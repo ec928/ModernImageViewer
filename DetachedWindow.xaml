@@ -1,0 +1,24 @@
+<Window
+    x:Class="ModernImageViewer.DetachedWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:ModernImageViewer"
+    Title="Detached Image">
+
+    <Grid x:Name="RootGrid" Background="#FF050505" RequestedTheme="Dark" 
+          Loaded="RootGrid_Loaded" 
+          SizeChanged="RootGrid_SizeChanged"
+          PointerPressed="RootGrid_PointerPressed" 
+          PointerMoved="RootGrid_PointerMoved" 
+          PointerReleased="RootGrid_PointerReleased">
+
+        <local:ImageViewerControl x:Name="ViewerControl" 
+                                  AllowDetach="False" 
+                                  CloseRequested="ViewerControl_CloseRequested" 
+                                  ToggleFullscreenRequested="ViewerControl_ToggleFullscreenRequested"
+                                  SizeToImageRequested="ViewerControl_SizeToImageRequested"
+                                  MinimizeRequested="ViewerControl_MinimizeRequested"
+                                  DeviceLostRestoring="ViewerControl_DeviceLostRestoring" />
+
+    </Grid>
+</Window>
