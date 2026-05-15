@@ -28,7 +28,7 @@ Extract the folder to your preferred location.
 
 Run ModernImageViewer.exe.
 
-Note on Windows SmartScreen: Because this is an unsigned indie beta, Windows Defender may flag it. Click More info -> Run anyway to launch.
+Note on Windows SmartScreen: Because this is an unsigned indie beta, Windows Defender may flag it. Click More info -> Run anyway to launch.  This is standard for indie software that hasn't been "signed" with an expensive corporate certificate.  You can verify the safety of the application by reviewing the source code provided in this repository. 
 
 💬 Feedback
 This is an active public beta. If you encounter bugs, performance issues, or have feature requests, please open a ticket in the Issues tab.
