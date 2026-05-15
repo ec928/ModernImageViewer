@@ -22,7 +22,7 @@ Architecture: Asynchronous tiered decoding and manual COM reference management f
 📦 Installation (Portable)
 This app is distributed as a Self-Contained Portable App. No installation or registry changes are required.
 
-Download the latest .zip from the Releases page.
+Download the latest .zip from the [Releases](https://github.com/ec928/ModernImageViewer/releases) page.
 
 Extract the folder to your preferred location.
 
