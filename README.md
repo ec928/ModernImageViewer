@@ -2,7 +2,7 @@
 A high-performance, hardware-accelerated image viewer built for creators, 3D artists, and power users. Designed specifically to handle massive directories of high-resolution images with zero UI lag and unique windowing capabilities.
 
 ✨ Key Features
-Tear-Off Viewports: Instantly detach any image into its own borderless, floating window—ideal for secondary monitors or overlaying reference images while working in Blender, Photoshop, or AI tools.
+Tear-Off Viewports: Instantly detach any image into its own borderless, floating window - ideal for secondary monitors or overlaying reference images while working in Blender, Photoshop, or AI tools.
 
 GPU-Accelerated Rendering: Powered by Win2D (Direct2D) for near-instant rendering and smooth scaling, offloading heavy image decoding to the graphics card.
 
