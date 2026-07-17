@@ -1,0 +1,47 @@
+<UserControl
+    x:Class="ModernImageViewer.Collage.CollageCanvas"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:ModernImageViewer.Collage"
+    xmlns:canvas="using:Microsoft.Graphics.Canvas.UI.Xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Grid x:Name="RootGrid" 
+          Background="#FF050505" 
+          RequestedTheme="Dark"
+          AllowDrop="True"
+          DragOver="RootGrid_DragOver"
+          Drop="RootGrid_Drop">
+
+        <canvas:CanvasControl x:Name="CollageCanvasControl"
+                              Draw="CollageCanvasControl_Draw"
+                              PointerPressed="CollageCanvasControl_PointerPressed"
+                              PointerMoved="CollageCanvasControl_PointerMoved"
+                              PointerReleased="CollageCanvasControl_PointerReleased"
+                              PointerWheelChanged="CollageCanvasControl_PointerWheelChanged"
+                              DoubleTapped="CollageCanvasControl_DoubleTapped"
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Stretch" />
+
+        <!-- TEMPORARY ZOOM HUD (Reliable timer version) -->
+        <Border x:Name="ZoomIndicatorContainer"
+                Background="#AA1F1F1F"
+                CornerRadius="6"
+                Padding="12,6"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Bottom"
+                Margin="0,0,0,50"
+                Opacity="0"
+                IsHitTestVisible="False"
+                Canvas.ZIndex="1000">
+            <TextBlock x:Name="ZoomIndicator"
+                       Text="100%"
+                       FontSize="22"
+                       FontWeight="SemiBold"
+                       Foreground="White"/>
+        </Border>
+
+    </Grid>
+</UserControl>

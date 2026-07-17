@@ -4,6 +4,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Numerics;
 using System.Runtime.CompilerServices;
@@ -37,20 +38,37 @@ namespace ModernImageViewer
         }
 
         public static (float NewZoom, double NewOffsetX, double NewOffsetY) CalculateWheelZoom(
-            float currentZoom, float minZoom, float maxZoom, int wheelDelta,
+            float targetZoomBase, float currentNativeZoom, float minZoom, float maxZoom, int wheelDelta,
             double pointerViewportX, double pointerViewportY,
-            double currentOffsetX, double currentOffsetY)
+            double currentOffsetX, double currentOffsetY,
+            double logicalW, double logicalH, float dpiScale,
+            double viewportW, double viewportH)
         {
             float zoomDelta = wheelDelta > 0 ? 1.15f : 0.85f;
-            float targetZoom = Math.Clamp(currentZoom * zoomDelta, minZoom, maxZoom);
+            float newTargetZoom = Math.Clamp(targetZoomBase * zoomDelta, minZoom, maxZoom);
+
+            double currentDisplayedW = (logicalW / dpiScale) * currentNativeZoom;
+            double currentDisplayedH = (logicalH / dpiScale) * currentNativeZoom;
+
+            double currentBlankOffsetX = currentDisplayedW < viewportW ? (viewportW - currentDisplayedW) / 2.0 : 0;
+            double currentBlankOffsetY = currentDisplayedH < viewportH ? (viewportH - currentDisplayedH) / 2.0 : 0;
 
             double absoluteX = currentOffsetX + pointerViewportX;
             double absoluteY = currentOffsetY + pointerViewportY;
 
-            double newOffsetX = (absoluteX / currentZoom) * targetZoom - pointerViewportX;
-            double newOffsetY = (absoluteY / currentZoom) * targetZoom - pointerViewportY;
+            double logicalX = (absoluteX - currentBlankOffsetX) / currentNativeZoom;
+            double logicalY = (absoluteY - currentBlankOffsetY) / currentNativeZoom;
 
-            return (targetZoom, newOffsetX, newOffsetY);
+            double newDisplayedW = (logicalW / dpiScale) * newTargetZoom;
+            double newDisplayedH = (logicalH / dpiScale) * newTargetZoom;
+
+            double newBlankOffsetX = newDisplayedW < viewportW ? (viewportW - newDisplayedW) / 2.0 : 0;
+            double newBlankOffsetY = newDisplayedH < viewportH ? (viewportH - newDisplayedH) / 2.0 : 0;
+
+            double newOffsetX = (logicalX * newTargetZoom) + newBlankOffsetX - pointerViewportX;
+            double newOffsetY = (logicalY * newTargetZoom) + newBlankOffsetY - pointerViewportY;
+
+            return (newTargetZoom, newOffsetX, newOffsetY);
         }
 
         public static (double TempPanX, double TempPanY) CalculateDragPan(
@@ -74,20 +92,20 @@ namespace ModernImageViewer
         }
 
         public static void DrawMappedImage(
-            CanvasDrawingSession session,
-            double viewW, double viewH,
-            double logicalW, double logicalH,
-            double panX, double panY,
-            float zoom, float gamma, float dpiScale,
-            bool isHighFidelity,
-            CanvasBitmap bitmap,
-            ColorManagementProfile? profile,
-            CropEffect crop,
-            ColorManagementEffect colorMgmt,
-            GammaTransferEffect decode,
-            GammaTransferEffect userGamma,
-            Transform2DEffect transform,
-            GammaTransferEffect encode)
+    CanvasDrawingSession session,
+    double viewW, double viewH,
+    double logicalW, double logicalH,
+    double panX, double panY,
+    float zoom, float gamma, float dpiScale,
+    bool isHighFidelity,
+    CanvasBitmap bitmap,
+    ColorManagementProfile? profile,
+    CropEffect crop,
+    ColorManagementEffect colorMgmt, // Kept in signature to avoid breaking callers
+    GammaTransferEffect decode,
+    GammaTransferEffect userGamma,
+    Transform2DEffect transform,
+    GammaTransferEffect encode)
         {
             if (zoom <= 0) zoom = 1.0f;
             double imgW = (logicalW / dpiScale) * zoom;
@@ -98,22 +116,11 @@ namespace ModernImageViewer
             double drawX = imgW <= viewW + 1.0 ? (viewW - imgW) / 2.0 : panX;
             double drawY = imgH <= viewH + 1.0 ? (viewH - imgH) / 2.0 : panY;
 
-            ICanvasImage linearImage;
+            // Both LF and HF now arrive perfectly color-managed by WIC.
+            // We bypass Win2D's ColorManagementEffect completely.
+            decode.Source = crop;
 
-            if (isHighFidelity && profile != null)
-            {
-                colorMgmt.Source = crop;
-                colorMgmt.SourceColorProfile = profile;
-                colorMgmt.OutputColorProfile = new ColorManagementProfile(CanvasColorSpace.ScRgb);
-                linearImage = colorMgmt;
-            }
-            else
-            {
-                decode.Source = crop;
-                linearImage = decode;
-            }
-
-            userGamma.Source = linearImage;
+            userGamma.Source = decode;
             userGamma.RedExponent = gamma / 2.2f;
             userGamma.GreenExponent = gamma / 2.2f;
             userGamma.BlueExponent = gamma / 2.2f;
@@ -159,13 +166,36 @@ namespace ModernImageViewer
         private static readonly SemaphoreSlim _thumbSemaphore = new(4);
         private CancellationTokenSource? _cts;
 
+        // Task tracking for deterministic file locks
+        private Task? _thumbnailTask;
+        private Task? _exifTask;
+
         private static readonly string[] ExifProperties = ["System.Photo.ISOSpeed", "System.Photo.FNumber", "System.Photo.ExposureTime", "System.Photo.CameraManufacturer", "System.Photo.CameraModel"];
 
         public event PropertyChangedEventHandler? PropertyChanged;
         protected void OnPropertyChanged([CallerMemberName] string? name = null) =>
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
-        public async Task LoadExifAsync(CancellationToken token = default)
+        public async Task CancelAndAwaitTasksAsync()
+        {
+            _cts?.Cancel();
+            var tasks = new List<Task>();
+            if (_thumbnailTask != null && !_thumbnailTask.IsCompleted) tasks.Add(_thumbnailTask);
+            if (_exifTask != null && !_exifTask.IsCompleted) tasks.Add(_exifTask);
+
+            if (tasks.Count > 0)
+            {
+                try { await Task.WhenAll(tasks); } catch { }
+            }
+        }
+
+        public Task LoadExifAsync(CancellationToken token = default)
+        {
+            _exifTask = InternalLoadExifAsync(token);
+            return _exifTask;
+        }
+
+        private async Task InternalLoadExifAsync(CancellationToken token)
         {
             if (HasExifData || string.IsNullOrEmpty(Path)) return;
             try
@@ -174,24 +204,42 @@ namespace ModernImageViewer
                 var extraProps = await file.Properties.RetrievePropertiesAsync(ExifProperties).AsTask(token);
                 if (token.IsCancellationRequested) return;
 
+                string newCameraModel = string.Empty;
                 if (extraProps.TryGetValue("System.Photo.CameraModel", out object? modelObj))
                 {
                     string mfg = extraProps.TryGetValue("System.Photo.CameraManufacturer", out object? mfgObj) ? (mfgObj?.ToString() ?? "") : "";
-                    CameraModel = $"{mfg} {modelObj}".Trim();
+                    newCameraModel = $"{mfg} {modelObj}".Trim();
                 }
 
-                if (extraProps.TryGetValue("System.Photo.ISOSpeed", out object? iso)) Iso = $"ISO {iso}";
-                if (extraProps.TryGetValue("System.Photo.FNumber", out object? f)) Aperture = $"f/{f:F1}";
-                if (extraProps.TryGetValue("System.Photo.ExposureTime", out object? exp)) ShutterSpeed = (double)exp < 1 ? $"1/{(int)Math.Round(1.0 / (double)exp)}s" : $"{exp}s";
+                string newIso = string.Empty;
+                if (extraProps.TryGetValue("System.Photo.ISOSpeed", out object? iso)) newIso = $"ISO {iso}";
 
-                HasExifData = true;
+                string newAperture = string.Empty;
+                if (extraProps.TryGetValue("System.Photo.FNumber", out object? f)) newAperture = $"f/{Convert.ToDouble(f):F1}";
+
+                string newShutterSpeed = string.Empty;
+                if (extraProps.TryGetValue("System.Photo.ExposureTime", out object? exp))
+                {
+                    double expVal = Convert.ToDouble(exp);
+                    newShutterSpeed = expVal < 1 ? $"1/{(int)Math.Round(1.0 / expVal)}s" : $"{expVal}s";
+                }
+
+                Dispatcher?.TryEnqueue(() =>
+                {
+                    if (token.IsCancellationRequested) return;
+                    CameraModel = newCameraModel;
+                    Iso = newIso;
+                    Aperture = newAperture;
+                    ShutterSpeed = newShutterSpeed;
+                    HasExifData = true;
+                });
             }
             catch { }
         }
 
         public string GetHudDisplayString(double logicalW, double logicalH)
         {
-            return $"{(int)logicalW} × {(int)logicalH} • {SizeString}";
+            return $"{(int)logicalW} × {(int)logicalH} • {SizeString} • {DateModified:yyyy-MM-dd HH:mm}";
         }
 
         public string GetZoomString(float zoom)
@@ -199,7 +247,13 @@ namespace ModernImageViewer
             return $"Zoom: {(int)Math.Round(zoom * 100)}%";
         }
 
-        public async Task LoadThumbnailAsync()
+        public Task LoadThumbnailAsync()
+        {
+            _thumbnailTask = InternalLoadThumbnailAsync();
+            return _thumbnailTask;
+        }
+
+        private async Task InternalLoadThumbnailAsync()
         {
             if (Thumbnail != null || string.IsNullOrEmpty(Path) || _isLoadingThumb) return;
             if (Dispatcher == null) return;
@@ -217,6 +271,7 @@ namespace ModernImageViewer
             {
                 await _thumbSemaphore.WaitAsync(token);
                 enteredSemaphore = true;
+                await Task.Delay(50, token);
                 if (token.IsCancellationRequested) return;
 
                 ImageSource? newThumb = null;
@@ -252,7 +307,6 @@ namespace ModernImageViewer
                             clonedStream.Dispose();
                             tcs.TrySetResult(null);
                         }
-
                         newThumb = await tcs.Task;
                     }
                 }
@@ -312,7 +366,6 @@ namespace ModernImageViewer
                         }
                         catch { tcs.TrySetResult(null); }
                     });
-
                     newThumb = await tcs.Task;
                 }
 

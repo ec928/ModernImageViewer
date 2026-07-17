@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.IO;
-using System.Threading;
 
 namespace ModernImageViewer
 {
@@ -10,9 +9,9 @@ namespace ModernImageViewer
     {
         private Window? _window;
 
-        // Centralized Memory & Cache Management
-        public static ConcurrentDictionary<string, ImageCacheEntry> GlobalImageCache { get; } = new(StringComparer.OrdinalIgnoreCase);
-        public static SemaphoreSlim GlobalCacheSemaphore { get; } = new(4, 4);
+        // Centralized thread-safe image cache
+        public static ConcurrentDictionary<string, ImageCacheEntry> GlobalImageCache { get; }
+            = new(StringComparer.OrdinalIgnoreCase);
 
         public App()
         {
@@ -22,7 +21,7 @@ namespace ModernImageViewer
 
         private void App_UnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
         {
-            System.Diagnostics.Debug.WriteLine($"[CRITICAL] Unhandled Exception intercepted: {e.Exception.Message}");
+            System.Diagnostics.Debug.WriteLine($"[CRITICAL] Unhandled Exception: {e.Exception}");
             e.Handled = true;
         }
 
@@ -35,7 +34,8 @@ namespace ModernImageViewer
 
             if (activatedArgs.Kind == Microsoft.Windows.AppLifecycle.ExtendedActivationKind.File)
             {
-                if (activatedArgs.Data is Windows.ApplicationModel.Activation.IFileActivatedEventArgs fileArgs && fileArgs.Files.Count > 0)
+                if (activatedArgs.Data is Windows.ApplicationModel.Activation.IFileActivatedEventArgs fileArgs
+                    && fileArgs.Files.Count > 0)
                 {
                     mainWindow.StartupFilePath = fileArgs.Files[0].Path;
                 }

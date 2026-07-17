@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using System;
 using System.Diagnostics;
+using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
 using Windows.Foundation;
@@ -59,6 +60,12 @@ namespace ModernImageViewer
         public event EventHandler? DeviceLostRestoring;
         public event EventHandler<int>? DetachLimitRequested;
 
+        // --- File Operation Events ---
+        public event EventHandler? EditRequested;
+        public event EventHandler? RenameRequested;
+        public event EventHandler? DeleteRequested;
+        public event EventHandler? AddToCollageRequested;
+
         // Tear-Off Pipeline
         public event EventHandler<Point>? TearOffInitiated;
         public event EventHandler? TearOffMoved;
@@ -69,6 +76,12 @@ namespace ModernImageViewer
         private CanvasBitmap? _rawGpuBitmap;
         private ColorManagementProfile? _rawGpuProfile;
         private EffectStack _effectStack = new();
+
+        // --- Animation State ---
+        private DispatcherTimer? _playbackTimer;
+        private AnimationFrame[]? _animationFrames;
+        private int _currentFrameIndex = 0;
+        private bool _isPlayingAnimation = true;
 
         private float _targetZoom = 1.0f;
         private float _currentFitFactor = 1.0f;
@@ -82,6 +95,8 @@ namespace ModernImageViewer
         private bool _isHighFidelityActive = false;
         private bool _previewResourcesLoaded = false;
         private bool _isFitToWindow = true;
+        private bool _isRenderQueued = false;
+        private bool _isPointerOverHud = false;
 
         // Tear-Off State
         private bool _isPotentialTearOff = false;
@@ -107,10 +122,17 @@ namespace ModernImageViewer
             if (_canvasDevice != null) _canvasDevice.DeviceLost += CanvasDevice_DeviceLost;
             _effectStack.Initialize();
 
+            _playbackTimer = new DispatcherTimer();
+            _playbackTimer.Tick += PlaybackTimer_Tick;
+
             _hudTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
             _hudTimer.Tick += (s, e) =>
             {
+                if (_isPointerOverHud) return;
+
                 UnifiedHud.IsHitTestVisible = false;
+                TopLeftInfoOverlay.IsHitTestVisible = false;
+                if (AnimationHud != null) AnimationHud.IsHitTestVisible = false;
                 FadeOutStoryboard.Begin();
                 _hudTimer.Stop();
             };
@@ -120,7 +142,7 @@ namespace ModernImageViewer
             {
                 _scrollQualityTimer.Stop();
                 if (_effectStack.Transform != null) _effectStack.Transform.InterpolationMode = CanvasImageInterpolation.HighQualityCubic;
-                PreviewCanvas?.Invalidate();
+                RequestRender();
             };
 
             this.Unloaded += ImageViewerControl_Unloaded;
@@ -131,6 +153,19 @@ namespace ModernImageViewer
         {
             SetGammaLevel(_currentGamma);
             SetDetachLimitState(_currentDetachLimitInt);
+        }
+
+        private void RequestRender()
+        {
+            if (!_isRenderQueued && PreviewCanvas != null)
+            {
+                _isRenderQueued = true;
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    _isRenderQueued = false;
+                    PreviewCanvas.Invalidate();
+                });
+            }
         }
 
         private static void OnTargetImageChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -154,6 +189,10 @@ namespace ModernImageViewer
             {
                 bool standalone = (bool)e.NewValue;
                 control.SizeToImageMenuItem.Visibility = standalone ? Visibility.Visible : Visibility.Collapsed;
+
+                var separator = control.FindName("SizeToImageSeparator") as MenuFlyoutSeparator;
+                if (separator != null) separator.Visibility = standalone ? Visibility.Visible : Visibility.Collapsed;
+
                 control.MinimizeButton.Visibility = standalone ? Visibility.Visible : Visibility.Collapsed;
             }
         }
@@ -161,9 +200,9 @@ namespace ModernImageViewer
         private void ImageViewerControl_Unloaded(object sender, RoutedEventArgs e)
         {
             if (_canvasDevice != null) _canvasDevice.DeviceLost -= CanvasDevice_DeviceLost;
+            _playbackTimer?.Stop();
             _hudTimer?.Stop();
             _scrollQualityTimer?.Stop();
-            _effectStack.Dispose();
             PreviewCanvas?.RemoveFromVisualTree();
         }
 
@@ -185,22 +224,26 @@ namespace ModernImageViewer
         {
             _tempPanX = 0;
             _tempPanY = 0;
+            _mouseWheelAccumulator = 0;
             ShowHud();
         }
 
-        // --- TIERED RENDERING METHOD WITH STATE SYNC FIX ---
         public void PrepareForNewImage(Microsoft.UI.Xaml.Media.ImageSource? thumbnail)
         {
+            _playbackTimer?.Stop();
+            _animationFrames = null;
             _rawGpuBitmap = null;
             _rawGpuProfile = null;
             _previewResourcesLoaded = false;
-
-            // Reset the fidelity state before the TargetImage property updates the HUD
             _isHighFidelityActive = false;
 
-            PreviewCanvas?.Invalidate(); // Instantly clear the old Win2D frame
+            _isPlayingAnimation = true;
+            if (AnimationHud != null) AnimationHud.Visibility = Visibility.Collapsed;
 
-            // Instantly show the thumbnail in the XAML image layer behind the canvas
+            if (_effectStack.Crop != null) _effectStack.Crop.Source = null;
+
+            RequestRender();
+
             if (thumbnail != null)
             {
                 if (PlaceholderImage != null)
@@ -219,19 +262,61 @@ namespace ModernImageViewer
             }
         }
 
-        public void InjectGpuBitmap(CanvasBitmap bitmap, ColorManagementProfile? profile, double nativeW, double nativeH, bool isHighFidelity, bool resetView = true)
+        private void PlaybackTimer_Tick(object? sender, object e)
         {
-            _rawGpuBitmap = bitmap;
-            _rawGpuProfile = profile;
-            _logicalImageWidth = nativeW > 0 ? nativeW : (bitmap?.SizeInPixels.Width ?? 1);
-            _logicalImageHeight = nativeH > 0 ? nativeH : (bitmap?.SizeInPixels.Height ?? 1);
-            _isHighFidelityActive = isHighFidelity;
+            if (_animationFrames == null || _animationFrames.Length == 0) return;
+
+            _currentFrameIndex = (_currentFrameIndex + 1) % _animationFrames.Length;
+            if (_playbackTimer != null)
+            {
+                var nextDelay = _animationFrames[_currentFrameIndex].Delay;
+                if (_playbackTimer.Interval != nextDelay)
+                {
+                    _playbackTimer.Interval = nextDelay;
+                }
+            }
+            RequestRender();
+            UpdateAnimCounter();
+        }
+
+        public void InjectImage(ImageCacheEntry entry, bool resetView = true)
+        {
+            _rawGpuBitmap = entry.GpuBitmap;
+            _animationFrames = entry.AnimationFrames;
+            _rawGpuProfile = entry.Profile;
+            _logicalImageWidth = entry.NativeWidth > 0 ? entry.NativeWidth : 1;
+            _logicalImageHeight = entry.NativeHeight > 0 ? entry.NativeHeight : 1;
+            _isHighFidelityActive = entry.IsHighFidelity;
             _previewResourcesLoaded = true;
 
-            if (_effectStack.Crop != null && _rawGpuBitmap != null)
+            if (_animationFrames != null && _animationFrames.Length > 1)
             {
-                _effectStack.Crop.Source = _rawGpuBitmap;
-                _effectStack.Crop.SourceRectangle = _rawGpuBitmap.Bounds;
+                _currentFrameIndex = 0;
+
+                if (AnimationHud != null) AnimationHud.Visibility = Visibility.Visible;
+                UpdateAnimCounter();
+                if (AnimPlayPauseIcon != null) AnimPlayPauseIcon.Symbol = Symbol.Pause;
+
+                if (_playbackTimer != null)
+                {
+                    _playbackTimer.Interval = _animationFrames[0].Delay;
+                    _playbackTimer.Start();
+                }
+
+                if (_effectStack.Crop != null && _animationFrames[0].GpuBitmap != null)
+                {
+                    _effectStack.Crop.Source = _animationFrames[0].GpuBitmap;
+                    _effectStack.Crop.SourceRectangle = _animationFrames[0].GpuBitmap.Bounds;
+                }
+            }
+            else
+            {
+                _playbackTimer?.Stop();
+                if (_effectStack.Crop != null && _rawGpuBitmap != null)
+                {
+                    _effectStack.Crop.Source = _rawGpuBitmap;
+                    _effectStack.Crop.SourceRectangle = _rawGpuBitmap.Bounds;
+                }
             }
 
             UpdateGridSize();
@@ -240,13 +325,12 @@ namespace ModernImageViewer
                 FitToWindow();
             }
 
-            // Hide the thumbnail once Win2D is ready to take over
             if (PlaceholderImage != null)
             {
                 PlaceholderImage.Visibility = Visibility.Collapsed;
             }
 
-            PreviewCanvas?.Invalidate();
+            RequestRender();
             ShowHud();
         }
 
@@ -258,7 +342,7 @@ namespace ModernImageViewer
             if (Gamma20 != null) Gamma20.IsChecked = Math.Abs(gamma - 2.0f) < 0.01f;
             if (Gamma22 != null) Gamma22.IsChecked = Math.Abs(gamma - 2.2f) < 0.01f;
             if (Gamma24 != null) Gamma24.IsChecked = Math.Abs(gamma - 2.4f) < 0.01f;
-            PreviewCanvas?.Invalidate();
+            RequestRender();
         }
 
         public void SetZoom(float targetZoom)
@@ -306,10 +390,32 @@ namespace ModernImageViewer
 
         private void PreviewCanvas_Draw(CanvasControl sender, CanvasDrawEventArgs args)
         {
-            if (_rawGpuBitmap == null || !_previewResourcesLoaded || _effectStack.Crop == null || _effectStack.ColorManagement == null || _effectStack.DecodeToLinear == null || _effectStack.UserGamma == null || _effectStack.Transform == null || _effectStack.EncodeToSrgb == null) return;
+            if (!_previewResourcesLoaded) return;
+
+            var crop = _effectStack.Crop;
+            var colorMgmt = _effectStack.ColorManagement;
+            var decode = _effectStack.DecodeToLinear;
+            var userGamma = _effectStack.UserGamma;
+            var transform = _effectStack.Transform;
+            var encode = _effectStack.EncodeToSrgb;
+
+            if (crop == null || colorMgmt == null || decode == null || userGamma == null || transform == null || encode == null) return;
+
+            CanvasBitmap? currentTarget = _rawGpuBitmap;
+
+            if (_animationFrames != null && _currentFrameIndex >= 0 && _currentFrameIndex < _animationFrames.Length)
+            {
+                var frame = _animationFrames[_currentFrameIndex];
+                if (frame != null) currentTarget = frame.GpuBitmap;
+            }
+
+            if (currentTarget == null) return;
+
+            crop.Source = currentTarget;
+
             try
             {
-                ViewerMath.DrawMappedImage(args.DrawingSession, sender.ActualWidth, sender.ActualHeight, _logicalImageWidth, _logicalImageHeight, -(ImageScroll?.HorizontalOffset ?? 0) + _tempPanX, -(ImageScroll?.VerticalOffset ?? 0) + _tempPanY, _targetZoom, _currentGamma, sender.Dpi / 96.0f, _isHighFidelityActive, _rawGpuBitmap, _rawGpuProfile, _effectStack.Crop, _effectStack.ColorManagement, _effectStack.DecodeToLinear, _effectStack.UserGamma, _effectStack.Transform, _effectStack.EncodeToSrgb);
+                ViewerMath.DrawMappedImage(args.DrawingSession, sender.ActualWidth, sender.ActualHeight, _logicalImageWidth, _logicalImageHeight, -(ImageScroll?.HorizontalOffset ?? 0) + _tempPanX, -(ImageScroll?.VerticalOffset ?? 0) + _tempPanY, _targetZoom, _currentGamma, sender.Dpi / 96.0f, _isHighFidelityActive, currentTarget, _rawGpuProfile, crop, colorMgmt, decode, userGamma, transform, encode);
             }
             catch (Exception ex) { Debug.WriteLine($"[Win2D Draw Error]: {ex.Message}"); }
         }
@@ -324,12 +430,67 @@ namespace ModernImageViewer
 
             if (TopLeftInfoOverlay != null) TopLeftInfoOverlay.IsHitTestVisible = false;
             if (UnifiedHud != null) UnifiedHud.IsHitTestVisible = true;
+            if (AnimationHud != null && AnimationHud.Visibility == Visibility.Visible) AnimationHud.IsHitTestVisible = true;
+
+            if (FadeInStoryboard != null) FadeInStoryboard.Begin();
+            _hudTimer?.Stop();
+            _hudTimer?.Start();
+        }
+
+        public void ShowNotification(string message)
+        {
+            if (HudFileName != null) HudFileName.Text = message;
+            if (HudSecondaryInfo != null) HudSecondaryInfo.Text = string.Empty;
+            if (HudZoomInfo != null) HudZoomInfo.Text = string.Empty;
+            if (HudFidelity != null) HudFidelity.Text = string.Empty;
+
+            if (TopLeftInfoOverlay != null) TopLeftInfoOverlay.IsHitTestVisible = false;
+            if (UnifiedHud != null) UnifiedHud.IsHitTestVisible = true;
+
             if (FadeInStoryboard != null) FadeInStoryboard.Begin();
             _hudTimer?.Stop();
             _hudTimer?.Start();
         }
 
         // --- Interaction Handlers ---
+        private void Hud_PointerEntered(object sender, PointerRoutedEventArgs e)
+        {
+            _isPointerOverHud = true;
+            _hudTimer?.Stop();
+        }
+
+        private void Hud_PointerExited(object sender, PointerRoutedEventArgs e)
+        {
+            _isPointerOverHud = false;
+            _hudTimer?.Start();
+        }
+
+        public bool HandleAnimationKeystroke(Windows.System.VirtualKey key)
+        {
+            if (_animationFrames == null || _animationFrames.Length <= 1) return false;
+
+            if (key == Windows.System.VirtualKey.Space)
+            {
+                AnimPlayPause_Click(this, null!);
+                return true;
+            }
+
+            int keyCode = (int)key;
+
+            if (keyCode == 188) // Comma / <
+            {
+                AnimPrev_Click(this, null!);
+                return true;
+            }
+            if (keyCode == 190) // Period / >
+            {
+                AnimNext_Click(this, null!);
+                return true;
+            }
+
+            return false;
+        }
+
         private void ToggleZoomMode(bool? forceState = null)
         {
             _isZoomMode = forceState ?? !_isZoomMode;
@@ -339,13 +500,39 @@ namespace ModernImageViewer
         }
 
         private void ToggleZoomMode_Click(object sender, RoutedEventArgs e) => ToggleZoomMode();
-        private void SizeToWindow_Click(object sender, RoutedEventArgs e) { ToggleZoomMode(false); FitToWindow(); }
+
+        private void SizeToWindow_Click(object sender, RoutedEventArgs e)
+        {
+            ToggleZoomMode(false);
+            FitToWindow();
+        }
+
         private void ZoomToActualSize_Click(object sender, RoutedEventArgs e)
         {
             ToggleZoomMode(true);
             _isFitToWindow = false;
             _targetZoom = 1.0f;
             ImageScroll?.ChangeView(ImageScroll.ScrollableWidth / 2, ImageScroll.ScrollableHeight / 2, _targetZoom, true);
+        }
+
+        private bool IsPointerOverBackground(Point ptr)
+        {
+            if (ImageScroll == null || PreviewCanvas == null) return true;
+
+            float dpiScale = PreviewCanvas.Dpi / 96.0f;
+            double displayedImgW = (_logicalImageWidth / dpiScale) * _targetZoom;
+            double displayedImgH = (_logicalImageHeight / dpiScale) * _targetZoom;
+
+            double viewW = ImageScroll.ActualWidth;
+            double viewH = ImageScroll.ActualHeight;
+
+            double startX = displayedImgW < viewW ? (viewW - displayedImgW) / 2.0 : 0;
+            double endX = displayedImgW < viewW ? startX + displayedImgW : viewW;
+
+            double startY = displayedImgH < viewH ? (viewH - displayedImgH) / 2.0 : 0;
+            double endY = displayedImgH < viewH ? startY + displayedImgH : viewH;
+
+            return ptr.X < startX || ptr.X > endX || ptr.Y < startY || ptr.Y > endY;
         }
 
         private void InputOverlay_PointerPressed(object sender, PointerRoutedEventArgs e)
@@ -371,20 +558,26 @@ namespace ModernImageViewer
 
             if ((_isZoomMode || isCtrlHeld) && prop.IsLeftButtonPressed)
             {
+                bool isBackgroundClick = ImageScroll != null && IsPointerOverBackground(e.GetCurrentPoint(ImageScroll).Position);
+                if (isBackgroundClick && IsStandaloneMode) return;
+
                 _isDragging = true;
                 _lastPoint = e.GetCurrentPoint(InputOverlay).Position;
                 _dragPointerId = e.Pointer.PointerId;
                 InputOverlay.CapturePointer(e.Pointer);
                 e.Handled = true;
             }
-            else if (!_isZoomMode && prop.IsLeftButtonPressed && AllowDetach && !IsStandaloneMode)
+            else if (!_isZoomMode && prop.IsLeftButtonPressed)
             {
-                _isPotentialTearOff = true;
-                _isTearingOffActive = false;
-                _tearOffStartPoint = e.GetCurrentPoint(InputOverlay).Position;
-                _tearOffPointerId = e.Pointer.PointerId;
-                InputOverlay.CapturePointer(e.Pointer);
-                e.Handled = true;
+                if (AllowDetach && !IsStandaloneMode)
+                {
+                    _isPotentialTearOff = true;
+                    _isTearingOffActive = false;
+                    _tearOffStartPoint = e.GetCurrentPoint(InputOverlay).Position;
+                    _tearOffPointerId = e.Pointer.PointerId;
+                    InputOverlay.CapturePointer(e.Pointer);
+                    e.Handled = true;
+                }
             }
         }
 
@@ -408,7 +601,7 @@ namespace ModernImageViewer
                 if (_effectStack.Transform != null) _effectStack.Transform.InterpolationMode = CanvasImageInterpolation.Linear;
                 _scrollQualityTimer?.Stop();
                 _scrollQualityTimer?.Start();
-                PreviewCanvas?.Invalidate();
+                RequestRender();
             }
             else if (_isPotentialTearOff && !_isTearingOffActive && e.Pointer.PointerId == _tearOffPointerId)
             {
@@ -433,9 +626,10 @@ namespace ModernImageViewer
                 _isDragging = false;
                 InputOverlay.ReleasePointerCapture(e.Pointer);
                 ImageScroll.ChangeView(ImageScroll.HorizontalOffset - _tempPanX, ImageScroll.VerticalOffset - _tempPanY, null, true);
-                _tempPanX = 0; _tempPanY = 0;
+                _tempPanX = 0;
+                _tempPanY = 0;
                 if (_effectStack.Transform != null) _effectStack.Transform.InterpolationMode = _isHighFidelityActive ? CanvasImageInterpolation.HighQualityCubic : CanvasImageInterpolation.Linear;
-                PreviewCanvas?.Invalidate();
+                RequestRender();
             }
             else if (_isTearingOffActive && e.Pointer.PointerId == _tearOffPointerId)
             {
@@ -448,11 +642,117 @@ namespace ModernImageViewer
                 _isPotentialTearOff = false;
                 InputOverlay.ReleasePointerCapture(e.Pointer);
                 var pointerUpdate = e.GetCurrentPoint(InputOverlay).Properties.PointerUpdateKind;
-                if (pointerUpdate == Microsoft.UI.Input.PointerUpdateKind.LeftButtonReleased)
+
+                if (pointerUpdate == Microsoft.UI.Input.PointerUpdateKind.LeftButtonReleased && ImageScroll != null)
                 {
-                    CloseRequested?.Invoke(this, EventArgs.Empty);
+                    bool isBackgroundClick = IsPointerOverBackground(e.GetCurrentPoint(ImageScroll).Position);
+
+                    if (isBackgroundClick)
+                    {
+                        CloseRequested?.Invoke(this, EventArgs.Empty);
+                        e.Handled = true;
+                    }
                 }
             }
+        }
+
+        private void InputOverlay_PointerCanceled(object sender, PointerRoutedEventArgs e)
+        {
+            if (InputOverlay == null) return;
+            if (_isDragging)
+            {
+                _isDragging = false;
+                InputOverlay.ReleasePointerCapture(e.Pointer);
+                _tempPanX = 0;
+                _tempPanY = 0;
+                if (_effectStack.Transform != null) _effectStack.Transform.InterpolationMode = _isHighFidelityActive ? CanvasImageInterpolation.HighQualityCubic : CanvasImageInterpolation.Linear;
+                RequestRender();
+            }
+            if (_isTearingOffActive)
+            {
+                _isTearingOffActive = false;
+                InputOverlay.ReleasePointerCapture(e.Pointer);
+                TearOffCompleted?.Invoke(this, EventArgs.Empty);
+            }
+            else if (_isPotentialTearOff)
+            {
+                _isPotentialTearOff = false;
+                InputOverlay.ReleasePointerCapture(e.Pointer);
+            }
+        }
+
+        private void InputOverlay_Tapped(object sender, TappedRoutedEventArgs e)
+        {
+            if (UnifiedHud != null)
+            {
+                if (UnifiedHud.Opacity > 0.5)
+                {
+                    UnifiedHud.IsHitTestVisible = false;
+                    TopLeftInfoOverlay.IsHitTestVisible = false;
+                    if (AnimationHud != null) AnimationHud.IsHitTestVisible = false;
+                    FadeOutStoryboard.Begin();
+                }
+                else
+                {
+                    ShowHud();
+                }
+            }
+            e.Handled = true;
+        }
+
+        private void InputOverlay_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+        {
+            if (ImageScroll == null) return;
+
+            float zoomInTarget = 1.0f;
+            if (_currentFitFactor >= 0.75f)
+            {
+                zoomInTarget = _currentFitFactor * 2.0f;
+            }
+            zoomInTarget = (float)Math.Min(ImageScroll.MaxZoomFactor, zoomInTarget);
+
+            if (_targetZoom < zoomInTarget - 0.01f)
+            {
+                ToggleZoomMode(true);
+                _isFitToWindow = false;
+
+                var ptr = e.GetPosition(ImageScroll);
+                float newZoom = zoomInTarget;
+
+                float currentNativeZoom = ImageScroll.ZoomFactor;
+                float dpiScale = PreviewCanvas != null ? PreviewCanvas.Dpi / 96.0f : 1.0f;
+
+                double currentDisplayedW = (_logicalImageWidth / dpiScale) * currentNativeZoom;
+                double currentDisplayedH = (_logicalImageHeight / dpiScale) * currentNativeZoom;
+
+                double currentBlankOffsetX = currentDisplayedW < ImageScroll.ViewportWidth ? (ImageScroll.ViewportWidth - currentDisplayedW) / 2.0 : 0;
+                double currentBlankOffsetY = currentDisplayedH < ImageScroll.ViewportHeight ? (ImageScroll.ViewportHeight - currentDisplayedH) / 2.0 : 0;
+
+                double absoluteX = ptr.X + ImageScroll.HorizontalOffset;
+                double absoluteY = ptr.Y + ImageScroll.VerticalOffset;
+
+                double logicalClickX = (absoluteX - currentBlankOffsetX) / currentNativeZoom;
+                double logicalClickY = (absoluteY - currentBlankOffsetY) / currentNativeZoom;
+
+                double newDisplayedW = (_logicalImageWidth / dpiScale) * newZoom;
+                double newDisplayedH = (_logicalImageHeight / dpiScale) * newZoom;
+
+                double newBlankOffsetX = newDisplayedW < ImageScroll.ViewportWidth ? (ImageScroll.ViewportWidth - newDisplayedW) / 2.0 : 0;
+                double newBlankOffsetY = newDisplayedH < ImageScroll.ViewportHeight ? (ImageScroll.ViewportHeight - newDisplayedH) / 2.0 : 0;
+
+                double targetX = (logicalClickX * newZoom) + newBlankOffsetX - ptr.X;
+                double targetY = (logicalClickY * newZoom) + newBlankOffsetY - ptr.Y;
+
+                _targetZoom = newZoom;
+                ImageScroll.ChangeView(targetX, targetY, _targetZoom, true);
+            }
+            else
+            {
+                ToggleZoomMode(false);
+                FitToWindow();
+            }
+
+            e.Handled = true;
         }
 
         private void InputOverlay_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
@@ -480,22 +780,37 @@ namespace ModernImageViewer
                 return;
             }
 
-            var result = ViewerMath.CalculateWheelZoom(_targetZoom, (float)ImageScroll.MinZoomFactor, (float)ImageScroll.MaxZoomFactor, ptr.Properties.MouseWheelDelta, ptr.Position.X, ptr.Position.Y, ImageScroll.HorizontalOffset, ImageScroll.VerticalOffset);
-
             _isFitToWindow = false;
-            _targetZoom = result.NewZoom;
+            float dpiScale = PreviewCanvas != null ? PreviewCanvas.Dpi / 96.0f : 1.0f;
 
+            // CS8602 fix: Enforced ImageScroll! to assure the compiler of the prior null-check
+            var result = ViewerMath.CalculateWheelZoom(
+                _targetZoom, ImageScroll!.ZoomFactor,
+                (float)ImageScroll.MinZoomFactor, (float)ImageScroll.MaxZoomFactor,
+                ptr.Properties.MouseWheelDelta, ptr.Position.X, ptr.Position.Y,
+                ImageScroll.HorizontalOffset, ImageScroll.VerticalOffset,
+                _logicalImageWidth, _logicalImageHeight, dpiScale,
+                ImageScroll.ViewportWidth, ImageScroll.ViewportHeight);
+
+            _targetZoom = result.NewZoom;
             ImageScroll.ChangeView(result.NewOffsetX, result.NewOffsetY, _targetZoom, true);
+
+            if (_targetZoom <= _currentFitFactor + 0.01f)
+            {
+                ToggleZoomMode(false);
+                _isFitToWindow = true;
+            }
+
             ShowHud();
             e.Handled = true;
         }
 
-        private void ImageScroll_ViewChanged(object s, ScrollViewerViewChangedEventArgs e) => PreviewCanvas?.Invalidate();
+        private void ImageScroll_ViewChanged(object s, ScrollViewerViewChangedEventArgs e) => RequestRender();
 
         private void ImageScroll_SizeChanged(object s, SizeChangedEventArgs e)
         {
             if (_isFitToWindow) FitToWindow();
-            PreviewCanvas?.Invalidate();
+            RequestRender();
         }
 
         private void SetGamma_Click(object sender, RoutedEventArgs e)
@@ -529,11 +844,93 @@ namespace ModernImageViewer
         private void DetachImage_Click(object sender, RoutedEventArgs e) => DetachRequested?.Invoke(this, _lastHudTriggerPos);
         private void ToggleFullscreen_Click(object sender, RoutedEventArgs e) => ToggleFullscreenRequested?.Invoke(this, EventArgs.Empty);
         private void Minimize_Click(object sender, RoutedEventArgs e) => MinimizeRequested?.Invoke(this, EventArgs.Empty);
-
         private void SizeToImage_Click(object sender, RoutedEventArgs e)
         {
             ToggleZoomMode(false);
             SizeToImageRequested?.Invoke(this, EventArgs.Empty);
+        }
+
+        // --- File Operations Handlers ---
+        private void AddToCollage_Click(object sender, RoutedEventArgs e)
+        {
+            AddToCollageRequested?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void PlayCinematic_Click(object sender, RoutedEventArgs e)
+        {
+            var main = MainWindow.Instance;
+            if (main == null || TargetImage == null) return;
+
+            var currentFiles = main.Images.Select(img => img.Path).ToList();
+            int startIndex = main.Images.IndexOf(TargetImage);
+
+            var cinematicWindow = new ModernImageViewer.Cinematic.CinematicWindow(currentFiles, startIndex);
+        }
+
+        private void EditImage_Click(object sender, RoutedEventArgs e)
+        {
+            EditRequested?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void RenameImage_Click(object sender, RoutedEventArgs e)
+        {
+            RenameRequested?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void DeleteImage_Click(object sender, RoutedEventArgs e)
+        {
+            DeleteRequested?.Invoke(this, EventArgs.Empty);
+        }
+
+        // --- Animation HUD Handlers ---
+        private void UpdateAnimCounter()
+        {
+            if (_animationFrames != null && AnimFrameCounter != null)
+            {
+                AnimFrameCounter.Text = $"{_currentFrameIndex + 1} / {_animationFrames.Length}";
+            }
+        }
+
+        private void AnimPrev_Click(object sender, RoutedEventArgs e)
+        {
+            if (_animationFrames == null) return;
+            PauseAnimation();
+            _currentFrameIndex = _currentFrameIndex - 1 < 0 ? _animationFrames.Length - 1 : _currentFrameIndex - 1;
+            RequestRender();
+            UpdateAnimCounter();
+        }
+
+        private void AnimNext_Click(object sender, RoutedEventArgs e)
+        {
+            if (_animationFrames == null) return;
+            PauseAnimation();
+            _currentFrameIndex = (_currentFrameIndex + 1) % _animationFrames.Length;
+            RequestRender();
+            UpdateAnimCounter();
+        }
+
+        private void AnimPlayPause_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isPlayingAnimation) PauseAnimation();
+            else PlayAnimation();
+        }
+
+        private void PauseAnimation()
+        {
+            _isPlayingAnimation = false;
+            _playbackTimer?.Stop();
+            if (AnimPlayPauseIcon != null) AnimPlayPauseIcon.Symbol = Symbol.Play;
+        }
+
+        private void PlayAnimation()
+        {
+            _isPlayingAnimation = true;
+            if (_animationFrames != null && _playbackTimer != null)
+            {
+                _playbackTimer.Interval = _animationFrames[_currentFrameIndex].Delay;
+                _playbackTimer.Start();
+            }
+            if (AnimPlayPauseIcon != null) AnimPlayPauseIcon.Symbol = Symbol.Pause;
         }
     }
 }

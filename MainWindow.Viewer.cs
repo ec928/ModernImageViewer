@@ -23,16 +23,16 @@ namespace ModernImageViewer
     {
         private DetachedWindow? _tearingOffWindow;
         private Point _tearOffStartPos;
+        private static readonly SemaphoreSlim _cacheSemaphore = new(4);
+
+        // Store active decode tasks for safe cancellation and awaiting
+        private Task<ImageCacheEntry?>? _fastDecodeTask;
+        private Task<ImageCacheEntry?>? _hfTask;
 
         private void TryDisposeRawGpuBitmap()
         {
-            if (_rawGpuBitmap != null && !App.GlobalImageCache.Values.Any(v => v.GpuBitmap == _rawGpuBitmap))
-            {
-                if (_currentRenderedItem == null || !DetachedPaths.ContainsKey(_currentRenderedItem.Path))
-                {
-                    _rawGpuBitmap.Dispose();
-                }
-            }
+            // Replaced manual raw disposal with cache entry release
+            _rawGpuBitmap = null;
         }
 
         public void LaunchDetachedWindow(ImageItem targetItem, Point? cursorSpawnPosition = null)
@@ -92,7 +92,6 @@ namespace ModernImageViewer
 
                 _tearingOffWindow = detachedWindow;
                 _tearOffStartPos = cursorSpawnPosition.Value;
-                ViewerControl.Visibility = Visibility.Collapsed;
             }
             else
             {
@@ -152,131 +151,120 @@ namespace ModernImageViewer
             if (HoverTriggerZone != null) HoverTriggerZone.Visibility = Visibility.Collapsed;
 
             ViewerControl.PrepareForNewImage(currentItem.Thumbnail);
-
             ViewerControl.TargetImage = currentItem;
             ViewerControl.Focus(FocusState.Programmatic);
 
-            bool isCached = App.GlobalImageCache.TryGetValue(currentItem.Path, out var cachedEntry) && (cachedEntry.GpuBitmap != null || cachedEntry.Bitmap != null);
+            bool isCached = App.GlobalImageCache.TryGetValue(currentItem.Path, out var cachedEntry) &&
+                            (cachedEntry.GpuBitmap != null || cachedEntry.Bitmap != null || cachedEntry.AnimationFrames != null);
 
             _ = currentItem.LoadExifAsync(exifToken);
 
             try
             {
-                CanvasBitmap? newGpuBitmap = null;
-                ColorManagementProfile? newGpuProfile = null;
-                double targetLogicalW = 0;
-                double targetLogicalH = 0;
+                ImageCacheEntry? targetEntry = null;
 
                 if (isCached && cachedEntry != null)
                 {
-                    if (cachedEntry.GpuBitmap == null || cachedEntry.GpuBitmap.Device != _canvasDevice)
+                    if ((cachedEntry.GpuBitmap == null && cachedEntry.AnimationFrames == null) ||
+                        (cachedEntry.GpuBitmap != null && cachedEntry.GpuBitmap.Device != _canvasDevice))
                     {
                         cachedEntry.GpuBitmap?.Dispose();
+                        if (cachedEntry.AnimationFrames != null)
+                        {
+                            foreach (var f in cachedEntry.AnimationFrames) f.Dispose();
+                            cachedEntry.AnimationFrames = null;
+                        }
+
                         if (cachedEntry.Bitmap != null)
                         {
-                            cachedEntry.GpuBitmap = CanvasBitmap.CreateFromSoftwareBitmap(_canvasDevice, cachedEntry.Bitmap);
+                            cachedEntry.GpuBitmap = ViewerEngine.CreateGpuBitmap(cachedEntry.Bitmap);
                             cachedEntry.Bitmap.Dispose();
                             cachedEntry.Bitmap = null;
                         }
                     }
-                    newGpuBitmap = cachedEntry.GpuBitmap;
-                    newGpuProfile = cachedEntry.Profile;
-                    targetLogicalW = cachedEntry.NativeWidth;
-                    targetLogicalH = cachedEntry.NativeHeight;
-                    _isHighFidelityActive = cachedEntry.IsHighFidelity;
+                    targetEntry = cachedEntry;
                 }
                 else
                 {
-                    var result = await Task.Run(async () =>
+                    _fastDecodeTask = ViewerEngine.DecodeFastPreviewAsync(currentItem.Path, fastToken);
+                    var result = await _fastDecodeTask;
+
+                    if (fastToken.IsCancellationRequested || myLoadId != _currentImageLoadId) { result?.Release(); return; }
+
+                    if (result != null && result.Bitmap != null)
                     {
-                        var entry = await ViewerEngine.DecodeFastPreviewAsync(currentItem.Path, fastToken);
-                        if (entry != null && entry.Bitmap != null && _canvasDevice != null && !fastToken.IsCancellationRequested)
-                        {
-                            try { entry.GpuBitmap = CanvasBitmap.CreateFromSoftwareBitmap(_canvasDevice, entry.Bitmap); entry.Bitmap.Dispose(); entry.Bitmap = null; } catch { }
-                        }
-                        return entry;
-                    });
+                        result.GpuBitmap = ViewerEngine.CreateGpuBitmap(result.Bitmap);
+                        result.Bitmap.Dispose();
+                        result.Bitmap = null;
+                    }
 
-                    if (fastToken.IsCancellationRequested || myLoadId != _currentImageLoadId) { result?.Dispose(); return; }
-
-                    if (result != null && (result.GpuBitmap != null || result.Bitmap != null))
+                    if (result != null && (result.GpuBitmap != null || result.AnimationFrames != null))
                     {
-                        if (result.GpuBitmap == null && result.Bitmap != null && _canvasDevice != null)
-                        {
-                            try { result.GpuBitmap = CanvasBitmap.CreateFromSoftwareBitmap(_canvasDevice, result.Bitmap); result.Bitmap.Dispose(); result.Bitmap = null; } catch { }
-                        }
-
                         if (App.GlobalImageCache.TryGetValue(currentItem.Path, out var existing))
                         {
-                            if (!existing.IsHighFidelity && existing.GpuBitmap != _rawGpuBitmap && !DetachedPaths.ContainsKey(currentItem.Path))
-                            {
-                                existing.Dispose();
-                                App.GlobalImageCache[currentItem.Path] = result;
-                            }
-                            else { result.Dispose(); result = existing; }
+                            existing.Release(); // Safe un-cache
+                            App.GlobalImageCache[currentItem.Path] = result; // Takes the base ref
                         }
                         else { App.GlobalImageCache[currentItem.Path] = result; }
                     }
-
-                    if (result != null)
-                    {
-                        newGpuBitmap = result.GpuBitmap;
-                        newGpuProfile = result.Profile;
-                        targetLogicalW = result.NativeWidth;
-                        targetLogicalH = result.NativeHeight;
-                    }
+                    targetEntry = result;
                 }
 
-                if (newGpuBitmap == null)
+                if (targetEntry == null || (targetEntry.GpuBitmap == null && targetEntry.AnimationFrames == null))
                 {
                     try
                     {
                         var recoveryEntry = await ViewerEngine.DecodeFastPreviewAsync(currentItem.Path, fastToken);
-                        if (recoveryEntry?.Bitmap != null && _canvasDevice != null && !fastToken.IsCancellationRequested)
+                        if (recoveryEntry?.Bitmap != null && !fastToken.IsCancellationRequested)
                         {
-                            newGpuBitmap = CanvasBitmap.CreateFromSoftwareBitmap(_canvasDevice, recoveryEntry.Bitmap);
+                            recoveryEntry.GpuBitmap = ViewerEngine.CreateGpuBitmap(recoveryEntry.Bitmap);
                             recoveryEntry.Bitmap.Dispose();
                             recoveryEntry.Bitmap = null;
-                            recoveryEntry.GpuBitmap = newGpuBitmap;
 
-                            if (App.GlobalImageCache.TryGetValue(currentItem.Path, out var oldEntry) && !DetachedPaths.ContainsKey(currentItem.Path))
+                            if (App.GlobalImageCache.TryGetValue(currentItem.Path, out var oldEntry))
                             {
-                                oldEntry.Dispose();
+                                oldEntry.Release();
                             }
                             App.GlobalImageCache[currentItem.Path] = recoveryEntry;
-                            targetLogicalW = recoveryEntry.NativeWidth;
-                            targetLogicalH = recoveryEntry.NativeHeight;
+                            targetEntry = recoveryEntry;
                         }
-                        else { recoveryEntry?.Dispose(); }
+                        else { recoveryEntry?.Release(); }
                     }
                     catch { }
                 }
 
-                if (myLoadId != _currentImageLoadId || newGpuBitmap == null) return;
+                if (myLoadId != _currentImageLoadId || targetEntry == null || (targetEntry.GpuBitmap == null && targetEntry.AnimationFrames == null)) return;
 
                 TryDisposeRawGpuBitmap();
 
-                _rawGpuBitmap = newGpuBitmap;
-                _rawGpuProfile = newGpuProfile;
+                _rawGpuBitmap = targetEntry.GpuBitmap;
+                _rawGpuProfile = targetEntry.Profile;
 
-                if (targetLogicalW == 0)
+                _logicalImageWidth = targetEntry.NativeWidth;
+                _logicalImageHeight = targetEntry.NativeHeight;
+
+                if (_logicalImageWidth == 0)
                 {
                     var size = await GetNativeImageSizeAsync(currentItem.Path);
-                    targetLogicalW = size.Width > 0 ? size.Width : _rawGpuBitmap.SizeInPixels.Width;
-                    targetLogicalH = size.Height > 0 ? size.Height : _rawGpuBitmap.SizeInPixels.Height;
+                    _logicalImageWidth = size.Width > 0 ? size.Width : (_rawGpuBitmap?.SizeInPixels.Width ?? 1);
+                    _logicalImageHeight = size.Height > 0 ? size.Height : (_rawGpuBitmap?.SizeInPixels.Height ?? 1);
+                    targetEntry.NativeWidth = _logicalImageWidth;
+                    targetEntry.NativeHeight = _logicalImageHeight;
                 }
 
-                _logicalImageWidth = targetLogicalW;
-                _logicalImageHeight = targetLogicalH;
                 _currentRenderedItem = currentItem;
+                _isHighFidelityActive = targetEntry.IsHighFidelity;
 
-                ViewerControl.InjectGpuBitmap(_rawGpuBitmap, _rawGpuProfile, targetLogicalW, targetLogicalH, _isHighFidelityActive, true);
+                ViewerControl.InjectImage(targetEntry, true);
 
                 ManageCache(index, stepDirection);
 
                 if (!_isHighFidelityActive) _hfPromotionTimer?.Start();
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"LoadFullImage error: {ex.Message}");
+            }
         }
 
         private static async Task<Size> GetNativeImageSizeAsync(string path)
@@ -293,36 +281,28 @@ namespace ModernImageViewer
 
         private void ManageCache(int centerIndex, int stepDirection)
         {
-            int prefetchRadius = 8;
-            int keepAliveRadius = 15;
+            const int prefetchRadiusAhead = 15;
+            const int prefetchRadiusBehind = 8;
+            const int keepAliveRadius = 20;
 
             _activeCachePaths.Clear();
-            HashSet<string> keepAlivePaths = [];
 
-            if (centerIndex >= 0 && centerIndex < Images.Count)
-            {
-                _activeCachePaths.Add(Images[centerIndex].Path);
-                keepAlivePaths.Add(Images[centerIndex].Path);
-            }
+            int ahead = stepDirection > 0 ? prefetchRadiusAhead : prefetchRadiusBehind;
+            int behind = stepDirection > 0 ? prefetchRadiusBehind : prefetchRadiusAhead;
 
-            for (int i = 1; i <= prefetchRadius; i++)
-            {
-                if (centerIndex + i < Images.Count) _activeCachePaths.Add(Images[centerIndex + i].Path);
-                if (centerIndex - i >= 0) _activeCachePaths.Add(Images[centerIndex - i].Path);
-            }
+            var keepAlivePaths = BuildKeepAlivePaths(centerIndex, keepAliveRadius);
+            BuildPrefetchPaths(centerIndex, ahead, behind);
 
-            for (int i = 1; i <= keepAliveRadius; i++)
-            {
-                if (centerIndex + i < Images.Count) keepAlivePaths.Add(Images[centerIndex + i].Path);
-                if (centerIndex - i >= 0) keepAlivePaths.Add(Images[centerIndex - i].Path);
-            }
+            var keysToRemove = App.GlobalImageCache.Keys
+                .Where(k => !keepAlivePaths.Contains(k))
+                .ToList();
 
-            var keysToRemove = App.GlobalImageCache.Keys.Where(k => !keepAlivePaths.Contains(k) && !DetachedPaths.ContainsKey(k)).ToList();
             foreach (var key in keysToRemove)
             {
                 if (App.GlobalImageCache.TryGetValue(key, out var entry))
                 {
-                    entry.Dispose();
+                    // Ref counting prevents premature destruction if detached windows hold references
+                    entry.Release();
                     App.GlobalImageCache.TryRemove(key, out _);
                 }
             }
@@ -340,79 +320,111 @@ namespace ModernImageViewer
 
             foreach (var path in _activeCachePaths)
             {
-                if (!App.GlobalImageCache.ContainsKey(path) && !_activeDecodes.ContainsKey(path))
-                {
-                    var cts = new CancellationTokenSource();
-                    _activeDecodes[path] = cts;
-                    var token = cts.Token;
+                if (App.GlobalImageCache.ContainsKey(path) || _activeDecodes.ContainsKey(path))
+                    continue;
 
-                    _ = Task.Run(async () =>
+                var cts = new CancellationTokenSource();
+                _activeDecodes[path] = cts;
+                var token = cts.Token;
+
+                _ = Task.Run(async () =>
+                {
+                    try
                     {
+                        await _cacheSemaphore.WaitAsync(token);
                         try
                         {
-                            await App.GlobalCacheSemaphore.WaitAsync(token);
-                            try
+                            if (token.IsCancellationRequested || _canvasDevice == null || !_activeCachePaths.Contains(path))
+                                return;
+
+                            var entry = await ViewerEngine.DecodeFastPreviewAsync(path, token);
+                            if (token.IsCancellationRequested || entry?.Bitmap == null)
                             {
-                                if (token.IsCancellationRequested) return;
-                                var entry = await ViewerEngine.DecodeFastPreviewAsync(path, token);
+                                entry?.Release();
+                                return;
+                            }
 
-                                if (entry != null && entry.Bitmap != null && _canvasDevice != null && !token.IsCancellationRequested)
+                            bool enqueued = this.DispatcherQueue.TryEnqueue(() =>
+                            {
+                                _activeDecodes.Remove(path);
+                                if (token.IsCancellationRequested) { entry.Release(); return; }
+
+                                try
                                 {
-                                    try
-                                    {
-                                        entry.GpuBitmap = CanvasBitmap.CreateFromSoftwareBitmap(_canvasDevice, entry.Bitmap);
-                                        entry.Bitmap.Dispose();
-                                        entry.Bitmap = null;
-                                    }
-                                    catch { }
-                                }
+                                    entry.GpuBitmap = ViewerEngine.CreateGpuBitmap(entry.Bitmap);
+                                    entry.Bitmap?.Dispose();
+                                    entry.Bitmap = null;
 
-                                bool enqueued = this.DispatcherQueue.TryEnqueue(() =>
-                                {
-                                    _activeDecodes.Remove(path);
-
-                                    if (token.IsCancellationRequested)
+                                    bool shouldKeep = keepAlivePaths.Contains(path);
+                                    if (shouldKeep && entry.GpuBitmap != null)
                                     {
-                                        entry?.Dispose();
-                                        return;
-                                    }
-
-                                    if ((keepAlivePaths.Contains(path) || DetachedPaths.ContainsKey(path)) && entry != null && (entry.GpuBitmap != null || entry.Bitmap != null))
-                                    {
-                                        if (App.GlobalImageCache.TryGetValue(path, out var oldEntry))
+                                        if (App.GlobalImageCache.TryGetValue(path, out var oldEntry) &&
+                                            !oldEntry.IsHighFidelity)
                                         {
-                                            if (oldEntry.IsHighFidelity || oldEntry.GpuBitmap == _rawGpuBitmap || DetachedPaths.ContainsKey(path))
-                                            {
-                                                entry.Dispose();
-                                            }
-                                            else
-                                            {
-                                                oldEntry.Dispose();
-                                                App.GlobalImageCache[path] = entry;
-                                            }
+                                            oldEntry.Release();
+                                            App.GlobalImageCache[path] = entry;
                                         }
-                                        else
+                                        else if (!App.GlobalImageCache.ContainsKey(path))
                                         {
                                             App.GlobalImageCache[path] = entry;
                                         }
+                                        else
+                                        {
+                                            entry.Release();
+                                        }
                                     }
-                                    else { entry?.Dispose(); }
-                                });
+                                    else
+                                    {
+                                        entry.Release();
+                                    }
+                                }
+                                catch { entry.Release(); }
+                            });
 
-                                if (!enqueued) entry?.Dispose();
-                            }
-                            finally { App.GlobalCacheSemaphore.Release(); }
+                            if (!enqueued) entry.Release();
                         }
-                        catch (OperationCanceledException)
-                        {
-                            this.DispatcherQueue.TryEnqueue(() => _activeDecodes.Remove(path));
-                        }
-                        catch
-                        {
-                            this.DispatcherQueue.TryEnqueue(() => _activeDecodes.Remove(path));
-                        }
-                    }, token);
-                }
+                        finally { _cacheSemaphore.Release(); }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        this.DispatcherQueue.TryEnqueue(() => _activeDecodes.Remove(path));
+                    }
+                    catch
+                    {
+                        this.DispatcherQueue.TryEnqueue(() => _activeDecodes.Remove(path));
+                    }
+                }, token);
+            }
+        }
+
+        private HashSet<string> BuildKeepAlivePaths(int centerIndex, int radius)
+        {
+            var keepAlive = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            if (centerIndex >= 0 && centerIndex < Images.Count)
+                keepAlive.Add(Images[centerIndex].Path);
+
+            for (int i = 1; i <= radius; i++)
+            {
+                if (centerIndex + i < Images.Count) keepAlive.Add(Images[centerIndex + i].Path);
+                if (centerIndex - i >= 0) keepAlive.Add(Images[centerIndex - i].Path);
+            }
+            return keepAlive;
+        }
+
+        private void BuildPrefetchPaths(int centerIndex, int ahead, int behind)
+        {
+            if (centerIndex >= 0 && centerIndex < Images.Count)
+                _activeCachePaths.Add(Images[centerIndex].Path);
+
+            for (int i = 1; i <= ahead; i++)
+            {
+                if (centerIndex + i < Images.Count) _activeCachePaths.Add(Images[centerIndex + i].Path);
+            }
+
+            for (int i = 1; i <= behind; i++)
+            {
+                if (centerIndex - i >= 0) _activeCachePaths.Add(Images[centerIndex - i].Path);
             }
         }
 
@@ -427,12 +439,19 @@ namespace ModernImageViewer
             }
             _activeDecodes.Clear();
 
-            var keysToRemove = App.GlobalImageCache.Keys.Where(k => !DetachedPaths.ContainsKey(k)).ToList();
+            string currentPath = (ViewerControl?.Visibility == Visibility.Visible && _currentRenderedItem != null)
+                ? _currentRenderedItem.Path
+                : string.Empty;
+
+            var keysToRemove = App.GlobalImageCache.Keys
+                .Where(k => !string.Equals(k, currentPath, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
             foreach (var key in keysToRemove)
             {
                 if (App.GlobalImageCache.TryGetValue(key, out var entry))
                 {
-                    entry.Dispose();
+                    entry.Release();
                     App.GlobalImageCache.TryRemove(key, out _);
                 }
             }
@@ -469,16 +488,29 @@ namespace ModernImageViewer
 
                 if (folderIdx != -1 && nextFolderIdx >= 0 && nextFolderIdx < _hopFolders.Count)
                 {
-                    _ = ScanFolder(_hopFolders[nextFolderIdx].Path).ContinueWith(t =>
+                    string targetFolder = _hopFolders[nextFolderIdx].Path;
+
+                    if (HasSupportedImages(targetFolder))
                     {
-                        DispatcherQueue.TryEnqueue(() =>
+                        _ = ScanFolder(targetFolder).ContinueWith(t =>
                         {
-                            if (Images.Count > 0)
+                            DispatcherQueue.TryEnqueue(() =>
                             {
-                                LoadFullImage(stepDirection > 0 ? 0 : Images.Count - 1, stepDirection);
-                            }
+                                if (Images.Count > 0)
+                                {
+                                    LoadFullImage(stepDirection > 0 ? 0 : Images.Count - 1, stepDirection);
+                                }
+                                else
+                                {
+                                    ClosePreviewInternal();
+                                }
+                            });
                         });
-                    });
+                    }
+                    else
+                    {
+                        ViewerControl?.ShowNotification($"Directory Empty: {Path.GetFileName(targetFolder)}");
+                    }
                     return;
                 }
             }
@@ -503,70 +535,101 @@ namespace ModernImageViewer
 
         private void ClosePreviewInternal(bool isTearOff = false)
         {
-            _mouseWheelAccumulator = 0;
             _hfPromotionTimer?.Stop();
             _hfCts?.Cancel();
             ClearImageCache();
 
             if (_slideshowTimer != null && _slideshowTimer.IsEnabled) _slideshowTimer.Stop();
 
+            ViewerControl.PrepareForNewImage(null);
+
             ViewerControl.Visibility = Visibility.Collapsed;
             if (HoverTriggerZone != null) HoverTriggerZone.Visibility = Visibility.Visible;
 
             TryDisposeRawGpuBitmap();
-            _rawGpuBitmap = null;
 
             if (_currentIndex >= 0 && _currentIndex < Images.Count && ImageGrid != null)
             {
                 var targetItem = Images[_currentIndex];
-
                 ImageGrid.ScrollIntoView(targetItem);
 
-                DispatcherQueue.TryEnqueue(async () =>
-                {
-                    await Task.Delay(50);
-
-                    if (ImageGrid.ContainerFromItem(targetItem) is GridViewItem container)
-                    {
-                        var scrollViewer = FindScrollViewer(ImageGrid);
-                        if (scrollViewer != null)
-                        {
-                            var transform = container.TransformToVisual(scrollViewer);
-                            var positionInScrollViewer = transform.TransformPoint(new Point(0, 0));
-
-                            double centerOffsetY = scrollViewer.VerticalOffset + positionInScrollViewer.Y
-                                                 - (scrollViewer.ViewportHeight / 2.0)
-                                                 + (container.ActualHeight / 2.0);
-
-                            scrollViewer.ChangeView(null, centerOffsetY, null, false);
-                        }
-
-                        if (container.ContentTemplateRoot is Grid rootElement)
-                        {
-                            if (!isTearOff)
-                            {
-                                RootGrid.Focus(FocusState.Programmatic);
-                            }
-
-                            rootElement.Scale = new Vector3(1.15f, 1.15f, 1.0f);
-                            rootElement.Opacity = 0.5;
-
-                            await Task.Delay(350);
-
-                            rootElement.Scale = new Vector3(1.0f, 1.0f, 1.0f);
-                            rootElement.Opacity = 1.0;
-                        }
-                    }
-                });
+                _ = AnimateCloseAsync(targetItem, isTearOff);
             }
+        }
+
+        private async Task AnimateCloseAsync(ImageItem targetItem, bool isTearOff)
+        {
+            try
+            {
+                await Task.Delay(50);
+
+                if (ImageGrid.ContainerFromItem(targetItem) is GridViewItem container)
+                {
+                    var scrollViewer = FindScrollViewer(ImageGrid);
+                    if (scrollViewer != null)
+                    {
+                        var transform = container.TransformToVisual(scrollViewer);
+                        var positionInScrollViewer = transform.TransformPoint(new Point(0, 0));
+
+                        double centerOffsetY = scrollViewer.VerticalOffset + positionInScrollViewer.Y
+                                             - (scrollViewer.ViewportHeight / 2.0)
+                                             + (container.ActualHeight / 2.0);
+
+                        scrollViewer.ChangeView(null, centerOffsetY, null, false);
+                    }
+
+                    if (container.ContentTemplateRoot is Grid rootElement)
+                    {
+                        if (!isTearOff) RootGrid.Focus(FocusState.Programmatic);
+
+                        rootElement.Scale = new Vector3(1.15f, 1.15f, 1.0f);
+                        rootElement.Opacity = 0.5;
+
+                        await Task.Delay(350);
+
+                        rootElement.Scale = new Vector3(1.0f, 1.0f, 1.0f);
+                        rootElement.Opacity = 1.0;
+                    }
+                }
+            }
+            catch { }
         }
 
         private void Global_KeyDown(object sender, KeyRoutedEventArgs e)
         {
-            if (e.Key == Windows.System.VirtualKey.F11) ToggleFullscreen();
-            else if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible)
+            if (e.Key == Windows.System.VirtualKey.F11)
             {
-                _mouseWheelAccumulator = 0;
+                ToggleFullscreen();
+                e.Handled = true;
+                return;
+            }
+
+            if (e.Key == Windows.System.VirtualKey.Delete)
+            {
+                var focusedElement = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(this.Content.XamlRoot);
+                if (focusedElement is TextBox || focusedElement is PasswordBox || focusedElement is RichEditBox)
+                    return;
+            }
+
+            if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible)
+            {
+                if (_isStartupIndexing)
+                {
+                    if (e.Key == Windows.System.VirtualKey.Right || e.Key == Windows.System.VirtualKey.Left ||
+                        e.Key == Windows.System.VirtualKey.Home || e.Key == Windows.System.VirtualKey.End ||
+                        e.Key == Windows.System.VirtualKey.Delete)
+                    {
+                        e.Handled = true;
+                    }
+                    return;
+                }
+
+                if (ViewerControl.HandleAnimationKeystroke(e.Key))
+                {
+                    e.Handled = true;
+                    return;
+                }
+
                 switch (e.Key)
                 {
                     case Windows.System.VirtualKey.Right: Navigate(1); break;
@@ -574,6 +637,7 @@ namespace ModernImageViewer
                     case Windows.System.VirtualKey.Home: Navigate(int.MinValue); break;
                     case Windows.System.VirtualKey.End: Navigate(int.MaxValue); break;
                     case Windows.System.VirtualKey.Escape: ClosePreviewInternal(); break;
+                    case Windows.System.VirtualKey.Delete: ViewerControl_DeleteRequested(this, EventArgs.Empty); break;
                 }
             }
         }
@@ -692,6 +756,20 @@ namespace ModernImageViewer
         private void ViewerControl_NavigateRequested(object sender, int step) => Navigate(step);
         private void ViewerControl_ShowInExplorerRequested(object sender, EventArgs e) => ShowInExplorer_Click(sender, new RoutedEventArgs());
 
+        // --- NEW: AddToCollageRouted Handler ---
+        private void ViewerControl_AddToCollageRequested(object? sender, EventArgs e)
+        {
+            if (_currentIndex >= 0 && _currentIndex < Images.Count)
+            {
+                string targetPath = Images[_currentIndex].Path;
+
+                // Re-use existing logic to instantiate or focus the editor window
+                TestCollage_Click(this, new RoutedEventArgs());
+
+                _collageEditorWindow?.AddExternalImage(targetPath);
+            }
+        }
+
         private void ViewerControl_DeviceLostRestoring(object sender, EventArgs e)
         {
             _canvasDevice = CanvasDevice.GetSharedDevice();
@@ -753,6 +831,76 @@ namespace ModernImageViewer
                 _tearingOffWindow = null;
             }
             ClosePreviewInternal(isTearOff: true);
+        }
+
+        public void ViewerControl_EditRequested(object? sender, EventArgs e)
+        {
+            if (_isStartupIndexing) return;
+
+            if (_currentIndex >= 0 && _currentIndex < Images.Count)
+            {
+                string targetPath = Images[_currentIndex].Path;
+                string editor = string.IsNullOrWhiteSpace(ImageEditorPath) ? "mspaint.exe" : ImageEditorPath;
+
+                try
+                {
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = editor,
+                        Arguments = $"\"{targetPath}\"",
+                        UseShellExecute = true
+                    };
+                    Process.Start(psi);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Failed to start editor: {ex.Message}");
+                }
+            }
+        }
+
+        private async void ViewerControl_RenameRequested(object sender, EventArgs e)
+        {
+            if (_isStartupIndexing) return;
+
+            if (_currentRenderedItem != null)
+            {
+                _fastDecodeCts?.Cancel();
+                _hfCts?.Cancel();
+
+                // Explicitly await the running tasks to clear file handles deterministically
+                if (_fastDecodeTask != null && !_fastDecodeTask.IsCompleted) try { await _fastDecodeTask; } catch { }
+                if (_hfTask != null && !_hfTask.IsCompleted) try { await _hfTask; } catch { }
+                await _currentRenderedItem.CancelAndAwaitTasksAsync();
+
+                if (await ViewerEngine.RenameImageAsync(_currentRenderedItem, this.Content.XamlRoot))
+                {
+                    LoadFullImage(_currentIndex);
+                }
+            }
+        }
+
+        private async void ViewerControl_DeleteRequested(object sender, EventArgs e)
+        {
+            if (_isStartupIndexing) return;
+
+            if (_currentRenderedItem != null)
+            {
+                _fastDecodeCts?.Cancel();
+                _hfCts?.Cancel();
+
+                // Explicitly await the running tasks to clear file handles deterministically
+                if (_fastDecodeTask != null && !_fastDecodeTask.IsCompleted) try { await _fastDecodeTask; } catch { }
+                if (_hfTask != null && !_hfTask.IsCompleted) try { await _hfTask; } catch { }
+                await _currentRenderedItem.CancelAndAwaitTasksAsync();
+
+                if (await ViewerEngine.DeleteImageAsync(_currentRenderedItem, this.Content.XamlRoot))
+                {
+                    Images.Remove(_currentRenderedItem);
+                    if (Images.Count == 0) ClosePreviewInternal();
+                    else LoadFullImage(Math.Min(_currentIndex, Images.Count - 1));
+                }
+            }
         }
     }
 }

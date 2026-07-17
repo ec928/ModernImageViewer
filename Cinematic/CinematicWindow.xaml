@@ -1,0 +1,206 @@
+<Window
+    x:Class="ModernImageViewer.Cinematic.CinematicWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:canvas="using:Microsoft.Graphics.Canvas.UI.Xaml"
+    Title="Cinematic Slideshow">
+
+    <Grid x:Name="RootGrid" Background="Black" PointerMoved="RootGrid_PointerMoved">
+
+        <!-- Native Zero-Friction Keyboard Controls -->
+        <Grid.KeyboardAccelerators>
+            <KeyboardAccelerator Key="Space" Invoked="Accelerator_PlayPause" />
+            <KeyboardAccelerator Key="Left" Invoked="Accelerator_Prev" />
+            <KeyboardAccelerator Key="Right" Invoked="Accelerator_Next" />
+            <KeyboardAccelerator Key="Escape" Invoked="Accelerator_Escape" />
+        </Grid.KeyboardAccelerators>
+
+        <Border x:Name="ActionBar" Canvas.ZIndex="1000" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,40" Padding="4" 
+                Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" 
+                BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" 
+                BorderThickness="1" CornerRadius="26" RequestedTheme="Dark">
+
+            <Border.OpacityTransition>
+                <ScalarTransition Duration="0:0:0.3"/>
+            </Border.OpacityTransition>
+
+            <StackPanel Orientation="Horizontal" Spacing="2">
+
+                <!-- Playlist Controls -->
+                <ToggleButton x:Name="BtnShuffle" IsChecked="{x:Bind ViewModel.IsShuffleEnabled, Mode=TwoWay}" Width="44" Height="44" Background="Transparent" BorderThickness="0" CornerRadius="22" ToolTipService.ToolTip="Toggle Shuffle">
+                    <SymbolIcon Symbol="Shuffle" />
+                </ToggleButton>
+                <ToggleButton x:Name="BtnLoop" IsChecked="{x:Bind ViewModel.IsLoopEnabled, Mode=TwoWay}" Width="44" Height="44" Background="Transparent" BorderThickness="0" CornerRadius="22" ToolTipService.ToolTip="Toggle Loop">
+                    <SymbolIcon Symbol="RepeatAll" />
+                </ToggleButton>
+
+                <Border Width="1" Height="24" Background="{ThemeResource SurfaceStrokeColorDefaultBrush}" Margin="4,0" />
+
+                <!-- Playback Controls -->
+                <Button x:Name="BtnBack" Click="BtnBack_Click" Width="44" Height="44" Background="Transparent" BorderThickness="0" CornerRadius="22" ToolTipService.ToolTip="Previous Slide">
+                    <SymbolIcon Symbol="Previous" />
+                </Button>
+                <Button x:Name="BtnPlayStop" Click="BtnPlayStop_Click" Width="44" Height="44" Background="Transparent" BorderThickness="0" CornerRadius="22" ToolTipService.ToolTip="Play / Pause">
+                    <SymbolIcon Symbol="{x:Bind ViewModel.PlayPauseIcon, Mode=OneWay}" />
+                </Button>
+                <Button x:Name="BtnForward" Click="BtnForward_Click" Width="44" Height="44" Background="Transparent" BorderThickness="0" CornerRadius="22" ToolTipService.ToolTip="Next Slide">
+                    <SymbolIcon Symbol="Next" />
+                </Button>
+
+                <Border Width="1" Height="24" Background="{ThemeResource SurfaceStrokeColorDefaultBrush}" Margin="4,0" />
+
+                <Button x:Name="BtnDirectorToggle" Click="BtnDirectorToggle_Click" Width="44" Height="44" Background="Transparent" BorderThickness="0" CornerRadius="22" ToolTipService.ToolTip="Toggle Director Panel">
+                    <SymbolIcon Symbol="Edit" />
+                </Button>
+            </StackPanel>
+        </Border>
+
+        <SplitView x:Name="DirectorSidebar" PanePlacement="Right" DisplayMode="Inline" OpenPaneLength="340" 
+                   PaneOpening="DirectorSidebar_PaneOpening" PaneClosed="DirectorSidebar_PaneClosed">
+
+            <SplitView.Pane>
+                <Grid x:Name="DirectorPanelGrid" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" Padding="24,40,24,24">
+                    <StackPanel Spacing="24">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="{x:Bind ViewModel.PanelHeader, Mode=OneWay}" Style="{ThemeResource TitleTextBlockStyle}" />
+                            <ToggleButton Content="{x:Bind ViewModel.OverrideButtonText, Mode=OneWay}" IsChecked="{x:Bind ViewModel.IsOverrideMode, Mode=TwoWay}" HorizontalAlignment="Stretch" ToolTipService.ToolTip="Toggle between Auto sequence and manual focal override" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Cinematic Technique" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                            <ComboBox HorizontalAlignment="Stretch" SelectedValue="{x:Bind ViewModel.TechniqueOverride, Mode=TwoWay}" SelectedValuePath="Tag">
+                                <ComboBoxItem Content="Auto (Engine Choice)" Tag="Auto" />
+                                <ComboBoxItem Content="Contextual Drift (1-Beat)" Tag="ContextualDrift" />
+                                <ComboBoxItem Content="The Ethereal Hold (1-Beat)" Tag="EtherealHold" />
+                                <ComboBoxItem Content="The Intimate Reveal (Cut)" Tag="IntimateReveal" />
+                                <ComboBoxItem Content="The Discovery Track (Snap-Zoom)" Tag="DiscoveryTrack" />
+                            </ComboBox>
+                        </StackPanel>
+
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Local Duration (Seconds)" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                            <Slider Minimum="3" Maximum="30" Value="{x:Bind ViewModel.DurationSeconds, Mode=TwoWay}" ToolTipService.ToolTip="Adjust slide pacing" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Motion Intensity (%)" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                            <Slider Minimum="0" Maximum="100" Value="{x:Bind ViewModel.IntensityPercent, Mode=TwoWay}" ToolTipService.ToolTip="Adjust scaling aggressiveness" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="8" Margin="0,12,0,0">
+                            <TextBlock Text="Sequence Beats (Combos)" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                            <Slider Minimum="1" Maximum="5" TickFrequency="1" TickPlacement="Outside" SnapsTo="Ticks" Value="{x:Bind ViewModel.BeatCount, Mode=TwoWay}" ToolTipService.ToolTip="Chain multiple camera moves together" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Motion Direction" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                            <ComboBox HorizontalAlignment="Stretch" SelectedValue="{x:Bind ViewModel.DirectionOverride, Mode=TwoWay}" SelectedValuePath="Tag">
+                                <ComboBoxItem Content="Auto (Random)" Tag="0" />
+                                <ComboBoxItem Content="Force Zoom In" Tag="1" />
+                                <ComboBoxItem Content="Force Zoom Out" Tag="2" />
+                                <ComboBoxItem Content="Pan Only (Close-Up)" Tag="3" />
+                            </ComboBox>
+                        </StackPanel>
+
+                        <StackPanel Spacing="8" Margin="0,20,0,0">
+                            <Button Content="Undo Last Move" Click="BtnUndo_Click" HorizontalAlignment="Stretch" ToolTipService.ToolTip="Revert target box to previous location" />
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Button Content="Load Project" Click="BtnLoad_Click" HorizontalAlignment="Stretch" Grid.Column="0" ToolTipService.ToolTip="Import an existing Cinematic JSON project" />
+                                <Button Content="Export Project" Click="BtnExport_Click" HorizontalAlignment="Stretch" Grid.Column="1" Style="{ThemeResource AccentButtonStyle}" ToolTipService.ToolTip="Save your customized timelines to disk" />
+                            </Grid>
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
+            </SplitView.Pane>
+
+            <SplitView.Content>
+                <Grid>
+                    <canvas:CanvasControl x:Name="SlideshowCanvas" CreateResources="SlideshowCanvas_CreateResources" Draw="SlideshowCanvas_Draw" SizeChanged="SlideshowCanvas_SizeChanged" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+
+                    <!-- Floating Instructional Hint -->
+                    <Border x:Name="WysiwygHint" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,48,0,0" Background="#DD000000" CornerRadius="8" Padding="16,12" BorderBrush="#55FFFFFF" BorderThickness="1" IsHitTestVisible="False" Canvas.ZIndex="500">
+                        <StackPanel Spacing="4" HorizontalAlignment="Center">
+                            <TextBlock Text="Target Edit Mode" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center"/>
+                            <TextBlock Text="Drag the viewfinder to set the focal point. Use your scroll wheel to resize." Foreground="#CCCCCC" FontSize="13" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border x:Name="TelemetryOverlay" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="24" Background="#CC000000" CornerRadius="8" Padding="16" Visibility="Collapsed" IsHitTestVisible="False">
+                        <StackPanel Spacing="8">
+                            <Border x:Name="StateBadge" CornerRadius="4" Padding="8,4" Background="#33FFFFFF" HorizontalAlignment="Left">
+                                <TextBlock x:Name="StateText" FontWeight="Bold" FontFamily="Consolas" FontSize="14" Foreground="White" />
+                            </Border>
+                            <TextBlock x:Name="TelemetryText" FontFamily="Consolas" FontSize="14" Foreground="#4AF626" Opacity="0.9" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+
+                    <Canvas x:Name="WysiwygOverlay" Visibility="Collapsed" Background="Transparent" 
+                            HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                            SizeChanged="WysiwygOverlay_SizeChanged"
+                            PointerWheelChanged="WysiwygOverlay_PointerWheelChanged">
+
+                        <!-- Ghost Viewport Indicator -->
+                        <Rectangle x:Name="GhostViewport" Stroke="#33FFFFFF" StrokeThickness="1" StrokeDashArray="4,4" IsHitTestVisible="False">
+                            <Rectangle.RenderTransform>
+                                <TranslateTransform x:Name="GhostTransform" X="0" Y="0" />
+                            </Rectangle.RenderTransform>
+                        </Rectangle>
+
+                        <!-- Focus Target Box (Cleaned of Handles and KeyDown) -->
+                        <Border x:Name="FocusTargetBox" Width="160" Height="90" 
+                                BorderBrush="{ThemeResource SystemAccentColor}" BorderThickness="2" CornerRadius="0"
+                                Background="#330078D7" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                PointerPressed="FocusTargetBox_PointerPressed" PointerMoved="FocusTargetBox_PointerMoved"
+                                PointerReleased="FocusTargetBox_PointerReleased" PointerCanceled="FocusTargetBox_PointerReleased">
+
+                            <Border.RenderTransform>
+                                <TranslateTransform x:Name="FocusBoxTransform" X="0" Y="0" />
+                            </Border.RenderTransform>
+
+                            <Grid>
+                                <Button x:Name="BtnClearTarget" Click="BtnClearTarget_Click" Width="24" Height="24" Padding="0" 
+                                        Background="#CC000000" BorderThickness="0" CornerRadius="12"
+                                        HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-12,-12,0"
+                                        ToolTipService.ToolTip="Clear Manual Target">
+                                    <SymbolIcon Symbol="Cancel" Foreground="White" />
+                                </Button>
+
+                                <!-- Rule of Thirds Grid -->
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="*"/>
+                                        <RowDefinition Height="*"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Border BorderBrush="#66FFFFFF" BorderThickness="0,0,1,1" Grid.Row="0" Grid.Column="0" />
+                                    <Border BorderBrush="#66FFFFFF" BorderThickness="0,0,1,1" Grid.Row="0" Grid.Column="1" />
+                                    <Border BorderBrush="#66FFFFFF" BorderThickness="0,0,0,1" Grid.Row="0" Grid.Column="2" />
+                                    <Border BorderBrush="#66FFFFFF" BorderThickness="0,0,1,1" Grid.Row="1" Grid.Column="0" />
+                                    <Border BorderBrush="#66FFFFFF" BorderThickness="0,0,1,1" Grid.Row="1" Grid.Column="1" />
+                                    <Border BorderBrush="#66FFFFFF" BorderThickness="0,0,0,1" Grid.Row="1" Grid.Column="2" />
+                                    <Border BorderBrush="#66FFFFFF" BorderThickness="0,0,1,0" Grid.Row="2" Grid.Column="0" />
+                                    <Border BorderBrush="#66FFFFFF" BorderThickness="0,0,1,0" Grid.Row="2" Grid.Column="1" />
+
+                                    <!-- Area Readout -->
+                                    <Border Background="#99000000" CornerRadius="4" Padding="4,2" HorizontalAlignment="Center" VerticalAlignment="Center" Grid.Row="1" Grid.Column="1">
+                                        <TextBlock x:Name="AreaReadoutText" Text="15%" FontSize="11" FontWeight="Bold" Foreground="White" />
+                                    </Border>
+                                </Grid>
+                            </Grid>
+                        </Border>
+                    </Canvas>
+                </Grid>
+            </SplitView.Content>
+        </SplitView>
+    </Grid>
+</Window>

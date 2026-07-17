@@ -13,7 +13,15 @@
             <Storyboard x:Name="FadeInStoryboard">
                 <DoubleAnimation Storyboard.TargetName="UnifiedHud" Storyboard.TargetProperty="Opacity" To="1.0" Duration="0:0:0.25" />
                 <DoubleAnimation Storyboard.TargetName="TopLeftInfoOverlay" Storyboard.TargetProperty="Opacity" To="1.0" Duration="0:0:0.25" />
+                <DoubleAnimation Storyboard.TargetName="AnimationHud" Storyboard.TargetProperty="Opacity" To="1.0" Duration="0:0:0.25" />
+
                 <DoubleAnimation Storyboard.TargetName="HudTranslate" Storyboard.TargetProperty="Y" To="0" Duration="0:0:0.25">
+                    <DoubleAnimation.EasingFunction>
+                        <QuadraticEase EasingMode="EaseOut" />
+                    </DoubleAnimation.EasingFunction>
+                </DoubleAnimation>
+
+                <DoubleAnimation Storyboard.TargetName="AnimHudTranslate" Storyboard.TargetProperty="Y" To="0" Duration="0:0:0.25">
                     <DoubleAnimation.EasingFunction>
                         <QuadraticEase EasingMode="EaseOut" />
                     </DoubleAnimation.EasingFunction>
@@ -23,7 +31,15 @@
             <Storyboard x:Name="FadeOutStoryboard">
                 <DoubleAnimation Storyboard.TargetName="UnifiedHud" Storyboard.TargetProperty="Opacity" To="0.0" Duration="0:0:0.25" />
                 <DoubleAnimation Storyboard.TargetName="TopLeftInfoOverlay" Storyboard.TargetProperty="Opacity" To="0.0" Duration="0:0:0.25" />
+                <DoubleAnimation Storyboard.TargetName="AnimationHud" Storyboard.TargetProperty="Opacity" To="0.0" Duration="0:0:0.25" />
+
                 <DoubleAnimation Storyboard.TargetName="HudTranslate" Storyboard.TargetProperty="Y" To="15" Duration="0:0:0.25">
+                    <DoubleAnimation.EasingFunction>
+                        <QuadraticEase EasingMode="EaseIn" />
+                    </DoubleAnimation.EasingFunction>
+                </DoubleAnimation>
+
+                <DoubleAnimation Storyboard.TargetName="AnimHudTranslate" Storyboard.TargetProperty="Y" To="15" Duration="0:0:0.25">
                     <DoubleAnimation.EasingFunction>
                         <QuadraticEase EasingMode="EaseIn" />
                     </DoubleAnimation.EasingFunction>
@@ -40,9 +56,23 @@
             </Grid>
         </ScrollViewer>
 
-        <Grid x:Name="InputOverlay" Background="#01000000" Canvas.ZIndex="50" PointerPressed="InputOverlay_PointerPressed" PointerMoved="InputOverlay_PointerMoved" PointerReleased="InputOverlay_PointerReleased" PointerWheelChanged="InputOverlay_PointerWheelChanged">
+        <Grid x:Name="InputOverlay" Background="#01000000" Canvas.ZIndex="50" 
+              PointerPressed="InputOverlay_PointerPressed" 
+              PointerMoved="InputOverlay_PointerMoved" 
+              PointerReleased="InputOverlay_PointerReleased" 
+              PointerCanceled="InputOverlay_PointerCanceled"
+              PointerWheelChanged="InputOverlay_PointerWheelChanged"
+              Tapped="InputOverlay_Tapped"
+              DoubleTapped="InputOverlay_DoubleTapped">
             <Grid.ContextFlyout>
                 <MenuFlyout>
+                    <MenuFlyoutItem x:Name="SizeToImageMenuItem" Text="Size Window to Image" Click="SizeToImage_Click" Visibility="Collapsed">
+                        <MenuFlyoutItem.Icon>
+                            <SymbolIcon Symbol="Placeholder"/>
+                        </MenuFlyoutItem.Icon>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutSeparator x:Name="SizeToImageSeparator" Visibility="Collapsed" />
+
                     <MenuFlyoutItem Text="Zoom to 100%" Click="ZoomToActualSize_Click">
                         <MenuFlyoutItem.Icon>
                             <SymbolIcon Symbol="ZoomIn"/>
@@ -54,14 +84,8 @@
                         </MenuFlyoutItem.Icon>
                     </MenuFlyoutItem>
 
-                    <MenuFlyoutItem x:Name="SizeToImageMenuItem" Text="Size Window to Image" Click="SizeToImage_Click" Visibility="Collapsed">
-                        <MenuFlyoutItem.Icon>
-                            <SymbolIcon Symbol="Placeholder"/>
-                        </MenuFlyoutItem.Icon>
-                    </MenuFlyoutItem>
-
                     <MenuFlyoutSeparator/>
-                    <MenuFlyoutItem Text="Fullscreen (F11)" Click="ToggleFullscreen_Click">
+                    <MenuFlyoutItem Text="Fullscreen / Maximize (F11)" Click="ToggleFullscreen_Click">
                         <MenuFlyoutItem.Icon>
                             <SymbolIcon Symbol="FullScreen"/>
                         </MenuFlyoutItem.Icon>
@@ -90,6 +114,35 @@
                     </MenuFlyoutSubItem>
                     <MenuFlyoutSeparator/>
 
+                    <MenuFlyoutItem Text="Add to Collage" Click="AddToCollage_Click">
+                        <MenuFlyoutItem.Icon>
+                            <SymbolIcon Symbol="Pictures"/>
+                        </MenuFlyoutItem.Icon>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutItem Text="Play Cinematic Slideshow" Click="PlayCinematic_Click">
+                        <MenuFlyoutItem.Icon>
+                            <SymbolIcon Symbol="Play" />
+                        </MenuFlyoutItem.Icon>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutSeparator/>
+
+                    <MenuFlyoutItem Text="Edit Image" Click="EditImage_Click">
+                        <MenuFlyoutItem.Icon>
+                            <SymbolIcon Symbol="Edit"/>
+                        </MenuFlyoutItem.Icon>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutItem Text="Rename" Click="RenameImage_Click">
+                        <MenuFlyoutItem.Icon>
+                            <SymbolIcon Symbol="Rename"/>
+                        </MenuFlyoutItem.Icon>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutItem Text="Delete (Del)" Click="DeleteImage_Click">
+                        <MenuFlyoutItem.Icon>
+                            <SymbolIcon Symbol="Delete"/>
+                        </MenuFlyoutItem.Icon>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutSeparator/>
+
                     <MenuFlyoutItem Text="Show in Explorer" Click="ShowInExplorer_Click">
                         <MenuFlyoutItem.Icon>
                             <SymbolIcon Symbol="Folder"/>
@@ -113,19 +166,43 @@
         </Grid>
 
         <Grid x:Name="TopLeftInfoOverlay" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="24,60,0,0" Opacity="0" IsHitTestVisible="False" Canvas.ZIndex="60">
-            <Border Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="12,8">
-                <StackPanel>
-                    <TextBlock x:Name="HudFileName" Style="{ThemeResource BodyStrongTextBlockStyle}" Foreground="{ThemeResource TextFillColorPrimaryBrush}" TextTrimming="CharacterEllipsis" MaxWidth="400"/>
-                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
-                        <TextBlock x:Name="HudSecondaryInfo" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <TextBlock x:Name="HudZoomInfo" Width="80" TextAlignment="Right" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Typography.NumeralAlignment="Tabular"/>
-                        <TextBlock x:Name="HudFidelity" Width="24" TextAlignment="Center" Style="{ThemeResource CaptionTextBlockStyle}" FontWeight="Bold"/>
+            <Border Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="16,10">
+                <StackPanel Spacing="4" HorizontalAlignment="Center">
+                    <TextBlock x:Name="HudFileName" Style="{ThemeResource BodyStrongTextBlockStyle}" Foreground="{ThemeResource TextFillColorPrimaryBrush}" TextTrimming="CharacterEllipsis" MaxWidth="350" HorizontalAlignment="Center"/>
+                    <TextBlock x:Name="HudSecondaryInfo" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center"/>
+                    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                        <TextBlock x:Name="HudZoomInfo" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Typography.NumeralAlignment="Tabular"/>
+                        <TextBlock Text="•" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Opacity="0.5"/>
+                        <TextBlock x:Name="HudFidelity" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorPrimaryBrush}" FontWeight="Bold"/>
                     </StackPanel>
                 </StackPanel>
             </Border>
         </Grid>
 
-        <Grid x:Name="UnifiedHud" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,80" Opacity="0" IsHitTestVisible="False" Canvas.ZIndex="60">
+        <Grid x:Name="AnimationHud" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,135" Opacity="0" IsHitTestVisible="False" Canvas.ZIndex="60" Visibility="Collapsed"
+              PointerEntered="Hud_PointerEntered" PointerExited="Hud_PointerExited">
+            <Grid.RenderTransform>
+                <TranslateTransform x:Name="AnimHudTranslate" Y="15" />
+            </Grid.RenderTransform>
+            <Border Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="20" Padding="12,4">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button x:Name="AnimPrevButton" Click="AnimPrev_Click" Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Previous Frame (&lt;)" Padding="6">
+                        <SymbolIcon Symbol="Previous"/>
+                    </Button>
+                    <Button x:Name="AnimPlayPauseButton" Click="AnimPlayPause_Click" Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Play/Pause (Space)" Padding="6">
+                        <SymbolIcon x:Name="AnimPlayPauseIcon" Symbol="Pause"/>
+                    </Button>
+                    <Button x:Name="AnimNextButton" Click="AnimNext_Click" Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Next Frame (&gt;)" Padding="6">
+                        <SymbolIcon Symbol="Next"/>
+                    </Button>
+                    <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,6" Opacity="0.4"/>
+                    <TextBlock x:Name="AnimFrameCounter" Text="1 / 1" VerticalAlignment="Center" Margin="4,0,8,0" Style="{ThemeResource CaptionTextBlockStyle}" Typography.NumeralAlignment="Tabular" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <Grid x:Name="UnifiedHud" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,80" Opacity="0" IsHitTestVisible="False" Canvas.ZIndex="60"
+              PointerEntered="Hud_PointerEntered" PointerExited="Hud_PointerExited">
             <Grid.RenderTransform>
                 <TranslateTransform x:Name="HudTranslate" Y="15" />
             </Grid.RenderTransform>
@@ -141,7 +218,7 @@
                         <Button x:Name="DetachButton" Click="DetachImage_Click" Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Detach" Padding="6">
                             <SymbolIcon Symbol="NewWindow"/>
                         </Button>
-                        <Button Click="ToggleFullscreen_Click" Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Fullscreen" Padding="6">
+                        <Button Click="ToggleFullscreen_Click" Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Fullscreen / Maximize (F11)" Padding="6">
                             <SymbolIcon Symbol="FullScreen"/>
                         </Button>
                     </StackPanel>

@@ -1,4 +1,4 @@
-using Microsoft.Graphics.Canvas;
+﻿using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Effects;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -9,11 +9,14 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Windows.Storage;
+using ModernImageViewer.Collage;
 
 namespace ModernImageViewer
 {
@@ -32,8 +35,8 @@ namespace ModernImageViewer
         public string? StartupFilePath { get; set; }
         public Dictionary<string, int> DetachedPaths { get; } = new(StringComparer.OrdinalIgnoreCase);
 
-        // Always defaults to CurrentZoom on initialization to meet requirement
         public DetachLimit CurrentDetachLimit = DetachLimit.CurrentZoom;
+        public string ImageEditorPath { get; set; } = "mspaint.exe";
 
         private ObservableRangeCollection<ImageItem> _images = [];
         public ObservableRangeCollection<ImageItem> Images
@@ -44,10 +47,6 @@ namespace ModernImageViewer
 
         public event PropertyChangedEventHandler? PropertyChanged;
         private void OnPropertyChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
-
-        private static readonly string[] ColorProfileProperty = ["System.Image.ColorProfile"];
-        private static readonly string[] ExifProperties = ["System.Photo.ISOSpeed", "System.Photo.FNumber", "System.Photo.ExposureTime", "System.Photo.CameraManufacturer", "System.Photo.CameraModel"];
-        private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".heic", ".heif", ".avif" };
 
         private readonly AppWindow _appWindow;
         private readonly IntPtr _hWnd;
@@ -68,11 +67,9 @@ namespace ModernImageViewer
         private bool _isFullscreen = false;
         private int _currentImageLoadId = 0, _currentScanId = 0;
         private bool _isScanning = false;
-
-        private float _targetZoom = 1.0f;
+        private bool _isStartupIndexing = false;
 
         private string _currentDirectory = string.Empty;
-        private int _mouseWheelAccumulator = 0;
         private DateTime _lastNavigationTime = DateTime.MinValue;
 
         private float _currentGamma = 2.2f;
@@ -90,7 +87,15 @@ namespace ModernImageViewer
 
         private ItemsWrapGrid? _imageWrapGrid;
         private readonly List<string> _recentFolders = [];
-        private readonly string _settingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ModernImageViewer", "settings.txt");
+
+        private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".heic", ".heif", ".avif"
+        };
+
+        private readonly string _settingsPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "ModernImageViewer", "settings.json");
 
         public MainWindow()
         {
@@ -132,79 +137,73 @@ namespace ModernImageViewer
             _slideshowTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
             _slideshowTimer.Tick += (s, e) => Navigate(1);
 
-            // --> FIXED: Reduced Debounce from 500ms to 150ms for instant feel
             _hfPromotionTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
             _hfPromotionTimer.Tick += async (s, e) =>
             {
                 _hfPromotionTimer?.Stop();
-                if (!_isHighFidelityActive && _currentIndex >= 0 && _currentIndex < Images.Count)
+
+                try
                 {
-                    int promoteId = _currentImageLoadId;
-                    var path = Images[_currentIndex].Path;
-
-                    _hfCts?.Cancel();
-                    _hfCts?.Dispose();
-                    _hfCts = new CancellationTokenSource();
-                    var token = _hfCts.Token;
-
-                    var hfEntry = await Task.Run(async () =>
+                    if (!_isHighFidelityActive && _currentIndex >= 0 && _currentIndex < Images.Count)
                     {
-                        var entry = await ViewerEngine.DecodeHighFidelityAsync(path, token);
-                        if (entry != null && entry.Bitmap != null && _canvasDevice != null && !token.IsCancellationRequested)
+                        int promoteId = _currentImageLoadId;
+                        var path = Images[_currentIndex].Path;
+
+                        _hfCts?.Cancel();
+                        _hfCts?.Dispose();
+                        _hfCts = new CancellationTokenSource();
+                        var token = _hfCts.Token;
+
+                        // Assigned to track background task (Fixes CS0649)
+                        _hfTask = Task.Run(async () =>
                         {
-                            try
+                            return await ViewerEngine.DecodeHighFidelityAsync(path, token);
+                        });
+                        var hfEntry = await _hfTask;
+
+                        if (token.IsCancellationRequested || promoteId != _currentImageLoadId || hfEntry == null)
+                        {
+                            hfEntry?.Dispose();
+                            return;
+                        }
+
+                        bool success = ViewerEngine.FinalizeHighFidelityGpuResources(hfEntry);
+
+                        if (!success || token.IsCancellationRequested || promoteId != _currentImageLoadId)
+                        {
+                            hfEntry.Dispose();
+                            return;
+                        }
+
+                        TryDisposeRawGpuBitmap();
+
+                        _rawGpuBitmap = hfEntry.GpuBitmap;
+                        _rawGpuProfile = hfEntry.Profile;
+
+                        if (App.GlobalImageCache.TryGetValue(path, out var oldEntry))
+                        {
+                            if (!DetachedPaths.ContainsKey(path))
                             {
-                                entry.GpuBitmap = CanvasBitmap.CreateFromSoftwareBitmap(_canvasDevice, entry.Bitmap);
-                                entry.Bitmap.Dispose();
-                                entry.Bitmap = null;
+                                oldEntry.Dispose();
                             }
-                            catch { }
                         }
-                        return entry;
-                    });
+                        if (hfEntry != null) App.GlobalImageCache[path] = hfEntry;
 
-                    if (token.IsCancellationRequested || promoteId != _currentImageLoadId || hfEntry == null || (hfEntry.GpuBitmap == null && hfEntry.Bitmap == null))
-                    {
-                        hfEntry?.Dispose();
-                        return;
-                    }
+                        _isHighFidelityActive = true;
 
-                    CanvasBitmap? newGpuBitmap = hfEntry?.GpuBitmap;
-                    if (newGpuBitmap == null && hfEntry?.Bitmap != null && _canvasDevice != null)
-                    {
-                        newGpuBitmap = CanvasBitmap.CreateFromSoftwareBitmap(_canvasDevice, hfEntry.Bitmap);
-                        hfEntry.GpuBitmap = newGpuBitmap;
-                        hfEntry.Bitmap.Dispose();
-                        hfEntry.Bitmap = null;
-                    }
-
-                    TryDisposeRawGpuBitmap();
-
-                    _rawGpuBitmap = newGpuBitmap;
-                    _rawGpuProfile = hfEntry?.Profile;
-
-                    if (App.GlobalImageCache.TryGetValue(path, out var oldEntry))
-                    {
-                        if (!DetachedPaths.ContainsKey(path))
+                        if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible && hfEntry != null)
                         {
-                            oldEntry.Dispose();
+                            ViewerControl.InjectImage(hfEntry, false);
                         }
                     }
-                    if (hfEntry != null) App.GlobalImageCache[path] = hfEntry;
-
-                    _isHighFidelityActive = true;
-
-                    if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible)
-                    {
-                        double safeW = hfEntry?.NativeWidth > 0 ? hfEntry.NativeWidth : _logicalImageWidth;
-                        double safeH = hfEntry?.NativeHeight > 0 ? hfEntry.NativeHeight : _logicalImageHeight;
-                        ViewerControl.InjectGpuBitmap(_rawGpuBitmap, _rawGpuProfile, safeW, safeH, true, false);
-                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[HF Promotion Error] Exception caught by shield: {ex.Message}");
                 }
             };
 
             ConfigureWindow(false);
-            LoadRecentFoldersFromSettings();
 
             RootGrid.Loaded += async (s, e) =>
             {
@@ -243,79 +242,161 @@ namespace ModernImageViewer
             ManageCache(_currentIndex, 0);
         }
 
+        private sealed class AppSettings
+        {
+            public int Version { get; set; } = 1;
+            public int WindowWidth { get; set; } = 1280;
+            public int WindowHeight { get; set; } = 1350;
+            public int WindowX { get; set; } = -1;
+            public int WindowY { get; set; } = -1;
+            public float Gamma { get; set; } = 2.2f;
+            public string ImageEditorPath { get; set; } = "mspaint.exe";
+            public List<string> RecentFolders { get; set; } = new();
+        }
+
         private void ConfigureWindow(bool forceReset)
         {
-            if (forceReset)
-            {
-                _appWindow?.Resize(new Windows.Graphics.SizeInt32(1280, 1350));
-            }
-            else
+            AppSettings settings = new AppSettings();
+
+            // Always attempt to load existing settings to preserve RecentFolders and Gamma
+            if (File.Exists(_settingsPath))
             {
                 try
                 {
-                    if (File.Exists(_settingsPath))
-                    {
-                        var lines = File.ReadAllLines(_settingsPath);
-                        if (lines.Length >= 4) _appWindow?.MoveAndResize(new Windows.Graphics.RectInt32(int.Parse(lines[2]), int.Parse(lines[3]), int.Parse(lines[0]), int.Parse(lines[1])));
-
-                        if (lines.Length >= 5 && float.TryParse(lines[4], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float savedGamma))
-                        {
-                            _currentGamma = savedGamma;
-                        }
-                    }
-
-                    if (ViewerControl != null)
-                    {
-                        ViewerControl.SetDetachLimitState((int)CurrentDetachLimit);
-                        ViewerControl.SetGammaLevel(_currentGamma);
-                    }
+                    string json = File.ReadAllText(_settingsPath);
+                    var loaded = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(json);
+                    if (loaded != null) settings = loaded;
                 }
-                catch { _appWindow?.Resize(new Windows.Graphics.SizeInt32(1280, 1350)); }
+                catch { /* use defaults */ }
+            }
+
+            // Explicitly target window dimensions for reset, leaving arrays and user preferences intact
+            if (forceReset)
+            {
+                settings.WindowWidth = 1280;
+                settings.WindowHeight = 1350;
+                settings.WindowX = -1;
+                settings.WindowY = -1;
+            }
+
+            int w = settings.WindowWidth < 300 ? 1280 : settings.WindowWidth;
+            int h = settings.WindowHeight < 300 ? 1350 : settings.WindowHeight;
+
+            _appWindow?.Resize(new Windows.Graphics.SizeInt32(w, h));
+
+            if (settings.WindowX != -1 && settings.WindowY != -1)
+                _appWindow?.Move(new Windows.Graphics.PointInt32(settings.WindowX, settings.WindowY));
+
+            _currentGamma = settings.Gamma;
+            ImageEditorPath = settings.ImageEditorPath;
+
+            _recentFolders.Clear();
+            foreach (var folder in settings.RecentFolders)
+            {
+                if (Directory.Exists(folder) && !_recentFolders.Contains(folder))
+                    _recentFolders.Add(folder);
+            }
+
+            if (ViewerControl != null)
+            {
+                ViewerControl.SetDetachLimitState((int)CurrentDetachLimit);
+                ViewerControl.SetGammaLevel(_currentGamma);
             }
         }
 
+        private async void ImageGrid_DragItemsStarting(object sender, DragItemsStartingEventArgs e)
+        {
+            var draggedItems = e.Items.OfType<ImageItem>().ToList();
+            if (draggedItems.Count == 0) return;
+
+            var storageFiles = new List<StorageFile>();
+
+            foreach (var item in draggedItems)
+            {
+                if (!string.IsNullOrEmpty(item.Path) && File.Exists(item.Path))
+                {
+                    try
+                    {
+                        var file = await StorageFile.GetFileFromPathAsync(item.Path);
+                        storageFiles.Add(file);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Failed to get StorageFile for drag: {ex.Message}");
+                    }
+                }
+            }
+
+            if (storageFiles.Count > 0)
+            {
+                e.Data.SetStorageItems(storageFiles);
+            }
+        }
+
+
+        // === TEMPORARY TEST HARNESS FOR COLLAGE PROTOTYPE ===
+        // This is throwaway code. We will replace it with a proper CollageEditorWindow later.
+        private CollageEditorWindow? _collageEditorWindow;
+
+        private void TestCollage_Click(object sender, RoutedEventArgs e)
+        {
+            if (_collageEditorWindow != null)
+            {
+                try
+                {
+                    var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(_collageEditorWindow);
+
+                    // Robust bring-to-front sequence
+                    NativeMethods.ShowWindow(hwnd, NativeMethods.SW_RESTORE);     // Restore if minimized
+                    NativeMethods.SetForegroundWindow(hwnd);
+                    NativeMethods.BringWindowToTop(hwnd);
+
+                    _collageEditorWindow.Activate();
+                }
+                catch
+                {
+                    // Window is in bad state → recreate it
+                    _collageEditorWindow.Close();
+                    _collageEditorWindow = null;
+                }
+
+                if (_collageEditorWindow != null) return;
+            }
+
+            // Create new editor
+            _collageEditorWindow = new CollageEditorWindow();
+            _collageEditorWindow.Closed += (s, args) => _collageEditorWindow = null;
+            _collageEditorWindow.Activate();
+        }
         private void SaveAllSettings()
         {
             try
             {
-                if (_appWindow != null)
-                {
-                    var lines = new List<string>
-                    {
-                        _appWindow.Size.Width.ToString(),
-                        _appWindow.Size.Height.ToString(),
-                        _appWindow.Position.X.ToString(),
-                        _appWindow.Position.Y.ToString(),
-                        _currentGamma.ToString(System.Globalization.CultureInfo.InvariantCulture)
-                    };
-                    lines.AddRange(_recentFolders);
+                if (_appWindow == null) return;
 
-                    string? dir = Path.GetDirectoryName(_settingsPath);
-                    if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-                    {
-                        Directory.CreateDirectory(dir);
-                    }
-                    File.WriteAllLines(_settingsPath, lines);
-                }
-            }
-            catch { }
-        }
+                if (_appWindow.Presenter is OverlappedPresenter p && p.State == OverlappedPresenterState.Minimized) return;
 
-        private void LoadRecentFoldersFromSettings()
-        {
-            try
-            {
-                if (File.Exists(_settingsPath))
+                var settings = new AppSettings
                 {
-                    var lines = File.ReadAllLines(_settingsPath);
-                    foreach (var l in lines)
-                    {
-                        if (!string.IsNullOrWhiteSpace(l) && Directory.Exists(l) && !_recentFolders.Contains(l))
-                        {
-                            _recentFolders.Add(l);
-                        }
-                    }
-                }
+                    WindowWidth = _appWindow.Size.Width,
+                    WindowHeight = _appWindow.Size.Height,
+                    WindowX = _appWindow.Position.X,
+                    WindowY = _appWindow.Position.Y,
+                    Gamma = _currentGamma,
+                    ImageEditorPath = ImageEditorPath,
+                    RecentFolders = new List<string>(_recentFolders)
+                };
+
+                string json = System.Text.Json.JsonSerializer.Serialize(settings, new System.Text.Json.JsonSerializerOptions
+                {
+                    WriteIndented = true
+                });
+
+                string? dir = Path.GetDirectoryName(_settingsPath);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                    Directory.CreateDirectory(dir);
+
+                File.WriteAllText(_settingsPath, json);
             }
             catch { }
         }

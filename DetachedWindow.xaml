@@ -10,7 +10,8 @@
           SizeChanged="RootGrid_SizeChanged"
           PointerPressed="RootGrid_PointerPressed" 
           PointerMoved="RootGrid_PointerMoved" 
-          PointerReleased="RootGrid_PointerReleased">
+          PointerReleased="RootGrid_PointerReleased"
+          PointerCanceled="RootGrid_PointerCanceled">
 
         <local:ImageViewerControl x:Name="ViewerControl" 
                                   AllowDetach="False" 
@@ -18,7 +19,11 @@
                                   ToggleFullscreenRequested="ViewerControl_ToggleFullscreenRequested"
                                   SizeToImageRequested="ViewerControl_SizeToImageRequested"
                                   MinimizeRequested="ViewerControl_MinimizeRequested"
-                                  DeviceLostRestoring="ViewerControl_DeviceLostRestoring" />
+                                  DeviceLostRestoring="ViewerControl_DeviceLostRestoring"
+                                  EditRequested="ViewerControl_EditRequested"
+                                  RenameRequested="ViewerControl_RenameRequested"
+                                  DeleteRequested="ViewerControl_DeleteRequested"
+                                  ShowInExplorerRequested="ViewerControl_ShowInExplorerRequested" />
 
     </Grid>
 </Window>

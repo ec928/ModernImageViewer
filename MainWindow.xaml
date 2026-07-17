@@ -18,7 +18,7 @@
 
         <Grid x:Name="HoverTriggerZone" Width="15" HorizontalAlignment="Left" Background="#01000000" PointerEntered="HoverZone_PointerEntered" Canvas.ZIndex="2000" />
 
-        <SplitView x:Name="SidebarView" PanePlacement="Left" DisplayMode="Overlay" OpenPaneLength="320">
+        <SplitView x:Name="SidebarView" PanePlacement="Left" DisplayMode="Overlay" OpenPaneLength="360">
             <SplitView.Pane>
                 <Grid x:Name="SidebarPane" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" PointerExited="Sidebar_PointerExited">
                     <Grid Padding="10,38,10,0">
@@ -29,23 +29,37 @@
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
 
+                        <!-- === BUTTON ROW (5 buttons) === -->
                         <Grid Grid.Row="0" Margin="0,0,0,10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <Button Click="BrowseButton_Click" HorizontalAlignment="Stretch" Margin="2" ToolTipService.ToolTip="Browse Folders">
+
+                            <Button Click="BrowseButton_Click" HorizontalAlignment="Stretch" Margin="3" ToolTipService.ToolTip="Browse Folders">
                                 <SymbolIcon Symbol="Folder"/>
                             </Button>
-                            <Button Grid.Column="1" HorizontalAlignment="Stretch" Margin="2" ToolTipService.ToolTip="Recent Folders">
+
+                            <Button Grid.Column="1" HorizontalAlignment="Stretch" Margin="3" ToolTipService.ToolTip="Recent Folders">
                                 <SymbolIcon Symbol="Library"/>
                                 <Button.Flyout>
                                     <MenuFlyout x:Name="RecentFoldersMenu" Opening="RecentFoldersMenu_Opening" />
                                 </Button.Flyout>
+                                <Button.ContextFlyout>
+                                    <MenuFlyout>
+                                        <MenuFlyoutItem Text="Clear Recent Folders" Click="ClearRecentFolders_Click">
+                                            <MenuFlyoutItem.Icon>
+                                                <SymbolIcon Symbol="Delete"/>
+                                            </MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
+                                    </MenuFlyout>
+                                </Button.ContextFlyout>
                             </Button>
-                            <Button Grid.Column="2" HorizontalAlignment="Stretch" Margin="2" ToolTipService.ToolTip="Sort Images">
+
+                            <Button Grid.Column="2" HorizontalAlignment="Stretch" Margin="3" ToolTipService.ToolTip="Sort Images">
                                 <SymbolIcon Symbol="Sort"/>
                                 <Button.Flyout>
                                     <MenuFlyout>
@@ -57,15 +71,31 @@
                                     </MenuFlyout>
                                 </Button.Flyout>
                             </Button>
-                            <Button Grid.Column="3" Click="ResetWindow_Click" HorizontalAlignment="Stretch" Margin="2" ToolTipService.ToolTip="Reset Window Size">
-                                <SymbolIcon Symbol="Refresh"/>
+
+                            <Button Grid.Column="3" Click="RefreshFolder_Click" HorizontalAlignment="Stretch" Margin="3" ToolTipService.ToolTip="Refresh Current Folder">
+                                <SymbolIcon Symbol="Sync"/>
+                            </Button>
+
+                            <Button Grid.Column="4" Click="TestCollage_Click" HorizontalAlignment="Stretch" Margin="3" ToolTipService.ToolTip="Open Collage Editor">
+                                <SymbolIcon Symbol="Pictures"/>
                             </Button>
                         </Grid>
 
-                        <StackPanel Grid.Row="1" Margin="5,0,5,15" Orientation="Horizontal" Spacing="10">
-                            <SymbolIcon Symbol="Pictures" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                            <Slider x:Name="ThumbSizeSlider" Minimum="100" Maximum="400" Value="164" Width="230" VerticalAlignment="Center" ValueChanged="ThumbSizeSlider_ValueChanged"/>
-                        </StackPanel>
+                        <Grid Grid.Row="1" Margin="5,0,5,15" VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <SymbolIcon Grid.Column="0" Symbol="Pictures" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+
+                            <Slider Grid.Column="1" x:Name="ThumbSizeSlider" Minimum="100" Maximum="400" Value="164" Width="190" VerticalAlignment="Center" ValueChanged="ThumbSizeSlider_ValueChanged" ToolTipService.ToolTip="Adjust Thumbnail Size"/>
+
+                            <Button Grid.Column="2" Click="ResetWindow_Click" Background="Transparent" BorderThickness="0" Padding="0" MinWidth="0" MinHeight="0" HorizontalAlignment="Right" VerticalAlignment="Center" ToolTipService.ToolTip="Reset Window Size">
+                                <FontIcon Glyph="&#xE72C;" FontSize="16" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            </Button>
+                        </Grid>
 
                         <BreadcrumbBar x:Name="FolderBreadcrumb" Grid.Row="2" Margin="5,0,0,15" ItemClicked="BreadcrumbBar_ItemClicked"/>
 
@@ -73,8 +103,18 @@
                             <TreeView.ItemTemplate>
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal" Spacing="10" Padding="0,5" Background="Transparent" Opacity="{Binding Content.NodeOpacity}">
-                                        <SymbolIcon Symbol="{Binding Content.NodeIcon}" Foreground="{ThemeResource SystemControlForegroundAccentBrush}"/>
-                                        <TextBlock Text="{Binding Content.Name}" Style="{ThemeResource BodyTextBlockStyle}" TextTrimming="CharacterEllipsis" FontWeight="{Binding Content.NodeFontWeight}"/>
+                                        <SymbolIcon Symbol="{Binding Content.NodeIcon}" Foreground="{ThemeResource SystemControlForegroundAccentBrush}" VerticalAlignment="Center"/>
+                                        <StackPanel Orientation="Vertical" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Content.Name}" 
+                               Style="{ThemeResource BodyTextBlockStyle}" 
+                               TextTrimming="CharacterEllipsis" 
+                               FontWeight="{Binding Content.NodeFontWeight}"/>
+
+                                            <TextBlock Text="{Binding Content.Subtitle}" 
+                               Visibility="{Binding Content.SubtitleVisibility}" 
+                               Style="{ThemeResource CaptionTextBlockStyle}" 
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                        </StackPanel>
                                     </StackPanel>
                                 </DataTemplate>
                             </TreeView.ItemTemplate>
@@ -85,7 +125,7 @@
 
             <SplitView.Content>
                 <Grid>
-                    <GridView x:Name="ImageGrid" Padding="10,48,10,0" SelectionMode="None" IsItemClickEnabled="True" ItemClick="ImageGrid_ItemClick" ItemsSource="{x:Bind Images, Mode=OneWay}" ContainerContentChanging="ImageGrid_ContainerContentChanging" FocusVisualPrimaryThickness="0" FocusVisualSecondaryThickness="0">
+                    <GridView x:Name="ImageGrid" Padding="10,48,10,0" SelectionMode="None" IsItemClickEnabled="True" ItemClick="ImageGrid_ItemClick" CanDragItems="True" DragItemsStarting="ImageGrid_DragItemsStarting" ItemsSource="{x:Bind Images, Mode=OneWay}" ContainerContentChanging="ImageGrid_ContainerContentChanging" FocusVisualPrimaryThickness="0" FocusVisualSecondaryThickness="0">
                         <GridView.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <ItemsWrapGrid x:Name="ImageWrapGrid" Orientation="Horizontal" CacheLength="10" ItemWidth="164" ItemHeight="164" Loaded="ImageWrapGrid_Loaded" />
@@ -105,7 +145,18 @@
                                         <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
                                     <Image x:Name="ThumbnailImage" Source="{x:Bind Thumbnail, Mode=OneWay}" x:Phase="2" Grid.Row="0" Stretch="UniformToFill" />
-                                    <TextBlock Text="{x:Bind Name}" x:Phase="1" Grid.Row="1" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="5,5,5,5" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
+                                    <TextBlock Text="{x:Bind Name}" 
+           x:Phase="1" 
+           Grid.Row="1" 
+           HorizontalAlignment="Center" 
+           TextTrimming="CharacterEllipsis"
+           TextWrapping="Wrap"
+           MaxLines="2"
+           Margin="4,4,4,6" 
+           Style="{ThemeResource CaptionTextBlockStyle}" 
+           Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+           FontSize="11"
+           ToolTipService.ToolTip="{x:Bind Name}"/>
                                 </Grid>
                             </DataTemplate>
                         </GridView.ItemTemplate>
@@ -113,23 +164,6 @@
 
                     <Grid x:Name="LoadingOverlay" Visibility="Collapsed" Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}" Canvas.ZIndex="500">
                         <ProgressRing x:Name="LoadingRing" Width="50" Height="50" HorizontalAlignment="Center" VerticalAlignment="Center" IsActive="False" />
-                    </Grid>
-
-                    <Grid x:Name="EmptyStateBorder" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
-                        <Rectangle Stroke="{ThemeResource SurfaceStrokeColorDefaultBrush}" StrokeThickness="2" StrokeDashArray="4,4" RadiusX="8" RadiusY="8" Fill="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}" />
-                        <StackPanel Padding="40" Spacing="15" HorizontalAlignment="Center">
-                            <SymbolIcon Symbol="Pictures" Foreground="{ThemeResource TextFillColorTertiaryBrush}" RenderTransformOrigin="0.5,0.5">
-                                <SymbolIcon.RenderTransform>
-                                    <ScaleTransform ScaleX="2.5" ScaleY="2.5"/>
-                                </SymbolIcon.RenderTransform>
-                            </SymbolIcon>
-                            <TextBlock Text="No images found." Style="{ThemeResource BodyStrongTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,15,0,0" HorizontalAlignment="Center" TextAlignment="Center"/>
-                            <TextBlock Text="Drag &amp; drop a folder here." Style="{ThemeResource BodyTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" TextAlignment="Center"/>
-                            <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center" Margin="0,10,0,0">
-                                <Button Content="Go Up a Folder" Click="GoUp_Click" Style="{ThemeResource DefaultButtonStyle}"/>
-                                <Button Content="Browse for Folder" Click="BrowseButton_Click" Style="{ThemeResource AccentButtonStyle}"/>
-                            </StackPanel>
-                        </StackPanel>
                     </Grid>
 
                     <local:ImageViewerControl x:Name="ViewerControl" 
@@ -144,7 +178,11 @@
                                               TearOffCompleted="ViewerControl_TearOffCompleted"
                                               ShowInExplorerRequested="ViewerControl_ShowInExplorerRequested"
                                               DeviceLostRestoring="ViewerControl_DeviceLostRestoring"
-                                              DetachLimitRequested="ViewerControl_DetachLimitRequested" />
+                                              DetachLimitRequested="ViewerControl_DetachLimitRequested"
+                                              EditRequested="ViewerControl_EditRequested"
+                                              RenameRequested="ViewerControl_RenameRequested"
+                                              DeleteRequested="ViewerControl_DeleteRequested"
+                                              AddToCollageRequested="ViewerControl_AddToCollageRequested" />
                 </Grid>
             </SplitView.Content>
         </SplitView>
