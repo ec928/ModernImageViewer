@@ -605,40 +605,54 @@ namespace ModernImageViewer.Collage
                     (float)_project.CanvasHeight,
                     96);
 
+                var elementBitmaps = new Dictionary<CollageElement, CanvasBitmap>();
+                var bitmapsToDispose = new List<CanvasBitmap>();
+
+                foreach (var element in _project.Elements)
+                {
+                    if (string.IsNullOrEmpty(element.ImagePath)) continue;
+
+                    if (element.HighResBitmap != null)
+                    {
+                        elementBitmaps[element] = element.HighResBitmap;
+                    }
+                    else
+                    {
+                        try
+                        {
+                            var imgFile = await StorageFile.GetFileFromPathAsync(element.ImagePath);
+                            using var imgStream = await imgFile.OpenReadAsync();
+                            var decoder = await BitmapDecoder.CreateAsync(imgStream);
+                            var softwareBitmap = await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
+                            var bmp = CanvasBitmap.CreateFromSoftwareBitmap(renderTarget.Device, softwareBitmap);
+                            elementBitmaps[element] = bmp;
+                            bitmapsToDispose.Add(bmp);
+                        }
+                        catch { }
+                    }
+                }
+
                 using (var ds = renderTarget.CreateDrawingSession())
                 {
                     ds.Clear(HexToColor(_project.BackgroundColor));
 
                     foreach (var element in _project.Elements)
                     {
+                        elementBitmaps.TryGetValue(element, out var bitmapToUse);
+                        
                         ImageCacheEntry? entry = null;
-                        CanvasBitmap? bitmapToUse = null;
-
                         if (!string.IsNullOrEmpty(element.ImagePath))
                         {
                             App.GlobalImageCache.TryGetValue(element.ImagePath, out entry);
-
-                            // Prefer HighRes if available, otherwise fall back to preview
-                            if (element.HighResBitmap != null)
-                            {
-                                bitmapToUse = element.HighResBitmap;
-                            }
-                            else if (entry?.Bitmap != null)
-                            {
-                                bitmapToUse = CanvasBitmap.CreateFromSoftwareBitmap(renderTarget.Device, entry.Bitmap);
-                            }
                         }
 
                         var clipGeom = element.GetOrUpdateClipGeometry(renderTarget);
                         CollageCellRenderer.DrawCell(ds, element, entry, bitmapToUse, 2.2f, clipGeom);
-
-                        // Only dispose if we created it from preview (not the element's HighResBitmap)
-                        if (bitmapToUse != element.HighResBitmap)
-                            bitmapToUse?.Dispose();
                     }
                 }
 
                 using var stream = await file.OpenAsync(FileAccessMode.ReadWrite);
+                stream.Size = 0; // Explicitly truncate file to prevent corruption on overwrite
 
                 if (!isJpeg)
                 {
@@ -646,19 +660,12 @@ namespace ModernImageViewer.Collage
                 }
                 else
                 {
-                    var memStream = new InMemoryRandomAccessStream();
-                    await renderTarget.SaveAsync(memStream, CanvasBitmapFileFormat.Png);
-                    memStream.Seek(0);
+                    await renderTarget.SaveAsync(stream, CanvasBitmapFileFormat.Jpeg, jpegQuality / 100f);
+                }
 
-                    var decoder = await BitmapDecoder.CreateAsync(memStream);
-                    var softwareBitmap = await decoder.GetSoftwareBitmapAsync();
-
-                    var propertySet = new BitmapPropertySet();
-                    propertySet.Add("ImageQuality", new BitmapTypedValue(jpegQuality / 100f, PropertyType.Single));
-
-                    var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.JpegEncoderId, stream, propertySet);
-                    encoder.SetSoftwareBitmap(softwareBitmap);
-                    await encoder.FlushAsync();
+                foreach (var bmp in bitmapsToDispose)
+                {
+                    bmp.Dispose();
                 }
             }
             catch (Exception ex)
