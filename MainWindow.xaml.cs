@@ -1,4 +1,4 @@
-﻿using Microsoft.Graphics.Canvas;
+using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Effects;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -399,6 +399,108 @@ namespace ModernImageViewer
                 File.WriteAllText(_settingsPath, json);
             }
             catch { }
+        }
+        private void PlayCinematicFolder_Click(object sender, RoutedEventArgs e)
+        {
+            if (Images.Count == 0) return;
+            var currentFiles = Images.Select(img => img.Path).ToList();
+            var cinematicWindow = new ModernImageViewer.Cinematic.CinematicWindow(currentFiles, 0);
+        }
+
+        private void ImageGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            int count = ImageGrid.SelectedItems.Count;
+            if (count > 0)
+            {
+                MultiSelectCountText.Text = $"{count} selected";
+                MultiSelectActionBar.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                MultiSelectActionBar.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private void MultiSelectCinematic_Click(object sender, RoutedEventArgs e)
+        {
+            var selectedItems = ImageGrid.SelectedItems.OfType<ImageItem>().ToList();
+            if (selectedItems.Count == 0) return;
+            var paths = selectedItems.Select(i => i.Path).ToList();
+            var cinematicWindow = new ModernImageViewer.Cinematic.CinematicWindow(paths, 0);
+            ImageGrid.SelectedItems.Clear();
+        }
+
+        private void MultiSelectCollage_Click(object sender, RoutedEventArgs e)
+        {
+            var selectedItems = ImageGrid.SelectedItems.OfType<ImageItem>().ToList();
+            if (selectedItems.Count == 0) return;
+            
+            if (_collageEditorWindow == null)
+            {
+                TestCollage_Click(this, new RoutedEventArgs());
+            }
+
+            if (_collageEditorWindow != null)
+            {
+                foreach (var item in selectedItems)
+                {
+                    _collageEditorWindow.AddExternalImage(item.Path);
+                }
+            }
+            ImageGrid.SelectedItems.Clear();
+        }
+
+        private async void MultiSelectDelete_Click(object sender, RoutedEventArgs e)
+        {
+            var selectedItems = ImageGrid.SelectedItems.OfType<ImageItem>().ToList();
+            if (selectedItems.Count == 0) return;
+
+            var dialog = new ContentDialog
+            {
+                Title = "Delete Selected Files",
+                Content = $"Are you sure you want to delete {selectedItems.Count} files?",
+                PrimaryButtonText = "Delete",
+                CloseButtonText = "Cancel",
+                XamlRoot = RootGrid.XamlRoot,
+                RequestedTheme = ElementTheme.Dark
+            };
+
+            var result = await dialog.ShowAsync();
+            if (result == ContentDialogResult.Primary)
+            {
+                foreach (var item in selectedItems)
+                {
+                    try
+                    {
+                        var file = await StorageFile.GetFileFromPathAsync(item.Path);
+                        await file.DeleteAsync();
+                        Images.Remove(item);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Failed to delete {item.Path}: {ex.Message}");
+                    }
+                }
+            }
+            ImageGrid.SelectedItems.Clear();
+        }
+
+        private void MultiSelectClear_Click(object sender, RoutedEventArgs e)
+        {
+            ImageGrid.SelectedItems.Clear();
+        }
+
+        private void Card_PointerPressed(object sender, PointerRoutedEventArgs e)
+        {
+            var ptr = e.GetCurrentPoint((UIElement)sender);
+            if (ptr.Properties.IsMiddleButtonPressed)
+            {
+                if (sender is FrameworkElement el && el.DataContext is ImageItem imageItem)
+                {
+                    LaunchDetachedWindow(imageItem);
+                    e.Handled = true;
+                }
+            }
         }
     }
 }

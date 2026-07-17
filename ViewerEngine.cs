@@ -1,4 +1,4 @@
-﻿using Microsoft.Graphics.Canvas;
+using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Effects;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -266,45 +266,54 @@ namespace ModernImageViewer
                     if (frameCount > 1)
                     {
                         var rawFrames = new List<(SoftwareBitmap, TimeSpan, ushort)>();
-                        for (uint i = 0; i < frameCount; i++)
+                        try
                         {
-                            if (token.IsCancellationRequested)
+                            for (uint i = 0; i < frameCount; i++)
                             {
-                                foreach (var f in rawFrames) f.Item1.Dispose();
-                                rawFrames.Clear();
-                                return null;
-                            }
-
-                            var frame = await decoder.GetFrameAsync(i).AsTask(token);
-
-                            TimeSpan delay = TimeSpan.FromMilliseconds(100);
-                            ushort disposal = 0;
-                            try
-                            {
-                                var props = await frame.BitmapProperties.GetPropertiesAsync(new[] { "/grctlext/Delay", "/grctlext/Disposal" }).AsTask(token);
-                                if (props.TryGetValue("/grctlext/Delay", out var delayProp) && delayProp.Value is ushort delayVal)
+                                if (token.IsCancellationRequested)
                                 {
-                                    if (delayVal > 0) delay = TimeSpan.FromMilliseconds(delayVal * 10);
+                                    foreach (var f in rawFrames) f.Item1.Dispose();
+                                    rawFrames.Clear();
+                                    return null;
                                 }
-                                if (props.TryGetValue("/grctlext/Disposal", out var dispProp) && dispProp.Value is byte dispVal)
+
+                                var frame = await decoder.GetFrameAsync(i).AsTask(token);
+
+                                TimeSpan delay = TimeSpan.FromMilliseconds(100);
+                                ushort disposal = 0;
+                                try
                                 {
-                                    disposal = dispVal;
+                                    var props = await frame.BitmapProperties.GetPropertiesAsync(new[] { "/grctlext/Delay", "/grctlext/Disposal" }).AsTask(token);
+                                    if (props.TryGetValue("/grctlext/Delay", out var delayProp) && delayProp.Value is ushort delayVal)
+                                    {
+                                        if (delayVal > 0) delay = TimeSpan.FromMilliseconds(delayVal * 10);
+                                    }
+                                    if (props.TryGetValue("/grctlext/Disposal", out var dispProp) && dispProp.Value is byte dispVal)
+                                    {
+                                        disposal = dispVal;
+                                    }
+                                }
+                                catch { }
+
+                                var softwareBitmap = await frame.GetSoftwareBitmapAsync(
+                                    format,
+                                    BitmapAlphaMode.Premultiplied,
+                                    transform,
+                                    ExifOrientationMode.RespectExifOrientation,
+                                    ColorManagementMode.ColorManageToSRgb).AsTask(token);
+
+                                if (softwareBitmap != null)
+                                {
+                                    softwareBitmap.DpiX = 96; softwareBitmap.DpiY = 96;
+                                    rawFrames.Add((softwareBitmap, delay, disposal));
                                 }
                             }
-                            catch { }
-
-                            var softwareBitmap = await frame.GetSoftwareBitmapAsync(
-                                format,
-                                BitmapAlphaMode.Premultiplied,
-                                transform,
-                                ExifOrientationMode.RespectExifOrientation,
-                                ColorManagementMode.ColorManageToSRgb).AsTask(token);
-
-                            if (softwareBitmap != null)
-                            {
-                                softwareBitmap.DpiX = 96; softwareBitmap.DpiY = 96;
-                                rawFrames.Add((softwareBitmap, delay, disposal));
-                            }
+                        }
+                        catch
+                        {
+                            foreach (var f in rawFrames) f.Item1?.Dispose();
+                            rawFrames.Clear();
+                            return null;
                         }
 
                         if (token.IsCancellationRequested)

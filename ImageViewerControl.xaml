@@ -215,6 +215,24 @@
                         <Button x:Name="MinimizeButton" Click="Minimize_Click" Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Minimize" Padding="6" Visibility="Collapsed">
                             <FontIcon Glyph="&#xE921;"/>
                         </Button>
+
+                        <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="6,6" Opacity="0.4"/>
+
+                        <Button Click="PlayCinematic_Click" Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Play Cinematic Slideshow" Padding="6">
+                            <SymbolIcon Symbol="Play"/>
+                        </Button>
+                        <Button Click="AddToCollage_Click" Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Add to Collage" Padding="6">
+                            <SymbolIcon Symbol="Pictures"/>
+                        </Button>
+
+                        <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="6,6" Opacity="0.4"/>
+
+                        <Button Click="ShowInExplorer_Click" Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Show in Explorer" Padding="6">
+                            <SymbolIcon Symbol="Folder"/>
+                        </Button>
+
+                        <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="6,6" Opacity="0.4"/>
+
                         <Button x:Name="DetachButton" Click="DetachImage_Click" Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Detach" Padding="6">
                             <SymbolIcon Symbol="NewWindow"/>
                         </Button>

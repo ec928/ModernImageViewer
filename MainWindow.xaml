@@ -72,8 +72,8 @@
                                 </Button.Flyout>
                             </Button>
 
-                            <Button Grid.Column="3" Click="RefreshFolder_Click" HorizontalAlignment="Stretch" Margin="3" ToolTipService.ToolTip="Refresh Current Folder">
-                                <SymbolIcon Symbol="Sync"/>
+                            <Button Grid.Column="3" Click="PlayCinematicFolder_Click" HorizontalAlignment="Stretch" Margin="3" ToolTipService.ToolTip="Play Cinematic Slideshow">
+                                <SymbolIcon Symbol="Play"/>
                             </Button>
 
                             <Button Grid.Column="4" Click="TestCollage_Click" HorizontalAlignment="Stretch" Margin="3" ToolTipService.ToolTip="Open Collage Editor">
@@ -86,13 +86,18 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
 
                             <SymbolIcon Grid.Column="0" Symbol="Pictures" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,0,10,0" VerticalAlignment="Center"/>
 
                             <Slider Grid.Column="1" x:Name="ThumbSizeSlider" Minimum="100" Maximum="400" Value="164" Width="190" VerticalAlignment="Center" ValueChanged="ThumbSizeSlider_ValueChanged" ToolTipService.ToolTip="Adjust Thumbnail Size"/>
 
-                            <Button Grid.Column="2" Click="ResetWindow_Click" Background="Transparent" BorderThickness="0" Padding="0" MinWidth="0" MinHeight="0" HorizontalAlignment="Right" VerticalAlignment="Center" ToolTipService.ToolTip="Reset Window Size">
+                            <Button Grid.Column="2" Click="RefreshFolder_Click" Background="Transparent" BorderThickness="0" Padding="0" MinWidth="0" MinHeight="0" HorizontalAlignment="Right" VerticalAlignment="Center" ToolTipService.ToolTip="Refresh Current Folder" Margin="0,0,10,0">
+                                <FontIcon Glyph="&#xE117;" FontSize="16" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            </Button>
+
+                            <Button Grid.Column="3" Click="ResetWindow_Click" Background="Transparent" BorderThickness="0" Padding="0" MinWidth="0" MinHeight="0" HorizontalAlignment="Right" VerticalAlignment="Center" ToolTipService.ToolTip="Reset Window Size">
                                 <FontIcon Glyph="&#xE72C;" FontSize="16" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             </Button>
                         </Grid>
@@ -125,7 +130,7 @@
 
             <SplitView.Content>
                 <Grid>
-                    <GridView x:Name="ImageGrid" Padding="10,48,10,0" SelectionMode="None" IsItemClickEnabled="True" ItemClick="ImageGrid_ItemClick" CanDragItems="True" DragItemsStarting="ImageGrid_DragItemsStarting" ItemsSource="{x:Bind Images, Mode=OneWay}" ContainerContentChanging="ImageGrid_ContainerContentChanging" FocusVisualPrimaryThickness="0" FocusVisualSecondaryThickness="0">
+                    <GridView x:Name="ImageGrid" Padding="10,48,10,0" SelectionMode="Extended" SelectionChanged="ImageGrid_SelectionChanged" IsItemClickEnabled="True" ItemClick="ImageGrid_ItemClick" CanDragItems="True" DragItemsStarting="ImageGrid_DragItemsStarting" ItemsSource="{x:Bind Images, Mode=OneWay}" ContainerContentChanging="ImageGrid_ContainerContentChanging" FocusVisualPrimaryThickness="0" FocusVisualSecondaryThickness="0">
                         <GridView.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <ItemsWrapGrid x:Name="ImageWrapGrid" Orientation="Horizontal" CacheLength="10" ItemWidth="164" ItemHeight="164" Loaded="ImageWrapGrid_Loaded" />
@@ -133,7 +138,7 @@
                         </GridView.ItemsPanel>
                         <GridView.ItemTemplate>
                             <DataTemplate x:DataType="local:ImageItem">
-                                <Grid Margin="4" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="4" PointerEntered="Card_PointerEntered" PointerExited="Card_PointerExited">
+                                <Grid Margin="4" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="4" PointerEntered="Card_PointerEntered" PointerExited="Card_PointerExited" PointerPressed="Card_PointerPressed">
                                     <Grid.ScaleTransition>
                                         <Vector3Transition Duration="0:0:0.15" />
                                     </Grid.ScaleTransition>
@@ -183,6 +188,28 @@
                                               RenameRequested="ViewerControl_RenameRequested"
                                               DeleteRequested="ViewerControl_DeleteRequested"
                                               AddToCollageRequested="ViewerControl_AddToCollageRequested" />
+
+                    <Grid x:Name="MultiSelectActionBar" Visibility="Collapsed" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,24" Canvas.ZIndex="500">
+                        <Border Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="16,8">
+                            <StackPanel Orientation="Horizontal" Spacing="16">
+                                <TextBlock x:Name="MultiSelectCountText" Text="0 selected" VerticalAlignment="Center" Style="{ThemeResource BodyStrongTextBlockStyle}" Margin="0,0,8,0" />
+                                
+                                <Button Click="MultiSelectCinematic_Click" Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Play Cinematic">
+                                    <SymbolIcon Symbol="Play" />
+                                </Button>
+                                <Button Click="MultiSelectCollage_Click" Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Add to Collage">
+                                    <SymbolIcon Symbol="Pictures" />
+                                </Button>
+                                <Button Click="MultiSelectDelete_Click" Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Delete">
+                                    <SymbolIcon Symbol="Delete" Foreground="Red" />
+                                </Button>
+                                <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,4" Opacity="0.4"/>
+                                <Button Click="MultiSelectClear_Click" Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Clear Selection">
+                                    <SymbolIcon Symbol="Cancel" />
+                                </Button>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
                 </Grid>
             </SplitView.Content>
         </SplitView>

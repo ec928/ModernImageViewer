@@ -17,6 +17,7 @@ using Windows.Storage;
 using ModernImageViewer.Cinematic.Data;
 using ModernImageViewer.Cinematic.ViewModels;
 using ModernImageViewer.Cinematic.Services;
+using Microsoft.UI.Xaml.Controls.Primitives;
 
 namespace ModernImageViewer.Cinematic
 {
@@ -52,6 +53,7 @@ namespace ModernImageViewer.Cinematic
 
         private DispatcherQueueTimer _idleTimer;
         private bool _isManuallyNavigating = false;
+        private int _currentTransitionType = -1;
         private int _trajectoryUpdateId = 0;
 
         // Freeze-Frame State Machine
@@ -107,6 +109,7 @@ namespace ModernImageViewer.Cinematic
             ViewModel = new CinematicViewModel(imagePaths, startIndex);
             ViewModel.TrajectoryRefreshRequested += () => UpdateActiveTrajectoriesAsync();
             ViewModel.SlideNavigationRequested += () => _ = ManualNavigateAsync();
+            _ = ViewModel.RestoreAutoSaveAsync();
 
             var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
             var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
@@ -238,6 +241,7 @@ namespace ModernImageViewer.Cinematic
                     _primaryFrame.Trajectory = newTrajectory;
                     _slideDurationSeconds = _primaryFrame.Trajectory.RecommendedDurationSeconds;
                     SlideshowCanvas.Invalidate();
+                    DispatcherQueue.TryEnqueue(() => UpdateGhostViewport());
                 }
             }
             catch (TaskCanceledException) { }
@@ -335,7 +339,7 @@ namespace ModernImageViewer.Cinematic
                 }
                 else DispatcherQueue.TryEnqueue(() => frame.Dispose());
             }
-            catch (TaskCanceledException) { DispatcherQueue.TryEnqueue(() => frame.Dispose()); }
+            catch (Exception) { DispatcherQueue.TryEnqueue(() => frame.Dispose()); }
             finally { _isPreloading = false; }
         }
 
@@ -563,14 +567,19 @@ namespace ModernImageViewer.Cinematic
                 _crossfadeBlurAlpha = (float)Math.Clamp(cfElapsed / blendWindow, 0.0, 1.0);
                 _crossfadeSubjectAlpha = _crossfadeBlurAlpha;
 
+                if (_crossfadeBlurAlpha <= 0.01f || _currentTransitionType == -1)
+                    _currentTransitionType = Random.Shared.Next(3);
+
                 UpdateFrameVectors(_secondaryFrame, 0f, ViewModel.GetCurrentEffectiveSettings().IntensityPercent);
             }
             else
             {
                 _crossfadeBlurAlpha = 0f;
                 _crossfadeSubjectAlpha = 0f;
+                _currentTransitionType = -1;
             }
 
+            SlideProgressBar.Value = mainT;
             SlideshowCanvas.Invalidate();
         }
 
@@ -578,16 +587,41 @@ namespace ModernImageViewer.Cinematic
         {
             try
             {
+                Vector2 pOffset = Vector2.Zero;
+                Vector2 sOffset = Vector2.Zero;
+
+                if (_crossfadeSubjectAlpha > 0f && _currentTransitionType > 0)
+                {
+                    float width = (float)sender.Size.Width;
+                    float t = _crossfadeSubjectAlpha;
+                    float easedT = t * t * (3f - 2f * t);
+
+                    if (_currentTransitionType == 1)
+                    {
+                        pOffset = new Vector2(-width * easedT, 0);
+                        sOffset = new Vector2(width * (1f - easedT), 0);
+                    }
+                    else if (_currentTransitionType == 2)
+                    {
+                        pOffset = new Vector2(width * easedT, 0);
+                        sOffset = new Vector2(-width * (1f - easedT), 0);
+                    }
+                }
+
                 if (_primaryFrame != null && _primaryFrame.GpuBitmap.Device == sender.Device)
-                    DrawFrame(args, _primaryFrame, sender.Size, 1.0f, 1.0f);
+                    DrawFrame(args, _primaryFrame, sender.Size, 1.0f, 1.0f, pOffset);
 
                 if (_secondaryFrame != null && _secondaryFrame.GpuBitmap.Device == sender.Device && (_crossfadeBlurAlpha > 0f || _crossfadeSubjectAlpha > 0f))
-                    DrawFrame(args, _secondaryFrame, sender.Size, _crossfadeBlurAlpha, _crossfadeSubjectAlpha);
+                {
+                    float sAlpha = _currentTransitionType > 0 ? 1.0f : _crossfadeSubjectAlpha;
+                    float bAlpha = _currentTransitionType > 0 ? 1.0f : _crossfadeBlurAlpha;
+                    DrawFrame(args, _secondaryFrame, sender.Size, bAlpha, sAlpha, sOffset);
+                }
             }
             catch (ObjectDisposedException) { }
         }
 
-        private void DrawFrame(CanvasDrawEventArgs args, SlideFrame frame, Size bounds, float blurAlpha, float subjectAlpha)
+        private void DrawFrame(CanvasDrawEventArgs args, SlideFrame frame, Size bounds, float blurAlpha, float subjectAlpha, Vector2 transitionOffset = default)
         {
             var imgSize = frame.Intelligence.ImageSize;
             var traj = frame.Trajectory;
@@ -629,7 +663,8 @@ namespace ModernImageViewer.Cinematic
                                     * Matrix3x2.CreateTranslation(
                                         Math.Clamp(rawPanX, -bufferX, bufferX),
                                         Math.Clamp(rawPanY, -bufferY, bufferY))
-                                    * Matrix3x2.CreateRotation(frame.CurrentRotation * -0.5f, bgCenter);
+                                    * Matrix3x2.CreateRotation(frame.CurrentRotation * -0.5f, bgCenter)
+                                    * Matrix3x2.CreateTranslation(transitionOffset);
 
                     args.DrawingSession.Transform = bgTransform;
 
@@ -639,7 +674,7 @@ namespace ModernImageViewer.Cinematic
                 if (subjectAlpha > 0f)
                 {
                     var fgCenter = new Vector2((float)bounds.Width / 2f, (float)bounds.Height / 2f);
-                    var fgTransform = Matrix3x2.CreateScale(frame.CurrentScale) * Matrix3x2.CreateTranslation(frame.CurrentPan) * Matrix3x2.CreateRotation(frame.CurrentRotation, fgCenter);
+                    var fgTransform = Matrix3x2.CreateScale(frame.CurrentScale) * Matrix3x2.CreateTranslation(frame.CurrentPan) * Matrix3x2.CreateRotation(frame.CurrentRotation, fgCenter) * Matrix3x2.CreateTranslation(transitionOffset);
 
                     args.DrawingSession.Transform = fgTransform;
                     args.DrawingSession.DrawImage(frame.GpuBitmap, 0, 0, frame.GpuBitmap.Bounds, subjectAlpha, CanvasImageInterpolation.HighQualityCubic);
@@ -650,7 +685,7 @@ namespace ModernImageViewer.Cinematic
                 if (subjectAlpha > 0f)
                 {
                     var centerPoint = new Vector2((float)bounds.Width / 2f, (float)bounds.Height / 2f);
-                    var transform = Matrix3x2.CreateScale(frame.CurrentScale) * Matrix3x2.CreateTranslation(frame.CurrentPan) * Matrix3x2.CreateRotation(frame.CurrentRotation, centerPoint);
+                    var transform = Matrix3x2.CreateScale(frame.CurrentScale) * Matrix3x2.CreateTranslation(frame.CurrentPan) * Matrix3x2.CreateRotation(frame.CurrentRotation, centerPoint) * Matrix3x2.CreateTranslation(transitionOffset);
 
                     args.DrawingSession.Transform = transform;
                     args.DrawingSession.DrawImage(frame.GpuBitmap, 0, 0, frame.GpuBitmap.Bounds, subjectAlpha, CanvasImageInterpolation.HighQualityCubic);
@@ -727,6 +762,36 @@ namespace ModernImageViewer.Cinematic
             _isTargetingFrozen = false;
 
             e.Handled = true;
+        }
+
+        private void UpdateGhostViewport()
+        {
+            if (_primaryFrame?.Trajectory == null || WysiwygOverlay.ActualWidth == 0 || WysiwygOverlay.ActualHeight == 0)
+            {
+                GhostViewport.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            var bounds = new Size(WysiwygOverlay.ActualWidth, WysiwygOverlay.ActualHeight);
+            GhostViewport.Width = bounds.Width;
+            GhostViewport.Height = bounds.Height;
+            GhostViewport.Visibility = Visibility.Visible;
+
+            float scaleToFit = (float)Math.Min(bounds.Width / _primaryFrame.Intelligence.ImageSize.Width, bounds.Height / _primaryFrame.Intelligence.ImageSize.Height);
+            float offsetX = (float)(bounds.Width - (_primaryFrame.Intelligence.ImageSize.Width * scaleToFit)) / 2f;
+            float offsetY = (float)(bounds.Height - (_primaryFrame.Intelligence.ImageSize.Height * scaleToFit)) / 2f;
+            var editTransform = Matrix3x2.CreateScale(scaleToFit) * Matrix3x2.CreateTranslation(offsetX, offsetY);
+
+            var traj = _primaryFrame.Trajectory;
+            var centerPoint = new Vector2((float)bounds.Width / 2f, (float)bounds.Height / 2f);
+            
+            var playbackTransform = Matrix3x2.CreateScale(traj.EndScale) * Matrix3x2.CreateTranslation(traj.EndPan) * Matrix3x2.CreateRotation(traj.EndRotation, centerPoint);
+
+            if (Matrix3x2.Invert(playbackTransform, out Matrix3x2 invPlayback))
+            {
+                var combined = invPlayback * editTransform;
+                GhostTransform.Matrix = new Microsoft.UI.Xaml.Media.Matrix(combined.M11, combined.M12, combined.M21, combined.M22, combined.M31, combined.M32);
+            }
         }
 
         private void ResetTargetBoxVisuals()
@@ -870,6 +935,92 @@ namespace ModernImageViewer.Cinematic
             };
 
             ViewModel.RegisterFocusTarget(rect);
+            UpdateGhostViewport();
+        }
+
+        private void Thumb_DragStarted(object sender, DragStartedEventArgs e)
+        {
+            _isTargetingFrozen = true;
+            ViewModel.CaptureUndoSnapshot();
+        }
+
+        private void Thumb_DragCompleted(object sender, DragCompletedEventArgs e)
+        {
+            CommitTargetToViewModel();
+            _isTargetingFrozen = false;
+        }
+
+        private void ThumbTopLeft_DragDelta(object sender, DragDeltaEventArgs e)
+        {
+            double newWidth = Math.Max(80, FocusTargetBox.Width - e.HorizontalChange);
+            double aspectRatio = WysiwygOverlay.ActualWidth / WysiwygOverlay.ActualHeight;
+            double newHeight = newWidth / aspectRatio;
+
+            double widthDiff = FocusTargetBox.Width - newWidth;
+            double heightDiff = FocusTargetBox.Height - newHeight;
+
+            double newX = Math.Clamp(FocusBoxTransform.X + widthDiff, 0, FocusBoxTransform.X + FocusTargetBox.Width - 80);
+            double newY = Math.Clamp(FocusBoxTransform.Y + heightDiff, 0, FocusBoxTransform.Y + FocusTargetBox.Height - (80 / aspectRatio));
+
+            FocusTargetBox.Width = newWidth;
+            FocusTargetBox.Height = newHeight;
+            FocusBoxTransform.X = newX;
+            FocusBoxTransform.Y = newY;
+            UpdateAreaReadout();
+        }
+
+        private void ThumbTopRight_DragDelta(object sender, DragDeltaEventArgs e)
+        {
+            double newWidth = Math.Max(80, FocusTargetBox.Width + e.HorizontalChange);
+            double aspectRatio = WysiwygOverlay.ActualWidth / WysiwygOverlay.ActualHeight;
+            double newHeight = newWidth / aspectRatio;
+
+            double heightDiff = FocusTargetBox.Height - newHeight;
+
+            double newX = FocusBoxTransform.X;
+            double newY = Math.Clamp(FocusBoxTransform.Y + heightDiff, 0, FocusBoxTransform.Y + FocusTargetBox.Height - (80 / aspectRatio));
+
+            if (newX + newWidth <= WysiwygOverlay.ActualWidth)
+            {
+                FocusTargetBox.Width = newWidth;
+                FocusTargetBox.Height = newHeight;
+                FocusBoxTransform.Y = newY;
+                UpdateAreaReadout();
+            }
+        }
+
+        private void ThumbBottomLeft_DragDelta(object sender, DragDeltaEventArgs e)
+        {
+            double newWidth = Math.Max(80, FocusTargetBox.Width - e.HorizontalChange);
+            double aspectRatio = WysiwygOverlay.ActualWidth / WysiwygOverlay.ActualHeight;
+            double newHeight = newWidth / aspectRatio;
+
+            double widthDiff = FocusTargetBox.Width - newWidth;
+
+            double newX = Math.Clamp(FocusBoxTransform.X + widthDiff, 0, FocusBoxTransform.X + FocusTargetBox.Width - 80);
+            double newY = FocusBoxTransform.Y;
+
+            if (newY + newHeight <= WysiwygOverlay.ActualHeight)
+            {
+                FocusTargetBox.Width = newWidth;
+                FocusTargetBox.Height = newHeight;
+                FocusBoxTransform.X = newX;
+                UpdateAreaReadout();
+            }
+        }
+
+        private void ThumbBottomRight_DragDelta(object sender, DragDeltaEventArgs e)
+        {
+            double newWidth = Math.Max(80, FocusTargetBox.Width + e.HorizontalChange);
+            double aspectRatio = WysiwygOverlay.ActualWidth / WysiwygOverlay.ActualHeight;
+            double newHeight = newWidth / aspectRatio;
+
+            if (FocusBoxTransform.X + newWidth <= WysiwygOverlay.ActualWidth && FocusBoxTransform.Y + newHeight <= WysiwygOverlay.ActualHeight)
+            {
+                FocusTargetBox.Width = newWidth;
+                FocusTargetBox.Height = newHeight;
+                UpdateAreaReadout();
+            }
         }
 
         private void RootGrid_PointerMoved(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
@@ -877,6 +1028,20 @@ namespace ModernImageViewer.Cinematic
             if (ActionBar != null) ActionBar.Opacity = 1.0;
             _idleTimer.Stop();
             _idleTimer.Start();
+        }
+
+        private void RootGrid_PointerExited(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+        {
+            ActionBar.Opacity = 0;
+            DirectorSidebar.IsPaneOpen = false;
+        }
+
+        private void Scrubber_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button btn && btn.CommandParameter is int index)
+            {
+                ViewModel.NavigateTo(index);
+            }
         }
 
         private void IdleTimer_Tick(DispatcherQueueTimer sender, object args)

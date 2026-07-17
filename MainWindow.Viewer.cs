@@ -1,4 +1,4 @@
-﻿using Microsoft.Graphics.Canvas;
+using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Effects;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -683,6 +683,11 @@ namespace ModernImageViewer
 
         private void ImageGrid_ItemClick(object s, ItemClickEventArgs e)
         {
+            bool isCtrl = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+            bool isShift = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+            
+            if (isCtrl || isShift) return;
+
             if (e.ClickedItem is ImageItem i) LoadFullImage(Images.IndexOf(i));
         }
 

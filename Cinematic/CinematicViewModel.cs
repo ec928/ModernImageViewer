@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
@@ -8,14 +8,48 @@ using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 using Windows.Storage;
 using ModernImageViewer.Cinematic.Data;
+using Microsoft.UI.Dispatching;
+using System.Collections.ObjectModel;
 
 namespace ModernImageViewer.Cinematic.ViewModels
 {
-    public class CinematicViewModel : INotifyPropertyChanged
+    public class SlideIndicatorItem : INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler PropertyChanged;
-        protected void OnPropertyChanged([CallerMemberName] string propertyName = null) =>
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        public int Index { get; set; }
+        private bool _isActive;
+        public bool IsActive 
+        { 
+            get => _isActive; 
+            set 
+            { 
+                if (_isActive != value) 
+                { 
+                    _isActive = value; 
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsActive))); 
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Opacity))); 
+                } 
+            } 
+        }
+        public double Opacity => IsActive ? 1.0 : 0.3;
+    }
+
+    public class CinematicViewModel : INotifyPropertyChanged
+    {
+        private readonly DispatcherQueue _dispatcher;
+        public ObservableCollection<SlideIndicatorItem> SlideIndicators { get; } = new();
+        public event PropertyChangedEventHandler PropertyChanged;
+        protected void OnPropertyChanged([CallerMemberName] string propertyName = null)
+        {
+            if (_dispatcher != null && !_dispatcher.HasThreadAccess)
+            {
+                _dispatcher.TryEnqueue(() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName)));
+            }
+            else
+            {
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+            }
+        }
 
         protected bool SetProperty<T>(ref T storage, T value, [CallerMemberName] string propertyName = null)
         {
@@ -34,7 +68,15 @@ namespace ModernImageViewer.Cinematic.ViewModels
         public int CurrentIndex
         {
             get => _currentIndex;
-            private set { SetProperty(ref _currentIndex, value); SyncStateForCurrentSlide(); }
+            private set 
+            { 
+                if (SetProperty(ref _currentIndex, value))
+                {
+                    SyncStateForCurrentSlide();
+                    for (int i = 0; i < SlideIndicators.Count; i++)
+                        SlideIndicators[i].IsActive = (i == _currentIndex);
+                }
+            }
         }
 
         public string CurrentFileName => ImagePaths.Count > 0 ? Path.GetFileName(ImagePaths[_currentIndex]) : string.Empty;
@@ -88,6 +130,7 @@ namespace ModernImageViewer.Cinematic.ViewModels
                     OnPropertyChanged(nameof(PanelHeader));
                     OnPropertyChanged(nameof(OverrideButtonText));
                     RefreshAllProperties();
+                    _ = AutoSaveAsync();
                 }
             }
         }
@@ -105,6 +148,7 @@ namespace ModernImageViewer.Cinematic.ViewModels
                 if (IsOverrideMode) CurrentDraft.DurationSeconds = value; else ActiveProject.GlobalDefaults.DurationSeconds = value;
                 OnPropertyChanged();
                 RequestRefresh();
+                _ = AutoSaveAsync();
             }
         }
 
@@ -117,6 +161,7 @@ namespace ModernImageViewer.Cinematic.ViewModels
                 if (IsOverrideMode) CurrentDraft.IntensityPercent = value; else ActiveProject.GlobalDefaults.IntensityPercent = value;
                 OnPropertyChanged();
                 RequestRefresh();
+                _ = AutoSaveAsync();
             }
         }
 
@@ -130,6 +175,7 @@ namespace ModernImageViewer.Cinematic.ViewModels
                 CurrentDraft.BeatCount = value;
                 OnPropertyChanged();
                 RequestRefresh();
+                _ = AutoSaveAsync();
             }
         }
 
@@ -142,6 +188,7 @@ namespace ModernImageViewer.Cinematic.ViewModels
                 if (IsOverrideMode) CurrentDraft.TechniqueOverride = value; else ActiveProject.GlobalDefaults.TechniqueOverride = value;
                 OnPropertyChanged();
                 RequestRefresh();
+                _ = AutoSaveAsync();
             }
         }
 
@@ -155,13 +202,19 @@ namespace ModernImageViewer.Cinematic.ViewModels
                 if (IsOverrideMode) CurrentDraft.DirectionOverride = val; else ActiveProject.GlobalDefaults.DirectionOverride = val;
                 OnPropertyChanged();
                 RequestRefresh();
+                _ = AutoSaveAsync();
             }
         }
 
         public CinematicViewModel(List<string> imagePaths, int startIndex)
         {
+            _dispatcher = DispatcherQueue.GetForCurrentThread();
             ImagePaths = imagePaths ?? new List<string>();
+            for (int i = 0; i < ImagePaths.Count; i++)
+                SlideIndicators.Add(new SlideIndicatorItem { Index = i });
             _currentIndex = Math.Max(0, Math.Min(startIndex, ImagePaths.Count - 1));
+            if (SlideIndicators.Count > 0)
+                SlideIndicators[_currentIndex].IsActive = true;
             SyncStateForCurrentSlide();
         }
 
@@ -181,7 +234,10 @@ namespace ModernImageViewer.Cinematic.ViewModels
                 CurrentIndex = (CurrentIndex + 1) % ImagePaths.Count;
             }
 
-            SlideNavigationRequested?.Invoke();
+            if (_dispatcher != null && !_dispatcher.HasThreadAccess)
+                _dispatcher.TryEnqueue(() => SlideNavigationRequested?.Invoke());
+            else
+                SlideNavigationRequested?.Invoke();
         }
 
         public void AdvanceToNextSlideSilently()
@@ -207,10 +263,35 @@ namespace ModernImageViewer.Cinematic.ViewModels
         {
             if (ImagePaths.Count == 0) return;
             CurrentIndex = (CurrentIndex - 1 >= 0) ? CurrentIndex - 1 : ImagePaths.Count - 1;
-            SlideNavigationRequested?.Invoke();
+            
+            if (_dispatcher != null && !_dispatcher.HasThreadAccess)
+                _dispatcher.TryEnqueue(() => SlideNavigationRequested?.Invoke());
+            else
+                SlideNavigationRequested?.Invoke();
         }
 
-        private void RequestRefresh() { if (!IsPlaying) TrajectoryRefreshRequested?.Invoke(); }
+        public void NavigateTo(int index)
+        {
+            if (index >= 0 && index < ImagePaths.Count)
+            {
+                CurrentIndex = index;
+                if (_dispatcher != null && !_dispatcher.HasThreadAccess)
+                    _dispatcher.TryEnqueue(() => SlideNavigationRequested?.Invoke());
+                else
+                    SlideNavigationRequested?.Invoke();
+            }
+        }
+
+        private void RequestRefresh() 
+        { 
+            if (!IsPlaying) 
+            {
+                if (_dispatcher != null && !_dispatcher.HasThreadAccess)
+                    _dispatcher.TryEnqueue(() => TrajectoryRefreshRequested?.Invoke());
+                else
+                    TrajectoryRefreshRequested?.Invoke();
+            } 
+        }
 
         private void RefreshAllProperties()
         {
@@ -247,6 +328,7 @@ namespace ModernImageViewer.Cinematic.ViewModels
             if (!IsOverrideMode) IsOverrideMode = true;
             CurrentDraft.FocusTargetRect = rect;
             RequestRefresh();
+            _ = AutoSaveAsync();
         }
 
         public void CaptureUndoSnapshot()
@@ -266,7 +348,8 @@ namespace ModernImageViewer.Cinematic.ViewModels
             else ActiveProject.Ledger.Remove(CurrentFileName);
 
             SyncStateForCurrentSlide();
-            TrajectoryRefreshRequested?.Invoke();
+            RequestRefresh();
+            _ = AutoSaveAsync();
         }
 
         public SlideSettings GetCurrentEffectiveSettings()
@@ -291,8 +374,38 @@ namespace ModernImageViewer.Cinematic.ViewModels
             {
                 ActiveProject = loadedProject;
                 SyncStateForCurrentSlide();
-                TrajectoryRefreshRequested?.Invoke();
+                RequestRefresh();
             }
+        }
+
+        public async Task AutoSaveAsync()
+        {
+            try
+            {
+                var folder = ApplicationData.Current.LocalFolder;
+                var file = await folder.CreateFileAsync("CinematicAutoSave.json", CreationCollisionOption.ReplaceExisting);
+                string json = JsonSerializer.Serialize(ActiveProject, new JsonSerializerOptions { WriteIndented = true });
+                await Windows.Storage.FileIO.WriteTextAsync(file, json);
+            }
+            catch { }
+        }
+
+        public async Task RestoreAutoSaveAsync()
+        {
+            try
+            {
+                var folder = ApplicationData.Current.LocalFolder;
+                var file = await folder.GetFileAsync("CinematicAutoSave.json");
+                string json = await Windows.Storage.FileIO.ReadTextAsync(file);
+                var loadedProject = JsonSerializer.Deserialize<CinematicProject>(json);
+                if (loadedProject != null)
+                {
+                    ActiveProject = loadedProject;
+                    SyncStateForCurrentSlide();
+                    RequestRefresh();
+                }
+            }
+            catch { }
         }
     }
 }
