@@ -157,6 +157,49 @@ namespace ModernImageViewer.VideoDirector.Models
             finally { _isUpdatingTiming = false; }
         }
 
+        // --- Upper-track (Track 2/3) clip properties ---
+        // These are additive: Track 1 ignores them (its timeline position is computed
+        // sequentially). Upper tracks use StartTime as the editable master-timeline
+        // placement and Opacity for compositing. This is the first step of converging
+        // the overlay onto this single clip type; the engine/UI still use OverlayClip.
+
+        // Editable placement on the master timeline. Display-only/computed for Track 1;
+        // the freely-editable start position for Track 2/3 (gaps allowed).
+        private TimeSpan _startTime = TimeSpan.Zero;
+        public TimeSpan StartTime
+        {
+            get => _startTime;
+            set
+            {
+                if (SetProperty(ref _startTime, value))
+                {
+                    OnPropertyChanged(nameof(StartTimeSeconds));
+                }
+            }
+        }
+
+        [JsonIgnore]
+        public double StartTimeSeconds
+        {
+            get => _startTime.TotalSeconds;
+            set => StartTime = TimeSpan.FromSeconds(value);
+        }
+
+        // Compositing opacity when this clip sits on an upper track. 1 = opaque.
+        private float _opacity = 1.0f;
+        public float Opacity
+        {
+            get => _opacity;
+            set => SetProperty(ref _opacity, Math.Clamp(value, 0f, 1f));
+        }
+
+        // End of this clip's window on the master timeline (upper tracks).
+        [JsonIgnore]
+        public TimeSpan EndTimeOnTimeline => _startTime + _opDuration;
+
+        // True if this clip is visible at the given master-timeline position (upper tracks).
+        public bool IsActiveAt(TimeSpan storyTime) => storyTime >= _startTime && storyTime < EndTimeOnTimeline;
+
         private SpatialMark _startMark = new();
         public SpatialMark StartMark
         {
