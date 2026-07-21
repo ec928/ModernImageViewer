@@ -27,25 +27,32 @@
         </Grid>
 
         <!-- Overlay Players (rendered on top of main A/B roll, below WYSIWYG and InputLayer).
-             Each overlay is a free video layer positioned/scaled by its CompositeTransform,
-             using the same zoom/pan mechanism as the main track. -->
-        <Grid x:Name="OverlayGrid1" x:FieldModifier="public" RenderTransformOrigin="0.5,0.5"
+             Each overlay grid IS the placement box (the PiP window): its size/position/clip are
+             set in code (VideoPlaybackEngine.ApplyOverlayBox) from the clip's placement fields.
+             The CompositeTransform lives on the MediaPlayerElement and frames the CONTENT
+             (marks: zoom/pan/motion), clipped to the box. During edit the box fills the screen
+             so content is framed full-size, identical to Track 1. -->
+        <Grid x:Name="OverlayGrid1" x:FieldModifier="public"
               Opacity="0" IsHitTestVisible="False"
-              HorizontalAlignment="Center" VerticalAlignment="Center">
-            <Grid.RenderTransform>
-                <CompositeTransform x:Name="OverlayTransform1" x:FieldModifier="public" />
-            </Grid.RenderTransform>
+              HorizontalAlignment="Left" VerticalAlignment="Top">
             <MediaPlayerElement x:Name="OverlayPlayer1" x:FieldModifier="public"
-                                AreTransportControlsEnabled="False" Stretch="Fill" />
+                                AreTransportControlsEnabled="False" Stretch="Fill"
+                                RenderTransformOrigin="0.5,0.5">
+                <MediaPlayerElement.RenderTransform>
+                    <CompositeTransform x:Name="OverlayTransform1" x:FieldModifier="public" />
+                </MediaPlayerElement.RenderTransform>
+            </MediaPlayerElement>
         </Grid>
-        <Grid x:Name="OverlayGrid2" x:FieldModifier="public" RenderTransformOrigin="0.5,0.5"
+        <Grid x:Name="OverlayGrid2" x:FieldModifier="public"
               Opacity="0" IsHitTestVisible="False"
-              HorizontalAlignment="Center" VerticalAlignment="Center">
-            <Grid.RenderTransform>
-                <CompositeTransform x:Name="OverlayTransform2" x:FieldModifier="public" />
-            </Grid.RenderTransform>
+              HorizontalAlignment="Left" VerticalAlignment="Top">
             <MediaPlayerElement x:Name="OverlayPlayer2" x:FieldModifier="public"
-                                AreTransportControlsEnabled="False" Stretch="Fill" />
+                                AreTransportControlsEnabled="False" Stretch="Fill"
+                                RenderTransformOrigin="0.5,0.5">
+                <MediaPlayerElement.RenderTransform>
+                    <CompositeTransform x:Name="OverlayTransform2" x:FieldModifier="public" />
+                </MediaPlayerElement.RenderTransform>
+            </MediaPlayerElement>
         </Grid>
 
         <!-- WYSIWYG Overlay for Edit Mode -->

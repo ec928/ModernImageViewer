@@ -452,6 +452,9 @@ namespace ModernImageViewer.VideoDirector.Views
                         StartMark = new SpatialMark(overlay.StartMark.Scale, overlay.StartMark.X, overlay.StartMark.Y),
                         EndMark = new SpatialMark(overlay.EndMark.Scale, overlay.EndMark.X, overlay.EndMark.Y),
                         Opacity = overlay.Opacity,
+                        PlacementScale = overlay.PlacementScale,
+                        PlacementCenterX = overlay.PlacementCenterX,
+                        PlacementCenterY = overlay.PlacementCenterY,
                         Thumbnail = overlay.Thumbnail
                     };
                     ViewModel.OverlayClips.Insert(index + 1, newOverlay);

@@ -199,6 +199,34 @@ namespace ModernImageViewer.VideoDirector.Models
         // True if this clip is visible at the given master-timeline position (upper tracks).
         public bool IsActiveAt(TimeSpan storyTime) => storyTime >= _startTime && storyTime < EndTimeOnTimeline;
 
+        // --- Placement (upper-track PiP box) ---
+        // Where and how big the clip appears in the composite, INDEPENDENT of its content
+        // framing (marks). Track 1 ignores placement (it is always full-frame). This is what
+        // lets a clip be framed full-screen while editing but shown as a corner PiP at playback.
+
+        // Box size as a fraction of the video's viewport-fit size. 0.3 = 30%.
+        private double _placementScale = 0.3;
+        public double PlacementScale
+        {
+            get => _placementScale;
+            set => SetProperty(ref _placementScale, Math.Clamp(value, 0.05, 1.0));
+        }
+
+        // Box centre as a fraction of the viewport (0.5,0.5 = centre). Default lower-right.
+        private double _placementCenterX = 0.72;
+        public double PlacementCenterX
+        {
+            get => _placementCenterX;
+            set => SetProperty(ref _placementCenterX, Math.Clamp(value, 0.0, 1.0));
+        }
+
+        private double _placementCenterY = 0.72;
+        public double PlacementCenterY
+        {
+            get => _placementCenterY;
+            set => SetProperty(ref _placementCenterY, Math.Clamp(value, 0.0, 1.0));
+        }
+
         private SpatialMark _startMark = new();
         public SpatialMark StartMark
         {

@@ -53,6 +53,10 @@ namespace ModernImageViewer.VideoDirector.Models
         private CinematicOperation _activeOverlay1;
         private CinematicOperation _activeOverlay2;
         private bool _isEditingOverlay = false;
+        // Native aspect (w/h) of each slot's overlay video, cached when the media opens, so
+        // the placement box can be sized to the video's shape (no black bars).
+        private double _overlayAspect1 = 0;
+        private double _overlayAspect2 = 0;
         // Story time as of the start of the currently-playing clip; CurrentStoryTime is
         // derived from this plus the active player's real position every render frame.
         private TimeSpan _storyTimeAtClipStart = TimeSpan.Zero;
@@ -1280,7 +1284,11 @@ namespace ModernImageViewer.VideoDirector.Models
                     if (currentSlotOverlay != overlay) return;
 
                     SeekAndPlayOverlay(sender, overlay, _viewModel.CurrentStoryTime);
-                    _dispatcher.TryEnqueue(() => SizeOverlayToVideo(slot, sender));
+                    _dispatcher.TryEnqueue(() =>
+                    {
+                        CacheOverlayAspect(slot, sender);
+                        ApplyOverlayBox(slot, overlay, false);
+                    });
                 }
 
                 player.MediaOpened += OnOpened;
@@ -1291,32 +1299,62 @@ namespace ModernImageViewer.VideoDirector.Models
                 // Source is already correct and open (e.g. re-entering this slot for the same
                 // clip) — safe to seek immediately.
                 SeekAndPlayOverlay(player, overlay, currentStoryTime);
-                SizeOverlayToVideo(slot, player);
+                CacheOverlayAspect(slot, player);
+                ApplyOverlayBox(slot, overlay, false);
             }
         }
 
-        // Sizes the overlay grid to the video's native aspect ratio so the video fills it with
-        // no black letterbox bars. Scale=1.0 == the video fit (contained) within the viewport;
-        // the clip's Scale transform then shrinks/enlarges from there. Without this the grid is
-        // full-viewport and a non-16:9 video gets pillar/letterboxed inside it.
-        private void SizeOverlayToVideo(int slot, MediaPlayer player)
+        // Caches the overlay video's native aspect (w/h) for the slot, read once the media
+        // has opened. Used to shape the placement box to the video (no black bars).
+        private void CacheOverlayAspect(int slot, MediaPlayer player)
         {
-            var grid = slot == 1 ? _playerControl.OverlayGrid1 : _playerControl.OverlayGrid2;
             if (player?.PlaybackSession == null) return;
-
             uint vw = player.PlaybackSession.NaturalVideoWidth;
             uint vh = player.PlaybackSession.NaturalVideoHeight;
+            if (vw == 0 || vh == 0) return;
+            double aspect = (double)vw / vh;
+            if (slot == 1) _overlayAspect1 = aspect; else _overlayAspect2 = aspect;
+        }
+
+        // Positions, sizes and clips the placement box (the overlay grid) from the clip's
+        // placement fields, shaped to the video aspect. In edit mode the box fills the screen
+        // (placement bypassed) so content is framed full-size, identical to Track 1; at
+        // playback it is the corner PiP. The grid clips its content so zoomed-in framing can't
+        // spill outside the box.
+        private void ApplyOverlayBox(int slot, CinematicOperation overlay, bool editMode)
+        {
+            var grid = slot == 1 ? _playerControl.OverlayGrid1 : _playerControl.OverlayGrid2;
+            double aspect = slot == 1 ? _overlayAspect1 : _overlayAspect2;
             double vpW = _playerControl.ActualWidth;
             double vpH = _playerControl.ActualHeight;
-            if (vw == 0 || vh == 0 || vpW <= 0 || vpH <= 0) return;
+            if (aspect <= 0 || vpW <= 0 || vpH <= 0) return;
 
-            double aspect = (double)vw / vh;
-            double baseW, baseH;
-            if (aspect >= vpW / vpH) { baseW = vpW; baseH = vpW / aspect; }
-            else { baseH = vpH; baseW = vpH * aspect; }
+            // Video fit to viewport (contained), preserving aspect — the "scale 1" reference.
+            double fitW, fitH;
+            if (aspect >= vpW / vpH) { fitW = vpW; fitH = vpW / aspect; }
+            else { fitH = vpH; fitW = vpH * aspect; }
 
-            grid.Width = baseW;
-            grid.Height = baseH;
+            double scale = editMode ? 1.0 : overlay.PlacementScale;
+            double cx = editMode ? 0.5 : overlay.PlacementCenterX;
+            double cy = editMode ? 0.5 : overlay.PlacementCenterY;
+
+            double boxW = fitW * scale;
+            double boxH = fitH * scale;
+            double left = cx * vpW - boxW / 2;
+            double top = cy * vpH - boxH / 2;
+
+            grid.Margin = new Microsoft.UI.Xaml.Thickness(left, top, 0, 0);
+            // Only resize + reallocate the clip when the box dimensions actually change
+            // (avoids per-frame allocation during playback).
+            if (grid.Width != boxW || grid.Height != boxH)
+            {
+                grid.Width = boxW;
+                grid.Height = boxH;
+                grid.Clip = new Microsoft.UI.Xaml.Media.RectangleGeometry
+                {
+                    Rect = new Windows.Foundation.Rect(0, 0, boxW, boxH)
+                };
+            }
         }
 
         private void SeekAndPlayOverlay(MediaPlayer player, CinematicOperation overlay, TimeSpan currentStoryTime)
@@ -1369,27 +1407,33 @@ namespace ModernImageViewer.VideoDirector.Models
             player.Source = null; // Release GPU decode pipeline
             grid.Opacity = 0;
 
-            // Reset transform
+            // Reset content transform + clear the placement box so no stale size/clip lingers.
             var transform = slot == 1 ? _playerControl.OverlayTransform1 : _playerControl.OverlayTransform2;
             transform.ScaleX = 1;
             transform.ScaleY = 1;
             transform.TranslateX = 0;
             transform.TranslateY = 0;
+            grid.ClearValue(Microsoft.UI.Xaml.FrameworkElement.WidthProperty);
+            grid.ClearValue(Microsoft.UI.Xaml.FrameworkElement.HeightProperty);
+            grid.Clip = null;
+            grid.Margin = new Microsoft.UI.Xaml.Thickness(0);
 
-            if (slot == 1) _activeOverlay1 = null;
-            else _activeOverlay2 = null;
+            if (slot == 1) { _activeOverlay1 = null; _overlayAspect1 = 0; }
+            else { _activeOverlay2 = null; _overlayAspect2 = 0; }
         }
 
         private void ApplyOverlayTransform(int slot, CinematicOperation overlay)
         {
-            // Static placement for now: the upper-track clip's StartMark holds its
-            // scale/position (StartMark == EndMark = no motion). Mark interpolation over the
-            // clip's duration comes in the content/placement phase.
+            // Content framing (marks) on the inner element. Static for now (StartMark ==
+            // EndMark); mark interpolation over the clip's duration comes in the motion step.
             var transform = slot == 1 ? _playerControl.OverlayTransform1 : _playerControl.OverlayTransform2;
             transform.ScaleX = overlay.StartMark.Scale;
             transform.ScaleY = overlay.StartMark.Scale;
             transform.TranslateX = overlay.StartMark.X;
             transform.TranslateY = overlay.StartMark.Y;
+
+            // Placement box (where/how big on screen), clipped so framing can't spill out.
+            ApplyOverlayBox(slot, overlay, false);
         }
 
         private void ApplyOverlayDriftCorrection(int slot, CinematicOperation overlay, TimeSpan currentStoryTime)
@@ -1478,11 +1522,13 @@ namespace ModernImageViewer.VideoDirector.Models
 
             _dispatcher.TryEnqueue(() =>
             {
+                // Content framing (marks) — edited full-size, same controls as Track 1.
                 transform.ScaleX = overlay.StartMark.Scale;
                 transform.ScaleY = overlay.StartMark.Scale;
                 transform.TranslateX = overlay.StartMark.X;
                 transform.TranslateY = overlay.StartMark.Y;
-                SizeOverlayToVideo(1, player); // Match the overlay grid to the video aspect (no black bars)
+                CacheOverlayAspect(1, player);
+                ApplyOverlayBox(1, overlay, true); // editMode: box fills the screen, placement bypassed
                 grid.Opacity = 1.0; // Full opacity while editing regardless of the clip's playback opacity
                 _playerControl.ActiveTransform = transform;
             });
