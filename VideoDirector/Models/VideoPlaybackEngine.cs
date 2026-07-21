@@ -52,6 +52,10 @@ namespace ModernImageViewer.VideoDirector.Models
         private MediaPlayer _overlayMediaPlayer2;
         private OverlayClip _activeOverlay1;
         private OverlayClip _activeOverlay2;
+        private bool _isEditingOverlay = false;
+        // Story time as of the start of the currently-playing clip; CurrentStoryTime is
+        // derived from this plus the active player's real position every render frame.
+        private TimeSpan _storyTimeAtClipStart = TimeSpan.Zero;
 
         public VideoPlaybackEngine(Views.DirectorPlayerControl playerControl, DirectorViewModel viewModel)
         {
@@ -113,9 +117,17 @@ namespace ModernImageViewer.VideoDirector.Models
             _mediaPlayerA = new MediaPlayer { IsLoopingEnabled = false, AutoPlay = false };
             _mediaPlayerB = new MediaPlayer { IsLoopingEnabled = false, AutoPlay = false };
 
+            // Each MediaPlayer auto-registers with the OS's System Media Transport Controls
+            // (lock-screen/media-key "Now Playing" session) unless disabled. With multiple
+            // MediaPlayer instances playing concurrently (main track + overlays), that
+            // background negotiation overhead is a known cause of stutter. This app has no
+            // use for OS transport-control integration, so turn it off on every player.
+            _mediaPlayerA.CommandManager.IsEnabled = false;
+            _mediaPlayerB.CommandManager.IsEnabled = false;
+
             _playerA.SetMediaPlayer(_mediaPlayerA);
             _playerB.SetMediaPlayer(_mediaPlayerB);
-            
+
             _playerControl.ActiveTransform = _playerControl.TransformA;
         }
 
@@ -123,11 +135,17 @@ namespace ModernImageViewer.VideoDirector.Models
         {
             if (_playbackCts == null || _playbackCts.IsCancellationRequested)
             {
-                int startIdx = 0;
+                int startIdx;
                 if (_viewModel.SelectedTimelineNode != null)
                 {
                     startIdx = _viewModel.TimelineNodes.IndexOf(_viewModel.SelectedTimelineNode as CinematicOperation);
                     if (startIdx < 0) startIdx = 0;
+                }
+                else
+                {
+                    // No Track 1 clip selected (e.g. an overlay is selected instead) — resume
+                    // from wherever the playhead currently is instead of restarting at clip 0.
+                    startIdx = _viewModel.GetTimelineIndexForStoryTime(_viewModel.CurrentStoryTime);
                 }
                 await StartPlaybackAsync(startIdx);
                 return;
@@ -161,7 +179,13 @@ namespace ModernImageViewer.VideoDirector.Models
                 var otherPlayer = _isPlayerAActive ? _mediaPlayerB : _mediaPlayerA;
                 otherPlayer.Pause();
             }
-            
+
+            // Overlay players are driven from the per-frame render loop, which stops running
+            // entirely while paused — so they must be paused explicitly here rather than
+            // relying on the render loop to catch up to the paused state.
+            _overlayMediaPlayer1.Pause();
+            _overlayMediaPlayer2.Pause();
+
             _dispatcher.TryEnqueue(() => UpdateWysiwygOverlay());
         }
 
@@ -180,6 +204,19 @@ namespace ModernImageViewer.VideoDirector.Models
             {
                 var otherPlayer = _isPlayerAActive ? _mediaPlayerB : _mediaPlayerA;
                 otherPlayer.Play();
+            }
+
+            // Resume whichever overlay slots are currently occupied; EvaluateOverlays will
+            // re-sync their exact position on the next render tick via drift correction.
+            if (_activeOverlay1 != null && _viewModel.PlaybackSpeed > 0)
+            {
+                _overlayMediaPlayer1.PlaybackSession.PlaybackRate = _viewModel.PlaybackSpeed;
+                _overlayMediaPlayer1.Play();
+            }
+            if (_activeOverlay2 != null && _viewModel.PlaybackSpeed > 0)
+            {
+                _overlayMediaPlayer2.PlaybackSession.PlaybackRate = _viewModel.PlaybackSpeed;
+                _overlayMediaPlayer2.Play();
             }
         }
 
@@ -201,7 +238,8 @@ namespace ModernImageViewer.VideoDirector.Models
             {
                 _viewModel.CurrentStoryTime += _viewModel.TimelineNodes[i].OpDuration + _viewModel.TimelineNodes[i].TransitionDuration;
             }
-            
+            _storyTimeAtClipStart = _viewModel.CurrentStoryTime;
+
             _isAnimating = true;
             CompositionTarget.Rendering += CompositionTarget_Rendering;
 
@@ -314,22 +352,30 @@ namespace ModernImageViewer.VideoDirector.Models
                     // 1. Play the main portion of the clip
                     await PlayOperationAsync(op, nextOp, startedByTransition, hasNextTransition, previousTransitionDuration, token);
                     
+                    // Advance the clip-start baseline by exactly this clip's story contribution.
+                    // The render loop drives CurrentStoryTime continuously off this baseline, so
+                    // accumulate into the baseline (not CurrentStoryTime) — adding to
+                    // CurrentStoryTime here would double-count, since the render loop has already
+                    // advanced it to this clip's end.
                     if (_skipTcs.Task.IsCompleted)
                     {
                         // Skipped!
                         startedByTransition = false;
-                        _viewModel.CurrentStoryTime += op.OpDuration + op.TransitionDuration;
+                        _storyTimeAtClipStart += op.OpDuration + op.TransitionDuration;
+                        _viewModel.CurrentStoryTime = _storyTimeAtClipStart;
                         continue;
                     }
-                    _viewModel.CurrentStoryTime += op.OpDuration;
-                    
+                    _storyTimeAtClipStart += op.OpDuration;
+                    _viewModel.CurrentStoryTime = _storyTimeAtClipStart;
+
                     // 2. Play the transition into the next clip if applicable
                     if (hasNextTransition)
                     {
                         await PlayTransitionAsync(op, nextOp, token);
                         startedByTransition = true;
                         previousTransitionDuration = op.TransitionDuration;
-                        _viewModel.CurrentStoryTime += op.TransitionDuration;
+                        _storyTimeAtClipStart += op.TransitionDuration;
+                        _viewModel.CurrentStoryTime = _storyTimeAtClipStart;
                     }
                     else
                     {
@@ -341,6 +387,7 @@ namespace ModernImageViewer.VideoDirector.Models
                 {
                     currentIndex = 0;
                     _viewModel.CurrentStoryTime = TimeSpan.Zero;
+                    _storyTimeAtClipStart = TimeSpan.Zero;
                 }
                 else
                 {
@@ -452,7 +499,10 @@ namespace ModernImageViewer.VideoDirector.Models
                 }
                 lastTick = now;
 
-                await Task.Delay(50, token);
+                // Polled at ~1 frame instead of 50ms so a clip can't keep playing noticeably
+                // past its nominal end before the transition machinery notices — that overshoot
+                // window was a source of transient story-time inaccuracy at clip boundaries.
+                await Task.Delay(15, token);
             }
 
             if (!hasNextTransition)
@@ -472,7 +522,35 @@ namespace ModernImageViewer.VideoDirector.Models
             _isPreparingTransition = true;
             _isPlayerAActive = !_isPlayerAActive; // Swap to next
             _playerControl.ActiveTransform = _isPlayerAActive ? _playerControl.TransformA : _playerControl.TransformB;
-            
+
+            // Update _opA/_opB atomically with the _isPlayerAActive flip above (not after the
+            // awaits below) — otherwise there's a window where _isPlayerAActive already points
+            // at the next clip's player but _opA/_opB still reference the previous clip, which
+            // the per-frame story-time calc reads and briefly computes a garbage value from.
+            if (nextOp != null)
+            {
+                var nextTotalDuration = nextOp.OpDuration + op.TransitionDuration;
+
+                double opGlobalSpeed = _viewModel.PlaybackSpeed == 0 ? 1.0 : _viewModel.PlaybackSpeed;
+                if (opGlobalSpeed != 1.0)
+                {
+                    nextTotalDuration = TimeSpan.FromSeconds(nextTotalDuration.TotalSeconds / opGlobalSpeed);
+                }
+
+                if (!_isPlayerAActive)
+                {
+                    _opB = nextOp;
+                    _opBDuration = nextTotalDuration;
+                    _opBStartTime = DateTime.Now;
+                }
+                else
+                {
+                    _opA = nextOp;
+                    _opADuration = nextTotalDuration;
+                    _opAStartTime = DateTime.Now;
+                }
+            }
+
             var fadingInPlayer = _isPlayerAActive ? _mediaPlayerA : _mediaPlayerB;
             var fadingInElement = _isPlayerAActive ? _playerA : _playerB;
             var fadingInGrid = _isPlayerAActive ? _playerControl.GridA : _playerControl.GridB;
@@ -534,30 +612,6 @@ namespace ModernImageViewer.VideoDirector.Models
             _transitionStyle = op.TransitionStyle;
             _renderDuration = op.TransitionDuration;
             _transitionStartTime = DateTime.Now;
-            
-            if (nextOp != null)
-            {
-                var nextTotalDuration = nextOp.OpDuration + op.TransitionDuration;
-                
-                double globalSpeed = _viewModel.PlaybackSpeed == 0 ? 1.0 : _viewModel.PlaybackSpeed;
-                if (globalSpeed != 1.0)
-                {
-                    nextTotalDuration = TimeSpan.FromSeconds(nextTotalDuration.TotalSeconds / globalSpeed);
-                }
-                
-                if (!_isPlayerAActive)
-                {
-                    _opB = nextOp;
-                    _opBDuration = nextTotalDuration;
-                    _opBStartTime = DateTime.Now;
-                }
-                else
-                {
-                    _opA = nextOp;
-                    _opADuration = nextTotalDuration;
-                    _opAStartTime = DateTime.Now;
-                }
-            }
 
             double activeGlobalSpeed = _viewModel.PlaybackSpeed == 0 ? 1.0 : _viewModel.PlaybackSpeed;
             TimeSpan realTransitionDuration = op.TransitionDuration;
@@ -699,6 +753,25 @@ namespace ModernImageViewer.VideoDirector.Models
             UpdateSpatial(_opA, _opAStartTime, _opADuration, _playerControl.TransformA);
             UpdateSpatial(_opB, _opBStartTime, _opBDuration, _playerControl.TransformB);
 
+            // CurrentStoryTime only gets bumped at clip boundaries elsewhere in this class —
+            // it does not tick on its own. Advance it continuously here from the active
+            // player's real decode position, or overlay drift-correction (which compares
+            // against this value every frame) sees a stale target and fights the overlay's
+            // real playback, which is what caused the overlay stutter.
+            var storyTimePlayer = _isPlayerAActive ? _mediaPlayerA : _mediaPlayerB;
+            var storyTimeOp = _isPlayerAActive ? _opA : _opB;
+            if (storyTimeOp != null && storyTimePlayer?.PlaybackSession != null)
+            {
+                // Video position advances at the clip's own playback rate, but story time is
+                // measured in real sequence seconds — a clip at 2x contributes half as much
+                // story time as video watched. Divide by the clip speed so the per-frame
+                // advance maxes out at exactly OpDuration, matching the boundary accounting.
+                double clipSpeed = storyTimeOp.PlaybackSpeed > 0 ? storyTimeOp.PlaybackSpeed : 1.0;
+                double videoElapsed = (storyTimePlayer.PlaybackSession.Position - storyTimeOp.VideoStartTime).TotalSeconds;
+                if (videoElapsed < 0) videoElapsed = 0;
+                _viewModel.CurrentStoryTime = _storyTimeAtClipStart + TimeSpan.FromSeconds(videoElapsed / clipSpeed);
+            }
+
             // Evaluate overlay clips against master story time
             EvaluateOverlays(_viewModel.CurrentStoryTime);
 
@@ -721,8 +794,17 @@ namespace ModernImageViewer.VideoDirector.Models
                 }
             }
 
-            UpdateTelemetryOverlay();
+            // The telemetry HUD is diagnostic text a human can't usefully read at 60fps —
+            // throttle it to ~10/sec instead of recomputing/re-laying-out text every frame,
+            // which otherwise competes with video decode for CPU during overlay playback.
+            if ((DateTime.Now - _lastTelemetryUpdate).TotalMilliseconds >= 100)
+            {
+                _lastTelemetryUpdate = DateTime.Now;
+                UpdateTelemetryOverlay();
+            }
         }
+
+        private DateTime _lastTelemetryUpdate = DateTime.MinValue;
 
         private void UpdateTelemetryOverlay(bool isEditMode = false)
         {
@@ -1094,11 +1176,13 @@ namespace ModernImageViewer.VideoDirector.Models
             _overlayMediaPlayer1 = new MediaPlayer();
             _overlayMediaPlayer1.IsLoopingEnabled = false;
             _overlayMediaPlayer1.AutoPlay = false;
+            _overlayMediaPlayer1.CommandManager.IsEnabled = false;
             _playerControl.OverlayPlayer1.SetMediaPlayer(_overlayMediaPlayer1);
 
             _overlayMediaPlayer2 = new MediaPlayer();
             _overlayMediaPlayer2.IsLoopingEnabled = false;
             _overlayMediaPlayer2.AutoPlay = false;
+            _overlayMediaPlayer2.CommandManager.IsEnabled = false;
             _playerControl.OverlayPlayer2.SetMediaPlayer(_overlayMediaPlayer2);
         }
 
@@ -1163,14 +1247,89 @@ namespace ModernImageViewer.VideoDirector.Models
             var player = slot == 1 ? _overlayMediaPlayer1 : _overlayMediaPlayer2;
             var grid = slot == 1 ? _playerControl.OverlayGrid1 : _playerControl.OverlayGrid2;
 
-            // Set source (this is where GPU resources are allocated — only when needed)
-            player.Source = MediaSource.CreateFromUri(new Uri(overlay.FilePath));
-            
-            // Seek to the correct position within the overlay's source video
+            // Mark active immediately so repeated per-frame EvaluateOverlays ticks don't
+            // re-trigger this while the media is still opening asynchronously.
+            if (slot == 1) _activeOverlay1 = overlay;
+            else _activeOverlay2 = overlay;
+
+            grid.Opacity = overlay.Opacity;
+
+            bool needsNewSource = player.Source == null ||
+                !string.Equals((player.Source as MediaSource)?.Uri?.LocalPath, overlay.FilePath, StringComparison.OrdinalIgnoreCase);
+
+            if (needsNewSource)
+            {
+                // MediaPlayer.PlaybackSession isn't seekable until MediaOpened fires — seeking
+                // (or even touching PlaybackSession) before then throws. Defer the seek/play
+                // until the media actually finishes opening instead of doing it synchronously.
+                void OnOpened(MediaPlayer sender, object args)
+                {
+                    sender.MediaOpened -= OnOpened;
+
+                    // The overlay this slot wants may have changed while we were waiting
+                    // (e.g. playback moved past it, or it got released) — bail if so.
+                    var currentSlotOverlay = slot == 1 ? _activeOverlay1 : _activeOverlay2;
+                    if (currentSlotOverlay != overlay) return;
+
+                    SeekAndPlayOverlay(sender, overlay, _viewModel.CurrentStoryTime);
+                    _dispatcher.TryEnqueue(() => SizeOverlayToVideo(slot, sender));
+                }
+
+                player.MediaOpened += OnOpened;
+                player.Source = MediaSource.CreateFromUri(new Uri(overlay.FilePath));
+            }
+            else
+            {
+                // Source is already correct and open (e.g. re-entering this slot for the same
+                // clip) — safe to seek immediately.
+                SeekAndPlayOverlay(player, overlay, currentStoryTime);
+                SizeOverlayToVideo(slot, player);
+            }
+        }
+
+        // Sizes the overlay grid to the video's native aspect ratio so the video fills it with
+        // no black letterbox bars. Scale=1.0 == the video fit (contained) within the viewport;
+        // the clip's Scale transform then shrinks/enlarges from there. Without this the grid is
+        // full-viewport and a non-16:9 video gets pillar/letterboxed inside it.
+        private void SizeOverlayToVideo(int slot, MediaPlayer player)
+        {
+            var grid = slot == 1 ? _playerControl.OverlayGrid1 : _playerControl.OverlayGrid2;
+            if (player?.PlaybackSession == null) return;
+
+            uint vw = player.PlaybackSession.NaturalVideoWidth;
+            uint vh = player.PlaybackSession.NaturalVideoHeight;
+            double vpW = _playerControl.ActualWidth;
+            double vpH = _playerControl.ActualHeight;
+            if (vw == 0 || vh == 0 || vpW <= 0 || vpH <= 0) return;
+
+            double aspect = (double)vw / vh;
+            double baseW, baseH;
+            if (aspect >= vpW / vpH) { baseW = vpW; baseH = vpW / aspect; }
+            else { baseH = vpH; baseW = vpH * aspect; }
+
+            grid.Width = baseW;
+            grid.Height = baseH;
+        }
+
+        private void SeekAndPlayOverlay(MediaPlayer player, OverlayClip overlay, TimeSpan currentStoryTime)
+        {
+            if (player.PlaybackSession == null) return;
+
             TimeSpan offsetIntoOverlay = currentStoryTime - overlay.StartTime;
-            player.PlaybackSession.Position = overlay.VideoStartTime + offsetIntoOverlay;
-            
-            if (_isAnimating && !_isPaused)
+            TimeSpan targetPosition = overlay.VideoStartTime + offsetIntoOverlay;
+
+            // The overlay's on-screen Duration is independent of the source clip's actual
+            // length — if Duration outlasts the media, hold on the last frame instead of
+            // seeking past end-of-media (which the player can't reach).
+            bool pastEnd = TryClampToMediaLength(player, ref targetPosition);
+
+            player.PlaybackSession.Position = targetPosition;
+
+            if (pastEnd)
+            {
+                player.Pause();
+            }
+            else if (_isAnimating && !_isPaused && _viewModel.PlaybackSpeed > 0)
             {
                 player.PlaybackSession.PlaybackRate = _viewModel.PlaybackSpeed;
                 player.Play();
@@ -1179,11 +1338,18 @@ namespace ModernImageViewer.VideoDirector.Models
             {
                 player.Pause();
             }
+        }
 
-            grid.Opacity = overlay.Opacity;
+        // Clamps a target seek position to the media's actual playable length. Returns true
+        // if the target was past end-of-media (i.e. the caller should hold, not keep seeking).
+        private bool TryClampToMediaLength(MediaPlayer player, ref TimeSpan targetPosition)
+        {
+            var natural = player.PlaybackSession?.NaturalDuration ?? TimeSpan.Zero;
+            if (natural <= TimeSpan.Zero || targetPosition < natural) return false;
 
-            if (slot == 1) _activeOverlay1 = overlay;
-            else _activeOverlay2 = overlay;
+            var holdPosition = natural - TimeSpan.FromMilliseconds(50);
+            targetPosition = holdPosition > TimeSpan.Zero ? holdPosition : TimeSpan.Zero;
+            return true;
         }
 
         private void ReleaseOverlaySlot(int slot)
@@ -1221,6 +1387,19 @@ namespace ModernImageViewer.VideoDirector.Models
             if (player.PlaybackSession == null) return;
 
             TimeSpan expectedPosition = overlay.VideoStartTime + (currentStoryTime - overlay.StartTime);
+
+            if (TryClampToMediaLength(player, ref expectedPosition))
+            {
+                // Past end-of-media — hold the last frame instead of chasing an unreachable
+                // position every frame (this was the cause of visible stutter).
+                if (player.PlaybackSession.Position < expectedPosition)
+                {
+                    player.PlaybackSession.Position = expectedPosition;
+                }
+                player.Pause();
+                return;
+            }
+
             TimeSpan actualPosition = player.PlaybackSession.Position;
             TimeSpan drift = (expectedPosition - actualPosition).Duration();
 
@@ -1228,12 +1407,82 @@ namespace ModernImageViewer.VideoDirector.Models
             {
                 player.PlaybackSession.Position = expectedPosition;
             }
+
+            // We're back in-bounds (not past end-of-media) — make sure the player is actually
+            // playing. Without this, a transient overshoot that triggered the past-end-of-media
+            // Pause() above on some earlier frame would leave the overlay frozen forever, since
+            // nothing else in this correction path ever resumes it.
+            if (_isAnimating && !_isPaused && _viewModel.PlaybackSpeed > 0)
+            {
+                if (player.PlaybackSession.PlaybackRate != _viewModel.PlaybackSpeed)
+                {
+                    player.PlaybackSession.PlaybackRate = _viewModel.PlaybackSpeed;
+                }
+                if (player.PlaybackSession.PlaybackState != Windows.Media.Playback.MediaPlaybackState.Playing)
+                {
+                    player.Play();
+                }
+            }
         }
 
         private void HideAllOverlays()
         {
             if (_activeOverlay1 != null) ReleaseOverlaySlot(1);
             if (_activeOverlay2 != null) ReleaseOverlaySlot(2);
+        }
+
+        // ==================== Overlay Editing (WYSIWYG) ====================
+
+        // Overlay editing always borrows slot 1. Playback is stopped first, so slot 1
+        // can't be in use for actual overlay playback at the same time.
+        public async void EnterOverlayEditMode(OverlayClip overlay)
+        {
+            StopPlayback();
+            UpdateWysiwygOverlay(); // Collapse any stale main-track rectangles
+
+            if (overlay == null || string.IsNullOrWhiteSpace(overlay.FilePath)) return;
+
+            _isEditingOverlay = true;
+            _activeOverlay1 = overlay;
+
+            var player = _overlayMediaPlayer1;
+            var grid = _playerControl.OverlayGrid1;
+            var transform = _playerControl.OverlayTransform1;
+
+            if (player.Source == null || !string.Equals((player.Source as MediaSource)?.Uri?.LocalPath, overlay.FilePath, StringComparison.OrdinalIgnoreCase))
+            {
+                var tcs = new TaskCompletionSource<bool>();
+                Windows.Foundation.TypedEventHandler<MediaPlayer, object> handler = (s, e) => tcs.TrySetResult(true);
+                player.MediaOpened += handler;
+                player.Source = MediaSource.CreateFromUri(new Uri(overlay.FilePath));
+                await Task.WhenAny(tcs.Task, Task.Delay(1500));
+                player.MediaOpened -= handler;
+            }
+
+            if (player.PlaybackSession != null)
+            {
+                player.PlaybackSession.Position = overlay.VideoStartTime;
+            }
+            player.Pause();
+
+            _dispatcher.TryEnqueue(() =>
+            {
+                transform.ScaleX = overlay.Scale;
+                transform.ScaleY = overlay.Scale;
+                transform.TranslateX = overlay.X;
+                transform.TranslateY = overlay.Y;
+                SizeOverlayToVideo(1, player); // Match the overlay grid to the video aspect (no black bars)
+                grid.Opacity = 1.0; // Full opacity while editing regardless of the clip's playback opacity
+                _playerControl.ActiveTransform = transform;
+            });
+        }
+
+        public void ClearOverlayEditMode()
+        {
+            if (!_isEditingOverlay) return;
+            _isEditingOverlay = false;
+            ReleaseOverlaySlot(1);
+            _playerControl.ActiveTransform = _isPlayerAActive ? _playerControl.TransformA : _playerControl.TransformB;
         }
     }
 }

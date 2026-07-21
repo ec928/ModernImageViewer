@@ -120,6 +120,20 @@ namespace ModernImageViewer.VideoDirector.Views
                 }
                 _playbackEngine?.UpdateWysiwygOverlay();
             }
+            else if (e.PropertyName == nameof(DirectorViewModel.SelectedOverlay))
+            {
+                if (ViewModel.SelectedOverlay is OverlayClip overlay)
+                {
+                    if (!ViewModel.IsPlaying)
+                    {
+                        _playbackEngine?.EnterOverlayEditMode(overlay);
+                    }
+                }
+                else
+                {
+                    _playbackEngine?.ClearOverlayEditMode();
+                }
+            }
             else if (e.PropertyName == nameof(DirectorViewModel.IsRecordingMotion))
             {
                 if (RecordButton.IsChecked != ViewModel.IsRecordingMotion)
@@ -382,6 +396,111 @@ namespace ModernImageViewer.VideoDirector.Views
             if (e.OriginalSource is FrameworkElement element && element.DataContext is CinematicOperation node)
             {
                 ViewModel.SelectedTimelineNode = node;
+            }
+        }
+
+        private void ApplyOverlayPosition_Click(object sender, RoutedEventArgs e)
+        {
+            var overlay = ViewModel.SelectedOverlay;
+            var transform = PlayerControl.ActiveTransform;
+            if (overlay != null && transform != null)
+            {
+                overlay.Scale = (float)transform.ScaleX;
+                overlay.X = (float)transform.TranslateX;
+                overlay.Y = (float)transform.TranslateY;
+            }
+        }
+
+        private async void AddOverlay_Click(object sender, RoutedEventArgs e)
+        {
+            var openPicker = new FileOpenPicker();
+            var window = MainWindow.Instance;
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+            WinRT.Interop.InitializeWithWindow.Initialize(openPicker, hwnd);
+
+            openPicker.ViewMode = PickerViewMode.Thumbnail;
+            openPicker.SuggestedStartLocation = PickerLocationId.VideosLibrary;
+            openPicker.FileTypeFilter.Add(".mp4");
+            openPicker.FileTypeFilter.Add(".mkv");
+            openPicker.FileTypeFilter.Add(".avi");
+            openPicker.FileTypeFilter.Add(".wmv");
+            openPicker.FileTypeFilter.Add(".jpg");
+            openPicker.FileTypeFilter.Add(".png");
+
+            StorageFile file = await openPicker.PickSingleFileAsync();
+            if (file != null)
+            {
+                await ViewModel.AddOverlayAsync(file.Path, ViewModel.CurrentStoryTime);
+            }
+        }
+
+        private void DuplicateOverlay_Click(object sender, RoutedEventArgs e)
+        {
+            var overlay = ViewModel.SelectedOverlay;
+            if (overlay != null)
+            {
+                int index = ViewModel.OverlayClips.IndexOf(overlay);
+                if (index >= 0)
+                {
+                    var newOverlay = new OverlayClip
+                    {
+                        FilePath = overlay.FilePath,
+                        StartTime = overlay.StartTime + overlay.Duration,
+                        Duration = overlay.Duration,
+                        VideoStartTime = overlay.VideoStartTime,
+                        Scale = overlay.Scale,
+                        X = overlay.X,
+                        Y = overlay.Y,
+                        Opacity = overlay.Opacity,
+                        ZOrder = overlay.ZOrder,
+                        Thumbnail = overlay.Thumbnail
+                    };
+                    ViewModel.OverlayClips.Insert(index + 1, newOverlay);
+                }
+            }
+        }
+
+        private void RemoveOverlay_Click(object sender, RoutedEventArgs e)
+        {
+            var overlay = ViewModel.SelectedOverlay;
+            if (overlay != null)
+            {
+                ViewModel.OverlayClips.Remove(overlay);
+                ViewModel.SelectedOverlay = null;
+            }
+        }
+
+        private void OverlayListView_RightTapped(object sender, Microsoft.UI.Xaml.Input.RightTappedRoutedEventArgs e)
+        {
+            if (e.OriginalSource is FrameworkElement element && element.DataContext is OverlayClip overlay)
+            {
+                ViewModel.SelectedOverlay = overlay;
+            }
+        }
+
+        private void OverlaySection_DragOver(object sender, DragEventArgs e)
+        {
+            if (e.DataView.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.StorageItems))
+            {
+                e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Copy;
+                e.DragUIOverride.Caption = "Add as overlay";
+                e.Handled = true;
+            }
+        }
+
+        private async void OverlaySection_Drop(object sender, DragEventArgs e)
+        {
+            if (e.DataView.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.StorageItems))
+            {
+                e.Handled = true;
+                var items = await e.DataView.GetStorageItemsAsync();
+                foreach (var item in items)
+                {
+                    if (item is Windows.Storage.StorageFile file && (file.FileType == ".mp4" || file.FileType == ".mkv" || file.FileType == ".avi" || file.FileType == ".jpg" || file.FileType == ".png"))
+                    {
+                        await ViewModel.AddOverlayAsync(item.Path, ViewModel.CurrentStoryTime);
+                    }
+                }
             }
         }
     }

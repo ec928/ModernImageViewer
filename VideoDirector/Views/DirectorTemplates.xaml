@@ -66,4 +66,28 @@
             </StackPanel>
         </Border>
     </DataTemplate>
+
+    <DataTemplate x:Key="OverlayTemplate">
+        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="4" Margin="16,4" HorizontalAlignment="Stretch" Padding="6">
+            <Grid ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Grid Width="60" Height="40" CornerRadius="4" Background="{ThemeResource ControlFillColorDefaultBrush}" ToolTipService.ToolTip="{Binding FileName}">
+                    <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+                </Grid>
+
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                    <TextBlock Text="{Binding FileName}" TextTrimming="CharacterEllipsis" FontSize="12" FontWeight="SemiBold" />
+                    <TextBlock FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}">
+                        <Run Text="{Binding StartTime, Converter={StaticResource TimeSpanConverter}}" />
+                        <Run Text=" for " />
+                        <Run Text="{Binding Duration, Converter={StaticResource TimeSpanConverter}}" />
+                    </TextBlock>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </DataTemplate>
 </ResourceDictionary>

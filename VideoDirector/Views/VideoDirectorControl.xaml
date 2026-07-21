@@ -63,42 +63,103 @@
                     </CommandBar.Content>
                 </CommandBar>
 
-                <ListView Grid.Row="1"
-                          ItemsSource="{x:Bind ViewModel.TimelineNodes}"
-                          ItemTemplate="{StaticResource OperationTemplate}"
-                          CanReorderItems="True"
-                          CanDragItems="True"
-                          AllowDrop="True"
-                          SelectionMode="Single"
-                          SelectedItem="{x:Bind ViewModel.SelectedTimelineNode, Mode=TwoWay}"
-                          SelectionChanged="ListView_SelectionChanged"
-                          RightTapped="ListView_RightTapped"
-                          GotFocus="ListView_GotFocus"
-                          Margin="12"
-                          HorizontalAlignment="Stretch">
-                    <ListView.ItemContainerStyle>
-                        <Style TargetType="ListViewItem">
-                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                            <Setter Property="Padding" Value="0"/>
-                            <Setter Property="ContextFlyout">
-                                <Setter.Value>
-                                    <MenuFlyout>
-                                        <MenuFlyoutItem Text="Duplicate" Click="Duplicate_Click" />
-                                        <MenuFlyoutItem Text="Remove" Click="Remove_Click" />
-                                    </MenuFlyout>
-                                </Setter.Value>
-                            </Setter>
-                        </Style>
-                    </ListView.ItemContainerStyle>
-                </ListView>
+                <Grid Grid.Row="1">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="2*" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="1*" MinHeight="120" />
+                    </Grid.RowDefinitions>
 
-                <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12"
-                            Visibility="{x:Bind ViewModel.TimelineNodes.Count, Converter={StaticResource EmptyToVisConverter}, Mode=OneWay, FallbackValue=Visible}">
-                    <FontIcon Glyph="&#xE8B1;" FontSize="48" Foreground="{ThemeResource TextFillColorDisabledBrush}"/>
-                    <TextBlock Text="Drag and drop video files here" TextWrapping="Wrap" TextAlignment="Center" Style="{StaticResource BodyTextBlockStyle}" Foreground="{ThemeResource TextFillColorDisabledBrush}" />
-                </StackPanel>
+                    <ListView Grid.Row="0"
+                              ItemsSource="{x:Bind ViewModel.TimelineNodes}"
+                              ItemTemplate="{StaticResource OperationTemplate}"
+                              CanReorderItems="True"
+                              CanDragItems="True"
+                              AllowDrop="True"
+                              SelectionMode="Single"
+                              SelectedItem="{x:Bind ViewModel.SelectedTimelineNode, Mode=TwoWay}"
+                              SelectionChanged="ListView_SelectionChanged"
+                              RightTapped="ListView_RightTapped"
+                              GotFocus="ListView_GotFocus"
+                              Margin="12"
+                              HorizontalAlignment="Stretch">
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="Padding" Value="0"/>
+                                <Setter Property="ContextFlyout">
+                                    <Setter.Value>
+                                        <MenuFlyout>
+                                            <MenuFlyoutItem Text="Duplicate" Click="Duplicate_Click" />
+                                            <MenuFlyoutItem Text="Remove" Click="Remove_Click" />
+                                        </MenuFlyout>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListView.ItemContainerStyle>
+                    </ListView>
 
-                <!-- Contextual Inspector Panel -->
+                    <StackPanel Grid.Row="0" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12"
+                                Visibility="{x:Bind ViewModel.TimelineNodes.Count, Converter={StaticResource EmptyToVisConverter}, Mode=OneWay, FallbackValue=Visible}">
+                        <FontIcon Glyph="&#xE8B1;" FontSize="48" Foreground="{ThemeResource TextFillColorDisabledBrush}"/>
+                        <TextBlock Text="Drag and drop video files here" TextWrapping="Wrap" TextAlignment="Center" Style="{StaticResource BodyTextBlockStyle}" Foreground="{ThemeResource TextFillColorDisabledBrush}" />
+                    </StackPanel>
+
+                    <Border Grid.Row="1" Height="1" Background="{ThemeResource SurfaceStrokeColorDefaultBrush}" Margin="12,4" />
+
+                    <Grid Grid.Row="2" AllowDrop="True" DragOver="OverlaySection_DragOver" Drop="OverlaySection_Drop">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <Grid Grid.Row="0" Margin="16,4,8,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Overlays" Style="{StaticResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <Button Grid.Column="1" Click="AddOverlay_Click" Padding="6,3" Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Add a picture-in-picture overlay clip">
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <FontIcon Glyph="&#xE710;" FontSize="12" />
+                                    <TextBlock Text="Add" FontSize="12" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+
+                        <ListView Grid.Row="1"
+                                  ItemsSource="{x:Bind ViewModel.OverlayClips}"
+                                  ItemTemplate="{StaticResource OverlayTemplate}"
+                                  SelectionMode="Single"
+                                  SelectedItem="{x:Bind ViewModel.SelectedOverlay, Mode=TwoWay}"
+                                  RightTapped="OverlayListView_RightTapped"
+                                  Margin="12,0,12,12"
+                                  HorizontalAlignment="Stretch">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    <Setter Property="Padding" Value="0"/>
+                                    <Setter Property="ContextFlyout">
+                                        <Setter.Value>
+                                            <MenuFlyout>
+                                                <MenuFlyoutItem Text="Duplicate" Click="DuplicateOverlay_Click" />
+                                                <MenuFlyoutItem Text="Remove" Click="RemoveOverlay_Click" />
+                                            </MenuFlyout>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                        </ListView>
+
+                        <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8"
+                                    Visibility="{x:Bind ViewModel.OverlayClips.Count, Converter={StaticResource EmptyToVisConverter}, Mode=OneWay, FallbackValue=Visible}">
+                            <TextBlock Text="Drag a clip here, or" TextAlignment="Center" Style="{StaticResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorDisabledBrush}" />
+                            <Button Content="+ Add Overlay" Click="AddOverlay_Click" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+
+                <!-- Contextual Inspector Panel: Track 1 clip -->
                 <Border Grid.Row="2" Background="{ThemeResource LayerFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="0,1,0,0"
                         Visibility="{x:Bind ViewModel.SelectedTimelineNode, Mode=OneWay, Converter={StaticResource NullToVisConverter}}"
@@ -166,6 +227,51 @@
                                 <TextBlock Grid.Row="4" Grid.Column="0" Text="Transition Out Duration (s)" VerticalAlignment="Center" />
                                 <NumberBox Grid.Row="4" Grid.Column="1" local:NumberBoxExtensions.FractionDigits="1" Value="{Binding SelectedTimelineNode.TransitionDuration, Mode=TwoWay, Converter={StaticResource TimeSpanToDoubleSecondsConverter}, FallbackValue=0.0}" 
                                            SmallChange="0.1" LargeChange="0.5" Minimum="0" SpinButtonPlacementMode="Inline" />
+                            </Grid>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+
+                <!-- Contextual Inspector Panel: Overlay clip -->
+                <Border Grid.Row="2" Background="{ThemeResource LayerFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="0,1,0,0"
+                        Visibility="{x:Bind ViewModel.SelectedOverlay, Mode=OneWay, Converter={StaticResource NullToVisConverter}}"
+                        Padding="16" MaxHeight="350">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Spacing="16">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="{Binding SelectedOverlay.FileName}" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="Scroll to zoom, drag to pan the overlay, then apply." FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                                <Button Content="Apply Position" Click="ApplyOverlayPosition_Click" HorizontalAlignment="Stretch" ToolTipService.ToolTip="Capture the current zoom/pan as this overlay's fixed position" />
+                            </StackPanel>
+
+                            <Grid ColumnSpacing="12" RowSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Start Time (s)" VerticalAlignment="Center" />
+                                <NumberBox Grid.Row="0" Grid.Column="1" local:NumberBoxExtensions.FractionDigits="1" Value="{Binding SelectedOverlay.StartTimeSeconds, Mode=TwoWay, FallbackValue=0.0}"
+                                           SmallChange="0.5" LargeChange="1.0" Minimum="0" SpinButtonPlacementMode="Inline" />
+
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Duration (s)" VerticalAlignment="Center" />
+                                <NumberBox Grid.Row="1" Grid.Column="1" local:NumberBoxExtensions.FractionDigits="1" Value="{Binding SelectedOverlay.DurationSeconds, Mode=TwoWay, FallbackValue=5.0}"
+                                           SmallChange="0.5" LargeChange="1.0" Minimum="0.1" SpinButtonPlacementMode="Inline" />
+
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Opacity" VerticalAlignment="Center" />
+                                <NumberBox Grid.Row="2" Grid.Column="1" local:NumberBoxExtensions.FractionDigits="2" Value="{Binding SelectedOverlay.Opacity, Mode=TwoWay, FallbackValue=1.0}"
+                                           SmallChange="0.1" LargeChange="0.25" Minimum="0" Maximum="1" SpinButtonPlacementMode="Inline" />
+
+                                <TextBlock Grid.Row="3" Grid.Column="0" Text="Layer (Z-Order)" VerticalAlignment="Center" />
+                                <NumberBox Grid.Row="3" Grid.Column="1" Value="{Binding SelectedOverlay.ZOrder, Mode=TwoWay, FallbackValue=0}"
+                                           SmallChange="1" LargeChange="1" SpinButtonPlacementMode="Inline" />
                             </Grid>
                         </StackPanel>
                     </ScrollViewer>

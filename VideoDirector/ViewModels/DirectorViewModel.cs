@@ -128,7 +128,26 @@ namespace ModernImageViewer.VideoDirector.ViewModels
         public CinematicOperation SelectedTimelineNode
         {
             get => _selectedTimelineNode;
-            set => SetProperty(ref _selectedTimelineNode, value);
+            set
+            {
+                if (SetProperty(ref _selectedTimelineNode, value) && value != null)
+                {
+                    SelectedOverlay = null;
+                }
+            }
+        }
+
+        private OverlayClip _selectedOverlay;
+        public OverlayClip SelectedOverlay
+        {
+            get => _selectedOverlay;
+            set
+            {
+                if (SetProperty(ref _selectedOverlay, value) && value != null)
+                {
+                    SelectedTimelineNode = null;
+                }
+            }
         }
 
         private TimeSpan _currentOperationTime;
@@ -294,6 +313,57 @@ namespace ModernImageViewer.VideoDirector.ViewModels
                     Thumbnail = thumbnail
                 });
             }
+        }
+
+        // Finds which Track 1 clip a given absolute story time falls within. Used to resume
+        // playback from the correct clip when there's no selected timeline node to go by
+        // (e.g. an overlay is selected instead) rather than silently restarting from clip 0.
+        public int GetTimelineIndexForStoryTime(TimeSpan storyTime)
+        {
+            TimeSpan accumulated = TimeSpan.Zero;
+            for (int i = 0; i < TimelineNodes.Count; i++)
+            {
+                var nodeSpan = TimelineNodes[i].OpDuration + TimelineNodes[i].TransitionDuration;
+                if (storyTime < accumulated + nodeSpan || i == TimelineNodes.Count - 1)
+                {
+                    return i;
+                }
+                accumulated += nodeSpan;
+            }
+            return 0;
+        }
+
+        public async Task AddOverlayAsync(string filePath, TimeSpan startTime)
+        {
+            TimeSpan duration = TimeSpan.FromSeconds(5);
+            Microsoft.UI.Xaml.Media.Imaging.BitmapImage? thumbnail = null;
+            try
+            {
+                var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(filePath);
+                var props = await file.Properties.GetVideoPropertiesAsync();
+                if (props != null && props.Duration.TotalSeconds > 0)
+                {
+                    duration = props.Duration;
+                }
+
+                var thumb = await file.GetThumbnailAsync(Windows.Storage.FileProperties.ThumbnailMode.VideosView, 120, Windows.Storage.FileProperties.ThumbnailOptions.UseCurrentScale);
+                if (thumb != null)
+                {
+                    thumbnail = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage();
+                    await thumbnail.SetSourceAsync(thumb);
+                }
+            }
+            catch { }
+
+            var overlay = new OverlayClip
+            {
+                FilePath = filePath,
+                StartTime = startTime,
+                Duration = duration,
+                Thumbnail = thumbnail
+            };
+            OverlayClips.Add(overlay);
+            SelectedOverlay = overlay;
         }
 
         // Serialization wrapper so the JSON file can hold both timeline nodes and overlay clips

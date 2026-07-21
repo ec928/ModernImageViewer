@@ -67,7 +67,8 @@ namespace ModernImageViewer.VideoDirector.Models
         }
 
         /// <summary>
-        /// Scale relative to viewport. 1.0 = full size, 0.3 = 30% PIP.
+        /// Scale of the overlay layer relative to viewport. 1.0 = full size, 0.3 = 30% PIP.
+        /// Zoom/pan the layer freely, same as the main track.
         /// </summary>
         private float _scale = 0.3f;
         public float Scale
