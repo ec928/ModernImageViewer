@@ -158,10 +158,9 @@ namespace ModernImageViewer.VideoDirector.Models
         }
 
         // --- Upper-track (Track 2/3) clip properties ---
-        // These are additive: Track 1 ignores them (its timeline position is computed
-        // sequentially). Upper tracks use StartTime as the editable master-timeline
-        // placement and Opacity for compositing. This is the first step of converging
-        // the overlay onto this single clip type; the engine/UI still use OverlayClip.
+        // Track 1 ignores these (its timeline position is computed sequentially). Upper
+        // tracks use StartTime as the editable master-timeline placement and Opacity for
+        // compositing. Upper-track clips are the same CinematicOperation type as Track 1.
 
         // Editable placement on the master timeline. Display-only/computed for Track 1;
         // the freely-editable start position for Track 2/3 (gaps allowed).

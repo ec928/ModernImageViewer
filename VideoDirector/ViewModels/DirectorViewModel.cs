@@ -21,7 +21,10 @@ namespace ModernImageViewer.VideoDirector.ViewModels
     {
         public ObservableCollection<CinematicOperation> TimelineNodes { get; } = new();
 
-        public ObservableCollection<OverlayClip> OverlayClips { get; } = new();
+        // Track 2 (upper track). Same clip type as Track 1 — a clip is a clip. Upper-track
+        // clips are freely placed on the timeline (editable StartTime, gaps allowed) and
+        // composited over Track 1.
+        public ObservableCollection<CinematicOperation> OverlayClips { get; } = new();
 
         private bool _isPlaying;
         public bool IsPlaying
@@ -137,8 +140,8 @@ namespace ModernImageViewer.VideoDirector.ViewModels
             }
         }
 
-        private OverlayClip _selectedOverlay;
-        public OverlayClip SelectedOverlay
+        private CinematicOperation _selectedOverlay;
+        public CinematicOperation SelectedOverlay
         {
             get => _selectedOverlay;
             set
@@ -355,11 +358,16 @@ namespace ModernImageViewer.VideoDirector.ViewModels
             }
             catch { }
 
-            var overlay = new OverlayClip
+            // An upper-track clip is a normal CinematicOperation. It defaults to a 30% PiP
+            // (StartMark == EndMark = scale 0.3, no motion) placed at the current playhead.
+            var overlay = new CinematicOperation
             {
                 FilePath = filePath,
+                OpDuration = duration,
+                VideoEndTime = duration,
                 StartTime = startTime,
-                Duration = duration,
+                StartMark = new SpatialMark(0.3f, 0f, 0f),
+                EndMark = new SpatialMark(0.3f, 0f, 0f),
                 Thumbnail = thumbnail
             };
             OverlayClips.Add(overlay);
@@ -370,7 +378,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
         private class ProjectData
         {
             public System.Collections.ObjectModel.ObservableCollection<CinematicOperation> TimelineNodes { get; set; } = new();
-            public System.Collections.ObjectModel.ObservableCollection<OverlayClip> OverlayClips { get; set; } = new();
+            public System.Collections.ObjectModel.ObservableCollection<CinematicOperation> OverlayClips { get; set; } = new();
         }
 
         public async Task SaveAsync(Windows.Storage.StorageFile file)
@@ -399,7 +407,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
             var trimmed = json.TrimStart();
 
             System.Collections.ObjectModel.ObservableCollection<CinematicOperation> nodes = null;
-            System.Collections.ObjectModel.ObservableCollection<OverlayClip> overlays = null;
+            System.Collections.ObjectModel.ObservableCollection<CinematicOperation> overlays = null;
 
             if (trimmed.StartsWith("["))
             {
@@ -459,7 +467,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
             catch { }
         }
 
-        private async Task LoadOverlayThumbnailAsync(OverlayClip overlay, Microsoft.UI.Dispatching.DispatcherQueue dispatcher)
+        private async Task LoadOverlayThumbnailAsync(CinematicOperation overlay, Microsoft.UI.Dispatching.DispatcherQueue dispatcher)
         {
             if (string.IsNullOrEmpty(overlay.FilePath)) return;
             try

@@ -122,7 +122,7 @@ namespace ModernImageViewer.VideoDirector.Views
             }
             else if (e.PropertyName == nameof(DirectorViewModel.SelectedOverlay))
             {
-                if (ViewModel.SelectedOverlay is OverlayClip overlay)
+                if (ViewModel.SelectedOverlay is CinematicOperation overlay)
                 {
                     if (!ViewModel.IsPlaying)
                     {
@@ -405,9 +405,9 @@ namespace ModernImageViewer.VideoDirector.Views
             var transform = PlayerControl.ActiveTransform;
             if (overlay != null && transform != null)
             {
-                overlay.Scale = (float)transform.ScaleX;
-                overlay.X = (float)transform.TranslateX;
-                overlay.Y = (float)transform.TranslateY;
+                // Static placement: capture into both marks (StartMark == EndMark = no motion).
+                overlay.StartMark = new SpatialMark((float)transform.ScaleX, (float)transform.TranslateX, (float)transform.TranslateY);
+                overlay.EndMark = new SpatialMark((float)transform.ScaleX, (float)transform.TranslateX, (float)transform.TranslateY);
             }
         }
 
@@ -442,17 +442,16 @@ namespace ModernImageViewer.VideoDirector.Views
                 int index = ViewModel.OverlayClips.IndexOf(overlay);
                 if (index >= 0)
                 {
-                    var newOverlay = new OverlayClip
+                    var newOverlay = new CinematicOperation
                     {
                         FilePath = overlay.FilePath,
-                        StartTime = overlay.StartTime + overlay.Duration,
-                        Duration = overlay.Duration,
+                        OpDuration = overlay.OpDuration,
                         VideoStartTime = overlay.VideoStartTime,
-                        Scale = overlay.Scale,
-                        X = overlay.X,
-                        Y = overlay.Y,
+                        VideoEndTime = overlay.VideoEndTime,
+                        StartTime = overlay.StartTime + overlay.OpDuration, // Place right after the original
+                        StartMark = new SpatialMark(overlay.StartMark.Scale, overlay.StartMark.X, overlay.StartMark.Y),
+                        EndMark = new SpatialMark(overlay.EndMark.Scale, overlay.EndMark.X, overlay.EndMark.Y),
                         Opacity = overlay.Opacity,
-                        ZOrder = overlay.ZOrder,
                         Thumbnail = overlay.Thumbnail
                     };
                     ViewModel.OverlayClips.Insert(index + 1, newOverlay);
@@ -472,7 +471,7 @@ namespace ModernImageViewer.VideoDirector.Views
 
         private void OverlayListView_RightTapped(object sender, Microsoft.UI.Xaml.Input.RightTappedRoutedEventArgs e)
         {
-            if (e.OriginalSource is FrameworkElement element && element.DataContext is OverlayClip overlay)
+            if (e.OriginalSource is FrameworkElement element && element.DataContext is CinematicOperation overlay)
             {
                 ViewModel.SelectedOverlay = overlay;
             }

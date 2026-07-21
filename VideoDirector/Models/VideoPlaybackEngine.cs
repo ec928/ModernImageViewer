@@ -50,8 +50,8 @@ namespace ModernImageViewer.VideoDirector.Models
         // Overlay state
         private MediaPlayer _overlayMediaPlayer1;
         private MediaPlayer _overlayMediaPlayer2;
-        private OverlayClip _activeOverlay1;
-        private OverlayClip _activeOverlay2;
+        private CinematicOperation _activeOverlay1;
+        private CinematicOperation _activeOverlay2;
         private bool _isEditingOverlay = false;
         // Story time as of the start of the currently-playing clip; CurrentStoryTime is
         // derived from this plus the active player's real position every render frame.
@@ -1184,6 +1184,12 @@ namespace ModernImageViewer.VideoDirector.Models
             _overlayMediaPlayer2.AutoPlay = false;
             _overlayMediaPlayer2.CommandManager.IsEnabled = false;
             _playerControl.OverlayPlayer2.SetMediaPlayer(_overlayMediaPlayer2);
+
+            // Upper-track audio is muted by default — Track 1 is the audio bed. Per-clip
+            // unmute is a later addition. Without this, a close-up overlaid on the same scene
+            // as Track 1 doubles/echoes the audio.
+            _overlayMediaPlayer1.IsMuted = true;
+            _overlayMediaPlayer2.IsMuted = true;
         }
 
         private void EvaluateOverlays(TimeSpan currentStoryTime)
@@ -1197,11 +1203,13 @@ namespace ModernImageViewer.VideoDirector.Models
                 return;
             }
 
-            // Determine which overlays should be active right now (max 2)
-            OverlayClip desired1 = null;
-            OverlayClip desired2 = null;
+            // Determine which overlays should be active right now (max 2). Ordered by
+            // collection position; per-clip z-order is superseded by track-level z-order
+            // in the multi-track model.
+            CinematicOperation desired1 = null;
+            CinematicOperation desired2 = null;
 
-            foreach (var overlay in overlays.OrderBy(o => o.ZOrder))
+            foreach (var overlay in overlays)
             {
                 if (overlay.IsActiveAt(currentStoryTime))
                 {
@@ -1242,7 +1250,7 @@ namespace ModernImageViewer.VideoDirector.Models
             if (_activeOverlay2 != null) ApplyOverlayTransform(2, _activeOverlay2);
         }
 
-        private void ActivateOverlaySlot(int slot, OverlayClip overlay, TimeSpan currentStoryTime)
+        private void ActivateOverlaySlot(int slot, CinematicOperation overlay, TimeSpan currentStoryTime)
         {
             var player = slot == 1 ? _overlayMediaPlayer1 : _overlayMediaPlayer2;
             var grid = slot == 1 ? _playerControl.OverlayGrid1 : _playerControl.OverlayGrid2;
@@ -1311,7 +1319,7 @@ namespace ModernImageViewer.VideoDirector.Models
             grid.Height = baseH;
         }
 
-        private void SeekAndPlayOverlay(MediaPlayer player, OverlayClip overlay, TimeSpan currentStoryTime)
+        private void SeekAndPlayOverlay(MediaPlayer player, CinematicOperation overlay, TimeSpan currentStoryTime)
         {
             if (player.PlaybackSession == null) return;
 
@@ -1372,16 +1380,19 @@ namespace ModernImageViewer.VideoDirector.Models
             else _activeOverlay2 = null;
         }
 
-        private void ApplyOverlayTransform(int slot, OverlayClip overlay)
+        private void ApplyOverlayTransform(int slot, CinematicOperation overlay)
         {
+            // Static placement for now: the upper-track clip's StartMark holds its
+            // scale/position (StartMark == EndMark = no motion). Mark interpolation over the
+            // clip's duration comes in the content/placement phase.
             var transform = slot == 1 ? _playerControl.OverlayTransform1 : _playerControl.OverlayTransform2;
-            transform.ScaleX = overlay.Scale;
-            transform.ScaleY = overlay.Scale;
-            transform.TranslateX = overlay.X;
-            transform.TranslateY = overlay.Y;
+            transform.ScaleX = overlay.StartMark.Scale;
+            transform.ScaleY = overlay.StartMark.Scale;
+            transform.TranslateX = overlay.StartMark.X;
+            transform.TranslateY = overlay.StartMark.Y;
         }
 
-        private void ApplyOverlayDriftCorrection(int slot, OverlayClip overlay, TimeSpan currentStoryTime)
+        private void ApplyOverlayDriftCorrection(int slot, CinematicOperation overlay, TimeSpan currentStoryTime)
         {
             var player = slot == 1 ? _overlayMediaPlayer1 : _overlayMediaPlayer2;
             if (player.PlaybackSession == null) return;
@@ -1435,7 +1446,7 @@ namespace ModernImageViewer.VideoDirector.Models
 
         // Overlay editing always borrows slot 1. Playback is stopped first, so slot 1
         // can't be in use for actual overlay playback at the same time.
-        public async void EnterOverlayEditMode(OverlayClip overlay)
+        public async void EnterOverlayEditMode(CinematicOperation overlay)
         {
             StopPlayback();
             UpdateWysiwygOverlay(); // Collapse any stale main-track rectangles
@@ -1467,10 +1478,10 @@ namespace ModernImageViewer.VideoDirector.Models
 
             _dispatcher.TryEnqueue(() =>
             {
-                transform.ScaleX = overlay.Scale;
-                transform.ScaleY = overlay.Scale;
-                transform.TranslateX = overlay.X;
-                transform.TranslateY = overlay.Y;
+                transform.ScaleX = overlay.StartMark.Scale;
+                transform.ScaleY = overlay.StartMark.Scale;
+                transform.TranslateX = overlay.StartMark.X;
+                transform.TranslateY = overlay.StartMark.Y;
                 SizeOverlayToVideo(1, player); // Match the overlay grid to the video aspect (no black bars)
                 grid.Opacity = 1.0; // Full opacity while editing regardless of the clip's playback opacity
                 _playerControl.ActiveTransform = transform;

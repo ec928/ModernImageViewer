@@ -254,7 +254,6 @@
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
 
                                 <TextBlock Grid.Row="0" Grid.Column="0" Text="Start Time (s)" VerticalAlignment="Center" />
@@ -262,16 +261,12 @@
                                            SmallChange="0.5" LargeChange="1.0" Minimum="0" SpinButtonPlacementMode="Inline" />
 
                                 <TextBlock Grid.Row="1" Grid.Column="0" Text="Duration (s)" VerticalAlignment="Center" />
-                                <NumberBox Grid.Row="1" Grid.Column="1" local:NumberBoxExtensions.FractionDigits="1" Value="{Binding SelectedOverlay.DurationSeconds, Mode=TwoWay, FallbackValue=5.0}"
+                                <NumberBox Grid.Row="1" Grid.Column="1" local:NumberBoxExtensions.FractionDigits="1" Value="{Binding SelectedOverlay.OpDuration, Mode=TwoWay, Converter={StaticResource TimeSpanToDoubleSecondsConverter}, FallbackValue=5.0}"
                                            SmallChange="0.5" LargeChange="1.0" Minimum="0.1" SpinButtonPlacementMode="Inline" />
 
                                 <TextBlock Grid.Row="2" Grid.Column="0" Text="Opacity" VerticalAlignment="Center" />
                                 <NumberBox Grid.Row="2" Grid.Column="1" local:NumberBoxExtensions.FractionDigits="2" Value="{Binding SelectedOverlay.Opacity, Mode=TwoWay, FallbackValue=1.0}"
                                            SmallChange="0.1" LargeChange="0.25" Minimum="0" Maximum="1" SpinButtonPlacementMode="Inline" />
-
-                                <TextBlock Grid.Row="3" Grid.Column="0" Text="Layer (Z-Order)" VerticalAlignment="Center" />
-                                <NumberBox Grid.Row="3" Grid.Column="1" Value="{Binding SelectedOverlay.ZOrder, Mode=TwoWay, FallbackValue=0}"
-                                           SmallChange="1" LargeChange="1" SpinButtonPlacementMode="Inline" />
                             </Grid>
                         </StackPanel>
                     </ScrollViewer>

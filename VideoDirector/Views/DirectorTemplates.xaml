@@ -84,7 +84,7 @@
                     <TextBlock FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}">
                         <Run Text="{Binding StartTime, Converter={StaticResource TimeSpanConverter}}" />
                         <Run Text=" for " />
-                        <Run Text="{Binding Duration, Converter={StaticResource TimeSpanConverter}}" />
+                        <Run Text="{Binding OpDuration, Converter={StaticResource TimeSpanConverter}}" />
                     </TextBlock>
                 </StackPanel>
             </Grid>
