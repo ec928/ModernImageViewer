@@ -124,6 +124,7 @@ namespace ModernImageViewer.VideoDirector.Views
             {
                 if (ViewModel.SelectedOverlay is CinematicOperation overlay)
                 {
+                    SyncOverlayBoxPositionCombo(overlay);
                     if (!ViewModel.IsPlaying)
                     {
                         _playbackEngine?.EnterOverlayEditMode(overlay);
@@ -416,6 +417,36 @@ namespace ModernImageViewer.VideoDirector.Views
             if (overlay != null && transform != null)
             {
                 overlay.EndMark = new SpatialMark((float)transform.ScaleX, (float)transform.TranslateX, (float)transform.TranslateY);
+            }
+        }
+
+        private bool _updatingOverlayPlacementUI;
+
+        // Reflect the selected overlay's placement in the corner combo (nearest preset) without
+        // the resulting SelectionChanged clobbering a custom position.
+        private void SyncOverlayBoxPositionCombo(CinematicOperation overlay)
+        {
+            if (OverlayBoxPositionCombo == null) return;
+            _updatingOverlayPlacementUI = true;
+            bool left = overlay.PlacementCenterX < 0.5;
+            bool top = overlay.PlacementCenterY < 0.5;
+            bool centered = System.Math.Abs(overlay.PlacementCenterX - 0.5) < 0.1 && System.Math.Abs(overlay.PlacementCenterY - 0.5) < 0.1;
+            OverlayBoxPositionCombo.SelectedIndex = centered ? 4 : (top ? (left ? 0 : 1) : (left ? 2 : 3));
+            _updatingOverlayPlacementUI = false;
+        }
+
+        private void OverlayBoxPosition_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_updatingOverlayPlacementUI) return;
+            var overlay = ViewModel.SelectedOverlay;
+            if (overlay == null || OverlayBoxPositionCombo.SelectedIndex < 0) return;
+            switch (OverlayBoxPositionCombo.SelectedIndex)
+            {
+                case 0: overlay.PlacementCenterX = 0.22; overlay.PlacementCenterY = 0.22; break; // Top Left
+                case 1: overlay.PlacementCenterX = 0.78; overlay.PlacementCenterY = 0.22; break; // Top Right
+                case 2: overlay.PlacementCenterX = 0.22; overlay.PlacementCenterY = 0.78; break; // Bottom Left
+                case 3: overlay.PlacementCenterX = 0.78; overlay.PlacementCenterY = 0.78; break; // Bottom Right
+                case 4: overlay.PlacementCenterX = 0.5;  overlay.PlacementCenterY = 0.5;  break; // Center
             }
         }
 
