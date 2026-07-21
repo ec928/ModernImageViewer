@@ -1,0 +1,82 @@
+<UserControl
+    x:Class="ModernImageViewer.VideoDirector.Views.DirectorPlayerControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="Black"
+    CornerRadius="8"
+    Margin="12,0,12,0">
+
+    <Grid>
+        <!-- The A-B Roll Media Players -->
+        <Grid>
+            <Grid x:Name="GridB" x:FieldModifier="public" RenderTransformOrigin="0.5,0.5">
+                <Grid.RenderTransform>
+                    <CompositeTransform x:Name="TransformB" x:FieldModifier="public" />
+                </Grid.RenderTransform>
+                <MediaPlayerElement x:Name="PlayerB" x:FieldModifier="public" AreTransportControlsEnabled="False" Stretch="Uniform" Opacity="0" />
+            </Grid>
+            <Grid x:Name="GridA" x:FieldModifier="public" RenderTransformOrigin="0.5,0.5">
+                <Grid.RenderTransform>
+                    <CompositeTransform x:Name="TransformA" x:FieldModifier="public" />
+                </Grid.RenderTransform>
+                <MediaPlayerElement x:Name="PlayerA" x:FieldModifier="public" AreTransportControlsEnabled="False" Stretch="Uniform" Opacity="1" />
+            </Grid>
+        </Grid>
+
+        <!-- Overlay Players (rendered on top of main A/B roll, below WYSIWYG and InputLayer) -->
+        <Grid x:Name="OverlayGrid1" x:FieldModifier="public" RenderTransformOrigin="0.5,0.5" 
+              Opacity="0" IsHitTestVisible="False">
+            <Grid.RenderTransform>
+                <CompositeTransform x:Name="OverlayTransform1" x:FieldModifier="public" />
+            </Grid.RenderTransform>
+            <MediaPlayerElement x:Name="OverlayPlayer1" x:FieldModifier="public" 
+                                AreTransportControlsEnabled="False" Stretch="Uniform" />
+        </Grid>
+        <Grid x:Name="OverlayGrid2" x:FieldModifier="public" RenderTransformOrigin="0.5,0.5" 
+              Opacity="0" IsHitTestVisible="False">
+            <Grid.RenderTransform>
+                <CompositeTransform x:Name="OverlayTransform2" x:FieldModifier="public" />
+            </Grid.RenderTransform>
+            <MediaPlayerElement x:Name="OverlayPlayer2" x:FieldModifier="public" 
+                                AreTransportControlsEnabled="False" Stretch="Uniform" />
+        </Grid>
+
+        <!-- WYSIWYG Overlay for Edit Mode -->
+        <Canvas x:Name="WysiwygCanvas" x:FieldModifier="public" IsHitTestVisible="False" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Rectangle x:Name="WysiwygStartRect" x:FieldModifier="public" Stroke="Cyan" Fill="Transparent" StrokeThickness="2" StrokeDashArray="4,4" Visibility="Collapsed" />
+            <Rectangle x:Name="WysiwygMidRect" x:FieldModifier="public" Stroke="DeepSkyBlue" Fill="Transparent" StrokeThickness="2" StrokeDashArray="4,4" Visibility="Collapsed" />
+            <Rectangle x:Name="WysiwygEndRect" x:FieldModifier="public" Stroke="RoyalBlue" Fill="Transparent" StrokeThickness="2" StrokeDashArray="4,4" Visibility="Collapsed" />
+            <Rectangle x:Name="WysiwygFullFrameRect" x:FieldModifier="public" Stroke="#80FFFFFF" StrokeThickness="1" Visibility="Collapsed" />
+        </Canvas>
+
+        <!-- Interactive Input Layer for Manual Targeting -->
+        <Grid x:Name="InputLayer" Background="Transparent" 
+              PointerWheelChanged="InputLayer_PointerWheelChanged"
+              PointerPressed="InputLayer_PointerPressed"
+              PointerMoved="InputLayer_PointerMoved"
+              PointerReleased="InputLayer_PointerReleased"
+              PointerCanceled="InputLayer_PointerCanceled" />
+
+        <!-- HUD Overlays -->
+        <StackPanel HorizontalAlignment="Left" VerticalAlignment="Top" Margin="20" Spacing="16" IsHitTestVisible="False">
+            <!-- Telemetry Overlay -->
+            <Grid x:Name="TelemetryOverlay" x:FieldModifier="public" Background="#80000000" CornerRadius="4" Padding="12" Visibility="Collapsed">
+                <StackPanel Spacing="4">
+                    <TextBlock Text="TELEMETRY" FontWeight="Bold" Foreground="Lime"/>
+                    <TextBlock x:Name="TelemetryStoryTime" x:FieldModifier="public" Foreground="White" FontFamily="Consolas" />
+                    <TextBlock x:Name="TelemetryClipTime" x:FieldModifier="public" Foreground="White" FontFamily="Consolas" />
+                    <TextBlock x:Name="TelemetryOperationInfo" x:FieldModifier="public" Foreground="White" FontFamily="Consolas" />
+                    <TextBlock x:Name="TelemetryStartMarkInfo" x:FieldModifier="public" Foreground="Cyan" FontFamily="Consolas" />
+                    <TextBlock x:Name="TelemetryMidMarkInfo" x:FieldModifier="public" Foreground="DeepSkyBlue" FontFamily="Consolas" />
+                    <TextBlock x:Name="TelemetryEndMarkInfo" x:FieldModifier="public" Foreground="RoyalBlue" FontFamily="Consolas" />
+                </StackPanel>
+            </Grid>
+
+
+        </StackPanel>
+              
+    </Grid>
+</UserControl>

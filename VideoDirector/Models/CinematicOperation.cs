@@ -1,0 +1,347 @@
+using System;
+using System.Collections.Generic;
+using System.Text.Json.Serialization;
+using Microsoft.UI.Xaml.Media.Imaging;
+
+namespace ModernImageViewer.VideoDirector.Models
+{
+    public class CinematicOperation : ObservableObject
+    {
+        private string _filePath = string.Empty;
+        public string FilePath
+        {
+            get => _filePath;
+            set
+            {
+                if (SetProperty(ref _filePath, value))
+                {
+                    OnPropertyChanged(nameof(FileName));
+                }
+            }
+        }
+
+        public string FileName => System.IO.Path.GetFileName(_filePath);
+
+        private BitmapImage? _thumbnail;
+        [JsonIgnore]
+        public BitmapImage? Thumbnail
+        {
+            get => _thumbnail;
+            set => SetProperty(ref _thumbnail, value);
+        }
+
+        [JsonIgnore]
+        public bool HasModifications => 
+            StartMark.Scale != 1.0f || StartMark.X != 0 || StartMark.Y != 0 ||
+            EndMark.Scale != 1.0f || EndMark.X != 0 || EndMark.Y != 0 ||
+            PlaybackSpeed != 1.0 ||
+            TransitionDuration > TimeSpan.Zero ||
+            TransitionStyle != TransitionStyle.HardSnap ||
+            CurveProfile != CurveProfile.Linear ||
+            VideoStartTime > TimeSpan.Zero ||
+            (VideoEndTime > TimeSpan.Zero && VideoEndTime != OpDuration);
+
+        private bool _isPlaying;
+        [JsonIgnore]
+        public bool IsPlaying
+        {
+            get => _isPlaying;
+            set => SetProperty(ref _isPlaying, value);
+        }
+
+        private bool _isUpdatingTiming = false;
+
+        private TimeSpan _videoStartTime = TimeSpan.Zero;
+        public TimeSpan VideoStartTime
+        {
+            get => _videoStartTime;
+            set 
+            {
+                if (SetProperty(ref _videoStartTime, value))
+                {
+                    SyncTimingFromVideo();
+                    OnPropertyChanged(nameof(HasModifications));
+                }
+            }
+        }
+
+        private TimeSpan _videoEndTime = TimeSpan.Zero;
+        public TimeSpan VideoEndTime
+        {
+            get => _videoEndTime;
+            set 
+            {
+                if (SetProperty(ref _videoEndTime, value))
+                {
+                    SyncTimingFromVideo();
+                    OnPropertyChanged(nameof(HasModifications));
+                }
+            }
+        }
+
+        private TimeSpan _opDuration = TimeSpan.Zero;
+        public TimeSpan OpDuration
+        {
+            get => _opDuration;
+            set 
+            {
+                if (SetProperty(ref _opDuration, value))
+                {
+                    SyncTimingFromOpDuration();
+                    OnPropertyChanged(nameof(HasModifications));
+                }
+            }
+        }
+
+        private double _playbackSpeed = 1.0;
+        public double PlaybackSpeed
+        {
+            get => _playbackSpeed;
+            set 
+            {
+                if (SetProperty(ref _playbackSpeed, value))
+                {
+                    SyncTimingFromPlaybackSpeed();
+                    OnPropertyChanged(nameof(HasModifications));
+                }
+            }
+        }
+
+        private void SyncTimingFromVideo()
+        {
+            if (_isUpdatingTiming) return;
+            _isUpdatingTiming = true;
+            try
+            {
+                double videoDuration = (_videoEndTime - _videoStartTime).TotalSeconds;
+                if (videoDuration > 0 && _playbackSpeed > 0)
+                {
+                    _opDuration = TimeSpan.FromSeconds(videoDuration / _playbackSpeed);
+                    OnPropertyChanged(nameof(OpDuration));
+                }
+            }
+            finally { _isUpdatingTiming = false; }
+        }
+
+        private void SyncTimingFromOpDuration()
+        {
+            if (_isUpdatingTiming) return;
+            _isUpdatingTiming = true;
+            try
+            {
+                if (_playbackSpeed == 0.0) return; // Treat as still image; let duration stand
+
+                double videoDuration = (_videoEndTime - _videoStartTime).TotalSeconds;
+                if (videoDuration > 0 && _opDuration.TotalSeconds > 0)
+                {
+                    _playbackSpeed = videoDuration / _opDuration.TotalSeconds;
+                    OnPropertyChanged(nameof(PlaybackSpeed));
+                }
+            }
+            finally { _isUpdatingTiming = false; }
+        }
+
+        private void SyncTimingFromPlaybackSpeed()
+        {
+            if (_isUpdatingTiming) return;
+            _isUpdatingTiming = true;
+            try
+            {
+                double videoDuration = (_videoEndTime - _videoStartTime).TotalSeconds;
+                if (videoDuration > 0 && _playbackSpeed > 0)
+                {
+                    _opDuration = TimeSpan.FromSeconds(videoDuration / _playbackSpeed);
+                    OnPropertyChanged(nameof(OpDuration));
+                }
+            }
+            finally { _isUpdatingTiming = false; }
+        }
+
+        private SpatialMark _startMark = new();
+        public SpatialMark StartMark
+        {
+            get => _startMark;
+            set
+            {
+                if (_startMark != null) _startMark.PropertyChanged -= Mark_PropertyChanged;
+                if (SetProperty(ref _startMark, value) && _startMark != null)
+                {
+                    _startMark.PropertyChanged += Mark_PropertyChanged;
+                    OnPropertyChanged(nameof(HasModifications));
+                }
+            }
+        }
+
+        private SpatialMark? _midMark;
+        public SpatialMark? MidMark
+        {
+            get => _midMark;
+            set
+            {
+                if (_midMark != null) _midMark.PropertyChanged -= Mark_PropertyChanged;
+                if (SetProperty(ref _midMark, value) && _midMark != null)
+                {
+                    _midMark.PropertyChanged += Mark_PropertyChanged;
+                    OnPropertyChanged(nameof(HasModifications));
+                }
+            }
+        }
+
+        private SpatialMark _endMark = new();
+        public SpatialMark EndMark
+        {
+            get => _endMark;
+            set
+            {
+                if (_endMark != null) _endMark.PropertyChanged -= Mark_PropertyChanged;
+                if (SetProperty(ref _endMark, value) && _endMark != null)
+                {
+                    _endMark.PropertyChanged += Mark_PropertyChanged;
+                    OnPropertyChanged(nameof(HasModifications));
+                }
+            }
+        }
+
+        public CinematicOperation()
+        {
+            _startMark.PropertyChanged += Mark_PropertyChanged;
+            _endMark.PropertyChanged += Mark_PropertyChanged;
+        }
+
+        public void Reset()
+        {
+            StartMark.Scale = 1.0f;
+            StartMark.X = 0;
+            StartMark.Y = 0;
+            
+            if (MidMark != null)
+            {
+                MidMark.Scale = 1.0f;
+                MidMark.X = 0;
+                MidMark.Y = 0;
+            }
+            MidMark = null;
+
+            EndMark.Scale = 1.0f;
+            EndMark.X = 0;
+            EndMark.Y = 0;
+
+            PlaybackSpeed = 1.0;
+            TransitionDuration = TimeSpan.Zero;
+            TransitionStyle = TransitionStyle.HardSnap;
+            CurveProfile = CurveProfile.Linear;
+            VideoStartTime = TimeSpan.Zero;
+            
+            // Revert duration to match the full clip duration
+            if (_videoEndTime > TimeSpan.Zero)
+            {
+                OpDuration = _videoEndTime;
+            }
+            
+            RecordedPath.Clear();
+            OnPropertyChanged(nameof(HasModifications));
+        }
+
+        private void Mark_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            OnPropertyChanged(nameof(HasModifications));
+        }
+
+        private List<TransformKeyframe> _recordedPath = new();
+        public List<TransformKeyframe> RecordedPath
+        {
+            get => _recordedPath;
+            set => SetProperty(ref _recordedPath, value);
+        }
+
+        private CurveProfile _curveProfile = CurveProfile.Linear;
+        public CurveProfile CurveProfile
+        {
+            get => _curveProfile;
+            set
+            {
+                if (SetProperty(ref _curveProfile, value))
+                {
+                    OnPropertyChanged(nameof(CurveProfileIndex));
+                    OnPropertyChanged(nameof(HasModifications));
+                }
+            }
+        }
+
+        private bool _isExpanded = false;
+        public bool IsExpanded
+        {
+            get => _isExpanded;
+            set => SetProperty(ref _isExpanded, value);
+        }
+
+        public int CurveProfileIndex
+        {
+            get => (int)_curveProfile;
+            set
+            {
+                if (Enum.IsDefined(typeof(CurveProfile), value))
+                {
+                    CurveProfile = (CurveProfile)value;
+                }
+            }
+        }
+
+        private TimeSpan _transitionDuration = TimeSpan.Zero;
+        public TimeSpan TransitionDuration
+        {
+            get => _transitionDuration;
+            set 
+            {
+                if (SetProperty(ref _transitionDuration, value))
+                {
+                    OnPropertyChanged(nameof(HasModifications));
+                }
+            }
+        }
+
+        private TransitionStyle _transitionStyle = TransitionStyle.HardSnap;
+        public TransitionStyle TransitionStyle
+        {
+            get => _transitionStyle;
+            set
+            {
+                if (SetProperty(ref _transitionStyle, value))
+                {
+                    OnPropertyChanged(nameof(TransitionStyleIndex));
+                    OnPropertyChanged(nameof(TransitionIconGlyph));
+                    OnPropertyChanged(nameof(TransitionIconTooltip));
+                    OnPropertyChanged(nameof(HasModifications));
+                }
+            }
+        }
+
+        public int TransitionStyleIndex
+        {
+            get => (int)_transitionStyle;
+            set
+            {
+                if (Enum.IsDefined(typeof(TransitionStyle), value))
+                {
+                    TransitionStyle = (TransitionStyle)value;
+                }
+            }
+        }
+
+        public string TransitionIconGlyph
+        {
+            get
+            {
+                return _transitionStyle switch
+                {
+                    TransitionStyle.Crossfade => "\uE88E", // Half-filled circle/star
+                    TransitionStyle.CinematicBridge => "\uE811", // Bridge/Merge
+                    TransitionStyle.DipToColor => "\uE790", // Color bucket
+                    _ => "\uE8C6" // Cut/Scissors
+                };
+            }
+        }
+
+        public string TransitionIconTooltip => $"Transition Out: {_transitionStyle}";
+    }
+}

@@ -144,12 +144,12 @@ namespace ModernImageViewer.Cinematic
                     }
                     else
                     {
-                        _appWindow.Resize(new Windows.Graphics.SizeInt32(1920, 1080));
+                        SetDefaultCinematicBounds();
                     }
                 }
                 catch
                 {
-                    _appWindow.Resize(new Windows.Graphics.SizeInt32(1920, 1080));
+                    SetDefaultCinematicBounds();
                 }
             }
 
@@ -161,6 +161,21 @@ namespace ModernImageViewer.Cinematic
             CompositionTarget.Rendering += CompositionTarget_Rendering;
             this.Closed += CinematicWindow_Closed;
             this.Activate();
+        }
+
+        private void SetDefaultCinematicBounds()
+        {
+            try
+            {
+                var displayArea = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(_appWindow.Id, Microsoft.UI.Windowing.DisplayAreaFallback.Primary);
+                int targetHeight = (int)(displayArea.WorkArea.Height * 0.9375);
+                int targetWidth = (int)(targetHeight * (16.0 / 9.0));
+                _appWindow.Resize(new Windows.Graphics.SizeInt32(targetWidth, targetHeight));
+            }
+            catch
+            {
+                _appWindow.Resize(new Windows.Graphics.SizeInt32(2400, 1350));
+            }
         }
 
         // --------------------------------------------------------

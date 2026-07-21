@@ -1,0 +1,69 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:models="using:ModernImageViewer.VideoDirector.Models"
+    xmlns:local="using:ModernImageViewer.VideoDirector.Views"
+    xmlns:wgf="using:Windows.Globalization.NumberFormatting">
+
+    <local:TimeSpanConverter x:Key="TimeSpanConverter" />
+    <local:BoolToVisConverter x:Key="BoolToVisConverter" />
+    <local:FloatFormatConverter x:Key="FloatFormatConverter" />
+    <local:TimeSpanToDoubleSecondsConverter x:Key="TimeSpanToDoubleSecondsConverter" />
+
+    <DataTemplate x:Key="OperationTemplate">
+        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="4" Margin="16,4" HorizontalAlignment="Stretch" Padding="6">
+            <StackPanel>
+                <!-- Collapsed Header & Thumbnail Area -->
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Draggable Handle -->
+                    <FontIcon Glyph="&#xE714;" Margin="0,0,8,0" VerticalAlignment="Center" FontSize="12"/>
+
+                    <Border Grid.Column="1" Width="4" CornerRadius="2" Background="{ThemeResource SystemAccentColor}" Margin="0,0,8,0" Visibility="{Binding IsPlaying, Mode=OneWay, Converter={StaticResource BoolToVisConverter}}" />
+
+                    <!-- Thumbnail & Filename Container -->
+                    <Grid Grid.Column="2" Height="60" CornerRadius="4" Background="{ThemeResource ControlFillColorDefaultBrush}" ToolTipService.ToolTip="{Binding FileName}">
+                        <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+                        
+                        <!-- File Name Bottom Overlay -->
+                        <Border Background="#80000000" VerticalAlignment="Bottom" Padding="6,2">
+                            <TextBlock Text="{Binding FileName, Mode=OneWay}" TextTrimming="CharacterEllipsis" FontSize="11" Foreground="White" />
+                        </Border>
+                        
+                        <!-- Duration Top Right Overlay -->
+                        <Border Background="#99000000" HorizontalAlignment="Right" VerticalAlignment="Top" Padding="4,2" Margin="4" CornerRadius="2">
+                            <TextBlock Text="{Binding OpDuration, Mode=OneWay, Converter={StaticResource TimeSpanConverter}}" FontSize="10" Foreground="White" />
+                        </Border>
+                        
+                        <!-- Modified Badge Top Left Overlay -->
+                        <Border Background="#B30078D7" HorizontalAlignment="Left" VerticalAlignment="Top" Padding="4,2" Margin="4" CornerRadius="2" Visibility="{Binding HasModifications, Mode=OneWay, Converter={StaticResource BoolToVisConverter}}">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <FontIcon Glyph="&#xE722;" FontSize="9" Foreground="White" />
+                                <TextBlock Text="MODIFIED" FontSize="9" Foreground="White" FontWeight="Bold"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                    
+                    <!-- Transition Out Indicator -->
+                    <Border Grid.Column="3" Margin="8,0,0,0" ToolTipService.ToolTip="{Binding TransitionIconTooltip, Mode=OneWay}">
+                        <FontIcon Glyph="{Binding TransitionIconGlyph, Mode=OneWay}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                    </Border>
+
+                    <!-- Expand Button -->
+                    <ToggleButton Grid.Column="4" IsChecked="{Binding IsExpanded, Mode=TwoWay}" Padding="6" Margin="4,0,0,0" Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Expand/Collapse">
+                        <FontIcon Glyph="&#xE70D;" FontSize="11"/>
+                    </ToggleButton>
+                </Grid>
+
+
+            </StackPanel>
+        </Border>
+    </DataTemplate>
+</ResourceDictionary>

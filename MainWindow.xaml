@@ -3,6 +3,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:ModernImageViewer"
     xmlns:canvas="using:Microsoft.Graphics.Canvas.UI.Xaml"
+    xmlns:vd="using:ModernImageViewer.VideoDirector.Views"
     x:Class="ModernImageViewer.MainWindow"
     Title="Modern Image Viewer">
 
@@ -23,6 +24,7 @@
                 <Grid x:Name="SidebarPane" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" PointerExited="Sidebar_PointerExited">
                     <Grid Padding="10,38,10,0">
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
@@ -81,7 +83,16 @@
                             </Button>
                         </Grid>
 
-                        <Grid Grid.Row="1" Margin="5,0,5,15" VerticalAlignment="Center">
+                        <Grid Grid.Row="1" Margin="0,0,0,10">
+                            <Button Click="OpenDirector_Click" HorizontalAlignment="Stretch" Margin="3" ToolTipService.ToolTip="Open Video Director">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <SymbolIcon Symbol="Video"/>
+                                    <TextBlock Text="Video Director"/>
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+
+                        <Grid Grid.Row="2" Margin="5,0,5,15" VerticalAlignment="Center">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
@@ -102,9 +113,9 @@
                             </Button>
                         </Grid>
 
-                        <BreadcrumbBar x:Name="FolderBreadcrumb" Grid.Row="2" Margin="5,0,0,15" ItemClicked="BreadcrumbBar_ItemClicked"/>
+                        <BreadcrumbBar x:Name="FolderBreadcrumb" Grid.Row="3" Margin="5,0,0,15" ItemClicked="BreadcrumbBar_ItemClicked"/>
 
-                        <TreeView Grid.Row="3" x:Name="FolderTreeView" ItemInvoked="FolderTreeView_ItemInvoked" SelectionMode="Single" Margin="0,0,0,15">
+                        <TreeView Grid.Row="4" x:Name="FolderTreeView" ItemInvoked="FolderTreeView_ItemInvoked" SelectionMode="Single" Margin="0,0,0,15">
                             <TreeView.ItemTemplate>
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal" Spacing="10" Padding="0,5" Background="Transparent" Opacity="{Binding Content.NodeOpacity}">
@@ -188,6 +199,10 @@
                                               RenameRequested="ViewerControl_RenameRequested"
                                               DeleteRequested="ViewerControl_DeleteRequested"
                                               AddToCollageRequested="ViewerControl_AddToCollageRequested" />
+
+                    <vd:VideoDirectorControl x:Name="DirectorControl"
+                                             Visibility="Collapsed"
+                                             Canvas.ZIndex="1000" />
 
                     <Grid x:Name="MultiSelectActionBar" Visibility="Collapsed" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,24" Canvas.ZIndex="500">
                         <Border Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="16,8">

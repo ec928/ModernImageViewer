@@ -49,6 +49,7 @@ namespace ModernImageViewer
         private void OnPropertyChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
         private readonly AppWindow _appWindow;
+        private AppSettings _currentSettings = new AppSettings();
         private readonly IntPtr _hWnd;
         private readonly KeyEventHandler _globalKeyDownHandler;
 
@@ -245,10 +246,14 @@ namespace ModernImageViewer
         private sealed class AppSettings
         {
             public int Version { get; set; } = 1;
-            public int WindowWidth { get; set; } = 1280;
-            public int WindowHeight { get; set; } = 1350;
+            public int WindowWidth { get; set; } = -1;
+            public int WindowHeight { get; set; } = -1;
             public int WindowX { get; set; } = -1;
             public int WindowY { get; set; } = -1;
+            public int DirectorWindowWidth { get; set; } = -1;
+            public int DirectorWindowHeight { get; set; } = -1;
+            public int DirectorWindowX { get; set; } = -1;
+            public int DirectorWindowY { get; set; } = -1;
             public float Gamma { get; set; } = 2.2f;
             public string ImageEditorPath { get; set; } = "mspaint.exe";
             public List<string> RecentFolders { get; set; } = new();
@@ -273,11 +278,59 @@ namespace ModernImageViewer
             // Explicitly target window dimensions for reset, leaving arrays and user preferences intact
             if (forceReset)
             {
-                settings.WindowWidth = 1280;
-                settings.WindowHeight = 1350;
+                settings.WindowWidth = -1;
+                settings.WindowHeight = -1;
                 settings.WindowX = -1;
                 settings.WindowY = -1;
+                
+                settings.DirectorWindowWidth = -1;
+                settings.DirectorWindowHeight = -1;
+                settings.DirectorWindowX = -1;
+                settings.DirectorWindowY = -1;
+
+                try
+                {
+                    string settingsDir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ModernImageViewer");
+                    string cinematicBoundsPath = System.IO.Path.Combine(settingsDir, "WindowBounds.json");
+                    if (File.Exists(cinematicBoundsPath))
+                    {
+                        File.Delete(cinematicBoundsPath);
+                    }
+                }
+                catch { }
             }
+
+            if (settings.WindowWidth == -1 || settings.WindowHeight == -1 || settings.DirectorWindowWidth == -1 || settings.DirectorWindowHeight == -1)
+            {
+                try
+                {
+                    var displayArea = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(_appWindow.Id, Microsoft.UI.Windowing.DisplayAreaFallback.Primary);
+                    int targetHeight = (int)(displayArea.WorkArea.Height * 0.9375);
+                    
+                    if (settings.DirectorWindowWidth == -1 || settings.DirectorWindowHeight == -1)
+                    {
+                        int dirTargetWidth = (int)(targetHeight * (16.0 / 9.0));
+                        settings.DirectorWindowWidth = dirTargetWidth;
+                        settings.DirectorWindowHeight = targetHeight;
+                    }
+                    
+                    if (settings.WindowWidth == -1 || settings.WindowHeight == -1)
+                    {
+                        int mainTargetWidth = (int)(targetHeight * 0.95);
+                        settings.WindowWidth = mainTargetWidth;
+                        settings.WindowHeight = targetHeight;
+                    }
+                }
+                catch
+                {
+                    if (settings.DirectorWindowWidth == -1) settings.DirectorWindowWidth = 2400;
+                    if (settings.DirectorWindowHeight == -1) settings.DirectorWindowHeight = 1350;
+                    if (settings.WindowWidth == -1) settings.WindowWidth = 1282;
+                    if (settings.WindowHeight == -1) settings.WindowHeight = 1350;
+                }
+            }
+
+            _currentSettings = settings;
 
             int w = settings.WindowWidth < 300 ? 1280 : settings.WindowWidth;
             int h = settings.WindowHeight < 300 ? 1350 : settings.WindowHeight;
@@ -338,6 +391,46 @@ namespace ModernImageViewer
         // This is throwaway code. We will replace it with a proper CollageEditorWindow later.
         private CollageEditorWindow? _collageEditorWindow;
 
+        private void OpenDirector_Click(object sender, RoutedEventArgs e)
+        {
+            if (_appWindow != null)
+            {
+                // First, flush the currently visible mode's bounds to _currentSettings and disk
+                SaveAllSettings();
+
+                if (DirectorControl.Visibility == Visibility.Visible)
+                {
+                    DirectorControl.Visibility = Visibility.Collapsed;
+                    
+                    _appWindow.Resize(new Windows.Graphics.SizeInt32(_currentSettings.WindowWidth, _currentSettings.WindowHeight));
+                    if (_currentSettings.WindowX != -1 && _currentSettings.WindowY != -1)
+                        _appWindow.Move(new Windows.Graphics.PointInt32(_currentSettings.WindowX, _currentSettings.WindowY));
+                }
+                else
+                {
+                    DirectorControl.Visibility = Visibility.Visible;
+                    ViewerControl.Visibility = Visibility.Collapsed; // Hide standard viewer if open
+
+                    _appWindow.Resize(new Windows.Graphics.SizeInt32(_currentSettings.DirectorWindowWidth, _currentSettings.DirectorWindowHeight));
+                    if (_currentSettings.DirectorWindowX != -1 && _currentSettings.DirectorWindowY != -1)
+                        _appWindow.Move(new Windows.Graphics.PointInt32(_currentSettings.DirectorWindowX, _currentSettings.DirectorWindowY));
+                }
+            }
+            else
+            {
+                // Toggle visibility of the director control (fallback if _appWindow missing)
+                if (DirectorControl.Visibility == Visibility.Visible)
+                {
+                    DirectorControl.Visibility = Visibility.Collapsed;
+                }
+                else
+                {
+                    DirectorControl.Visibility = Visibility.Visible;
+                    ViewerControl.Visibility = Visibility.Collapsed; // Hide standard viewer if open
+                }
+            }
+        }
+
         private void TestCollage_Click(object sender, RoutedEventArgs e)
         {
             if (_collageEditorWindow != null)
@@ -376,18 +469,26 @@ namespace ModernImageViewer
 
                 if (_appWindow.Presenter is OverlappedPresenter p && p.State == OverlappedPresenterState.Minimized) return;
 
-                var settings = new AppSettings
+                if (DirectorControl.Visibility == Visibility.Visible)
                 {
-                    WindowWidth = _appWindow.Size.Width,
-                    WindowHeight = _appWindow.Size.Height,
-                    WindowX = _appWindow.Position.X,
-                    WindowY = _appWindow.Position.Y,
-                    Gamma = _currentGamma,
-                    ImageEditorPath = ImageEditorPath,
-                    RecentFolders = new List<string>(_recentFolders)
-                };
+                    _currentSettings.DirectorWindowWidth = _appWindow.Size.Width;
+                    _currentSettings.DirectorWindowHeight = _appWindow.Size.Height;
+                    _currentSettings.DirectorWindowX = _appWindow.Position.X;
+                    _currentSettings.DirectorWindowY = _appWindow.Position.Y;
+                }
+                else
+                {
+                    _currentSettings.WindowWidth = _appWindow.Size.Width;
+                    _currentSettings.WindowHeight = _appWindow.Size.Height;
+                    _currentSettings.WindowX = _appWindow.Position.X;
+                    _currentSettings.WindowY = _appWindow.Position.Y;
+                }
 
-                string json = System.Text.Json.JsonSerializer.Serialize(settings, new System.Text.Json.JsonSerializerOptions
+                _currentSettings.Gamma = _currentGamma;
+                _currentSettings.ImageEditorPath = ImageEditorPath;
+                _currentSettings.RecentFolders = new List<string>(_recentFolders);
+
+                string json = System.Text.Json.JsonSerializer.Serialize(_currentSettings, new System.Text.Json.JsonSerializerOptions
                 {
                     WriteIndented = true
                 });
