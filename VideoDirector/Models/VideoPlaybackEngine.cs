@@ -720,41 +720,10 @@ namespace ModernImageViewer.VideoDirector.Models
             {
                 if (op == null || transform == null) return;
                 var spatialElapsed = DateTime.Now - startTime;
-                var spatialProgress = duration.TotalMilliseconds > 0 
-                    ? Math.Clamp(spatialElapsed.TotalMilliseconds / duration.TotalMilliseconds, 0, 1) 
+                var spatialProgress = duration.TotalMilliseconds > 0
+                    ? spatialElapsed.TotalMilliseconds / duration.TotalMilliseconds
                     : 1;
-
-                double easedProgress = spatialProgress;
-                if (op.CurveProfile == CurveProfile.Bezier)
-                    easedProgress = spatialProgress < 0.5 ? 2 * spatialProgress * spatialProgress : 1 - Math.Pow(-2 * spatialProgress + 2, 2) / 2;
-                else if (op.CurveProfile == CurveProfile.DirectorsArc)
-                    easedProgress = 1 - Math.Pow(1 - spatialProgress, 3);
-
-                if (op.MidMark != null)
-                {
-                    if (easedProgress < 0.5)
-                    {
-                        double p = easedProgress * 2;
-                        transform.ScaleX = op.StartMark.Scale + (op.MidMark.Scale - op.StartMark.Scale) * p;
-                        transform.TranslateX = op.StartMark.X + (op.MidMark.X - op.StartMark.X) * p;
-                        transform.TranslateY = op.StartMark.Y + (op.MidMark.Y - op.StartMark.Y) * p;
-                    }
-                    else
-                    {
-                        double p = (easedProgress - 0.5) * 2;
-                        transform.ScaleX = op.MidMark.Scale + (op.EndMark.Scale - op.MidMark.Scale) * p;
-                        transform.TranslateX = op.MidMark.X + (op.EndMark.X - op.MidMark.X) * p;
-                        transform.TranslateY = op.MidMark.Y + (op.EndMark.Y - op.MidMark.Y) * p;
-                    }
-                    transform.ScaleY = transform.ScaleX;
-                }
-                else
-                {
-                    transform.ScaleX = op.StartMark.Scale + (op.EndMark.Scale - op.StartMark.Scale) * easedProgress;
-                    transform.ScaleY = transform.ScaleX;
-                    transform.TranslateX = op.StartMark.X + (op.EndMark.X - op.StartMark.X) * easedProgress;
-                    transform.TranslateY = op.StartMark.Y + (op.EndMark.Y - op.StartMark.Y) * easedProgress;
-                }
+                ApplyMarksAtProgress(op, spatialProgress, transform);
             }
 
             UpdateSpatial(_opA, _opAStartTime, _opADuration, _playerControl.TransformA);
@@ -1253,8 +1222,8 @@ namespace ModernImageViewer.VideoDirector.Models
             }
 
             // Apply transforms for active overlays
-            if (_activeOverlay1 != null) ApplyOverlayTransform(1, _activeOverlay1);
-            if (_activeOverlay2 != null) ApplyOverlayTransform(2, _activeOverlay2);
+            if (_activeOverlay1 != null) ApplyOverlayTransform(1, _activeOverlay1, currentStoryTime);
+            if (_activeOverlay2 != null) ApplyOverlayTransform(2, _activeOverlay2, currentStoryTime);
         }
 
         private void ActivateOverlaySlot(int slot, CinematicOperation overlay, TimeSpan currentStoryTime)
@@ -1425,18 +1394,60 @@ namespace ModernImageViewer.VideoDirector.Models
             else { _activeOverlay2 = null; _overlayAspect2 = 0; }
         }
 
-        private void ApplyOverlayTransform(int slot, CinematicOperation overlay)
+        private void ApplyOverlayTransform(int slot, CinematicOperation overlay, TimeSpan currentStoryTime)
         {
-            // Content framing (marks) on the inner element. Static for now (StartMark ==
-            // EndMark); mark interpolation over the clip's duration comes in the motion step.
             var transform = slot == 1 ? _playerControl.OverlayTransform1 : _playerControl.OverlayTransform2;
-            transform.ScaleX = overlay.StartMark.Scale;
-            transform.ScaleY = overlay.StartMark.Scale;
-            transform.TranslateX = overlay.StartMark.X;
-            transform.TranslateY = overlay.StartMark.Y;
+
+            // Content framing interpolated over the overlay's OWN duration (Ken Burns / push-in),
+            // using the same marks + curve as Track 1. Static clip = StartMark == EndMark.
+            double rawProgress = overlay.OpDuration.TotalMilliseconds > 0
+                ? (currentStoryTime - overlay.StartTime).TotalMilliseconds / overlay.OpDuration.TotalMilliseconds
+                : 0;
+            ApplyMarksAtProgress(overlay, rawProgress, transform);
 
             // Placement box (where/how big on screen), clipped so framing can't spill out.
             ApplyOverlayBox(slot, overlay, false);
+        }
+
+        // Applies a clip's Start/Mid/End marks to a transform at the given progress (0..1),
+        // eased by the clip's CurveProfile. Shared by Track 1 (UpdateSpatial) and upper-track
+        // overlay content so motion behaves identically on every track.
+        private void ApplyMarksAtProgress(CinematicOperation op, double rawProgress, Microsoft.UI.Xaml.Media.CompositeTransform transform)
+        {
+            if (op == null || transform == null) return;
+            double progress = Math.Clamp(rawProgress, 0, 1);
+
+            double easedProgress = progress;
+            if (op.CurveProfile == CurveProfile.Bezier)
+                easedProgress = progress < 0.5 ? 2 * progress * progress : 1 - Math.Pow(-2 * progress + 2, 2) / 2;
+            else if (op.CurveProfile == CurveProfile.DirectorsArc)
+                easedProgress = 1 - Math.Pow(1 - progress, 3);
+
+            if (op.MidMark != null)
+            {
+                if (easedProgress < 0.5)
+                {
+                    double p = easedProgress * 2;
+                    transform.ScaleX = op.StartMark.Scale + (op.MidMark.Scale - op.StartMark.Scale) * p;
+                    transform.TranslateX = op.StartMark.X + (op.MidMark.X - op.StartMark.X) * p;
+                    transform.TranslateY = op.StartMark.Y + (op.MidMark.Y - op.StartMark.Y) * p;
+                }
+                else
+                {
+                    double p = (easedProgress - 0.5) * 2;
+                    transform.ScaleX = op.MidMark.Scale + (op.EndMark.Scale - op.MidMark.Scale) * p;
+                    transform.TranslateX = op.MidMark.X + (op.EndMark.X - op.MidMark.X) * p;
+                    transform.TranslateY = op.MidMark.Y + (op.EndMark.Y - op.MidMark.Y) * p;
+                }
+                transform.ScaleY = transform.ScaleX;
+            }
+            else
+            {
+                transform.ScaleX = op.StartMark.Scale + (op.EndMark.Scale - op.StartMark.Scale) * easedProgress;
+                transform.ScaleY = transform.ScaleX;
+                transform.TranslateX = op.StartMark.X + (op.EndMark.X - op.StartMark.X) * easedProgress;
+                transform.TranslateY = op.StartMark.Y + (op.EndMark.Y - op.StartMark.Y) * easedProgress;
+            }
         }
 
         private void ApplyOverlayDriftCorrection(int slot, CinematicOperation overlay, TimeSpan currentStoryTime)

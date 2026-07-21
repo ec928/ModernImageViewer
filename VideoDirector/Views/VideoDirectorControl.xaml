@@ -241,8 +241,11 @@
                         <StackPanel Spacing="16">
                             <StackPanel Spacing="8">
                                 <TextBlock Text="{Binding SelectedOverlay.FileName}" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
-                                <TextBlock Text="Scroll to zoom, drag to pan the overlay, then apply." FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
-                                <Button Content="Apply Position" Click="ApplyOverlayPosition_Click" HorizontalAlignment="Stretch" ToolTipService.ToolTip="Capture the current zoom/pan as this overlay's fixed position" />
+                                <TextBlock Text="Zoom &amp; Motion: scroll/drag to frame, then set Start and End. Same as Track 1." FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button Content="Set Start" Width="90" FontWeight="SemiBold" Click="SetOverlayStart_Click" Foreground="Cyan" ToolTipService.ToolTip="Capture the current framing as the overlay's start" />
+                                    <Button Content="Set End" Width="90" FontWeight="SemiBold" Click="SetOverlayEnd_Click" Foreground="RoyalBlue" ToolTipService.ToolTip="Capture the current framing as the overlay's end (leave same as Start for no motion)" />
+                                </StackPanel>
                             </StackPanel>
 
                             <Grid ColumnSpacing="12" RowSpacing="12">

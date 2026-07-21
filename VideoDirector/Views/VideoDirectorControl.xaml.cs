@@ -399,14 +399,22 @@ namespace ModernImageViewer.VideoDirector.Views
             }
         }
 
-        private void ApplyOverlayPosition_Click(object sender, RoutedEventArgs e)
+        private void SetOverlayStart_Click(object sender, RoutedEventArgs e)
         {
             var overlay = ViewModel.SelectedOverlay;
             var transform = PlayerControl.ActiveTransform;
             if (overlay != null && transform != null)
             {
-                // Static placement: capture into both marks (StartMark == EndMark = no motion).
                 overlay.StartMark = new SpatialMark((float)transform.ScaleX, (float)transform.TranslateX, (float)transform.TranslateY);
+            }
+        }
+
+        private void SetOverlayEnd_Click(object sender, RoutedEventArgs e)
+        {
+            var overlay = ViewModel.SelectedOverlay;
+            var transform = PlayerControl.ActiveTransform;
+            if (overlay != null && transform != null)
+            {
                 overlay.EndMark = new SpatialMark((float)transform.ScaleX, (float)transform.TranslateX, (float)transform.TranslateY);
             }
         }
