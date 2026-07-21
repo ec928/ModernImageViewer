@@ -227,7 +227,10 @@ namespace ModernImageViewer.VideoDirector.Models
         public async Task StartPlaybackAsync(int startIndex = 0)
         {
             if (_viewModel.TimelineNodes.Count == 0) return;
-            
+
+            // Starting playback exits any overlay edit mode, so StopPlayback below releases
+            // the edit slot cleanly and EvaluateOverlays takes over slot management.
+            _isEditingOverlay = false;
             StopPlayback(); // Ensure we stop cleanly first
             var myCts = new CancellationTokenSource();
             _playbackCts = myCts;
@@ -1482,7 +1485,9 @@ namespace ModernImageViewer.VideoDirector.Models
 
         private void HideAllOverlays()
         {
-            if (_activeOverlay1 != null) ReleaseOverlaySlot(1);
+            // While editing an overlay, slot 1 is the edit surface — don't let a stale
+            // playback-teardown (which also calls StopPlayback -> HideAllOverlays) wipe it.
+            if (!_isEditingOverlay && _activeOverlay1 != null) ReleaseOverlaySlot(1);
             if (_activeOverlay2 != null) ReleaseOverlaySlot(2);
         }
 
@@ -1492,12 +1497,14 @@ namespace ModernImageViewer.VideoDirector.Models
         // can't be in use for actual overlay playback at the same time.
         public async void EnterOverlayEditMode(CinematicOperation overlay)
         {
+            if (overlay == null || string.IsNullOrWhiteSpace(overlay.FilePath)) return;
+
+            // Mark editing BEFORE stopping playback so neither this StopPlayback nor the
+            // cancelled playback loop's async teardown releases slot 1 out from under us.
+            _isEditingOverlay = true;
             StopPlayback();
             UpdateWysiwygOverlay(); // Collapse any stale main-track rectangles
 
-            if (overlay == null || string.IsNullOrWhiteSpace(overlay.FilePath)) return;
-
-            _isEditingOverlay = true;
             _activeOverlay1 = overlay;
 
             var player = _overlayMediaPlayer1;
