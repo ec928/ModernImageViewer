@@ -1319,15 +1319,37 @@ namespace ModernImageViewer.VideoDirector.Models
             double vpH = _playerControl.ActualHeight;
             if (aspect <= 0 || vpW <= 0 || vpH <= 0) return;
 
-            double boxW = editMode ? vpW : vpW * overlay.PlacementWidth;
             if (overlay.PlacementHeight <= 0)
             {
-                overlay.PlacementHeight = Math.Clamp((boxW / aspect) / vpH, 0.05, 1.0);
+                double initBoxW = vpW * overlay.PlacementWidth;
+                overlay.PlacementHeight = Math.Clamp((initBoxW / aspect) / vpH, 0.05, 1.0);
             }
-            double boxH = editMode ? vpH : vpH * overlay.PlacementHeight;
 
-            double cx = editMode ? 0.5 : overlay.PlacementCenterX;
-            double cy = editMode ? 0.5 : overlay.PlacementCenterY;
+            double boxW, boxH, cx, cy;
+            if (editMode)
+            {
+                double pipAspect = (overlay.PlacementWidth * vpW) / (overlay.PlacementHeight * vpH);
+                double screenAspect = vpW / vpH;
+                if (pipAspect > screenAspect) 
+                {
+                    boxW = vpW;
+                    boxH = vpW / pipAspect;
+                }
+                else 
+                {
+                    boxH = vpH;
+                    boxW = vpH * pipAspect;
+                }
+                cx = 0.5;
+                cy = 0.5;
+            }
+            else
+            {
+                boxW = vpW * overlay.PlacementWidth;
+                boxH = vpH * overlay.PlacementHeight;
+                cx = overlay.PlacementCenterX;
+                cy = overlay.PlacementCenterY;
+            }
 
             double left = cx * vpW - boxW / 2;
             double top = cy * vpH - boxH / 2;
@@ -1406,6 +1428,8 @@ namespace ModernImageViewer.VideoDirector.Models
             grid.ClearValue(Microsoft.UI.Xaml.FrameworkElement.HeightProperty);
             grid.Clip = null;
             grid.Margin = new Microsoft.UI.Xaml.Thickness(0);
+
+            _playerControl.UpdateWysiwygHandles(slot, false);
 
             if (slot == 1) { _activeOverlay1 = null; _overlayAspect1 = 0; }
             else { _activeOverlay2 = null; _overlayAspect2 = 0; }
