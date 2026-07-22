@@ -417,6 +417,26 @@ namespace ModernImageViewer.VideoDirector.Views
             }
         }
 
+        private void SetOverlayMid_Click(object sender, RoutedEventArgs e)
+        {
+            var overlay = ViewModel.SelectedOverlay;
+            var transform = PlayerControl.ActiveTransform;
+            if (overlay != null && transform != null)
+            {
+                overlay.MidMark = new SpatialMark((float)transform.ScaleX, (float)transform.TranslateX, (float)transform.TranslateY);
+            }
+        }
+
+        private void ClearOverlayMid_RightTapped(object sender, Microsoft.UI.Xaml.Input.RightTappedRoutedEventArgs e)
+        {
+            var overlay = ViewModel.SelectedOverlay;
+            if (overlay != null)
+            {
+                overlay.MidMark = null; // Back to a two-point (Start -> End) motion
+            }
+            e.Handled = true;
+        }
+
         private void SetOverlayEnd_Click(object sender, RoutedEventArgs e)
         {
             var overlay = ViewModel.SelectedOverlay;
