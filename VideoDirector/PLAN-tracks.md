@@ -1,9 +1,15 @@
 # VideoDirector — Multi-Track Plan
 
-**Status:** working prototype — Track 1 + Track 2 (with up to two simultaneous PiPs) + bottom
-dock all functional. Next: Canvas view (real C3+C4) → C-full → N-tracks. See §6 (progress) and
-§7 (roadmap). This doc is the durable source of truth for the multi-track work; readable
-standalone by any session or tool — no prior chat context required.
+**Status:** working prototype on a **clean two-mode architecture** (Edit / Arrange, strictly
+segregated — see §5A). Track 1 + Track 2 clips, bottom dock, Edit mode (frame one clip + Ken
+Burns preview), Arrange mode (composite + drag/wheel-move/resize PiPs) all functional. Next:
+**PiP reshaping** → Start Time field → C-full → N-tracks. See §6 (progress) and §7 (next steps).
+This doc is the durable source of truth; readable standalone by any session or tool.
+
+> **Design lesson (do not repeat):** an earlier attempt grew multiple overlapping ways to
+> select/arrange/edit that bled into each other and broke. The fix, and the law now, is
+> **strict mode segregation: the mode alone decides what input does — nothing else.** Any new
+> interaction must belong to exactly one mode. Do not add a second parallel way to do a thing.
 
 **Working principle (non-negotiable):** every step ends in a **green build and a commit**.
 Never leave the tree in a non-building state. Small steps, committed often, so we are never
@@ -119,6 +125,43 @@ right panel sheds the clip lists and becomes purely the selected clip's properti
 
 ---
 
+## 5A. The two-mode architecture (definitive — supersedes the old "canvas/edit" spec)
+
+There are exactly **two strictly-segregated modes**. The mode alone decides what pointer input
+does; there is no other condition. No bleed-over, no third state, no parallel mechanisms.
+
+### Edit mode (transient)
+Edit **one** clip only — identical behaviour on every track (Track 1, 2, … x).
+- **Enter:** select a clip in the dock (Track Dashboard). (Entry point may broaden later.)
+- Shows **only that clip**, full-screen. All other clips/overlays are hidden.
+- **Zoom & Motion controls** (same layout for all tracks): scroll = zoom, drag = pan,
+  Set Start / Mid / End = motion keyframes, Curve profile.
+- **Start Time** field in the panel: **read-only/auto for Track 1** (sequential), **editable
+  for Track 2+**. *(Field on Track 1 not yet added — see §7.)*
+- **Play = ONLY this clip's Ken Burns preview** (loops); never the composite.
+- **Exit** button (top-left, shown only in Edit) → returns to Arrange.
+- `InputMode = Content`. Everything you do affects only the edited clip.
+
+### Arrange mode (default)
+The whole canvas, like playback will look.
+- **Play = the entire composite** (all tracks).
+- **Move / resize the PiP windows:** drag a PiP → move; wheel over a PiP → resize.
+  (Focused on Track 2 for now; same behaviour to extend to all tracks later.)
+- A PiP is only on screen when the playhead is inside its time window — **accepted WYSIWYG
+  sacrifice**: to arrange a PiP, pause at a moment it's visible.
+- `InputMode = ArrangePips`. All pointer input targets PiP placement (bounds hit-test via the
+  full-screen InputLayer — the only reliable pointer catcher, since the PiP's MediaPlayerElement
+  video surface does not raise its own pointer events).
+
+### Enforcement notes
+- The mode is held in the engine (`EditorMode`); it sets `DirectorPlayerControl.InputMode`.
+- Edit isolation: entering Edit hides every non-edited surface (Track 1 edit releases both
+  overlay slots; Track 2 edit hides the main players + the other slot). `ExitToArrange` restores
+  the composite.
+- `Play` is routed by mode (Edit → clip-scoped preview; Arrange → composite playback).
+
+---
+
 ## 6. Progress (as built)
 
 Working prototype. Build green. Commits, oldest → newest:
@@ -138,74 +181,51 @@ Working prototype. Build green. Commits, oldest → newest:
 - `88b4d18` / `64aa776` / `2a0cb6f` — **Phase E**: bottom track dock (Track 1 + Track 2 lanes),
   auto-hide during playback (`IsDockVisible`), right panel is now **inspector-only**; dock owns
   arrangement (select / reorder / context-menu / add).
+- `df8cdec` — C3 parity: Set Mid + Curve Profile in the overlay inspector.
+- `2f2c2b2` — **the two-mode rebuild (§5A)**: replaced the tangled arrange/composite/edit-content
+  machinery with strictly-segregated **Edit** and **Arrange** modes. Clip-scoped Edit preview;
+  Arrange drag/wheel move+resize of the PiP under the cursor; Exit button; EDIT/ARRANGE badge.
+- `3b913e9` — fix: Edit mode now shows **only** the edited clip (was leaking the overlay over
+  Track 1 via a stale flag); moved Exit button clear of the title-bar drag region.
 
-**What actually works now:** Track 1 sequential base + Track 2 overlays with full-screen content
-framing, Ken-Burns motion, corner+size placement, opacity, muted audio, add/duplicate/remove,
-and a bottom dock. **Track 2 already shows up to TWO simultaneous PiPs** (the engine has two
-overlay slots fed from `OverlayClips`), each independently framed/placed/animated — so the
-multi-layer capability is already real, if loosely modelled (see §7 N-tracks).
+**What actually works now:** the two-mode architecture (§5A) — Edit mode frames one clip with
+Ken-Burns preview; Arrange mode shows the composite and lets you drag + wheel-resize a Track 2
+PiP. Plus: Track 1 sequential base, Track 2 overlays (up to **two simultaneous PiPs**, each
+independently framed/placed/animated), motion, opacity, muted audio, add/duplicate/remove, the
+bottom dock.
 
 **Placement representation:** `PlacementScale` + `PlacementCenterX/Y` (normalized 0..1) on the
-clip. Corner presets in the inspector are a UI convenience that write these.
+clip — box is **aspect-locked to the video** (a single size, no reshape yet; see §7).
 
 ---
 
-## 7. Phases — status & revised roadmap
+## 7. Next steps (in priority order)
 
-Done: **B, C1, C2, C4-interim, E** (see §6). Each ended green + committed.
+The two-mode architecture (§5A) is the foundation and is done. Remaining work:
 
-**Revised roadmap (agreed):** finish the **Canvas view (C3 + C4)** → **C-full** → **N-tracks**.
-**Phase D (hardcoded Track 3) is dropped** — it proves nothing new and Track 2 already does two
-simultaneous PiPs; a third layer comes free with generic N-tracks.
+### NEXT — PiP reshaping (Arrange mode)
+Today the PiP box is **aspect-locked to the video** (single `PlacementScale`): you can move and
+*uniformly* resize, but not change its shape. To add reshaping:
+1. **Model + rendering — easy, low-risk.** Replace `PlacementScale` with **independent width +
+   height** (viewport fractions). The video **crop-fills** the reshaped box (switch the fit to
+   crop-fill) so there's no distortion and no bars. Content marks (Edit mode) still frame what
+   shows inside. Prove it first with two numeric fields.
+2. **Handle UI — moderate.** Draw corner/edge drag-handles on the selected PiP in Arrange;
+   corner = change W+H, edge = one dimension. Sits on the now-reliable InputLayer hit-testing.
 
-### NEXT — Canvas view (the real C3 + C4)  *(the "polish" that finishes Phase C)*
-Both outstanding pieces hang off one missing thing: a **Canvas/composite view** — the paused
-composite (Track 1 frame + every PiP at its placement) that you can manipulate directly.
-- **Edit ⇄ Canvas toggle (rest of C3).** A way to flip between single-clip full-screen *edit*
-  view and the *composite* view. Today: selecting an overlay = full-screen edit; playing =
-  composite; there is no paused composite view.
-- **WYSIWYG placement (real C4).** In Canvas view, click a PiP to select, **drag to move**,
-  **handles to resize** → writes `PlacementCenterX/Y` + `PlacementScale`. Replaces the interim
-  numeric/preset controls' blind set-then-play loop.
-- **Unified-controls gap (rest of C3).** Overlay inspector still lacks **Set Mid, Curve
-  Profile, and Record** (Track 1 has them; the engine already supports Mid/Curve via
-  `ApplyMarksAtProgress`). Add them for true parity.
-- Needs: render the composite while paused (currently the overlay eval only runs during the
-  animation loop); pointer hit-testing on PiPs; resize-handle UI.
+Wheel stays as uniform resize; handles do the reshape. Design note: reshaping **crops** the
+video to the box shape — what's in the crop is set by the Edit-mode framing. Box = window shape;
+content marks = what's behind it.
 
-#### Canvas-view interaction spec (agreed)
+### THEN — Start Time field + panel parity (finishes §5A's Edit panel)
+- Add the **Start Time** field to the Edit-mode Zoom & Motion panel: **read-only/auto for
+  Track 1** (compute from preceding clips' durations), **editable for Track 2+**.
+- Unify the panel layout across tracks; track-specific fields appear only where they apply
+  (Opacity → PiPs; Transition-out → Track 1). Record stays Track-1-only for now.
 
-**View model — canvas is home.** When paused, the default state is the **composite/canvas view**
-(Track 1 frame + PiPs at their placement). Content-editing is something you *dive into* for one
-clip and come back from:
-- **Enter content-edit:** double-click a clip (its PiP on the canvas, or its dock tile), **or**
-  an explicit **"Edit content"** button in the inspector (double-click alone isn't discoverable).
-  → that clip full-screen, marks active (today's edit view).
-- **Exit:** **Esc**, plus a visible **"← Composite" / Done** affordance in edit view.
-- **Behavior change from today:** single dock click currently jumps straight to full-screen
-  edit. New model: **single-click = select/arrange (stay in canvas), double-click = edit
-  content.** This is the intended arrange-vs-frame split.
-- **Playing** = composite; dock auto-hides (already implemented).
-- **Mode indicator (required):** an always-visible badge — "Composite" vs "Editing: <clip>" —
-  because the mouse wheel means different things per mode (see below).
-
-**PiP manipulation in canvas view** (on the selected PiP):
-- **Drag body → move** (writes `PlacementCenterX/Y`).
-- **Mouse wheel → uniform resize** around the box centre, keeping its shape.
-- **Drag edge/corner handles → reshape** (change width vs height independently).
-- Consistency rule: **the wheel always zooms the thing you're editing** — content (marks) in
-  edit view, the box in canvas view. Same gesture, analogous meaning per mode.
-
-**Placement model change required for reshape.** Today placement is aspect-locked to the video
-(`PlacementScale` only). To allow reshaping (square / tall PiP from a 16:9 source), placement
-needs **independent width + height** (e.g. `PlacementW`/`PlacementH` as viewport fractions).
-The video then **crop-fills** the box (no bars); the **content marks still frame what shows
-inside** it. So: box = the window's shape/size/position; content marks = what's behind the
-window. Wheel scales W+H together; handles change them separately. (The corner-preset UI +
-`PlacementScale` from the interim C4 map onto the new fields.)
-
-**Also finish C3 parity:** add **Set Mid, Curve Profile, and Record** to the overlay inspector
-(engine already supports Mid/Curve via `ApplyMarksAtProgress`).
+### THEN — extend Arrange move/resize to Track 1
+Same drag/resize behaviour for Track 1 clips — the ambition of consistent behaviour on all tracks
+(deferred until the Track 2 foundation is solid, per the agreed plan).
 
 ### THEN — C-full (time-scaled timeline)
 - px = seconds, ruler, drag clips along time, snapping, a playhead moving through the dock.
