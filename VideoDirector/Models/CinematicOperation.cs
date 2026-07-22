@@ -213,11 +213,11 @@ namespace ModernImageViewer.VideoDirector.Models
         }
 
         // Box height as a fraction of the video's viewport size.
-        private double _placementHeight = 0.3;
+        private double _placementHeight = 0;
         public double PlacementHeight
         {
             get => _placementHeight;
-            set => SetProperty(ref _placementHeight, Math.Clamp(value, 0.05, 1.0));
+            set => SetProperty(ref _placementHeight, Math.Clamp(value, 0.0, 1.0));
         }
 
         // Box centre as a fraction of the viewport (0.5,0.5 = centre). Default lower-right.

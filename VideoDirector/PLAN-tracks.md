@@ -194,6 +194,8 @@ PiP. Plus: Track 1 sequential base, Track 2 overlays (up to **two simultaneous P
 independently framed/placed/animated), motion, opacity, muted audio, add/duplicate/remove, the
 bottom dock.
 
+- **[x] C3/C4: PiP Reshaping** -> Split `PlacementScale` into `Width`/`Height`. Implement visible drag-handles (NW, N, NE, etc.) on the canvas. Allow edges for freeform, corners for proportional (Shift overrides proportional). Keep it entirely in Arrange mode.
+
 **Placement representation:** `PlacementScale` + `PlacementCenterX/Y` (normalized 0..1) on the
 clip — box is **aspect-locked to the video** (a single size, no reshape yet; see §7).
 

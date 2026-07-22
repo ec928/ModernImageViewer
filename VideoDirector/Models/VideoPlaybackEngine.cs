@@ -1320,6 +1320,10 @@ namespace ModernImageViewer.VideoDirector.Models
             if (aspect <= 0 || vpW <= 0 || vpH <= 0) return;
 
             double boxW = editMode ? vpW : vpW * overlay.PlacementWidth;
+            if (overlay.PlacementHeight <= 0)
+            {
+                overlay.PlacementHeight = Math.Clamp((boxW / aspect) / vpH, 0.05, 1.0);
+            }
             double boxH = editMode ? vpH : vpH * overlay.PlacementHeight;
 
             double cx = editMode ? 0.5 : overlay.PlacementCenterX;
