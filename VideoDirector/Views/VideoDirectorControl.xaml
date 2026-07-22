@@ -199,11 +199,15 @@
                                     <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
 
-                                <!-- Box position is set by dragging the PiP in Composite mode; a numeric
-                                     size is kept for precision (complements wheel-resize). -->
-                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Box Size" VerticalAlignment="Center" />
-                                <NumberBox Grid.Row="0" Grid.Column="1" local:NumberBoxExtensions.FractionDigits="2" Value="{Binding SelectedOverlay.PlacementScale, Mode=TwoWay, FallbackValue=0.3}"
-                                           SmallChange="0.05" LargeChange="0.1" Minimum="0.05" Maximum="1.0" SpinButtonPlacementMode="Inline" ToolTipService.ToolTip="PiP box size as a fraction of the frame (0.3 = 30%). Or use Composite mode: wheel to resize." />
+                                <!-- Box size is typically set by dragging the PiP handles in Arrange mode; numeric
+                                     size is kept for precision. -->
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Width / Height" VerticalAlignment="Center" />
+                                <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                    <NumberBox local:NumberBoxExtensions.FractionDigits="2" Value="{Binding SelectedOverlay.PlacementWidth, Mode=TwoWay, FallbackValue=0.3}"
+                                               SmallChange="0.05" LargeChange="0.1" Minimum="0.05" Maximum="1.0" SpinButtonPlacementMode="Inline" Width="80" ToolTipService.ToolTip="Width (fraction of frame)" />
+                                    <NumberBox local:NumberBoxExtensions.FractionDigits="2" Value="{Binding SelectedOverlay.PlacementHeight, Mode=TwoWay, FallbackValue=0.3}"
+                                               SmallChange="0.05" LargeChange="0.1" Minimum="0.05" Maximum="1.0" SpinButtonPlacementMode="Inline" Width="80" ToolTipService.ToolTip="Height (fraction of frame)" />
+                                </StackPanel>
 
                                 <TextBlock Grid.Row="1" Grid.Column="0" Text="Start Time (s)" VerticalAlignment="Center" />
                                 <NumberBox Grid.Row="1" Grid.Column="1" local:NumberBoxExtensions.FractionDigits="1" Value="{Binding SelectedOverlay.StartTimeSeconds, Mode=TwoWay, FallbackValue=0.0}"

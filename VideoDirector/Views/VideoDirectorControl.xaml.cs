@@ -492,7 +492,8 @@ namespace ModernImageViewer.VideoDirector.Views
                         StartMark = new SpatialMark(overlay.StartMark.Scale, overlay.StartMark.X, overlay.StartMark.Y),
                         EndMark = new SpatialMark(overlay.EndMark.Scale, overlay.EndMark.X, overlay.EndMark.Y),
                         Opacity = overlay.Opacity,
-                        PlacementScale = overlay.PlacementScale,
+                        PlacementWidth = overlay.PlacementWidth,
+                        PlacementHeight = overlay.PlacementHeight,
                         PlacementCenterX = overlay.PlacementCenterX,
                         PlacementCenterY = overlay.PlacementCenterY,
                         Thumbnail = overlay.Thumbnail
