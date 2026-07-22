@@ -30,8 +30,18 @@ namespace ModernImageViewer.VideoDirector.ViewModels
         public bool IsPlaying
         {
             get => _isPlaying;
-            set => SetProperty(ref _isPlaying, value);
+            set
+            {
+                if (SetProperty(ref _isPlaying, value))
+                {
+                    OnPropertyChanged(nameof(IsDockVisible));
+                }
+            }
         }
+
+        // The bottom track dock is shown when the storyboard is toggled on AND we're not
+        // playing — it auto-hides during playback so the video gets the full canvas.
+        public bool IsDockVisible => _isStoryboardVisible && !_isPlaying;
 
         private bool _isLooping = true;
         public bool IsLooping
@@ -70,6 +80,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
                 if (SetProperty(ref _isStoryboardVisible, value))
                 {
                     UpdateTelemetryVisibility();
+                    OnPropertyChanged(nameof(IsDockVisible));
                 }
             }
         }

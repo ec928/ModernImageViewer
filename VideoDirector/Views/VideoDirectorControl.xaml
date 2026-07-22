@@ -368,11 +368,12 @@
             </StackPanel>
         </Border>
 
-        <!-- Bottom Track Dock: horizontal arrangement lanes (one per track). -->
+        <!-- Bottom Track Dock: horizontal arrangement lanes (one per track).
+             Auto-hides during playback (IsDockVisible) so the video gets the full canvas. -->
         <Border Grid.Row="1" x:Name="TrackDock"
                 Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                 BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="0,1,0,0"
-                Visibility="{x:Bind ViewModel.IsStoryboardVisible, Mode=OneWay, Converter={StaticResource BoolToVisConverter}}"
+                Visibility="{x:Bind ViewModel.IsDockVisible, Mode=OneWay, Converter={StaticResource BoolToVisConverter}}"
                 Padding="8,6">
             <StackPanel Spacing="4">
                 <!-- Track 1 lane -->
@@ -387,6 +388,39 @@
                               ItemsSource="{x:Bind ViewModel.TimelineNodes}"
                               ItemTemplate="{StaticResource DockTileTemplate}"
                               SelectedItem="{x:Bind ViewModel.SelectedTimelineNode, Mode=TwoWay}"
+                              SelectionMode="Single"
+                              Height="74"
+                              ScrollViewer.HorizontalScrollMode="Enabled"
+                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                              ScrollViewer.VerticalScrollMode="Disabled"
+                              ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                        <ListView.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <ItemsStackPanel Orientation="Horizontal" />
+                            </ItemsPanelTemplate>
+                        </ListView.ItemsPanel>
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="Padding" Value="0" />
+                                <Setter Property="Margin" Value="0" />
+                                <Setter Property="MinWidth" Value="0" />
+                            </Style>
+                        </ListView.ItemContainerStyle>
+                    </ListView>
+                </Grid>
+
+                <!-- Track 2 lane -->
+                <Grid AllowDrop="True" DragOver="OverlaySection_DragOver" Drop="OverlaySection_Drop">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="64" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Track 2" VerticalAlignment="Center"
+                               FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <ListView Grid.Column="1" x:Name="Track2Lane"
+                              ItemsSource="{x:Bind ViewModel.OverlayClips}"
+                              ItemTemplate="{StaticResource DockTileTemplate}"
+                              SelectedItem="{x:Bind ViewModel.SelectedOverlay, Mode=TwoWay}"
                               SelectionMode="Single"
                               Height="74"
                               ScrollViewer.HorizontalScrollMode="Enabled"
