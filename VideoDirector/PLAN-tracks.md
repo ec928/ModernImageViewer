@@ -173,6 +173,40 @@ composite (Track 1 frame + every PiP at its placement) that you can manipulate d
 - Needs: render the composite while paused (currently the overlay eval only runs during the
   animation loop); pointer hit-testing on PiPs; resize-handle UI.
 
+#### Canvas-view interaction spec (agreed)
+
+**View model — canvas is home.** When paused, the default state is the **composite/canvas view**
+(Track 1 frame + PiPs at their placement). Content-editing is something you *dive into* for one
+clip and come back from:
+- **Enter content-edit:** double-click a clip (its PiP on the canvas, or its dock tile), **or**
+  an explicit **"Edit content"** button in the inspector (double-click alone isn't discoverable).
+  → that clip full-screen, marks active (today's edit view).
+- **Exit:** **Esc**, plus a visible **"← Composite" / Done** affordance in edit view.
+- **Behavior change from today:** single dock click currently jumps straight to full-screen
+  edit. New model: **single-click = select/arrange (stay in canvas), double-click = edit
+  content.** This is the intended arrange-vs-frame split.
+- **Playing** = composite; dock auto-hides (already implemented).
+- **Mode indicator (required):** an always-visible badge — "Composite" vs "Editing: <clip>" —
+  because the mouse wheel means different things per mode (see below).
+
+**PiP manipulation in canvas view** (on the selected PiP):
+- **Drag body → move** (writes `PlacementCenterX/Y`).
+- **Mouse wheel → uniform resize** around the box centre, keeping its shape.
+- **Drag edge/corner handles → reshape** (change width vs height independently).
+- Consistency rule: **the wheel always zooms the thing you're editing** — content (marks) in
+  edit view, the box in canvas view. Same gesture, analogous meaning per mode.
+
+**Placement model change required for reshape.** Today placement is aspect-locked to the video
+(`PlacementScale` only). To allow reshaping (square / tall PiP from a 16:9 source), placement
+needs **independent width + height** (e.g. `PlacementW`/`PlacementH` as viewport fractions).
+The video then **crop-fills** the box (no bars); the **content marks still frame what shows
+inside** it. So: box = the window's shape/size/position; content marks = what's behind the
+window. Wheel scales W+H together; handles change them separately. (The corner-preset UI +
+`PlacementScale` from the interim C4 map onto the new fields.)
+
+**Also finish C3 parity:** add **Set Mid, Curve Profile, and Record** to the overlay inspector
+(engine already supports Mid/Curve via `ApplyMarksAtProgress`).
+
 ### THEN — C-full (time-scaled timeline)
 - px = seconds, ruler, drag clips along time, snapping, a playhead moving through the dock.
 - **Shared horizontal scroll across lanes** (never built in E) lands here — it's the time-axis
