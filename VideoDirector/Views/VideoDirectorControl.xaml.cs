@@ -415,6 +415,14 @@ namespace ModernImageViewer.VideoDirector.Views
             }
         }
 
+        private void EditOverlayContent_Click(object sender, RoutedEventArgs e)
+        {
+            var overlay = ViewModel.SelectedOverlay;
+            if (overlay == null || _playbackEngine == null) return;
+            _playbackEngine.ExitCanvasMode();
+            _playbackEngine.EnterOverlayEditMode(overlay);
+        }
+
         private void SetOverlayMid_Click(object sender, RoutedEventArgs e)
         {
             var overlay = ViewModel.SelectedOverlay;

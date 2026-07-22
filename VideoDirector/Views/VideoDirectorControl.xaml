@@ -161,6 +161,7 @@
                         <StackPanel Spacing="16">
                             <StackPanel Spacing="8">
                                 <TextBlock Text="{Binding SelectedOverlay.FileName}" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
+                                <Button Content="Edit content (full screen)" Click="EditOverlayContent_Click" HorizontalAlignment="Stretch" ToolTipService.ToolTip="Frame this overlay's content full-screen (or double-tap its PiP in Composite mode)" />
                                 <TextBlock Text="Zoom &amp; Motion: scroll/drag to frame, then set Start / Mid / End. Same as Track 1." FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                     <Button Content="Start" Width="58" FontWeight="SemiBold" Click="SetOverlayStart_Click" Foreground="Cyan" ToolTipService.ToolTip="Capture the current framing as the overlay's start" />
