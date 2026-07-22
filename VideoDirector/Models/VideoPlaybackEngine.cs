@@ -1503,8 +1503,9 @@ namespace ModernImageViewer.VideoDirector.Models
 
         private void HideAllOverlays()
         {
-            // While editing an overlay, slot 1 is the edit surface — don't let a stale
-            // playback-teardown (which also calls StopPlayback -> HideAllOverlays) wipe it.
+            // While editing an overlay (slot 1) or arranging on the composite (canvas mode),
+            // the PiPs are the live surface — don't let a StopPlayback teardown wipe them.
+            if (_canvasMode) return;
             if (!_isEditingOverlay && _activeOverlay1 != null) ReleaseOverlaySlot(1);
             if (_activeOverlay2 != null) ReleaseOverlaySlot(2);
         }
@@ -1587,13 +1588,15 @@ namespace ModernImageViewer.VideoDirector.Models
         // from a paused moment where the composite is already on screen.
         public void EnterCanvasMode()
         {
-            StopPlayback();
-            _isEditingOverlay = false;
+            // Set _canvasMode BEFORE StopPlayback so its HideAllOverlays keeps the live PiPs
+            // instead of tearing them down (which made the visible PiP vanish on first entry).
             _canvasMode = true;
+            _isEditingOverlay = false;
+            StopPlayback();
             _playerControl.CanvasMode = true;
             _viewModel.IsCanvasMode = true;
             UpdateWysiwygOverlay(); // collapse any Track-1 edit rectangles
-            EvaluateOverlays(_viewModel.CurrentStoryTime); // place the PiPs at their placement
+            EvaluateOverlays(_viewModel.CurrentStoryTime); // reconcile PiPs at their placement (no teardown)
         }
 
         public void ExitCanvasMode()
