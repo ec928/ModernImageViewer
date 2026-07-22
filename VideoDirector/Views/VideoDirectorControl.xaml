@@ -29,6 +29,12 @@
         <!-- Background Layer: Full Bleed Immersive Player -->
         <local:DirectorPlayerControl x:Name="PlayerControl" Grid.Row="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
 
+        <!-- Mode indicator badge (which mode you're in; the wheel is context-sensitive) -->
+        <Border Grid.Row="0" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="16" Padding="8,4"
+                Background="#99000000" CornerRadius="4" IsHitTestVisible="False">
+            <TextBlock Text="{x:Bind ViewModel.ModeLabel, Mode=OneWay}" Foreground="White" FontSize="12" FontWeight="SemiBold" />
+        </Border>
+
         <!-- Foreground Layer: Floating Edit Badge -->
         <Border x:Name="EditModeBadge" Background="#D9E81123" CornerRadius="8" Padding="16,8" 
                 Visibility="{x:Bind ViewModel.IsRecordingMotion, Mode=OneWay, Converter={StaticResource BoolToVisConverter}}" 

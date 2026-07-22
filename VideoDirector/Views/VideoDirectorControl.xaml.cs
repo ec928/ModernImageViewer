@@ -342,17 +342,6 @@ namespace ModernImageViewer.VideoDirector.Views
             }
         }
 
-        private void ListView_GotFocus(object sender, RoutedEventArgs e)
-        {
-            if (e.OriginalSource is FrameworkElement element && element.DataContext is CinematicOperation op)
-            {
-                if (ViewModel.SelectedTimelineNode != op)
-                {
-                    ViewModel.SelectedTimelineNode = op;
-                }
-            }
-        }
-
         private void Duplicate_Click(object sender, RoutedEventArgs e)
         {
             var node = ViewModel.SelectedTimelineNode;

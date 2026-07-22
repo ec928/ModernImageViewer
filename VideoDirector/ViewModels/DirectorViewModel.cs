@@ -35,6 +35,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
                 if (SetProperty(ref _isPlaying, value))
                 {
                     OnPropertyChanged(nameof(IsDockVisible));
+                    OnPropertyChanged(nameof(ModeLabel));
                 }
             }
         }
@@ -148,6 +149,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
                 {
                     if (value != null) SelectedOverlay = null;
                     OnPropertyChanged(nameof(HasSelection));
+                    OnPropertyChanged(nameof(ModeLabel));
                 }
             }
         }
@@ -162,6 +164,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
                 {
                     if (value != null) SelectedTimelineNode = null;
                     OnPropertyChanged(nameof(HasSelection));
+                    OnPropertyChanged(nameof(ModeLabel));
                 }
             }
         }
@@ -169,6 +172,20 @@ namespace ModernImageViewer.VideoDirector.ViewModels
         // True when either a Track 1 clip or an overlay is selected — the right panel shows
         // the relevant inspector, otherwise a "nothing selected" hint.
         public bool HasSelection => _selectedTimelineNode != null || _selectedOverlay != null;
+
+        // Human-readable current mode, shown in a badge. The mouse wheel means different things
+        // in edit vs composite, so the mode must always be visible. (Interactive canvas view is
+        // still to come; for now this reflects the existing play/edit/idle states.)
+        public string ModeLabel
+        {
+            get
+            {
+                if (_isPlaying) return "Playing";
+                if (_selectedOverlay != null) return "Editing · " + _selectedOverlay.FileName;
+                if (_selectedTimelineNode != null) return "Editing · " + _selectedTimelineNode.FileName;
+                return "Composite";
+            }
+        }
 
         private TimeSpan _currentOperationTime;
         public TimeSpan CurrentOperationTime
