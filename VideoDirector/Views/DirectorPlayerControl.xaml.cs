@@ -14,126 +14,123 @@ namespace ModernImageViewer.VideoDirector.Views
         public event EventHandler ViewportTransformChanged;
         public Microsoft.UI.Xaml.Media.CompositeTransform ActiveTransform { get; set; }
 
-        // Canvas-arrange mode: the overlay boxes become interactive (move/resize/edit their
-        // placement directly on the composite) and the full-screen content InputLayer yields.
-        public event EventHandler<int> OverlayBoxSelected;             // slot
+        // Canvas-arrange events — raised from the InputLayer by hit-testing the PiP boxes.
+        // (The boxes contain a MediaPlayerElement video surface, which does not reliably raise
+        // its own pointer events, so all input goes through the full-screen InputLayer.)
+        public event EventHandler<int> OverlayBoxSelected;                       // slot
         public event EventHandler<(int slot, double dx, double dy)> OverlayBoxMoved;
         public event EventHandler<(int slot, int delta)> OverlayBoxWheel;
-        public event EventHandler<int> OverlayBoxEditRequested;        // slot (double-tap)
+        public event EventHandler<int> OverlayBoxEditRequested;                  // slot (double-tap)
 
         private bool _canvasMode;
-        public bool CanvasMode
-        {
-            get => _canvasMode;
-            set
-            {
-                _canvasMode = value;
-                // In canvas mode the boxes receive pointer input and the content InputLayer is off.
-                InputLayer.IsHitTestVisible = !value;
-                OverlayGrid1.IsHitTestVisible = value;
-                OverlayGrid2.IsHitTestVisible = value;
-            }
-        }
+        public bool CanvasMode { get => _canvasMode; set => _canvasMode = value; }
 
-        private bool _boxDragging;
-        private Point _lastBoxPointer;
-
-        private static int SlotOf(object sender) => sender == null ? 0 : (((FrameworkElement)sender).Name == "OverlayGrid1" ? 1 : 2);
-
-        private void OverlayBox_PointerPressed(object sender, PointerRoutedEventArgs e)
-        {
-            int slot = SlotOf(sender);
-            OverlayBoxSelected?.Invoke(this, slot);
-            _boxDragging = true;
-            _lastBoxPointer = e.GetCurrentPoint(this).Position;
-            ((FrameworkElement)sender).CapturePointer(e.Pointer);
-            e.Handled = true;
-        }
-
-        private void OverlayBox_PointerMoved(object sender, PointerRoutedEventArgs e)
-        {
-            if (!_boxDragging) return;
-            var p = e.GetCurrentPoint(this).Position;
-            double dx = p.X - _lastBoxPointer.X;
-            double dy = p.Y - _lastBoxPointer.Y;
-            _lastBoxPointer = p;
-            OverlayBoxMoved?.Invoke(this, (SlotOf(sender), dx, dy));
-            e.Handled = true;
-        }
-
-        private void OverlayBox_PointerReleased(object sender, PointerRoutedEventArgs e)
-        {
-            _boxDragging = false;
-            ((FrameworkElement)sender).ReleasePointerCapture(e.Pointer);
-            e.Handled = true;
-        }
-
-        private void OverlayBox_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
-        {
-            int delta = e.GetCurrentPoint(this).Properties.MouseWheelDelta;
-            OverlayBoxWheel?.Invoke(this, (SlotOf(sender), delta));
-            e.Handled = true;
-        }
-
-        private void OverlayBox_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
-        {
-            OverlayBoxEditRequested?.Invoke(this, SlotOf(sender));
-            e.Handled = true;
-        }
+        private int _dragSlot; // >0 while dragging a PiP box in canvas mode
 
         public DirectorPlayerControl()
         {
             this.InitializeComponent();
         }
 
+        // Which PiP box (if any) is under the given InputLayer-space point; topmost (slot 2) wins.
+        // The overlay grids are positioned via Margin + Width/Height in the same coordinate space
+        // as the full-screen InputLayer, so a simple bounds test is valid.
+        private int HitTestOverlaySlot(Point p)
+        {
+            if (IsInsideBox(OverlayGrid2, p)) return 2;
+            if (IsInsideBox(OverlayGrid1, p)) return 1;
+            return 0;
+        }
+
+        private static bool IsInsideBox(Grid g, Point p)
+        {
+            if (g == null || g.Opacity <= 0.01 || double.IsNaN(g.Width) || g.Width <= 0 || g.Height <= 0) return false;
+            double left = g.Margin.Left, top = g.Margin.Top;
+            return p.X >= left && p.X <= left + g.Width && p.Y >= top && p.Y <= top + g.Height;
+        }
+
         private void InputLayer_PointerPressed(object sender, PointerRoutedEventArgs e)
         {
+            var p = e.GetCurrentPoint(InputLayer).Position;
+
+            if (_canvasMode)
+            {
+                _dragSlot = HitTestOverlaySlot(p);
+                if (_dragSlot > 0)
+                {
+                    OverlayBoxSelected?.Invoke(this, _dragSlot);
+                    _isDragging = true;
+                    _lastPointerPosition = p;
+                    InputLayer.CapturePointer(e.Pointer);
+                }
+                return;
+            }
+
             _isDragging = true;
-            _lastPointerPosition = e.GetCurrentPoint(InputLayer).Position;
+            _lastPointerPosition = p;
             InputLayer.CapturePointer(e.Pointer);
         }
 
         private void InputLayer_PointerMoved(object sender, PointerRoutedEventArgs e)
         {
-            if (!_isDragging || ActiveTransform == null) return;
+            if (!_isDragging) return;
 
-            var currentPosition = e.GetCurrentPoint(InputLayer).Position;
-            var deltaX = currentPosition.X - _lastPointerPosition.X;
-            var deltaY = currentPosition.Y - _lastPointerPosition.Y;
+            var p = e.GetCurrentPoint(InputLayer).Position;
+            var deltaX = p.X - _lastPointerPosition.X;
+            var deltaY = p.Y - _lastPointerPosition.Y;
+            _lastPointerPosition = p;
 
+            if (_canvasMode)
+            {
+                if (_dragSlot > 0) OverlayBoxMoved?.Invoke(this, (_dragSlot, deltaX, deltaY));
+                return;
+            }
+
+            if (ActiveTransform == null) return;
             ActiveTransform.TranslateX += deltaX;
             ActiveTransform.TranslateY += deltaY;
-
-            _lastPointerPosition = currentPosition;
             ViewportTransformChanged?.Invoke(this, EventArgs.Empty);
         }
 
         private void InputLayer_PointerReleased(object sender, PointerRoutedEventArgs e)
         {
             _isDragging = false;
+            _dragSlot = 0;
             InputLayer.ReleasePointerCapture(e.Pointer);
         }
 
         private void InputLayer_PointerCanceled(object sender, PointerRoutedEventArgs e)
         {
             _isDragging = false;
+            _dragSlot = 0;
             InputLayer.ReleasePointerCapture(e.Pointer);
         }
 
         private void InputLayer_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
         {
-            if (ActiveTransform == null) return;
-            
-            var properties = e.GetCurrentPoint(InputLayer).Properties;
-            var delta = properties.MouseWheelDelta;
+            var pt = e.GetCurrentPoint(InputLayer);
+            int delta = pt.Properties.MouseWheelDelta;
 
+            if (_canvasMode)
+            {
+                int slot = HitTestOverlaySlot(pt.Position);
+                if (slot > 0) OverlayBoxWheel?.Invoke(this, (slot, delta));
+                return;
+            }
+
+            if (ActiveTransform == null) return;
             double zoomFactor = delta > 0 ? 1.1 : (1.0 / 1.1);
             double newScale = Math.Clamp(ActiveTransform.ScaleX * zoomFactor, 0.1, 10.0);
-
             ActiveTransform.ScaleX = newScale;
             ActiveTransform.ScaleY = newScale;
-            
             ViewportTransformChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void InputLayer_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+        {
+            if (!_canvasMode) return;
+            int slot = HitTestOverlaySlot(e.GetPosition(InputLayer));
+            if (slot > 0) OverlayBoxEditRequested?.Invoke(this, slot);
         }
     }
 }
