@@ -21,9 +21,13 @@
     </UserControl.Resources>
 
     <Grid Background="Black" AllowDrop="True" DragOver="Grid_DragOver" Drop="Grid_Drop">
-        
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />    <!-- Canvas area (player + right panel + floating pill) -->
+            <RowDefinition Height="Auto" /> <!-- Bottom track dock (collapses when hidden) -->
+        </Grid.RowDefinitions>
+
         <!-- Background Layer: Full Bleed Immersive Player -->
-        <local:DirectorPlayerControl x:Name="PlayerControl" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+        <local:DirectorPlayerControl x:Name="PlayerControl" Grid.Row="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
 
         <!-- Foreground Layer: Floating Edit Badge -->
         <Border x:Name="EditModeBadge" Background="#D9E81123" CornerRadius="8" Padding="16,8" 
@@ -361,6 +365,48 @@
                         </StackPanel>
                     </StackPanel>
                 </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Bottom Track Dock: horizontal arrangement lanes (one per track). -->
+        <Border Grid.Row="1" x:Name="TrackDock"
+                Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="0,1,0,0"
+                Visibility="{x:Bind ViewModel.IsStoryboardVisible, Mode=OneWay, Converter={StaticResource BoolToVisConverter}}"
+                Padding="8,6">
+            <StackPanel Spacing="4">
+                <!-- Track 1 lane -->
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="64" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Track 1" VerticalAlignment="Center"
+                               FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <ListView Grid.Column="1" x:Name="Track1Lane"
+                              ItemsSource="{x:Bind ViewModel.TimelineNodes}"
+                              ItemTemplate="{StaticResource DockTileTemplate}"
+                              SelectedItem="{x:Bind ViewModel.SelectedTimelineNode, Mode=TwoWay}"
+                              SelectionMode="Single"
+                              Height="74"
+                              ScrollViewer.HorizontalScrollMode="Enabled"
+                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                              ScrollViewer.VerticalScrollMode="Disabled"
+                              ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                        <ListView.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <ItemsStackPanel Orientation="Horizontal" />
+                            </ItemsPanelTemplate>
+                        </ListView.ItemsPanel>
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="Padding" Value="0" />
+                                <Setter Property="Margin" Value="0" />
+                                <Setter Property="MinWidth" Value="0" />
+                            </Style>
+                        </ListView.ItemContainerStyle>
+                    </ListView>
+                </Grid>
             </StackPanel>
         </Border>
     </Grid>

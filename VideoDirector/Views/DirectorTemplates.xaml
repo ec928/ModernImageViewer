@@ -67,6 +67,23 @@
         </Border>
     </DataTemplate>
 
+    <!-- Compact fixed-width tile for the horizontal track lanes in the bottom dock. -->
+    <DataTemplate x:Key="DockTileTemplate">
+        <Border Width="118" Height="66" Margin="3,0" CornerRadius="4"
+                Background="{ThemeResource ControlFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                ToolTipService.ToolTip="{Binding FileName}">
+            <Grid>
+                <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+                <Border Width="3" HorizontalAlignment="Left" Background="{ThemeResource SystemAccentColor}"
+                        Visibility="{Binding IsPlaying, Mode=OneWay, Converter={StaticResource BoolToVisConverter}}" />
+                <Border Background="#80000000" VerticalAlignment="Bottom" Padding="4,1">
+                    <TextBlock Text="{Binding FileName, Mode=OneWay}" TextTrimming="CharacterEllipsis" FontSize="10" Foreground="White" />
+                </Border>
+            </Grid>
+        </Border>
+    </DataTemplate>
+
     <DataTemplate x:Key="OverlayTemplate">
         <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="4" Margin="16,4" HorizontalAlignment="Stretch" Padding="6">
             <Grid ColumnSpacing="8">

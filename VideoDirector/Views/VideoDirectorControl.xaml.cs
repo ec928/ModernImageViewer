@@ -54,8 +54,15 @@ namespace ModernImageViewer.VideoDirector.Views
         {
             _playbackEngine = new VideoPlaybackEngine(PlayerControl, ViewModel);
             PlayerControl.ViewportTransformChanged += PlayerControl_ViewportTransformChanged;
+            PlayerControl.SizeChanged += PlayerControl_SizeChanged;
             ViewModel.PropertyChanged += ViewModel_PropertyChanged;
             ViewModel.EditTargetChanged += ViewModel_EditTargetChanged;
+        }
+
+        private void PlayerControl_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            // The canvas resizes when the bottom dock is toggled — keep WYSIWYG/overlay aligned.
+            _playbackEngine?.OnViewportResized();
         }
 
         private void ViewModel_EditTargetChanged(object sender, CinematicOperation op)

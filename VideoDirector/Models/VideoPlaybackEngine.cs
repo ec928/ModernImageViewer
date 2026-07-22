@@ -1559,5 +1559,16 @@ namespace ModernImageViewer.VideoDirector.Models
             ReleaseOverlaySlot(1);
             _playerControl.ActiveTransform = _isPlayerAActive ? _playerControl.TransformA : _playerControl.TransformB;
         }
+
+        // The canvas changed size (e.g. the bottom dock was toggled). Re-apply the size-dependent
+        // visuals so the WYSIWYG rectangles and the overlay placement box stay aligned.
+        public void OnViewportResized()
+        {
+            UpdateWysiwygOverlay();
+            if (_isEditingOverlay && _activeOverlay1 != null)
+            {
+                ApplyOverlayBox(1, _activeOverlay1, true);
+            }
+        }
     }
 }
