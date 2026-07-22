@@ -181,8 +181,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
             get
             {
                 if (_isPlaying) return "Playing";
-                if (_isCanvasMode) return "Composite · arrange";
-                if (_selectedOverlay != null) return "Editing · " + _selectedOverlay.FileName;
+                if (_selectedOverlay != null) return (_isCanvasMode ? "Arranging PiP · " : "Editing content · ") + _selectedOverlay.FileName;
                 if (_selectedTimelineNode != null) return "Editing · " + _selectedTimelineNode.FileName;
                 return "Composite";
             }

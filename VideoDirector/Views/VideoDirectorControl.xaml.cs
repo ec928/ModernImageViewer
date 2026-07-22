@@ -65,12 +65,6 @@ namespace ModernImageViewer.VideoDirector.Views
             _playbackEngine?.OnViewportResized();
         }
 
-        private void CanvasModeButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (_playbackEngine == null) return;
-            if (_playbackEngine.IsCanvasMode) _playbackEngine.ExitCanvasMode();
-            else _playbackEngine.EnterCanvasMode();
-        }
 
         private void ViewModel_EditTargetChanged(object sender, CinematicOperation op)
         {
@@ -138,14 +132,14 @@ namespace ModernImageViewer.VideoDirector.Views
             {
                 if (ViewModel.SelectedOverlay is CinematicOperation overlay)
                 {
-                    // In canvas/arrange mode, selecting a PiP just targets it for the inspector —
-                    // it does NOT dive into full-screen content editing (that's double-tap).
-                    if (!ViewModel.IsPlaying && _playbackEngine?.IsCanvasMode != true)
+                    // Selecting an overlay shows its PiP and lets you arrange it (drag = move,
+                    // wheel = resize). "Edit content" / double-tap dives into full-screen framing.
+                    if (!ViewModel.IsPlaying)
                     {
-                        _playbackEngine?.EnterOverlayEditMode(overlay);
+                        _playbackEngine?.ArrangeOverlay(overlay);
                     }
                 }
-                else if (_playbackEngine?.IsCanvasMode != true)
+                else
                 {
                     _playbackEngine?.ClearOverlayEditMode();
                 }
@@ -418,7 +412,6 @@ namespace ModernImageViewer.VideoDirector.Views
         {
             var overlay = ViewModel.SelectedOverlay;
             if (overlay == null || _playbackEngine == null) return;
-            _playbackEngine.ExitCanvasMode();
             _playbackEngine.EnterOverlayEditMode(overlay);
         }
 
