@@ -144,9 +144,10 @@ namespace ModernImageViewer.VideoDirector.ViewModels
             get => _selectedTimelineNode;
             set
             {
-                if (SetProperty(ref _selectedTimelineNode, value) && value != null)
+                if (SetProperty(ref _selectedTimelineNode, value))
                 {
-                    SelectedOverlay = null;
+                    if (value != null) SelectedOverlay = null;
+                    OnPropertyChanged(nameof(HasSelection));
                 }
             }
         }
@@ -157,12 +158,17 @@ namespace ModernImageViewer.VideoDirector.ViewModels
             get => _selectedOverlay;
             set
             {
-                if (SetProperty(ref _selectedOverlay, value) && value != null)
+                if (SetProperty(ref _selectedOverlay, value))
                 {
-                    SelectedTimelineNode = null;
+                    if (value != null) SelectedTimelineNode = null;
+                    OnPropertyChanged(nameof(HasSelection));
                 }
             }
         }
+
+        // True when either a Track 1 clip or an overlay is selected — the right panel shows
+        // the relevant inspector, otherwise a "nothing selected" hint.
+        public bool HasSelection => _selectedTimelineNode != null || _selectedOverlay != null;
 
         private TimeSpan _currentOperationTime;
         public TimeSpan CurrentOperationTime
