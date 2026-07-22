@@ -188,32 +188,24 @@
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
 
-                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Box Position" VerticalAlignment="Center" />
-                                <ComboBox Grid.Row="0" Grid.Column="1" x:Name="OverlayBoxPositionCombo" SelectionChanged="OverlayBoxPosition_SelectionChanged" HorizontalAlignment="Stretch" ToolTipService.ToolTip="Where the PiP box sits on screen">
-                                    <x:String>Top Left</x:String>
-                                    <x:String>Top Right</x:String>
-                                    <x:String>Bottom Left</x:String>
-                                    <x:String>Bottom Right</x:String>
-                                    <x:String>Center</x:String>
-                                </ComboBox>
+                                <!-- Box position is set by dragging the PiP in Composite mode; a numeric
+                                     size is kept for precision (complements wheel-resize). -->
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Box Size" VerticalAlignment="Center" />
+                                <NumberBox Grid.Row="0" Grid.Column="1" local:NumberBoxExtensions.FractionDigits="2" Value="{Binding SelectedOverlay.PlacementScale, Mode=TwoWay, FallbackValue=0.3}"
+                                           SmallChange="0.05" LargeChange="0.1" Minimum="0.05" Maximum="1.0" SpinButtonPlacementMode="Inline" ToolTipService.ToolTip="PiP box size as a fraction of the frame (0.3 = 30%). Or use Composite mode: wheel to resize." />
 
-                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Box Size" VerticalAlignment="Center" />
-                                <NumberBox Grid.Row="1" Grid.Column="1" local:NumberBoxExtensions.FractionDigits="2" Value="{Binding SelectedOverlay.PlacementScale, Mode=TwoWay, FallbackValue=0.3}"
-                                           SmallChange="0.05" LargeChange="0.1" Minimum="0.05" Maximum="1.0" SpinButtonPlacementMode="Inline" ToolTipService.ToolTip="PiP box size as a fraction of the frame (0.3 = 30%)" />
-
-                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Start Time (s)" VerticalAlignment="Center" />
-                                <NumberBox Grid.Row="2" Grid.Column="1" local:NumberBoxExtensions.FractionDigits="1" Value="{Binding SelectedOverlay.StartTimeSeconds, Mode=TwoWay, FallbackValue=0.0}"
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Start Time (s)" VerticalAlignment="Center" />
+                                <NumberBox Grid.Row="1" Grid.Column="1" local:NumberBoxExtensions.FractionDigits="1" Value="{Binding SelectedOverlay.StartTimeSeconds, Mode=TwoWay, FallbackValue=0.0}"
                                            SmallChange="0.5" LargeChange="1.0" Minimum="0" SpinButtonPlacementMode="Inline" />
 
-                                <TextBlock Grid.Row="3" Grid.Column="0" Text="Duration (s)" VerticalAlignment="Center" />
-                                <NumberBox Grid.Row="3" Grid.Column="1" local:NumberBoxExtensions.FractionDigits="1" Value="{Binding SelectedOverlay.OpDuration, Mode=TwoWay, Converter={StaticResource TimeSpanToDoubleSecondsConverter}, FallbackValue=5.0}"
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Duration (s)" VerticalAlignment="Center" />
+                                <NumberBox Grid.Row="2" Grid.Column="1" local:NumberBoxExtensions.FractionDigits="1" Value="{Binding SelectedOverlay.OpDuration, Mode=TwoWay, Converter={StaticResource TimeSpanToDoubleSecondsConverter}, FallbackValue=5.0}"
                                            SmallChange="0.5" LargeChange="1.0" Minimum="0.1" SpinButtonPlacementMode="Inline" />
 
-                                <TextBlock Grid.Row="4" Grid.Column="0" Text="Opacity" VerticalAlignment="Center" />
-                                <NumberBox Grid.Row="4" Grid.Column="1" local:NumberBoxExtensions.FractionDigits="2" Value="{Binding SelectedOverlay.Opacity, Mode=TwoWay, FallbackValue=1.0}"
+                                <TextBlock Grid.Row="3" Grid.Column="0" Text="Opacity" VerticalAlignment="Center" />
+                                <NumberBox Grid.Row="3" Grid.Column="1" local:NumberBoxExtensions.FractionDigits="2" Value="{Binding SelectedOverlay.Opacity, Mode=TwoWay, FallbackValue=1.0}"
                                            SmallChange="0.1" LargeChange="0.25" Minimum="0" Maximum="1" SpinButtonPlacementMode="Inline" />
                             </Grid>
                         </StackPanel>

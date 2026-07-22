@@ -33,7 +33,7 @@
              (marks: zoom/pan/motion), clipped to the box. During edit the box fills the screen
              so content is framed full-size, identical to Track 1. -->
         <Grid x:Name="OverlayGrid1" x:FieldModifier="public"
-              Opacity="0" IsHitTestVisible="False"
+              Opacity="0" IsHitTestVisible="False" Background="Transparent"
               HorizontalAlignment="Left" VerticalAlignment="Top"
               PointerPressed="OverlayBox_PointerPressed" PointerMoved="OverlayBox_PointerMoved"
               PointerReleased="OverlayBox_PointerReleased" PointerCanceled="OverlayBox_PointerReleased"
@@ -47,7 +47,7 @@
             </MediaPlayerElement>
         </Grid>
         <Grid x:Name="OverlayGrid2" x:FieldModifier="public"
-              Opacity="0" IsHitTestVisible="False"
+              Opacity="0" IsHitTestVisible="False" Background="Transparent"
               HorizontalAlignment="Left" VerticalAlignment="Top"
               PointerPressed="OverlayBox_PointerPressed" PointerMoved="OverlayBox_PointerMoved"
               PointerReleased="OverlayBox_PointerReleased" PointerCanceled="OverlayBox_PointerReleased"
