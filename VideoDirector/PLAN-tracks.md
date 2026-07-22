@@ -1,8 +1,9 @@
 # VideoDirector — Multi-Track Plan
 
-**Status:** design agreed, foundation started. This doc is the durable source of truth for
-the multi-track work. It is readable standalone by any session or tool — no prior chat context
-required.
+**Status:** working prototype — Track 1 + Track 2 (with up to two simultaneous PiPs) + bottom
+dock all functional. Next: Canvas view (real C3+C4) → C-full → N-tracks. See §6 (progress) and
+§7 (roadmap). This doc is the durable source of truth for the multi-track work; readable
+standalone by any session or tool — no prior chat context required.
 
 **Working principle (non-negotiable):** every step ends in a **green build and a commit**.
 Never leave the tree in a non-building state. Small steps, committed often, so we are never
@@ -118,78 +119,76 @@ right panel sheds the clip lists and becomes purely the selected clip's properti
 
 ---
 
-## 6. Current state (already committed)
+## 6. Progress (as built)
 
-- `cf26e47` — additive fields on `CinematicOperation`: `StartTime` (+`StartTimeSeconds`),
-  `Opacity`, `EndTimeOnTimeline`, `IsActiveAt(storyTime)`. Non-breaking; Track 1 ignores them.
-- `83340a4` — overlay editing/management UI + playback correctness fixes (continuous
-  story-time off the active player, fixed clip-boundary double-count, deterministic
-  pause/resume, media-open race, SMTC disabled, telemetry throttled) + aspect-correct sizing.
-- Build is green. Overlay currently uses a **single** static transform (`OverlayTransform1/2`
-  on the grid) and **two** overlay players for **two simultaneous overlays**.
+Working prototype. Build green. Commits, oldest → newest:
 
-**Player-allocation shift to make:** current = 2 (Track 1 A/B) + 2 (overlay slots, 2
-simultaneous). Target = **one clip playing per track at a time**, so the two overlay players
-become **Track 2 and Track 3** players (1 each). Add a per-track A/B pair only when enabling
-upper-track transitions (target 2/track → 6 total; fine on the target hardware). Start lean
-(1/track, hard cuts) and add the pair with transitions.
+- `cf26e47` — additive `CinematicOperation` fields (`StartTime`, `Opacity`, `IsActiveAt`, …).
+- `83340a4` — overlay editing/mgmt UI + playback correctness fixes + aspect-correct sizing.
+- `e2440e7` — **Phase B**: retire `OverlayClip`; Track 2 is now `CinematicOperation`. Upper-track
+  audio muted at the player level. (Deviation: kept a **single** `OverlayClips` collection —
+  did **not** store upper tracks as a list. See §7 N-tracks.)
+- `e2835d6` — **Phase C1**: content/placement split; overlay grid = clipped placement **box**,
+  content transform on the inner player; editing an overlay is **full-screen**.
+- `84472ae` — fix: edit-mode race after pausing playback.
+- `0c5d092` — **Phase C2**: content **motion** — overlays interpolate Start/Mid/End marks over
+  their duration via shared `ApplyMarksAtProgress` (identical to Track 1). Inspector: Set Start/End.
+- `02463b3` — **Phase C4 (interim only)**: placement via inspector — Box Position (corner presets)
+  + Box Size. **Not** the WYSIWYG drag/resize C4 was defined as.
+- `88b4d18` / `64aa776` / `2a0cb6f` — **Phase E**: bottom track dock (Track 1 + Track 2 lanes),
+  auto-hide during playback (`IsDockVisible`), right panel is now **inspector-only**; dock owns
+  arrangement (select / reorder / context-menu / add).
+
+**What actually works now:** Track 1 sequential base + Track 2 overlays with full-screen content
+framing, Ken-Burns motion, corner+size placement, opacity, muted audio, add/duplicate/remove,
+and a bottom dock. **Track 2 already shows up to TWO simultaneous PiPs** (the engine has two
+overlay slots fed from `OverlayClips`), each independently framed/placed/animated — so the
+multi-layer capability is already real, if loosely modelled (see §7 N-tracks).
+
+**Placement representation:** `PlacementScale` + `PlacementCenterX/Y` (normalized 0..1) on the
+clip. Corner presets in the inspector are a UI convenience that write these.
 
 ---
 
-## 7. Implementation phases
+## 7. Phases — status & revised roadmap
 
-Recommended order. Each phase (and sub-step) ends green + committed.
+Done: **B, C1, C2, C4-interim, E** (see §6). Each ended green + committed.
 
-### Phase B — Clip-type convergence (behaviour-preserving)
-Goal: Track 2 is a real `CinematicOperation`; today's static-PiP behaviour preserved.
-- `DirectorViewModel`: `OverlayClips` → `ObservableCollection<CinematicOperation>`;
-  `SelectedOverlay` → `CinematicOperation`. Store upper tracks as a **list** (even with one
-  entry) so N-tracks is a contained change later — do **not** hardcode "Track 2".
-- `AddOverlayAsync` → creates a `CinematicOperation` with `StartMark`/`EndMark` at scale 0.3
-  (the default PiP), muted, `StartTime` = current playhead.
-- `ProjectData` (save/load) serializes the unified type; keep backward-compat load
-  (old array + old overlay wrapper) mapping onto the new type.
-- Engine overlay methods take `CinematicOperation`; read `StartTime`/`OpDuration`/`Opacity`/
-  `IsActiveAt`; map the static transform onto `StartMark.Scale/X/Y` for now
-  (`ApplyOverlayTransform` reads `StartMark`).
-- UI: overlay inspector bindings updated to the unified type (start/duration/opacity/z-order).
-- Delete `OverlayClip.cs` once nothing references it.
-- **Commit.** Test: overlays behave exactly as before, backed by the unified type.
+**Revised roadmap (agreed):** finish the **Canvas view (C3 + C4)** → **C-full** → **N-tracks**.
+**Phase D (hardcoded Track 3) is dropped** — it proves nothing new and Track 2 already does two
+simultaneous PiPs; a third layer comes free with generic N-tracks.
 
-### Phase C — Content/placement split, motion, view switching (core capability)
-Sub-stepped; this is the big one.
+### NEXT — Canvas view (the real C3 + C4)  *(the "polish" that finishes Phase C)*
+Both outstanding pieces hang off one missing thing: a **Canvas/composite view** — the paused
+composite (Track 1 frame + every PiP at its placement) that you can manipulate directly.
+- **Edit ⇄ Canvas toggle (rest of C3).** A way to flip between single-clip full-screen *edit*
+  view and the *composite* view. Today: selecting an overlay = full-screen edit; playing =
+  composite; there is no paused composite view.
+- **WYSIWYG placement (real C4).** In Canvas view, click a PiP to select, **drag to move**,
+  **handles to resize** → writes `PlacementCenterX/Y` + `PlacementScale`. Replaces the interim
+  numeric/preset controls' blind set-then-play loop.
+- **Unified-controls gap (rest of C3).** Overlay inspector still lacks **Set Mid, Curve
+  Profile, and Record** (Track 1 has them; the engine already supports Mid/Curve via
+  `ApplyMarksAtProgress`). Add them for true parity.
+- Needs: render the composite while paused (currently the overlay eval only runs during the
+  animation loop); pointer hit-testing on PiPs; resize-handle UI.
 
-- **C1 — Placement box + clip.** Add placement to `CinematicOperation`: `PlacementScale`,
-  `PlacementX`, `PlacementY` (output space; defaults = corner @30%). Nested render structure:
-  outer box (placement, sized/positioned/**clipped**) + inner `MediaPlayerElement` (content).
-  Content still static (`StartMark`) for now. Track 1's placement = identity (full frame).
-  **Commit.** Test: PiP is a proper clipped box; content can't spill outside it.
-- **C2 — Content motion.** Interpolate the clip's Start/Mid/End marks over its own duration in
-  the upper-track render path, reusing the same `UpdateSpatial` math Track 1 uses (static clip
-  = `StartMark == EndMark`). **Commit.** Test: an upper clip can Ken Burns / push-in.
-- **C3 — Full-screen edit + unified controls.** Selecting any clip → Edit view: placement =
-  identity (full-screen), marks active, the **same** Set Start/Mid/End + curve + record
-  controls as Track 1 (unify the inspector — one control set, not two). Edit/Canvas toggle.
-  **Commit.** Test: editing a Track 2 clip is identical to editing a Track 1 clip.
-- **C4 — Canvas-view placement editing.** In Canvas view, select a PiP → drag to move,
-  handles to resize; writes back to placement fields. **Commit.**
+### THEN — C-full (time-scaled timeline)
+- px = seconds, ruler, drag clips along time, snapping, a playhead moving through the dock.
+- **Shared horizontal scroll across lanes** (never built in E) lands here — it's the time-axis
+  on-ramp and becomes mandatory once lanes are time-scaled.
+- Editable Track 2/3 start-times become spatial (drag) instead of numeric.
 
-### Phase E — C-lite arrangement dock
-Goal: move arrangement to a toggleable bottom dock; right panel → inspector-only.
-- Bottom dock: horizontal lanes per track, clips left-to-right, **one shared horizontal
-  scroll**. Reoriented tile template. Drag-to-reorder within a lane; file-drop onto a lane.
-- Toggle (reuse the storyboard-visibility pattern). **Handle the canvas `SizeChanged`** the
-  toggle causes so the WYSIWYG rectangles and overlay aspect-sizing stay aligned (this is the
-  one real coupling — failure is visible, not silent).
-- Transport pill stays floating over the canvas (available even when the dock is hidden);
-  trim slider stays with it for now.
-- Right panel: remove the clip lists; keep only the selected-clip inspector (+ project
-  Save/Load/Clear). **Commit.**
-
-### Phase D — Track 3
-Trivial once the model is a track-list and the dock renders N lanes: add a second upper track
-(z-order 3) + its lane + its player. 3-way compositing is the same code as 2-way, one more
-layer. **Commit.** (Can slot in anytime after B; placed here for UI cleanliness.)
+### THEN — N-tracks (generic; forget Track 3)
+- Migrate the data model from the single `OverlayClips` + "2 slots" to a **list of upper
+  tracks**, each a `CinematicOperation` collection with its own z-order + default corner.
+- Decide track semantics: move from today's **loose** model (2 simultaneous clips from one
+  collection) to **strict** (each track sequential/no-overlap; N simultaneous = N tracks).
+  Strict is cleaner and pairs with the timeline; the loose model already gives the *capability*.
+- Player allocation: per-track player(s); add an A/B pair per track only when enabling
+  upper-track transitions.
+- Dock renders N lanes from the track list; add/remove-track UI.
+- Best built **with** C-full (stacked tracks + time axis is the natural home).
 
 ---
 
@@ -215,18 +214,24 @@ layer. **Commit.** (Can slot in anytime after B; placed here for UI cleanliness.
 
 ## 9. Deferred / future (explicitly NOT now)
 
-- **C-full** — time-scaled timeline (px = seconds, ruler, drag-to-position, snapping,
-  playhead in the dock). The dock's shared-scroll container is the on-ramp.
-- **N > 3 tracks** — the model is built as a track-list so this is additive.
 - **Advanced per-clip transitions** and **canvas-level transitions/effects**.
-- **Audio** — proper mixing/ducking/per-clip levels. Until then: upper tracks muted by default.
+- **Audio** — proper mixing/ducking/per-clip levels + per-clip unmute. Until then upper tracks
+  are muted at the player level (no per-clip audio field yet).
+- **Polish / cleanup backlog** (do opportunistically, none blocking):
+  - Empty-state hint when a track lane / the whole timeline is empty (the old "drag files
+    here" prompt was removed with the right-panel lists; drop-on-canvas still adds to Track 1).
+  - Remove now-unused `OperationTemplate` / `OverlayTemplate` and the dead `ListView_GotFocus`.
+  - Verify horizontal drag-reorder feels right in the dock lanes.
+  - General visual polish of the dock tiles / inspector.
 
 ---
 
 ## 10. How to resume
 
-1. Read this doc + `git log` (`cf26e47`, `83340a4`).
-2. Confirm build is green.
-3. Start at the first unfinished phase; work in the smallest steps that end green + committed.
-4. After each phase, launch the app and manually verify the specific behaviour that phase adds
-   (this is a WinUI app — no automated UI test; verification is by running it).
+1. Read this doc top-to-bottom + `git log` (latest: right-panel-inspector-only dock commit).
+2. Confirm build is green (`dotnet build -c Debug -p:Platform=x64`).
+3. Next work is the **Canvas view (real C3 + C4)** in §7. Then C-full, then N-tracks.
+4. Work in the smallest steps that end **green + committed**. This is a WinUI app with **no
+   automated UI test** — the author (a human) verifies each visible step by running it, so
+   build+commit each increment and hand off for a visual check rather than stacking unverified
+   changes. Layout/visual bugs are visible and reversible, not silent.
