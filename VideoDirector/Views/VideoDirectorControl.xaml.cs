@@ -132,17 +132,14 @@ namespace ModernImageViewer.VideoDirector.Views
             {
                 if (ViewModel.SelectedOverlay is CinematicOperation overlay)
                 {
-                    // Selecting an overlay shows its PiP and lets you arrange it (drag = move,
-                    // wheel = resize). "Edit content" / double-tap dives into full-screen framing.
+                    // Selecting a Track 2 clip in the dock = Edit it (full-screen content), same
+                    // as selecting a Track 1 clip. Returning to Arrange is the Exit button.
                     if (!ViewModel.IsPlaying)
                     {
-                        _playbackEngine?.ArrangeOverlay(overlay);
+                        _playbackEngine?.EnterOverlayEditMode(overlay);
                     }
                 }
-                else
-                {
-                    _playbackEngine?.ClearOverlayEditMode();
-                }
+                // Deselection does not change mode — Exit returns to Arrange.
             }
             else if (e.PropertyName == nameof(DirectorViewModel.IsRecordingMotion))
             {
@@ -224,7 +221,14 @@ namespace ModernImageViewer.VideoDirector.Views
 
         private async void PlayPause_Click(object sender, RoutedEventArgs e)
         {
-            if (_playbackEngine != null)
+            if (_playbackEngine == null) return;
+            // Strict segregation: in Edit mode, Play previews ONLY the edited clip's motion;
+            // in Arrange mode, Play plays the whole composite.
+            if (_playbackEngine.IsEditMode)
+            {
+                _playbackEngine.ToggleEditPreview();
+            }
+            else
             {
                 await _playbackEngine.TogglePlayPauseAsync();
             }
@@ -408,11 +412,12 @@ namespace ModernImageViewer.VideoDirector.Views
             }
         }
 
-        private void EditOverlayContent_Click(object sender, RoutedEventArgs e)
+        private void ExitToArrange_Click(object sender, RoutedEventArgs e)
         {
-            var overlay = ViewModel.SelectedOverlay;
-            if (overlay == null || _playbackEngine == null) return;
-            _playbackEngine.EnterOverlayEditMode(overlay);
+            // Clear the selection so we don't immediately re-enter Edit, then return to Arrange.
+            ViewModel.SelectedTimelineNode = null;
+            ViewModel.SelectedOverlay = null;
+            _playbackEngine?.ExitToArrange();
         }
 
         private void SetOverlayMid_Click(object sender, RoutedEventArgs e)

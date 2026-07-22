@@ -76,10 +76,12 @@ namespace ModernImageViewer.VideoDirector.Models
             _viewModel.OperationSeekRequested += ViewModel_OperationSeekRequested;
             _viewModel.PropertyChanged += ViewModel_PropertyChanged;
 
-            // Arrange: manipulate the selected PiP's placement directly (drag/wheel/double-tap).
+            // Arrange mode: drag/wheel the PiP under the cursor.
             _playerControl.OverlayBoxMoved += OnOverlayBoxMoved;
             _playerControl.OverlayBoxWheel += OnOverlayBoxWheel;
-            _playerControl.OverlayBoxEditRequested += OnOverlayBoxEditRequested;
+
+            // Start in Arrange (the default mode) — PiP input active.
+            _playerControl.InputMode = Views.PlayerInputMode.ArrangePips;
         }
 
         private void ViewModel_OperationSeekRequested(object sender, TimeSpan e)
@@ -233,9 +235,14 @@ namespace ModernImageViewer.VideoDirector.Models
         {
             if (_viewModel.TimelineNodes.Count == 0) return;
 
-            // Starting playback exits any overlay edit mode, so StopPlayback below releases
-            // the edit slot cleanly and EvaluateOverlays takes over slot management.
+            // Composite playback is Arrange mode: exit any Edit state so the whole timeline plays.
             _isEditingOverlay = false;
+            _mode = EditorMode.Arrange;
+            _editClip = null;
+            _editPlayer = null;
+            _playerControl.InputMode = Views.PlayerInputMode.ArrangePips;
+            _viewModel.IsEditMode = false;
+            StopEditPreview();
             StopPlayback(); // Ensure we stop cleanly first
             var myCts = new CancellationTokenSource();
             _playbackCts = myCts;
@@ -936,8 +943,11 @@ namespace ModernImageViewer.VideoDirector.Models
         {
             StopPlayback();
             UpdateTimelineNodesIsPlayingState(op);
-            
+
             if (string.IsNullOrWhiteSpace(op.FilePath)) return;
+
+            // Track 1 clip entering Edit mode: content input + clip-scoped preview target.
+            SetEditModeState(op, _isPlayerAActive ? _mediaPlayerA : _mediaPlayerB);
 
             var activePlayer = _isPlayerAActive ? _mediaPlayerA : _mediaPlayerB;
             var activeElement = _isPlayerAActive ? _playerA : _playerB;
@@ -1501,41 +1511,69 @@ namespace ModernImageViewer.VideoDirector.Models
 
         private void HideAllOverlays()
         {
-            // While an overlay is being arranged or content-edited (slot 1), it's the live
-            // surface the user is working on — don't let a StopPlayback teardown wipe it.
-            if (_overlayInteraction == OverlayInteraction.None && _activeOverlay1 != null) ReleaseOverlaySlot(1);
+            // While a Track 2 clip is being content-edited full-screen, slot 1 is the edit
+            // surface — don't let a StopPlayback teardown wipe it.
+            if (!_isEditingOverlay && _activeOverlay1 != null) ReleaseOverlaySlot(1);
             if (_activeOverlay2 != null) ReleaseOverlaySlot(2);
         }
 
-        // ==================== Overlay arrange + content editing ====================
+        // ==================== Two modes: Arrange (default) and Edit ====================
         //
-        // An overlay == a PiP == a Track 2 clip. There are exactly two things you can do to a
-        // selected overlay, and SELECTING it always shows it (visibility is NOT tied to the
-        // playhead here — a selected overlay is shown so you can work on it):
-        //   * Arrange     — position/size the PiP box (drag = move, wheel = resize).
-        //   * EditContent — frame the video inside it full-screen (drag = pan, wheel = zoom).
-        // During playback, EvaluateOverlays governs which PiPs are visible (the composite).
+        // Strict segregation — the mode alone decides what input does, nothing else:
+        //   Arrange (default): the whole composite; Play plays everything; drag a PiP to move
+        //                      it, wheel to resize (InputMode = ArrangePips).
+        //   Edit:              ONE clip full-screen; frame its content + motion; Play previews
+        //                      ONLY that clip's Ken Burns (InputMode = Content).
+        // You enter Edit by selecting a clip in the dock; Exit returns to Arrange.
 
-        private enum OverlayInteraction { None, Arrange, EditContent }
-        private OverlayInteraction _overlayInteraction = OverlayInteraction.None;
+        private enum EditorMode { Arrange, Edit }
+        private EditorMode _mode = EditorMode.Arrange;
+        public bool IsEditMode => _mode == EditorMode.Edit;
 
-        public bool IsArrangingOverlay => _overlayInteraction == OverlayInteraction.Arrange;
+        // The single clip being edited + the player showing it (main player for Track 1, overlay
+        // player for Track 2). Used by the clip-scoped Edit-mode preview.
+        private CinematicOperation _editClip;
+        private MediaPlayer _editPlayer;
 
-        // Show the selected overlay in slot 1 and make it interactive. editContent=false shows it
-        // as its PiP at placement (arrange); editContent=true shows it full-screen (frame content).
-        private async void ShowOverlayInSlot1(CinematicOperation overlay, bool editContent)
+        // Put the app into Edit mode for the given clip/player. Called by Track 1's EnterEditMode
+        // and by EnterOverlayEditMode (Track 2).
+        private void SetEditModeState(CinematicOperation clip, MediaPlayer player)
+        {
+            StopEditPreview();
+            _mode = EditorMode.Edit;
+            _editClip = clip;
+            _editPlayer = player;
+            _playerControl.InputMode = Views.PlayerInputMode.Content;
+            _viewModel.IsEditMode = true;
+        }
+
+        // Return to Arrange (the default composite view). Releases the edit surface and lays the
+        // composite PiPs out at the current playhead.
+        public void ExitToArrange()
+        {
+            StopEditPreview();
+            _mode = EditorMode.Arrange;
+            _isEditingOverlay = false;
+            _editClip = null;
+            _editPlayer = null;
+            _playerControl.InputMode = Views.PlayerInputMode.ArrangePips;
+            _viewModel.IsEditMode = false;
+            UpdateWysiwygOverlay();                        // hide Track-1 edit rectangles
+            EvaluateOverlays(_viewModel.CurrentStoryTime); // show the composite's active PiPs
+        }
+
+        // Edit a Track 2 clip's content full-screen — same idea as Track 1's EnterEditMode, but
+        // the clip lives in the overlay player. Zoom & Motion controls apply to its content.
+        public async void EnterOverlayEditMode(CinematicOperation overlay)
         {
             if (overlay == null || string.IsNullOrWhiteSpace(overlay.FilePath)) return;
 
-            // Set the interaction BEFORE StopPlayback so HideAllOverlays keeps slot 1 alive.
-            _overlayInteraction = editContent ? OverlayInteraction.EditContent : OverlayInteraction.Arrange;
-            _isEditingOverlay = editContent;
+            _isEditingOverlay = true; // keep slot 1 through StopPlayback
+            SetEditModeState(overlay, _overlayMediaPlayer1);
             StopPlayback();
-            UpdateWysiwygOverlay(); // collapse any Track-1 edit rectangles
+            UpdateWysiwygOverlay();
 
             _activeOverlay1 = overlay;
-            _playerControl.PlacementMode = !editContent; // drag moves the box (arrange) vs pans content (edit)
-            _viewModel.IsCanvasMode = !editContent;      // badge: "Arranging PiP" vs "Editing content"
 
             var player = _overlayMediaPlayer1;
             var grid = _playerControl.OverlayGrid1;
@@ -1550,13 +1588,9 @@ namespace ModernImageViewer.VideoDirector.Models
                 await Task.WhenAny(tcs.Task, Task.Delay(1500));
                 player.MediaOpened -= handler;
             }
+            if (_activeOverlay1 != overlay) return;
 
-            if (_activeOverlay1 != overlay) return; // a different overlay was selected while awaiting
-
-            if (player.PlaybackSession != null)
-            {
-                player.PlaybackSession.Position = overlay.VideoStartTime;
-            }
+            if (player.PlaybackSession != null) player.PlaybackSession.Position = overlay.VideoStartTime;
             player.Pause();
 
             _dispatcher.TryEnqueue(() =>
@@ -1567,63 +1601,90 @@ namespace ModernImageViewer.VideoDirector.Models
                 transform.TranslateX = overlay.StartMark.X;
                 transform.TranslateY = overlay.StartMark.Y;
                 CacheOverlayAspect(1, player);
-                ApplyOverlayBox(1, overlay, editContent); // full-screen if editing content, PiP box if arranging
+                ApplyOverlayBox(1, overlay, true); // full-screen for content framing
                 grid.Opacity = 1.0;
-                _playerControl.ActiveTransform = transform; // content transform (used when editing content)
+                _playerControl.ActiveTransform = transform;
             });
         }
 
-        // Public entry points.
-        public void ArrangeOverlay(CinematicOperation overlay) => ShowOverlayInSlot1(overlay, false);
-        public void EnterOverlayEditMode(CinematicOperation overlay) => ShowOverlayInSlot1(overlay, true);
+        // Back-compat name used by the selection wiring — now just returns to Arrange.
+        public void ClearOverlayEditMode() => ExitToArrange();
 
-        public void ClearOverlayEditMode()
-        {
-            if (_overlayInteraction == OverlayInteraction.None) return;
-            _overlayInteraction = OverlayInteraction.None;
-            _isEditingOverlay = false;
-            _playerControl.PlacementMode = false;
-            _viewModel.IsCanvasMode = false;
-            ReleaseOverlaySlot(1);
-            _playerControl.ActiveTransform = _isPlayerAActive ? _playerControl.TransformA : _playerControl.TransformB;
-        }
-
-        // The canvas changed size (e.g. the bottom dock was toggled). Re-apply size-dependent visuals.
         public void OnViewportResized()
         {
             UpdateWysiwygOverlay();
-            if (_overlayInteraction != OverlayInteraction.None && _activeOverlay1 != null)
-            {
-                ApplyOverlayBox(1, _activeOverlay1, _overlayInteraction == OverlayInteraction.EditContent);
-            }
+            if (_isEditingOverlay && _activeOverlay1 != null)
+                ApplyOverlayBox(1, _activeOverlay1, true);
         }
 
-        // ---- PiP box manipulation from the InputLayer (Arrange mode; always targets slot 1) ----
+        // ---- Clip-scoped Edit-mode preview (Play in Edit mode = this clip's Ken Burns only) ----
 
-        private void OnOverlayBoxSelected(object sender, int slot) { /* slot 1 is already the selection */ }
+        private bool _editPreviewPlaying;
+        private DateTime _editPreviewStart;
+
+        public void ToggleEditPreview()
+        {
+            if (_editPreviewPlaying) StopEditPreview();
+            else StartEditPreview();
+        }
+
+        private void StartEditPreview()
+        {
+            if (_editClip == null || _editPlayer?.PlaybackSession == null) return;
+            _editPreviewPlaying = true;
+            _editPreviewStart = DateTime.Now;
+            _editPlayer.PlaybackSession.Position = _editClip.VideoStartTime;
+            _editPlayer.PlaybackSession.PlaybackRate = 1.0;
+            _editPlayer.Play();
+            CompositionTarget.Rendering += EditPreview_Rendering;
+            _viewModel.IsPlaying = true;
+        }
+
+        private void StopEditPreview()
+        {
+            if (!_editPreviewPlaying) return;
+            _editPreviewPlaying = false;
+            CompositionTarget.Rendering -= EditPreview_Rendering;
+            _editPlayer?.Pause();
+            _viewModel.IsPlaying = false;
+        }
+
+        private void EditPreview_Rendering(object sender, object e)
+        {
+            if (_editClip == null || _playerControl.ActiveTransform == null) return;
+            double dur = _editClip.OpDuration.TotalSeconds;
+            if (dur <= 0) dur = 1;
+            double progress = (DateTime.Now - _editPreviewStart).TotalSeconds / dur;
+            if (progress >= 1.0)
+            {
+                _editPreviewStart = DateTime.Now; // loop the preview
+                progress = 0;
+                if (_editPlayer?.PlaybackSession != null) _editPlayer.PlaybackSession.Position = _editClip.VideoStartTime;
+            }
+            ApplyMarksAtProgress(_editClip, progress, _playerControl.ActiveTransform);
+        }
+
+        // ---- Arrange mode: drag / wheel the PiP under the cursor (the hit slot) ----
 
         private void OnOverlayBoxMoved(object sender, (int slot, double dx, double dy) e)
         {
-            var overlay = _activeOverlay1;
-            if (overlay == null || _overlayInteraction != OverlayInteraction.Arrange) return;
+            if (_mode != EditorMode.Arrange) return;
+            var overlay = e.slot == 1 ? _activeOverlay1 : _activeOverlay2;
+            if (overlay == null) return;
             double vpW = _playerControl.ActualWidth, vpH = _playerControl.ActualHeight;
             if (vpW <= 0 || vpH <= 0) return;
             overlay.PlacementCenterX += e.dx / vpW;
             overlay.PlacementCenterY += e.dy / vpH;
-            ApplyOverlayBox(1, overlay, false);
+            ApplyOverlayBox(e.slot, overlay, false);
         }
 
         private void OnOverlayBoxWheel(object sender, (int slot, int delta) e)
         {
-            var overlay = _activeOverlay1;
-            if (overlay == null || _overlayInteraction != OverlayInteraction.Arrange) return;
+            if (_mode != EditorMode.Arrange) return;
+            var overlay = e.slot == 1 ? _activeOverlay1 : _activeOverlay2;
+            if (overlay == null) return;
             overlay.PlacementScale *= e.delta > 0 ? 1.08 : 1.0 / 1.08;
-            ApplyOverlayBox(1, overlay, false);
-        }
-
-        private void OnOverlayBoxEditRequested(object sender, int slot)
-        {
-            if (_activeOverlay1 != null) EnterOverlayEditMode(_activeOverlay1);
+            ApplyOverlayBox(e.slot, overlay, false);
         }
     }
 }

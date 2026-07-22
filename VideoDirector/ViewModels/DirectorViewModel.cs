@@ -180,21 +180,23 @@ namespace ModernImageViewer.VideoDirector.ViewModels
         {
             get
             {
-                if (_isPlaying) return "Playing";
-                if (_selectedOverlay != null) return (_isCanvasMode ? "Arranging PiP · " : "Editing content · ") + _selectedOverlay.FileName;
-                if (_selectedTimelineNode != null) return "Editing · " + _selectedTimelineNode.FileName;
-                return "Composite";
+                if (_isEditMode)
+                {
+                    var name = _selectedOverlay?.FileName ?? _selectedTimelineNode?.FileName ?? "";
+                    return "EDIT · " + name;
+                }
+                return _isPlaying ? "ARRANGE · playing" : "ARRANGE";
             }
         }
 
-        // Canvas/arrange mode — set by the engine; drives the badge and the toggle button state.
-        private bool _isCanvasMode;
-        public bool IsCanvasMode
+        // Edit vs Arrange mode — set by the engine; drives the badge.
+        private bool _isEditMode;
+        public bool IsEditMode
         {
-            get => _isCanvasMode;
+            get => _isEditMode;
             set
             {
-                if (SetProperty(ref _isCanvasMode, value))
+                if (SetProperty(ref _isEditMode, value))
                 {
                     OnPropertyChanged(nameof(ModeLabel));
                 }

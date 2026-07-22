@@ -6,34 +6,69 @@ using Windows.Foundation;
 
 namespace ModernImageViewer.VideoDirector.Views
 {
+    // The single switch that decides what all pointer input does. Set by the engine from the
+    // editor mode — nothing else influences input routing (strict mode segregation).
+    public enum PlayerInputMode
+    {
+        Content,     // Edit mode: drag = pan the clip's content, wheel = zoom it.
+        ArrangePips  // Arrange mode: drag = move the PiP under the cursor, wheel = resize it.
+    }
+
     public sealed partial class DirectorPlayerControl : UserControl
     {
         private bool _isDragging = false;
         private Point _lastPointerPosition;
+        private int _dragSlot;
 
         public event EventHandler ViewportTransformChanged;
         public Microsoft.UI.Xaml.Media.CompositeTransform ActiveTransform { get; set; }
 
-        // Raised from the full-screen InputLayer (the only reliable pointer catcher — the PiP's
-        // MediaPlayerElement video surface does not raise its own pointer events). In placement
-        // mode these target the arranged overlay (slot 1).
+        // PiP manipulation events (Arrange mode). Raised from the full-screen InputLayer — the
+        // only reliable pointer catcher, since the PiP's MediaPlayerElement video surface does
+        // not raise its own pointer events.
         public event EventHandler<(int slot, double dx, double dy)> OverlayBoxMoved;
         public event EventHandler<(int slot, int delta)> OverlayBoxWheel;
-        public event EventHandler<int> OverlayBoxEditRequested;
 
-        // When true, drag/wheel/double-tap manipulate the arranged PiP's placement rather than
-        // panning/zooming the content transform.
-        public bool PlacementMode { get; set; }
+        public PlayerInputMode InputMode { get; set; } = PlayerInputMode.Content;
 
         public DirectorPlayerControl()
         {
             this.InitializeComponent();
         }
 
+        // Which PiP box (if any) is under the given InputLayer-space point; topmost (slot 2) wins.
+        // The overlay grids are positioned via Margin + Width/Height in the same coordinate space
+        // as the full-screen InputLayer, so a plain bounds test is valid.
+        private int HitTestOverlaySlot(Point p)
+        {
+            if (IsInsideBox(OverlayGrid2, p)) return 2;
+            if (IsInsideBox(OverlayGrid1, p)) return 1;
+            return 0;
+        }
+
+        private static bool IsInsideBox(Grid g, Point p)
+        {
+            if (g == null || g.Opacity <= 0.01 || double.IsNaN(g.Width) || g.Width <= 0 || g.Height <= 0) return false;
+            double left = g.Margin.Left, top = g.Margin.Top;
+            return p.X >= left && p.X <= left + g.Width && p.Y >= top && p.Y <= top + g.Height;
+        }
+
         private void InputLayer_PointerPressed(object sender, PointerRoutedEventArgs e)
         {
+            var p = e.GetCurrentPoint(InputLayer).Position;
+
+            if (InputMode == PlayerInputMode.ArrangePips)
+            {
+                _dragSlot = HitTestOverlaySlot(p);
+                if (_dragSlot == 0) return; // clicked empty canvas — nothing to arrange
+                _isDragging = true;
+                _lastPointerPosition = p;
+                InputLayer.CapturePointer(e.Pointer);
+                return;
+            }
+
             _isDragging = true;
-            _lastPointerPosition = e.GetCurrentPoint(InputLayer).Position;
+            _lastPointerPosition = p;
             InputLayer.CapturePointer(e.Pointer);
         }
 
@@ -46,9 +81,9 @@ namespace ModernImageViewer.VideoDirector.Views
             var deltaY = p.Y - _lastPointerPosition.Y;
             _lastPointerPosition = p;
 
-            if (PlacementMode)
+            if (InputMode == PlayerInputMode.ArrangePips)
             {
-                OverlayBoxMoved?.Invoke(this, (1, deltaX, deltaY));
+                if (_dragSlot > 0) OverlayBoxMoved?.Invoke(this, (_dragSlot, deltaX, deltaY));
                 return;
             }
 
@@ -61,22 +96,26 @@ namespace ModernImageViewer.VideoDirector.Views
         private void InputLayer_PointerReleased(object sender, PointerRoutedEventArgs e)
         {
             _isDragging = false;
+            _dragSlot = 0;
             InputLayer.ReleasePointerCapture(e.Pointer);
         }
 
         private void InputLayer_PointerCanceled(object sender, PointerRoutedEventArgs e)
         {
             _isDragging = false;
+            _dragSlot = 0;
             InputLayer.ReleasePointerCapture(e.Pointer);
         }
 
         private void InputLayer_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
         {
-            int delta = e.GetCurrentPoint(InputLayer).Properties.MouseWheelDelta;
+            var pt = e.GetCurrentPoint(InputLayer);
+            int delta = pt.Properties.MouseWheelDelta;
 
-            if (PlacementMode)
+            if (InputMode == PlayerInputMode.ArrangePips)
             {
-                OverlayBoxWheel?.Invoke(this, (1, delta));
+                int slot = HitTestOverlaySlot(pt.Position);
+                if (slot > 0) OverlayBoxWheel?.Invoke(this, (slot, delta));
                 return;
             }
 
@@ -90,7 +129,7 @@ namespace ModernImageViewer.VideoDirector.Views
 
         private void InputLayer_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
         {
-            if (PlacementMode) OverlayBoxEditRequested?.Invoke(this, 1);
+            // Reserved (entry to Edit is via the dock for now).
         }
     }
 }
