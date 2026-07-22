@@ -947,7 +947,10 @@ namespace ModernImageViewer.VideoDirector.Models
             if (string.IsNullOrWhiteSpace(op.FilePath)) return;
 
             // Track 1 clip entering Edit mode: content input + clip-scoped preview target.
-            SetEditModeState(op, _isPlayerAActive ? _mediaPlayerA : _mediaPlayerB);
+            // isOverlayEdit:false so HideAllOverlays (in StopPlayback above) releases BOTH overlay
+            // slots — only the Track 1 clip is shown, nothing on top of it.
+            SetEditModeState(op, _isPlayerAActive ? _mediaPlayerA : _mediaPlayerB, isOverlayEdit: false);
+            HideAllOverlays();
 
             var activePlayer = _isPlayerAActive ? _mediaPlayerA : _mediaPlayerB;
             var activeElement = _isPlayerAActive ? _playerA : _playerB;
@@ -1535,14 +1538,16 @@ namespace ModernImageViewer.VideoDirector.Models
         private CinematicOperation _editClip;
         private MediaPlayer _editPlayer;
 
-        // Put the app into Edit mode for the given clip/player. Called by Track 1's EnterEditMode
-        // and by EnterOverlayEditMode (Track 2).
-        private void SetEditModeState(CinematicOperation clip, MediaPlayer player)
+        // Put the app into Edit mode for the given clip/player. isOverlayEdit = true when the clip
+        // is a Track 2 overlay (edited in the overlay player); false for a Track 1 clip. The flag
+        // decides whether the subsequent HideAllOverlays keeps overlay slot 1 (the edit surface).
+        private void SetEditModeState(CinematicOperation clip, MediaPlayer player, bool isOverlayEdit)
         {
             StopEditPreview();
             _mode = EditorMode.Edit;
             _editClip = clip;
             _editPlayer = player;
+            _isEditingOverlay = isOverlayEdit;
             _playerControl.InputMode = Views.PlayerInputMode.Content;
             _viewModel.IsEditMode = true;
         }
@@ -1559,6 +1564,9 @@ namespace ModernImageViewer.VideoDirector.Models
             _playerControl.InputMode = Views.PlayerInputMode.ArrangePips;
             _viewModel.IsEditMode = false;
             UpdateWysiwygOverlay();                        // hide Track-1 edit rectangles
+            // Restore the Track 1 base (a Track 2 edit had hidden the main players).
+            _playerA.Opacity = _isPlayerAActive ? 1 : 0;
+            _playerB.Opacity = _isPlayerAActive ? 0 : 1;
             EvaluateOverlays(_viewModel.CurrentStoryTime); // show the composite's active PiPs
         }
 
@@ -1568,10 +1576,10 @@ namespace ModernImageViewer.VideoDirector.Models
         {
             if (overlay == null || string.IsNullOrWhiteSpace(overlay.FilePath)) return;
 
-            _isEditingOverlay = true; // keep slot 1 through StopPlayback
-            SetEditModeState(overlay, _overlayMediaPlayer1);
+            SetEditModeState(overlay, _overlayMediaPlayer1, isOverlayEdit: true); // keeps slot 1
             StopPlayback();
             UpdateWysiwygOverlay();
+            if (_activeOverlay2 != null) ReleaseOverlaySlot(2); // hide any other PiP
 
             _activeOverlay1 = overlay;
 
@@ -1603,6 +1611,9 @@ namespace ModernImageViewer.VideoDirector.Models
                 CacheOverlayAspect(1, player);
                 ApplyOverlayBox(1, overlay, true); // full-screen for content framing
                 grid.Opacity = 1.0;
+                // Hide the Track 1 base so ONLY this overlay clip is shown while editing it.
+                _playerA.Opacity = 0;
+                _playerB.Opacity = 0;
                 _playerControl.ActiveTransform = transform;
             });
         }
