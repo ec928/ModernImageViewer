@@ -53,6 +53,7 @@ namespace ModernImageViewer.VideoDirector.Models
         private CinematicOperation _activeOverlay1;
         private CinematicOperation _activeOverlay2;
         private bool _isEditingOverlay = false;
+        private bool _canvasMode = false;
         // Native aspect (w/h) of each slot's overlay video, cached when the media opens, so
         // the placement box can be sized to the video's shape (no black bars).
         private double _overlayAspect1 = 0;
@@ -75,6 +76,12 @@ namespace ModernImageViewer.VideoDirector.Models
             _viewModel.PlaybackSpeedChanged += ViewModel_PlaybackSpeedChanged;
             _viewModel.OperationSeekRequested += ViewModel_OperationSeekRequested;
             _viewModel.PropertyChanged += ViewModel_PropertyChanged;
+
+            // Canvas-arrange: manipulate PiP placement directly on the composite.
+            _playerControl.OverlayBoxSelected += OnOverlayBoxSelected;
+            _playerControl.OverlayBoxMoved += OnOverlayBoxMoved;
+            _playerControl.OverlayBoxWheel += OnOverlayBoxWheel;
+            _playerControl.OverlayBoxEditRequested += OnOverlayBoxEditRequested;
         }
 
         private void ViewModel_OperationSeekRequested(object sender, TimeSpan e)
@@ -1569,6 +1576,66 @@ namespace ModernImageViewer.VideoDirector.Models
             {
                 ApplyOverlayBox(1, _activeOverlay1, true);
             }
+        }
+
+        // ==================== Canvas / composite arrange mode ====================
+
+        public bool IsCanvasMode => _canvasMode;
+
+        // Enter the composite/arrange view: lay out the active PiPs at their placement and make
+        // their boxes directly manipulable (move/wheel-resize/double-tap-to-edit). Best entered
+        // from a paused moment where the composite is already on screen.
+        public void EnterCanvasMode()
+        {
+            StopPlayback();
+            _isEditingOverlay = false;
+            _canvasMode = true;
+            _playerControl.CanvasMode = true;
+            _viewModel.IsCanvasMode = true;
+            UpdateWysiwygOverlay(); // collapse any Track-1 edit rectangles
+            EvaluateOverlays(_viewModel.CurrentStoryTime); // place the PiPs at their placement
+        }
+
+        public void ExitCanvasMode()
+        {
+            _canvasMode = false;
+            _playerControl.CanvasMode = false;
+            _viewModel.IsCanvasMode = false;
+        }
+
+        private CinematicOperation OverlayForSlot(int slot) => slot == 1 ? _activeOverlay1 : _activeOverlay2;
+
+        private void OnOverlayBoxSelected(object sender, int slot)
+        {
+            var overlay = OverlayForSlot(slot);
+            if (overlay != null) _viewModel.SelectedOverlay = overlay;
+        }
+
+        private void OnOverlayBoxMoved(object sender, (int slot, double dx, double dy) e)
+        {
+            var overlay = OverlayForSlot(e.slot);
+            if (overlay == null) return;
+            double vpW = _playerControl.ActualWidth, vpH = _playerControl.ActualHeight;
+            if (vpW <= 0 || vpH <= 0) return;
+            overlay.PlacementCenterX += e.dx / vpW; // property clamps to 0..1
+            overlay.PlacementCenterY += e.dy / vpH;
+            ApplyOverlayBox(e.slot, overlay, false);
+        }
+
+        private void OnOverlayBoxWheel(object sender, (int slot, int delta) e)
+        {
+            var overlay = OverlayForSlot(e.slot);
+            if (overlay == null) return;
+            overlay.PlacementScale *= e.delta > 0 ? 1.08 : 1.0 / 1.08; // property clamps
+            ApplyOverlayBox(e.slot, overlay, false);
+        }
+
+        private void OnOverlayBoxEditRequested(object sender, int slot)
+        {
+            var overlay = OverlayForSlot(slot);
+            if (overlay == null) return;
+            ExitCanvasMode();
+            EnterOverlayEditMode(overlay); // dive into full-screen content framing
         }
     }
 }

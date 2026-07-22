@@ -34,7 +34,10 @@
              so content is framed full-size, identical to Track 1. -->
         <Grid x:Name="OverlayGrid1" x:FieldModifier="public"
               Opacity="0" IsHitTestVisible="False"
-              HorizontalAlignment="Left" VerticalAlignment="Top">
+              HorizontalAlignment="Left" VerticalAlignment="Top"
+              PointerPressed="OverlayBox_PointerPressed" PointerMoved="OverlayBox_PointerMoved"
+              PointerReleased="OverlayBox_PointerReleased" PointerCanceled="OverlayBox_PointerReleased"
+              PointerWheelChanged="OverlayBox_PointerWheelChanged" DoubleTapped="OverlayBox_DoubleTapped">
             <MediaPlayerElement x:Name="OverlayPlayer1" x:FieldModifier="public"
                                 AreTransportControlsEnabled="False" Stretch="Fill"
                                 RenderTransformOrigin="0.5,0.5">
@@ -45,7 +48,10 @@
         </Grid>
         <Grid x:Name="OverlayGrid2" x:FieldModifier="public"
               Opacity="0" IsHitTestVisible="False"
-              HorizontalAlignment="Left" VerticalAlignment="Top">
+              HorizontalAlignment="Left" VerticalAlignment="Top"
+              PointerPressed="OverlayBox_PointerPressed" PointerMoved="OverlayBox_PointerMoved"
+              PointerReleased="OverlayBox_PointerReleased" PointerCanceled="OverlayBox_PointerReleased"
+              PointerWheelChanged="OverlayBox_PointerWheelChanged" DoubleTapped="OverlayBox_DoubleTapped">
             <MediaPlayerElement x:Name="OverlayPlayer2" x:FieldModifier="public"
                                 AreTransportControlsEnabled="False" Stretch="Fill"
                                 RenderTransformOrigin="0.5,0.5">

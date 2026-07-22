@@ -65,6 +65,13 @@ namespace ModernImageViewer.VideoDirector.Views
             _playbackEngine?.OnViewportResized();
         }
 
+        private void CanvasModeButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_playbackEngine == null) return;
+            if (_playbackEngine.IsCanvasMode) _playbackEngine.ExitCanvasMode();
+            else _playbackEngine.EnterCanvasMode();
+        }
+
         private void ViewModel_EditTargetChanged(object sender, CinematicOperation op)
         {
             if (!ViewModel.IsPlaying)
@@ -132,12 +139,14 @@ namespace ModernImageViewer.VideoDirector.Views
                 if (ViewModel.SelectedOverlay is CinematicOperation overlay)
                 {
                     SyncOverlayBoxPositionCombo(overlay);
-                    if (!ViewModel.IsPlaying)
+                    // In canvas/arrange mode, selecting a PiP just targets it for the inspector —
+                    // it does NOT dive into full-screen content editing (that's double-tap).
+                    if (!ViewModel.IsPlaying && _playbackEngine?.IsCanvasMode != true)
                     {
                         _playbackEngine?.EnterOverlayEditMode(overlay);
                     }
                 }
-                else
+                else if (_playbackEngine?.IsCanvasMode != true)
                 {
                     _playbackEngine?.ClearOverlayEditMode();
                 }

@@ -284,6 +284,9 @@
                             <ComboBox SelectedItem="{x:Bind ViewModel.PlaybackSpeed, Mode=TwoWay}" 
                                       ItemsSource="{x:Bind ViewModel.AvailableSpeeds}"
                                       Width="60" Height="28" MinHeight="28" FontSize="11" Padding="8,0" VerticalAlignment="Center" ToolTipService.ToolTip="Global Speed" />
+                            <ToggleButton x:Name="CanvasModeButton" IsChecked="{x:Bind ViewModel.IsCanvasMode, Mode=OneWay}" Click="CanvasModeButton_Click" Width="28" Height="28" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="4" ToolTipService.ToolTip="Composite / arrange PiPs (drag to move, wheel to resize, double-tap to edit)">
+                                <FontIcon Glyph="&#xE7C9;" FontSize="14" />
+                            </ToggleButton>
                             <ToggleButton x:Name="StoryboardButton" IsChecked="{x:Bind ViewModel.IsStoryboardVisible, Mode=TwoWay}" Width="28" Height="28" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="4" ToolTipService.ToolTip="Toggle Storyboard">
                                 <SymbolIcon Symbol="List" />
                             </ToggleButton>
