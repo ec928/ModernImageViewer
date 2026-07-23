@@ -18,6 +18,44 @@ destroyed an earlier version of this code.
 
 ---
 
+## ⚠️ KNOWN LIMITATIONS — skipped for now, MUST eventually be addressed
+
+These were consciously deferred to keep the prototype moving. They are **not "won't do"** (that
+is §9) — they are **owed work**. Do not let them quietly become permanent.
+
+1. **🔴 PiP rendering (§7A) — attempted and FAILED at least SEVEN times.** Every attempt to make
+   the overlay PiP reshape/move without artefacts has failed: it greens on resize, blanks after
+   manipulation, and the reshape handles disappear behind the video surface. Root cause: a
+   `MediaPlayerElement` is a GPU video surface, not a plain image, even when paused — resizing/
+   moving it corrupts it and it composites over XAML. **Seven distinct fixes, seven failures.**
+   The still-image proxy (commit `2098e57`) also failed (the visibility swap didn't take effect).
+   **Verdict: stop patching. The whole PiP-render component must be rebuilt from scratch**, ideally
+   folded into §7B with "arrange = still image / playback = live video" designed in from the start.
+2. **🔴 Overlays are invisible in the composite (Arrange + scrub).** Because overlay rendering goes
+   through the broken component above, you currently **cannot see Track 2 overlays** while arranging
+   or scrubbing — only Track 1 shows. This is the single biggest functional hole. Fixed with #1/§7B.
+3. **🔴 4-track model not built.** The engine still uses the **loose 2-simultaneous-slot** overlay
+   model, not the agreed strict **track list (1 spine + ≤3 overlay tracks)**. §7B must replace it.
+4. **🟠 Duplicate / Remove not re-homed onto the timeline.** Removing the old tile lanes dropped the
+   right-click Duplicate/Remove menus. The timeline now supports select (tap), move (drag), reorder
+   (spine drag), and add (button / drag-drop) — but **there is no way to duplicate or remove a clip
+   from the timeline yet.** Add a right-click flyout on the blocks.
+5. **🟠 Spine (blue) drag has no ghost-follow.** The grabbed spine block does not visually track the
+   cursor; it only snaps when it crosses into another slot, and the reorder target is coarse (can be
+   jumpy with certain clip widths). Needs a cursor-following ghost + a stable, center-based target.
+6. **🟡 Overlay drag rebuilds the whole timeline every pointer-move** (minor flicker / wasted work).
+   Should move just the dragged block during the drag and rebuild once on release.
+7. **🟡 Scrub robustness.** Rapid scrubbing re-seeks the paused main player many times a second
+   (possible jank), and crossing a spine clip boundary loads the next source asynchronously (brief
+   lag / first-time stall). Needs throttling/debounce + smarter source preloading.
+8. **🟡 Back-compat.** `PlacementScale` was removed in favour of independent width/height, so **old
+   saved projects lose custom PiP sizes** (revert to 0.3×0.3). Acceptable at prototype stage; revisit
+   before any real persistence guarantees.
+
+Severity: 🔴 blocks the core experience · 🟠 functional gap / regression · 🟡 polish/robustness.
+
+---
+
 ## 1. Objective
 
 A multi-track video sequencer/compositor with **3 tracks**:
