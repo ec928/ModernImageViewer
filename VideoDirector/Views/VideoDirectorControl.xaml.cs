@@ -743,17 +743,24 @@ namespace ModernImageViewer.VideoDirector.Views
             }
         }
 
+        // Drop a video/image onto the timeline strip to add it as a Track 2 overlay. The drop
+        // position sets its start time (falls back to the playhead if the scale isn't ready).
         private async void OverlaySection_Drop(object sender, DragEventArgs e)
         {
             if (e.DataView.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.StorageItems))
             {
                 e.Handled = true;
+                double dropX = e.GetPosition(TimelineBar).X;
+                TimeSpan startTime = _timelinePxPerSec > 0
+                    ? TimeSpan.FromSeconds(Math.Max(0, dropX / _timelinePxPerSec))
+                    : ViewModel.CurrentStoryTime;
+
                 var items = await e.DataView.GetStorageItemsAsync();
                 foreach (var item in items)
                 {
                     if (item is Windows.Storage.StorageFile file && (file.FileType == ".mp4" || file.FileType == ".mkv" || file.FileType == ".avi" || file.FileType == ".jpg" || file.FileType == ".png"))
                     {
-                        await ViewModel.AddOverlayAsync(item.Path, ViewModel.CurrentStoryTime);
+                        await ViewModel.AddOverlayAsync(item.Path, startTime);
                     }
                 }
             }

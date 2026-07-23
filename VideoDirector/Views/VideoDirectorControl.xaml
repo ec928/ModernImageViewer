@@ -298,7 +298,8 @@
         <Border Grid.Row="1" x:Name="TrackDock"
                 Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                 BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="0,1,0,0"
-                Padding="8,6">
+                Padding="8,6"
+                AllowDrop="True" DragOver="OverlaySection_DragOver" Drop="OverlaySection_Drop">
             <StackPanel Spacing="4">
                 <!-- Proportional timeline + playhead (§7E/F). Activity view: spine (top) + overlay
                      blocks (below) drawn to scale on one shared time axis; the playhead tracks the
