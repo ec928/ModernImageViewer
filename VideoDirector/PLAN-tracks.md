@@ -227,8 +227,19 @@ one overlay working, add a second, spend ages fixing everything that breaks). Op
   GPU video surface, not a plain image, so resizing/moving it blanks/greens it and it composites
   over the handles. Frame-refresh churn removed (`0ea76fc`). This is what §7A replaces.
 
-### A — Still-image PiP  *(do FIRST; decoupled; then carry straight on)*
-The redo of PiP rendering, and the cornerstone principle for everything below:
+### A — Still-image PiP  *(PARKED — needs a full component rebuild, not more patches)*
+> **Status (2026-07-23):** attempted (`2098e57`) by adding an `Image` proxy and toggling
+> image/video/handles in `ApplyOverlayBox`. **Still fails** — PiP still greens on move/reshape and
+> handles still almost never appear. Symptoms indicate the visibility swap **isn't taking effect**
+> in the states that matter (the video element isn't actually being hidden; handles share the same
+> unreached `ApplyOverlayBox` state), so the user is still manipulating the live video surface.
+> After ~6 iterations with no progress, **do not patch further.** The whole PiP-render component
+> (`OverlayGrid` + video + image + handles + the state-toggling in `ApplyOverlayBox`/`EvaluateOverlays`)
+> is to be **rebuilt from scratch** when revisited — likely folded into the track rework, where the
+> "arrange = still image, playback = video" split is designed in from the start rather than bolted on.
+> The trackbar/scrubber below does **not** hard-depend on this; carry on.
+
+The intended principle (still correct, just not yet realised):
 **arrange/scrub = still images; playback = live video.**
 - In Arrange/scrub a PiP is a **plain bitmap** (the clip's thumbnail) in an `Image`, sized/clipped
   by the existing box geometry (+ the same marks transform). A bitmap resizes/moves/crops and sits

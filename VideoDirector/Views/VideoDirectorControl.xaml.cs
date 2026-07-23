@@ -19,6 +19,10 @@ namespace ModernImageViewer.VideoDirector.Views
         private DispatcherTimer _inactivityTimer;
         private double _preRecordSpeed = 1.0;
 
+        // Proportional timeline bar (§7E/F): px-per-second scale + the playhead rectangle.
+        private double _timelinePxPerSec;
+        private Microsoft.UI.Xaml.Shapes.Rectangle _playhead;
+
         public VideoDirectorControl()
         {
             this.InitializeComponent();
@@ -57,6 +61,78 @@ namespace ModernImageViewer.VideoDirector.Views
             PlayerControl.SizeChanged += PlayerControl_SizeChanged;
             ViewModel.PropertyChanged += ViewModel_PropertyChanged;
             ViewModel.EditTargetChanged += ViewModel_EditTargetChanged;
+
+            ViewModel.TimelineNodes.CollectionChanged += (s, ev) => BuildTimelineBar();
+            ViewModel.OverlayClips.CollectionChanged += (s, ev) => BuildTimelineBar();
+            BuildTimelineBar();
+        }
+
+        private void TimelineBar_SizeChanged(object sender, SizeChangedEventArgs e) => BuildTimelineBar();
+
+        // Draws the proportional timeline on one shared px=seconds scale: spine clips (top row) laid
+        // end-to-end with a thin transition sliver, overlays (lower row) positioned by start-time.
+        // Reads the story-time authority on the VM so it agrees with playback (§7C/§7E).
+        private void BuildTimelineBar()
+        {
+            if (TimelineBar == null) return;
+            TimelineBar.Children.Clear();
+            _playhead = null;
+
+            double w = TimelineBar.ActualWidth;
+            double total = ViewModel.TotalStoryDuration.TotalSeconds;
+            if (w <= 0 || total <= 0) { _timelinePxPerSec = 0; return; }
+            _timelinePxPerSec = w / total;
+
+            const double spineY = 3, spineH = 15, ovY = 21, ovH = 15;
+
+            for (int i = 0; i < ViewModel.TimelineNodes.Count; i++)
+            {
+                var clip = ViewModel.TimelineNodes[i];
+                double x = ViewModel.GetSpineClipStart(i).TotalSeconds * _timelinePxPerSec;
+                double cw = clip.OpDuration.TotalSeconds * _timelinePxPerSec;
+                AddTimelineBlock(x, spineY, cw, spineH, Microsoft.UI.ColorHelper.FromArgb(0xFF, 0x3B, 0x82, 0xF6)); // spine = blue
+                double tw = clip.TransitionDuration.TotalSeconds * _timelinePxPerSec;
+                if (tw > 0.5)
+                    AddTimelineBlock(x + cw, spineY, tw, spineH, Microsoft.UI.ColorHelper.FromArgb(0xFF, 0x64, 0x74, 0x8B)); // transition
+            }
+
+            foreach (var ov in ViewModel.OverlayClips)
+            {
+                double x = ov.StartTimeSeconds * _timelinePxPerSec;
+                double ow = ov.OpDuration.TotalSeconds * _timelinePxPerSec;
+                AddTimelineBlock(x, ovY, ow, ovH, Microsoft.UI.ColorHelper.FromArgb(0xFF, 0xF5, 0x9E, 0x0B)); // overlay = amber
+            }
+
+            _playhead = new Microsoft.UI.Xaml.Shapes.Rectangle
+            {
+                Width = 2,
+                Height = TimelineBar.ActualHeight,
+                Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White)
+            };
+            TimelineBar.Children.Add(_playhead);
+            UpdatePlayhead();
+        }
+
+        private void AddTimelineBlock(double x, double y, double width, double height, Windows.UI.Color color)
+        {
+            if (width < 1) width = 1;
+            var r = new Microsoft.UI.Xaml.Shapes.Rectangle
+            {
+                Width = width,
+                Height = height,
+                RadiusX = 2,
+                RadiusY = 2,
+                Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(color)
+            };
+            Canvas.SetLeft(r, x);
+            Canvas.SetTop(r, y);
+            TimelineBar.Children.Add(r);
+        }
+
+        private void UpdatePlayhead()
+        {
+            if (_playhead == null || _timelinePxPerSec <= 0) return;
+            Canvas.SetLeft(_playhead, ViewModel.CurrentStoryTime.TotalSeconds * _timelinePxPerSec);
         }
 
         private void PlayerControl_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -134,6 +210,11 @@ namespace ModernImageViewer.VideoDirector.Views
 
         private void ViewModel_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
+            if (e.PropertyName == nameof(DirectorViewModel.CurrentStoryTime))
+            {
+                UpdatePlayhead();
+                return;
+            }
             if (e.PropertyName == nameof(DirectorViewModel.IsPlaying))
             {
                 if (PlayPauseIcon != null)

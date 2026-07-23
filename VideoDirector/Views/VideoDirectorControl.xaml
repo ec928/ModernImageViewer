@@ -299,6 +299,14 @@
                 Visibility="{x:Bind ViewModel.IsDockVisible, Mode=OneWay, Converter={StaticResource BoolToVisConverter}}"
                 Padding="8,6">
             <StackPanel Spacing="4">
+                <!-- Proportional timeline + playhead (§7E/F). Activity view: spine (top) + overlay
+                     blocks (below) drawn to scale on one shared time axis; the playhead tracks the
+                     story position and (next) scrubs. Laid out in code (TimelineBar_*). -->
+                <Border Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" CornerRadius="4">
+                    <Canvas x:Name="TimelineBar" Height="40" HorizontalAlignment="Stretch"
+                            Background="Transparent" SizeChanged="TimelineBar_SizeChanged" />
+                </Border>
+
                 <!-- Track 1 lane -->
                 <Grid>
                     <Grid.ColumnDefinitions>
