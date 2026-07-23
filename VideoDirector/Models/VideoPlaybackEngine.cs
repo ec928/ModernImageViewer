@@ -327,6 +327,14 @@ namespace ModernImageViewer.VideoDirector.Models
                     _dispatcher.TryEnqueue(() => _viewModel.IsRecordingMotion = false);
                 }
             }
+
+            // Stopping while arranging (not on the way into Edit, which sets _mode first) should
+            // leave the static composite on screen — HideAllOverlays just tore the PiPs down, so
+            // rebuild them (with their handles) at the current story time for continued arranging.
+            if (_mode == EditorMode.Arrange)
+            {
+                _dispatcher.TryEnqueue(() => EvaluateOverlays(_viewModel.CurrentStoryTime));
+            }
         }
 
         public void SkipNext()
@@ -1445,6 +1453,13 @@ namespace ModernImageViewer.VideoDirector.Models
                 ? (currentStoryTime - overlay.StartTime).TotalMilliseconds / overlay.OpDuration.TotalMilliseconds
                 : 0;
             ApplyMarksAtProgress(overlay, rawProgress, transform);
+
+            // Marks store the pan in EDIT-mode pixels, where the box fills the frame (placement
+            // = 1). The PiP box is smaller, so an unscaled pan would be exaggerated and push the
+            // video off-centre (a gap on one side). Scale the translation by the box fraction so
+            // the framing looks identical at any PiP size. (Zoom is relative, so it needs no scaling.)
+            transform.TranslateX *= overlay.PlacementWidth;
+            transform.TranslateY *= overlay.PlacementHeight;
 
             // Placement box (where/how big on screen), clipped so framing can't spill out.
             ApplyOverlayBox(slot, overlay, false);
