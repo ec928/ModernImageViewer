@@ -77,7 +77,7 @@ namespace ModernImageViewer.VideoDirector.Models
             _viewModel.PropertyChanged += ViewModel_PropertyChanged;
 
             // Arrange mode: drag/wheel the PiP under the cursor.
-            _playerControl.OverlayBoxManipulated += OnOverlayBoxManipulated;
+            _playerControl.OverlayBoxMoved += OnOverlayBoxMoved;
             _playerControl.OverlayBoxWheel += OnOverlayBoxWheel;
 
             // Start in Arrange (the default mode) — PiP input active.
@@ -1319,38 +1319,17 @@ namespace ModernImageViewer.VideoDirector.Models
             double vpH = _playerControl.ActualHeight;
             if (aspect <= 0 || vpW <= 0 || vpH <= 0) return;
 
-            if (overlay.PlacementHeight <= 0)
-            {
-                double initBoxW = vpW * overlay.PlacementWidth;
-                overlay.PlacementHeight = Math.Clamp((initBoxW / aspect) / vpH, 0.05, 1.0);
-            }
+            // Video fit to viewport (contained), preserving aspect — the "scale 1" reference.
+            double fitW, fitH;
+            if (aspect >= vpW / vpH) { fitW = vpW; fitH = vpW / aspect; }
+            else { fitH = vpH; fitW = vpH * aspect; }
 
-            double boxW, boxH, cx, cy;
-            if (editMode)
-            {
-                double pipAspect = (overlay.PlacementWidth * vpW) / (overlay.PlacementHeight * vpH);
-                double screenAspect = vpW / vpH;
-                if (pipAspect > screenAspect) 
-                {
-                    boxW = vpW;
-                    boxH = vpW / pipAspect;
-                }
-                else 
-                {
-                    boxH = vpH;
-                    boxW = vpH * pipAspect;
-                }
-                cx = 0.5;
-                cy = 0.5;
-            }
-            else
-            {
-                boxW = vpW * overlay.PlacementWidth;
-                boxH = vpH * overlay.PlacementHeight;
-                cx = overlay.PlacementCenterX;
-                cy = overlay.PlacementCenterY;
-            }
+            double scale = editMode ? 1.0 : overlay.PlacementScale;
+            double cx = editMode ? 0.5 : overlay.PlacementCenterX;
+            double cy = editMode ? 0.5 : overlay.PlacementCenterY;
 
+            double boxW = fitW * scale;
+            double boxH = fitH * scale;
             double left = cx * vpW - boxW / 2;
             double top = cy * vpH - boxH / 2;
 
@@ -1428,8 +1407,6 @@ namespace ModernImageViewer.VideoDirector.Models
             grid.ClearValue(Microsoft.UI.Xaml.FrameworkElement.HeightProperty);
             grid.Clip = null;
             grid.Margin = new Microsoft.UI.Xaml.Thickness(0);
-
-            _playerControl.UpdateWysiwygHandles(slot, false);
 
             if (slot == 1) { _activeOverlay1 = null; _overlayAspect1 = 0; }
             else { _activeOverlay2 = null; _overlayAspect2 = 0; }
@@ -1572,7 +1549,6 @@ namespace ModernImageViewer.VideoDirector.Models
             _editPlayer = player;
             _isEditingOverlay = isOverlayEdit;
             _playerControl.InputMode = Views.PlayerInputMode.Content;
-            _playerControl.UpdateWysiwygHandles(0, false);
             _viewModel.IsEditMode = true;
         }
 
@@ -1701,89 +1677,16 @@ namespace ModernImageViewer.VideoDirector.Models
 
         // ---- Arrange mode: drag / wheel the PiP under the cursor (the hit slot) ----
 
-        private void OnOverlayBoxManipulated(object sender, (int slot, Views.DragHandleType handle, double dx, double dy, bool proportional) e)
+        private void OnOverlayBoxMoved(object sender, (int slot, double dx, double dy) e)
         {
             if (_mode != EditorMode.Arrange) return;
             var overlay = e.slot == 1 ? _activeOverlay1 : _activeOverlay2;
             if (overlay == null) return;
             double vpW = _playerControl.ActualWidth, vpH = _playerControl.ActualHeight;
             if (vpW <= 0 || vpH <= 0) return;
-
-            if (e.handle == Views.DragHandleType.Center)
-            {
-                overlay.PlacementCenterX += e.dx / vpW;
-                overlay.PlacementCenterY += e.dy / vpH;
-            }
-            else
-            {
-                // Resize logic
-                double oldW = overlay.PlacementWidth;
-                double oldH = overlay.PlacementHeight;
-                double dw = 0, dh = 0;
-                double dcx = 0, dcy = 0;
-
-                if (e.handle == Views.DragHandleType.E || e.handle == Views.DragHandleType.NE || e.handle == Views.DragHandleType.SE)
-                {
-                    dw = e.dx / vpW;
-                    dcx = dw / 2;
-                }
-                else if (e.handle == Views.DragHandleType.W || e.handle == Views.DragHandleType.NW || e.handle == Views.DragHandleType.SW)
-                {
-                    dw = -e.dx / vpW;
-                    dcx = -dw / 2;
-                }
-
-                if (e.handle == Views.DragHandleType.S || e.handle == Views.DragHandleType.SE || e.handle == Views.DragHandleType.SW)
-                {
-                    dh = e.dy / vpH;
-                    dcy = dh / 2;
-                }
-                else if (e.handle == Views.DragHandleType.N || e.handle == Views.DragHandleType.NE || e.handle == Views.DragHandleType.NW)
-                {
-                    dh = -e.dy / vpH;
-                    dcy = -dh / 2;
-                }
-
-                if (e.proportional && oldW > 0 && oldH > 0)
-                {
-                    // For proportional scaling, the primary axis of change determines the other axis.
-                    // We'll use the larger change to drive the scale factor to avoid jitter.
-                    double maxChangeRatio = Math.Abs(dw) > Math.Abs(dh) ? (oldW + dw) / oldW : (oldH + dh) / oldH;
-                    if (maxChangeRatio < 0.1) maxChangeRatio = 0.1;
-                    
-                    double newW = oldW * maxChangeRatio;
-                    double newH = oldH * maxChangeRatio;
-                    
-                    dw = newW - oldW;
-                    dh = newH - oldH;
-
-                    // Fix up dcx/dcy based on the proportional dw/dh
-                    if (e.handle == Views.DragHandleType.E || e.handle == Views.DragHandleType.NE || e.handle == Views.DragHandleType.SE) dcx = dw / 2;
-                    else if (e.handle == Views.DragHandleType.W || e.handle == Views.DragHandleType.NW || e.handle == Views.DragHandleType.SW) dcx = -dw / 2;
-
-                    if (e.handle == Views.DragHandleType.S || e.handle == Views.DragHandleType.SE || e.handle == Views.DragHandleType.SW) dcy = dh / 2;
-                    else if (e.handle == Views.DragHandleType.N || e.handle == Views.DragHandleType.NE || e.handle == Views.DragHandleType.NW) dcy = -dh / 2;
-                }
-
-                overlay.PlacementWidth = Math.Clamp(oldW + dw, 0.05, 1.0);
-                overlay.PlacementHeight = Math.Clamp(oldH + dh, 0.05, 1.0);
-                
-                // Recompute actual dw/dh in case of clamping
-                dw = overlay.PlacementWidth - oldW;
-                dh = overlay.PlacementHeight - oldH;
-                
-                if (e.handle == Views.DragHandleType.E || e.handle == Views.DragHandleType.NE || e.handle == Views.DragHandleType.SE) dcx = dw / 2;
-                else if (e.handle == Views.DragHandleType.W || e.handle == Views.DragHandleType.NW || e.handle == Views.DragHandleType.SW) dcx = -dw / 2;
-
-                if (e.handle == Views.DragHandleType.S || e.handle == Views.DragHandleType.SE || e.handle == Views.DragHandleType.SW) dcy = dh / 2;
-                else if (e.handle == Views.DragHandleType.N || e.handle == Views.DragHandleType.NE || e.handle == Views.DragHandleType.NW) dcy = -dh / 2;
-
-                overlay.PlacementCenterX += dcx;
-                overlay.PlacementCenterY += dcy;
-            }
-
+            overlay.PlacementCenterX += e.dx / vpW;
+            overlay.PlacementCenterY += e.dy / vpH;
             ApplyOverlayBox(e.slot, overlay, false);
-            _playerControl.UpdateWysiwygHandles(e.slot, true);
         }
 
         private void OnOverlayBoxWheel(object sender, (int slot, int delta) e)
@@ -1791,11 +1694,8 @@ namespace ModernImageViewer.VideoDirector.Models
             if (_mode != EditorMode.Arrange) return;
             var overlay = e.slot == 1 ? _activeOverlay1 : _activeOverlay2;
             if (overlay == null) return;
-            double factor = e.delta > 0 ? 1.08 : 1.0 / 1.08;
-            overlay.PlacementWidth = Math.Clamp(overlay.PlacementWidth * factor, 0.05, 1.0);
-            overlay.PlacementHeight = Math.Clamp(overlay.PlacementHeight * factor, 0.05, 1.0);
+            overlay.PlacementScale *= e.delta > 0 ? 1.08 : 1.0 / 1.08;
             ApplyOverlayBox(e.slot, overlay, false);
-            _playerControl.UpdateWysiwygHandles(e.slot, true);
         }
     }
 }

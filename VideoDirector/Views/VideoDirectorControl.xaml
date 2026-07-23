@@ -124,29 +124,35 @@
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
 
+                                <!-- Start Time (Read Only for Track 1) -->
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Start Time (s)" VerticalAlignment="Center" />
+                                <NumberBox Grid.Row="0" Grid.Column="1" local:NumberBoxExtensions.FractionDigits="1" Value="{Binding SelectedTimelineNode.StartTimeSeconds, Mode=OneWay, FallbackValue=0.0}" 
+                                           IsEnabled="False" SpinButtonPlacementMode="Hidden" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
                                 <!-- Curve Profile -->
-                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Curve Profile" VerticalAlignment="Center" />
-                                <ComboBox Grid.Row="0" Grid.Column="1" SelectedIndex="{Binding SelectedTimelineNode.CurveProfileIndex, Mode=TwoWay, FallbackValue=0}" HorizontalAlignment="Stretch">
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Curve Profile" VerticalAlignment="Center" />
+                                <ComboBox Grid.Row="1" Grid.Column="1" SelectedIndex="{Binding SelectedTimelineNode.CurveProfileIndex, Mode=TwoWay, FallbackValue=0}" HorizontalAlignment="Stretch">
                                     <x:String>Linear</x:String>
                                     <x:String>Bezier</x:String>
                                     <x:String>DirectorsArc</x:String>
                                 </ComboBox>
 
                                 <!-- Playback Speed -->
-                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Playback Speed" VerticalAlignment="Center" />
-                                <NumberBox Grid.Row="1" Grid.Column="1" local:NumberBoxExtensions.FractionDigits="2" Value="{Binding SelectedTimelineNode.PlaybackSpeed, Mode=TwoWay, FallbackValue=1.0}" 
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Playback Speed" VerticalAlignment="Center" />
+                                <NumberBox Grid.Row="2" Grid.Column="1" local:NumberBoxExtensions.FractionDigits="2" Value="{Binding SelectedTimelineNode.PlaybackSpeed, Mode=TwoWay, FallbackValue=1.0}" 
                                            SmallChange="0.1" LargeChange="0.5" Minimum="0" SpinButtonPlacementMode="Inline" />
                                            
                                 <!-- Clip Duration -->
-                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Clip Duration (s)" VerticalAlignment="Center" />
-                                <NumberBox Grid.Row="2" Grid.Column="1" local:NumberBoxExtensions.FractionDigits="1" Value="{Binding SelectedTimelineNode.OpDuration, Mode=TwoWay, Converter={StaticResource TimeSpanToDoubleSecondsConverter}, FallbackValue=1.0}" 
+                                <TextBlock Grid.Row="3" Grid.Column="0" Text="Clip Duration (s)" VerticalAlignment="Center" />
+                                <NumberBox Grid.Row="3" Grid.Column="1" local:NumberBoxExtensions.FractionDigits="1" Value="{Binding SelectedTimelineNode.OpDuration, Mode=TwoWay, Converter={StaticResource TimeSpanToDoubleSecondsConverter}, FallbackValue=1.0}" 
                                            SmallChange="0.5" LargeChange="1.0" Minimum="0" SpinButtonPlacementMode="Inline" />
 
                                 <!-- Transition Style -->
-                                <TextBlock Grid.Row="3" Grid.Column="0" Text="Transition Out Style" VerticalAlignment="Center" />
-                                <ComboBox Grid.Row="3" Grid.Column="1" SelectedIndex="{Binding SelectedTimelineNode.TransitionStyleIndex, Mode=TwoWay, FallbackValue=0}" HorizontalAlignment="Stretch">
+                                <TextBlock Grid.Row="4" Grid.Column="0" Text="Transition Out Style" VerticalAlignment="Center" />
+                                <ComboBox Grid.Row="4" Grid.Column="1" SelectedIndex="{Binding SelectedTimelineNode.TransitionStyleIndex, Mode=TwoWay, FallbackValue=0}" HorizontalAlignment="Stretch">
                                     <x:String>HardSnap</x:String>
                                     <x:String>Crossfade</x:String>
                                     <x:String>CinematicBridge</x:String>
@@ -154,8 +160,8 @@
                                 </ComboBox>
 
                                 <!-- Transition Duration -->
-                                <TextBlock Grid.Row="4" Grid.Column="0" Text="Transition Out Duration (s)" VerticalAlignment="Center" />
-                                <NumberBox Grid.Row="4" Grid.Column="1" local:NumberBoxExtensions.FractionDigits="1" Value="{Binding SelectedTimelineNode.TransitionDuration, Mode=TwoWay, Converter={StaticResource TimeSpanToDoubleSecondsConverter}, FallbackValue=0.0}" 
+                                <TextBlock Grid.Row="5" Grid.Column="0" Text="Transition Out Duration (s)" VerticalAlignment="Center" />
+                                <NumberBox Grid.Row="5" Grid.Column="1" local:NumberBoxExtensions.FractionDigits="1" Value="{Binding SelectedTimelineNode.TransitionDuration, Mode=TwoWay, Converter={StaticResource TimeSpanToDoubleSecondsConverter}, FallbackValue=0.0}" 
                                            SmallChange="0.1" LargeChange="0.5" Minimum="0" SpinButtonPlacementMode="Inline" />
                             </Grid>
                         </StackPanel>
@@ -199,15 +205,11 @@
                                     <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
 
-                                <!-- Box size is typically set by dragging the PiP handles in Arrange mode; numeric
-                                     size is kept for precision. -->
-                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Width / Height" VerticalAlignment="Center" />
-                                <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                                    <NumberBox local:NumberBoxExtensions.FractionDigits="2" Value="{Binding SelectedOverlay.PlacementWidth, Mode=TwoWay, FallbackValue=0.3}"
-                                               SmallChange="0.05" LargeChange="0.1" Minimum="0.05" Maximum="1.0" SpinButtonPlacementMode="Inline" Width="80" ToolTipService.ToolTip="Width (fraction of frame)" />
-                                    <NumberBox local:NumberBoxExtensions.FractionDigits="2" Value="{Binding SelectedOverlay.PlacementHeight, Mode=TwoWay, FallbackValue=0.3}"
-                                               SmallChange="0.05" LargeChange="0.1" Minimum="0.05" Maximum="1.0" SpinButtonPlacementMode="Inline" Width="80" ToolTipService.ToolTip="Height (fraction of frame)" />
-                                </StackPanel>
+                                <!-- Box position is set by dragging the PiP in Composite mode; a numeric
+                                     size is kept for precision (complements wheel-resize). -->
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Box Size" VerticalAlignment="Center" />
+                                <NumberBox Grid.Row="0" Grid.Column="1" local:NumberBoxExtensions.FractionDigits="2" Value="{Binding SelectedOverlay.PlacementScale, Mode=TwoWay, FallbackValue=0.3}"
+                                           SmallChange="0.05" LargeChange="0.1" Minimum="0.05" Maximum="1.0" SpinButtonPlacementMode="Inline" ToolTipService.ToolTip="PiP box size as a fraction of the frame (0.3 = 30%). Or use Composite mode: wheel to resize." />
 
                                 <TextBlock Grid.Row="1" Grid.Column="0" Text="Start Time (s)" VerticalAlignment="Center" />
                                 <NumberBox Grid.Row="1" Grid.Column="1" local:NumberBoxExtensions.FractionDigits="1" Value="{Binding SelectedOverlay.StartTimeSeconds, Mode=TwoWay, FallbackValue=0.0}"
