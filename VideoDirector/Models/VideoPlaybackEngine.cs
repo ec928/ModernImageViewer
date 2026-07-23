@@ -1033,6 +1033,58 @@ namespace ModernImageViewer.VideoDirector.Models
             });
         }
 
+        // Static composite seek (§7G): show the composite at story-time t WITHOUT playing — the
+        // spine frame (main player seeked to the right clip + offset, marks applied) plus the
+        // overlays active then. Drives the global scrubber. A drag on the timeline means "navigate
+        // the whole thing", so if we were in Edit we drop back to Arrange first (once — the mode
+        // flip self-limits repeat calls).
+        public async void SeekCompositeToStoryTime(TimeSpan t)
+        {
+            if (_isAnimating) return; // don't fight active playback
+            if (_mode != EditorMode.Arrange) ExitToArrange();
+
+            var nodes = _viewModel.TimelineNodes;
+            if (nodes.Count == 0) return;
+            if (t < TimeSpan.Zero) t = TimeSpan.Zero;
+            _viewModel.CurrentStoryTime = t;
+
+            int index = _viewModel.GetTimelineIndexForStoryTime(t);
+            if (index < 0 || index >= nodes.Count) return;
+            var op = nodes[index];
+            if (op == null || string.IsNullOrWhiteSpace(op.FilePath)) return;
+
+            TimeSpan offset = t - _viewModel.GetSpineClipStart(index);
+            if (offset < TimeSpan.Zero) offset = TimeSpan.Zero;
+            if (offset > op.OpDuration) offset = op.OpDuration;
+
+            var activePlayer = _isPlayerAActive ? _mediaPlayerA : _mediaPlayerB;
+            var activeElement = _isPlayerAActive ? _playerA : _playerB;
+            var standbyElement = _isPlayerAActive ? _playerB : _playerA;
+            var activeTransform = _isPlayerAActive ? _playerControl.TransformA : _playerControl.TransformB;
+
+            if (activePlayer.Source == null || !string.Equals((activePlayer.Source as MediaSource)?.Uri?.LocalPath, op.FilePath, StringComparison.OrdinalIgnoreCase))
+            {
+                var tcs = new TaskCompletionSource<bool>();
+                Windows.Foundation.TypedEventHandler<MediaPlayer, object> handler = (s, e) => tcs.TrySetResult(true);
+                activePlayer.MediaOpened += handler;
+                activePlayer.Source = MediaSource.CreateFromUri(new Uri(op.FilePath));
+                await Task.WhenAny(tcs.Task, Task.Delay(1500));
+                activePlayer.MediaOpened -= handler;
+            }
+
+            activeElement.Opacity = 1;
+            standbyElement.Opacity = 0;
+            activePlayer.Pause();
+            if (activePlayer.PlaybackSession != null)
+                activePlayer.PlaybackSession.Position = op.VideoStartTime + offset;
+
+            double progress = op.OpDuration.TotalMilliseconds > 0 ? offset.TotalMilliseconds / op.OpDuration.TotalMilliseconds : 0;
+            ApplyMarksAtProgress(op, progress, activeTransform);
+            _playerControl.ActiveTransform = activeTransform;
+
+            EvaluateOverlays(t);
+        }
+
         private DateTime _recordStartTime;
 
         public async void StartRecordingMotion(CinematicOperation op)

@@ -304,7 +304,10 @@
                      story position and (next) scrubs. Laid out in code (TimelineBar_*). -->
                 <Border Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" CornerRadius="4">
                     <Canvas x:Name="TimelineBar" Height="40" HorizontalAlignment="Stretch"
-                            Background="Transparent" SizeChanged="TimelineBar_SizeChanged" />
+                            Background="Transparent" SizeChanged="TimelineBar_SizeChanged"
+                            PointerPressed="TimelineBar_PointerPressed"
+                            PointerMoved="TimelineBar_PointerMoved"
+                            PointerReleased="TimelineBar_PointerReleased" />
                 </Border>
 
                 <!-- Track legend + add. The proportional timeline above is now the single track
