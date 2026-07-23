@@ -1637,6 +1637,12 @@ namespace ModernImageViewer.VideoDirector.Models
             UpdateWysiwygOverlay();
             if (_isEditingOverlay && _activeOverlay1 != null)
                 ApplyOverlayBox(1, _activeOverlay1, true);
+            // Resizing the canvas invalidates the paused overlay surfaces too — refresh them.
+            if (!_isAnimating)
+            {
+                if (_activeOverlay1 != null) RepresentOverlayFrame(1);
+                if (_activeOverlay2 != null) RepresentOverlayFrame(2);
+            }
         }
 
         // ---- Clip-scoped Edit-mode preview (Play in Edit mode = this clip's Ken Burns only) ----
@@ -1702,6 +1708,7 @@ namespace ModernImageViewer.VideoDirector.Models
                 overlay.PlacementCenterX += e.dx / vpW;
                 overlay.PlacementCenterY += e.dy / vpH;
                 ApplyOverlayBox(e.slot, overlay, false);
+                RepresentOverlayFrame(e.slot);
                 return;
             }
 
@@ -1737,6 +1744,19 @@ namespace ModernImageViewer.VideoDirector.Models
             overlay.PlacementCenterX = ((left + right) / 2) / vpW;
             overlay.PlacementCenterY = ((top + bottom) / 2) / vpH;
             ApplyOverlayBox(e.slot, overlay, false);
+            RepresentOverlayFrame(e.slot);
+        }
+
+        // A paused MediaPlayerElement stops pushing frames once its surface is resized or moved,
+        // so reshaping/moving a PiP in Arrange (where the player is paused) leaves an empty box.
+        // Re-seek to the current position to force a fresh frame onto the resized surface.
+        private void RepresentOverlayFrame(int slot)
+        {
+            var player = slot == 1 ? _overlayMediaPlayer1 : _overlayMediaPlayer2;
+            var session = player?.PlaybackSession;
+            if (session == null) return;
+            if (session.PlaybackState == Windows.Media.Playback.MediaPlaybackState.Playing) return;
+            try { session.Position = session.Position; } catch { }
         }
 
         private void OnOverlayBoxWheel(object sender, (int slot, int delta) e)
@@ -1749,6 +1769,7 @@ namespace ModernImageViewer.VideoDirector.Models
             overlay.PlacementWidth *= f;
             overlay.PlacementHeight *= f;
             ApplyOverlayBox(e.slot, overlay, false);
+            RepresentOverlayFrame(e.slot);
         }
     }
 }
