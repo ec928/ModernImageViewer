@@ -149,6 +149,9 @@ namespace ModernImageViewer.VideoDirector.ViewModels
                 {
                     if (value != null) SelectedOverlay = null;
                     OnPropertyChanged(nameof(HasSelection));
+                    OnPropertyChanged(nameof(SelectedClip));
+                    OnPropertyChanged(nameof(IsTrack1Selected));
+                    OnPropertyChanged(nameof(IsOverlaySelected));
                     OnPropertyChanged(nameof(ModeLabel));
                 }
             }
@@ -164,6 +167,9 @@ namespace ModernImageViewer.VideoDirector.ViewModels
                 {
                     if (value != null) SelectedTimelineNode = null;
                     OnPropertyChanged(nameof(HasSelection));
+                    OnPropertyChanged(nameof(SelectedClip));
+                    OnPropertyChanged(nameof(IsTrack1Selected));
+                    OnPropertyChanged(nameof(IsOverlaySelected));
                     OnPropertyChanged(nameof(ModeLabel));
                 }
             }
@@ -172,6 +178,13 @@ namespace ModernImageViewer.VideoDirector.ViewModels
         // True when either a Track 1 clip or an overlay is selected — the right panel shows
         // the relevant inspector, otherwise a "nothing selected" hint.
         public bool HasSelection => _selectedTimelineNode != null || _selectedOverlay != null;
+
+        // The single selected clip regardless of track — the unified inspector binds to this so
+        // Track 1 and Track 2+ share one layout. IsTrack1Selected / IsOverlaySelected drive the
+        // visibility of the track-specific rows (Speed/Transition vs Size/Opacity).
+        public CinematicOperation SelectedClip => _selectedTimelineNode ?? _selectedOverlay;
+        public bool IsTrack1Selected => _selectedTimelineNode != null;
+        public bool IsOverlaySelected => _selectedOverlay != null;
 
         // Human-readable current mode, shown in a badge. The mouse wheel means different things
         // in edit vs composite, so the mode must always be visible. (Interactive canvas view is

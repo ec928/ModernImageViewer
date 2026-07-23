@@ -204,12 +204,22 @@ namespace ModernImageViewer.VideoDirector.Models
         // framing (marks). Track 1 ignores placement (it is always full-frame). This is what
         // lets a clip be framed full-screen while editing but shown as a corner PiP at playback.
 
-        // Box size as a fraction of the video's viewport-fit size. 0.3 = 30%.
-        private double _placementScale = 0.3;
-        public double PlacementScale
+        // Box size as INDEPENDENT fractions of the video's viewport-fit size (0.3 = 30%).
+        // Width and Height are decoupled so the PiP box can be reshaped to any aspect; the
+        // video content crop-fills the box (UniformToFill + clip) so it never distorts.
+        // Default 0.3 x 0.3 reproduces the old aspect-locked 30% corner PiP exactly.
+        private double _placementWidth = 0.3;
+        public double PlacementWidth
         {
-            get => _placementScale;
-            set => SetProperty(ref _placementScale, Math.Clamp(value, 0.05, 1.0));
+            get => _placementWidth;
+            set => SetProperty(ref _placementWidth, Math.Clamp(value, 0.05, 1.0));
+        }
+
+        private double _placementHeight = 0.3;
+        public double PlacementHeight
+        {
+            get => _placementHeight;
+            set => SetProperty(ref _placementHeight, Math.Clamp(value, 0.05, 1.0));
         }
 
         // Box centre as a fraction of the viewport (0.5,0.5 = centre). Default lower-right.

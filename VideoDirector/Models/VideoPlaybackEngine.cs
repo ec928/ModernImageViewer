@@ -77,7 +77,7 @@ namespace ModernImageViewer.VideoDirector.Models
             _viewModel.PropertyChanged += ViewModel_PropertyChanged;
 
             // Arrange mode: drag/wheel the PiP under the cursor.
-            _playerControl.OverlayBoxMoved += OnOverlayBoxMoved;
+            _playerControl.OverlayBoxDragged += OnOverlayBoxDragged;
             _playerControl.OverlayBoxWheel += OnOverlayBoxWheel;
 
             // Start in Arrange (the default mode) — PiP input active.
@@ -1324,14 +1324,25 @@ namespace ModernImageViewer.VideoDirector.Models
             if (aspect >= vpW / vpH) { fitW = vpW; fitH = vpW / aspect; }
             else { fitH = vpH; fitW = vpH * aspect; }
 
-            double scale = editMode ? 1.0 : overlay.PlacementScale;
+            // Edit mode: box fills the video fit (framing at full size). Arrange: independent
+            // width/height so the PiP can be reshaped; the video crop-fills (UniformToFill).
+            double sw = editMode ? 1.0 : overlay.PlacementWidth;
+            double sh = editMode ? 1.0 : overlay.PlacementHeight;
             double cx = editMode ? 0.5 : overlay.PlacementCenterX;
             double cy = editMode ? 0.5 : overlay.PlacementCenterY;
 
-            double boxW = fitW * scale;
-            double boxH = fitH * scale;
+            double boxW = fitW * sw;
+            double boxH = fitH * sh;
             double left = cx * vpW - boxW / 2;
             double top = cy * vpH - boxH / 2;
+
+            // Reshape handles show only on the corner PiP while arranging (not in full-frame edit,
+            // and not during playback where they would clutter the composite).
+            var handles = slot == 1 ? _playerControl.OverlayHandles1 : _playerControl.OverlayHandles2;
+            if (handles != null)
+                handles.Visibility = (!editMode && !_isAnimating)
+                    ? Microsoft.UI.Xaml.Visibility.Visible
+                    : Microsoft.UI.Xaml.Visibility.Collapsed;
 
             grid.Margin = new Microsoft.UI.Xaml.Thickness(left, top, 0, 0);
             // Only resize + reallocate the clip when the box dimensions actually change
@@ -1677,15 +1688,54 @@ namespace ModernImageViewer.VideoDirector.Models
 
         // ---- Arrange mode: drag / wheel the PiP under the cursor (the hit slot) ----
 
-        private void OnOverlayBoxMoved(object sender, (int slot, double dx, double dy) e)
+        private void OnOverlayBoxDragged(object sender, (int slot, Views.BoxGrab grab, double dx, double dy) e)
         {
             if (_mode != EditorMode.Arrange) return;
             var overlay = e.slot == 1 ? _activeOverlay1 : _activeOverlay2;
             if (overlay == null) return;
             double vpW = _playerControl.ActualWidth, vpH = _playerControl.ActualHeight;
             if (vpW <= 0 || vpH <= 0) return;
-            overlay.PlacementCenterX += e.dx / vpW;
-            overlay.PlacementCenterY += e.dy / vpH;
+
+            // Interior grab = translate the whole box.
+            if (e.grab == Views.BoxGrab.Move)
+            {
+                overlay.PlacementCenterX += e.dx / vpW;
+                overlay.PlacementCenterY += e.dy / vpH;
+                ApplyOverlayBox(e.slot, overlay, false);
+                return;
+            }
+
+            // Edge/corner grab = reshape. Work in pixels: move only the grabbed edges, keep the
+            // opposite edges anchored, then convert back to independent width/height + centre.
+            double aspect = e.slot == 1 ? _overlayAspect1 : _overlayAspect2;
+            if (aspect <= 0) return;
+            double fitW, fitH;
+            if (aspect >= vpW / vpH) { fitW = vpW; fitH = vpW / aspect; }
+            else { fitH = vpH; fitW = vpH * aspect; }
+
+            double boxW = fitW * overlay.PlacementWidth;
+            double boxH = fitH * overlay.PlacementHeight;
+            double cxPx = overlay.PlacementCenterX * vpW;
+            double cyPx = overlay.PlacementCenterY * vpH;
+            double left = cxPx - boxW / 2, right = cxPx + boxW / 2;
+            double top = cyPx - boxH / 2, bottom = cyPx + boxH / 2;
+
+            var g = e.grab;
+            bool moveLeft = g == Views.BoxGrab.Left || g == Views.BoxGrab.TopLeft || g == Views.BoxGrab.BottomLeft;
+            bool moveRight = g == Views.BoxGrab.Right || g == Views.BoxGrab.TopRight || g == Views.BoxGrab.BottomRight;
+            bool moveTop = g == Views.BoxGrab.Top || g == Views.BoxGrab.TopLeft || g == Views.BoxGrab.TopRight;
+            bool moveBottom = g == Views.BoxGrab.Bottom || g == Views.BoxGrab.BottomLeft || g == Views.BoxGrab.BottomRight;
+
+            const double minPx = 24;
+            if (moveLeft) left = Math.Min(left + e.dx, right - minPx);
+            if (moveRight) right = Math.Max(right + e.dx, left + minPx);
+            if (moveTop) top = Math.Min(top + e.dy, bottom - minPx);
+            if (moveBottom) bottom = Math.Max(bottom + e.dy, top + minPx);
+
+            overlay.PlacementWidth = (right - left) / fitW;
+            overlay.PlacementHeight = (bottom - top) / fitH;
+            overlay.PlacementCenterX = ((left + right) / 2) / vpW;
+            overlay.PlacementCenterY = ((top + bottom) / 2) / vpH;
             ApplyOverlayBox(e.slot, overlay, false);
         }
 
@@ -1694,7 +1744,10 @@ namespace ModernImageViewer.VideoDirector.Models
             if (_mode != EditorMode.Arrange) return;
             var overlay = e.slot == 1 ? _activeOverlay1 : _activeOverlay2;
             if (overlay == null) return;
-            overlay.PlacementScale *= e.delta > 0 ? 1.08 : 1.0 / 1.08;
+            // Wheel = uniform resize: scales both dimensions, preserving the box's current shape.
+            double f = e.delta > 0 ? 1.08 : 1.0 / 1.08;
+            overlay.PlacementWidth *= f;
+            overlay.PlacementHeight *= f;
             ApplyOverlayBox(e.slot, overlay, false);
         }
     }

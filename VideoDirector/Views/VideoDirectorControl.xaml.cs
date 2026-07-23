@@ -85,9 +85,11 @@ namespace ModernImageViewer.VideoDirector.Views
             _playbackEngine?.UpdateWysiwygOverlay();
         }
 
+        // Keyframe capture is identical for every track: it grabs the current content framing
+        // (the edit-mode transform) onto the selected clip. One handler, whichever track is live.
         private void SetStart_Click(object sender, RoutedEventArgs e)
         {
-            var op = ViewModel.SelectedTimelineNode as CinematicOperation;
+            var op = ViewModel.SelectedClip;
             var transform = PlayerControl.ActiveTransform;
             if (op != null && transform != null)
             {
@@ -98,7 +100,7 @@ namespace ModernImageViewer.VideoDirector.Views
 
         private void SetMid_Click(object sender, RoutedEventArgs e)
         {
-            var op = ViewModel.SelectedTimelineNode as CinematicOperation;
+            var op = ViewModel.SelectedClip;
             var transform = PlayerControl.ActiveTransform;
             if (op != null && transform != null)
             {
@@ -109,13 +111,25 @@ namespace ModernImageViewer.VideoDirector.Views
 
         private void SetEnd_Click(object sender, RoutedEventArgs e)
         {
-            var op = ViewModel.SelectedTimelineNode as CinematicOperation;
+            var op = ViewModel.SelectedClip;
             var transform = PlayerControl.ActiveTransform;
             if (op != null && transform != null)
             {
                 op.EndMark = new SpatialMark((float)transform.ScaleX, (float)transform.TranslateX, (float)transform.TranslateY);
                 _playbackEngine?.UpdateWysiwygOverlay();
             }
+        }
+
+        // Right-click the Mid button to clear it (back to a two-point Start -> End motion).
+        private void ClearMid_RightTapped(object sender, Microsoft.UI.Xaml.Input.RightTappedRoutedEventArgs e)
+        {
+            var op = ViewModel.SelectedClip;
+            if (op != null)
+            {
+                op.MidMark = null;
+                _playbackEngine?.UpdateWysiwygOverlay();
+            }
+            e.Handled = true;
         }
 
         private void ViewModel_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -402,16 +416,6 @@ namespace ModernImageViewer.VideoDirector.Views
             }
         }
 
-        private void SetOverlayStart_Click(object sender, RoutedEventArgs e)
-        {
-            var overlay = ViewModel.SelectedOverlay;
-            var transform = PlayerControl.ActiveTransform;
-            if (overlay != null && transform != null)
-            {
-                overlay.StartMark = new SpatialMark((float)transform.ScaleX, (float)transform.TranslateX, (float)transform.TranslateY);
-            }
-        }
-
         private void ExitToArrange_Click(object sender, RoutedEventArgs e)
         {
             // Clear the selection so we don't immediately re-enter Edit, then return to Arrange.
@@ -419,37 +423,6 @@ namespace ModernImageViewer.VideoDirector.Views
             ViewModel.SelectedOverlay = null;
             _playbackEngine?.ExitToArrange();
         }
-
-        private void SetOverlayMid_Click(object sender, RoutedEventArgs e)
-        {
-            var overlay = ViewModel.SelectedOverlay;
-            var transform = PlayerControl.ActiveTransform;
-            if (overlay != null && transform != null)
-            {
-                overlay.MidMark = new SpatialMark((float)transform.ScaleX, (float)transform.TranslateX, (float)transform.TranslateY);
-            }
-        }
-
-        private void ClearOverlayMid_RightTapped(object sender, Microsoft.UI.Xaml.Input.RightTappedRoutedEventArgs e)
-        {
-            var overlay = ViewModel.SelectedOverlay;
-            if (overlay != null)
-            {
-                overlay.MidMark = null; // Back to a two-point (Start -> End) motion
-            }
-            e.Handled = true;
-        }
-
-        private void SetOverlayEnd_Click(object sender, RoutedEventArgs e)
-        {
-            var overlay = ViewModel.SelectedOverlay;
-            var transform = PlayerControl.ActiveTransform;
-            if (overlay != null && transform != null)
-            {
-                overlay.EndMark = new SpatialMark((float)transform.ScaleX, (float)transform.TranslateX, (float)transform.TranslateY);
-            }
-        }
-
 
         private async void AddOverlay_Click(object sender, RoutedEventArgs e)
         {
@@ -492,7 +465,8 @@ namespace ModernImageViewer.VideoDirector.Views
                         StartMark = new SpatialMark(overlay.StartMark.Scale, overlay.StartMark.X, overlay.StartMark.Y),
                         EndMark = new SpatialMark(overlay.EndMark.Scale, overlay.EndMark.X, overlay.EndMark.Y),
                         Opacity = overlay.Opacity,
-                        PlacementScale = overlay.PlacementScale,
+                        PlacementWidth = overlay.PlacementWidth,
+                        PlacementHeight = overlay.PlacementHeight,
                         PlacementCenterX = overlay.PlacementCenterX,
                         PlacementCenterY = overlay.PlacementCenterY,
                         Thumbnail = overlay.Thumbnail

@@ -194,8 +194,9 @@ PiP. Plus: Track 1 sequential base, Track 2 overlays (up to **two simultaneous P
 independently framed/placed/animated), motion, opacity, muted audio, add/duplicate/remove, the
 bottom dock.
 
-**Placement representation:** `PlacementScale` + `PlacementCenterX/Y` (normalized 0..1) on the
-clip — box is **aspect-locked to the video** (a single size, no reshape yet; see §7).
+**Placement representation:** `PlacementWidth` + `PlacementHeight` + `PlacementCenterX/Y`
+(normalized 0..1) on the clip — **independent dimensions**, so the box can be reshaped to any
+aspect. The video **crop-fills** the box (`UniformToFill` + box clip): no distortion, no bars.
 
 ---
 
@@ -203,25 +204,24 @@ clip — box is **aspect-locked to the video** (a single size, no reshape yet; s
 
 The two-mode architecture (§5A) is the foundation and is done. Remaining work:
 
-### NEXT — PiP reshaping (Arrange mode)
-Today the PiP box is **aspect-locked to the video** (single `PlacementScale`): you can move and
-*uniformly* resize, but not change its shape. To add reshaping:
-1. **Model + rendering — easy, low-risk.** Replace `PlacementScale` with **independent width +
-   height** (viewport fractions). The video **crop-fills** the reshaped box (switch the fit to
-   crop-fill) so there's no distortion and no bars. Content marks (Edit mode) still frame what
-   shows inside. Prove it first with two numeric fields.
-2. **Handle UI — moderate.** Draw corner/edge drag-handles on the selected PiP in Arrange;
-   corner = change W+H, edge = one dimension. Sits on the now-reliable InputLayer hit-testing.
+### DONE — PiP reshaping (Arrange mode)
+- **Model + rendering.** `PlacementScale` replaced by independent `PlacementWidth`/`PlacementHeight`.
+  Overlay `MediaPlayerElement` switched to `Stretch="UniformToFill"` so the reshaped box crop-fills.
+  `ApplyOverlayBox` sizes `boxW=fitW*Width`, `boxH=fitH*Height`. Default 0.3×0.3 = the old 30% PiP.
+- **Numeric fields.** Inspector shows **PiP Width** + **PiP Height** (overlay-only rows).
+- **Handles.** Eight visible handles (4 corner + 4 edge) drawn on the selected PiP in Arrange
+  (`OverlayHandles1/2`, hidden in Edit + during playback). Hit-testing is geometric on the
+  InputLayer (`ClassifyGrab`): corner = W+H reshape, edge = one dimension, interior = move,
+  anchored to the opposite edge/corner. Wheel stays **uniform** resize (scales both dims).
+  *(Backward-compat note: old saved projects lose custom PiP size → revert to 0.3×0.3.)*
 
-Wheel stays as uniform resize; handles do the reshape. Design note: reshaping **crops** the
-video to the box shape — what's in the crop is set by the Edit-mode framing. Box = window shape;
-content marks = what's behind it.
-
-### THEN — Start Time field + panel parity (finishes §5A's Edit panel)
-- Add the **Start Time** field to the Edit-mode Zoom & Motion panel: **read-only/auto for
-  Track 1** (compute from preceding clips' durations), **editable for Track 2+**.
-- Unify the panel layout across tracks; track-specific fields appear only where they apply
-  (Opacity → PiPs; Transition-out → Track 1). Record stays Track-1-only for now.
+### DONE — Inspector panel parity
+Single **unified inspector** binds to `SelectedClip` (whichever track). Identical skeleton for
+all tracks: header → Zoom & Motion cluster (Start/Mid/End, shared handlers on `SelectedClip`) →
+property rows. Track-specific rows toggle via `IsTrack1Selected`/`IsOverlaySelected`:
+Speed + Transition-out → Track 1; PiP Width/Height + Opacity → overlays. Start Time is one shared
+row, **read-only for Track 1** (derived from clip order) / **editable for overlays**. Record
+stays Track-1-only.
 
 ### THEN — extend Arrange move/resize to Track 1
 Same drag/resize behaviour for Track 1 clips — the ambition of consistent behaviour on all tracks

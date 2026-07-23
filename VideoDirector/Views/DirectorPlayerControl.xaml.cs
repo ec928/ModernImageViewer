@@ -14,19 +14,29 @@ namespace ModernImageViewer.VideoDirector.Views
         ArrangePips  // Arrange mode: drag = move the PiP under the cursor, wheel = resize it.
     }
 
+    // What grabbing the PiP box does: move it, or resize it from a specific edge/corner.
+    // Determined at pointer-press from where in the box the cursor is (interior = move,
+    // near an edge = one-dimension resize, near a corner = two-dimension resize).
+    public enum BoxGrab { Move, Left, Right, Top, Bottom, TopLeft, TopRight, BottomLeft, BottomRight }
+
     public sealed partial class DirectorPlayerControl : UserControl
     {
         private bool _isDragging = false;
         private Point _lastPointerPosition;
         private int _dragSlot;
+        private BoxGrab _dragGrab;
+
+        // How close (px) to an edge counts as grabbing that edge for a resize.
+        private const double HandleThreshold = 20.0;
 
         public event EventHandler ViewportTransformChanged;
         public Microsoft.UI.Xaml.Media.CompositeTransform ActiveTransform { get; set; }
 
         // PiP manipulation events (Arrange mode). Raised from the full-screen InputLayer — the
         // only reliable pointer catcher, since the PiP's MediaPlayerElement video surface does
-        // not raise its own pointer events.
-        public event EventHandler<(int slot, double dx, double dy)> OverlayBoxMoved;
+        // not raise its own pointer events. Move and resize share one channel; the grab mode
+        // tells the engine whether to translate the box or reshape it from an edge/corner.
+        public event EventHandler<(int slot, BoxGrab grab, double dx, double dy)> OverlayBoxDragged;
         public event EventHandler<(int slot, int delta)> OverlayBoxWheel;
 
         public PlayerInputMode InputMode { get; set; } = PlayerInputMode.Content;
@@ -53,6 +63,28 @@ namespace ModernImageViewer.VideoDirector.Views
             return p.X >= left && p.X <= left + g.Width && p.Y >= top && p.Y <= top + g.Height;
         }
 
+        // Classify where in the box the cursor is: near an edge/corner (resize) or interior (move).
+        private BoxGrab ClassifyGrab(int slot, Point p)
+        {
+            var g = slot == 2 ? OverlayGrid2 : OverlayGrid1;
+            double relX = p.X - g.Margin.Left;
+            double relY = p.Y - g.Margin.Top;
+            // Keep the threshold below half the box so a tiny box still has a movable interior.
+            double t = Math.Min(HandleThreshold, Math.Min(g.Width, g.Height) / 3.0);
+            bool nearLeft = relX <= t, nearRight = relX >= g.Width - t;
+            bool nearTop = relY <= t, nearBottom = relY >= g.Height - t;
+
+            if (nearTop && nearLeft) return BoxGrab.TopLeft;
+            if (nearTop && nearRight) return BoxGrab.TopRight;
+            if (nearBottom && nearLeft) return BoxGrab.BottomLeft;
+            if (nearBottom && nearRight) return BoxGrab.BottomRight;
+            if (nearLeft) return BoxGrab.Left;
+            if (nearRight) return BoxGrab.Right;
+            if (nearTop) return BoxGrab.Top;
+            if (nearBottom) return BoxGrab.Bottom;
+            return BoxGrab.Move;
+        }
+
         private void InputLayer_PointerPressed(object sender, PointerRoutedEventArgs e)
         {
             var p = e.GetCurrentPoint(InputLayer).Position;
@@ -61,6 +93,7 @@ namespace ModernImageViewer.VideoDirector.Views
             {
                 _dragSlot = HitTestOverlaySlot(p);
                 if (_dragSlot == 0) return; // clicked empty canvas — nothing to arrange
+                _dragGrab = ClassifyGrab(_dragSlot, p);
                 _isDragging = true;
                 _lastPointerPosition = p;
                 InputLayer.CapturePointer(e.Pointer);
@@ -83,7 +116,7 @@ namespace ModernImageViewer.VideoDirector.Views
 
             if (InputMode == PlayerInputMode.ArrangePips)
             {
-                if (_dragSlot > 0) OverlayBoxMoved?.Invoke(this, (_dragSlot, deltaX, deltaY));
+                if (_dragSlot > 0) OverlayBoxDragged?.Invoke(this, (_dragSlot, _dragGrab, deltaX, deltaY));
                 return;
             }
 
