@@ -1344,13 +1344,27 @@ namespace ModernImageViewer.VideoDirector.Models
             double left = cx * vpW - boxW / 2;
             double top = cy * vpH - boxH / 2;
 
-            // Reshape handles show only on the corner PiP while arranging (not in full-frame edit,
-            // and not during playback where they would clutter the composite).
+            // Arrange-idle: show the still-image proxy + reshape handles, hide the live video
+            // surface (§7A — a bitmap reshapes cleanly where the paused video surface blanks/greens).
+            // Edit (full-frame content framing) and playback show the live video instead.
+            bool arrangeIdle = !editMode && !_isAnimating;
+            var vis = arrangeIdle ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
+
             var handles = slot == 1 ? _playerControl.OverlayHandles1 : _playerControl.OverlayHandles2;
-            if (handles != null)
-                handles.Visibility = (!editMode && !_isAnimating)
-                    ? Microsoft.UI.Xaml.Visibility.Visible
-                    : Microsoft.UI.Xaml.Visibility.Collapsed;
+            if (handles != null) handles.Visibility = vis;
+
+            var image = slot == 1 ? _playerControl.OverlayImage1 : _playerControl.OverlayImage2;
+            if (image != null)
+            {
+                image.Visibility = vis;
+                if (arrangeIdle) image.Source = overlay.Thumbnail;
+            }
+
+            var playerElement = slot == 1 ? _playerControl.OverlayPlayer1 : _playerControl.OverlayPlayer2;
+            if (playerElement != null)
+                playerElement.Visibility = arrangeIdle
+                    ? Microsoft.UI.Xaml.Visibility.Collapsed
+                    : Microsoft.UI.Xaml.Visibility.Visible;
 
             grid.Margin = new Microsoft.UI.Xaml.Thickness(left, top, 0, 0);
             // Only resize + reallocate the clip when the box dimensions actually change

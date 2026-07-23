@@ -55,6 +55,9 @@
                     <CompositeTransform x:Name="OverlayTransform1" x:FieldModifier="public" />
                 </MediaPlayerElement.RenderTransform>
             </MediaPlayerElement>
+            <!-- Still-image proxy for Arrange/scrub (§7A): a plain bitmap reshapes/moves/crops
+                 cleanly where the live video surface goes blank/green. Video shows only at playback. -->
+            <Image x:Name="OverlayImage1" x:FieldModifier="public" Stretch="UniformToFill" Visibility="Collapsed" />
             <!-- Reshape chrome (Arrange only): outline + 8 drag handles. Visual only — the
                  full-screen InputLayer does the hit-testing, so these never intercept input.
                  Handles sit flush inside the box edges so the box clip doesn't crop them. -->
@@ -80,6 +83,7 @@
                     <CompositeTransform x:Name="OverlayTransform2" x:FieldModifier="public" />
                 </MediaPlayerElement.RenderTransform>
             </MediaPlayerElement>
+            <Image x:Name="OverlayImage2" x:FieldModifier="public" Stretch="UniformToFill" Visibility="Collapsed" />
             <Grid x:Name="OverlayHandles2" x:FieldModifier="public" IsHitTestVisible="False" Visibility="Collapsed">
                 <Border BorderBrush="#CCFFFFFF" BorderThickness="1.5" />
                 <Rectangle Style="{StaticResource PipHandleStyle}" HorizontalAlignment="Left"   VerticalAlignment="Top" />
