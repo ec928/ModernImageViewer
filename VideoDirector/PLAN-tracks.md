@@ -31,9 +31,11 @@ is §9) — they are **owed work**. Do not let them quietly become permanent.
    The still-image proxy (commit `2098e57`) also failed (the visibility swap didn't take effect).
    **Verdict: stop patching. The whole PiP-render component must be rebuilt from scratch**, ideally
    folded into §7B with "arrange = still image / playback = live video" designed in from the start.
-2. **🔴 Overlays are invisible in the composite (Arrange + scrub).** Because overlay rendering goes
-   through the broken component above, you currently **cannot see Track 2 overlays** while arranging
-   or scrubbing — only Track 1 shows. This is the single biggest functional hole. Fixed with #1/§7B.
+2. **🟡 Overlay video is static while scrubbing (minor — author confirmed not a priority).**
+   Overlays *are* visible, selectable, and reorderable — an earlier draft wrongly said they were
+   invisible; they are not. The real, narrow limitation: when you scrub, the Track 2 overlay shows a
+   **static frame** rather than seeking to the scrubbed moment — only Track 1 seeks live. The static
+   composite-seek (§7G) only seeks the spine; seeking overlays per-frame too would fix it.
 3. **🔴 4-track model not built.** The engine still uses the **loose 2-simultaneous-slot** overlay
    model, not the agreed strict **track list (1 spine + ≤3 overlay tracks)**. §7B must replace it.
 4. **🟠 Duplicate / Remove not re-homed onto the timeline.** Removing the old tile lanes dropped the
