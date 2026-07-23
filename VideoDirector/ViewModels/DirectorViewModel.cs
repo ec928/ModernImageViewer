@@ -399,6 +399,30 @@ namespace ModernImageViewer.VideoDirector.ViewModels
             return 0;
         }
 
+        // --- Story-time model (§7C): single authority the trackbar + scrubber read, so they
+        // agree with playback at transition boundaries. The spine (Track 1) defines total length;
+        // transitions are ADDITIVE — each spine clip occupies OpDuration + TransitionDuration.
+
+        // Total composite length = the spine's cumulative span. Overlays live within it.
+        public TimeSpan TotalStoryDuration
+        {
+            get
+            {
+                var total = TimeSpan.Zero;
+                foreach (var clip in TimelineNodes) total += clip.OpDuration + clip.TransitionDuration;
+                return total;
+            }
+        }
+
+        // Story-time start of spine clip `index` = cumulative span of everything before it.
+        public TimeSpan GetSpineClipStart(int index)
+        {
+            var start = TimeSpan.Zero;
+            for (int i = 0; i < index && i < TimelineNodes.Count; i++)
+                start += TimelineNodes[i].OpDuration + TimelineNodes[i].TransitionDuration;
+            return start;
+        }
+
         public async Task AddOverlayAsync(string filePath, TimeSpan startTime)
         {
             TimeSpan duration = TimeSpan.FromSeconds(5);
