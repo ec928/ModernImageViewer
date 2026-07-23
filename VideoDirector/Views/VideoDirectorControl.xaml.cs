@@ -19,13 +19,18 @@ namespace ModernImageViewer.VideoDirector.Views
         private DispatcherTimer _inactivityTimer;
         private double _preRecordSpeed = 1.0;
 
-        // Proportional timeline bar (§7E/F): px-per-second scale + the playhead rectangle.
+        // Proportional timeline bar (§7E/F): px-per-second scale + the playhead line & handle.
         private double _timelinePxPerSec;
         private Microsoft.UI.Xaml.Shapes.Rectangle _playhead;
-        // Scrub gesture state (tap = select a clip, drag = scrub the story position).
+        private Microsoft.UI.Xaml.Shapes.Polygon _playheadKnob;
+        // Pointer state: ruler = scrub; clip row tap = select; clip row drag = move/reorder.
         private Windows.Foundation.Point _timelinePressPoint;
         private bool _timelinePressed;
         private bool _timelineScrubbing;
+        private bool _timelineMovingClip;
+        private CinematicOperation _dragClip;
+        private bool _dragIsSpine;
+        private double _dragGrabOffsetSec;
 
         public VideoDirectorControl()
         {
@@ -73,48 +78,58 @@ namespace ModernImageViewer.VideoDirector.Views
 
         private void TimelineBar_SizeChanged(object sender, SizeChangedEventArgs e) => BuildTimelineBar();
 
-        // Draws the proportional timeline on one shared px=seconds scale: spine clips (top row) laid
-        // end-to-end with a thin transition sliver, overlays (lower row) positioned by start-time.
-        // Reads the story-time authority on the VM so it agrees with playback (§7C/§7E).
+        // Timeline layout: a scrub ruler on top, then the spine row, then the overlay row — all on
+        // one shared px=seconds scale (§7E). Scrub on the ruler; drag clips in their rows.
+        private const double RulerH = 14, RowSpineY = 16, RowOvY = 34, BlockH = 16;
+
         private void BuildTimelineBar()
         {
             if (TimelineBar == null) return;
             TimelineBar.Children.Clear();
-            _playhead = null;
+            _playhead = null; _playheadKnob = null;
 
             double w = TimelineBar.ActualWidth;
+            double h = TimelineBar.ActualHeight;
             double total = ViewModel.TotalStoryDuration.TotalSeconds;
             if (w <= 0 || total <= 0) { _timelinePxPerSec = 0; return; }
             _timelinePxPerSec = w / total;
 
-            const double spineY = 3, spineH = 15, ovY = 21, ovH = 15;
+            // Faint ruler strip marks the scrub zone.
+            var ruler = new Microsoft.UI.Xaml.Shapes.Rectangle
+            {
+                Width = w, Height = RulerH, IsHitTestVisible = false,
+                Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(0x22, 0x88, 0x88, 0x88))
+            };
+            Canvas.SetLeft(ruler, 0); Canvas.SetTop(ruler, 0);
+            TimelineBar.Children.Add(ruler);
 
             for (int i = 0; i < ViewModel.TimelineNodes.Count; i++)
             {
                 var clip = ViewModel.TimelineNodes[i];
                 double x = ViewModel.GetSpineClipStart(i).TotalSeconds * _timelinePxPerSec;
                 double cw = clip.OpDuration.TotalSeconds * _timelinePxPerSec;
-                AddTimelineBlock(x, spineY, cw, spineH, Microsoft.UI.ColorHelper.FromArgb(0xFF, 0x3B, 0x82, 0xF6), clip); // spine = blue
+                AddTimelineBlock(x, RowSpineY, cw, BlockH, Microsoft.UI.ColorHelper.FromArgb(0xFF, 0x3B, 0x82, 0xF6), clip); // spine
                 double tw = clip.TransitionDuration.TotalSeconds * _timelinePxPerSec;
                 if (tw > 0.5)
-                    AddTimelineBlock(x + cw, spineY, tw, spineH, Microsoft.UI.ColorHelper.FromArgb(0xFF, 0x64, 0x74, 0x8B)); // transition
+                    AddTimelineBlock(x + cw, RowSpineY, tw, BlockH, Microsoft.UI.ColorHelper.FromArgb(0xFF, 0x64, 0x74, 0x8B)); // transition
             }
 
             foreach (var ov in ViewModel.OverlayClips)
             {
                 double x = ov.StartTimeSeconds * _timelinePxPerSec;
                 double ow = ov.OpDuration.TotalSeconds * _timelinePxPerSec;
-                AddTimelineBlock(x, ovY, ow, ovH, Microsoft.UI.ColorHelper.FromArgb(0xFF, 0xF5, 0x9E, 0x0B), ov); // overlay = amber
+                AddTimelineBlock(x, RowOvY, ow, BlockH, Microsoft.UI.ColorHelper.FromArgb(0xFF, 0xF5, 0x9E, 0x0B), ov); // overlay
             }
 
-            _playhead = new Microsoft.UI.Xaml.Shapes.Rectangle
-            {
-                Width = 2,
-                Height = TimelineBar.ActualHeight,
-                IsHitTestVisible = false,
-                Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White)
-            };
+            // Playhead: a bright red line the full height with a downward triangle handle in the ruler.
+            var red = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(0xFF, 0xEF, 0x44, 0x44));
+            _playhead = new Microsoft.UI.Xaml.Shapes.Rectangle { Width = 2, Height = h, IsHitTestVisible = false, Fill = red };
             TimelineBar.Children.Add(_playhead);
+            _playheadKnob = new Microsoft.UI.Xaml.Shapes.Polygon { IsHitTestVisible = false, Fill = red };
+            _playheadKnob.Points.Add(new Windows.Foundation.Point(0, 0));
+            _playheadKnob.Points.Add(new Windows.Foundation.Point(11, 0));
+            _playheadKnob.Points.Add(new Windows.Foundation.Point(5.5, 9));
+            TimelineBar.Children.Add(_playheadKnob);
             UpdatePlayhead();
         }
 
@@ -151,34 +166,59 @@ namespace ModernImageViewer.VideoDirector.Views
             }
         }
 
-        // Timeline pointer: tap = select the clip under the point, drag = scrub the story position.
+        // Timeline pointer model (standard NLE): the top ruler scrubs; the clip rows drag clips.
+        // Tap in a row = select; drag in a row = move (overlay = reposition in time, spine =
+        // reorder). Empty space in the rows also scrubs.
         private void TimelineBar_PointerPressed(object sender, PointerRoutedEventArgs e)
         {
-            _timelinePressPoint = e.GetCurrentPoint(TimelineBar).Position;
+            var p = e.GetCurrentPoint(TimelineBar).Position;
+            _timelinePressPoint = p;
             _timelinePressed = true;
             _timelineScrubbing = false;
+            _timelineMovingClip = false;
+            _dragClip = null;
             TimelineBar.CapturePointer(e.Pointer);
+
+            if (p.Y < RulerH) { _timelineScrubbing = true; ScrubToX(p.X); return; }
+
+            var hit = HitClip(p);
+            if (hit.clip != null)
+            {
+                _dragClip = hit.clip;
+                _dragIsSpine = hit.isSpine;
+                _dragGrabOffsetSec = (p.X / _timelinePxPerSec) - hit.startSec;
+            }
+            else { _timelineScrubbing = true; ScrubToX(p.X); }
         }
 
         private void TimelineBar_PointerMoved(object sender, PointerRoutedEventArgs e)
         {
             if (!_timelinePressed) return;
             var p = e.GetCurrentPoint(TimelineBar).Position;
-            if (!_timelineScrubbing && Math.Abs(p.X - _timelinePressPoint.X) < 4) return; // tap vs drag
-            _timelineScrubbing = true;
-            ScrubToX(p.X);
+
+            if (_timelineScrubbing) { ScrubToX(p.X); return; }
+            if (_dragClip == null) return;
+            if (!_timelineMovingClip && Math.Abs(p.X - _timelinePressPoint.X) < 4) return;
+            _timelineMovingClip = true;
+
+            if (!_dragIsSpine) MoveOverlayTo(p.X); // overlay moves live; spine reorders on release
         }
 
         private void TimelineBar_PointerReleased(object sender, PointerRoutedEventArgs e)
         {
             TimelineBar.ReleasePointerCapture(e.Pointer);
-            if (_timelinePressed && !_timelineScrubbing)
-                SelectClipAtPoint(_timelinePressPoint);
+            if (_timelinePressed && _dragClip != null)
+            {
+                if (!_timelineMovingClip) SelectClip(_dragClip, _dragIsSpine);
+                else if (_dragIsSpine) ReorderSpineTo(_dragClip, e.GetCurrentPoint(TimelineBar).Position.X);
+            }
             _timelinePressed = false;
             _timelineScrubbing = false;
+            _timelineMovingClip = false;
+            _dragClip = null;
         }
 
-        // Drag: map x -> story time and seek the composite (spine frame + active overlays).
+        // Map x -> story time and seek the composite (spine frame + active overlays).
         private void ScrubToX(double x)
         {
             if (_timelinePxPerSec <= 0) return;
@@ -187,46 +227,71 @@ namespace ModernImageViewer.VideoDirector.Views
             _playbackEngine?.SeekCompositeToStoryTime(TimeSpan.FromSeconds(sec));
         }
 
-        // Tap: select the spine clip (top row) or overlay (lower row) under the point.
-        private void SelectClipAtPoint(Windows.Foundation.Point p)
+        // Which clip (and its start-second) sits under a point in the clip rows, if any.
+        private (CinematicOperation clip, bool isSpine, double startSec) HitClip(Windows.Foundation.Point p)
         {
-            if (_timelinePxPerSec <= 0) return;
+            if (_timelinePxPerSec <= 0) return (null, false, 0);
             var t = TimeSpan.FromSeconds(Math.Max(0, p.X / _timelinePxPerSec));
 
-            if (p.Y < 20) // spine row
+            if (p.Y >= RowSpineY && p.Y < RowSpineY + BlockH && ViewModel.TimelineNodes.Count > 0)
             {
-                if (ViewModel.TimelineNodes.Count == 0) return;
                 int idx = ViewModel.GetTimelineIndexForStoryTime(t);
-                if (idx < 0 || idx >= ViewModel.TimelineNodes.Count) return;
-                var clip = ViewModel.TimelineNodes[idx];
-                ViewModel.SelectedTimelineNode = clip;
-                if (ViewModel.IsPlaying)
-                {
-                    if (_playbackEngine?.CurrentPlayingOperation != clip)
-                        _ = _playbackEngine?.StartPlaybackAsync(idx);
-                }
-                else
-                {
-                    _playbackEngine?.EnterEditMode(clip, ViewModel.CurrentEditTarget);
-                }
+                if (idx >= 0 && idx < ViewModel.TimelineNodes.Count)
+                    return (ViewModel.TimelineNodes[idx], true, ViewModel.GetSpineClipStart(idx).TotalSeconds);
             }
-            else // overlay row
+            else if (p.Y >= RowOvY && p.Y < RowOvY + BlockH)
             {
                 foreach (var ov in ViewModel.OverlayClips)
-                {
                     if (t >= ov.StartTime && t < ov.StartTime + ov.OpDuration)
-                    {
-                        ViewModel.SelectedOverlay = ov; // PropertyChanged handler enters overlay edit
-                        return;
-                    }
-                }
+                        return (ov, false, ov.StartTimeSeconds);
             }
+            return (null, false, 0);
+        }
+
+        private void SelectClip(CinematicOperation clip, bool isSpine)
+        {
+            if (isSpine)
+            {
+                ViewModel.SelectedTimelineNode = clip;
+                int idx = ViewModel.TimelineNodes.IndexOf(clip);
+                if (ViewModel.IsPlaying)
+                {
+                    if (_playbackEngine?.CurrentPlayingOperation != clip && idx >= 0)
+                        _ = _playbackEngine?.StartPlaybackAsync(idx);
+                }
+                else _playbackEngine?.EnterEditMode(clip, ViewModel.CurrentEditTarget);
+            }
+            else ViewModel.SelectedOverlay = clip; // PropertyChanged enters overlay edit
+        }
+
+        // Overlay drag = free reposition in time (set StartTime), keeping the grab offset.
+        private void MoveOverlayTo(double x)
+        {
+            if (_dragClip == null || _timelinePxPerSec <= 0) return;
+            double total = ViewModel.TotalStoryDuration.TotalSeconds;
+            double newStart = (x / _timelinePxPerSec) - _dragGrabOffsetSec;
+            newStart = Math.Clamp(newStart, 0, Math.Max(0, total - _dragClip.OpDuration.TotalSeconds));
+            _dragClip.StartTime = TimeSpan.FromSeconds(newStart);
+            BuildTimelineBar();
+        }
+
+        // Spine drag = reorder (order-based, gapless): drop onto whichever slot x falls in.
+        private void ReorderSpineTo(CinematicOperation clip, double x)
+        {
+            if (_timelinePxPerSec <= 0) return;
+            int cur = ViewModel.TimelineNodes.IndexOf(clip);
+            if (cur < 0) return;
+            var t = TimeSpan.FromSeconds(Math.Max(0, x / _timelinePxPerSec));
+            int target = Math.Clamp(ViewModel.GetTimelineIndexForStoryTime(t), 0, ViewModel.TimelineNodes.Count - 1);
+            if (target != cur) ViewModel.TimelineNodes.Move(cur, target);
         }
 
         private void UpdatePlayhead()
         {
             if (_playhead == null || _timelinePxPerSec <= 0) return;
-            Canvas.SetLeft(_playhead, ViewModel.CurrentStoryTime.TotalSeconds * _timelinePxPerSec);
+            double x = ViewModel.CurrentStoryTime.TotalSeconds * _timelinePxPerSec;
+            Canvas.SetLeft(_playhead, x);
+            if (_playheadKnob != null) Canvas.SetLeft(_playheadKnob, x - 4.5);
         }
 
         private void PlayerControl_SizeChanged(object sender, SizeChangedEventArgs e)
