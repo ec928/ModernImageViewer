@@ -44,7 +44,14 @@ is §9) — they are **owed work**. Do not let them quietly become permanent.
    from the timeline yet.** Add a right-click flyout on the blocks.
 5. **🟠 Spine (blue) drag has no ghost-follow.** The grabbed spine block does not visually track the
    cursor; it only snaps when it crosses into another slot, and the reorder target is coarse (can be
-   jumpy with certain clip widths). Needs a cursor-following ghost + a stable, center-based target.
+   jumpy with certain clip widths).
+   **Approach (agreed):** the spine is gapless/order-based, so a clip's position is *derived* from its
+   index — there is nothing continuous to write (unlike an overlay's free `StartTime`), which is why a
+   data-driven move snaps. So decouple visual from commit: (1) draw the dragged block as a free
+   **ghost** at `cursorX − grabOffset`; (2) reflow the *other* clips to open a gap at the insertion
+   point; (3) **commit the index change once on release** — no live data churn. Insertion index =
+   count of *other* clips whose centre is left of the cursor (dragged clip excluded) → monotonic, so
+   it cannot oscillate. Cosmetic follow, real discrete commit.
 6. **🟡 Overlay drag rebuilds the whole timeline every pointer-move** (minor flicker / wasted work).
    Should move just the dragged block during the drag and rebuild once on release.
 7. **🟡 Scrub robustness.** Rapid scrubbing re-seeks the paused main player many times a second
@@ -369,6 +376,24 @@ is instantiated or used in Arrange.* If that stays green, the entire 7A failure 
   not a special code path — which *removes* code. The only asymmetry is data-level (role + defaults).
 - **Data model:** replace `OverlayClips` + hardcoded "slot 1/2" with a **track list** (spine +
   overlay array). This is the foundation everything else hangs off.
+
+**Concrete mechanism — a "+N loop capped at 4", not hardcoded slots 3/4:**
+- **Data:** `OverlayTracks` (an `ObservableCollection<OverlayTrack>`, 1..3), each holding an ordered
+  `Clips` collection + a default corner; `MaxOverlayTracks = 3`. Spine stays `TimelineNodes`.
+  Migrate the old flat `OverlayClips` → `OverlayTracks[0]`.
+- **State → arrays:** today's scalar slot pairs (`_activeOverlay1/2`, `_overlayMediaPlayer1/2`,
+  `_overlayAspect1/2`) become **length-3 arrays** indexed by track.
+- **Surfaces:** **pre-declare 3** overlay units in XAML (bounded), exposed as an `OverlayVisuals[3]`
+  array (grid + video + still + transform + handles); z-order = track index. Chosen over runtime
+  instantiation / `ItemsControl` because `MediaPlayerElement`-in-template is awkward and we're capped
+  anyway — the *logic* stays fully generic, only the surface count is fixed.
+- **Evaluation:** replace `EvaluateOverlays` (slot-1/slot-2 branches) with one `EvaluateTracks(t)`
+  loop over `OverlayTracks[i]`; every existing slot method's `slot==1 ? _x1 : _x2` becomes `_x[i]`,
+  so the duplicated bodies collapse into one indexed body.
+- **Why this and not hardcoding 3/4:** adding a track becomes **data** (a new `OverlayTrack` + one
+  pre-declared surface), never a new branch. It is *less* code than four hardcoded slots, and it
+  removes the "add another slot and everything breaks" failure. N>4 would only bump the constant +
+  add a surface — no code-path change. The spine is **not** in this loop (keeps its own A/B roll).
 
 ### C — Story-time authority + additive transitions
 - **One story-time model** turns `clip durations + transition durations` into each clip's
