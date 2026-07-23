@@ -267,29 +267,50 @@ one overlay working, add a second, spend ages fixing everything that breaks). Op
   GPU video surface, not a plain image, so resizing/moving it blanks/greens it and it composites
   over the handles. Frame-refresh churn removed (`0ea76fc`). This is what §7A replaces.
 
-### A — Still-image PiP  *(PARKED — needs a full component rebuild, not more patches)*
-> **Status (2026-07-23):** attempted (`2098e57`) by adding an `Image` proxy and toggling
-> image/video/handles in `ApplyOverlayBox`. **Still fails** — PiP still greens on move/reshape and
-> handles still almost never appear. Symptoms indicate the visibility swap **isn't taking effect**
-> in the states that matter (the video element isn't actually being hidden; handles share the same
-> unreached `ApplyOverlayBox` state), so the user is still manipulating the live video surface.
-> After ~6 iterations with no progress, **do not patch further.** The whole PiP-render component
-> (`OverlayGrid` + video + image + handles + the state-toggling in `ApplyOverlayBox`/`EvaluateOverlays`)
-> is to be **rebuilt from scratch** when revisited — likely folded into the track rework, where the
-> "arrange = still image, playback = video" split is designed in from the start rather than bolted on.
-> The trackbar/scrubber below does **not** hard-depend on this; carry on.
+### A — PiP render REBUILD  *(do AFTER 7B; never attempt before or outside it)*
+> **Status: FAILED 7 times (2026-07-23). Do not patch — rebuild inside 7B.** Attempts 1–6 fought the
+> live video surface (seek-to-refresh, `StepForwardOneFrame`, debounce); attempt 7 (`2098e57`) had the
+> right idea (still-image proxy) but bolted it onto the tangled `ApplyOverlayBox` state machine and
+> shipped it blind/untested — the visibility swap never fired, so the user was still manipulating the
+> video surface. Root cause across all 7: a `MediaPlayerElement` is a **GPU video surface, not a plain
+> image, even paused.** **No more standalone attempts. No "low complexity / low risk" labels — the
+> seven-failure track record IS the estimate; treat as HIGH risk.**
 
-The intended principle (still correct, just not yet realised):
-**arrange/scrub = still images; playback = live video.**
-- In Arrange/scrub a PiP is a **plain bitmap** (the clip's thumbnail) in an `Image`, sized/clipped
-  by the existing box geometry (+ the same marks transform). A bitmap resizes/moves/crops and sits
-  under the handles cleanly — none of the video-surface artefacts.
-- The live `MediaPlayerElement` renders **only during playback**, where the box size is fixed.
-- Bonus: interactive editing no longer runs multiple simultaneous video decoders (the old stutter
-  source) — overlay video players spin up **only at playback**.
-- **Confidence high** (removes the cause, not a workaround); **complexity low-moderate**, hinging on
-  a usable per-clip thumbnail already existing (else grab one representative frame via the
-  frame-server API). **Decoupled** from the static-seek work — it lands on its own, first.
+**Sequencing:** **7B ships first (functional, not perfect). *Then* rebuild the PiP render** — inside
+7B's new per-track pipeline, never as a patch on the old one.
+
+**The invariant (a design rule, not a runtime toggle that can fail to fire):**
+- In **Arrange**, the manipulable PiP is **always a plain element** (bitmap/border). The overlay
+  `MediaPlayerElement` is **not instantiated or used in Arrange at all** — so there is literally
+  nothing to green, blank, or composite over the handles.
+- The **video surface renders only during playback**, sized/positioned to match the box, and is
+  **never itself resized or moved by the user.**
+
+**How this rebuild differs from the 7 failures (the lessons):**
+1. **Rebuild the component; never bolt onto the old one.**
+2. It lives **inside 7B's clean pipeline** — no tangled edit/animating/`EvaluateOverlays` state to
+   lose the swap in.
+3. **Verify the cursed mechanism first, in isolation, with the author** (Iteration 1 below) before
+   stacking anything on it — the one deliberate exception to "bulldoze then harden".
+4. **If it misbehaves, diagnose — never re-patch blind.** Add temporary on-screen/log output the
+   author can read back (is the render path hit? is the image source set? is the video element
+   actually absent?) and fix the real cause. All 7 failures were undiagnosed guesses.
+5. **High risk by default**; sequence so a failure costs one tiny step, not a session.
+
+**Iteration 1 — explicit goal + acceptance (get the author's YES before ANY further step):**
+- **Goal (only this):** in Arrange, a Track-2 overlay renders as a **plain still bitmap** (its
+  thumbnail) in the PiP box.
+- **Acceptance — all author-confirmed:** (a) the overlay shows as a static image in its box;
+  (b) changing the box size (a numeric field is enough) does **not** green / blank / corrupt it;
+  (c) **no overlay `MediaPlayerElement` exists in Arrange** (confirm in code *and* on screen).
+- **Explicitly OUT of scope for iter 1:** handles, drag-reshape, wheel-resize, marks/framing on the
+  image, and the playback video swap.
+- **If (a)–(c) don't all hold: stop and diagnose (lesson #4). Do not proceed, do not re-patch.**
+
+**Later iterations, each gated on the previous being author-confirmed:**
+2. Reshape **handles** on the still image. 3. **Corner/edge drag + wheel** reshape. 4. **Marks/
+framing** applied to the still. 5. **Playback swap** — hide the still, show the live video surface
+sized to the box.
 
 ### B — Track model  *(build all 4 at once; generic over overlays, spine special)*
 - **4 tracks max: 1 spine + up to 3 overlay tracks** (3 simultaneous PiPs).
@@ -353,9 +374,17 @@ The intended principle (still correct, just not yet realised):
 ### H — Playback
 - Spine A/B + **up to 3 overlay players (one per overlay track)**; upper-track transitions stubbed.
 
-**Build order:** A (still-image, now) → B + C (track list + story-time authority) → D (scale) →
-G (static-seek) → E (trackbar) → F (scrubber) → H (playback tidy-up). Get A plus a rough E/F over a
-static composite working end-to-end early, confirm it in the hand, then harden.
+**Build order (revised after the 2026-07-23 session):**
+- **DONE:** C (story-time authority), D (scale), E (proportional trackbar, single track display),
+  F (scrubber + tap-select + drag-move/reorder), G (static composite-seek, spine only).
+- **NEXT — and the first target when work resumes: B — the 4-track model.** Rush it to *functional,
+  not perfect* (generic N-track evaluation, one player per overlay track, transitions stubbed). This
+  is the end-to-end spine we did not reach last session; it comes before any more polishing.
+- **THEN — A (PiP render rebuild)** inside B's new pipeline, per the iteration-1-gated plan in §7A.
+- **THEN harden:** work the ⚠️ Known Limitations list (top of doc).
+
+**Treat the current timeline UI (E/F) as provisional** — expect to adapt it to B's N-track data model
+rather than assume it survives intact.
 
 ### Later polish (after the rework; additive, non-blocking)
 - **Zoom / horizontal scroll** for dense or long timelines (the scale already supports it).
