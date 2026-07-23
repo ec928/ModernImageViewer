@@ -312,6 +312,48 @@ one overlay working, add a second, spend ages fixing everything that breaks). Op
 framing** applied to the still. 5. **Playback swap** — hide the still, show the live video surface
 sized to the box.
 
+#### 7A acceptance test spec (TDD — mandatory; this is the structure that replaces "trust me")
+
+No UI test harness exists, and the cursed symptoms (green/blank/handles-behind-video) are *rendering*
+behaviours WinUI can't self-observe. So every iteration has **two** test kinds:
+- **(A) Automatable, written test-first** — pure logic (geometry/reshape math, state predicates) and
+  observable invariants (element type in the box; whether any video-pipeline call happened). Requires
+  a small **seam added up front**: extract geometry/reshape/state logic into UI-free methods, expose a
+  **video-pipeline call counter** and a **render-state inspector**, add a tiny unit-test project.
+- **(B) Author-run visual checks** — binary pass/fail, for the pixels the stack can't self-test.
+
+**The backbone test, written first and kept GREEN through every iteration:** *no `MediaPlayerElement`
+is instantiated or used in Arrange.* If that stays green, the entire 7A failure class is impossible.
+
+**Iteration 1 — overlay is a plain static bitmap in Arrange; no video surface**
+- A: **T1.1 (backbone)** overlay active in Arrange ⇒ no overlay `MediaPlayerElement` (not created, or
+  Source null + not in tree). **T1.2** element filling the box is the plain-image type, not
+  `MediaPlayerElement`. **T1.3** that Image's `Source` is non-null. **T1.4** box-rect math: (W,H,vp,A)
+  → `fitW*W × fitH*H` centered. **T1.5** a box resize makes **zero** video-pipeline calls (counter==0).
+- B: **V1.1** shows a recognizable still (not black/green/blank); **V1.2** numeric W/H resize stays
+  clean across many rapid changes; **V1.3** no video ever plays in the PiP in Arrange.
+
+**Iteration 2 — reshape handles on the still image**
+- A: **T2.1** 8 handle positions == 4 corners + 4 edge-midpoints of box rect (±ε). **T2.2** re-assert
+  T1.1/T1.2 *with handles present* (element under handles still the plain image). **T2.3** handles
+  Visible **iff** (Arrange ∧ selected ∧ not playing) — assert all 2³ state combos. **T2.4**
+  `ClassifyGrab(point)` returns the right region for a table of known points.
+- B: **V2.1** all 8 handles visible on top of the image; **V2.2** stay visible through field-resize;
+  **V2.3** deselect / playback ⇒ hidden.
+
+**Iteration 3 — corner/edge drag + wheel reshape**
+- A: **T3.1** corner grab + delta → opposite-anchored (W,H,center). **T3.2** edge grab changes one
+  dimension only. **T3.3** interior grab moves center, W/H unchanged. **T3.4** wheel scales W and H by
+  the same factor. **T3.5** results respect min-size + [0.05,1.0] clamps. **T3.6** a full drag-reshape
+  gesture makes **zero** video-pipeline calls (counter==0). **T3.7** reshaped box (aspect ≠ image) ⇒
+  fill == `UniformToFill` and clip rect == box rect (crop-fills, no bars).
+- B: **V3.1** corner=W+H, edge=one dim, interior=move, all tracking the cursor; **V3.2** image
+  crop-fills and **stays clean at narrow/extreme aspects** (the exact case that greened before);
+  **V3.3** handles follow the box; **V3.4** wheel resizes uniformly.
+
+**T1.1 and T\*.6 (the "no video surface / zero video calls" invariants) are the tests that make the
+7A curse un-repeatable.** Write them first; keep them green; do not proceed past a red gate.
+
 ### B — Track model  *(build all 4 at once; generic over overlays, spine special)*
 - **4 tracks max: 1 spine + up to 3 overlay tracks** (3 simultaneous PiPs).
 - **Strict per-track:** clips are sequential and never overlap within a track; simultaneity is
