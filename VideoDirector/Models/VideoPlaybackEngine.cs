@@ -61,6 +61,11 @@ namespace ModernImageViewer.VideoDirector.Models
         // derived from this plus the active player's real position every render frame.
         private TimeSpan _storyTimeAtClipStart = TimeSpan.Zero;
 
+        // Debounced refresh of a paused PiP's frame after the user stops manipulating it
+        // (a paused video surface goes blank once resized/moved; see ScheduleOverlayRefresh).
+        private Microsoft.UI.Xaml.DispatcherTimer _overlayRefreshTimer;
+        private int _pendingRefreshSlot = 1;
+
         public VideoPlaybackEngine(Views.DirectorPlayerControl playerControl, DirectorViewModel viewModel)
         {
             _playerControl = playerControl;
@@ -79,6 +84,13 @@ namespace ModernImageViewer.VideoDirector.Models
             // Arrange mode: drag/wheel the PiP under the cursor.
             _playerControl.OverlayBoxDragged += OnOverlayBoxDragged;
             _playerControl.OverlayBoxWheel += OnOverlayBoxWheel;
+
+            // Fires ~180ms after the last PiP manipulation to refresh the paused frame once.
+            _overlayRefreshTimer = new Microsoft.UI.Xaml.DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(180)
+            };
+            _overlayRefreshTimer.Tick += OverlayRefreshTimer_Tick;
 
             // Start in Arrange (the default mode) — PiP input active.
             _playerControl.InputMode = Views.PlayerInputMode.ArrangePips;
@@ -1640,8 +1652,8 @@ namespace ModernImageViewer.VideoDirector.Models
             // Resizing the canvas invalidates the paused overlay surfaces too — refresh them.
             if (!_isAnimating)
             {
-                if (_activeOverlay1 != null) RepresentOverlayFrame(1);
-                if (_activeOverlay2 != null) RepresentOverlayFrame(2);
+                if (_activeOverlay1 != null) ScheduleOverlayRefresh(1);
+                if (_activeOverlay2 != null) ScheduleOverlayRefresh(2);
             }
         }
 
@@ -1708,7 +1720,7 @@ namespace ModernImageViewer.VideoDirector.Models
                 overlay.PlacementCenterX += e.dx / vpW;
                 overlay.PlacementCenterY += e.dy / vpH;
                 ApplyOverlayBox(e.slot, overlay, false);
-                RepresentOverlayFrame(e.slot);
+                ScheduleOverlayRefresh(e.slot);
                 return;
             }
 
@@ -1744,19 +1756,30 @@ namespace ModernImageViewer.VideoDirector.Models
             overlay.PlacementCenterX = ((left + right) / 2) / vpW;
             overlay.PlacementCenterY = ((top + bottom) / 2) / vpH;
             ApplyOverlayBox(e.slot, overlay, false);
-            RepresentOverlayFrame(e.slot);
+            ScheduleOverlayRefresh(e.slot);
         }
 
         // A paused MediaPlayerElement stops pushing frames once its surface is resized or moved,
-        // so reshaping/moving a PiP in Arrange (where the player is paused) leaves an empty box.
-        // Re-seek to the current position to force a fresh frame onto the resized surface.
-        private void RepresentOverlayFrame(int slot)
+        // so reshaping/moving a PiP in Arrange (where the player is paused) can leave an empty
+        // box. We refresh it ONCE, after manipulation settles (debounced) — never per pointer
+        // move. Doing it per-event caused a seek/step storm that flashed undecoded green frames.
+        private void ScheduleOverlayRefresh(int slot)
         {
-            var player = slot == 1 ? _overlayMediaPlayer1 : _overlayMediaPlayer2;
+            _pendingRefreshSlot = slot;
+            _overlayRefreshTimer.Stop();
+            _overlayRefreshTimer.Start();
+        }
+
+        private void OverlayRefreshTimer_Tick(object sender, object e)
+        {
+            _overlayRefreshTimer.Stop();
+            if (_mode != EditorMode.Arrange || _isAnimating) return;
+            var player = _pendingRefreshSlot == 1 ? _overlayMediaPlayer1 : _overlayMediaPlayer2;
             var session = player?.PlaybackSession;
-            if (session == null) return;
-            if (session.PlaybackState == Windows.Media.Playback.MediaPlaybackState.Playing) return;
-            try { session.Position = session.Position; } catch { }
+            if (session == null || session.PlaybackState == Windows.Media.Playback.MediaPlaybackState.Playing) return;
+            // StepForwardOneFrame decodes and presents a real frame (a re-seek can present an
+            // undecoded green one); advancing a single frame on a static PiP is imperceptible.
+            try { if (session.CanPause) player.StepForwardOneFrame(); } catch { }
         }
 
         private void OnOverlayBoxWheel(object sender, (int slot, int delta) e)
@@ -1769,7 +1792,7 @@ namespace ModernImageViewer.VideoDirector.Models
             overlay.PlacementWidth *= f;
             overlay.PlacementHeight *= f;
             ApplyOverlayBox(e.slot, overlay, false);
-            RepresentOverlayFrame(e.slot);
+            ScheduleOverlayRefresh(e.slot);
         }
     }
 }
