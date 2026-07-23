@@ -293,10 +293,11 @@
 
         <!-- Bottom Track Dock: horizontal arrangement lanes (one per track).
              Auto-hides during playback (IsDockVisible) so the video gets the full canvas. -->
+        <!-- Always visible now (it is just the compact timeline strip since the tile lanes were
+             removed) so the playhead is watchable during playback too. -->
         <Border Grid.Row="1" x:Name="TrackDock"
                 Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                 BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="0,1,0,0"
-                Visibility="{x:Bind ViewModel.IsDockVisible, Mode=OneWay, Converter={StaticResource BoolToVisConverter}}"
                 Padding="8,6">
             <StackPanel Spacing="4">
                 <!-- Proportional timeline + playhead (§7E/F). Activity view: spine (top) + overlay
