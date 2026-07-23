@@ -201,17 +201,16 @@ namespace ModernImageViewer.VideoDirector.Views
             if (!_timelineMovingClip && Math.Abs(p.X - _timelinePressPoint.X) < 4) return;
             _timelineMovingClip = true;
 
-            if (!_dragIsSpine) MoveOverlayTo(p.X); // overlay moves live; spine reorders on release
+            // Both move live: overlay repositions in time, spine reorders as the cursor crosses slots.
+            if (_dragIsSpine) ReorderSpineTo(_dragClip, p.X);
+            else MoveOverlayTo(p.X);
         }
 
         private void TimelineBar_PointerReleased(object sender, PointerRoutedEventArgs e)
         {
             TimelineBar.ReleasePointerCapture(e.Pointer);
-            if (_timelinePressed && _dragClip != null)
-            {
-                if (!_timelineMovingClip) SelectClip(_dragClip, _dragIsSpine);
-                else if (_dragIsSpine) ReorderSpineTo(_dragClip, e.GetCurrentPoint(TimelineBar).Position.X);
-            }
+            if (_timelinePressed && _dragClip != null && !_timelineMovingClip)
+                SelectClip(_dragClip, _dragIsSpine); // a tap (no drag) selects
             _timelinePressed = false;
             _timelineScrubbing = false;
             _timelineMovingClip = false;
