@@ -196,53 +196,120 @@ bottom dock.
 
 **Placement representation:** `PlacementWidth` + `PlacementHeight` + `PlacementCenterX/Y`
 (normalized 0..1) on the clip — **independent dimensions**, so the box can be reshaped to any
-aspect. The video **crop-fills** the box (`UniformToFill` + box clip): no distortion, no bars.
+aspect, crop-filled (`UniformToFill` + box clip): no distortion, no bars. **Note:** crop-fill is
+reliable on a **still bitmap** but *not* on the live paused video surface — see §7A (still-image
+redo); reshaping is currently broken pending that.
 
 ---
 
 ## 7. Next steps (in priority order)
 
-The two-mode architecture (§5A) is the foundation and is done. Remaining work:
+Reshaping and timeline navigation can't be patched in piecemeal any longer; the design below was
+worked through with the author (2026-07-23) and is built as **one interconnected rework**, not
+incrementally — incremental change on an unsettled design is exactly what broke the PiP work (get
+one overlay working, add a second, spend ages fixing everything that breaks). Operating rules:
+- **Validate fast, harden slow.** Stand up a rough end-to-end prototype (proportional trackbar +
+  working scrubber over a static composite) first, prove the design in the hand, *then* polish.
+- **Stubbing to reach end-to-end is acceptable** — a known, deliberate cost of prototyping.
+- **Rewrite over re-patch** when a component keeps failing (the still-image PiP below is a *rewrite*
+  of the PiP-rendering path, not another workaround).
+- **Bounded, not open-ended:** exactly **4 tracks max** (1 spine + 3 overlays).
 
-### DONE — PiP reshaping (Arrange mode)
-- **Model + rendering.** `PlacementScale` replaced by independent `PlacementWidth`/`PlacementHeight`.
-  Overlay `MediaPlayerElement` switched to `Stretch="UniformToFill"` so the reshaped box crop-fills.
-  `ApplyOverlayBox` sizes `boxW=fitW*Width`, `boxH=fitH*Height`. Default 0.3×0.3 = the old 30% PiP.
-- **Numeric fields.** Inspector shows **PiP Width** + **PiP Height** (overlay-only rows).
-- **Handles.** Eight visible handles (4 corner + 4 edge) drawn on the selected PiP in Arrange
-  (`OverlayHandles1/2`, hidden in Edit + during playback). Hit-testing is geometric on the
-  InputLayer (`ClassifyGrab`): corner = W+H reshape, edge = one dimension, interior = move,
-  anchored to the opposite edge/corner. Wheel stays **uniform** resize (scales both dims).
-  *(Backward-compat note: old saved projects lose custom PiP size → revert to 0.3×0.3.)*
+### Already done (keep)
+- **Reshaping model + UI:** independent `PlacementWidth`/`PlacementHeight` (default 0.3×0.3), the
+  **PiP Width/Height** inspector rows, and the 8 reshape handles (`ClassifyGrab`: corner = W+H,
+  edge = one dim, interior = move, opposite-anchored; wheel = uniform). Good; they stay.
+- **Unified inspector (panel parity):** one inspector bound to `SelectedClip`; identical skeleton
+  for every track; track-specific rows toggle via `IsTrack1Selected`/`IsOverlaySelected`
+  (Speed + Transition-out → Track 1; PiP W/H + Opacity → overlays; Start Time shared, read-only for
+  Track 1). Keep.
+- **What FAILED:** rendering the PiP by reshaping the **live paused `MediaPlayerElement`** — it's a
+  GPU video surface, not a plain image, so resizing/moving it blanks/greens it and it composites
+  over the handles. Frame-refresh churn removed (`0ea76fc`). This is what §7A replaces.
 
-### DONE — Inspector panel parity
-Single **unified inspector** binds to `SelectedClip` (whichever track). Identical skeleton for
-all tracks: header → Zoom & Motion cluster (Start/Mid/End, shared handlers on `SelectedClip`) →
-property rows. Track-specific rows toggle via `IsTrack1Selected`/`IsOverlaySelected`:
-Speed + Transition-out → Track 1; PiP Width/Height + Opacity → overlays. Start Time is one shared
-row, **read-only for Track 1** (derived from clip order) / **editable for overlays**. Record
-stays Track-1-only.
+### A — Still-image PiP  *(do FIRST; decoupled; then carry straight on)*
+The redo of PiP rendering, and the cornerstone principle for everything below:
+**arrange/scrub = still images; playback = live video.**
+- In Arrange/scrub a PiP is a **plain bitmap** (the clip's thumbnail) in an `Image`, sized/clipped
+  by the existing box geometry (+ the same marks transform). A bitmap resizes/moves/crops and sits
+  under the handles cleanly — none of the video-surface artefacts.
+- The live `MediaPlayerElement` renders **only during playback**, where the box size is fixed.
+- Bonus: interactive editing no longer runs multiple simultaneous video decoders (the old stutter
+  source) — overlay video players spin up **only at playback**.
+- **Confidence high** (removes the cause, not a workaround); **complexity low-moderate**, hinging on
+  a usable per-clip thumbnail already existing (else grab one representative frame via the
+  frame-server API). **Decoupled** from the static-seek work — it lands on its own, first.
 
-### THEN — extend Arrange move/resize to Track 1
-Same drag/resize behaviour for Track 1 clips — the ambition of consistent behaviour on all tracks
-(deferred until the Track 2 foundation is solid, per the agreed plan).
+### B — Track model  *(build all 4 at once; generic over overlays, spine special)*
+- **4 tracks max: 1 spine + up to 3 overlay tracks** (3 simultaneous PiPs).
+- **Strict per-track:** clips are sequential and never overlap within a track; simultaneity is
+  expressed by *using another track*.
+- **Spine (Track 1) is special and NOT in the generic loop:** gapless, defines total length, keeps
+  the A/B-roll + transitions.
+- **Overlay tracks are a fixed array of ≤3, uniform:** one loop `for each overlay track: evaluate`,
+  **exactly one player per overlay track** (no dynamic pool), **upper-track transitions stubbed**
+  (HardSnap only) for the prototype. *(If this starts to need a player pool or per-overlay A/B,
+  that's the signal it's drifting into the expensive over-general version — stop and reconsider.)*
+- **Uniform interaction/shaping across all tracks:** same `CinematicOperation`, inspector, marks,
+  reshape handles, edit/arrange flow. Track 1's "full-frame" becomes a **default placement value**,
+  not a special code path — which *removes* code. The only asymmetry is data-level (role + defaults).
+- **Data model:** replace `OverlayClips` + hardcoded "slot 1/2" with a **track list** (spine +
+  overlay array). This is the foundation everything else hangs off.
 
-### THEN — C-full (time-scaled timeline)
-- px = seconds, ruler, drag clips along time, snapping, a playhead moving through the dock.
-- **Shared horizontal scroll across lanes** (never built in E) lands here — it's the time-axis
-  on-ramp and becomes mandatory once lanes are time-scaled.
-- Editable Track 2/3 start-times become spatial (drag) instead of numeric.
+### C — Story-time authority + additive transitions
+- **One story-time model** turns `clip durations + transition durations` into each clip's
+  `[start,end]` on the global timeline. **Both playback AND the trackbar/scrubber read from it** —
+  never a parallel calculation, or they disagree at transitions (where it shows most).
+- **Transitions are ADDITIVE** (author's call: clips are very short, so no content is sacrificed to
+  an overlap). Timeline = a strict non-overlapping sequence `[clipA][transAB][clipB][transBC]…`;
+  total = Σ clip + Σ transition; **"gapless" = contiguous incl. the transition segments.**
+- **Accepted tradeoff:** additive transitions blend **boundary frames** (freeze-frame dissolve /
+  dip), not a live-motion crossfade (which needs overlap + would eat clip content). Fine for short
+  clips. *(Future, explicitly not now/soon: fake a motion crossfade via an ongoing Ken-Burns.)*
+- **Verify** how today's engine composes transitions (the A/B roll implies an *overlap* model) and
+  align it to additive — additive likely *simplifies* the A/B usage (hold boundary frames + blend).
 
-### THEN — N-tracks (generic; forget Track 3)
-- Migrate the data model from the single `OverlayClips` + "2 slots" to a **list of upper
-  tracks**, each a `CinematicOperation` collection with its own z-order + default corner.
-- Decide track semantics: move from today's **loose** model (2 simultaneous clips from one
-  collection) to **strict** (each track sequential/no-overlap; N simultaneous = N tracks).
-  Strict is cleaner and pairs with the timeline; the loose model already gives the *capability*.
-- Player allocation: per-track player(s); add an A/B pair per track only when enabling
-  upper-track transitions.
-- Dock renders N lanes from the track list; add/remove-track UI.
-- Best built **with** C-full (stacked tracks + time axis is the natural home).
+### D — Shared scale (pure proportional)
+- **`px = seconds`** — one **scale authority** (`TimeToX` / `XToTime`) used by *both* block layout
+  and the scrubber. Linear + monotonic ⇒ the scrubber is **truthful** (position = a real read of
+  story time). This is why pure-proportional beat floored/columned layouts.
+- **Two single-authority layers:** story-model → `[start,end]` (C), then scale → x (here). Nothing
+  computes pixel positions independently.
+- **Short-clip grabbability = zoom, DEFERRED** (additive, not interconnected). The scale carries a
+  `pixelsPerSecond` from day one so zoom later just changes that number. At second-scale clips and
+  reasonable story lengths, fit-to-width is already grabbable.
+
+### E — Proportional trackbar  *(replaces the equal-tile dock lanes)*
+- N track rows of proportional blocks on the shared scale. **Spine:** gapless, **order-based**
+  (reorder = ripple; start = cumulative). **Overlay tracks:** **free-positioned** (drag a block
+  along time = set its start; gaps allowed).
+- Re-home select / reorder / remove onto the blocks. **Stays visible during playback** so the
+  playhead can travel across it.
+
+### F — Truthful global scrubber
+- A playhead overlaying the trackbar; **drag/click → `XToTime` → static composite seek**. Replaces
+  the click-a-clip-then-Exit navigation.
+- **Convenience:** selecting/grabbing a PiP **auto-parks the playhead inside that PiP's window** so
+  it's guaranteed visible for arranging.
+- **Edit mode is unchanged:** it keeps the per-clip proportional slider (scrub one clip + trim). The
+  global scrubber is the **Arrange** time control — mode-contextual, per §5A.
+
+### G — Composite static-seek  *(the scrubber's engine dependency)*
+- Position everything at story-time *T* **without playing**. **Spine** = live seek of the main
+  player (scrubbing seeks present frames fine — unrelated to the paused-*resize* blanking).
+  **Overlays** = **stills** (thumbnail if active at *T*) → light, no multi-decoder churn.
+
+### H — Playback
+- Spine A/B + **up to 3 overlay players (one per overlay track)**; upper-track transitions stubbed.
+
+**Build order:** A (still-image, now) → B + C (track list + story-time authority) → D (scale) →
+G (static-seek) → E (trackbar) → F (scrubber) → H (playback tidy-up). Get A plus a rough E/F over a
+static composite working end-to-end early, confirm it in the hand, then harden.
+
+### Later polish (after the rework; additive, non-blocking)
+- **Zoom / horizontal scroll** for dense or long timelines (the scale already supports it).
+- Ruler / time ticks; snapping to a time quantum; dragging clips along time with snap.
+- Add/remove-track UI beyond the 4-track default; per-clip audio/unmute (see §9).
 
 ---
 
@@ -284,7 +351,8 @@ Same drag/resize behaviour for Track 1 clips — the ambition of consistent beha
 
 1. Read this doc top-to-bottom + `git log` (latest: right-panel-inspector-only dock commit).
 2. Confirm build is green (`dotnet build -c Debug -p:Platform=x64`).
-3. Next work is the **Canvas view (real C3 + C4)** in §7. Then C-full, then N-tracks.
+3. Next work is the **multi-track timeline rework** in §7: §7A still-image PiP first (decoupled),
+   then the 4-track model + story-time authority + pure-proportional trackbar + truthful scrubber.
 4. Work in the smallest steps that end **green + committed**. This is a WinUI app with **no
    automated UI test** — the author (a human) verifies each visible step by running it, so
    build+commit each increment and hand off for a visual check rather than stacking unverified
