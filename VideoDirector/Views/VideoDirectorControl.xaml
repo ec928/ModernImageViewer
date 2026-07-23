@@ -307,98 +307,30 @@
                             Background="Transparent" SizeChanged="TimelineBar_SizeChanged" />
                 </Border>
 
-                <!-- Track 1 lane -->
+                <!-- Track legend + add. The proportional timeline above is now the single track
+                     display (replaces the old equal-tile lanes); click a block to select a clip. -->
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="64" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="Track 1" VerticalAlignment="Center"
-                               FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    <ListView Grid.Column="1" x:Name="Track1Lane"
-                              ItemsSource="{x:Bind ViewModel.TimelineNodes}"
-                              ItemTemplate="{StaticResource DockTileTemplate}"
-                              SelectedItem="{x:Bind ViewModel.SelectedTimelineNode, Mode=TwoWay}"
-                              SelectionMode="Single"
-                              SelectionChanged="ListView_SelectionChanged"
-                              RightTapped="ListView_RightTapped"
-                              CanReorderItems="True" CanDragItems="True" AllowDrop="True"
-                              Height="74"
-                              ScrollViewer.HorizontalScrollMode="Enabled"
-                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                              ScrollViewer.VerticalScrollMode="Disabled"
-                              ScrollViewer.VerticalScrollBarVisibility="Disabled">
-                        <ListView.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <ItemsStackPanel Orientation="Horizontal" />
-                            </ItemsPanelTemplate>
-                        </ListView.ItemsPanel>
-                        <ListView.ItemContainerStyle>
-                            <Style TargetType="ListViewItem">
-                                <Setter Property="Padding" Value="0" />
-                                <Setter Property="Margin" Value="0" />
-                                <Setter Property="MinWidth" Value="0" />
-                                <Setter Property="ContextFlyout">
-                                    <Setter.Value>
-                                        <MenuFlyout>
-                                            <MenuFlyoutItem Text="Duplicate" Click="Duplicate_Click" />
-                                            <MenuFlyoutItem Text="Remove" Click="Remove_Click" />
-                                        </MenuFlyout>
-                                    </Setter.Value>
-                                </Setter>
-                            </Style>
-                        </ListView.ItemContainerStyle>
-                    </ListView>
-                </Grid>
-
-                <!-- Track 2 lane -->
-                <Grid AllowDrop="True" DragOver="OverlaySection_DragOver" Drop="OverlaySection_Drop">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="64" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
-                        <TextBlock Text="Track 2" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        <Button Click="AddOverlay_Click" Padding="4,1" Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Add an overlay clip to Track 2">
-                            <StackPanel Orientation="Horizontal" Spacing="3">
-                                <FontIcon Glyph="&#xE710;" FontSize="10" />
-                                <TextBlock Text="Add" FontSize="10" />
-                            </StackPanel>
-                        </Button>
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" Margin="0,0,14,0">
+                        <Rectangle Width="10" Height="10" RadiusX="2" RadiusY="2" Fill="#3B82F6" />
+                        <TextBlock Text="Track 1" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     </StackPanel>
-                    <ListView Grid.Column="1" x:Name="Track2Lane"
-                              ItemsSource="{x:Bind ViewModel.OverlayClips}"
-                              ItemTemplate="{StaticResource DockTileTemplate}"
-                              SelectedItem="{x:Bind ViewModel.SelectedOverlay, Mode=TwoWay}"
-                              SelectionMode="Single"
-                              RightTapped="OverlayListView_RightTapped"
-                              CanReorderItems="True" CanDragItems="True"
-                              Height="74"
-                              ScrollViewer.HorizontalScrollMode="Enabled"
-                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                              ScrollViewer.VerticalScrollMode="Disabled"
-                              ScrollViewer.VerticalScrollBarVisibility="Disabled">
-                        <ListView.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <ItemsStackPanel Orientation="Horizontal" />
-                            </ItemsPanelTemplate>
-                        </ListView.ItemsPanel>
-                        <ListView.ItemContainerStyle>
-                            <Style TargetType="ListViewItem">
-                                <Setter Property="Padding" Value="0" />
-                                <Setter Property="Margin" Value="0" />
-                                <Setter Property="MinWidth" Value="0" />
-                                <Setter Property="ContextFlyout">
-                                    <Setter.Value>
-                                        <MenuFlyout>
-                                            <MenuFlyoutItem Text="Duplicate" Click="DuplicateOverlay_Click" />
-                                            <MenuFlyoutItem Text="Remove" Click="RemoveOverlay_Click" />
-                                        </MenuFlyout>
-                                    </Setter.Value>
-                                </Setter>
-                            </Style>
-                        </ListView.ItemContainerStyle>
-                    </ListView>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                        <Rectangle Width="10" Height="10" RadiusX="2" RadiusY="2" Fill="#F59E0B" />
+                        <TextBlock Text="Track 2" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                    <Button Grid.Column="3" Click="AddOverlay_Click" Padding="8,2"
+                            ToolTipService.ToolTip="Add an overlay clip to Track 2">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <FontIcon Glyph="&#xE710;" FontSize="11" />
+                            <TextBlock Text="Add Overlay" FontSize="11" />
+                        </StackPanel>
+                    </Button>
                 </Grid>
             </StackPanel>
         </Border>

@@ -90,7 +90,7 @@ namespace ModernImageViewer.VideoDirector.Views
                 var clip = ViewModel.TimelineNodes[i];
                 double x = ViewModel.GetSpineClipStart(i).TotalSeconds * _timelinePxPerSec;
                 double cw = clip.OpDuration.TotalSeconds * _timelinePxPerSec;
-                AddTimelineBlock(x, spineY, cw, spineH, Microsoft.UI.ColorHelper.FromArgb(0xFF, 0x3B, 0x82, 0xF6)); // spine = blue
+                AddTimelineBlock(x, spineY, cw, spineH, Microsoft.UI.ColorHelper.FromArgb(0xFF, 0x3B, 0x82, 0xF6), clip); // spine = blue
                 double tw = clip.TransitionDuration.TotalSeconds * _timelinePxPerSec;
                 if (tw > 0.5)
                     AddTimelineBlock(x + cw, spineY, tw, spineH, Microsoft.UI.ColorHelper.FromArgb(0xFF, 0x64, 0x74, 0x8B)); // transition
@@ -100,20 +100,21 @@ namespace ModernImageViewer.VideoDirector.Views
             {
                 double x = ov.StartTimeSeconds * _timelinePxPerSec;
                 double ow = ov.OpDuration.TotalSeconds * _timelinePxPerSec;
-                AddTimelineBlock(x, ovY, ow, ovH, Microsoft.UI.ColorHelper.FromArgb(0xFF, 0xF5, 0x9E, 0x0B)); // overlay = amber
+                AddTimelineBlock(x, ovY, ow, ovH, Microsoft.UI.ColorHelper.FromArgb(0xFF, 0xF5, 0x9E, 0x0B), ov); // overlay = amber
             }
 
             _playhead = new Microsoft.UI.Xaml.Shapes.Rectangle
             {
                 Width = 2,
                 Height = TimelineBar.ActualHeight,
+                IsHitTestVisible = false,
                 Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White)
             };
             TimelineBar.Children.Add(_playhead);
             UpdatePlayhead();
         }
 
-        private void AddTimelineBlock(double x, double y, double width, double height, Windows.UI.Color color)
+        private void AddTimelineBlock(double x, double y, double width, double height, Windows.UI.Color color, CinematicOperation clip = null)
         {
             if (width < 1) width = 1;
             var r = new Microsoft.UI.Xaml.Shapes.Rectangle
@@ -124,9 +125,41 @@ namespace ModernImageViewer.VideoDirector.Views
                 RadiusY = 2,
                 Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(color)
             };
+            if (clip != null)
+            {
+                r.Tag = clip;
+                r.PointerPressed += TimelineBlock_PointerPressed;
+            }
             Canvas.SetLeft(r, x);
             Canvas.SetTop(r, y);
             TimelineBar.Children.Add(r);
+        }
+
+        // Click a timeline block to select its clip — the same behaviour the old dock tiles had:
+        // spine clip -> Edit it (or jump playback); overlay -> Edit it (via SelectedOverlay wiring).
+        private void TimelineBlock_PointerPressed(object sender, PointerRoutedEventArgs e)
+        {
+            if (!(sender is FrameworkElement fe && fe.Tag is CinematicOperation clip)) return;
+
+            if (ViewModel.TimelineNodes.Contains(clip))
+            {
+                ViewModel.SelectedTimelineNode = clip;
+                if (ViewModel.IsPlaying)
+                {
+                    int idx = ViewModel.TimelineNodes.IndexOf(clip);
+                    if (_playbackEngine?.CurrentPlayingOperation != clip && idx >= 0)
+                        _ = _playbackEngine?.StartPlaybackAsync(idx);
+                }
+                else
+                {
+                    _playbackEngine?.EnterEditMode(clip, ViewModel.CurrentEditTarget);
+                }
+            }
+            else
+            {
+                ViewModel.SelectedOverlay = clip; // PropertyChanged handler enters overlay edit
+            }
+            e.Handled = true;
         }
 
         private void UpdatePlayhead()
