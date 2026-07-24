@@ -626,6 +626,11 @@ namespace ModernImageViewer.VideoDirector.Views
                     PlayPauseIcon.Symbol = ViewModel.IsPlaying ? Symbol.Pause : Symbol.Play;
                 }
                 _playbackEngine?.UpdateWysiwygOverlay();
+
+                // Whenever playback stops by ANY route (pause, stop, reaching the end), put the
+                // PiPs back into arrangeable stills. Keying off the observable state rather than
+                // one specific method means no path can miss it.
+                if (!ViewModel.IsPlaying) _playbackEngine?.RefreshComposite();
             }
             else if (e.PropertyName == nameof(DirectorViewModel.SelectedOverlay))
             {
