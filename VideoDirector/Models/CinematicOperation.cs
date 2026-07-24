@@ -22,6 +22,26 @@ namespace ModernImageViewer.VideoDirector.Models
 
         public string FileName => System.IO.Path.GetFileName(_filePath);
 
+        private static readonly string[] ImageExtensions =
+            { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".tif", ".tiff" };
+
+        // A clip behaves as a still when it's an image file OR its playback speed is 0 (frozen
+        // frame). Everything else is a video whose end is measured from the decode position.
+        // Do NOT gate video detection on a hardcoded video-extension whitelist: any container we
+        // can't positively identify as an image is a video (.mkv, .avi, .mov, … all count), or a
+        // trimmed clip in an unlisted format silently falls through to still handling and overruns.
+        [JsonIgnore]
+        public bool IsStill
+        {
+            get
+            {
+                if (_playbackSpeed <= 0) return true;
+                if (string.IsNullOrWhiteSpace(_filePath)) return true;
+                var ext = System.IO.Path.GetExtension(_filePath);
+                return Array.Exists(ImageExtensions, e => string.Equals(e, ext, StringComparison.OrdinalIgnoreCase));
+            }
+        }
+
         private BitmapImage? _thumbnail;
         [JsonIgnore]
         public BitmapImage? Thumbnail

@@ -509,8 +509,14 @@ namespace ModernImageViewer.VideoDirector.Models
             TimeSpan elapsed = TimeSpan.Zero;
             DateTime lastTick = DateTime.Now;
 
-            bool isVideo = !string.IsNullOrWhiteSpace(op.FilePath) && 
-                (op.FilePath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) || op.FilePath.EndsWith(".wmv", StringComparison.OrdinalIgnoreCase));
+            // Stills (image files or speed-0 frozen frames) have no advancing decode position, so
+            // they can only be timed by wall clock. Real videos end at their trimmed out-point
+            // (decode position) — but with a wall-clock backstop: a slow seek deep into a long
+            // source (e.g. a 50-min .mkv) can leave Position lagging for seconds, and without the
+            // backstop the clip runs past its out-point until the file ends. The two measures are
+            // designed to coincide across every speed combination, so breaking on whichever fires
+            // first is frame-accurate in the normal case and self-correcting when Position stalls.
+            bool isStill = op.IsStill;
 
             while (true)
             {
@@ -521,14 +527,14 @@ namespace ModernImageViewer.VideoDirector.Models
                 {
                     double currentSpeed = globalSpeed == 0 ? 1.0 : globalSpeed;
                     elapsed += TimeSpan.FromSeconds((now - lastTick).TotalSeconds * currentSpeed);
-                    
-                    if (isVideo)
+
+                    if (isStill)
                     {
-                        if (activePlayer.PlaybackSession.Position >= op.VideoEndTime) break;
+                        if (elapsed >= op.OpDuration) break;
                     }
                     else
                     {
-                        if (elapsed >= op.OpDuration) break;
+                        if (activePlayer.PlaybackSession.Position >= op.VideoEndTime || elapsed >= op.OpDuration) break;
                     }
                 }
                 lastTick = now;
