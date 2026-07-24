@@ -194,7 +194,13 @@ namespace ModernImageViewer.VideoDirector.Models
             // relying on the render loop to catch up to the paused state.
             for (int i = 0; i < MaxOverlayTracks; i++) _overlayPlayer[i]?.Pause();
 
-            _dispatcher.TryEnqueue(() => UpdateWysiwygOverlay());
+            _dispatcher.TryEnqueue(() =>
+            {
+                UpdateWysiwygOverlay();
+                // The render loop is stopped now, so nothing else will re-evaluate the composite:
+                // switch the PiPs back to arrangeable stills (frame + handles) explicitly.
+                RefreshComposite();
+            });
         }
 
         private void ResumePlayback()
@@ -283,16 +289,10 @@ namespace ModernImageViewer.VideoDirector.Models
 
                     if (!wasCancelled)
                     {
-                        _dispatcher.TryEnqueue(() => 
-                        {
-                            _playerA.Opacity = 0;
-                            _playerB.Opacity = 0;
-                            
-                            if (_viewModel.SelectedTimelineNode != null)
-                            {
-                                EnterEditMode(_viewModel.SelectedTimelineNode as CinematicOperation, _viewModel.CurrentEditTarget);
-                            }
-                        });
+                        // Reaching the end used to blank the main players and silently drop into
+                        // Edit mode — the same trap as before (Play then previews one clip and the
+                        // playhead looks frozen). Stay in Arrange and just re-render the composite.
+                        _dispatcher.TryEnqueue(() => RefreshComposite());
                     }
                 }
             }
@@ -1274,7 +1274,7 @@ namespace ModernImageViewer.VideoDirector.Models
                 // through the video-activation pipeline. It used to, which is why a still only
                 // appeared after playing (a player had to be loaded first) and why reshaping could
                 // re-attach a surface and go black. Nothing here touches a MediaPlayer.
-                if (!_isAnimating && !(_isEditingOverlay && i == 0))
+                if (!IsActivelyPlaying && !(_isEditingOverlay && i == 0))
                 {
                     _activeOverlay[i] = desired;
                     if (desired == null) { SetOverlayRender(i, OverlayRender.Hidden, null); continue; }
@@ -1322,6 +1322,11 @@ namespace ModernImageViewer.VideoDirector.Models
         //            or composite over the handles when the box is resized/moved.
         //   Video  — the live MediaPlayerElement (playback, and full-screen content editing).
         private enum OverlayRender { Hidden, Still, Video }
+
+        // "Playing" means actively rolling. PAUSED is not playing: pausing keeps the playback loop
+        // alive (_isAnimating stays true), but a paused composite must behave like Arrange — stills
+        // with handles that you can move — otherwise pause leaves you unable to arrange anything.
+        private bool IsActivelyPlaying => _isAnimating && !_isPaused;
 
         // Idempotent: safe to call every frame. This is the ONLY place the still/video choice is
         // made — the seven failed attempts all inferred it as a side effect somewhere else.
@@ -1377,7 +1382,7 @@ namespace ModernImageViewer.VideoDirector.Models
         // moved in time). Cheap and video-free — it takes the still path in EvaluateOverlays.
         public void RefreshComposite()
         {
-            if (_isAnimating) return;
+            if (IsActivelyPlaying) return;
             EvaluateOverlays(_viewModel.CurrentStoryTime);
         }
 
@@ -1851,10 +1856,9 @@ namespace ModernImageViewer.VideoDirector.Models
         private void OnOverlayBoxDragged(object sender, (int slot, Views.BoxGrab grab, double dx, double dy) e)
         {
             if (_mode != EditorMode.Arrange) return;
-            // §7A invariant: never manipulate a live video surface. While playing, the PiP IS the
-            // video surface (handles are hidden for the same reason) — dragging it is what could
-            // still turn it green. Arrange when paused; playback is for watching.
-            if (_isAnimating) return;
+            // §7A invariant: never manipulate a live video surface. While ACTIVELY playing the PiP
+            // IS that surface (handles hidden for the same reason). Paused counts as Arrange.
+            if (IsActivelyPlaying) return;
             var overlay = _activeOverlay[e.slot];
             if (overlay == null) return;
             double vpW = _playerControl.ActualWidth, vpH = _playerControl.ActualHeight;
@@ -1906,7 +1910,7 @@ namespace ModernImageViewer.VideoDirector.Models
         private void OnOverlayBoxWheel(object sender, (int slot, int delta) e)
         {
             if (_mode != EditorMode.Arrange) return;
-            if (_isAnimating) return;   // same invariant: no resizing a live video surface
+            if (IsActivelyPlaying) return;   // same invariant: no resizing a live video surface
             var overlay = _activeOverlay[e.slot];
             if (overlay == null) return;
             // Wheel = uniform resize: scales both dimensions, preserving the box's current shape.
