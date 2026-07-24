@@ -345,8 +345,8 @@
                     <local:TimelineRangeSlider Grid.Column="0" Grid.ColumnSpan="3"
                                                Maximum="{x:Bind ViewModel.CurrentOperationDurationSeconds, Mode=OneWay}"
                                                Position="{x:Bind ViewModel.CurrentOperationTimeSeconds, Mode=TwoWay}"
-                                               TrimStart="{Binding SelectedTimelineNode.VideoStartTime, Mode=TwoWay, Converter={StaticResource TimeSpanToDoubleSecondsConverter}}"
-                                               TrimEnd="{Binding SelectedTimelineNode.VideoEndTime, Mode=TwoWay, Converter={StaticResource TimeSpanToDoubleSecondsConverter}}"
+                                               TrimStart="{Binding SelectedClip.VideoStartTime, Mode=TwoWay, Converter={StaticResource TimeSpanToDoubleSecondsConverter}}"
+                                               TrimEnd="{Binding SelectedClip.VideoEndTime, Mode=TwoWay, Converter={StaticResource TimeSpanToDoubleSecondsConverter}}"
                                                InteractionStarted="TimelineRangeSlider_InteractionStarted"
                                                InteractionCompleted="TimelineRangeSlider_InteractionCompleted" />
                 </Grid>

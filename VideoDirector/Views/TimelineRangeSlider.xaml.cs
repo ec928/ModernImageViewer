@@ -54,11 +54,40 @@ namespace ModernImageViewer.VideoDirector.Views
 
         private static void OnDependencyPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            if (d is TimelineRangeSlider slider && !slider._isDragging)
+            if (d is TimelineRangeSlider slider)
             {
-                slider.UpdateUI();
+                // A new clip (Maximum changes) resets the zoom to fit the whole source.
+                if (e.Property == MaximumProperty)
+                {
+                    slider._viewStart = 0;
+                    slider._viewSpan = Math.Max(0.01, slider.Maximum);
+                }
+                if (!slider._isDragging) slider.UpdateUI();
             }
         }
+
+        // The visible window into [0, Maximum], in value (seconds) units. Zooming shrinks _viewSpan
+        // so a drag covers fewer seconds per pixel — that's what makes trimming a long source precise.
+        private double _viewStart;
+        private double _viewSpan;
+
+        private double Max => Math.Max(0.01, Maximum);
+
+        private void EnsureView()
+        {
+            if (_viewSpan <= 0 || _viewSpan > Max || _viewStart < 0 || _viewStart + _viewSpan > Max + 0.001)
+            {
+                _viewStart = 0;
+                _viewSpan = Max;
+            }
+        }
+
+        // value -> 0..1 position within the visible window (clamped so off-window thumbs sit at an edge).
+        private double Ratio(double value) => Math.Clamp((value - _viewStart) / _viewSpan, 0, 1);
+
+        // pixel position on the track -> value, and a pixel delta -> value delta, both in the window.
+        private double PixelToValue(double px, double trackWidth) => _viewStart + Math.Clamp((px - 12) / trackWidth, 0, 1) * _viewSpan;
+        private double DeltaToValue(double dxPixels, double trackWidth) => (dxPixels / trackWidth) * _viewSpan;
 
         private void UserControl_SizeChanged(object sender, SizeChangedEventArgs e)
         {
@@ -73,14 +102,14 @@ namespace ModernImageViewer.VideoDirector.Views
         {
             if (RootGrid.ActualWidth == 0) return;
 
+            EnsureView();
+
             double width = RootGrid.ActualWidth;
             double trackWidth = Math.Max(0, width - 24);
 
-            double max = Math.Max(0.01, Maximum);
-
-            double startRatio = Math.Clamp(TrimStart / max, 0, 1);
-            double endRatio = Math.Clamp(TrimEnd / max, 0, 1);
-            double posRatio = Math.Clamp(Position / max, 0, 1);
+            double startRatio = Ratio(TrimStart);
+            double endRatio = Ratio(TrimEnd);
+            double posRatio = Ratio(Position);
 
             double startX = 12 + startRatio * trackWidth - (StartThumb.ActualWidth / 2);
             double endX = 12 + endRatio * trackWidth - (EndThumb.ActualWidth / 2);
@@ -104,7 +133,7 @@ namespace ModernImageViewer.VideoDirector.Views
         private void StartThumb_ManipulationDelta(object sender, ManipulationDeltaRoutedEventArgs e)
         {
             double trackWidth = Math.Max(0.01, RootGrid.ActualWidth - 24);
-            double deltaValue = (e.Cumulative.Translation.X / trackWidth) * Maximum;
+            double deltaValue = DeltaToValue(e.Cumulative.Translation.X, trackWidth);
             double maxAllowed = Math.Max(0, TrimEnd);
             double newValue = Math.Clamp(_dragStartValue + deltaValue, 0, maxAllowed);
             
@@ -130,8 +159,8 @@ namespace ModernImageViewer.VideoDirector.Views
         private void EndThumb_ManipulationDelta(object sender, ManipulationDeltaRoutedEventArgs e)
         {
             double trackWidth = Math.Max(0.01, RootGrid.ActualWidth - 24);
-            double deltaValue = (e.Cumulative.Translation.X / trackWidth) * Maximum;
-            
+            double deltaValue = DeltaToValue(e.Cumulative.Translation.X, trackWidth);
+
             double effectiveMax = Math.Max(0, Maximum);
             double minAllowed = Math.Min(TrimStart, effectiveMax);
             double newValue = Math.Clamp(_dragStartValue + deltaValue, minAllowed, effectiveMax);
@@ -158,8 +187,8 @@ namespace ModernImageViewer.VideoDirector.Views
         private void PlayheadThumb_ManipulationDelta(object sender, ManipulationDeltaRoutedEventArgs e)
         {
             double trackWidth = Math.Max(0.01, RootGrid.ActualWidth - 24);
-            double deltaValue = (e.Cumulative.Translation.X / trackWidth) * Maximum;
-            
+            double deltaValue = DeltaToValue(e.Cumulative.Translation.X, trackWidth);
+
             double effectiveMax = Math.Max(0, Maximum);
             double newValue = Math.Clamp(_dragStartValue + deltaValue, 0, effectiveMax);
             
@@ -187,12 +216,36 @@ namespace ModernImageViewer.VideoDirector.Views
 
             var point = e.GetCurrentPoint(RootGrid).Position;
             double trackWidth = Math.Max(0.01, RootGrid.ActualWidth - 24);
-            double deltaX = point.X - 12;
-            
-            double effectiveMax = Math.Max(0, Maximum);
-            double newValue = Math.Clamp((deltaX / trackWidth) * Maximum, 0, effectiveMax);
+            double newValue = Math.Clamp(PixelToValue(point.X, trackWidth), 0, Max);
 
             Position = newValue;
+            UpdateUI();
+        }
+
+        // Scroll to zoom the visible window, centred on the cursor so it pans toward what you point at.
+        private void RootGrid_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
+        {
+            EnsureView();
+            double trackWidth = Math.Max(0.01, RootGrid.ActualWidth - 24);
+            var pt = e.GetCurrentPoint(RootGrid);
+            double cursorRatio = Math.Clamp((pt.Position.X - 12) / trackWidth, 0, 1);
+            double cursorValue = _viewStart + cursorRatio * _viewSpan;
+
+            double factor = pt.Properties.MouseWheelDelta > 0 ? 0.8 : 1.25; // in : out
+            double minSpan = Math.Min(2.0, Max); // can't zoom past ~2s (or the whole clip if shorter)
+            double newSpan = Math.Clamp(_viewSpan * factor, minSpan, Max);
+
+            _viewStart = Math.Clamp(cursorValue - cursorRatio * newSpan, 0, Math.Max(0, Max - newSpan));
+            _viewSpan = newSpan;
+            UpdateUI();
+            e.Handled = true;
+        }
+
+        // Double-click fits the whole source back into view.
+        private void RootGrid_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+        {
+            _viewStart = 0;
+            _viewSpan = Max;
             UpdateUI();
         }
     }
