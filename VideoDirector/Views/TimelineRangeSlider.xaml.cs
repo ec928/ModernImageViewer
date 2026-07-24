@@ -229,18 +229,27 @@ namespace ModernImageViewer.VideoDirector.Views
         {
             EnsureView();
 
-            // The playhead is the pivot: keep it dead centre and grow/shrink both sides equally, so
-            // zooming never slides the timeline sideways. (If the playhead is off-window, pivot on
-            // the current centre instead.)
-            bool playheadVisible = Position >= _viewStart && Position <= _viewStart + _viewSpan;
-            double pivot = playheadVisible ? Position : _viewStart + _viewSpan * 0.5;
+            int delta = e.GetCurrentPoint(RootGrid).Properties.MouseWheelDelta;
+            bool shift = e.KeyModifiers.HasFlag(Windows.System.VirtualKeyModifiers.Shift);
 
-            double factor = e.GetCurrentPoint(RootGrid).Properties.MouseWheelDelta > 0 ? 0.8 : 1.25; // in : out
-            double minSpan = Math.Min(2.0, Max); // can't zoom past ~2s (or the whole clip if shorter)
-            double newSpan = Math.Clamp(_viewSpan * factor, minSpan, Max);
+            if (shift)
+            {
+                // Shift+scroll pans the visible window left/right so you can reach any region.
+                double panBy = (delta > 0 ? -1 : 1) * _viewSpan * 0.2;
+                _viewStart = Math.Clamp(_viewStart + panBy, 0, Math.Max(0, Max - _viewSpan));
+            }
+            else
+            {
+                // Zoom magnifies around the CENTRE of the view — both edges move outward/inward
+                // equally, exactly like a commercial timeline zoom, never sliding to one side.
+                double center = _viewStart + _viewSpan * 0.5;
+                double factor = delta > 0 ? 0.8 : 1.25; // in : out
+                double minSpan = Math.Min(2.0, Max);    // can't zoom past ~2s (or the whole clip if shorter)
+                double newSpan = Math.Clamp(_viewSpan * factor, minSpan, Max);
+                _viewStart = Math.Clamp(center - newSpan / 2, 0, Math.Max(0, Max - newSpan));
+                _viewSpan = newSpan;
+            }
 
-            _viewStart = Math.Clamp(pivot - newSpan / 2, 0, Math.Max(0, Max - newSpan));
-            _viewSpan = newSpan;
             UpdateUI();
             e.Handled = true;
         }
