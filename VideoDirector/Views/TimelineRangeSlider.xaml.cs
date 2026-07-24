@@ -85,9 +85,18 @@ namespace ModernImageViewer.VideoDirector.Views
         // value -> 0..1 position within the visible window (clamped so off-window thumbs sit at an edge).
         private double Ratio(double value) => Math.Clamp((value - _viewStart) / _viewSpan, 0, 1);
 
-        // pixel position on the track -> value, and a pixel delta -> value delta, both in the window.
+        // pixel position on the track -> value within the visible window.
         private double PixelToValue(double px, double trackWidth) => _viewStart + Math.Clamp((px - 12) / trackWidth, 0, 1) * _viewSpan;
-        private double DeltaToValue(double dxPixels, double trackWidth) => (dxPixels / trackWidth) * _viewSpan;
+
+        // True when a value sits inside the visible window. Drives adaptive drag resolution: a trim
+        // handle dragged while OFF-window moves coarsely (whole clip per screen width) so it rushes
+        // back into view in one drag; once in view it moves at the fine, zoomed resolution. The view
+        // never moves during a drag, so a handle can never be stranded off-screen and undraggable.
+        private bool ValueInView(double value)
+        {
+            EnsureView();
+            return value >= _viewStart && value <= _viewStart + _viewSpan;
+        }
 
         private void UserControl_SizeChanged(object sender, SizeChangedEventArgs e)
         {
@@ -95,7 +104,6 @@ namespace ModernImageViewer.VideoDirector.Views
         }
 
         private bool _isDragging = false;
-        private double _dragStartValue;
 
         private void UpdateUI()
         {
@@ -125,19 +133,16 @@ namespace ModernImageViewer.VideoDirector.Views
         private void StartThumb_ManipulationStarted(object sender, ManipulationStartedRoutedEventArgs e)
         {
             _isDragging = true;
-            _dragStartValue = TrimStart;
             InteractionStarted?.Invoke(this, EventArgs.Empty);
         }
 
         private void StartThumb_ManipulationDelta(object sender, ManipulationDeltaRoutedEventArgs e)
         {
             double trackWidth = Math.Max(0.01, RootGrid.ActualWidth - 24);
-            double deltaValue = DeltaToValue(e.Cumulative.Translation.X, trackWidth);
-            double maxAllowed = Math.Max(0, TrimEnd);
-            double newValue = Math.Clamp(_dragStartValue + deltaValue, 0, maxAllowed);
-            
-            TrimStart = newValue;
-            Position = newValue; // Scrub playhead while trimming
+            double span = ValueInView(TrimStart) ? _viewSpan : Max; // coarse off-window, fine in-view
+            double step = (e.Delta.Translation.X / trackWidth) * span;
+            TrimStart = Math.Clamp(TrimStart + step, 0, Math.Max(0, TrimEnd));
+            Position = TrimStart; // scrub playhead while trimming
             UpdateUI();
         }
 
@@ -151,21 +156,16 @@ namespace ModernImageViewer.VideoDirector.Views
         private void EndThumb_ManipulationStarted(object sender, ManipulationStartedRoutedEventArgs e)
         {
             _isDragging = true;
-            _dragStartValue = TrimEnd;
             InteractionStarted?.Invoke(this, EventArgs.Empty);
         }
 
         private void EndThumb_ManipulationDelta(object sender, ManipulationDeltaRoutedEventArgs e)
         {
             double trackWidth = Math.Max(0.01, RootGrid.ActualWidth - 24);
-            double deltaValue = DeltaToValue(e.Cumulative.Translation.X, trackWidth);
-
-            double effectiveMax = Math.Max(0, Maximum);
-            double minAllowed = Math.Min(TrimStart, effectiveMax);
-            double newValue = Math.Clamp(_dragStartValue + deltaValue, minAllowed, effectiveMax);
-            
-            TrimEnd = newValue;
-            Position = newValue; // Scrub playhead while trimming
+            double span = ValueInView(TrimEnd) ? _viewSpan : Max; // coarse off-window, fine in-view
+            double step = (e.Delta.Translation.X / trackWidth) * span;
+            TrimEnd = Math.Clamp(TrimEnd + step, Math.Min(TrimStart, Max), Max);
+            Position = TrimEnd; // scrub playhead while trimming
             UpdateUI();
         }
 
@@ -179,19 +179,15 @@ namespace ModernImageViewer.VideoDirector.Views
         private void PlayheadThumb_ManipulationStarted(object sender, ManipulationStartedRoutedEventArgs e)
         {
             _isDragging = true;
-            _dragStartValue = Position;
             InteractionStarted?.Invoke(this, EventArgs.Empty);
         }
 
         private void PlayheadThumb_ManipulationDelta(object sender, ManipulationDeltaRoutedEventArgs e)
         {
             double trackWidth = Math.Max(0.01, RootGrid.ActualWidth - 24);
-            double deltaValue = DeltaToValue(e.Cumulative.Translation.X, trackWidth);
-
-            double effectiveMax = Math.Max(0, Maximum);
-            double newValue = Math.Clamp(_dragStartValue + deltaValue, 0, effectiveMax);
-            
-            Position = newValue;
+            double span = ValueInView(Position) ? _viewSpan : Max; // coarse off-window, fine in-view
+            double step = (e.Delta.Translation.X / trackWidth) * span;
+            Position = Math.Clamp(Position + step, 0, Max);
             UpdateUI();
         }
 
@@ -246,7 +242,7 @@ namespace ModernImageViewer.VideoDirector.Views
                     ? Position
                     : _viewStart + _viewSpan * 0.5; // playhead off-window: fall back to view centre
                 double factor = delta > 0 ? 0.8 : 1.25; // in : out
-                double minSpan = Math.Min(2.0, Max);    // can't zoom past ~2s (or the whole clip if shorter)
+                double minSpan = Math.Min(0.2, Max);    // allow zooming to sub-second (frame) precision
                 double newSpan = Math.Clamp(_viewSpan * factor, minSpan, Max);
                 _viewStart = Math.Clamp(pivot - newSpan / 2, 0, Math.Max(0, Max - newSpan));
                 _viewSpan = newSpan;
