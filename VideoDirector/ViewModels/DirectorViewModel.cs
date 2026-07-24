@@ -508,7 +508,9 @@ namespace ModernImageViewer.VideoDirector.ViewModels
                 Thumbnail = thumbnail
             };
             track.Clips.Add(overlay);
-            SelectedOverlay = overlay;
+            // Deliberately does NOT select the new clip: selecting an overlay enters Edit mode,
+            // and in Edit mode Play previews that one clip instead of the composite (so the global
+            // playhead appears frozen). Adding clips is an Arrange activity — stay in Arrange.
         }
 
         // Serialization wrapper. OverlayTracks is the current shape; OverlayClips is the legacy

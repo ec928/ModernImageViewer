@@ -237,14 +237,10 @@ namespace ModernImageViewer.VideoDirector.Views
                 RadiusY = 2,
                 Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(color)
             };
-            // Highlight the selected clip so it's obvious which one the inspector is editing.
+            // Selected clip: just a lighter shade of its own colour — no border, so nothing
+            // overlaps the label.
             if (clip != null && ReferenceEquals(clip, ViewModel.SelectedClip))
-            {
-                // Near-black reads clearly against both the blue/amber blocks and the light bar
-                // (white did not — it vanished against the background).
-                r.Stroke = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(0xFF, 0x0F, 0x17, 0x2A));
-                r.StrokeThickness = 3;
-            }
+                r.Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(Lighten(color, 0.45));
             Canvas.SetLeft(r, x);
             Canvas.SetTop(r, y);
             TimelineBar.Children.Add(r);
@@ -365,14 +361,12 @@ namespace ModernImageViewer.VideoDirector.Views
 
         private void TimelineContextMenu_Opening(object sender, object e)
         {
+            // Keep this trivial: just record what was under the cursor. It previously also called
+            // SelectClip (which changes mode / starts async work) — an exception in Opening aborts
+            // the flyout, which is a candidate for "right-click does nothing".
             var hit = HitClip(_lastHoverPoint);
             _contextClip = hit.clip;
             _contextIsSpine = hit.isSpine;
-
-            bool hasClip = _contextClip != null;
-            TimelineDuplicateItem.IsEnabled = hasClip;
-            TimelineRemoveItem.IsEnabled = hasClip;
-            if (hasClip) SelectClip(_contextClip, _contextIsSpine);
         }
 
         private void TimelineDuplicate_Click(object sender, RoutedEventArgs e)
@@ -496,6 +490,13 @@ namespace ModernImageViewer.VideoDirector.Views
             BuildTimelineBar();
         }
 
+
+        // Blend a colour toward white by `amount` (0..1) — used for the selected-clip shade.
+        private static Windows.UI.Color Lighten(Windows.UI.Color c, double amount)
+        {
+            byte Mix(byte v) => (byte)(v + (255 - v) * amount);
+            return Microsoft.UI.ColorHelper.FromArgb(c.A, Mix(c.R), Mix(c.G), Mix(c.B));
+        }
 
         private void UpdatePlayhead()
         {
