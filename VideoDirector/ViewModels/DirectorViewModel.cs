@@ -497,6 +497,11 @@ namespace ModernImageViewer.VideoDirector.ViewModels
             trackIndex = Math.Clamp(trackIndex, 0, OverlayTracks.Count - 1);
             var track = OverlayTracks[trackIndex];
 
+            // Same clamp as dragging: a dropped file must not land on top of an existing clip,
+            // since only one clip per track can be active at a time.
+            startTime = TimeSpan.FromSeconds(
+                track.ClampToFreeSlot(null, Math.Max(0, startTime.TotalSeconds), duration.TotalSeconds));
+
             var overlay = new CinematicOperation
             {
                 FilePath = filePath,

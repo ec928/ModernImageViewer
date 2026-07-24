@@ -512,33 +512,9 @@ namespace ModernImageViewer.VideoDirector.Views
             double dur = _dragClip.OpDuration.TotalSeconds;
             double newStart = (p.X / _timelinePxPerSec) - _dragGrabOffsetSec;
             newStart = Math.Clamp(newStart, 0, Math.Max(0, total - dur));
-            newStart = ClampToFreeSlot(target, _dragClip, newStart, dur);
+            newStart = target.ClampToFreeSlot(_dragClip, newStart, dur);
             _dragClip.StartTime = TimeSpan.FromSeconds(newStart);
             BuildTimelineBar();
-        }
-
-        // Keep a moving clip inside the free gap between its neighbours on the same track.
-        private static double ClampToFreeSlot(OverlayTrack track, CinematicOperation moving, double start, double dur)
-        {
-            double lower = 0, upper = double.MaxValue;
-            double centre = start + dur / 2;
-
-            foreach (var other in track.Clips)
-            {
-                if (ReferenceEquals(other, moving)) continue;
-                double s = other.StartTimeSeconds;
-                double e = s + other.OpDuration.TotalSeconds;
-
-                if (e <= centre) lower = Math.Max(lower, e);          // neighbour to our left
-                else if (s >= centre) upper = Math.Min(upper, s);     // neighbour to our right
-                else if (centre < (s + e) / 2) upper = Math.Min(upper, s);
-                else lower = Math.Max(lower, e);
-            }
-
-            if (start < lower) start = lower;
-            if (upper != double.MaxValue && start + dur > upper) start = upper - dur;
-            if (start < lower) start = lower;   // no room in this gap — park against the left edge
-            return Math.Max(0, start);
         }
 
 

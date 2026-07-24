@@ -1,3 +1,4 @@
+using System;
 using System.Collections.ObjectModel;
 
 namespace ModernImageViewer.VideoDirector.Models
@@ -30,6 +31,33 @@ namespace ModernImageViewer.VideoDirector.Models
         {
             get => _name;
             set => SetProperty(ref _name, value);
+        }
+
+        // Nearest start time (seconds) at which a clip of length `dur` fits WITHOUT overlapping the
+        // others on this track. The track is strict — only one clip can be active at a time, so an
+        // overlap would silently hide one at playback. Pass the clip being moved so it ignores
+        // itself; pass null when placing a brand-new clip.
+        public double ClampToFreeSlot(CinematicOperation moving, double start, double dur)
+        {
+            double lower = 0, upper = double.MaxValue;
+            double centre = start + dur / 2;
+
+            foreach (var other in Clips)
+            {
+                if (moving != null && ReferenceEquals(other, moving)) continue;
+                double s = other.StartTimeSeconds;
+                double e = s + other.OpDuration.TotalSeconds;
+
+                if (e <= centre) lower = Math.Max(lower, e);          // neighbour to our left
+                else if (s >= centre) upper = Math.Min(upper, s);     // neighbour to our right
+                else if (centre < (s + e) / 2) upper = Math.Min(upper, s);
+                else lower = Math.Max(lower, e);
+            }
+
+            if (start < lower) start = lower;
+            if (upper != double.MaxValue && start + dur > upper) start = upper - dur;
+            if (start < lower) start = lower;   // no room in this gap — park against the left edge
+            return Math.Max(0, start);
         }
     }
 }
