@@ -36,16 +36,16 @@ is §9) — they are **owed work**. Do not let them quietly become permanent.
    invisible; they are not. The real, narrow limitation: when you scrub, the Track 2 overlay shows a
    **static frame** rather than seeking to the scrubbed moment — only Track 1 seeks live. The static
    composite-seek (§7G) only seeks the spine; seeking overlays per-frame too would fix it.
-3. **🔴 4-track model not built.** The engine still uses the **loose 2-simultaneous-slot** overlay
-   model, not the agreed strict **track list (1 spine + ≤3 overlay tracks)**. §7B must replace it.
-4. **🟠 Duplicate / Remove not re-homed onto the timeline.** Removing the old tile lanes dropped the
-   right-click Duplicate/Remove menus. The timeline now supports select (tap), move (drag), reorder
-   (spine drag), and add (button / drag-drop) — but **there is no way to duplicate or remove a clip
-   from the timeline yet.** Add a right-click flyout on the blocks.
-5. **🟠 Spine (blue) drag has no ghost-follow.** The grabbed spine block does not visually track the
-   cursor; it only snaps when it crosses into another slot, and the reorder target is coarse (can be
-   jumpy with certain clip widths).
-   **Approach (agreed):** the spine is gapless/order-based, so a clip's position is *derived* from its
+3. ~~**4-track model not built.**~~ **DONE (§7B, `b539df5`).** Strict track list — 1 spine + ≤3
+   overlay tracks, one generic `EvaluateOverlays` loop indexed by track, one player/surface per
+   track. Always 4 tracks; adding a track is data, not new branches.
+4. ~~**Duplicate / Remove not re-homed.**~~ **DONE (`fac2aca`).** Right-click any timeline block for
+   a Duplicate / Remove flyout. *(The long failure here was self-inflicted: `PointerReleased` fired
+   for the right button too and rebuilt the Canvas, destroying the element the context gesture had
+   started on — swapping RightTapped→ContextRequested→ContextFlyout was never going to fix it.)*
+5. ~~**Spine (blue) drag has no ghost-follow.**~~ **DONE (`9668c73`)** — implemented exactly as the
+   approach below describes.
+   **Approach (implemented):** the spine is gapless/order-based, so a clip's position is *derived* from its
    index — there is nothing continuous to write (unlike an overlay's free `StartTime`), which is why a
    data-driven move snaps. So decouple visual from commit: (1) draw the dragged block as a free
    **ghost** at `cursorX − grabOffset`; (2) reflow the *other* clips to open a gap at the insertion
@@ -62,6 +62,14 @@ is §9) — they are **owed work**. Do not let them quietly become permanent.
    before any real persistence guarantees.
 
 Severity: 🔴 blocks the core experience · 🟠 functional gap / regression · 🟡 polish/robustness.
+
+> **BASELINE (2026-07-24, tag `baseline-7b`).** 7B is done and the multi-track prototype works
+> end-to-end: 4 labelled tracks; one proportional timeline with a ruler-scrub, red playhead and
+> selection shading; tap to select, drag to move (overlays reposition in time *and* move between
+> tracks; spine reorders via a ghost), right-click Duplicate/Remove; drop files onto a row to add
+> them to that track (row-aware, clamped into free gaps — no within-track overlap); play resumes
+> from the playhead. **The one remaining 🔴 is §7A** (PiP render rebuild), untouched by design and
+> gated behind its own test-first plan.
 
 ---
 

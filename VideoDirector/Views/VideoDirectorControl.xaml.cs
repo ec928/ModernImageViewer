@@ -983,9 +983,19 @@ namespace ModernImageViewer.VideoDirector.Views
             if (e.DataView.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.StorageItems))
             {
                 e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Copy;
-                e.DragUIOverride.Caption = "Add as overlay";
+                // Name the row being hovered, so it's obvious where the drop will land.
+                e.DragUIOverride.Caption = "Add to " + TrackNameAt(e.GetPosition(TimelineBar).Y);
                 e.Handled = true;
             }
+        }
+
+        // Which track a given y in the timeline belongs to: the Track 1 row (and the ruler above
+        // it) is the spine; the rows below are the overlay tracks.
+        private string TrackNameAt(double y)
+        {
+            if (y < RowOvY) return "Track 1";
+            int i = Math.Clamp((int)((y - RowOvY) / RowPitch), 0, Math.Max(0, ViewModel.OverlayTracks.Count - 1));
+            return "Track " + (i + 2);
         }
 
         // Drop a video/image onto the timeline strip to add it. Which row you drop on decides the
