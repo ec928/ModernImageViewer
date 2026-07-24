@@ -46,6 +46,11 @@ namespace ModernImageViewer.VideoDirector.Views
         public event EventHandler InteractionStarted;
         public event EventHandler InteractionCompleted;
 
+        // Fired when the user drags a trim handle. TrimStart/TrimEnd are OneWay (display only) so a
+        // selection change never writes stale values back into a clip; the model is written only
+        // here, in response to an actual drag.
+        public event EventHandler TrimChanged;
+
         public TimelineRangeSlider()
         {
             this.InitializeComponent();
@@ -210,10 +215,12 @@ namespace ModernImageViewer.VideoDirector.Views
                 case DragTarget.Start:
                     TrimStart = Math.Clamp(v, 0, TrimEnd);
                     Position = TrimStart; // scrub playhead to the in-point while trimming
+                    TrimChanged?.Invoke(this, EventArgs.Empty);
                     break;
                 case DragTarget.End:
                     TrimEnd = Math.Clamp(v, TrimStart, Max);
                     Position = TrimEnd;
+                    TrimChanged?.Invoke(this, EventArgs.Empty);
                     break;
                 case DragTarget.Playhead:
                     Position = v;

@@ -999,6 +999,16 @@ namespace ModernImageViewer.VideoDirector.Views
 
         private bool _wasPlayingBeforeDrag = false;
 
+        // The scrubber's trim handles are OneWay-bound (display only); a drag writes the model here.
+        // Doing it explicitly (not via a TwoWay binding on a shared control) is what stops one clip's
+        // trim from being clobbered when you switch between clips.
+        private void ClipScrubber_TrimChanged(object sender, EventArgs e)
+        {
+            if (ViewModel.SelectedClip is not CinematicOperation clip) return;
+            clip.VideoStartTime = TimeSpan.FromSeconds(ClipScrubber.TrimStart);
+            clip.VideoEndTime = TimeSpan.FromSeconds(ClipScrubber.TrimEnd);
+        }
+
         private void TimelineRangeSlider_InteractionStarted(object sender, EventArgs e)
         {
             _wasPlayingBeforeDrag = ViewModel.IsPlaying;

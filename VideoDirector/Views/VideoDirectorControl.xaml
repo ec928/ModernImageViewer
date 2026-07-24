@@ -353,8 +353,9 @@
                     <local:TimelineRangeSlider x:Name="ClipScrubber" Grid.Column="0"
                                                Maximum="{Binding SelectedClip.SourceDurationSeconds, FallbackValue=1.0}"
                                                Position="{x:Bind ViewModel.CurrentOperationTimeSeconds, Mode=TwoWay}"
-                                               TrimStart="{Binding SelectedClip.VideoStartTime, Mode=TwoWay, Converter={StaticResource TimeSpanToDoubleSecondsConverter}}"
-                                               TrimEnd="{Binding SelectedClip.VideoEndTime, Mode=TwoWay, Converter={StaticResource TimeSpanToDoubleSecondsConverter}}"
+                                               TrimStart="{Binding SelectedClip.VideoStartTime, Mode=OneWay, Converter={StaticResource TimeSpanToDoubleSecondsConverter}}"
+                                               TrimEnd="{Binding SelectedClip.VideoEndTime, Mode=OneWay, Converter={StaticResource TimeSpanToDoubleSecondsConverter}}"
+                                               TrimChanged="ClipScrubber_TrimChanged"
                                                InteractionStarted="TimelineRangeSlider_InteractionStarted"
                                                InteractionCompleted="TimelineRangeSlider_InteractionCompleted" />
                     <!-- Trim: collapse the scrubber to just the trimmed range, so it behaves like a
