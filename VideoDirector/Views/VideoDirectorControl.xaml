@@ -180,7 +180,34 @@
                                     </ComboBox>
                                 </Grid>
 
-                                <!-- Clip Duration: shared -->
+                                <!-- Trim: In / Out points into the source, in seconds. Numeric so an
+                                     exact segment can be pulled from a long clip (the slider can't).
+                                     Source length is read-only; Duration below = (Out - In) / Speed. -->
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Source length (s)" VerticalAlignment="Center" Width="120" />
+                                    <NumberBox Grid.Column="1" local:NumberBoxExtensions.FractionDigits="1" IsEnabled="False"
+                                               Value="{Binding SelectedClip.SourceDurationSeconds, Mode=OneWay, FallbackValue=0.0}"
+                                               SpinButtonPlacementMode="Hidden" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                </Grid>
+
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="In point (s)" VerticalAlignment="Center" Width="120" />
+                                    <NumberBox Grid.Column="1" local:NumberBoxExtensions.FractionDigits="1" Value="{Binding SelectedClip.VideoStartTime, Mode=TwoWay, Converter={StaticResource TimeSpanToDoubleSecondsConverter}, FallbackValue=0.0}"
+                                               SmallChange="0.5" LargeChange="5" Minimum="0" SpinButtonPlacementMode="Inline"
+                                               ToolTipService.ToolTip="Where the clip starts in the source video." />
+                                </Grid>
+
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Out point (s)" VerticalAlignment="Center" Width="120" />
+                                    <NumberBox Grid.Column="1" local:NumberBoxExtensions.FractionDigits="1" Value="{Binding SelectedClip.VideoEndTime, Mode=TwoWay, Converter={StaticResource TimeSpanToDoubleSecondsConverter}, FallbackValue=0.0}"
+                                               SmallChange="0.5" LargeChange="5" Minimum="0" SpinButtonPlacementMode="Inline"
+                                               ToolTipService.ToolTip="Where the clip ends in the source video." />
+                                </Grid>
+
+                                <!-- Clip Duration on the timeline (derived from trim + speed; editable). -->
                                 <Grid ColumnSpacing="12">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="Duration (s)" VerticalAlignment="Center" Width="120" />
@@ -188,12 +215,13 @@
                                                SmallChange="0.5" LargeChange="1.0" Minimum="0.1" SpinButtonPlacementMode="Inline" />
                                 </Grid>
 
-                                <!-- Playback Speed: Track 1 only -->
-                                <Grid ColumnSpacing="12" Visibility="{Binding IsTrack1Selected, Converter={StaticResource BoolToVisConverter}}">
+                                <!-- Playback Speed: shared. 0 = a still to Ken-Burns across the duration. -->
+                                <Grid ColumnSpacing="12">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="Playback Speed" VerticalAlignment="Center" Width="120" />
                                     <NumberBox Grid.Column="1" local:NumberBoxExtensions.FractionDigits="2" Value="{Binding SelectedClip.PlaybackSpeed, Mode=TwoWay, FallbackValue=1.0}"
-                                               SmallChange="0.1" LargeChange="0.5" Minimum="0" SpinButtonPlacementMode="Inline" />
+                                               SmallChange="0.25" LargeChange="1.0" Minimum="0" Maximum="8" SpinButtonPlacementMode="Inline"
+                                               ToolTipService.ToolTip="1 = normal, 3 = 3x faster, 0 = a still. Max 8." />
                                 </Grid>
 
                                 <!-- PiP Width: overlay only -->

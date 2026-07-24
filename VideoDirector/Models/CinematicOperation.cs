@@ -79,6 +79,19 @@ namespace ModernImageViewer.VideoDirector.Models
             }
         }
 
+        // Full length of the source file, captured when the clip is added. The trim In/Out points
+        // (VideoStartTime/VideoEndTime) live within [0, SourceDuration]. Not the timeline duration
+        // (that's OpDuration = trimmed length / speed).
+        private TimeSpan _sourceDuration;
+        public TimeSpan SourceDuration
+        {
+            get => _sourceDuration;
+            set { if (SetProperty(ref _sourceDuration, value)) OnPropertyChanged(nameof(SourceDurationSeconds)); }
+        }
+
+        [JsonIgnore]
+        public double SourceDurationSeconds => _sourceDuration.TotalSeconds;
+
         private TimeSpan _opDuration = TimeSpan.Zero;
         public TimeSpan OpDuration
         {

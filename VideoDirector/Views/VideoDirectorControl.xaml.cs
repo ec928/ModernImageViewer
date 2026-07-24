@@ -862,8 +862,17 @@ namespace ModernImageViewer.VideoDirector.Views
                 if (paths.Count > 0)
                 {
                     await ViewModel.AddFilesAsync(paths);
+                    EditNewestSpineClip();   // open the new clip so you can trim/frame it
                 }
             }
+        }
+
+        // After adding to Track 1, drop straight into Edit on the newest clip so it can be trimmed
+        // and framed immediately (adding a clip is usually the prelude to editing it).
+        private void EditNewestSpineClip()
+        {
+            if (ViewModel.IsPlaying || ViewModel.TimelineNodes.Count == 0) return;
+            SelectClip(ViewModel.TimelineNodes[^1], isSpine: true);
         }
 
         private async void PlayPause_Click(object sender, RoutedEventArgs e)
@@ -1060,6 +1069,14 @@ namespace ModernImageViewer.VideoDirector.Views
                     }
                 }
                 if (spinePaths.Count > 0) await ViewModel.AddFilesAsync(spinePaths);
+
+                // Open the newest clip for editing, same as a canvas drop.
+                if (toSpine) EditNewestSpineClip();
+                else if (!ViewModel.IsPlaying)
+                {
+                    var track = ViewModel.OverlayTracks[trackIndex];
+                    if (track.Clips.Count > 0) SelectClip(track.Clips[^1], isSpine: false);
+                }
             }
         }
     }

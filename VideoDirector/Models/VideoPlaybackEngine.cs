@@ -1537,8 +1537,14 @@ namespace ModernImageViewer.VideoDirector.Models
         {
             if (player.PlaybackSession == null) return;
 
+            // Per-clip speed applies to overlays just like Track 1: the source advances `clipSpeed`
+            // per story-second (0 = a still, frozen at the in-point), and the player runs at
+            // clipSpeed * global so real-time playback matches.
+            double clipSpeed = overlay.PlaybackSpeed;
+            double advance = clipSpeed <= 0 ? 0 : clipSpeed;
             TimeSpan offsetIntoOverlay = currentStoryTime - overlay.StartTime;
-            TimeSpan targetPosition = overlay.VideoStartTime + offsetIntoOverlay;
+            if (offsetIntoOverlay < TimeSpan.Zero) offsetIntoOverlay = TimeSpan.Zero;
+            TimeSpan targetPosition = overlay.VideoStartTime + TimeSpan.FromSeconds(offsetIntoOverlay.TotalSeconds * advance);
 
             // The overlay's on-screen Duration is independent of the source clip's actual
             // length — if Duration outlasts the media, hold on the last frame instead of
@@ -1547,13 +1553,14 @@ namespace ModernImageViewer.VideoDirector.Models
 
             player.PlaybackSession.Position = targetPosition;
 
-            if (pastEnd)
+            double combinedSpeed = clipSpeed * _viewModel.PlaybackSpeed;
+            if (pastEnd || combinedSpeed <= 0)
             {
-                player.Pause();
+                player.Pause();   // held frame, or a still (speed 0)
             }
-            else if (_isAnimating && !_isPaused && _viewModel.PlaybackSpeed > 0)
+            else if (_isAnimating && !_isPaused)
             {
-                player.PlaybackSession.PlaybackRate = _viewModel.PlaybackSpeed;
+                player.PlaybackSession.PlaybackRate = combinedSpeed;
                 player.Play();
             }
             else
@@ -1667,7 +1674,12 @@ namespace ModernImageViewer.VideoDirector.Models
             var player = _overlayPlayer[slot];
             if (player.PlaybackSession == null) return;
 
-            TimeSpan expectedPosition = overlay.VideoStartTime + (currentStoryTime - overlay.StartTime);
+            // Match SeekAndPlayOverlay: source advances at the clip's own speed.
+            double clipSpeed = overlay.PlaybackSpeed;
+            double advance = clipSpeed <= 0 ? 0 : clipSpeed;
+            TimeSpan into = currentStoryTime - overlay.StartTime;
+            if (into < TimeSpan.Zero) into = TimeSpan.Zero;
+            TimeSpan expectedPosition = overlay.VideoStartTime + TimeSpan.FromSeconds(into.TotalSeconds * advance);
 
             if (TryClampToMediaLength(player, ref expectedPosition))
             {
@@ -1693,11 +1705,12 @@ namespace ModernImageViewer.VideoDirector.Models
             // playing. Without this, a transient overshoot that triggered the past-end-of-media
             // Pause() above on some earlier frame would leave the overlay frozen forever, since
             // nothing else in this correction path ever resumes it.
-            if (_isAnimating && !_isPaused && _viewModel.PlaybackSpeed > 0)
+            double combinedSpeed = clipSpeed * _viewModel.PlaybackSpeed;
+            if (_isAnimating && !_isPaused && combinedSpeed > 0)
             {
-                if (player.PlaybackSession.PlaybackRate != _viewModel.PlaybackSpeed)
+                if (player.PlaybackSession.PlaybackRate != combinedSpeed)
                 {
-                    player.PlaybackSession.PlaybackRate = _viewModel.PlaybackSpeed;
+                    player.PlaybackSession.PlaybackRate = combinedSpeed;
                 }
                 if (player.PlaybackSession.PlaybackState != Windows.Media.Playback.MediaPlaybackState.Playing)
                 {

@@ -412,6 +412,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
                 TimelineNodes.Add(new CinematicOperation
                 {
                     FilePath = path,
+                    SourceDuration = duration,   // full source length; trim In/Out live within it
                     OpDuration = duration,
                     VideoEndTime = duration,
                     TransitionDuration = TimeSpan.Zero, // Default 0s transition for the new last clip
@@ -513,6 +514,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
             var overlay = new CinematicOperation
             {
                 FilePath = filePath,
+                SourceDuration = duration,   // full source length; trim In/Out live within it
                 OpDuration = duration,
                 VideoEndTime = duration,
                 StartTime = startTime,
