@@ -48,20 +48,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
             return track;
         }
 
-        public void RemoveOverlayTrack(int index)
-        {
-            if (index < 0 || index >= OverlayTracks.Count || OverlayTracks.Count <= 1) return;
-            OverlayTracks.RemoveAt(index);
-            OnPropertyChanged(nameof(CanAddOverlayTrack));
-        }
 
-        // Every upper-track clip, flattened — for lookups that don't care which track.
-        public IEnumerable<CinematicOperation> AllOverlayClips()
-        {
-            foreach (var track in OverlayTracks)
-                foreach (var clip in track.Clips)
-                    yield return clip;
-        }
 
         private bool _isPlaying;
         public bool IsPlaying

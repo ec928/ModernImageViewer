@@ -1300,6 +1300,11 @@ namespace ModernImageViewer.VideoDirector.Models
                     }
                     if (aspect > 0) _overlayAspect[i] = aspect;
 
+                    // If we still don't know the shape, ApplyOverlayBox would bail and leave the
+                    // box at whatever the PREVIOUS clip set — showing this still in the wrong
+                    // rectangle. Show nothing until the aspect is known instead.
+                    if (_overlayAspect[i] <= 0) { SetOverlayRender(i, OverlayRender.Hidden, null); continue; }
+
                     SetOverlayRender(i, OverlayRender.Still, desired);
                     ApplyOverlayBox(i, desired, false);
                     continue;

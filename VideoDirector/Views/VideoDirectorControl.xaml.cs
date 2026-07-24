@@ -89,10 +89,6 @@ namespace ModernImageViewer.VideoDirector.Views
                     track.Clips.CollectionChanged += (s, ev) => { BuildTimelineBar(); _playbackEngine?.RefreshComposite(); };
         }
 
-        private void AddOverlayTrack_Click(object sender, RoutedEventArgs e)
-        {
-            ViewModel.AddOverlayTrack();   // capped at MaxOverlayTracks; adds a new timeline row
-        }
 
         // The track that owns a given upper-track clip (null if it's a spine clip).
         private OverlayTrack TrackOf(CinematicOperation clip)
@@ -813,81 +809,9 @@ namespace ModernImageViewer.VideoDirector.Views
             ViewModel.Clear();
         }
 
-        private async void Play_Click(object sender, RoutedEventArgs e)
-        {
-            if (ViewModel.IsPlaying)
-            {
-                _playbackEngine?.StopPlayback();
-            }
-            else
-            {
-                int startIdx = 0;
-                if (ViewModel.SelectedTimelineNode != null)
-                {
-                    startIdx = ViewModel.TimelineNodes.IndexOf(ViewModel.SelectedTimelineNode as CinematicOperation);
-                    if (startIdx < 0) startIdx = 0;
-                }
-                await _playbackEngine?.StartPlaybackAsync(startIdx);
-            }
-        }
 
-        private void ListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (ViewModel.SelectedTimelineNode is CinematicOperation op)
-            {
-                if (ViewModel.IsPlaying)
-                {
-                    if (_playbackEngine?.CurrentPlayingOperation == op) return;
 
-                    int index = ViewModel.TimelineNodes.IndexOf(op);
-                    if (index >= 0)
-                    {
-                        _ = _playbackEngine?.StartPlaybackAsync(index);
-                    }
-                }
-                else
-                {
-                    _playbackEngine?.EnterEditMode(op, ViewModel.CurrentEditTarget);
-                }
-            }
-        }
 
-        private void Duplicate_Click(object sender, RoutedEventArgs e)
-        {
-            var node = ViewModel.SelectedTimelineNode;
-            if (node != null)
-            {
-                int index = ViewModel.TimelineNodes.IndexOf(node);
-                if (index >= 0)
-                {
-                    if (node is CinematicOperation op)
-                    {
-                        var newOp = new CinematicOperation
-                        {
-                            FilePath = op.FilePath,
-                            VideoStartTime = op.VideoStartTime,
-                            VideoEndTime = op.VideoEndTime,
-                            OpDuration = op.OpDuration,
-                            CurveProfile = op.CurveProfile,
-                            StartMark = new SpatialMark(op.StartMark.Scale, op.StartMark.X, op.StartMark.Y),
-                            EndMark = new SpatialMark(op.EndMark.Scale, op.EndMark.X, op.EndMark.Y),
-                            TransitionDuration = op.TransitionDuration,
-                            TransitionStyle = op.TransitionStyle
-                        };
-                        ViewModel.TimelineNodes.Insert(index + 1, newOp);
-                    }
-                }
-            }
-        }
-
-        private void Remove_Click(object sender, RoutedEventArgs e)
-        {
-            var node = ViewModel.SelectedTimelineNode;
-            if (node != null)
-            {
-                ViewModel.TimelineNodes.Remove(node);
-            }
-        }
 
         private void ResetClip_Click(object sender, RoutedEventArgs e)
         {
@@ -898,13 +822,6 @@ namespace ModernImageViewer.VideoDirector.Views
             }
         }
 
-        private void ListView_RightTapped(object sender, Microsoft.UI.Xaml.Input.RightTappedRoutedEventArgs e)
-        {
-            if (e.OriginalSource is FrameworkElement element && element.DataContext is CinematicOperation node)
-            {
-                ViewModel.SelectedTimelineNode = node;
-            }
-        }
 
         private void ExitToArrange_Click(object sender, RoutedEventArgs e)
         {
@@ -914,76 +831,9 @@ namespace ModernImageViewer.VideoDirector.Views
             _playbackEngine?.ExitToArrange();
         }
 
-        private async void AddOverlay_Click(object sender, RoutedEventArgs e)
-        {
-            var openPicker = new FileOpenPicker();
-            var window = MainWindow.Instance;
-            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
-            WinRT.Interop.InitializeWithWindow.Initialize(openPicker, hwnd);
 
-            openPicker.ViewMode = PickerViewMode.Thumbnail;
-            openPicker.SuggestedStartLocation = PickerLocationId.VideosLibrary;
-            openPicker.FileTypeFilter.Add(".mp4");
-            openPicker.FileTypeFilter.Add(".mkv");
-            openPicker.FileTypeFilter.Add(".avi");
-            openPicker.FileTypeFilter.Add(".wmv");
-            openPicker.FileTypeFilter.Add(".jpg");
-            openPicker.FileTypeFilter.Add(".png");
 
-            StorageFile file = await openPicker.PickSingleFileAsync();
-            if (file != null)
-            {
-                await ViewModel.AddOverlayAsync(file.Path, ViewModel.CurrentStoryTime);
-            }
-        }
 
-        private void DuplicateOverlay_Click(object sender, RoutedEventArgs e)
-        {
-            var overlay = ViewModel.SelectedOverlay;
-            if (overlay != null)
-            {
-                var track = TrackOf(overlay);
-                int index = track?.Clips.IndexOf(overlay) ?? -1;
-                if (index >= 0)
-                {
-                    var newOverlay = new CinematicOperation
-                    {
-                        FilePath = overlay.FilePath,
-                        OpDuration = overlay.OpDuration,
-                        VideoStartTime = overlay.VideoStartTime,
-                        VideoEndTime = overlay.VideoEndTime,
-                        StartTime = overlay.StartTime + overlay.OpDuration, // Place right after the original
-                        StartMark = new SpatialMark(overlay.StartMark.Scale, overlay.StartMark.X, overlay.StartMark.Y),
-                        EndMark = new SpatialMark(overlay.EndMark.Scale, overlay.EndMark.X, overlay.EndMark.Y),
-                        Opacity = overlay.Opacity,
-                        PlacementWidth = overlay.PlacementWidth,
-                        PlacementHeight = overlay.PlacementHeight,
-                        PlacementCenterX = overlay.PlacementCenterX,
-                        PlacementCenterY = overlay.PlacementCenterY,
-                        Thumbnail = overlay.Thumbnail
-                    };
-                    track.Clips.Insert(index + 1, newOverlay);
-                }
-            }
-        }
-
-        private void RemoveOverlay_Click(object sender, RoutedEventArgs e)
-        {
-            var overlay = ViewModel.SelectedOverlay;
-            if (overlay != null)
-            {
-                TrackOf(overlay)?.Clips.Remove(overlay);
-                ViewModel.SelectedOverlay = null;
-            }
-        }
-
-        private void OverlayListView_RightTapped(object sender, Microsoft.UI.Xaml.Input.RightTappedRoutedEventArgs e)
-        {
-            if (e.OriginalSource is FrameworkElement element && element.DataContext is CinematicOperation overlay)
-            {
-                ViewModel.SelectedOverlay = overlay;
-            }
-        }
 
         private void OverlaySection_DragOver(object sender, DragEventArgs e)
         {
