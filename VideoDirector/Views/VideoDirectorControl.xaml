@@ -316,8 +316,17 @@
                                 Background="Transparent" SizeChanged="TimelineBar_SizeChanged"
                                 PointerPressed="TimelineBar_PointerPressed"
                                 PointerMoved="TimelineBar_PointerMoved"
-                                PointerReleased="TimelineBar_PointerReleased"
-                                ContextRequested="TimelineBar_ContextRequested" />
+                                PointerReleased="TimelineBar_PointerReleased">
+                            <!-- A real ContextFlyout: the platform shows this on right-click /
+                                 menu key / long-press, rather than us hand-rolling it from a
+                                 pointer event (which never fired reliably). -->
+                            <Canvas.ContextFlyout>
+                                <MenuFlyout Opening="TimelineContextMenu_Opening">
+                                    <MenuFlyoutItem x:Name="TimelineDuplicateItem" Text="Duplicate" Click="TimelineDuplicate_Click" />
+                                    <MenuFlyoutItem x:Name="TimelineRemoveItem" Text="Remove" Click="TimelineRemove_Click" />
+                                </MenuFlyout>
+                            </Canvas.ContextFlyout>
+                        </Canvas>
                     </Grid>
                 </Border>
             </StackPanel>

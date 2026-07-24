@@ -33,6 +33,7 @@ namespace ModernImageViewer.VideoDirector.Views
         private double _dragGrabOffsetSec;
         private double _dragCursorX;      // live cursor x, for the spine ghost
         private int _dragInsertIndex;     // where the ghost would drop
+        private Windows.Foundation.Point _lastHoverPoint;  // for the context menu's target
 
         public VideoDirectorControl()
         {
@@ -239,8 +240,10 @@ namespace ModernImageViewer.VideoDirector.Views
             // Highlight the selected clip so it's obvious which one the inspector is editing.
             if (clip != null && ReferenceEquals(clip, ViewModel.SelectedClip))
             {
-                r.Stroke = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White);
-                r.StrokeThickness = 2;
+                // Near-black reads clearly against both the blue/amber blocks and the light bar
+                // (white did not — it vanished against the background).
+                r.Stroke = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(0xFF, 0x0F, 0x17, 0x2A));
+                r.StrokeThickness = 3;
             }
             Canvas.SetLeft(r, x);
             Canvas.SetTop(r, y);
@@ -297,8 +300,11 @@ namespace ModernImageViewer.VideoDirector.Views
 
         private void TimelineBar_PointerMoved(object sender, PointerRoutedEventArgs e)
         {
+            // Recorded even when not dragging: the context menu resolves its target from here.
+            _lastHoverPoint = e.GetCurrentPoint(TimelineBar).Position;
+
             if (!_timelinePressed) return;
-            var p = e.GetCurrentPoint(TimelineBar).Position;
+            var p = _lastHoverPoint;
 
             if (_timelineScrubbing) { ScrubToX(p.X); return; }
             if (_dragClip == null) return;
@@ -352,26 +358,31 @@ namespace ModernImageViewer.VideoDirector.Views
             BuildTimelineBar(); // clear the ghost / settle the layout
         }
 
-        // Right-click a block for Duplicate / Remove (re-homed from the old dock tile menus).
-        // ContextRequested (not RightTapped) is the reliable path — it also covers the keyboard
-        // menu key and touch long-press, and isn't swallowed by pointer handling.
-        private void TimelineBar_ContextRequested(UIElement sender, ContextRequestedEventArgs e)
+        // Duplicate / Remove for the block under the cursor. The platform opens the ContextFlyout;
+        // we just resolve which clip it applies to from the last pointer position.
+        private CinematicOperation _contextClip;
+        private bool _contextIsSpine;
+
+        private void TimelineContextMenu_Opening(object sender, object e)
         {
-            if (!e.TryGetPosition(TimelineBar, out var p)) return;
-            var hit = HitClip(p);
-            if (hit.clip == null) return;
+            var hit = HitClip(_lastHoverPoint);
+            _contextClip = hit.clip;
+            _contextIsSpine = hit.isSpine;
 
-            SelectClip(hit.clip, hit.isSpine);
+            bool hasClip = _contextClip != null;
+            TimelineDuplicateItem.IsEnabled = hasClip;
+            TimelineRemoveItem.IsEnabled = hasClip;
+            if (hasClip) SelectClip(_contextClip, _contextIsSpine);
+        }
 
-            var flyout = new MenuFlyout();
-            var dup = new MenuFlyoutItem { Text = "Duplicate" };
-            dup.Click += (s, ev) => DuplicateClip(hit.clip, hit.isSpine);
-            var del = new MenuFlyoutItem { Text = "Remove" };
-            del.Click += (s, ev) => RemoveClip(hit.clip, hit.isSpine);
-            flyout.Items.Add(dup);
-            flyout.Items.Add(del);
-            flyout.ShowAt(TimelineBar, new Microsoft.UI.Xaml.Controls.Primitives.FlyoutShowOptions { Position = p });
-            e.Handled = true;
+        private void TimelineDuplicate_Click(object sender, RoutedEventArgs e)
+        {
+            if (_contextClip != null) DuplicateClip(_contextClip, _contextIsSpine);
+        }
+
+        private void TimelineRemove_Click(object sender, RoutedEventArgs e)
+        {
+            if (_contextClip != null) RemoveClip(_contextClip, _contextIsSpine);
         }
 
         private void DuplicateClip(CinematicOperation clip, bool isSpine)
