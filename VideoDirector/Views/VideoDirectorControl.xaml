@@ -84,11 +84,12 @@
             </StackPanel>
         </Border>
 
-        <!-- Foreground Layer: Right Side Panel (The Storyboard) -->
-        <Border HorizontalAlignment="Right" VerticalAlignment="Stretch" Width="380" 
-                Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" 
-                BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1,0,0,0" 
-                CornerRadius="8,0,0,8" Margin="0,48,0,0"
+        <!-- Foreground Layer: Right Side Panel (Properties). Top margin clears the Global Command
+             Zone strip above it so Save/Load/Clear stay reachable while this panel is open. -->
+        <Border HorizontalAlignment="Right" VerticalAlignment="Stretch" Width="380"
+                Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1,0,0,0"
+                CornerRadius="8,0,0,8" Margin="0,96,0,0"
                 Visibility="{x:Bind ViewModel.IsStoryboardVisible, Mode=OneWay, Converter={StaticResource BoolToVisConverter}}">
             <Grid>
                 <Grid.RowDefinitions>
