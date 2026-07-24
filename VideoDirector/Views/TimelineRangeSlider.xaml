@@ -13,6 +13,11 @@
           ToolTipService.ToolTip="Scroll to zoom into the source for precise trimming; double-click to fit.">
         <!-- Base Track -->
         <Rectangle x:Name="BaseTrack" Height="4" Fill="{ThemeResource SurfaceStrokeColorDefaultBrush}" RadiusX="2" RadiusY="2" VerticalAlignment="Center" Margin="12,0" />
+
+        <!-- Overview strip: the WHOLE clip; the accent segment shows where the zoomed window sits,
+             so zooming has a spatial reference instead of feeling like everything slides randomly. -->
+        <Rectangle x:Name="OverviewBase" Height="3" Fill="{ThemeResource SurfaceStrokeColorDefaultBrush}" Opacity="0.4" RadiusX="1" RadiusY="1" VerticalAlignment="Bottom" Margin="12,0,12,1" />
+        <Rectangle x:Name="OverviewWindow" Height="3" Fill="{ThemeResource AccentTextFillColorPrimaryBrush}" RadiusX="1" RadiusY="1" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="12,0,0,1" />
         
         <!-- Active Trim Range Highlight -->
         <Rectangle x:Name="ActiveTrack" Height="4" Fill="{ThemeResource AccentTextFillColorPrimaryBrush}" RadiusX="2" RadiusY="2" VerticalAlignment="Center" Margin="12,0" HorizontalAlignment="Left" />

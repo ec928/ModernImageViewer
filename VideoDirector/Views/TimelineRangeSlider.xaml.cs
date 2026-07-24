@@ -121,6 +121,12 @@ namespace ModernImageViewer.VideoDirector.Views
 
             ActiveTrack.Margin = new Thickness(12 + startRatio * trackWidth, 0, 0, 0);
             ActiveTrack.Width = Math.Max(0, (endRatio - startRatio) * trackWidth);
+
+            // Overview: where the visible window sits within the whole clip (full width = zoomed out).
+            double viewLeft = 12 + (_viewStart / Max) * trackWidth;
+            double viewWidth = Math.Max(2, (_viewSpan / Max) * trackWidth);
+            OverviewWindow.Margin = new Thickness(viewLeft, 0, 0, 1);
+            OverviewWindow.Width = viewWidth;
         }
 
         private void StartThumb_ManipulationStarted(object sender, ManipulationStartedRoutedEventArgs e)
@@ -222,20 +228,30 @@ namespace ModernImageViewer.VideoDirector.Views
             UpdateUI();
         }
 
-        // Scroll to zoom the visible window, centred on the cursor so it pans toward what you point at.
+        // Scroll to zoom. Anchored on the PLAYHEAD (a visible landmark you're working around) so it
+        // stays put while the window tightens around it — far less disorienting than anchoring on an
+        // unmarked cursor. If the playhead is off-window, keep the current centre instead.
         private void RootGrid_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
         {
             EnsureView();
-            double trackWidth = Math.Max(0.01, RootGrid.ActualWidth - 24);
-            var pt = e.GetCurrentPoint(RootGrid);
-            double cursorRatio = Math.Clamp((pt.Position.X - 12) / trackWidth, 0, 1);
-            double cursorValue = _viewStart + cursorRatio * _viewSpan;
 
-            double factor = pt.Properties.MouseWheelDelta > 0 ? 0.8 : 1.25; // in : out
+            double anchorValue, anchorRatio;
+            if (Position >= _viewStart && Position <= _viewStart + _viewSpan)
+            {
+                anchorValue = Position;
+                anchorRatio = (Position - _viewStart) / _viewSpan; // keep the playhead at the same spot
+            }
+            else
+            {
+                anchorValue = _viewStart + _viewSpan * 0.5;         // playhead not visible: hold centre
+                anchorRatio = 0.5;
+            }
+
+            double factor = e.GetCurrentPoint(RootGrid).Properties.MouseWheelDelta > 0 ? 0.8 : 1.25; // in : out
             double minSpan = Math.Min(2.0, Max); // can't zoom past ~2s (or the whole clip if shorter)
             double newSpan = Math.Clamp(_viewSpan * factor, minSpan, Max);
 
-            _viewStart = Math.Clamp(cursorValue - cursorRatio * newSpan, 0, Math.Max(0, Max - newSpan));
+            _viewStart = Math.Clamp(anchorValue - anchorRatio * newSpan, 0, Math.Max(0, Max - newSpan));
             _viewSpan = newSpan;
             UpdateUI();
             e.Handled = true;
