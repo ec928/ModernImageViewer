@@ -969,6 +969,70 @@ namespace ModernImageViewer.VideoDirector.Views
             ViewModel.Clear();
         }
 
+        private async void Export_Click(object sender, RoutedEventArgs e)
+        {
+            if (ViewModel.TimelineNodes.Count == 0)
+            {
+                await ShowExportMessage("Nothing to export", "Add at least one Track 1 clip first.");
+                return;
+            }
+
+            var savePicker = new FileSavePicker();
+            var window = MainWindow.Instance;
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+            WinRT.Interop.InitializeWithWindow.Initialize(savePicker, hwnd);
+            savePicker.SuggestedStartLocation = PickerLocationId.VideosLibrary;
+            savePicker.FileTypeChoices.Add("MP4 Video", new List<string>() { ".mp4" });
+            savePicker.SuggestedFileName = "Export";
+
+            StorageFile file = await savePicker.PickSaveFileAsync();
+            if (file == null) return;
+
+            var bar = new Microsoft.UI.Xaml.Controls.ProgressBar { Minimum = 0, Maximum = 100, Value = 0, Width = 320 };
+            var status = new TextBlock { Text = "Rendering the Track 1 spine — this can take a while for long clips." };
+            var panel = new StackPanel { Spacing = 12 };
+            panel.Children.Add(status);
+            panel.Children.Add(bar);
+            var progressDialog = new ContentDialog
+            {
+                Title = "Exporting video",
+                Content = panel,
+                XamlRoot = this.XamlRoot
+            };
+
+            var exporter = new Models.VideoExporter();
+            var progress = new Progress<double>(p => bar.Value = p);
+
+            _ = progressDialog.ShowAsync(); // non-blocking; hidden when the render finishes
+            var result = await exporter.ExportSpineAsync(ViewModel.TimelineNodes, file, progress);
+            progressDialog.Hide();
+
+            switch (result.Outcome)
+            {
+                case Models.VideoExporter.ExportOutcome.Success:
+                    await ShowExportMessage("Export complete", $"Saved to:\n{result.Message}");
+                    break;
+                case Models.VideoExporter.ExportOutcome.NothingToRender:
+                    await ShowExportMessage("Nothing to export", result.Message);
+                    break;
+                default:
+                    await ShowExportMessage("Export failed", result.Message);
+                    break;
+            }
+        }
+
+        private async Task ShowExportMessage(string title, string message)
+        {
+            var dialog = new ContentDialog
+            {
+                Title = title,
+                Content = new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap },
+                CloseButtonText = "OK",
+                XamlRoot = this.XamlRoot
+            };
+            await dialog.ShowAsync();
+        }
+
 
 
 

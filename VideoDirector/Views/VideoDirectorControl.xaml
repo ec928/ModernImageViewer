@@ -46,6 +46,16 @@
                     Background="{x:Bind ViewModel.IsEditMode, Mode=OneWay, Converter={StaticResource BoolToBadgeBrushConverter}}">
                 <TextBlock Text="{x:Bind ViewModel.ModeLabel, Mode=OneWay}" Foreground="White" FontSize="12" FontWeight="SemiBold" />
             </Border>
+            <!-- Export: the payoff action — renders the composite to an MP4. Accented so it reads
+                 as the primary project action. -->
+            <Button Click="Export_Click" Height="34" Padding="12,0" CornerRadius="4" BorderThickness="0"
+                    Background="{ThemeResource AccentFillColorDefaultBrush}"
+                    ToolTipService.ToolTip="Export the composite to an MP4 video">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <SymbolIcon Symbol="Video" Foreground="White" />
+                    <TextBlock Text="Export" Foreground="White" VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
             <!-- Global actions: plain icon buttons (a CommandBar fights a small right-aligned
                  group). Save / Load / Clear — project scope only. -->
             <Border CornerRadius="4" Background="#99000000" VerticalAlignment="Center" Padding="3">
