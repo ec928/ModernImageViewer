@@ -40,29 +40,12 @@
             <TextBlock Text="{x:Bind ViewModel.ModeLabel, Mode=OneWay}" Foreground="White" FontSize="12" FontWeight="SemiBold" />
         </Border>
 
-        <!-- Unmistakable EDIT indicator: an accent border around the canvas... -->
+        <!-- Unmistakable EDIT indicator: an accent border around the canvas. The textual indicator
+             and the way out (Done) now live in the inspector panel header, next to the edit
+             controls, rather than as a separate floating pill. -->
         <Border Grid.Row="0" IsHitTestVisible="False" CornerRadius="8" Margin="12,0,12,0"
                 BorderBrush="{ThemeResource AccentFillColorDefaultBrush}" BorderThickness="3"
                 Visibility="{x:Bind ViewModel.IsEditMode, Mode=OneWay, Converter={StaticResource BoolToVisConverter}}" />
-
-        <!-- ...plus a prominent banner naming the clip, with a clear way out (Done). -->
-        <Border Grid.Row="0" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,52,0,0"
-                CornerRadius="20" Padding="14,7" Background="{ThemeResource AccentFillColorDefaultBrush}"
-                Visibility="{x:Bind ViewModel.IsEditMode, Mode=OneWay, Converter={StaticResource BoolToVisConverter}}">
-            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                <FontIcon Glyph="&#xE70F;" FontSize="14" Foreground="White" />
-                <TextBlock Foreground="White" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="360">
-                    <Run Text="Editing:" /><Run Text="  " /><Run Text="{Binding SelectedClip.FileName, Mode=OneWay}" />
-                </TextBlock>
-                <Button Click="ExitToArrange_Click" Background="#33FFFFFF" BorderThickness="0" CornerRadius="12" Padding="12,4"
-                        ToolTipService.ToolTip="Done editing — back to Arrange (Esc, or double-click the image)">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <SymbolIcon Symbol="Accept" Foreground="White" />
-                        <TextBlock Text="Done" Foreground="White" VerticalAlignment="Center" />
-                    </StackPanel>
-                </Button>
-            </StackPanel>
-        </Border>
 
         <!-- Foreground Layer: Floating Edit Badge -->
         <Border x:Name="EditModeBadge" Background="#D9E81123" CornerRadius="8" Padding="16,8" 
@@ -86,9 +69,35 @@
                 Visibility="{x:Bind ViewModel.IsStoryboardVisible, Mode=OneWay, Converter={StaticResource BoolToVisConverter}}">
             <Grid>
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" /> <!-- CommandBar -->
+                    <RowDefinition Height="Auto" /> <!-- Edit header + CommandBar -->
                     <RowDefinition Height="*" />    <!-- Inspector area -->
                 </Grid.RowDefinitions>
+
+              <StackPanel Grid.Row="0">
+                <!-- Edit-mode header: the clip being edited + the way out, co-located with the edit
+                     controls below. Shown only while editing. -->
+                <Border Background="{ThemeResource AccentFillColorDefaultBrush}" Padding="14,8"
+                        Visibility="{x:Bind ViewModel.IsEditMode, Mode=OneWay, Converter={StaticResource BoolToVisConverter}}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                            <TextBlock Text="EDITING" Foreground="White" FontSize="10" FontWeight="Bold" Opacity="0.85" />
+                            <TextBlock Text="{Binding SelectedClip.FileName, Mode=OneWay}" Foreground="White"
+                                       FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Click="ExitToArrange_Click" VerticalAlignment="Center"
+                                Background="#33FFFFFF" BorderThickness="0" CornerRadius="12" Padding="12,4"
+                                ToolTipService.ToolTip="Done editing — back to Arrange (Esc, or double-click the image)">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <SymbolIcon Symbol="Accept" Foreground="White" />
+                                <TextBlock Text="Done" Foreground="White" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                </Border>
 
                 <CommandBar DefaultLabelPosition="Right" Background="Transparent" Padding="4">
                     <CommandBar.PrimaryCommands>
@@ -100,6 +109,7 @@
                         <TextBlock Text="Inspector" Style="{StaticResource SubtitleTextBlockStyle}" VerticalAlignment="Center" Margin="12,0,0,0"/>
                     </CommandBar.Content>
                 </CommandBar>
+              </StackPanel>
 
                 <!-- Hint shown when nothing is selected (clip lists now live in the bottom dock). -->
                 <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12" Padding="24"
@@ -301,7 +311,7 @@
                             <ComboBox SelectedItem="{x:Bind ViewModel.PlaybackSpeed, Mode=TwoWay}" 
                                       ItemsSource="{x:Bind ViewModel.AvailableSpeeds}"
                                       Width="60" Height="28" MinHeight="28" FontSize="11" Padding="8,0" VerticalAlignment="Center" ToolTipService.ToolTip="Global Speed" />
-                            <ToggleButton x:Name="StoryboardButton" IsChecked="{x:Bind ViewModel.IsStoryboardVisible, Mode=TwoWay}" Width="28" Height="28" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="4" ToolTipService.ToolTip="Toggle Storyboard">
+                            <ToggleButton x:Name="StoryboardButton" IsChecked="{x:Bind ViewModel.IsStoryboardPinned, Mode=TwoWay}" Width="28" Height="28" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="4" ToolTipService.ToolTip="Pin the inspector panel open (it opens automatically while editing)">
                                 <SymbolIcon Symbol="List" />
                             </ToggleButton>
                         </StackPanel>

@@ -64,9 +64,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
             }
         }
 
-        // The bottom track dock is shown when the storyboard is toggled on AND we're not
-        // playing — it auto-hides during playback so the video gets the full canvas.
-        public bool IsDockVisible => _isStoryboardVisible && !_isPlaying;
+        public bool IsDockVisible => IsStoryboardVisible && !_isPlaying;
 
         private bool _isLooping = true;
         public bool IsLooping
@@ -82,7 +80,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
             set => SetProperty(ref _isAutoPlayEnabled, value);
         }
 
-        private bool _isTelemetryVisible = true;
+        private bool _isTelemetryVisible = false;
         public bool IsTelemetryVisible
         {
             get => _isTelemetryVisible;
@@ -96,19 +94,25 @@ namespace ModernImageViewer.VideoDirector.ViewModels
             set => SetProperty(ref _isRecordingMotion, value);
         }
 
-        private bool _isStoryboardVisible = true;
-        public bool IsStoryboardVisible
+        // The inspector/storyboard panel auto-shows while editing a clip; otherwise it shows only
+        // if the user has PINNED it open. So editing always has its controls to hand, and arranging
+        // stays uncluttered. The transport's storyboard toggle is the pin.
+        private bool _isStoryboardPinned;
+        public bool IsStoryboardPinned
         {
-            get => _isStoryboardVisible;
+            get => _isStoryboardPinned;
             set
             {
-                if (SetProperty(ref _isStoryboardVisible, value))
+                if (SetProperty(ref _isStoryboardPinned, value))
                 {
-                    UpdateTelemetryVisibility();
+                    OnPropertyChanged(nameof(IsStoryboardVisible));
                     OnPropertyChanged(nameof(IsDockVisible));
+                    UpdateTelemetryVisibility();
                 }
             }
         }
+
+        public bool IsStoryboardVisible => _isStoryboardPinned || _isEditMode;
 
         private bool _isControlsVisible = true;
         public bool IsControlsVisible
@@ -119,7 +123,9 @@ namespace ModernImageViewer.VideoDirector.ViewModels
 
         private void UpdateTelemetryVisibility()
         {
-            IsTelemetryVisible = IsStoryboardVisible;
+            // Telemetry is a debug HUD — only when the panel is deliberately pinned, not on every
+            // edit (that HUD was the "wall of text" that used to clutter editing).
+            IsTelemetryVisible = _isStoryboardPinned;
         }
 
         private double _playbackSpeed = 1.0;
@@ -236,6 +242,8 @@ namespace ModernImageViewer.VideoDirector.ViewModels
                 if (SetProperty(ref _isEditMode, value))
                 {
                     OnPropertyChanged(nameof(ModeLabel));
+                    OnPropertyChanged(nameof(IsStoryboardVisible)); // panel follows edit mode
+                    OnPropertyChanged(nameof(IsDockVisible));
                 }
             }
         }
