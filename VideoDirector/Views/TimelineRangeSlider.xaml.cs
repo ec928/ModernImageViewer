@@ -88,14 +88,17 @@ namespace ModernImageViewer.VideoDirector.Views
         // pixel position on the track -> value within the visible window.
         private double PixelToValue(double px, double trackWidth) => _viewStart + Math.Clamp((px - 12) / trackWidth, 0, 1) * _viewSpan;
 
-        // True when a value sits inside the visible window. Drives adaptive drag resolution: a trim
-        // handle dragged while OFF-window moves coarsely (whole clip per screen width) so it rushes
-        // back into view in one drag; once in view it moves at the fine, zoomed resolution. The view
-        // never moves during a drag, so a handle can never be stranded off-screen and undraggable.
-        private bool ValueInView(double value)
+        // Which handle a drag is moving. Dragging tracks the cursor's ABSOLUTE position within the
+        // visible window, so the handle sits exactly under the pointer and is always on screen —
+        // it can never move invisibly off-window or "jump". To place a handle outside the current
+        // window, zoom out / pan first, then drag.
+        private enum DragTarget { None, Start, End, Playhead }
+        private DragTarget _drag = DragTarget.None;
+
+        private double ValueAtCursor(PointerRoutedEventArgs e)
         {
-            EnsureView();
-            return value >= _viewStart && value <= _viewStart + _viewSpan;
+            double trackWidth = Math.Max(0.01, RootGrid.ActualWidth - 24);
+            return Math.Clamp(PixelToValue(e.GetCurrentPoint(RootGrid).Position.X, trackWidth), 0, Max);
         }
 
         private void UserControl_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -130,91 +133,80 @@ namespace ModernImageViewer.VideoDirector.Views
             ActiveTrack.Width = Math.Max(0, (endRatio - startRatio) * trackWidth);
         }
 
-        private void StartThumb_ManipulationStarted(object sender, ManipulationStartedRoutedEventArgs e)
-        {
-            _isDragging = true;
-            InteractionStarted?.Invoke(this, EventArgs.Empty);
-        }
-
-        private void StartThumb_ManipulationDelta(object sender, ManipulationDeltaRoutedEventArgs e)
-        {
-            double trackWidth = Math.Max(0.01, RootGrid.ActualWidth - 24);
-            double span = ValueInView(TrimStart) ? _viewSpan : Max; // coarse off-window, fine in-view
-            double step = (e.Delta.Translation.X / trackWidth) * span;
-            TrimStart = Math.Clamp(TrimStart + step, 0, Math.Max(0, TrimEnd));
-            Position = TrimStart; // scrub playhead while trimming
-            UpdateUI();
-        }
-
-        private void StartThumb_ManipulationCompleted(object sender, ManipulationCompletedRoutedEventArgs e)
-        {
-            _isDragging = false;
-            UpdateUI();
-            InteractionCompleted?.Invoke(this, EventArgs.Empty);
-        }
-
-        private void EndThumb_ManipulationStarted(object sender, ManipulationStartedRoutedEventArgs e)
-        {
-            _isDragging = true;
-            InteractionStarted?.Invoke(this, EventArgs.Empty);
-        }
-
-        private void EndThumb_ManipulationDelta(object sender, ManipulationDeltaRoutedEventArgs e)
-        {
-            double trackWidth = Math.Max(0.01, RootGrid.ActualWidth - 24);
-            double span = ValueInView(TrimEnd) ? _viewSpan : Max; // coarse off-window, fine in-view
-            double step = (e.Delta.Translation.X / trackWidth) * span;
-            TrimEnd = Math.Clamp(TrimEnd + step, Math.Min(TrimStart, Max), Max);
-            Position = TrimEnd; // scrub playhead while trimming
-            UpdateUI();
-        }
-
-        private void EndThumb_ManipulationCompleted(object sender, ManipulationCompletedRoutedEventArgs e)
-        {
-            _isDragging = false;
-            UpdateUI();
-            InteractionCompleted?.Invoke(this, EventArgs.Empty);
-        }
-
-        private void PlayheadThumb_ManipulationStarted(object sender, ManipulationStartedRoutedEventArgs e)
-        {
-            _isDragging = true;
-            InteractionStarted?.Invoke(this, EventArgs.Empty);
-        }
-
-        private void PlayheadThumb_ManipulationDelta(object sender, ManipulationDeltaRoutedEventArgs e)
-        {
-            double trackWidth = Math.Max(0.01, RootGrid.ActualWidth - 24);
-            double span = ValueInView(Position) ? _viewSpan : Max; // coarse off-window, fine in-view
-            double step = (e.Delta.Translation.X / trackWidth) * span;
-            Position = Math.Clamp(Position + step, 0, Max);
-            UpdateUI();
-        }
-
         protected override void OnPointerReleased(PointerRoutedEventArgs e)
         {
             base.OnPointerReleased(e);
-            _isDragging = false;
+            EndDrag();
         }
 
         protected override void OnPointerCanceled(PointerRoutedEventArgs e)
         {
             base.OnPointerCanceled(e);
+            EndDrag();
+        }
+
+        private void EndDrag()
+        {
+            if (_drag == DragTarget.None && !_isDragging) return;
+            _drag = DragTarget.None;
             _isDragging = false;
+            InteractionCompleted?.Invoke(this, EventArgs.Empty);
         }
 
         private void RootGrid_PointerPressed(object sender, PointerRoutedEventArgs e)
         {
-            // Ignore if they clicked on a thumb (thumbs handle their own events)
-            if (e.OriginalSource is FrameworkElement el && (el == StartThumb || el == EndThumb || el == PlayheadThumb || el.Parent == StartThumb || el.Parent == EndThumb || el.Parent == PlayheadThumb))
+            // A press on a thumb starts a drag that tracks the cursor; a press on the bare track
+            // scrubs the playhead there.
+            if (e.OriginalSource is FrameworkElement el)
+            {
+                if (el == StartThumb || el.Parent == StartThumb) _drag = DragTarget.Start;
+                else if (el == EndThumb || el.Parent == EndThumb) _drag = DragTarget.End;
+                else if (el == PlayheadThumb || el.Parent == PlayheadThumb) _drag = DragTarget.Playhead;
+            }
+
+            if (_drag != DragTarget.None)
+            {
+                _isDragging = true;
+                RootGrid.CapturePointer(e.Pointer);
+                InteractionStarted?.Invoke(this, EventArgs.Empty);
+                e.Handled = true;
                 return;
+            }
 
-            var point = e.GetCurrentPoint(RootGrid).Position;
-            double trackWidth = Math.Max(0.01, RootGrid.ActualWidth - 24);
-            double newValue = Math.Clamp(PixelToValue(point.X, trackWidth), 0, Max);
-
-            Position = newValue;
+            Position = ValueAtCursor(e);
             UpdateUI();
+        }
+
+        private void RootGrid_PointerMoved(object sender, PointerRoutedEventArgs e)
+        {
+            if (_drag == DragTarget.None) return;
+            double v = ValueAtCursor(e);
+            switch (_drag)
+            {
+                case DragTarget.Start:
+                    TrimStart = Math.Clamp(v, 0, TrimEnd);
+                    Position = TrimStart; // scrub playhead to the in-point while trimming
+                    break;
+                case DragTarget.End:
+                    TrimEnd = Math.Clamp(v, TrimStart, Max);
+                    Position = TrimEnd;
+                    break;
+                case DragTarget.Playhead:
+                    Position = v;
+                    break;
+            }
+            UpdateUI();
+            e.Handled = true;
+        }
+
+        private void RootGrid_PointerReleased(object sender, PointerRoutedEventArgs e)
+        {
+            if (_drag != DragTarget.None)
+            {
+                RootGrid.ReleasePointerCapture(e.Pointer);
+                e.Handled = true;
+            }
+            EndDrag();
         }
 
         // Scroll to zoom around the CENTRE of the view (both edges move equally, no sideways slide);

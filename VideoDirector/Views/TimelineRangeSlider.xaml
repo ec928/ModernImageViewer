@@ -9,6 +9,7 @@
     Height="32">
 
     <Grid x:Name="RootGrid" Background="Transparent" PointerPressed="RootGrid_PointerPressed"
+          PointerMoved="RootGrid_PointerMoved" PointerReleased="RootGrid_PointerReleased"
           PointerWheelChanged="RootGrid_PointerWheelChanged" DoubleTapped="RootGrid_DoubleTapped"
           ToolTipService.ToolTip="Scroll to zoom · Shift+scroll to pan · double-click to reset zoom">
         <!-- Base Track -->
@@ -20,21 +21,19 @@
         <!-- Interaction Canvas -->
         <Canvas x:Name="ThumbsCanvas" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
             
-            <!-- Trim Start Thumb -->
-            <Border x:Name="StartThumb" Width="24" Height="32" Background="Transparent" 
-                    ManipulationMode="TranslateX" ManipulationDelta="StartThumb_ManipulationDelta" ManipulationStarted="StartThumb_ManipulationStarted">
+            <!-- Trim Start Thumb. Dragging is driven by RootGrid pointer events (absolute tracking),
+                 so the thumb itself just needs to be identifiable as the press target. -->
+            <Border x:Name="StartThumb" Width="24" Height="32" Background="Transparent">
                 <TextBlock Text="[" FontSize="20" FontWeight="Bold" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,-4,0,0"/>
             </Border>
 
             <!-- Trim End Thumb -->
-            <Border x:Name="EndThumb" Width="24" Height="32" Background="Transparent" 
-                    ManipulationMode="TranslateX" ManipulationDelta="EndThumb_ManipulationDelta" ManipulationStarted="EndThumb_ManipulationStarted">
+            <Border x:Name="EndThumb" Width="24" Height="32" Background="Transparent">
                 <TextBlock Text="]" FontSize="20" FontWeight="Bold" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,-4,0,0"/>
             </Border>
 
             <!-- Playhead Thumb -->
-            <Border x:Name="PlayheadThumb" Width="16" Height="32" Background="Transparent" 
-                    ManipulationMode="TranslateX" ManipulationDelta="PlayheadThumb_ManipulationDelta" ManipulationStarted="PlayheadThumb_ManipulationStarted">
+            <Border x:Name="PlayheadThumb" Width="16" Height="32" Background="Transparent">
                 <Ellipse Width="12" Height="12" Fill="{ThemeResource TextFillColorPrimaryBrush}" Stroke="{ThemeResource SolidBackgroundFillColorBaseBrush}" StrokeThickness="2" VerticalAlignment="Center" HorizontalAlignment="Center" />
             </Border>
         </Canvas>
