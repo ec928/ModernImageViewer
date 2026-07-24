@@ -121,8 +121,28 @@ namespace ModernImageViewer.VideoDirector.Models
 
         public void SeekActiveOperation(TimeSpan position)
         {
+            // In Edit mode the subject is the edit player — the main player for a spine clip, the
+            // OVERLAY player for an overlay. Seeking the main player here left the overlay preview
+            // blank while trimming (the overlay frame was never moved).
+            if (_mode == EditorMode.Edit && _editPlayer?.PlaybackSession != null)
+            {
+                _editPlayer.PlaybackSession.Position = position;
+                if (!_editPreviewPlaying) RenderPausedFrame(_editPlayer);
+                return;
+            }
+
             var activePlayer = _isPlayerAActive ? _mediaPlayerA : _mediaPlayerB;
             activePlayer.PlaybackSession.Position = position;
+        }
+
+        // A paused MediaPlayer that was just seeked or freshly attached (the overlay edit surface is
+        // attached on demand) often shows no frame until it plays. StepForwardOneFrame forces the
+        // current frame to decode and display while staying paused — otherwise: blank preview.
+        private static void RenderPausedFrame(MediaPlayer player)
+        {
+            var s = player?.PlaybackSession;
+            if (s == null || s.PlaybackState == Windows.Media.Playback.MediaPlaybackState.Playing) return;
+            try { player.StepForwardOneFrame(); } catch { }
         }
 
         private void InitializePlayers()
@@ -1906,6 +1926,7 @@ namespace ModernImageViewer.VideoDirector.Models
                     _viewModel.CurrentOperationDuration = player.PlaybackSession.NaturalDuration;
                     _viewModel.CurrentOperationTime = player.PlaybackSession.Position;
                 }
+                RenderPausedFrame(player); // show the frame now, not just after you press play
                 UpdateWysiwygOverlay();
             });
         }
@@ -1968,6 +1989,9 @@ namespace ModernImageViewer.VideoDirector.Models
         private void EditPreview_Rendering(object sender, object e)
         {
             if (_editClip == null || _playerControl.ActiveTransform == null) return;
+            // Apply Volume live so the audio slider works while the preview is playing (overlays
+            // start muted, so a one-time apply at play meant raising it did nothing until restart).
+            if (_editPlayer != null) _editPlayer.Volume = _editClip.Volume;
             double dur = _editClip.OpDuration.TotalSeconds;
             if (dur <= 0) dur = 1;
             double progress = (DateTime.Now - _editPreviewStart).TotalSeconds / dur;
