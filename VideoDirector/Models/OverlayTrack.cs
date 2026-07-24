@@ -39,25 +39,46 @@ namespace ModernImageViewer.VideoDirector.Models
         // itself; pass null when placing a brand-new clip.
         public double ClampToFreeSlot(CinematicOperation moving, double start, double dur)
         {
-            double lower = 0, upper = double.MaxValue;
-            double centre = start + dur / 2;
+            start = Math.Max(0, start);
 
+            // Occupied spans on this track (excluding the clip being moved), merged so the gaps
+            // between them are real.
+            var busy = new System.Collections.Generic.List<(double s, double e)>();
             foreach (var other in Clips)
             {
                 if (moving != null && ReferenceEquals(other, moving)) continue;
                 double s = other.StartTimeSeconds;
                 double e = s + other.OpDuration.TotalSeconds;
+                if (e > s) busy.Add((s, e));
+            }
+            if (busy.Count == 0) return start;
+            busy.Sort((a, b) => a.s.CompareTo(b.s));
 
-                if (e <= centre) lower = Math.Max(lower, e);          // neighbour to our left
-                else if (s >= centre) upper = Math.Min(upper, s);     // neighbour to our right
-                else if (centre < (s + e) / 2) upper = Math.Min(upper, s);
-                else lower = Math.Max(lower, e);
+            var merged = new System.Collections.Generic.List<(double s, double e)>();
+            foreach (var iv in busy)
+            {
+                int last = merged.Count - 1;
+                if (last >= 0 && iv.s <= merged[last].e)
+                    merged[last] = (merged[last].s, Math.Max(merged[last].e, iv.e));
+                else merged.Add(iv);
             }
 
-            if (start < lower) start = lower;
-            if (upper != double.MaxValue && start + dur > upper) start = upper - dur;
-            if (start < lower) start = lower;   // no room in this gap — park against the left edge
-            return Math.Max(0, start);
+            // Choose the gap that fits and lands closest to where the user asked for.
+            double best = double.NaN, bestDistance = double.MaxValue;
+            void Consider(double gapStart, double gapEnd)
+            {
+                if (gapEnd - gapStart < dur) return;   // won't fit in this gap
+                double candidate = Math.Clamp(start, gapStart, gapEnd - dur);
+                double distance = Math.Abs(candidate - start);
+                if (distance < bestDistance) { bestDistance = distance; best = candidate; }
+            }
+
+            Consider(0, merged[0].s);
+            for (int i = 0; i < merged.Count - 1; i++) Consider(merged[i].e, merged[i + 1].s);
+            Consider(merged[merged.Count - 1].e, double.MaxValue);
+
+            // Nothing fits anywhere before the end — park after the last clip.
+            return double.IsNaN(best) ? merged[merged.Count - 1].e : best;
         }
     }
 }

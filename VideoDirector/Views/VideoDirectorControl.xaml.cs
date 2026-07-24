@@ -988,8 +988,9 @@ namespace ModernImageViewer.VideoDirector.Views
             }
         }
 
-        // Drop a video/image onto the timeline strip to add it as a Track 2 overlay. The drop
-        // position sets its start time (falls back to the playhead if the scale isn't ready).
+        // Drop a video/image onto the timeline strip to add it. Which row you drop on decides the
+        // track (Track 1 row = spine, lower rows = that overlay track); the drop x sets the start
+        // time (falls back to the playhead if the scale isn't ready).
         private async void OverlaySection_Drop(object sender, DragEventArgs e)
         {
             if (e.DataView.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.StorageItems))
@@ -1000,18 +1001,23 @@ namespace ModernImageViewer.VideoDirector.Views
                     ? TimeSpan.FromSeconds(Math.Max(0, drop.X / _timelinePxPerSec))
                     : ViewModel.CurrentStoryTime;
 
-                // Dropping on a track's row targets that track; above the rows targets track 0.
-                int trackIndex = drop.Y >= RowOvY ? (int)((drop.Y - RowOvY) / RowPitch) : 0;
+                // The row you drop on decides the destination: the Track 1 row (and the ruler
+                // above it) adds to the spine; the rows below add to that overlay track.
+                bool toSpine = drop.Y < RowOvY;
+                int trackIndex = toSpine ? 0 : (int)((drop.Y - RowOvY) / RowPitch);
                 trackIndex = Math.Clamp(trackIndex, 0, Math.Max(0, ViewModel.OverlayTracks.Count - 1));
 
                 var items = await e.DataView.GetStorageItemsAsync();
+                var spinePaths = new System.Collections.Generic.List<string>();
                 foreach (var item in items)
                 {
                     if (item is Windows.Storage.StorageFile file && (file.FileType == ".mp4" || file.FileType == ".mkv" || file.FileType == ".avi" || file.FileType == ".jpg" || file.FileType == ".png"))
                     {
-                        await ViewModel.AddOverlayAsync(item.Path, startTime, trackIndex);
+                        if (toSpine) spinePaths.Add(item.Path);
+                        else await ViewModel.AddOverlayAsync(item.Path, startTime, trackIndex);
                     }
                 }
+                if (spinePaths.Count > 0) await ViewModel.AddFilesAsync(spinePaths);
             }
         }
     }
