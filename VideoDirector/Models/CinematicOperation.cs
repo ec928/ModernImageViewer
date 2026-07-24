@@ -70,18 +70,27 @@ namespace ModernImageViewer.VideoDirector.Models
         }
 
         private bool _isUpdatingTiming = false;
+        private const double MinClipSeconds = 0.1;
+
+        // The trim window and timeline duration are kept mutually consistent at all times by the
+        // setters below — you can never leave the model in a state where In >= Out yet Duration
+        // claims a length the clip doesn't have (the bug that let a clip render a full block on the
+        // timeline but end instantly on playback). The single invariant enforced everywhere:
+        //   0 <= VideoStartTime  <  VideoEndTime <= SourceDuration   (>= MinClipSeconds apart)
+        //   OpDuration == (VideoEndTime - VideoStartTime) / PlaybackSpeed   (for a video)
+        // A still (PlaybackSpeed == 0) has no advancing source window, so its OpDuration is an
+        // independent hold time.
 
         private TimeSpan _videoStartTime = TimeSpan.Zero;
         public TimeSpan VideoStartTime
         {
             get => _videoStartTime;
-            set 
+            set
             {
-                if (SetProperty(ref _videoStartTime, value))
-                {
-                    SyncTimingFromVideo();
-                    OnPropertyChanged(nameof(HasModifications));
-                }
+                if (_isUpdatingTiming) { SetProperty(ref _videoStartTime, value); return; }
+                _isUpdatingTiming = true;
+                try { NormalizeTrim(value.TotalSeconds, _videoEndTime.TotalSeconds, changedStart: true); }
+                finally { _isUpdatingTiming = false; }
             }
         }
 
@@ -89,13 +98,12 @@ namespace ModernImageViewer.VideoDirector.Models
         public TimeSpan VideoEndTime
         {
             get => _videoEndTime;
-            set 
+            set
             {
-                if (SetProperty(ref _videoEndTime, value))
-                {
-                    SyncTimingFromVideo();
-                    OnPropertyChanged(nameof(HasModifications));
-                }
+                if (_isUpdatingTiming) { SetProperty(ref _videoEndTime, value); return; }
+                _isUpdatingTiming = true;
+                try { NormalizeTrim(_videoStartTime.TotalSeconds, value.TotalSeconds, changedStart: false); }
+                finally { _isUpdatingTiming = false; }
             }
         }
 
@@ -106,7 +114,21 @@ namespace ModernImageViewer.VideoDirector.Models
         public TimeSpan SourceDuration
         {
             get => _sourceDuration;
-            set { if (SetProperty(ref _sourceDuration, value)) OnPropertyChanged(nameof(SourceDurationSeconds)); }
+            set
+            {
+                if (SetProperty(ref _sourceDuration, value))
+                {
+                    OnPropertyChanged(nameof(SourceDurationSeconds));
+                    // Learning the true source length (e.g. backfilled after the media opens) can
+                    // retroactively invalidate a trim; re-clamp so the window stays inside it.
+                    if (!_isUpdatingTiming)
+                    {
+                        _isUpdatingTiming = true;
+                        try { NormalizeTrim(_videoStartTime.TotalSeconds, _videoEndTime.TotalSeconds, changedStart: false); }
+                        finally { _isUpdatingTiming = false; }
+                    }
+                }
+            }
         }
 
         [JsonIgnore]
@@ -116,13 +138,12 @@ namespace ModernImageViewer.VideoDirector.Models
         public TimeSpan OpDuration
         {
             get => _opDuration;
-            set 
+            set
             {
-                if (SetProperty(ref _opDuration, value))
-                {
-                    SyncTimingFromOpDuration();
-                    OnPropertyChanged(nameof(HasModifications));
-                }
+                if (_isUpdatingTiming) { SetProperty(ref _opDuration, value); return; }
+                _isUpdatingTiming = true;
+                try { ApplyDurationEdit(value.TotalSeconds); }
+                finally { _isUpdatingTiming = false; }
             }
         }
 
@@ -130,64 +151,106 @@ namespace ModernImageViewer.VideoDirector.Models
         public double PlaybackSpeed
         {
             get => _playbackSpeed;
-            set 
+            set
             {
-                if (SetProperty(ref _playbackSpeed, value))
+                if (SetProperty(ref _playbackSpeed, value < 0 ? 0 : value))
                 {
-                    SyncTimingFromPlaybackSpeed();
+                    if (!_isUpdatingTiming)
+                    {
+                        _isUpdatingTiming = true;
+                        try { RecomputeOpDurationFromTrim(); }
+                        finally { _isUpdatingTiming = false; }
+                    }
                     OnPropertyChanged(nameof(HasModifications));
                 }
             }
         }
 
-        private void SyncTimingFromVideo()
+        // Enforces the trim invariant. Whichever endpoint the user just changed is honoured; the
+        // other yields if they would cross (or come within MinClipSeconds). Then OpDuration is
+        // recomputed from the real window so the timeline block can never lie about its length.
+        private void NormalizeTrim(double startSec, double endSec, bool changedStart)
         {
-            if (_isUpdatingTiming) return;
-            _isUpdatingTiming = true;
-            try
+            double src = _sourceDuration.TotalSeconds > 0 ? _sourceDuration.TotalSeconds : double.PositiveInfinity;
+            double start = Math.Clamp(startSec, 0, src);
+            double end = Math.Clamp(endSec, 0, src);
+
+            if (end - start < MinClipSeconds)
             {
-                double videoDuration = (_videoEndTime - _videoStartTime).TotalSeconds;
-                if (videoDuration > 0 && _playbackSpeed > 0)
+                if (changedStart)
                 {
-                    _opDuration = TimeSpan.FromSeconds(videoDuration / _playbackSpeed);
-                    OnPropertyChanged(nameof(OpDuration));
+                    end = Math.Min(src, start + MinClipSeconds);
+                    start = Math.Max(0, end - MinClipSeconds);
+                }
+                else
+                {
+                    start = Math.Max(0, end - MinClipSeconds);
+                    end = Math.Min(src, start + MinClipSeconds);
                 }
             }
-            finally { _isUpdatingTiming = false; }
+
+            if (Math.Abs(start - _videoStartTime.TotalSeconds) > 1e-9)
+            {
+                _videoStartTime = TimeSpan.FromSeconds(start);
+                OnPropertyChanged(nameof(VideoStartTime));
+            }
+            if (Math.Abs(end - _videoEndTime.TotalSeconds) > 1e-9)
+            {
+                _videoEndTime = TimeSpan.FromSeconds(end);
+                OnPropertyChanged(nameof(VideoEndTime));
+            }
+            RecomputeOpDurationFromTrim();
+            OnPropertyChanged(nameof(HasModifications));
         }
 
-        private void SyncTimingFromOpDuration()
+        private void RecomputeOpDurationFromTrim()
         {
-            if (_isUpdatingTiming) return;
-            _isUpdatingTiming = true;
-            try
+            if (_playbackSpeed <= 0) return; // still: OpDuration is an independent hold time
+            double dur = (_videoEndTime - _videoStartTime).TotalSeconds / _playbackSpeed;
+            if (dur < MinClipSeconds) dur = MinClipSeconds;
+            if (Math.Abs(dur - _opDuration.TotalSeconds) > 1e-9)
             {
-                if (_playbackSpeed == 0.0) return; // Treat as still image; let duration stand
-
-                double videoDuration = (_videoEndTime - _videoStartTime).TotalSeconds;
-                if (videoDuration > 0 && _opDuration.TotalSeconds > 0)
-                {
-                    _playbackSpeed = videoDuration / _opDuration.TotalSeconds;
-                    OnPropertyChanged(nameof(PlaybackSpeed));
-                }
+                _opDuration = TimeSpan.FromSeconds(dur);
+                OnPropertyChanged(nameof(OpDuration));
             }
-            finally { _isUpdatingTiming = false; }
         }
 
-        private void SyncTimingFromPlaybackSpeed()
+        // Editing the timeline Duration re-trims the OUT point (In and Speed fixed): "make this
+        // 10s long" pulls exactly 10s x speed of source from the In point. This is what makes a
+        // precise segment extractable from a very long source by typing a number. For a still
+        // (speed 0) there is no source window, so Duration is set directly as the hold time.
+        private void ApplyDurationEdit(double durationSec)
         {
-            if (_isUpdatingTiming) return;
-            _isUpdatingTiming = true;
-            try
+            double d = Math.Max(MinClipSeconds, durationSec);
+
+            if (_playbackSpeed <= 0)
             {
-                double videoDuration = (_videoEndTime - _videoStartTime).TotalSeconds;
-                if (videoDuration > 0 && _playbackSpeed > 0)
+                if (Math.Abs(d - _opDuration.TotalSeconds) > 1e-9)
                 {
-                    _opDuration = TimeSpan.FromSeconds(videoDuration / _playbackSpeed);
+                    _opDuration = TimeSpan.FromSeconds(d);
                     OnPropertyChanged(nameof(OpDuration));
                 }
+                OnPropertyChanged(nameof(HasModifications));
+                return;
             }
-            finally { _isUpdatingTiming = false; }
+
+            double src = _sourceDuration.TotalSeconds > 0 ? _sourceDuration.TotalSeconds : double.PositiveInfinity;
+            double desiredEnd = _videoStartTime.TotalSeconds + d * _playbackSpeed;
+            double end = Math.Clamp(desiredEnd, _videoStartTime.TotalSeconds + MinClipSeconds, src);
+            if (Math.Abs(end - _videoEndTime.TotalSeconds) > 1e-9)
+            {
+                _videoEndTime = TimeSpan.FromSeconds(end);
+                OnPropertyChanged(nameof(VideoEndTime));
+            }
+            // Reflect the ACTUAL (possibly source-capped) window, keeping the displayed number honest.
+            double actual = (end - _videoStartTime.TotalSeconds) / _playbackSpeed;
+            if (actual < MinClipSeconds) actual = MinClipSeconds;
+            if (Math.Abs(actual - _opDuration.TotalSeconds) > 1e-9)
+            {
+                _opDuration = TimeSpan.FromSeconds(actual);
+                OnPropertyChanged(nameof(OpDuration));
+            }
+            OnPropertyChanged(nameof(HasModifications));
         }
 
         // --- Upper-track (Track 2/3) clip properties ---

@@ -515,9 +515,13 @@ namespace ModernImageViewer.VideoDirector.Views
             var copy = new CinematicOperation
             {
                 FilePath = clip.FilePath,
+                // SourceDuration and PlaybackSpeed must precede the trim: the trim setters clamp
+                // against the source length and derive OpDuration from the speed.
+                SourceDuration = clip.SourceDuration,
+                SourceAspect = clip.SourceAspect,
+                PlaybackSpeed = clip.PlaybackSpeed,
                 VideoStartTime = clip.VideoStartTime,
                 VideoEndTime = clip.VideoEndTime,
-                OpDuration = clip.OpDuration,
                 CurveProfile = clip.CurveProfile,
                 StartMark = new SpatialMark(clip.StartMark.Scale, clip.StartMark.X, clip.StartMark.Y),
                 EndMark = new SpatialMark(clip.EndMark.Scale, clip.EndMark.X, clip.EndMark.Y),
