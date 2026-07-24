@@ -1264,6 +1264,12 @@ namespace ModernImageViewer.VideoDirector.Models
         // per track, which is why track i can own exactly one player/surface.
         private void EvaluateOverlays(TimeSpan currentStoryTime)
         {
+            // EDIT MODE OWNS THE SCREEN. It shows exactly ONE clip full-screen, and it manages the
+            // overlay surfaces itself (HideAllOverlays / EnterOverlayEditMode). If we ran here we
+            // would paint the other tracks' stills over the clip being edited — three videos
+            // instead of one — and could stomp the edit view that was just set up.
+            if (_mode != EditorMode.Arrange) return;
+
             var tracks = _viewModel.OverlayTracks;
 
             for (int i = 0; i < MaxOverlayTracks; i++)
@@ -1274,7 +1280,7 @@ namespace ModernImageViewer.VideoDirector.Models
                 // through the video-activation pipeline. It used to, which is why a still only
                 // appeared after playing (a player had to be loaded first) and why reshaping could
                 // re-attach a surface and go black. Nothing here touches a MediaPlayer.
-                if (!IsActivelyPlaying && !(_isEditingOverlay && i == 0))
+                if (!IsActivelyPlaying)
                 {
                     _activeOverlay[i] = desired;
                     if (desired == null) { SetOverlayRender(i, OverlayRender.Hidden, null); continue; }
@@ -1392,6 +1398,7 @@ namespace ModernImageViewer.VideoDirector.Models
         public void RefreshComposite()
         {
             if (IsActivelyPlaying) return;
+            if (_mode != EditorMode.Arrange) return;   // never redraw the composite over Edit mode
             EvaluateOverlays(_viewModel.CurrentStoryTime);
         }
 
