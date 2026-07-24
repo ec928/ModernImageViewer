@@ -481,11 +481,18 @@ namespace ModernImageViewer.VideoDirector.ViewModels
                 {
                     duration = props.Duration;
                 }
-                // Real frame dimensions — the PiP box is shaped from these, NOT from the thumbnail
-                // (VideosView thumbnails are letterboxed 16:9 even for portrait video).
+                // Real frame dimensions — the PiP box is shaped from these. We never assume an
+                // aspect, so read it properly for images too (a .jpg/.png overlay has no video
+                // properties, and a portrait photo must not be forced into a landscape box).
                 if (props != null && props.Width > 0 && props.Height > 0)
                 {
                     sourceAspect = (double)props.Width / props.Height;
+                }
+                else
+                {
+                    var imageProps = await file.Properties.GetImagePropertiesAsync();
+                    if (imageProps != null && imageProps.Width > 0 && imageProps.Height > 0)
+                        sourceAspect = (double)imageProps.Width / imageProps.Height;
                 }
 
                 var thumb = await file.GetThumbnailAsync(Windows.Storage.FileProperties.ThumbnailMode.SingleItem, 480, Windows.Storage.FileProperties.ThumbnailOptions.UseCurrentScale);

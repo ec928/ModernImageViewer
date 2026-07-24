@@ -1279,11 +1279,20 @@ namespace ModernImageViewer.VideoDirector.Models
                     _activeOverlay[i] = desired;
                     if (desired == null) { SetOverlayRender(i, OverlayRender.Hidden, null); continue; }
 
-                    // Shape the box from the SOURCE VIDEO's aspect. Never from the thumbnail:
-                    // VideosView thumbnails are letterboxed 16:9 even for portrait clips, which
-                    // made every box landscape and cropped the subject's head off.
-                    if (desired.SourceAspect > 0) _overlayAspect[i] = desired.SourceAspect;
-                    else if (_overlayAspect[i] <= 0) _overlayAspect[i] = 16.0 / 9.0; // until known
+                    // Shape the box from the clip's REAL aspect. Never assume a default — an
+                    // assumed 16:9 silently forces portrait clips (and portrait photos) into a
+                    // landscape box and crops the subject. If we genuinely don't know it yet,
+                    // leave it unknown: ApplyOverlayBox skips, and we render once we do know.
+                    double aspect = desired.SourceAspect;
+                    if (aspect <= 0)
+                    {
+                        // SingleItem thumbnails preserve the item's own aspect, so this is a valid
+                        // secondary source (it was not, back when we used VideosView).
+                        var thumb = desired.Thumbnail;
+                        if (thumb != null && thumb.PixelWidth > 0 && thumb.PixelHeight > 0)
+                            aspect = (double)thumb.PixelWidth / thumb.PixelHeight;
+                    }
+                    if (aspect > 0) _overlayAspect[i] = aspect;
 
                     SetOverlayRender(i, OverlayRender.Still, desired);
                     ApplyOverlayBox(i, desired, false);
