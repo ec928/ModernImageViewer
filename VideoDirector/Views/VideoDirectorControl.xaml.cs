@@ -540,6 +540,7 @@ namespace ModernImageViewer.VideoDirector.Views
             TransitionDuration = clip.TransitionDuration,
             TransitionStyle = clip.TransitionStyle,
             Opacity = clip.Opacity,
+            Volume = clip.Volume,
             PlacementWidth = clip.PlacementWidth,
             PlacementHeight = clip.PlacementHeight,
             PlacementCenterX = clip.PlacementCenterX,

@@ -55,6 +55,7 @@ namespace ModernImageViewer.VideoDirector.Models
             }
 
             var clip = await MediaClip.CreateFromFileAsync(file);
+            clip.Volume = op.Volume; // per-clip audio level (overlays default muted)
 
             // Trim to the clip's source window (Clip Start / Clip End). TrimTimeFromEnd is measured
             // back from the source's real end, so derive it from OriginalDuration.
@@ -108,7 +109,8 @@ namespace ModernImageViewer.VideoDirector.Models
                         {
                             Position = new Rect(cx - boxW / 2, cy - boxH / 2, boxW, boxH),
                             Opacity = Math.Clamp(op.Opacity, 0, 1),
-                            Delay = op.StartTime < TimeSpan.Zero ? TimeSpan.Zero : op.StartTime
+                            Delay = op.StartTime < TimeSpan.Zero ? TimeSpan.Zero : op.StartTime,
+                            AudioEnabled = op.Volume > 0 // muted overlays contribute no audio to the mix
                         };
                         layer.Overlays.Add(overlay);
                     }

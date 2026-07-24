@@ -541,6 +541,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
                 VideoEndTime = duration,
                 StartTime = startTime,
                 SourceAspect = sourceAspect,
+                Volume = 0.0,                // overlays start muted; opt in per-clip if the PiP's audio matters
                 PlacementCenterX = track.DefaultCenterX,
                 PlacementCenterY = track.DefaultCenterY,
                 Thumbnail = thumbnail

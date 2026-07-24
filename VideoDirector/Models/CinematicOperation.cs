@@ -288,6 +288,16 @@ namespace ModernImageViewer.VideoDirector.Models
             set => SetProperty(ref _opacity, Math.Clamp(value, 0f, 1f));
         }
 
+        // Audio level for this clip, 0 (mute) .. 1 (full). Applied in both the live preview and the
+        // export. Track 1 defaults to full (the main narrative); overlays are added muted so stacked
+        // PiPs don't fight the main track — raise this to let a PiP's audio through.
+        private double _volume = 1.0;
+        public double Volume
+        {
+            get => _volume;
+            set => SetProperty(ref _volume, Math.Clamp(value, 0.0, 1.0));
+        }
+
         // End of this clip's window on the master timeline (upper tracks).
         [JsonIgnore]
         public TimeSpan EndTimeOnTimeline => _startTime + _opDuration;

@@ -262,6 +262,15 @@
                                                ToolTipService.ToolTip="1 = normal, 3 = 3x faster, 0 = a still. Max 8." />
                                 </Grid>
 
+                                <!-- Volume: shared. Track 1 defaults full; overlays default muted (0). -->
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Volume" VerticalAlignment="Center" Width="120" />
+                                    <NumberBox Grid.Column="1" local:NumberBoxExtensions.FractionDigits="2" Value="{Binding SelectedClip.Volume, Mode=TwoWay, FallbackValue=1.0}"
+                                               SmallChange="0.1" LargeChange="0.25" Minimum="0" Maximum="1" SpinButtonPlacementMode="Inline"
+                                               ToolTipService.ToolTip="Clip audio level: 0 = mute, 1 = full. Overlays start muted so PiPs don't fight the main track." />
+                                </Grid>
+
                                 <!-- Overlay placement — applies to overlay tracks; disabled (not
                                      hidden) for Track 1, which is always full-frame. Keeping the row
                                      present means the panel skeleton is identical for every clip and

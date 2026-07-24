@@ -44,6 +44,8 @@ namespace ModernImageViewer.VideoDirector.Models
         private TimeSpan _renderDuration;
         private MediaPlayerElement _fadeOutElement;
         private MediaPlayerElement _fadeInElement;
+        private double _fadeOutVolume = 1.0; // per-clip volumes captured for the crossfade audio ramp
+        private double _fadeInVolume = 1.0;
 
         public CinematicOperation? CurrentPlayingOperation { get; private set; }
 
@@ -228,6 +230,7 @@ namespace ModernImageViewer.VideoDirector.Models
                 {
                     if (_activeOverlay[i] == null || _overlayPlayer[i]?.PlaybackSession == null) continue;
                     _overlayPlayer[i].PlaybackSession.PlaybackRate = _viewModel.PlaybackSpeed;
+                    _overlayPlayer[i].Volume = _activeOverlay[i].Volume;
                     _overlayPlayer[i].Play();
                 }
             }
@@ -455,7 +458,7 @@ namespace ModernImageViewer.VideoDirector.Models
                     
                     double combinedSpeed = _viewModel.PlaybackSpeed * op.PlaybackSpeed;
                     activePlayer.PlaybackSession.PlaybackRate = combinedSpeed;
-                    activePlayer.Volume = 1.0;
+                    activePlayer.Volume = op.Volume;
                     
                     if (!_isPaused && combinedSpeed > 0) activePlayer.Play();
                     else if (combinedSpeed == 0) activePlayer.Pause();
@@ -628,8 +631,8 @@ namespace ModernImageViewer.VideoDirector.Models
                     fadingInElement.Opacity = 1.0;
                 });
                 
-                fadingInPlayer.Volume = 1.0;
-                
+                fadingInPlayer.Volume = nextOp?.Volume ?? 1.0;
+
                 _ = Task.Delay(150).ContinueWith(_ =>
                 {
                     _dispatcher.TryEnqueue(() => fadingOutElement.Opacity = 0.0);
@@ -647,6 +650,8 @@ namespace ModernImageViewer.VideoDirector.Models
 
             _fadeOutElement = fadingOutElement;
             _fadeInElement = fadingInElement;
+            _fadeOutVolume = op.Volume;
+            _fadeInVolume = nextOp?.Volume ?? 1.0;
             _isPreparingTransition = false;
             _inTransition = true;
             _transitionStyle = op.TransitionStyle;
@@ -668,7 +673,7 @@ namespace ModernImageViewer.VideoDirector.Models
             _dispatcher.TryEnqueue(() =>
             {
                 fadingInElement.Opacity = 1.0;
-                fadingInPlayer.Volume = 1.0;
+                fadingInPlayer.Volume = nextOp?.Volume ?? 1.0;
                 fadingOutElement.Opacity = 0.0;
             });
             _inTransition = false;
@@ -745,8 +750,8 @@ namespace ModernImageViewer.VideoDirector.Models
                 var fadingOutPlayer = _fadeOutElement == _playerA ? _mediaPlayerA : _mediaPlayerB;
                 var fadingInPlayer = _fadeInElement == _playerA ? _mediaPlayerA : _mediaPlayerB;
                 
-                fadingOutPlayer.Volume = 1.0 - transProgress;
-                fadingInPlayer.Volume = transProgress;
+                fadingOutPlayer.Volume = (1.0 - transProgress) * _fadeOutVolume;
+                fadingInPlayer.Volume = transProgress * _fadeInVolume;
             }
 
             void UpdateSpatial(CinematicOperation op, DateTime startTime, TimeSpan duration, Microsoft.UI.Xaml.Media.CompositeTransform transform)
@@ -1587,6 +1592,7 @@ namespace ModernImageViewer.VideoDirector.Models
             else if (_isAnimating && !_isPaused)
             {
                 player.PlaybackSession.PlaybackRate = combinedSpeed;
+                player.Volume = overlay.Volume; // overlays default muted; per-clip volume opts in
                 player.Play();
             }
             else
@@ -1738,6 +1744,7 @@ namespace ModernImageViewer.VideoDirector.Models
                 {
                     player.PlaybackSession.PlaybackRate = combinedSpeed;
                 }
+                if (player.Volume != overlay.Volume) player.Volume = overlay.Volume;
                 if (player.PlaybackSession.PlaybackState != Windows.Media.Playback.MediaPlaybackState.Playing)
                 {
                     player.Play();
@@ -1935,6 +1942,7 @@ namespace ModernImageViewer.VideoDirector.Models
             // marks still animate over OpDuration below. (Was hardcoded to 1.0 + Play, so a
             // speed-0 clip wrongly ran at full speed.)
             double clipSpeed = _editClip.PlaybackSpeed;
+            _editPlayer.Volume = _editClip.Volume;
             if (clipSpeed > 0)
             {
                 _editPlayer.PlaybackSession.PlaybackRate = clipSpeed;
