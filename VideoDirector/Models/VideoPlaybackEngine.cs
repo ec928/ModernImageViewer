@@ -1038,7 +1038,15 @@ namespace ModernImageViewer.VideoDirector.Models
         // flip self-limits repeat calls).
         public async void SeekCompositeToStoryTime(TimeSpan t)
         {
-            if (_isAnimating) return; // don't fight active playback
+            // Pausing leaves the playback loop alive (_isAnimating stays true, _isPaused flips),
+            // so guarding on _isAnimating alone made the scrubber dead after play->pause until
+            // something else called StopPlayback. Scrubbing while paused means "take over": end
+            // the playback loop and settle into Arrange at the scrubbed point.
+            if (_isAnimating)
+            {
+                if (!_isPaused) return;   // actively playing — don't fight it
+                StopPlayback();
+            }
             if (_mode != EditorMode.Arrange) ExitToArrange();
 
             var nodes = _viewModel.TimelineNodes;

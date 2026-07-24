@@ -263,7 +263,13 @@ namespace ModernImageViewer.VideoDirector.Views
         // reorder). Empty space in the rows also scrubs.
         private void TimelineBar_PointerPressed(object sender, PointerRoutedEventArgs e)
         {
-            var p = e.GetCurrentPoint(TimelineBar).Position;
+            var point = e.GetCurrentPoint(TimelineBar);
+            // Only the left button (or a touch/pen contact, which also reports it) drives
+            // scrub/select/drag. Without this, a right-click starts a drag and captures the
+            // pointer, which suppresses RightTapped — i.e. no context menu.
+            if (!point.Properties.IsLeftButtonPressed) return;
+
+            var p = point.Position;
             _timelinePressPoint = p;
             _timelinePressed = true;
             _timelineScrubbing = false;
