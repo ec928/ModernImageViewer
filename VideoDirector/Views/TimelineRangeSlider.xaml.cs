@@ -95,7 +95,6 @@ namespace ModernImageViewer.VideoDirector.Views
         }
 
         private bool _isDragging = false;
-        private double _dragStartPixel;
         private double _dragStartValue;
 
         private void UpdateUI()
@@ -222,9 +221,8 @@ namespace ModernImageViewer.VideoDirector.Views
             UpdateUI();
         }
 
-        // Scroll to zoom. Anchored on the PLAYHEAD (a visible landmark you're working around) so it
-        // stays put while the window tightens around it — far less disorienting than anchoring on an
-        // unmarked cursor. If the playhead is off-window, keep the current centre instead.
+        // Scroll to zoom around the CENTRE of the view (both edges move equally, no sideways slide);
+        // Shift+scroll pans the window to reach any region.
         private void RootGrid_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
         {
             EnsureView();
