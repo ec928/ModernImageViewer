@@ -1851,8 +1851,20 @@ namespace ModernImageViewer.VideoDirector.Models
             _editPreviewPlaying = true;
             _editPreviewStart = DateTime.Now;
             _editPlayer.PlaybackSession.Position = _editClip.VideoStartTime;
-            _editPlayer.PlaybackSession.PlaybackRate = 1.0;
-            _editPlayer.Play();
+
+            // Respect the clip's own speed. Speed 0 = a STILL: freeze the frame; the Ken Burns
+            // marks still animate over OpDuration below. (Was hardcoded to 1.0 + Play, so a
+            // speed-0 clip wrongly ran at full speed.)
+            double clipSpeed = _editClip.PlaybackSpeed;
+            if (clipSpeed > 0)
+            {
+                _editPlayer.PlaybackSession.PlaybackRate = clipSpeed;
+                _editPlayer.Play();
+            }
+            else
+            {
+                _editPlayer.Pause();
+            }
             CompositionTarget.Rendering += EditPreview_Rendering;
             _viewModel.IsPlaying = true;
         }
@@ -1876,7 +1888,12 @@ namespace ModernImageViewer.VideoDirector.Models
             {
                 _editPreviewStart = DateTime.Now; // loop the preview
                 progress = 0;
-                if (_editPlayer?.PlaybackSession != null) _editPlayer.PlaybackSession.Position = _editClip.VideoStartTime;
+                if (_editPlayer?.PlaybackSession != null)
+                {
+                    _editPlayer.PlaybackSession.Position = _editClip.VideoStartTime;
+                    // Resume if it hit end-of-media mid-loop; a still (speed 0) stays paused.
+                    if (_editClip.PlaybackSpeed > 0) _editPlayer.Play();
+                }
             }
             ApplyMarksAtProgress(_editClip, progress, _playerControl.ActiveTransform);
         }

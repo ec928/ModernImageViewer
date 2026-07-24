@@ -318,20 +318,19 @@ namespace ModernImageViewer.VideoDirector.Views
         {
             if (clip == null) return 1.0;                       // transitions / drag ghost
 
-            // Keyed off the actual mode, NOT off SelectedClip — a clip stays selected after
-            // playback/edit, so using selection would wrongly dim Arrange.
-            if (ViewModel.IsPlaying)
-            {
-                // Track 1: the clip currently rolling. Overlays: any that are live right now.
-                bool active = ViewModel.TimelineNodes.Contains(clip)
-                    ? ReferenceEquals(clip, _playbackEngine?.CurrentPlayingOperation)
-                    : clip.IsActiveAt(ViewModel.CurrentStoryTime);
-                return active ? 1.0 : 0.5;
-            }
+            // Edit spotlights the one edited clip; Play AND Arrange both spotlight whatever is on
+            // screen at the playhead (the composite), so the timeline mirrors what you see.
             if (ViewModel.IsEditMode)
                 return ReferenceEquals(clip, ViewModel.SelectedClip) ? 1.0 : 0.5;
+            return IsActiveAtPlayhead(clip) ? 1.0 : 0.5;
+        }
 
-            return 1.0;   // Arrange: everything full
+        private bool IsActiveAtPlayhead(CinematicOperation clip)
+        {
+            var t = ViewModel.CurrentStoryTime;
+            if (ViewModel.TimelineNodes.Contains(clip))   // spine: the clip at the playhead
+                return ViewModel.TimelineNodes.IndexOf(clip) == ViewModel.GetTimelineIndexForStoryTime(t);
+            return clip.IsActiveAt(t);                    // overlay: live in its window
         }
 
         // Which clips are on screen right now — as a signature, so playback can rebuild the
@@ -739,8 +738,9 @@ namespace ModernImageViewer.VideoDirector.Views
             if (e.PropertyName == nameof(DirectorViewModel.CurrentStoryTime))
             {
                 UpdatePlayhead();
-                // While playing, refresh the spotlight when an overlay comes/goes (not every frame).
-                if (ViewModel.IsPlaying)
+                // Play OR Arrange (scrubbing): refresh the spotlight when the set of clips on
+                // screen changes (not every frame). Edit ignores the playhead.
+                if (!ViewModel.IsEditMode)
                 {
                     int sig = ActiveSignature();
                     if (sig != _lastActiveSignature) { _lastActiveSignature = sig; BuildTimelineBar(); }
