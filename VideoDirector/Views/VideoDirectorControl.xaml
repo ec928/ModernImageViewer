@@ -160,8 +160,8 @@
                                     <Button Content="Start" Width="60" FontWeight="SemiBold" Click="SetStart_Click" ToolTipService.ToolTip="Set Start Keyframe" Foreground="Cyan" />
                                     <Button Content="Mid" Width="60" FontWeight="SemiBold" Click="SetMid_Click" RightTapped="ClearMid_RightTapped" ToolTipService.ToolTip="Set Mid Keyframe (right-click to clear)" Foreground="DeepSkyBlue" />
                                     <Button Content="End" Width="60" FontWeight="SemiBold" Click="SetEnd_Click" ToolTipService.ToolTip="Set End Keyframe" Foreground="RoyalBlue" />
-                                    <ToggleButton x:Name="RecordButton" Click="RecordButton_Click" ToolTipService.ToolTip="Record Motion" Height="32" Padding="8,4" CornerRadius="4"
-                                                  Visibility="{Binding IsTrack1Selected, Converter={StaticResource BoolToVisConverter}}">
+                                    <ToggleButton x:Name="RecordButton" Click="RecordButton_Click" ToolTipService.ToolTip="Record Motion (Track 1)" Height="32" Padding="8,4" CornerRadius="4"
+                                                  IsEnabled="{Binding IsTrack1Selected}">
                                         <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                             <SymbolIcon x:Name="RecordIcon" Symbol="Video" Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
                                             <TextBlock Text="Record" Foreground="{ThemeResource SystemFillColorCriticalBrush}" FontWeight="SemiBold" VerticalAlignment="Center"/>
@@ -239,37 +239,50 @@
                                                ToolTipService.ToolTip="1 = normal, 3 = 3x faster, 0 = a still. Max 8." />
                                 </Grid>
 
-                                <!-- PiP Width: overlay only -->
-                                <Grid ColumnSpacing="12" Visibility="{Binding IsOverlaySelected, Converter={StaticResource BoolToVisConverter}}">
+                                <!-- Overlay placement — applies to overlay tracks; disabled (not
+                                     hidden) for Track 1, which is always full-frame. Keeping the row
+                                     present means the panel skeleton is identical for every clip and
+                                     never reshuffles as the selection changes. -->
+                                <TextBlock Text="Overlay Placement (PiP)" FontWeight="SemiBold" FontSize="12"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,4,0,0" />
+
+                                <Grid ColumnSpacing="12">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="PiP Width" VerticalAlignment="Center" Width="120" />
                                     <NumberBox Grid.Column="1" local:NumberBoxExtensions.FractionDigits="2" Value="{Binding SelectedClip.PlacementWidth, Mode=TwoWay, FallbackValue=0.3}"
+                                               IsEnabled="{Binding IsOverlaySelected}"
                                                SmallChange="0.05" LargeChange="0.1" Minimum="0.05" Maximum="1.0" SpinButtonPlacementMode="Inline"
-                                               ToolTipService.ToolTip="PiP box width as a fraction of the frame. Or drag a side/corner handle on the composite." />
+                                               ToolTipService.ToolTip="PiP box width as a fraction of the frame. Or drag a side/corner handle on the composite. Overlay tracks only." />
                                 </Grid>
 
-                                <!-- PiP Height: overlay only -->
-                                <Grid ColumnSpacing="12" Visibility="{Binding IsOverlaySelected, Converter={StaticResource BoolToVisConverter}}">
+                                <Grid ColumnSpacing="12">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="PiP Height" VerticalAlignment="Center" Width="120" />
                                     <NumberBox Grid.Column="1" local:NumberBoxExtensions.FractionDigits="2" Value="{Binding SelectedClip.PlacementHeight, Mode=TwoWay, FallbackValue=0.3}"
+                                               IsEnabled="{Binding IsOverlaySelected}"
                                                SmallChange="0.05" LargeChange="0.1" Minimum="0.05" Maximum="1.0" SpinButtonPlacementMode="Inline"
-                                               ToolTipService.ToolTip="PiP box height as a fraction of the frame. Reshape independently of width for any aspect." />
+                                               ToolTipService.ToolTip="PiP box height as a fraction of the frame. Reshape independently of width for any aspect. Overlay tracks only." />
                                 </Grid>
 
-                                <!-- Opacity: overlay only -->
-                                <Grid ColumnSpacing="12" Visibility="{Binding IsOverlaySelected, Converter={StaticResource BoolToVisConverter}}">
+                                <Grid ColumnSpacing="12">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="Opacity" VerticalAlignment="Center" Width="120" />
                                     <NumberBox Grid.Column="1" local:NumberBoxExtensions.FractionDigits="2" Value="{Binding SelectedClip.Opacity, Mode=TwoWay, FallbackValue=1.0}"
-                                               SmallChange="0.1" LargeChange="0.25" Minimum="0" Maximum="1" SpinButtonPlacementMode="Inline" />
+                                               IsEnabled="{Binding IsOverlaySelected}"
+                                               SmallChange="0.1" LargeChange="0.25" Minimum="0" Maximum="1" SpinButtonPlacementMode="Inline"
+                                               ToolTipService.ToolTip="Overlay opacity. Overlay tracks only." />
                                 </Grid>
 
-                                <!-- Transition Out Style: Track 1 only -->
-                                <Grid ColumnSpacing="12" Visibility="{Binding IsTrack1Selected, Converter={StaticResource BoolToVisConverter}}">
+                                <!-- Transition — applies to Track 1 (how a clip hands off to the next);
+                                     disabled for overlays. Same skeleton-stability rationale as above. -->
+                                <TextBlock Text="Transition (Track 1)" FontWeight="SemiBold" FontSize="12"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,4,0,0" />
+
+                                <Grid ColumnSpacing="12">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="Transition Style" VerticalAlignment="Center" Width="120" />
-                                    <ComboBox Grid.Column="1" SelectedIndex="{Binding SelectedClip.TransitionStyleIndex, Mode=TwoWay, FallbackValue=0}" HorizontalAlignment="Stretch">
+                                    <ComboBox Grid.Column="1" SelectedIndex="{Binding SelectedClip.TransitionStyleIndex, Mode=TwoWay, FallbackValue=0}"
+                                              IsEnabled="{Binding IsTrack1Selected}" HorizontalAlignment="Stretch">
                                         <x:String>HardSnap</x:String>
                                         <x:String>Crossfade</x:String>
                                         <x:String>CinematicBridge</x:String>
@@ -277,14 +290,13 @@
                                     </ComboBox>
                                 </Grid>
 
-                                <!-- Transition Out Duration: Track 1 only -->
-                                <Grid ColumnSpacing="12" Visibility="{Binding IsTrack1Selected, Converter={StaticResource BoolToVisConverter}}">
+                                <Grid ColumnSpacing="12">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="Transition Length" VerticalAlignment="Center" Width="120" TextWrapping="Wrap" />
                                     <NumberBox Grid.Column="1" local:NumberBoxExtensions.FractionDigits="1" Value="{Binding SelectedClip.TransitionDuration, Mode=TwoWay, Converter={StaticResource TimeSpanToDoubleSecondsConverter}, FallbackValue=0.0}"
                                                IsEnabled="{Binding SelectedClip.TransitionEditable}"
                                                SmallChange="0.1" LargeChange="0.5" Minimum="0" SpinButtonPlacementMode="Inline"
-                                               ToolTipService.ToolTip="HardSnap is an instant cut (0). Choose another Transition Style to set a length." />
+                                               ToolTipService.ToolTip="HardSnap is an instant cut (0). Choose another Transition Style to set a length. Track 1 only." />
                                 </Grid>
                             </StackPanel>
                         </StackPanel>
