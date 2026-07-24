@@ -10,7 +10,7 @@
 
     <Grid x:Name="RootGrid" Background="Transparent" PointerPressed="RootGrid_PointerPressed"
           PointerWheelChanged="RootGrid_PointerWheelChanged" DoubleTapped="RootGrid_DoubleTapped"
-          ToolTipService.ToolTip="Scroll to zoom into the source for precise trimming; double-click to fit.">
+          ToolTipService.ToolTip="Scroll to zoom · Shift+scroll to pan · double-click to reset zoom">
         <!-- Base Track -->
         <Rectangle x:Name="BaseTrack" Height="4" Fill="{ThemeResource SurfaceStrokeColorDefaultBrush}" RadiusX="2" RadiusY="2" VerticalAlignment="Center" Margin="12,0" />
         
