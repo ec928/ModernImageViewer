@@ -1279,11 +1279,15 @@ namespace ModernImageViewer.VideoDirector.Models
                     _activeOverlay[i] = desired;
                     if (desired == null) { SetOverlayRender(i, OverlayRender.Hidden, null); continue; }
 
-                    // Shape the box from the THUMBNAIL's aspect, not the video's — the still then
-                    // fills its box exactly instead of being cropped to a mismatched shape.
+                    // Shape the box from the THUMBNAIL's aspect when it's known. NOTE: a BitmapImage
+                    // reports 0 until it has finished loading, so this can legitimately be skipped
+                    // on early passes — which is exactly why the still uses Stretch="Uniform":
+                    // a wrong box shape then just letterboxes instead of cropping the image away.
                     var thumb = desired.Thumbnail;
-                    if (thumb != null && thumb.PixelHeight > 0)
+                    if (thumb != null && thumb.PixelHeight > 0 && thumb.PixelWidth > 0)
                         _overlayAspect[i] = (double)thumb.PixelWidth / thumb.PixelHeight;
+                    else if (_overlayAspect[i] <= 0)
+                        _overlayAspect[i] = 16.0 / 9.0;   // sane default so the box can be laid out
 
                     SetOverlayRender(i, OverlayRender.Still, desired);
                     ApplyOverlayBox(i, desired, false);
