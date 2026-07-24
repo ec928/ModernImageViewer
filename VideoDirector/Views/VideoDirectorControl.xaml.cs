@@ -35,6 +35,7 @@ namespace ModernImageViewer.VideoDirector.Views
         private double _dragCursorX;      // live cursor x, for the spine ghost
         private int _dragInsertIndex;     // where the ghost would drop
         private Windows.Foundation.Point _lastHoverPoint;  // for the context menu's target
+        private int _lastActiveSignature = -1;             // playback spotlight refresh guard
 
         public VideoDirectorControl()
         {
@@ -309,15 +310,50 @@ namespace ModernImageViewer.VideoDirector.Views
             TimelineLabels.Children.Add(label);
         }
 
+        // Spotlight opacity for a clip block, by mode:
+        //   Arrange (not playing, nothing selected) -> everything full.
+        //   Edit    (a clip selected)               -> that clip full, the rest dim.
+        //   Play                                    -> every clip active at the playhead full, rest dim.
+        private double BlockDim(CinematicOperation clip)
+        {
+            if (clip == null) return 1.0;                       // transitions / drag ghost
+            bool focusExists = ViewModel.IsPlaying || ViewModel.SelectedClip != null;
+            if (!focusExists) return 1.0;
+            return IsClipInFocus(clip) ? 1.0 : 0.5;
+        }
+
+        private bool IsClipInFocus(CinematicOperation clip)
+        {
+            if (ViewModel.IsPlaying)
+            {
+                // Track 1: the clip currently rolling. Overlays: any that are live right now.
+                if (ViewModel.TimelineNodes.Contains(clip))
+                    return ReferenceEquals(clip, _playbackEngine?.CurrentPlayingOperation);
+                return clip.IsActiveAt(ViewModel.CurrentStoryTime);
+            }
+            return ReferenceEquals(clip, ViewModel.SelectedClip);   // Edit
+        }
+
+        // Which clips are on screen right now — as a signature, so playback can rebuild the
+        // highlights only when the active set actually changes (an overlay starts/ends), not every
+        // frame. Spine boundaries already rebuild via the SelectedClip change.
+        private int ActiveSignature()
+        {
+            var t = ViewModel.CurrentStoryTime;
+            int sig = 17 * 31 + ViewModel.GetTimelineIndexForStoryTime(t);
+            foreach (var track in ViewModel.OverlayTracks)
+                foreach (var ov in track.Clips)
+                    if (ov.IsActiveAt(t)) sig = sig * 31 + ov.GetHashCode();
+            return sig;
+        }
+
         private void AddTimelineBlock(double x, double y, double width, double height, Windows.UI.Color color, CinematicOperation clip = null)
         {
             if (width < 1) width = 1;
 
-            // Spotlight selection (#1): the selected clip stays full strength; when something IS
-            // selected, every OTHER clip dims. Hierarchy by contrast, not by adding weight/border
-            // to a small block where space is at a premium.
-            bool selected = clip != null && ReferenceEquals(clip, ViewModel.SelectedClip);
-            double dim = (clip != null && ViewModel.SelectedClip != null && !selected) ? 0.5 : 1.0;
+            // Spotlight (#1): the in-focus clip(s) stay full strength, the rest dim. "In focus"
+            // depends on mode — Arrange: all; Edit: the edited clip; Play: everything on screen now.
+            double dim = BlockDim(clip);
 
             var r = new Microsoft.UI.Xaml.Shapes.Rectangle
             {
@@ -703,6 +739,12 @@ namespace ModernImageViewer.VideoDirector.Views
             if (e.PropertyName == nameof(DirectorViewModel.CurrentStoryTime))
             {
                 UpdatePlayhead();
+                // While playing, refresh the spotlight when an overlay comes/goes (not every frame).
+                if (ViewModel.IsPlaying)
+                {
+                    int sig = ActiveSignature();
+                    if (sig != _lastActiveSignature) { _lastActiveSignature = sig; BuildTimelineBar(); }
+                }
                 return;
             }
             if (e.PropertyName == nameof(DirectorViewModel.SelectedClip))
@@ -722,6 +764,11 @@ namespace ModernImageViewer.VideoDirector.Views
                 // PiPs back into arrangeable stills. Keying off the observable state rather than
                 // one specific method means no path can miss it.
                 if (!ViewModel.IsPlaying) _playbackEngine?.RefreshComposite();
+
+                // Rebuild so the spotlight switches between play-mode (active clips) and
+                // selection-mode logic; reset the signature so the next play refreshes.
+                _lastActiveSignature = -1;
+                BuildTimelineBar();
             }
             else if (e.PropertyName == nameof(DirectorViewModel.SelectedOverlay))
             {
