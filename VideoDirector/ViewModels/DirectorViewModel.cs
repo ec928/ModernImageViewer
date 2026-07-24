@@ -345,6 +345,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
         {
             TimelineNodes.CollectionChanged += TimelineNodes_CollectionChanged;
             EnsureOverlayTracks(); // always the full set of upper tracks (Track 2..4)
+            ResetHistory();        // baseline = the empty project, so the first edit is undoable
         }
 
         // The track count is fixed: 1 spine + MaxOverlayTracks upper tracks are always present,
@@ -439,6 +440,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
                     Thumbnail = thumbnail
                 });
             }
+            RecordIfChanged();
         }
 
         // Finds which Track 1 clip a given absolute story time falls within. Used to resume
@@ -544,6 +546,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
                 Thumbnail = thumbnail
             };
             track.Clips.Add(overlay);
+            RecordIfChanged();
             // Deliberately does NOT select the new clip: selecting an overlay enters Edit mode,
             // and in Edit mode Play previews that one clip instead of the composite (so the global
             // playhead appears frozen). Adding clips is an Arrange activity — stay in Arrange.
@@ -636,6 +639,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
             }
             EnsureOverlayTracks(); // top up so the timeline always shows the full Track 1..4 set
             OnPropertyChanged(nameof(CanAddOverlayTrack));
+            ResetHistory(); // the loaded project is the new baseline, not an undo step
         }
 
         private async Task LoadThumbnailAsync(CinematicOperation node, Microsoft.UI.Dispatching.DispatcherQueue dispatcher)
@@ -684,6 +688,119 @@ namespace ModernImageViewer.VideoDirector.ViewModels
             TimelineNodes.Clear();
             OverlayTracks.Clear();
             EnsureOverlayTracks();
+            RecordIfChanged();
+        }
+
+        // ---- Undo / redo -------------------------------------------------------------------
+        // Snapshot-based history reusing the project serialization. One step is recorded per
+        // "settle point" (add, remove, move, clear, exit-edit), so a burst of edits within one
+        // edit session collapses into a single undo. RecordIfChanged compares the current state to
+        // the last settled state and only records a step when something actually changed — so
+        // calling it defensively (e.g. on every exit-edit) never litters the history with no-ops.
+        private readonly System.Collections.Generic.Stack<string> _undo = new();
+        private readonly System.Collections.Generic.Stack<string> _redo = new();
+        private string _settled = string.Empty;
+        private const int MaxHistory = 50;
+        private static readonly System.Text.Json.JsonSerializerOptions _snapshotOptions = new();
+
+        public bool CanUndo => _undo.Count > 0;
+        public bool CanRedo => _redo.Count > 0;
+
+        private string CaptureSnapshot()
+        {
+            var data = new ProjectData { TimelineNodes = TimelineNodes, OverlayTracks = OverlayTracks };
+            return System.Text.Json.JsonSerializer.Serialize(data, _snapshotOptions);
+        }
+
+        // Establish the "nothing to undo" baseline — call after construction and after a project load
+        // so neither the empty start nor the load itself is an undo step.
+        public void ResetHistory()
+        {
+            _undo.Clear();
+            _redo.Clear();
+            _settled = CaptureSnapshot();
+            RaiseHistoryChanged();
+        }
+
+        public void RecordIfChanged()
+        {
+            var current = CaptureSnapshot();
+            if (current == _settled) return;
+
+            if (_settled.Length > 0)
+            {
+                _undo.Push(_settled);
+                if (_undo.Count > MaxHistory)
+                {
+                    // Drop the oldest entry (bottom of the stack) to cap memory.
+                    var kept = _undo.ToArray(); // index 0 = newest
+                    _undo.Clear();
+                    for (int i = MaxHistory - 1; i >= 0; i--) _undo.Push(kept[i]);
+                }
+                _redo.Clear();
+            }
+            _settled = current;
+            RaiseHistoryChanged();
+        }
+
+        public void Undo()
+        {
+            if (_undo.Count == 0) return;
+            _redo.Push(CaptureSnapshot());
+            var target = _undo.Pop();
+            _settled = target;
+            RestoreSnapshot(target);
+            RaiseHistoryChanged();
+        }
+
+        public void Redo()
+        {
+            if (_redo.Count == 0) return;
+            _undo.Push(CaptureSnapshot());
+            var target = _redo.Pop();
+            _settled = target;
+            RestoreSnapshot(target);
+            RaiseHistoryChanged();
+        }
+
+        private void RaiseHistoryChanged()
+        {
+            OnPropertyChanged(nameof(CanUndo));
+            OnPropertyChanged(nameof(CanRedo));
+        }
+
+        private void RestoreSnapshot(string json)
+        {
+            ProjectData data;
+            try { data = System.Text.Json.JsonSerializer.Deserialize<ProjectData>(json, _snapshotOptions); }
+            catch { return; }
+            if (data == null) return;
+
+            var dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+
+            SelectedTimelineNode = null;
+            SelectedOverlay = null;
+
+            TimelineNodes.Clear();
+            if (data.TimelineNodes != null)
+                foreach (var node in data.TimelineNodes)
+                {
+                    TimelineNodes.Add(node);
+                    _ = LoadThumbnailAsync(node, dispatcher);
+                }
+
+            OverlayTracks.Clear();
+            if (data.OverlayTracks != null)
+                foreach (var track in data.OverlayTracks)
+                {
+                    if (OverlayTracks.Count >= MaxOverlayTracks) break;
+                    OverlayTracks.Add(track);
+                    foreach (var clip in track.Clips) _ = LoadOverlayThumbnailAsync(clip, dispatcher);
+                }
+
+            EnsureOverlayTracks();
+            OnPropertyChanged(nameof(CanAddOverlayTrack));
+            OnPropertyChanged(nameof(TotalStoryTime));
         }
     }
 }

@@ -482,7 +482,11 @@ namespace ModernImageViewer.VideoDirector.Views
             _timelineScrubbing = false;
             _timelineMovingClip = false;
             _dragClip = null;
-            if (wasMoving) BuildTimelineBar(); // only needed to clear the drag ghost
+            if (wasMoving)
+            {
+                BuildTimelineBar();          // clear the drag ghost
+                ViewModel.RecordIfChanged(); // record the move/reorder as one undo step
+            }
         }
 
         // Duplicate / Remove for the block under the cursor. The platform opens the ContextFlyout;
@@ -548,6 +552,7 @@ namespace ModernImageViewer.VideoDirector.Views
                 copy.StartTime = clip.StartTime + clip.OpDuration; // place right after the original
                 track.Clips.Insert(i + 1, copy);
             }
+            ViewModel.RecordIfChanged();
         }
 
         private void RemoveClip(CinematicOperation clip, bool isSpine)
@@ -562,6 +567,7 @@ namespace ModernImageViewer.VideoDirector.Views
                 TrackOf(clip)?.Clips.Remove(clip);
                 if (ViewModel.SelectedOverlay == clip) ViewModel.SelectedOverlay = null;
             }
+            ViewModel.RecordIfChanged();
         }
 
         // Map x -> story time and seek the composite (spine frame + active overlays).
@@ -644,6 +650,7 @@ namespace ModernImageViewer.VideoDirector.Views
             _dragClip.StartTime = TimeSpan.FromSeconds(newStart);
             BuildTimelineBar();
             _playbackEngine?.RefreshComposite();   // moving in time can change what's on screen
+            // History is recorded once on drop (PointerReleased), not per move-tick.
         }
 
 
@@ -1097,6 +1104,8 @@ namespace ModernImageViewer.VideoDirector.Views
             ViewModel.SelectedTimelineNode = null;
             ViewModel.SelectedOverlay = null;
             _playbackEngine?.ExitToArrange();
+            // An edit session (trim/speed/framing changes) collapses into one undo step here.
+            ViewModel.RecordIfChanged();
         }
 
         private void EscapeAccelerator_Invoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender,
@@ -1128,9 +1137,40 @@ namespace ModernImageViewer.VideoDirector.Views
         }
 
         // A NumberBox hosts an inner TextBox, so a focused TextBox means the user is typing —
-        // in which case Space/Delete must reach the field, not trigger a shortcut.
+        // in which case Space/Delete/Ctrl+Z must reach the field, not trigger a shortcut.
         private bool IsTextInputFocused()
             => FocusManager.GetFocusedElement(this.XamlRoot) is TextBox;
+
+        private void UndoAccelerator_Invoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender,
+                                             Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
+        {
+            if (IsTextInputFocused()) return; // let Ctrl+Z undo text in a field
+            args.Handled = true;
+            ApplyHistory(ViewModel.Undo);
+        }
+
+        private void RedoAccelerator_Invoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender,
+                                             Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
+        {
+            if (IsTextInputFocused()) return;
+            args.Handled = true;
+            ApplyHistory(ViewModel.Redo);
+        }
+
+        private void Undo_Click(object sender, RoutedEventArgs e) => ApplyHistory(ViewModel.Undo);
+        private void Redo_Click(object sender, RoutedEventArgs e) => ApplyHistory(ViewModel.Redo);
+
+        // Undo/redo swap the whole clip collection, so any engine references to the old clips (edit
+        // target, playing op) go stale. Settle the engine into a clean Arrange first, apply the
+        // history step, then rebuild the timeline and composite from the restored state.
+        private void ApplyHistory(Action historyOp)
+        {
+            if (ViewModel.IsPlaying) _playbackEngine?.StopPlayback();
+            if (ViewModel.IsEditMode) _playbackEngine?.ExitToArrange();
+            historyOp();
+            BuildTimelineBar();
+            _playbackEngine?.RefreshComposite();
+        }
 
 
 

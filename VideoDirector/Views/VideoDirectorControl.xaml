@@ -26,6 +26,9 @@
         <KeyboardAccelerator Key="Escape" Invoked="EscapeAccelerator_Invoked" />
         <KeyboardAccelerator Key="Space" Invoked="PlayPauseAccelerator_Invoked" />
         <KeyboardAccelerator Key="Delete" Invoked="DeleteAccelerator_Invoked" />
+        <KeyboardAccelerator Key="Z" Modifiers="Control" Invoked="UndoAccelerator_Invoked" />
+        <KeyboardAccelerator Key="Y" Modifiers="Control" Invoked="RedoAccelerator_Invoked" />
+        <KeyboardAccelerator Key="Z" Modifiers="Control,Shift" Invoked="RedoAccelerator_Invoked" />
     </UserControl.KeyboardAccelerators>
 
     <Grid Background="Black" AllowDrop="True" DragOver="Grid_DragOver" Drop="Grid_Drop">
@@ -63,6 +66,13 @@
                  group). Save / Load / Clear — project scope only. -->
             <Border CornerRadius="4" Background="#99000000" VerticalAlignment="Center" Padding="3">
                 <StackPanel Orientation="Horizontal" Spacing="2">
+                    <Button Click="Undo_Click" IsEnabled="{x:Bind ViewModel.CanUndo, Mode=OneWay}" Width="34" Height="34" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="4" ToolTipService.ToolTip="Undo (Ctrl+Z)">
+                        <SymbolIcon Symbol="Undo" Foreground="White" />
+                    </Button>
+                    <Button Click="Redo_Click" IsEnabled="{x:Bind ViewModel.CanRedo, Mode=OneWay}" Width="34" Height="34" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="4" ToolTipService.ToolTip="Redo (Ctrl+Y)">
+                        <SymbolIcon Symbol="Redo" Foreground="White" />
+                    </Button>
+                    <AppBarSeparator />
                     <Button Click="Save_Click" Width="34" Height="34" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="4" ToolTipService.ToolTip="Save project">
                         <SymbolIcon Symbol="Save" Foreground="White" />
                     </Button>
