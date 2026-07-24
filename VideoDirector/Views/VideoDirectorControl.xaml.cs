@@ -75,7 +75,7 @@ namespace ModernImageViewer.VideoDirector.Views
             ViewModel.EditTargetChanged += ViewModel_EditTargetChanged;
 
             ViewModel.TimelineNodes.CollectionChanged += (s, ev) => BuildTimelineBar();
-            ViewModel.OverlayTracks.CollectionChanged += (s, ev) => { HookOverlayTrackClips(); BuildTimelineBar(); };
+            ViewModel.OverlayTracks.CollectionChanged += (s, ev) => { HookOverlayTrackClips(); BuildTimelineBar(); _playbackEngine?.RefreshComposite(); };
             HookOverlayTrackClips();
             BuildTimelineBar();
         }
@@ -86,7 +86,7 @@ namespace ModernImageViewer.VideoDirector.Views
         {
             foreach (var track in ViewModel.OverlayTracks)
                 if (_hookedTracks.Add(track))
-                    track.Clips.CollectionChanged += (s, ev) => BuildTimelineBar();
+                    track.Clips.CollectionChanged += (s, ev) => { BuildTimelineBar(); _playbackEngine?.RefreshComposite(); };
         }
 
         private void AddOverlayTrack_Click(object sender, RoutedEventArgs e)
@@ -515,6 +515,7 @@ namespace ModernImageViewer.VideoDirector.Views
             newStart = target.ClampToFreeSlot(_dragClip, newStart, dur);
             _dragClip.StartTime = TimeSpan.FromSeconds(newStart);
             BuildTimelineBar();
+            _playbackEngine?.RefreshComposite();   // moving in time can change what's on screen
         }
 
 

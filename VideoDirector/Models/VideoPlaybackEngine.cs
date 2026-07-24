@@ -258,6 +258,11 @@ namespace ModernImageViewer.VideoDirector.Models
             // baseline + elapsed-into-clip, so it lands back on the scrubbed position.
             if (startOffset > TimeSpan.Zero) _viewModel.CurrentStoryTime += startOffset;
 
+            // Arrange marks tracks active WITHOUT loading any video (still-only path), so clear the
+            // active set here — otherwise playback would see them as already active and skip
+            // ActivateOverlaySlot, leaving the overlay players with no source loaded.
+            for (int i = 0; i < MaxOverlayTracks; i++) _activeOverlay[i] = null;
+
             _isAnimating = true;
             CompositionTarget.Rendering += CompositionTarget_Rendering;
 
@@ -1265,6 +1270,27 @@ namespace ModernImageViewer.VideoDirector.Models
             {
                 var desired = i < tracks.Count ? ResolveActiveClip(tracks[i], currentStoryTime) : null;
 
+                // ---- ARRANGE: a pure-model, video-free path (§7A). Showing a still must NOT go
+                // through the video-activation pipeline. It used to, which is why a still only
+                // appeared after playing (a player had to be loaded first) and why reshaping could
+                // re-attach a surface and go black. Nothing here touches a MediaPlayer.
+                if (!_isAnimating && !(_isEditingOverlay && i == 0))
+                {
+                    _activeOverlay[i] = desired;
+                    if (desired == null) { SetOverlayRender(i, OverlayRender.Hidden, null); continue; }
+
+                    // Shape the box from the THUMBNAIL's aspect, not the video's — the still then
+                    // fills its box exactly instead of being cropped to a mismatched shape.
+                    var thumb = desired.Thumbnail;
+                    if (thumb != null && thumb.PixelHeight > 0)
+                        _overlayAspect[i] = (double)thumb.PixelWidth / thumb.PixelHeight;
+
+                    SetOverlayRender(i, OverlayRender.Still, desired);
+                    ApplyOverlayBox(i, desired, false);
+                    continue;
+                }
+
+                // ---- PLAYBACK (and full-screen content edit): the live video pipeline.
                 if (_activeOverlay[i] != desired)
                 {
                     if (desired != null) ActivateOverlaySlot(i, desired, currentStoryTime);
@@ -1277,17 +1303,11 @@ namespace ModernImageViewer.VideoDirector.Models
                 }
 
                 if (_activeOverlay[i] != null)
+                {
                     ApplyOverlayTransform(i, _activeOverlay[i], currentStoryTime);
-
-                // Explicit render mode for this track's current state (§7A). Arrange shows a still
-                // bitmap and NO video surface; playback shows the live video.
-                if (_activeOverlay[i] == null)
-                    SetOverlayRender(i, OverlayRender.Hidden, null);
-                else if (_isEditingOverlay && i == 0)
-                    SetOverlayRender(i, OverlayRender.Video, _activeOverlay[i]); // full-screen edit
-                else
-                    SetOverlayRender(i, _isAnimating ? OverlayRender.Video : OverlayRender.Still,
-                                     _activeOverlay[i]);
+                    SetOverlayRender(i, OverlayRender.Video, _activeOverlay[i]);
+                }
+                else SetOverlayRender(i, OverlayRender.Hidden, null);
             }
         }
 
@@ -1347,6 +1367,14 @@ namespace ModernImageViewer.VideoDirector.Models
             if (video == null) return;
             if (video.MediaPlayer == null) video.SetMediaPlayer(_overlayPlayer[track]);
             video.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
+        }
+
+        // Re-render the Arrange composite from the model (e.g. after a clip is added, removed, or
+        // moved in time). Cheap and video-free — it takes the still path in EvaluateOverlays.
+        public void RefreshComposite()
+        {
+            if (_isAnimating) return;
+            EvaluateOverlays(_viewModel.CurrentStoryTime);
         }
 
         // Strict track ⇒ the first clip whose window contains t is the only one.
