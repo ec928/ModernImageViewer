@@ -313,7 +313,7 @@ namespace ModernImageViewer.VideoDirector.Views
         {
             if (width < 1) width = 1;
             bool selected = clip != null && ReferenceEquals(clip, ViewModel.SelectedClip);
-            var fill = selected ? TrackPalette.Lighten(color, 0.35) : color;
+            var fill = selected ? TrackPalette.Lighten(color, 0.2) : color;
 
             var r = new Microsoft.UI.Xaml.Shapes.Rectangle
             {
@@ -327,16 +327,20 @@ namespace ModernImageViewer.VideoDirector.Views
             Canvas.SetTop(r, y);
             TimelineBar.Children.Add(r);
 
-            // Selection: a crisp accent bar along the bottom edge (doesn't overlap the label at top).
-            if (selected)
+            // Selection: an inset ring in whichever of black/white contrasts with the block's own
+            // colour (never white-on-white). Inset so it sits ON the block, not on the light bar.
+            if (selected && width > 3)
             {
-                var accent = new Microsoft.UI.Xaml.Shapes.Rectangle
+                var ring = new Microsoft.UI.Xaml.Shapes.Rectangle
                 {
-                    Width = width, Height = 2, IsHitTestVisible = false,
-                    Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White)
+                    Width = width - 2, Height = height - 2, RadiusX = 2, RadiusY = 2,
+                    IsHitTestVisible = false,
+                    Fill = null,
+                    Stroke = new Microsoft.UI.Xaml.Media.SolidColorBrush(TrackPalette.TextOn(fill)),
+                    StrokeThickness = 2
                 };
-                Canvas.SetLeft(accent, x); Canvas.SetTop(accent, y + height - 2);
-                TimelineBar.Children.Add(accent);
+                Canvas.SetLeft(ring, x + 1); Canvas.SetTop(ring, y + 1);
+                TimelineBar.Children.Add(ring);
             }
 
             // File-name label inside the block, in whichever of black/white reads on this colour.
