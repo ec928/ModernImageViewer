@@ -122,11 +122,16 @@ namespace ModernImageViewer.VideoDirector.Views
             ActiveTrack.Margin = new Thickness(12 + startRatio * trackWidth, 0, 0, 0);
             ActiveTrack.Width = Math.Max(0, (endRatio - startRatio) * trackWidth);
 
-            // Overview: where the visible window sits within the whole clip (full width = zoomed out).
-            double viewLeft = 12 + (_viewStart / Max) * trackWidth;
-            double viewWidth = Math.Max(2, (_viewSpan / Max) * trackWidth);
-            OverviewWindow.Margin = new Thickness(viewLeft, 0, 0, 1);
-            OverviewWindow.Width = viewWidth;
+            // Overview strip: only meaningful when zoomed in — it shows where the window sits within
+            // the whole clip. Hidden at full zoom-out (it would just be a redundant full-width line).
+            bool zoomed = _viewSpan < Max - 0.001;
+            OverviewBase.Visibility = zoomed ? Visibility.Visible : Visibility.Collapsed;
+            OverviewWindow.Visibility = zoomed ? Visibility.Visible : Visibility.Collapsed;
+            if (zoomed)
+            {
+                OverviewWindow.Margin = new Thickness(12 + (_viewStart / Max) * trackWidth, 0, 0, 1);
+                OverviewWindow.Width = Math.Max(2, (_viewSpan / Max) * trackWidth);
+            }
         }
 
         private void StartThumb_ManipulationStarted(object sender, ManipulationStartedRoutedEventArgs e)
