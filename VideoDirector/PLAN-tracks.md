@@ -60,6 +60,18 @@ is §9) — they are **owed work**. Do not let them quietly become permanent.
 8. **🟡 Back-compat.** `PlacementScale` was removed in favour of independent width/height, so **old
    saved projects lose custom PiP sizes** (revert to 0.3×0.3). Acceptable at prototype stage; revisit
    before any real persistence guarantees.
+9. **🟠 UX/UI is prototype-grade and inconsistent — needs a dedicated design pass (author call).**
+   The interface was grown reactively, not designed, and it shows: a developer **telemetry HUD**
+   (raw text) is user-visible; **mode is signalled three ways** (accent border + top-left pill +
+   panel header); several **competing idioms** (floating transport pill, right inspector panel,
+   bottom timeline strip); **edit controls are a text panel** (Start/Mid/End/Record buttons) for
+   what is a *visual* task — commercial NLEs do keyframing largely **on-canvas / direct-manipulation**;
+   **ad-hoc visual language** (hand-picked hex colours, hand-drawn chrome) instead of a palette/
+   spacing/type system; and the inspector **conflates** per-clip editing with project actions
+   (Save/Load/Clear). Fix = a proper pass grounded in established tools (Premiere / Final Cut /
+   DaVinci Resolve / CapCut): produce a **small design spec first** (layout, mode model, control
+   placement, visual tokens), *then* implement — not more reactive tweaks. Telemetry should become
+   opt-in/removed; Save/Load/Clear should move out of the per-clip inspector.
 
 Severity: 🔴 blocks the core experience · 🟠 functional gap / regression · 🟡 polish/robustness.
 
