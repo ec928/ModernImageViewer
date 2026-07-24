@@ -989,7 +989,7 @@ namespace ModernImageViewer.VideoDirector.Views
             if (file == null) return;
 
             var bar = new Microsoft.UI.Xaml.Controls.ProgressBar { Minimum = 0, Maximum = 100, Value = 0, Width = 320 };
-            var status = new TextBlock { Text = "Rendering the Track 1 spine — this can take a while for long clips." };
+            var status = new TextBlock { Text = "Rendering the composite (spine + overlays) — this can take a while for long clips." };
             var panel = new StackPanel { Spacing = 12 };
             panel.Children.Add(status);
             panel.Children.Add(bar);
@@ -1004,7 +1004,7 @@ namespace ModernImageViewer.VideoDirector.Views
             var progress = new Progress<double>(p => bar.Value = p);
 
             _ = progressDialog.ShowAsync(); // non-blocking; hidden when the render finishes
-            var result = await exporter.ExportSpineAsync(ViewModel.TimelineNodes, file, progress);
+            var result = await exporter.ExportAsync(ViewModel.TimelineNodes, ViewModel.OverlayTracks, file, progress);
             progressDialog.Hide();
 
             switch (result.Outcome)
