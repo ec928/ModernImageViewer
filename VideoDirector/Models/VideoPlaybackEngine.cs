@@ -969,6 +969,16 @@ namespace ModernImageViewer.VideoDirector.Models
             DrawRect(_playerControl.WysiwygFullFrameRect, new SpatialMark(1f, 0f, 0f), true);
         }
 
+        // Backfill the true source length from the opened media. Covers clips from older projects
+        // saved before SourceDuration was captured (their "Source Length" read 0 and trim couldn't
+        // clamp to real bounds). Only fills when missing; setting it re-clamps the trim safely.
+        private static void BackfillSourceDuration(CinematicOperation op, MediaPlayer player)
+        {
+            if (op == null || player?.PlaybackSession == null || op.SourceDuration > TimeSpan.Zero) return;
+            var natural = player.PlaybackSession.NaturalDuration;
+            if (natural > TimeSpan.Zero) op.SourceDuration = natural;
+        }
+
         public async void EnterEditMode(CinematicOperation op, EditTarget target)
         {
             StopPlayback();
@@ -1043,6 +1053,7 @@ namespace ModernImageViewer.VideoDirector.Models
             {
                 if (activePlayer.PlaybackSession != null)
                 {
+                    BackfillSourceDuration(op, activePlayer);
                     _viewModel.CurrentOperationDuration = activePlayer.PlaybackSession.NaturalDuration;
                     _viewModel.CurrentOperationTime = activePlayer.PlaybackSession.Position;
                 }
@@ -1884,6 +1895,7 @@ namespace ModernImageViewer.VideoDirector.Models
                 // Per-clip scrubber range + the WYSIWYG framing rects, exactly as Track 1 does.
                 if (player.PlaybackSession != null)
                 {
+                    BackfillSourceDuration(overlay, player);
                     _viewModel.CurrentOperationDuration = player.PlaybackSession.NaturalDuration;
                     _viewModel.CurrentOperationTime = player.PlaybackSession.Position;
                 }
