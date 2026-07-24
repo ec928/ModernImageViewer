@@ -983,7 +983,7 @@ namespace ModernImageViewer.VideoDirector.Views
                 var dialog = new ContentDialog
                 {
                     Title = "Clear project?",
-                    Content = "This removes every clip from all tracks. It can't be undone.",
+                    Content = "This removes every clip from all tracks. You can undo it with Ctrl+Z.",
                     PrimaryButtonText = "Clear",
                     CloseButtonText = "Cancel",
                     DefaultButton = ContentDialogButton.Close,
