@@ -23,6 +23,7 @@ namespace ModernImageViewer.VideoDirector.Views
         private double _timelinePxPerSec;
         private Microsoft.UI.Xaml.Shapes.Rectangle _playhead;
         private Microsoft.UI.Xaml.Shapes.Polygon _playheadKnob;
+        private TextBlock _playheadTime;
         // Pointer state: ruler = scrub; clip row tap = select; clip row drag = move/reorder.
         private Windows.Foundation.Point _timelinePressPoint;
         private bool _timelinePressed;
@@ -125,6 +126,13 @@ namespace ModernImageViewer.VideoDirector.Views
             if (w <= 0 || total <= 0) { _timelinePxPerSec = 0; return; }
             _timelinePxPerSec = w / total;
 
+            // Per-lane bands: a faint tint of the track's own colour distinguishes the lanes by
+            // colour rather than by height (space is at a premium), and ties each lane to its
+            // identity colour. Drawn first so blocks/gridlines paint over them.
+            DrawRowBand(RowSpineY, w, TrackPalette.Spine);
+            for (int ti = 0; ti < ViewModel.OverlayTracks.Count; ti++)
+                DrawRowBand(RowOvY + ti * RowPitch, w, TrackPalette.Overlay(ti));
+
             // Faint ruler strip marks the scrub zone.
             var ruler = new Microsoft.UI.Xaml.Shapes.Rectangle
             {
@@ -134,7 +142,31 @@ namespace ModernImageViewer.VideoDirector.Views
             Canvas.SetLeft(ruler, 0); Canvas.SetTop(ruler, 0);
             TimelineBar.Children.Add(ruler);
 
-            var spineColor = Microsoft.UI.ColorHelper.FromArgb(0xFF, 0x3B, 0x82, 0xF6);
+            // Time scale: labelled ticks in the ruler + faint full-height gridlines behind the blocks.
+            var gridBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(0x16, 0x88, 0x88, 0x88));
+            var tickBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(0x77, 0x88, 0x88, 0x88));
+            var labelBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray);
+            double step = NiceTimeStep(total, w);
+            for (double t = 0; t <= total + 0.001 && step > 0; t += step)
+            {
+                double gx = t * _timelinePxPerSec;
+                var grid = new Microsoft.UI.Xaml.Shapes.Rectangle { Width = 1, Height = h - RulerH, IsHitTestVisible = false, Fill = gridBrush };
+                Canvas.SetLeft(grid, gx); Canvas.SetTop(grid, RulerH);
+                TimelineBar.Children.Add(grid);
+
+                var tick = new Microsoft.UI.Xaml.Shapes.Rectangle { Width = 1, Height = 4, IsHitTestVisible = false, Fill = tickBrush };
+                Canvas.SetLeft(tick, gx); Canvas.SetTop(tick, RulerH - 4);
+                TimelineBar.Children.Add(tick);
+
+                if (gx < w - 26)
+                {
+                    var tl = new TextBlock { Text = FormatTimeShort(t), FontSize = 8, IsHitTestVisible = false, Foreground = labelBrush };
+                    Canvas.SetLeft(tl, gx + 2); Canvas.SetTop(tl, 1);
+                    TimelineBar.Children.Add(tl);
+                }
+            }
+
+            var spineColor = TrackPalette.Spine;
             var transColor = Microsoft.UI.ColorHelper.FromArgb(0xFF, 0x64, 0x74, 0x8B);
             bool spineGhost = _timelineMovingClip && _dragIsSpine && _dragClip != null;
 
@@ -176,15 +208,16 @@ namespace ModernImageViewer.VideoDirector.Views
                     Microsoft.UI.ColorHelper.FromArgb(0xCC, 0x93, 0xC5, 0xFD), _dragClip); // ghost
             }
 
-            // One row per upper track (§7B) — same loop for 1 track or 3.
+            // One row per upper track (§7B) — same loop for 1 track or 3, each in its own colour.
             for (int ti = 0; ti < ViewModel.OverlayTracks.Count; ti++)
             {
                 double rowY = RowOvY + ti * RowPitch;
+                var trackColor = TrackPalette.Overlay(ti);
                 foreach (var ov in ViewModel.OverlayTracks[ti].Clips)
                 {
                     double x = ov.StartTimeSeconds * _timelinePxPerSec;
                     double ow = ov.OpDuration.TotalSeconds * _timelinePxPerSec;
-                    AddTimelineBlock(x, rowY, ow, BlockH, Microsoft.UI.ColorHelper.FromArgb(0xFF, 0xF5, 0x9E, 0x0B), ov);
+                    AddTimelineBlock(x, rowY, ow, BlockH, trackColor, ov);
                 }
             }
 
@@ -197,8 +230,47 @@ namespace ModernImageViewer.VideoDirector.Views
             _playheadKnob.Points.Add(new Windows.Foundation.Point(11, 0));
             _playheadKnob.Points.Add(new Windows.Foundation.Point(5.5, 9));
             TimelineBar.Children.Add(_playheadKnob);
+
+            // A small time readout that rides the playhead.
+            _playheadTime = new TextBlock
+            {
+                FontSize = 9, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, IsHitTestVisible = false,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(0xFF, 0xEF, 0x44, 0x44))
+            };
+            TimelineBar.Children.Add(_playheadTime);
+
             UpdatePlayhead();
             BuildTrackLabels();
+        }
+
+        // Faint band across a lane in the track's own colour — lane separation without extra height.
+        private void DrawRowBand(double rowY, double w, Windows.UI.Color color)
+        {
+            var band = new Microsoft.UI.Xaml.Shapes.Rectangle
+            {
+                Width = w, Height = RowPitch, IsHitTestVisible = false,
+                Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(TrackPalette.At(color, 0x1E))
+            };
+            Canvas.SetLeft(band, 0); Canvas.SetTop(band, rowY - 1);
+            TimelineBar.Children.Add(band);
+        }
+
+        // A "nice" tick interval (seconds) aiming for ~80px between ticks.
+        private double NiceTimeStep(double totalSeconds, double w)
+        {
+            if (_timelinePxPerSec <= 0) return 0;
+            double rough = 80.0 / _timelinePxPerSec;   // seconds per ~80px
+            double[] steps = { 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600 };
+            foreach (var s in steps) if (s >= rough) return s;
+            return steps[steps.Length - 1];
+        }
+
+        private static string FormatTimeShort(double seconds)
+        {
+            int m = (int)(seconds / 60);
+            int s = (int)System.Math.Round(seconds - m * 60);
+            if (s == 60) { m++; s = 0; }
+            return m > 0 ? $"{m}:{s:00}" : $"{s}s";
         }
 
         // "Track 1".."Track 4" in the left gutter, vertically aligned to each row.
@@ -208,13 +280,23 @@ namespace ModernImageViewer.VideoDirector.Views
             TimelineLabels.Children.Clear();
             TimelineLabels.Height = TimelineBarHeight;
 
-            AddTrackLabel("Track 1", RowSpineY);
+            AddTrackLabel("Track 1", RowSpineY, TrackPalette.Spine);
             for (int ti = 0; ti < ViewModel.OverlayTracks.Count; ti++)
-                AddTrackLabel("Track " + (ti + 2), RowOvY + ti * RowPitch);
+                AddTrackLabel("Track " + (ti + 2), RowOvY + ti * RowPitch, TrackPalette.Overlay(ti));
         }
 
-        private void AddTrackLabel(string text, double y)
+        private void AddTrackLabel(string text, double y, Windows.UI.Color color)
         {
+            // A colour cap ties the label to the track's identity colour (same as its blocks and
+            // its on-screen PiP).
+            var cap = new Microsoft.UI.Xaml.Shapes.Rectangle
+            {
+                Width = 4, Height = BlockH - 2, RadiusX = 2, RadiusY = 2, IsHitTestVisible = false,
+                Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(color)
+            };
+            Canvas.SetLeft(cap, 4); Canvas.SetTop(cap, y + 1);
+            TimelineLabels.Children.Add(cap);
+
             var label = new TextBlock
             {
                 Text = text,
@@ -222,7 +304,7 @@ namespace ModernImageViewer.VideoDirector.Views
                 IsHitTestVisible = false,
                 Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray)
             };
-            Canvas.SetLeft(label, 4);
+            Canvas.SetLeft(label, 12);
             Canvas.SetTop(label, y + 1);
             TimelineLabels.Children.Add(label);
         }
@@ -230,23 +312,34 @@ namespace ModernImageViewer.VideoDirector.Views
         private void AddTimelineBlock(double x, double y, double width, double height, Windows.UI.Color color, CinematicOperation clip = null)
         {
             if (width < 1) width = 1;
+            bool selected = clip != null && ReferenceEquals(clip, ViewModel.SelectedClip);
+            var fill = selected ? TrackPalette.Lighten(color, 0.35) : color;
+
             var r = new Microsoft.UI.Xaml.Shapes.Rectangle
             {
                 Width = width,
                 Height = height,
                 RadiusX = 2,
                 RadiusY = 2,
-                Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(color)
+                Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(fill)
             };
-            // Selected clip: just a lighter shade of its own colour — no border, so nothing
-            // overlaps the label.
-            if (clip != null && ReferenceEquals(clip, ViewModel.SelectedClip))
-                r.Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(Lighten(color, 0.45));
             Canvas.SetLeft(r, x);
             Canvas.SetTop(r, y);
             TimelineBar.Children.Add(r);
 
-            // Small file-name label inside the block (trims when the block is narrow).
+            // Selection: a crisp accent bar along the bottom edge (doesn't overlap the label at top).
+            if (selected)
+            {
+                var accent = new Microsoft.UI.Xaml.Shapes.Rectangle
+                {
+                    Width = width, Height = 2, IsHitTestVisible = false,
+                    Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White)
+                };
+                Canvas.SetLeft(accent, x); Canvas.SetTop(accent, y + height - 2);
+                TimelineBar.Children.Add(accent);
+            }
+
+            // File-name label inside the block, in whichever of black/white reads on this colour.
             if (clip != null && !string.IsNullOrEmpty(clip.FileName) && width > 16)
             {
                 var label = new TextBlock
@@ -256,7 +349,7 @@ namespace ModernImageViewer.VideoDirector.Views
                     MaxWidth = width - 6,
                     TextTrimming = TextTrimming.CharacterEllipsis,
                     IsHitTestVisible = false,
-                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White)
+                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(TrackPalette.TextOn(fill))
                 };
                 Canvas.SetLeft(label, x + 4);
                 Canvas.SetTop(label, y + 1);
@@ -517,19 +610,25 @@ namespace ModernImageViewer.VideoDirector.Views
         }
 
 
-        // Blend a colour toward white by `amount` (0..1) — used for the selected-clip shade.
-        private static Windows.UI.Color Lighten(Windows.UI.Color c, double amount)
-        {
-            byte Mix(byte v) => (byte)(v + (255 - v) * amount);
-            return Microsoft.UI.ColorHelper.FromArgb(c.A, Mix(c.R), Mix(c.G), Mix(c.B));
-        }
-
         private void UpdatePlayhead()
         {
             if (_playhead == null || _timelinePxPerSec <= 0) return;
-            double x = ViewModel.CurrentStoryTime.TotalSeconds * _timelinePxPerSec;
+            double sec = ViewModel.CurrentStoryTime.TotalSeconds;
+            double x = sec * _timelinePxPerSec;
             Canvas.SetLeft(_playhead, x);
             if (_playheadKnob != null) Canvas.SetLeft(_playheadKnob, x - 4.5);
+
+            if (_playheadTime != null)
+            {
+                int m = (int)(sec / 60);
+                _playheadTime.Text = m > 0 ? $"{m}:{sec - m * 60:00.0}" : $"{sec:0.0}s";
+                // Sit just right of the playhead, flipping to the left near the right edge.
+                double w = TimelineBar?.ActualWidth ?? 0;
+                double tx = x + 4;
+                if (tx > w - 40) tx = x - 40;
+                Canvas.SetLeft(_playheadTime, System.Math.Max(0, tx));
+                Canvas.SetTop(_playheadTime, RulerH + 1);
+            }
         }
 
         private void PlayerControl_SizeChanged(object sender, SizeChangedEventArgs e)

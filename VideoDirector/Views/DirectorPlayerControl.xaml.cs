@@ -70,6 +70,42 @@ namespace ModernImageViewer.VideoDirector.Views
                 new OverlayVisual { Grid = OverlayGrid2, Video = OverlayPlayer2, Still = OverlayImage2, Transform = OverlayTransform2, Frame = OverlayFrame2 },
                 new OverlayVisual { Grid = OverlayGrid3, Video = OverlayPlayer3, Still = OverlayImage3, Transform = OverlayTransform3, Frame = OverlayFrame3 },
             };
+
+            // Surface i always renders overlay track i, so its identity colour + track badge are
+            // fixed. Colouring the frame to match the dashboard row (and a "T2".."T4" badge) is the
+            // correlation key: which picture on screen is which timeline row.
+            for (int i = 0; i < OverlayVisuals.Length; i++)
+                StyleOverlayFrame(OverlayVisuals[i].Frame, TrackPalette.Overlay(i), "T" + (i + 2));
+        }
+
+        private static void StyleOverlayFrame(Microsoft.UI.Xaml.Controls.Grid frame, Windows.UI.Color color, string badgeText)
+        {
+            if (frame == null) return;
+            var brush = new Microsoft.UI.Xaml.Media.SolidColorBrush(color);
+
+            if (frame.Children.Count > 0 && frame.Children[0] is Microsoft.UI.Xaml.Controls.Border border)
+            {
+                border.BorderBrush = brush;
+                border.BorderThickness = new Microsoft.UI.Xaml.Thickness(2);
+            }
+
+            var badge = new Microsoft.UI.Xaml.Controls.Border
+            {
+                Background = brush,
+                CornerRadius = new Microsoft.UI.Xaml.CornerRadius(3),
+                Padding = new Microsoft.UI.Xaml.Thickness(5, 1, 5, 1),
+                Margin = new Microsoft.UI.Xaml.Thickness(4),
+                HorizontalAlignment = Microsoft.UI.Xaml.HorizontalAlignment.Left,
+                VerticalAlignment = Microsoft.UI.Xaml.VerticalAlignment.Top,
+                Child = new Microsoft.UI.Xaml.Controls.TextBlock
+                {
+                    Text = badgeText,
+                    FontSize = 10,
+                    FontWeight = Microsoft.UI.Text.FontWeights.Bold,
+                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(TrackPalette.TextOn(color))
+                }
+            };
+            frame.Children.Add(badge);
         }
 
         // Which PiP box (if any) is under the given InputLayer-space point; topmost track wins.
