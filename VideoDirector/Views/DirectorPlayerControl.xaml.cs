@@ -53,6 +53,11 @@ namespace ModernImageViewer.VideoDirector.Views
         public event EventHandler<(int slot, BoxGrab grab, double dx, double dy)> OverlayBoxDragged;
         public event EventHandler<(int slot, int delta)> OverlayBoxWheel;
 
+        // Double-tap the image to enter Edit for the clip under the cursor (slot = overlay track
+        // index, or -1 = Track 1). In Edit mode a double-tap exits instead.
+        public event EventHandler<int> EditRequested;
+        public event EventHandler ExitEditRequested;
+
         public PlayerInputMode InputMode { get; set; } = PlayerInputMode.Content;
 
         public DirectorPlayerControl()
@@ -184,7 +189,17 @@ namespace ModernImageViewer.VideoDirector.Views
 
         private void InputLayer_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
         {
-            // Reserved (entry to Edit is via the dock for now).
+            if (InputMode == PlayerInputMode.ArrangePips)
+            {
+                // Edit whatever is under the cursor: an overlay PiP, or Track 1 if not on one.
+                EditRequested?.Invoke(this, HitTestOverlaySlot(e.GetPosition(InputLayer)));
+            }
+            else
+            {
+                // Already editing one clip full-screen — double-tap exits.
+                ExitEditRequested?.Invoke(this, EventArgs.Empty);
+            }
+            e.Handled = true;
         }
     }
 }

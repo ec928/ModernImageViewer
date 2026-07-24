@@ -13,12 +13,17 @@
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="DirectorTemplates.xaml" />
             </ResourceDictionary.MergedDictionaries>
-            
+
             <local:EmptyToVisConverter x:Key="EmptyToVisConverter" />
             <local:NullToVisConverter x:Key="NullToVisConverter" />
             <local:NullToBoolConverter x:Key="NullToBoolConverter" />
         </ResourceDictionary>
     </UserControl.Resources>
+
+    <UserControl.KeyboardAccelerators>
+        <!-- Escape leaves Edit mode. -->
+        <KeyboardAccelerator Key="Escape" Invoked="EscapeAccelerator_Invoked" />
+    </UserControl.KeyboardAccelerators>
 
     <Grid Background="Black" AllowDrop="True" DragOver="Grid_DragOver" Drop="Grid_Drop">
         <Grid.RowDefinitions>
@@ -29,21 +34,35 @@
         <!-- Background Layer: Full Bleed Immersive Player -->
         <local:DirectorPlayerControl x:Name="PlayerControl" Grid.Row="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
 
-        <!-- Mode indicator + Exit-to-Arrange (Exit shows only in Edit mode).
-             Top margin clears the window's title-bar drag region so the button is clickable. -->
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="16,52,16,16">
-            <Border Background="#99000000" CornerRadius="4" Padding="8,4" VerticalAlignment="Center">
-                <TextBlock Text="{x:Bind ViewModel.ModeLabel, Mode=OneWay}" Foreground="White" FontSize="12" FontWeight="SemiBold" />
-            </Border>
-            <Button Click="ExitToArrange_Click" Padding="10,4" CornerRadius="4"
-                    Visibility="{x:Bind ViewModel.IsEditMode, Mode=OneWay, Converter={StaticResource BoolToVisConverter}}"
-                    ToolTipService.ToolTip="Exit edit — back to Arrange (the whole composite)">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                    <SymbolIcon Symbol="Back" />
-                    <TextBlock Text="Exit" VerticalAlignment="Center" />
-                </StackPanel>
-            </Button>
-        </StackPanel>
+        <!-- Persistent small mode indicator, top-left. Top margin clears the title-bar drag region. -->
+        <Border Grid.Row="0" Background="#99000000" CornerRadius="4" Padding="8,4"
+                HorizontalAlignment="Left" VerticalAlignment="Top" Margin="16,52,16,16">
+            <TextBlock Text="{x:Bind ViewModel.ModeLabel, Mode=OneWay}" Foreground="White" FontSize="12" FontWeight="SemiBold" />
+        </Border>
+
+        <!-- Unmistakable EDIT indicator: an accent border around the canvas... -->
+        <Border Grid.Row="0" IsHitTestVisible="False" CornerRadius="8" Margin="12,0,12,0"
+                BorderBrush="{ThemeResource AccentFillColorDefaultBrush}" BorderThickness="3"
+                Visibility="{x:Bind ViewModel.IsEditMode, Mode=OneWay, Converter={StaticResource BoolToVisConverter}}" />
+
+        <!-- ...plus a prominent banner naming the clip, with a clear way out (Done). -->
+        <Border Grid.Row="0" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,52,0,0"
+                CornerRadius="20" Padding="14,7" Background="{ThemeResource AccentFillColorDefaultBrush}"
+                Visibility="{x:Bind ViewModel.IsEditMode, Mode=OneWay, Converter={StaticResource BoolToVisConverter}}">
+            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                <FontIcon Glyph="&#xE70F;" FontSize="14" Foreground="White" />
+                <TextBlock Foreground="White" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="360">
+                    <Run Text="Editing:" /><Run Text="  " /><Run Text="{Binding SelectedClip.FileName, Mode=OneWay}" />
+                </TextBlock>
+                <Button Click="ExitToArrange_Click" Background="#33FFFFFF" BorderThickness="0" CornerRadius="12" Padding="12,4"
+                        ToolTipService.ToolTip="Done editing — back to Arrange (Esc, or double-click the image)">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <SymbolIcon Symbol="Accept" Foreground="White" />
+                        <TextBlock Text="Done" Foreground="White" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Border>
 
         <!-- Foreground Layer: Floating Edit Badge -->
         <Border x:Name="EditModeBadge" Background="#D9E81123" CornerRadius="8" Padding="16,8" 

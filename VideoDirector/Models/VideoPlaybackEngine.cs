@@ -1407,6 +1407,11 @@ namespace ModernImageViewer.VideoDirector.Models
             EvaluateOverlays(_viewModel.CurrentStoryTime);
         }
 
+        // The overlay clip currently shown in a given track's box (null if none) — used by
+        // double-tap-to-edit to know which clip a PiP represents.
+        public CinematicOperation GetActiveOverlay(int track)
+            => (track >= 0 && track < MaxOverlayTracks) ? _activeOverlay[track] : null;
+
         // Strict track ⇒ the first clip whose window contains t is the only one.
         private static CinematicOperation ResolveActiveClip(OverlayTrack track, TimeSpan t)
         {

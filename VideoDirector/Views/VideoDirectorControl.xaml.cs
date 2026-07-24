@@ -71,6 +71,8 @@ namespace ModernImageViewer.VideoDirector.Views
             _playbackEngine = new VideoPlaybackEngine(PlayerControl, ViewModel);
             PlayerControl.ViewportTransformChanged += PlayerControl_ViewportTransformChanged;
             PlayerControl.SizeChanged += PlayerControl_SizeChanged;
+            PlayerControl.EditRequested += PlayerControl_EditRequested;
+            PlayerControl.ExitEditRequested += (s, ev) => ExitEditMode();
             ViewModel.PropertyChanged += ViewModel_PropertyChanged;
             ViewModel.EditTargetChanged += ViewModel_EditTargetChanged;
 
@@ -823,12 +825,40 @@ namespace ModernImageViewer.VideoDirector.Views
         }
 
 
-        private void ExitToArrange_Click(object sender, RoutedEventArgs e)
+        private void ExitToArrange_Click(object sender, RoutedEventArgs e) => ExitEditMode();
+
+        // Double-tap the image (Arrange) to edit the clip under the cursor: an overlay PiP, or the
+        // Track 1 clip at the playhead if the tap wasn't on a PiP. Routes through SelectClip so
+        // there's one entry path (selection + enter-edit) shared with the timeline.
+        private void PlayerControl_EditRequested(object sender, int slot)
         {
+            if (ViewModel.IsPlaying) return;
+            if (slot >= 0)
+            {
+                var clip = _playbackEngine?.GetActiveOverlay(slot);
+                if (clip != null) SelectClip(clip, isSpine: false);
+            }
+            else if (ViewModel.TimelineNodes.Count > 0)
+            {
+                int idx = ViewModel.GetTimelineIndexForStoryTime(ViewModel.CurrentStoryTime);
+                if (idx >= 0 && idx < ViewModel.TimelineNodes.Count)
+                    SelectClip(ViewModel.TimelineNodes[idx], isSpine: true);
+            }
+        }
+
+        private void ExitEditMode()
+        {
+            if (!ViewModel.IsEditMode) return;
             // Clear the selection so we don't immediately re-enter Edit, then return to Arrange.
             ViewModel.SelectedTimelineNode = null;
             ViewModel.SelectedOverlay = null;
             _playbackEngine?.ExitToArrange();
+        }
+
+        private void EscapeAccelerator_Invoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender,
+                                               Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
+        {
+            if (ViewModel.IsEditMode) { ExitEditMode(); args.Handled = true; }
         }
 
 
