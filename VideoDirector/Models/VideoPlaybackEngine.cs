@@ -1298,11 +1298,10 @@ namespace ModernImageViewer.VideoDirector.Models
                 var player = new MediaPlayer
                 {
                     IsLoopingEnabled = false,
-                    AutoPlay = false,
-                    // Upper-track audio is muted by default — Track 1 is the audio bed. Per-clip
-                    // unmute is a later addition. Without this, a close-up overlaid on the same
-                    // scene as Track 1 doubles/echoes the audio.
-                    IsMuted = true
+                    AutoPlay = false
+                    // Audio is governed by the per-clip Volume (overlays default to 0 = silent, so
+                    // Track 1 stays the audio bed unless a PiP's Volume is raised). Do NOT hard-mute
+                    // here: that overrode Volume entirely, so the audio slider did nothing.
                 };
                 player.CommandManager.IsEnabled = false;
                 _overlayPlayer[i] = player;
