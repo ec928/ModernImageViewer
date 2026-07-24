@@ -1278,7 +1278,75 @@ namespace ModernImageViewer.VideoDirector.Models
 
                 if (_activeOverlay[i] != null)
                     ApplyOverlayTransform(i, _activeOverlay[i], currentStoryTime);
+
+                // Explicit render mode for this track's current state (§7A). Arrange shows a still
+                // bitmap and NO video surface; playback shows the live video.
+                if (_activeOverlay[i] == null)
+                    SetOverlayRender(i, OverlayRender.Hidden, null);
+                else if (_isEditingOverlay && i == 0)
+                    SetOverlayRender(i, OverlayRender.Video, _activeOverlay[i]); // full-screen edit
+                else
+                    SetOverlayRender(i, _isAnimating ? OverlayRender.Video : OverlayRender.Still,
+                                     _activeOverlay[i]);
             }
+        }
+
+        // ---- §7A: how an upper-track clip is rendered. Exactly one of these, set explicitly. ----
+        //   Hidden — nothing on screen for this track.
+        //   Still  — a plain bitmap (the clip's thumbnail). NO MediaPlayer is attached to the
+        //            element, so there is no video surface at all: nothing that can blank, green,
+        //            or composite over the handles when the box is resized/moved.
+        //   Video  — the live MediaPlayerElement (playback, and full-screen content editing).
+        private enum OverlayRender { Hidden, Still, Video }
+
+        // Idempotent: safe to call every frame. This is the ONLY place the still/video choice is
+        // made — the seven failed attempts all inferred it as a side effect somewhere else.
+        private void SetOverlayRender(int track, OverlayRender mode, CinematicOperation clip)
+        {
+            var v = _playerControl.OverlayVisuals[track];
+
+            switch (mode)
+            {
+                case OverlayRender.Hidden:
+                    DetachOverlayVideo(track);
+                    v.Still.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
+                    v.Still.Source = null;
+                    if (v.Handles != null) v.Handles.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
+                    v.Grid.Opacity = 0;
+                    break;
+
+                case OverlayRender.Still:
+                    DetachOverlayVideo(track);              // the invariant
+                    v.Still.Source = clip?.Thumbnail;
+                    v.Still.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
+                    if (v.Handles != null) v.Handles.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
+                    v.Grid.Opacity = clip?.Opacity ?? 1.0;
+                    break;
+
+                case OverlayRender.Video:
+                    v.Still.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
+                    if (v.Handles != null) v.Handles.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
+                    AttachOverlayVideo(track);
+                    v.Grid.Opacity = clip?.Opacity ?? 1.0;
+                    break;
+            }
+        }
+
+        // A MediaPlayerElement with no MediaPlayer has no video surface to render at all.
+        private void DetachOverlayVideo(int track)
+        {
+            var video = _playerControl.OverlayVisuals[track].Video;
+            if (video == null) return;
+            if (video.MediaPlayer != null) video.SetMediaPlayer(null);
+            video.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
+        }
+
+        private void AttachOverlayVideo(int track)
+        {
+            var video = _playerControl.OverlayVisuals[track].Video;
+            if (video == null) return;
+            if (video.MediaPlayer == null) video.SetMediaPlayer(_overlayPlayer[track]);
+            video.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
         }
 
         // Strict track ⇒ the first clip whose window contains t is the only one.
@@ -1380,27 +1448,9 @@ namespace ModernImageViewer.VideoDirector.Models
             double left = cx * vpW - boxW / 2;
             double top = cy * vpH - boxH / 2;
 
-            // Arrange-idle: show the still-image proxy + reshape handles, hide the live video
-            // surface (§7A — a bitmap reshapes cleanly where the paused video surface blanks/greens).
-            // Edit (full-frame content framing) and playback show the live video instead.
-            bool arrangeIdle = !editMode && !_isAnimating;
-            var vis = arrangeIdle ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
-
-            var handles = _playerControl.OverlayVisuals[slot].Handles;
-            if (handles != null) handles.Visibility = vis;
-
-            var image = _playerControl.OverlayVisuals[slot].Still;
-            if (image != null)
-            {
-                image.Visibility = vis;
-                if (arrangeIdle) image.Source = overlay.Thumbnail;
-            }
-
-            var playerElement = _playerControl.OverlayVisuals[slot].Video;
-            if (playerElement != null)
-                playerElement.Visibility = arrangeIdle
-                    ? Microsoft.UI.Xaml.Visibility.Collapsed
-                    : Microsoft.UI.Xaml.Visibility.Visible;
+            // NOTE (§7A): this method does GEOMETRY ONLY. Deciding still-vs-video used to live here
+            // and silently never fired — the render mode is now set explicitly by SetOverlayRender
+            // at each state transition, never as a side effect of laying out a box.
 
             grid.Margin = new Microsoft.UI.Xaml.Thickness(left, top, 0, 0);
             // Only resize + reallocate the clip when the box dimensions actually change
@@ -1464,6 +1514,7 @@ namespace ModernImageViewer.VideoDirector.Models
 
             player.Pause();
             player.Source = null; // Release GPU decode pipeline
+            SetOverlayRender(slot, OverlayRender.Hidden, null);
             grid.Opacity = 0;
 
             // Reset content transform + clear the placement box so no stale size/clip lingers.
@@ -1696,7 +1747,8 @@ namespace ModernImageViewer.VideoDirector.Models
                 // leaves a stale aspect here, which sizes the box to the wrong shape and makes
                 // UniformToFill crop the clip (e.g. a portrait clip shown as a cropped landscape).
                 CacheOverlayAspect(0, player);
-                ApplyOverlayBox(0, overlay, true); // full-screen for content framing
+                SetOverlayRender(0, OverlayRender.Video, overlay); // live video for content framing
+                ApplyOverlayBox(0, overlay, true);                 // full-screen box
                 grid.Opacity = 1.0;
                 // Hide the Track 1 base so ONLY this overlay clip is shown while editing it.
                 _playerA.Opacity = 0;
