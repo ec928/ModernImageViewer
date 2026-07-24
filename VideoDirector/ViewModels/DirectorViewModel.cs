@@ -216,9 +216,8 @@ namespace ModernImageViewer.VideoDirector.ViewModels
         public bool IsTrack1Selected => _selectedTimelineNode != null;
         public bool IsOverlaySelected => _selectedOverlay != null;
 
-        // Human-readable current mode, shown in a badge. The mouse wheel means different things
-        // in edit vs composite, so the mode must always be visible. (Interactive canvas view is
-        // still to come; for now this reflects the existing play/edit/idle states.)
+        // The three distinct modes, shown in the mode indicator. Edit takes precedence (its preview
+        // sets IsPlaying too); then Play; otherwise Arrange.
         public string ModeLabel
         {
             get
@@ -228,7 +227,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
                     var name = _selectedOverlay?.FileName ?? _selectedTimelineNode?.FileName ?? "";
                     return "EDIT · " + name;
                 }
-                return _isPlaying ? "ARRANGE · playing" : "ARRANGE";
+                return _isPlaying ? "PLAY" : "ARRANGE";
             }
         }
 
