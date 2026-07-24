@@ -335,10 +335,18 @@ namespace ModernImageViewer.VideoDirector.Views
 
         private void TimelineBar_PointerReleased(object sender, PointerRoutedEventArgs e)
         {
+            // This fires for the RIGHT button too. If we never started a left-press, do nothing —
+            // in particular do NOT rebuild the bar: rebuilding destroys every Canvas child,
+            // including the element the right-tap gesture started on, which kills the pending
+            // context gesture before the flyout can open.
+            if (!_timelinePressed) return;
+
             TimelineBar.ReleasePointerCapture(e.Pointer);
-            if (_timelinePressed && _dragClip != null)
+            bool wasMoving = _timelineMovingClip;
+
+            if (_dragClip != null)
             {
-                if (!_timelineMovingClip) SelectClip(_dragClip, _dragIsSpine); // a tap selects
+                if (!wasMoving) SelectClip(_dragClip, _dragIsSpine); // a tap selects
                 else if (_dragIsSpine)
                 {
                     // Commit the reorder exactly once, at the ghost's drop position.
@@ -351,7 +359,7 @@ namespace ModernImageViewer.VideoDirector.Views
             _timelineScrubbing = false;
             _timelineMovingClip = false;
             _dragClip = null;
-            BuildTimelineBar(); // clear the ghost / settle the layout
+            if (wasMoving) BuildTimelineBar(); // only needed to clear the drag ghost
         }
 
         // Duplicate / Remove for the block under the cursor. The platform opens the ContextFlyout;
