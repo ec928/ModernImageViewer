@@ -148,10 +148,7 @@
                             <!-- Header: clip name + track label -->
                             <StackPanel Spacing="2">
                                 <TextBlock Text="{Binding SelectedClip.FileName}" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
-                                <TextBlock Text="Track 1 · spine" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                           Visibility="{Binding IsTrack1Selected, Converter={StaticResource BoolToVisConverter}}" />
-                                <TextBlock Text="Track 2 · overlay (PiP)" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                           Visibility="{Binding IsOverlaySelected, Converter={StaticResource BoolToVisConverter}}" />
+                                <TextBlock Text="{Binding SelectedTrackLabel}" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                             </StackPanel>
 
                             <!-- Zoom &amp; Motion cluster (identical for every track) -->
@@ -350,14 +347,14 @@
 
 
 
-                    <!-- Global Stack -->
+                    <!-- Master playback speed (affects every track) -->
                     <StackPanel Spacing="4" VerticalAlignment="Center">
-                        <TextBlock Text="GLOBAL" FontSize="9" Foreground="Gray" FontWeight="Bold" HorizontalAlignment="Center" />
+                        <TextBlock Text="SPEED" FontSize="9" Foreground="Gray" FontWeight="Bold" HorizontalAlignment="Center" />
                         <StackPanel Orientation="Horizontal" Spacing="4">
-                            <ComboBox SelectedItem="{x:Bind ViewModel.PlaybackSpeed, Mode=TwoWay}" 
+                            <ComboBox SelectedItem="{x:Bind ViewModel.PlaybackSpeed, Mode=TwoWay}"
                                       ItemsSource="{x:Bind ViewModel.AvailableSpeeds}"
-                                      Width="60" Height="28" MinHeight="28" FontSize="11" Padding="8,0" VerticalAlignment="Center" ToolTipService.ToolTip="Global Speed" />
-                            <ToggleButton x:Name="StoryboardButton" IsChecked="{x:Bind ViewModel.IsStoryboardPinned, Mode=TwoWay}" Width="28" Height="28" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="4" ToolTipService.ToolTip="Pin the inspector panel open (it opens automatically while editing)">
+                                      Width="60" Height="28" MinHeight="28" FontSize="11" Padding="8,0" VerticalAlignment="Center" ToolTipService.ToolTip="Master playback speed (affects all tracks)" />
+                            <ToggleButton x:Name="StoryboardButton" IsChecked="{x:Bind ViewModel.IsStoryboardPinned, Mode=TwoWay}" Width="28" Height="28" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="4" ToolTipService.ToolTip="Pin the Properties panel open (it opens automatically while editing)">
                                 <SymbolIcon Symbol="List" />
                             </ToggleButton>
                         </StackPanel>

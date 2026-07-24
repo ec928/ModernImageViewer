@@ -182,6 +182,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
                     OnPropertyChanged(nameof(SelectedClip));
                     OnPropertyChanged(nameof(IsTrack1Selected));
                     OnPropertyChanged(nameof(IsOverlaySelected));
+                    OnPropertyChanged(nameof(SelectedTrackLabel));
                     OnPropertyChanged(nameof(ModeLabel));
                 }
             }
@@ -200,6 +201,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
                     OnPropertyChanged(nameof(SelectedClip));
                     OnPropertyChanged(nameof(IsTrack1Selected));
                     OnPropertyChanged(nameof(IsOverlaySelected));
+                    OnPropertyChanged(nameof(SelectedTrackLabel));
                     OnPropertyChanged(nameof(ModeLabel));
                 }
             }
@@ -215,6 +217,25 @@ namespace ModernImageViewer.VideoDirector.ViewModels
         public CinematicOperation SelectedClip => _selectedTimelineNode ?? _selectedOverlay;
         public bool IsTrack1Selected => _selectedTimelineNode != null;
         public bool IsOverlaySelected => _selectedOverlay != null;
+
+        // Plain, correct track label for the selected clip — "Track 1 · main" for the spine, or the
+        // real overlay track number (Track 2/3/4 · overlay). Replaces the old two hardcoded labels
+        // that always said "Track 2" even for track 3/4.
+        public string SelectedTrackLabel
+        {
+            get
+            {
+                if (_selectedTimelineNode != null) return "Track 1 · main";
+                if (_selectedOverlay != null)
+                {
+                    for (int i = 0; i < OverlayTracks.Count; i++)
+                        if (OverlayTracks[i].Clips.Contains(_selectedOverlay))
+                            return $"Track {i + 2} · overlay";
+                    return "Overlay";
+                }
+                return string.Empty;
+            }
+        }
 
         // The three distinct modes, shown in the mode indicator. Edit takes precedence (its preview
         // sets IsPlaying too); then Play; otherwise Arrange.
