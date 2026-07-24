@@ -1975,6 +1975,12 @@ namespace ModernImageViewer.VideoDirector.Models
                 }
             }
             ApplyMarksAtProgress(_editClip, progress, _playerControl.ActiveTransform);
+
+            // Drive the per-clip scrubber off the real decode position so it tracks the preview.
+            // (Assigning CurrentOperationTime — not …Seconds — only notifies the slider; it does
+            // not fire a seek back into the player, so there's no feedback loop.)
+            if (_editPlayer?.PlaybackSession != null)
+                _viewModel.CurrentOperationTime = _editPlayer.PlaybackSession.Position;
         }
 
         // ---- Arrange mode: drag / wheel the PiP under the cursor (the hit slot) ----

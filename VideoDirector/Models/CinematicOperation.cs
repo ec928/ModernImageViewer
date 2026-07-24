@@ -495,13 +495,21 @@ namespace ModernImageViewer.VideoDirector.Models
             {
                 if (SetProperty(ref _transitionStyle, value))
                 {
+                    // HardSnap is an instant cut — it has no duration. Force it to 0 and lock it
+                    // (the UI disables the field via TransitionEditable).
+                    if (_transitionStyle == TransitionStyle.HardSnap) TransitionDuration = TimeSpan.Zero;
                     OnPropertyChanged(nameof(TransitionStyleIndex));
                     OnPropertyChanged(nameof(TransitionIconGlyph));
                     OnPropertyChanged(nameof(TransitionIconTooltip));
+                    OnPropertyChanged(nameof(TransitionEditable));
                     OnPropertyChanged(nameof(HasModifications));
                 }
             }
         }
+
+        // A HardSnap cut has a fixed 0 length; every other style has an editable duration.
+        [JsonIgnore]
+        public bool TransitionEditable => _transitionStyle != TransitionStyle.HardSnap;
 
         public int TransitionStyleIndex
         {
