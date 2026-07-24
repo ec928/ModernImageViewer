@@ -317,21 +317,21 @@ namespace ModernImageViewer.VideoDirector.Views
         private double BlockDim(CinematicOperation clip)
         {
             if (clip == null) return 1.0;                       // transitions / drag ghost
-            bool focusExists = ViewModel.IsPlaying || ViewModel.SelectedClip != null;
-            if (!focusExists) return 1.0;
-            return IsClipInFocus(clip) ? 1.0 : 0.5;
-        }
 
-        private bool IsClipInFocus(CinematicOperation clip)
-        {
+            // Keyed off the actual mode, NOT off SelectedClip — a clip stays selected after
+            // playback/edit, so using selection would wrongly dim Arrange.
             if (ViewModel.IsPlaying)
             {
                 // Track 1: the clip currently rolling. Overlays: any that are live right now.
-                if (ViewModel.TimelineNodes.Contains(clip))
-                    return ReferenceEquals(clip, _playbackEngine?.CurrentPlayingOperation);
-                return clip.IsActiveAt(ViewModel.CurrentStoryTime);
+                bool active = ViewModel.TimelineNodes.Contains(clip)
+                    ? ReferenceEquals(clip, _playbackEngine?.CurrentPlayingOperation)
+                    : clip.IsActiveAt(ViewModel.CurrentStoryTime);
+                return active ? 1.0 : 0.5;
             }
-            return ReferenceEquals(clip, ViewModel.SelectedClip);   // Edit
+            if (ViewModel.IsEditMode)
+                return ReferenceEquals(clip, ViewModel.SelectedClip) ? 1.0 : 0.5;
+
+            return 1.0;   // Arrange: everything full
         }
 
         // Which clips are on screen right now — as a signature, so playback can rebuild the
@@ -745,6 +745,11 @@ namespace ModernImageViewer.VideoDirector.Views
                     int sig = ActiveSignature();
                     if (sig != _lastActiveSignature) { _lastActiveSignature = sig; BuildTimelineBar(); }
                 }
+                return;
+            }
+            if (e.PropertyName == nameof(DirectorViewModel.IsEditMode))
+            {
+                BuildTimelineBar(); // spotlight switches between Edit and Arrange
                 return;
             }
             if (e.PropertyName == nameof(DirectorViewModel.SelectedClip))
