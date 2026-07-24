@@ -34,11 +34,29 @@
         <!-- Background Layer: Full Bleed Immersive Player -->
         <local:DirectorPlayerControl x:Name="PlayerControl" Grid.Row="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
 
-        <!-- Persistent small mode indicator, top-left. Top margin clears the title-bar drag region. -->
-        <Border Grid.Row="0" Background="#99000000" CornerRadius="4" Padding="8,4"
-                HorizontalAlignment="Left" VerticalAlignment="Top" Margin="16,52,16,16">
-            <TextBlock Text="{x:Bind ViewModel.ModeLabel, Mode=OneWay}" Foreground="White" FontSize="12" FontWeight="SemiBold" />
-        </Border>
+        <!-- ===== Zone A: Global Command Zone (top-right) =====
+             Project-scoped controls only — the mode badge (read-only state) + Save/Load/Clear.
+             Deliberately separated from the selection-scoped Properties panel so the
+             biggest-blast-radius actions never sit next to per-clip fields. Top margin clears the
+             window caption/drag region. -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8"
+                    HorizontalAlignment="Right" VerticalAlignment="Top" Margin="16,52,16,0">
+            <!-- Mode badge: read-only. Accent-tinted in Edit. -->
+            <Border VerticalAlignment="Center" CornerRadius="4" Padding="10,5"
+                    Background="{x:Bind ViewModel.IsEditMode, Mode=OneWay, Converter={StaticResource BoolToBadgeBrushConverter}}">
+                <TextBlock Text="{x:Bind ViewModel.ModeLabel, Mode=OneWay}" Foreground="White" FontSize="12" FontWeight="SemiBold" />
+            </Border>
+            <AppBarSeparator />
+            <!-- Global actions -->
+            <Border CornerRadius="4" Background="#99000000">
+                <CommandBar DefaultLabelPosition="Collapsed" Background="Transparent" Padding="0"
+                            OverflowButtonVisibility="Collapsed">
+                    <AppBarButton Icon="Save" Label="Save" Click="Save_Click" ToolTipService.ToolTip="Save project" />
+                    <AppBarButton Icon="OpenFile" Label="Load" Click="Load_Click" ToolTipService.ToolTip="Load project" />
+                    <AppBarButton Icon="Delete" Label="Clear" Click="Clear_Click" ToolTipService.ToolTip="Clear project" />
+                </CommandBar>
+            </Border>
+        </StackPanel>
 
         <!-- Unmistakable EDIT indicator: an accent border around the canvas. The textual indicator
              and the way out (Done) now live in the inspector panel header, next to the edit
@@ -99,16 +117,10 @@
                     </Grid>
                 </Border>
 
-                <CommandBar DefaultLabelPosition="Right" Background="Transparent" Padding="4">
-                    <CommandBar.PrimaryCommands>
-                        <AppBarButton Icon="Save" Label="Save" Click="Save_Click" />
-                        <AppBarButton Icon="OpenFile" Label="Load" Click="Load_Click" />
-                        <AppBarButton Icon="Delete" Label="Clear" Click="Clear_Click" />
-                    </CommandBar.PrimaryCommands>
-                    <CommandBar.Content>
-                        <TextBlock Text="Inspector" Style="{StaticResource SubtitleTextBlockStyle}" VerticalAlignment="Center" Margin="12,0,0,0"/>
-                    </CommandBar.Content>
-                </CommandBar>
+                <!-- Selection-scoped panel header. Project actions (Save/Load/Clear) deliberately
+                     live in the top-right Global Command Zone, not here. -->
+                <TextBlock Text="Properties" Style="{StaticResource SubtitleTextBlockStyle}"
+                           VerticalAlignment="Center" Margin="16,10,0,10"/>
               </StackPanel>
 
                 <!-- Hint shown when nothing is selected (clip lists now live in the bottom dock). -->

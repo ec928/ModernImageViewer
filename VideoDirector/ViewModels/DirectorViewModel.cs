@@ -218,15 +218,13 @@ namespace ModernImageViewer.VideoDirector.ViewModels
 
         // The three distinct modes, shown in the mode indicator. Edit takes precedence (its preview
         // sets IsPlaying too); then Play; otherwise Arrange.
+        // Pure state word for the Global Command Zone badge. Context (Edit) wins over the Play
+        // verb; the clip name lives in the Properties header, not here.
         public string ModeLabel
         {
             get
             {
-                if (_isEditMode)
-                {
-                    var name = _selectedOverlay?.FileName ?? _selectedTimelineNode?.FileName ?? "";
-                    return "EDIT · " + name;
-                }
+                if (_isEditMode) return "EDIT";
                 return _isPlaying ? "PLAY" : "ARRANGE";
             }
         }
@@ -299,14 +297,15 @@ namespace ModernImageViewer.VideoDirector.ViewModels
                 if (SetProperty(ref _currentEditTarget, value))
                 {
                     OnPropertyChanged(nameof(CurrentEditTargetIndex));
-                    // When edit target changes, jump to it if we have an active operation
-                    if (SelectedTimelineNode != null)
+                    // When the edit target changes, jump to it on whatever clip is selected — spine
+                    // or overlay (SelectedClip), not only Track 1.
+                    if (SelectedClip != null)
                     {
                         var dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
-                        dispatcher.TryEnqueue(() => 
+                        dispatcher.TryEnqueue(() =>
                         {
                             var evt = EditTargetChanged;
-                            evt?.Invoke(this, SelectedTimelineNode);
+                            evt?.Invoke(this, SelectedClip);
                         });
                     }
                 }

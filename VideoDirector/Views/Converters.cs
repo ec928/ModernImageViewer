@@ -121,6 +121,28 @@ namespace ModernImageViewer.VideoDirector.Views
         }
     }
 
+    // Mode-badge background: accent-tinted while editing (draws the eye to the active Edit
+    // context), neutral translucent otherwise. Keeps the badge read-only but state-expressive.
+    public class BoolToBadgeBrushConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, string language)
+        {
+            bool isEdit = value is bool b && b;
+            if (isEdit
+                && Application.Current.Resources.TryGetValue("AccentFillColorDefaultBrush", out var accent)
+                && accent is Microsoft.UI.Xaml.Media.Brush accentBrush)
+            {
+                return accentBrush;
+            }
+            return new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x99, 0, 0, 0));
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, string language)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
     public class NullToBoolConverter : IValueConverter
     {
         public object Convert(object value, Type targetType, object parameter, string language)

@@ -608,10 +608,14 @@ namespace ModernImageViewer.VideoDirector.Views
                 {
                     if (_playbackEngine?.CurrentPlayingOperation != clip && idx >= 0)
                         _ = _playbackEngine?.StartPlaybackAsync(idx);
+                    return;
                 }
-                else _playbackEngine?.EnterEditMode(clip, ViewModel.CurrentEditTarget);
             }
-            else ViewModel.SelectedOverlay = clip; // PropertyChanged enters overlay edit
+            else ViewModel.SelectedOverlay = clip;
+
+            // One entry point for both tracks — selecting a clip (while not playing) edits it.
+            if (!ViewModel.IsPlaying)
+                _playbackEngine?.BeginEdit(ViewModel.SelectedClip, ViewModel.CurrentEditTarget);
         }
 
         // Overlay drag: horizontally = reposition in time, vertically = move to another track.
@@ -675,14 +679,14 @@ namespace ModernImageViewer.VideoDirector.Views
         {
             if (!ViewModel.IsPlaying)
             {
-                _playbackEngine?.EnterEditMode(op, ViewModel.CurrentEditTarget);
+                _playbackEngine?.BeginEdit(op, ViewModel.CurrentEditTarget);
             }
         }
 
         private void PlayerControl_ViewportTransformChanged(object sender, EventArgs e)
         {
-            if (ViewModel.IsPlaying || ViewModel.SelectedTimelineNode == null) return;
-            var op = ViewModel.SelectedTimelineNode as CinematicOperation;
+            if (ViewModel.IsPlaying || ViewModel.SelectedClip == null) return;
+            var op = ViewModel.SelectedClip as CinematicOperation;
             var transform = PlayerControl.ActiveTransform;
             if (op == null || transform == null) return;
             
@@ -754,6 +758,13 @@ namespace ModernImageViewer.VideoDirector.Views
             if (e.PropertyName == nameof(DirectorViewModel.IsEditMode))
             {
                 BuildTimelineBar(); // spotlight switches between Edit and Arrange
+                // Zone F: the global timeline recedes in Edit so it can't be confused with the
+                // Playbar's per-clip scrubber — dimmed and non-interactive until back in Arrange.
+                if (TrackDock != null)
+                {
+                    TrackDock.Opacity = ViewModel.IsEditMode ? 0.35 : 1.0;
+                    TrackDock.IsHitTestVisible = !ViewModel.IsEditMode;
+                }
                 return;
             }
             if (e.PropertyName == nameof(DirectorViewModel.SelectedClip))
@@ -779,19 +790,8 @@ namespace ModernImageViewer.VideoDirector.Views
                 _lastActiveSignature = -1;
                 BuildTimelineBar();
             }
-            else if (e.PropertyName == nameof(DirectorViewModel.SelectedOverlay))
-            {
-                if (ViewModel.SelectedOverlay is CinematicOperation overlay)
-                {
-                    // Selecting a Track 2 clip in the dock = Edit it (full-screen content), same
-                    // as selecting a Track 1 clip. Returning to Arrange is the Exit button.
-                    if (!ViewModel.IsPlaying)
-                    {
-                        _playbackEngine?.EnterOverlayEditMode(overlay);
-                    }
-                }
-                // Deselection does not change mode — Exit returns to Arrange.
-            }
+            // Note: entering Edit on selection is owned by SelectClip -> BeginEdit (one entry point
+            // for both tracks), so there's no per-track edit trigger here anymore.
             else if (e.PropertyName == nameof(DirectorViewModel.IsRecordingMotion))
             {
                 if (RecordButton.IsChecked != ViewModel.IsRecordingMotion)
@@ -975,9 +975,9 @@ namespace ModernImageViewer.VideoDirector.Views
 
         private void ResetClip_Click(object sender, RoutedEventArgs e)
         {
-            if (ViewModel.SelectedTimelineNode != null)
+            if (ViewModel.SelectedClip != null)
             {
-                ViewModel.SelectedTimelineNode.Reset();
+                ViewModel.SelectedClip.Reset();
                 _playbackEngine?.UpdateWysiwygOverlay();
             }
         }

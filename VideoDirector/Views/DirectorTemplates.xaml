@@ -9,5 +9,6 @@
     <local:BoolToVisConverter x:Key="BoolToVisConverter" />
     <local:FloatFormatConverter x:Key="FloatFormatConverter" />
     <local:TimeSpanToDoubleSecondsConverter x:Key="TimeSpanToDoubleSecondsConverter" />
+    <local:BoolToBadgeBrushConverter x:Key="BoolToBadgeBrushConverter" />
 
 </ResourceDictionary>

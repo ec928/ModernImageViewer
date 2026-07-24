@@ -819,15 +819,20 @@ namespace ModernImageViewer.VideoDirector.Models
         {
             if (_viewModel.IsTelemetryVisible)
             {
-                var activeTransform = _isPlayerAActive ? _playerControl.TransformA : _playerControl.TransformB;
-                
+                // Telemetry follows the SUBJECT: in Edit that's the edited clip, its player, and its
+                // transform — whatever track it's on. Reading the Track-1 player/transform was why
+                // editing an overlay showed irrelevant numbers.
+                var activeTransform = _playerControl.ActiveTransform
+                                      ?? (_isPlayerAActive ? _playerControl.TransformA : _playerControl.TransformB);
+
                 _playerControl.TelemetryOverlay.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
 
                 var currentActivePlayer = _isPlayerAActive ? _mediaPlayerA : _mediaPlayerB;
                 var activeOp = _isPlayerAActive ? _opA : _opB;
                 if (isEditMode)
                 {
-                    activeOp = _viewModel.SelectedTimelineNode as CinematicOperation;
+                    activeOp = _viewModel.SelectedClip as CinematicOperation;
+                    if (_editPlayer != null) currentActivePlayer = _editPlayer;
                 }
 
                 string currentFileName = activeOp != null ? System.IO.Path.GetFileName(activeOp.FilePath) : "Transition";
@@ -905,13 +910,17 @@ namespace ModernImageViewer.VideoDirector.Models
 
         public void UpdateWysiwygOverlay()
         {
-            if (_viewModel.IsPlaying || _viewModel.SelectedTimelineNode == null)
+            // The Ken Burns edit rectangles belong to Edit mode only, and to the CURRENT SUBJECT
+            // (SelectedClip) whatever track it's on — not just Track 1. Keying this off
+            // SelectedTimelineNode was why editing an overlay drew nothing. Mode is the authority
+            // (during composite play _mode is Arrange, so the rects stay hidden).
+            if (_mode != EditorMode.Edit || _viewModel.SelectedClip == null)
             {
                 _playerControl.WysiwygCanvas.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
                 return;
             }
 
-            var op = _viewModel.SelectedTimelineNode as CinematicOperation;
+            var op = _viewModel.SelectedClip as CinematicOperation;
             var transform = _playerControl.ActiveTransform;
             if (op == null || transform == null) return;
 
@@ -1788,9 +1797,21 @@ namespace ModernImageViewer.VideoDirector.Models
             EvaluateOverlays(_viewModel.CurrentStoryTime); // show the composite's active PiPs
         }
 
-        // Edit a Track 2 clip's content full-screen — same idea as Track 1's EnterEditMode, but
-        // the clip lives in the overlay player. Zoom & Motion controls apply to its content.
-        public async void EnterOverlayEditMode(CinematicOperation overlay)
+        // Single entry point for editing ANY clip. Dispatches to the correct surface (spine clips
+        // live in the main players; overlay clips in the overlay player) but every clip goes
+        // through one call, one Edit state, one WYSIWYG/telemetry path — that's the "one Edit
+        // pipeline" contract the UI relies on.
+        public void BeginEdit(CinematicOperation clip, EditTarget target)
+        {
+            if (clip == null) return;
+            if (_viewModel.TimelineNodes.Contains(clip)) EnterEditMode(clip, target);
+            else EnterOverlayEditMode(clip, target);
+        }
+
+        // Edit an overlay clip's content full-screen — same idea as Track 1's EnterEditMode, but
+        // the clip lives in the overlay player. Zoom & Motion controls apply to its content, and
+        // Start/Mid/End target selection works identically.
+        public async void EnterOverlayEditMode(CinematicOperation overlay, EditTarget target = EditTarget.Start)
         {
             if (overlay == null || string.IsNullOrWhiteSpace(overlay.FilePath)) return;
 
@@ -1819,16 +1840,36 @@ namespace ModernImageViewer.VideoDirector.Models
             }
             if (_activeOverlay[0] != overlay) return;
 
-            if (player.PlaybackSession != null) player.PlaybackSession.Position = overlay.VideoStartTime;
+            // Resolve the edit target to a source position + the mark being framed (same three
+            // targets as Track 1). Seek within the clip's own trimmed source window.
+            SpatialMark markToEdit;
+            TimeSpan seekPos;
+            if (target == EditTarget.Mid && overlay.MidMark != null)
+            {
+                seekPos = overlay.VideoStartTime + TimeSpan.FromSeconds((overlay.VideoEndTime - overlay.VideoStartTime).TotalSeconds / 2);
+                markToEdit = overlay.MidMark;
+            }
+            else if (target == EditTarget.End)
+            {
+                seekPos = overlay.VideoEndTime;
+                markToEdit = overlay.EndMark;
+            }
+            else
+            {
+                seekPos = overlay.VideoStartTime;
+                markToEdit = overlay.StartMark;
+            }
+
+            if (player.PlaybackSession != null) player.PlaybackSession.Position = seekPos;
             player.Pause();
 
             _dispatcher.TryEnqueue(() =>
             {
                 if (_activeOverlay[0] != overlay) return;
-                transform.ScaleX = overlay.StartMark.Scale;
-                transform.ScaleY = overlay.StartMark.Scale;
-                transform.TranslateX = overlay.StartMark.X;
-                transform.TranslateY = overlay.StartMark.Y;
+                transform.ScaleX = markToEdit.Scale;
+                transform.ScaleY = markToEdit.Scale;
+                transform.TranslateX = markToEdit.X;
+                transform.TranslateY = markToEdit.Y;
                 // Must cache into the SAME index the edit surface uses (0) — caching elsewhere
                 // leaves a stale aspect here, which sizes the box to the wrong shape and makes
                 // UniformToFill crop the clip (e.g. a portrait clip shown as a cropped landscape).
@@ -1840,6 +1881,13 @@ namespace ModernImageViewer.VideoDirector.Models
                 _playerA.Opacity = 0;
                 _playerB.Opacity = 0;
                 _playerControl.ActiveTransform = transform;
+                // Per-clip scrubber range + the WYSIWYG framing rects, exactly as Track 1 does.
+                if (player.PlaybackSession != null)
+                {
+                    _viewModel.CurrentOperationDuration = player.PlaybackSession.NaturalDuration;
+                    _viewModel.CurrentOperationTime = player.PlaybackSession.Position;
+                }
+                UpdateWysiwygOverlay();
             });
         }
 
