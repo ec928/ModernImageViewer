@@ -146,19 +146,17 @@ namespace ModernImageViewer.VideoDirector.Models
         {
             if (_playbackCts == null || _playbackCts.IsCancellationRequested)
             {
-                int startIdx;
-                if (_viewModel.SelectedTimelineNode != null)
-                {
-                    startIdx = _viewModel.TimelineNodes.IndexOf(_viewModel.SelectedTimelineNode as CinematicOperation);
-                    if (startIdx < 0) startIdx = 0;
-                }
-                else
-                {
-                    // No Track 1 clip selected (e.g. an overlay is selected instead) — resume
-                    // from wherever the playhead currently is instead of restarting at clip 0.
-                    startIdx = _viewModel.GetTimelineIndexForStoryTime(_viewModel.CurrentStoryTime);
-                }
-                await StartPlaybackAsync(startIdx);
+                // The playhead is the source of truth: resume exactly where the scrubber sits,
+                // including part-way into a clip. (Selecting a clip parks the playhead at that
+                // clip's start, so selection still plays the clip from its beginning.)
+                var at = _viewModel.CurrentStoryTime;
+                int startIdx = _viewModel.GetTimelineIndexForStoryTime(at);
+                var offset = at - _viewModel.GetSpineClipStart(startIdx);
+                if (offset < TimeSpan.Zero) offset = TimeSpan.Zero;
+                if (startIdx >= 0 && startIdx < _viewModel.TimelineNodes.Count
+                    && offset > _viewModel.TimelineNodes[startIdx].OpDuration) offset = TimeSpan.Zero;
+
+                await StartPlaybackAsync(startIdx, offset);
                 return;
             }
 
@@ -229,7 +227,7 @@ namespace ModernImageViewer.VideoDirector.Models
             }
         }
 
-        public async Task StartPlaybackAsync(int startIndex = 0)
+        public async Task StartPlaybackAsync(int startIndex = 0, TimeSpan startOffset = default)
         {
             if (_viewModel.TimelineNodes.Count == 0) return;
 
@@ -255,14 +253,17 @@ namespace ModernImageViewer.VideoDirector.Models
             {
                 _viewModel.CurrentStoryTime += _viewModel.TimelineNodes[i].OpDuration + _viewModel.TimelineNodes[i].TransitionDuration;
             }
-            _storyTimeAtClipStart = _viewModel.CurrentStoryTime;
+            _storyTimeAtClipStart = _viewModel.CurrentStoryTime;   // baseline = clip boundary
+            // Resume mid-clip (e.g. after scrubbing): the render loop derives CurrentStoryTime as
+            // baseline + elapsed-into-clip, so it lands back on the scrubbed position.
+            if (startOffset > TimeSpan.Zero) _viewModel.CurrentStoryTime += startOffset;
 
             _isAnimating = true;
             CompositionTarget.Rendering += CompositionTarget_Rendering;
 
             try
             {
-                await PlaybackLoopAsync(startIndex, token);
+                await PlaybackLoopAsync(startIndex, token, startOffset);
             }
             catch (OperationCanceledException)
             {
@@ -345,7 +346,7 @@ namespace ModernImageViewer.VideoDirector.Models
             }
         }
 
-        private async Task PlaybackLoopAsync(int startIndex, CancellationToken token)
+        private async Task PlaybackLoopAsync(int startIndex, CancellationToken token, TimeSpan startOffset = default)
         {
             bool startedByTransition = false;
             TimeSpan previousTransitionDuration = TimeSpan.Zero;
@@ -375,7 +376,8 @@ namespace ModernImageViewer.VideoDirector.Models
                     _skipTcs = new TaskCompletionSource<bool>();
                     
                     // 1. Play the main portion of the clip
-                    await PlayOperationAsync(op, nextOp, startedByTransition, hasNextTransition, previousTransitionDuration, token);
+                    await PlayOperationAsync(op, nextOp, startedByTransition, hasNextTransition, previousTransitionDuration, token, startOffset);
+                    startOffset = TimeSpan.Zero; // only the first clip resumes mid-way
                     
                     // Advance the clip-start baseline by exactly this clip's story contribution.
                     // The render loop drives CurrentStoryTime continuously off this baseline, so
@@ -421,7 +423,7 @@ namespace ModernImageViewer.VideoDirector.Models
             }
         }
 
-        private async Task PlayOperationAsync(CinematicOperation op, CinematicOperation nextOp, bool startedByTransition, bool hasNextTransition, TimeSpan previousTransitionDuration, CancellationToken token)
+        private async Task PlayOperationAsync(CinematicOperation op, CinematicOperation nextOp, bool startedByTransition, bool hasNextTransition, TimeSpan previousTransitionDuration, CancellationToken token, TimeSpan startOffset = default)
         {
             var activePlayer = _isPlayerAActive ? _mediaPlayerA : _mediaPlayerB;
             var activeElement = _isPlayerAActive ? _playerA : _playerB;
@@ -444,7 +446,7 @@ namespace ModernImageViewer.VideoDirector.Models
                         activePlayer.MediaOpened -= OnMediaOpened;
                     }
 
-                    activePlayer.PlaybackSession.Position = op.VideoStartTime;
+                    activePlayer.PlaybackSession.Position = op.VideoStartTime + startOffset;
                     
                     double combinedSpeed = _viewModel.PlaybackSpeed * op.PlaybackSpeed;
                     activePlayer.PlaybackSession.PlaybackRate = combinedSpeed;
@@ -473,7 +475,9 @@ namespace ModernImageViewer.VideoDirector.Models
                 }
             }
             
-            var opStartTime = startedByTransition ? DateTime.Now - previousTransitionDuration : DateTime.Now;
+            // Back-date by startOffset so elapsed accounting matches the seeked-in position and
+            // the clip still ends at its proper boundary.
+            var opStartTime = startedByTransition ? DateTime.Now - previousTransitionDuration : DateTime.Now - startOffset;
             var totalVisibleDuration = op.OpDuration + previousTransitionDuration + (hasNextTransition ? op.TransitionDuration : TimeSpan.Zero);
             
             double globalSpeed = _viewModel.PlaybackSpeed == 0 ? 1.0 : _viewModel.PlaybackSpeed;

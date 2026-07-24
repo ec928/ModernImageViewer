@@ -317,7 +317,7 @@
                                 PointerPressed="TimelineBar_PointerPressed"
                                 PointerMoved="TimelineBar_PointerMoved"
                                 PointerReleased="TimelineBar_PointerReleased"
-                                RightTapped="TimelineBar_RightTapped" />
+                                ContextRequested="TimelineBar_ContextRequested" />
                     </Grid>
                 </Border>
             </StackPanel>

@@ -236,6 +236,12 @@ namespace ModernImageViewer.VideoDirector.Views
                 RadiusY = 2,
                 Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(color)
             };
+            // Highlight the selected clip so it's obvious which one the inspector is editing.
+            if (clip != null && ReferenceEquals(clip, ViewModel.SelectedClip))
+            {
+                r.Stroke = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White);
+                r.StrokeThickness = 2;
+            }
             Canvas.SetLeft(r, x);
             Canvas.SetTop(r, y);
             TimelineBar.Children.Add(r);
@@ -347,9 +353,11 @@ namespace ModernImageViewer.VideoDirector.Views
         }
 
         // Right-click a block for Duplicate / Remove (re-homed from the old dock tile menus).
-        private void TimelineBar_RightTapped(object sender, Microsoft.UI.Xaml.Input.RightTappedRoutedEventArgs e)
+        // ContextRequested (not RightTapped) is the reliable path — it also covers the keyboard
+        // menu key and touch long-press, and isn't swallowed by pointer handling.
+        private void TimelineBar_ContextRequested(UIElement sender, ContextRequestedEventArgs e)
         {
-            var p = e.GetPosition(TimelineBar);
+            if (!e.TryGetPosition(TimelineBar, out var p)) return;
             var hit = HitClip(p);
             if (hit.clip == null) return;
 
@@ -565,6 +573,10 @@ namespace ModernImageViewer.VideoDirector.Views
             {
                 UpdatePlayhead();
                 return;
+            }
+            if (e.PropertyName == nameof(DirectorViewModel.SelectedClip))
+            {
+                BuildTimelineBar(); // redraw so the selection highlight moves
             }
             if (e.PropertyName == nameof(DirectorViewModel.IsPlaying))
             {
