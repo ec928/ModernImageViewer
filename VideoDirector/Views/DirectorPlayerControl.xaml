@@ -12,10 +12,10 @@
     <UserControl.Resources>
         <!-- PiP reshape handle: small white square with a dark outline, flush inside a box corner/edge. -->
         <Style x:Key="PipHandleStyle" TargetType="Rectangle">
-            <Setter Property="Width" Value="12" />
-            <Setter Property="Height" Value="12" />
+            <Setter Property="Width" Value="9" />
+            <Setter Property="Height" Value="9" />
             <Setter Property="Fill" Value="White" />
-            <Setter Property="Stroke" Value="#99000000" />
+            <Setter Property="Stroke" Value="#66000000" />
             <Setter Property="StrokeThickness" Value="1" />
             <Setter Property="RadiusX" Value="2" />
             <Setter Property="RadiusY" Value="2" />
@@ -62,7 +62,7 @@
                  full-screen InputLayer does the hit-testing, so these never intercept input.
                  Handles sit flush inside the box edges so the box clip doesn't crop them. -->
             <Grid x:Name="OverlayHandles1" x:FieldModifier="public" IsHitTestVisible="False" Visibility="Collapsed">
-                <Border BorderBrush="#CCFFFFFF" BorderThickness="1.5" />
+                <Border BorderBrush="#99FFFFFF" BorderThickness="1" />
                 <Rectangle Style="{StaticResource PipHandleStyle}" HorizontalAlignment="Left"   VerticalAlignment="Top" />
                 <Rectangle Style="{StaticResource PipHandleStyle}" HorizontalAlignment="Center" VerticalAlignment="Top" />
                 <Rectangle Style="{StaticResource PipHandleStyle}" HorizontalAlignment="Right"  VerticalAlignment="Top" />
@@ -85,7 +85,7 @@
             </MediaPlayerElement>
             <Image x:Name="OverlayImage2" x:FieldModifier="public" Stretch="Uniform" Visibility="Collapsed" />
             <Grid x:Name="OverlayHandles2" x:FieldModifier="public" IsHitTestVisible="False" Visibility="Collapsed">
-                <Border BorderBrush="#CCFFFFFF" BorderThickness="1.5" />
+                <Border BorderBrush="#99FFFFFF" BorderThickness="1" />
                 <Rectangle Style="{StaticResource PipHandleStyle}" HorizontalAlignment="Left"   VerticalAlignment="Top" />
                 <Rectangle Style="{StaticResource PipHandleStyle}" HorizontalAlignment="Center" VerticalAlignment="Top" />
                 <Rectangle Style="{StaticResource PipHandleStyle}" HorizontalAlignment="Right"  VerticalAlignment="Top" />
@@ -110,7 +110,7 @@
             </MediaPlayerElement>
             <Image x:Name="OverlayImage3" x:FieldModifier="public" Stretch="Uniform" Visibility="Collapsed" />
             <Grid x:Name="OverlayHandles3" x:FieldModifier="public" IsHitTestVisible="False" Visibility="Collapsed">
-                <Border BorderBrush="#CCFFFFFF" BorderThickness="1.5" />
+                <Border BorderBrush="#99FFFFFF" BorderThickness="1" />
                 <Rectangle Style="{StaticResource PipHandleStyle}" HorizontalAlignment="Left"   VerticalAlignment="Top" />
                 <Rectangle Style="{StaticResource PipHandleStyle}" HorizontalAlignment="Center" VerticalAlignment="Top" />
                 <Rectangle Style="{StaticResource PipHandleStyle}" HorizontalAlignment="Right"  VerticalAlignment="Top" />

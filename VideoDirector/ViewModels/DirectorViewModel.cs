@@ -391,7 +391,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
                     }
 
                     // Get Thumbnail
-                    var thumb = await file.GetThumbnailAsync(Windows.Storage.FileProperties.ThumbnailMode.VideosView, 120, Windows.Storage.FileProperties.ThumbnailOptions.UseCurrentScale);
+                    var thumb = await file.GetThumbnailAsync(Windows.Storage.FileProperties.ThumbnailMode.VideosView, 480, Windows.Storage.FileProperties.ThumbnailOptions.UseCurrentScale);
                     if (thumb != null)
                     {
                         thumbnail = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage();
@@ -481,7 +481,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
                     duration = props.Duration;
                 }
 
-                var thumb = await file.GetThumbnailAsync(Windows.Storage.FileProperties.ThumbnailMode.VideosView, 120, Windows.Storage.FileProperties.ThumbnailOptions.UseCurrentScale);
+                var thumb = await file.GetThumbnailAsync(Windows.Storage.FileProperties.ThumbnailMode.VideosView, 480, Windows.Storage.FileProperties.ThumbnailOptions.UseCurrentScale);
                 if (thumb != null)
                 {
                     thumbnail = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage();
@@ -613,7 +613,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
             try
             {
                 var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(node.FilePath);
-                var thumb = await file.GetThumbnailAsync(Windows.Storage.FileProperties.ThumbnailMode.VideosView, 120, Windows.Storage.FileProperties.ThumbnailOptions.UseCurrentScale);
+                var thumb = await file.GetThumbnailAsync(Windows.Storage.FileProperties.ThumbnailMode.VideosView, 480, Windows.Storage.FileProperties.ThumbnailOptions.UseCurrentScale);
                 if (thumb != null && dispatcher != null)
                 {
                     // Ensure UI thread update
@@ -634,7 +634,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
             try
             {
                 var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(overlay.FilePath);
-                var thumb = await file.GetThumbnailAsync(Windows.Storage.FileProperties.ThumbnailMode.VideosView, 120, Windows.Storage.FileProperties.ThumbnailOptions.UseCurrentScale);
+                var thumb = await file.GetThumbnailAsync(Windows.Storage.FileProperties.ThumbnailMode.VideosView, 480, Windows.Storage.FileProperties.ThumbnailOptions.UseCurrentScale);
                 if (thumb != null && dispatcher != null)
                 {
                     dispatcher.TryEnqueue(async () =>

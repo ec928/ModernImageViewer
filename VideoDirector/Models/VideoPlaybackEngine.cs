@@ -1348,7 +1348,12 @@ namespace ModernImageViewer.VideoDirector.Models
                     DetachOverlayVideo(track);              // the invariant
                     v.Still.Source = clip?.Thumbnail;
                     v.Still.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
-                    if (v.Handles != null) v.Handles.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
+                    // Chrome only on the SELECTED PiP — 8 handles on every overlay at once is
+                    // visual noise. Any PiP is still grabbable (hit-testing is geometric).
+                    if (v.Handles != null)
+                        v.Handles.Visibility = (clip != null && ReferenceEquals(clip, _viewModel.SelectedClip))
+                            ? Microsoft.UI.Xaml.Visibility.Visible
+                            : Microsoft.UI.Xaml.Visibility.Collapsed;
                     v.Grid.Opacity = clip?.Opacity ?? 1.0;
                     break;
 

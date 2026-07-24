@@ -616,7 +616,8 @@ namespace ModernImageViewer.VideoDirector.Views
             }
             if (e.PropertyName == nameof(DirectorViewModel.SelectedClip))
             {
-                BuildTimelineBar(); // redraw so the selection highlight moves
+                BuildTimelineBar();                  // redraw so the selection highlight moves
+                _playbackEngine?.RefreshComposite(); // and so the PiP chrome follows the selection
             }
             if (e.PropertyName == nameof(DirectorViewModel.IsPlaying))
             {
