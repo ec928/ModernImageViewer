@@ -72,15 +72,41 @@ namespace ModernImageViewer.VideoDirector.Views
             ViewModel.EditTargetChanged += ViewModel_EditTargetChanged;
 
             ViewModel.TimelineNodes.CollectionChanged += (s, ev) => BuildTimelineBar();
-            ViewModel.OverlayClips.CollectionChanged += (s, ev) => BuildTimelineBar();
+            ViewModel.OverlayTracks.CollectionChanged += (s, ev) => { HookOverlayTrackClips(); BuildTimelineBar(); };
+            HookOverlayTrackClips();
             BuildTimelineBar();
+        }
+
+        // Each overlay track owns its own clip collection, so the timeline has to watch them all.
+        private readonly System.Collections.Generic.HashSet<OverlayTrack> _hookedTracks = new();
+        private void HookOverlayTrackClips()
+        {
+            foreach (var track in ViewModel.OverlayTracks)
+                if (_hookedTracks.Add(track))
+                    track.Clips.CollectionChanged += (s, ev) => BuildTimelineBar();
+        }
+
+        private void AddOverlayTrack_Click(object sender, RoutedEventArgs e)
+        {
+            ViewModel.AddOverlayTrack();   // capped at MaxOverlayTracks; adds a new timeline row
+        }
+
+        // The track that owns a given upper-track clip (null if it's a spine clip).
+        private OverlayTrack TrackOf(CinematicOperation clip)
+        {
+            foreach (var track in ViewModel.OverlayTracks)
+                if (track.Clips.Contains(clip)) return track;
+            return null;
         }
 
         private void TimelineBar_SizeChanged(object sender, SizeChangedEventArgs e) => BuildTimelineBar();
 
         // Timeline layout: a scrub ruler on top, then the spine row, then the overlay row — all on
         // one shared px=seconds scale (§7E). Scrub on the ruler; drag clips in their rows.
-        private const double RulerH = 14, RowSpineY = 16, RowOvY = 34, BlockH = 16;
+        private const double RulerH = 14, RowSpineY = 16, RowOvY = 34, BlockH = 16, RowPitch = 18;
+
+        // Bar height grows with the number of upper tracks.
+        private double TimelineBarHeight => RowOvY + Math.Max(1, ViewModel.OverlayTracks.Count) * RowPitch + 2;
 
         private void BuildTimelineBar()
         {
@@ -88,8 +114,9 @@ namespace ModernImageViewer.VideoDirector.Views
             TimelineBar.Children.Clear();
             _playhead = null; _playheadKnob = null;
 
+            TimelineBar.Height = TimelineBarHeight;   // grows with the upper-track count
             double w = TimelineBar.ActualWidth;
-            double h = TimelineBar.ActualHeight;
+            double h = TimelineBarHeight;
             double total = ViewModel.TotalStoryDuration.TotalSeconds;
             if (w <= 0 || total <= 0) { _timelinePxPerSec = 0; return; }
             _timelinePxPerSec = w / total;
@@ -114,11 +141,16 @@ namespace ModernImageViewer.VideoDirector.Views
                     AddTimelineBlock(x + cw, RowSpineY, tw, BlockH, Microsoft.UI.ColorHelper.FromArgb(0xFF, 0x64, 0x74, 0x8B)); // transition
             }
 
-            foreach (var ov in ViewModel.OverlayClips)
+            // One row per upper track (§7B) — same loop for 1 track or 3.
+            for (int ti = 0; ti < ViewModel.OverlayTracks.Count; ti++)
             {
-                double x = ov.StartTimeSeconds * _timelinePxPerSec;
-                double ow = ov.OpDuration.TotalSeconds * _timelinePxPerSec;
-                AddTimelineBlock(x, RowOvY, ow, BlockH, Microsoft.UI.ColorHelper.FromArgb(0xFF, 0xF5, 0x9E, 0x0B), ov); // overlay
+                double rowY = RowOvY + ti * RowPitch;
+                foreach (var ov in ViewModel.OverlayTracks[ti].Clips)
+                {
+                    double x = ov.StartTimeSeconds * _timelinePxPerSec;
+                    double ow = ov.OpDuration.TotalSeconds * _timelinePxPerSec;
+                    AddTimelineBlock(x, rowY, ow, BlockH, Microsoft.UI.ColorHelper.FromArgb(0xFF, 0xF5, 0x9E, 0x0B), ov);
+                }
             }
 
             // Playhead: a bright red line the full height with a downward triangle handle in the ruler.
@@ -238,11 +270,15 @@ namespace ModernImageViewer.VideoDirector.Views
                 if (idx >= 0 && idx < ViewModel.TimelineNodes.Count)
                     return (ViewModel.TimelineNodes[idx], true, ViewModel.GetSpineClipStart(idx).TotalSeconds);
             }
-            else if (p.Y >= RowOvY && p.Y < RowOvY + BlockH)
+            else if (p.Y >= RowOvY)
             {
-                foreach (var ov in ViewModel.OverlayClips)
-                    if (t >= ov.StartTime && t < ov.StartTime + ov.OpDuration)
-                        return (ov, false, ov.StartTimeSeconds);
+                int ti = (int)((p.Y - RowOvY) / RowPitch);   // which upper-track row
+                if (ti >= 0 && ti < ViewModel.OverlayTracks.Count)
+                {
+                    foreach (var ov in ViewModel.OverlayTracks[ti].Clips)
+                        if (t >= ov.StartTime && t < ov.StartTime + ov.OpDuration)
+                            return (ov, false, ov.StartTimeSeconds);
+                }
             }
             return (null, false, 0);
         }
@@ -691,7 +727,8 @@ namespace ModernImageViewer.VideoDirector.Views
             var overlay = ViewModel.SelectedOverlay;
             if (overlay != null)
             {
-                int index = ViewModel.OverlayClips.IndexOf(overlay);
+                var track = TrackOf(overlay);
+                int index = track?.Clips.IndexOf(overlay) ?? -1;
                 if (index >= 0)
                 {
                     var newOverlay = new CinematicOperation
@@ -710,7 +747,7 @@ namespace ModernImageViewer.VideoDirector.Views
                         PlacementCenterY = overlay.PlacementCenterY,
                         Thumbnail = overlay.Thumbnail
                     };
-                    ViewModel.OverlayClips.Insert(index + 1, newOverlay);
+                    track.Clips.Insert(index + 1, newOverlay);
                 }
             }
         }
@@ -720,7 +757,7 @@ namespace ModernImageViewer.VideoDirector.Views
             var overlay = ViewModel.SelectedOverlay;
             if (overlay != null)
             {
-                ViewModel.OverlayClips.Remove(overlay);
+                TrackOf(overlay)?.Clips.Remove(overlay);
                 ViewModel.SelectedOverlay = null;
             }
         }
@@ -750,17 +787,21 @@ namespace ModernImageViewer.VideoDirector.Views
             if (e.DataView.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.StorageItems))
             {
                 e.Handled = true;
-                double dropX = e.GetPosition(TimelineBar).X;
+                var drop = e.GetPosition(TimelineBar);
                 TimeSpan startTime = _timelinePxPerSec > 0
-                    ? TimeSpan.FromSeconds(Math.Max(0, dropX / _timelinePxPerSec))
+                    ? TimeSpan.FromSeconds(Math.Max(0, drop.X / _timelinePxPerSec))
                     : ViewModel.CurrentStoryTime;
+
+                // Dropping on a track's row targets that track; above the rows targets track 0.
+                int trackIndex = drop.Y >= RowOvY ? (int)((drop.Y - RowOvY) / RowPitch) : 0;
+                trackIndex = Math.Clamp(trackIndex, 0, Math.Max(0, ViewModel.OverlayTracks.Count - 1));
 
                 var items = await e.DataView.GetStorageItemsAsync();
                 foreach (var item in items)
                 {
                     if (item is Windows.Storage.StorageFile file && (file.FileType == ".mp4" || file.FileType == ".mkv" || file.FileType == ".avi" || file.FileType == ".jpg" || file.FileType == ".png"))
                     {
-                        await ViewModel.AddOverlayAsync(item.Path, startTime);
+                        await ViewModel.AddOverlayAsync(item.Path, startTime, trackIndex);
                     }
                 }
             }

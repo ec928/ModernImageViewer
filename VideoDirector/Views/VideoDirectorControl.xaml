@@ -329,13 +329,23 @@
                         <Rectangle Width="10" Height="10" RadiusX="2" RadiusY="2" Fill="#F59E0B" />
                         <TextBlock Text="Track 2" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     </StackPanel>
-                    <Button Grid.Column="3" Click="AddOverlay_Click" Padding="8,2"
-                            ToolTipService.ToolTip="Add an overlay clip to Track 2">
-                        <StackPanel Orientation="Horizontal" Spacing="4">
-                            <FontIcon Glyph="&#xE710;" FontSize="11" />
-                            <TextBlock Text="Add Overlay" FontSize="11" />
-                        </StackPanel>
-                    </Button>
+                    <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6">
+                        <Button Click="AddOverlayTrack_Click" Padding="8,2"
+                                IsEnabled="{Binding CanAddOverlayTrack}"
+                                ToolTipService.ToolTip="Add another upper track (max 3 overlay tracks)">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <FontIcon Glyph="&#xE710;" FontSize="11" />
+                                <TextBlock Text="Add Track" FontSize="11" />
+                            </StackPanel>
+                        </Button>
+                        <Button Click="AddOverlay_Click" Padding="8,2"
+                                ToolTipService.ToolTip="Add an overlay clip to the first upper track">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <FontIcon Glyph="&#xE710;" FontSize="11" />
+                                <TextBlock Text="Add Overlay" FontSize="11" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
                 </Grid>
             </StackPanel>
         </Border>

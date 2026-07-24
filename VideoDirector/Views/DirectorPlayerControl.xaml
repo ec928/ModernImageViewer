@@ -96,6 +96,31 @@
                 <Rectangle Style="{StaticResource PipHandleStyle}" HorizontalAlignment="Right"  VerticalAlignment="Bottom" />
             </Grid>
         </Grid>
+        <!-- Third overlay unit (Track 4). Surfaces are pre-declared and bounded at 3; the engine
+             addresses them generically via OverlayVisuals[i] — see §7B. -->
+        <Grid x:Name="OverlayGrid3" x:FieldModifier="public"
+              Opacity="0" IsHitTestVisible="False"
+              HorizontalAlignment="Left" VerticalAlignment="Top">
+            <MediaPlayerElement x:Name="OverlayPlayer3" x:FieldModifier="public"
+                                AreTransportControlsEnabled="False" Stretch="UniformToFill"
+                                RenderTransformOrigin="0.5,0.5">
+                <MediaPlayerElement.RenderTransform>
+                    <CompositeTransform x:Name="OverlayTransform3" x:FieldModifier="public" />
+                </MediaPlayerElement.RenderTransform>
+            </MediaPlayerElement>
+            <Image x:Name="OverlayImage3" x:FieldModifier="public" Stretch="UniformToFill" Visibility="Collapsed" />
+            <Grid x:Name="OverlayHandles3" x:FieldModifier="public" IsHitTestVisible="False" Visibility="Collapsed">
+                <Border BorderBrush="#CCFFFFFF" BorderThickness="1.5" />
+                <Rectangle Style="{StaticResource PipHandleStyle}" HorizontalAlignment="Left"   VerticalAlignment="Top" />
+                <Rectangle Style="{StaticResource PipHandleStyle}" HorizontalAlignment="Center" VerticalAlignment="Top" />
+                <Rectangle Style="{StaticResource PipHandleStyle}" HorizontalAlignment="Right"  VerticalAlignment="Top" />
+                <Rectangle Style="{StaticResource PipHandleStyle}" HorizontalAlignment="Left"   VerticalAlignment="Center" />
+                <Rectangle Style="{StaticResource PipHandleStyle}" HorizontalAlignment="Right"  VerticalAlignment="Center" />
+                <Rectangle Style="{StaticResource PipHandleStyle}" HorizontalAlignment="Left"   VerticalAlignment="Bottom" />
+                <Rectangle Style="{StaticResource PipHandleStyle}" HorizontalAlignment="Center" VerticalAlignment="Bottom" />
+                <Rectangle Style="{StaticResource PipHandleStyle}" HorizontalAlignment="Right"  VerticalAlignment="Bottom" />
+            </Grid>
+        </Grid>
 
         <!-- WYSIWYG Overlay for Edit Mode -->
         <Canvas x:Name="WysiwygCanvas" x:FieldModifier="public" IsHitTestVisible="False" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">

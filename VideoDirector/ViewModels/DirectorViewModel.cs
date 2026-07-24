@@ -21,10 +21,47 @@ namespace ModernImageViewer.VideoDirector.ViewModels
     {
         public ObservableCollection<CinematicOperation> TimelineNodes { get; } = new();
 
-        // Track 2 (upper track). Same clip type as Track 1 — a clip is a clip. Upper-track
+        // Upper tracks (Track 2..4). Same clip type as Track 1 — a clip is a clip. Upper-track
         // clips are freely placed on the timeline (editable StartTime, gaps allowed) and
-        // composited over Track 1.
-        public ObservableCollection<CinematicOperation> OverlayClips { get; } = new();
+        // composited over Track 1. Bounded at 3: track i maps 1:1 to overlay player/surface i.
+        public const int MaxOverlayTracks = 3;
+        public ObservableCollection<OverlayTrack> OverlayTracks { get; } = new();
+
+        // Default corners so stacked PiPs don't land on top of each other.
+        private static readonly (double x, double y)[] TrackCorners =
+            { (0.72, 0.72), (0.28, 0.72), (0.72, 0.28) };
+
+        public bool CanAddOverlayTrack => OverlayTracks.Count < MaxOverlayTracks;
+
+        public OverlayTrack AddOverlayTrack()
+        {
+            if (OverlayTracks.Count >= MaxOverlayTracks) return null;
+            int i = OverlayTracks.Count;
+            var track = new OverlayTrack
+            {
+                Name = "Track " + (i + 2),
+                DefaultCenterX = TrackCorners[i].x,
+                DefaultCenterY = TrackCorners[i].y
+            };
+            OverlayTracks.Add(track);
+            OnPropertyChanged(nameof(CanAddOverlayTrack));
+            return track;
+        }
+
+        public void RemoveOverlayTrack(int index)
+        {
+            if (index < 0 || index >= OverlayTracks.Count || OverlayTracks.Count <= 1) return;
+            OverlayTracks.RemoveAt(index);
+            OnPropertyChanged(nameof(CanAddOverlayTrack));
+        }
+
+        // Every upper-track clip, flattened — for lookups that don't care which track.
+        public IEnumerable<CinematicOperation> AllOverlayClips()
+        {
+            foreach (var track in OverlayTracks)
+                foreach (var clip in track.Clips)
+                    yield return clip;
+        }
 
         private bool _isPlaying;
         public bool IsPlaying
@@ -293,6 +330,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
         public DirectorViewModel()
         {
             TimelineNodes.CollectionChanged += TimelineNodes_CollectionChanged;
+            AddOverlayTrack(); // always at least one upper track
         }
 
         private void TimelineNodes_CollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
@@ -423,7 +461,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
             return start;
         }
 
-        public async Task AddOverlayAsync(string filePath, TimeSpan startTime)
+        public async Task AddOverlayAsync(string filePath, TimeSpan startTime, int trackIndex = 0)
         {
             TimeSpan duration = TimeSpan.FromSeconds(5);
             Microsoft.UI.Xaml.Media.Imaging.BitmapImage? thumbnail = null;
@@ -448,22 +486,30 @@ namespace ModernImageViewer.VideoDirector.ViewModels
             // An upper-track clip is a normal CinematicOperation placed at the current playhead.
             // Content framing defaults to full-frame (marks at scale 1); the clip appears as a
             // 30% corner PiP via its placement (PlacementScale/Center defaults on the clip).
+            if (OverlayTracks.Count == 0) AddOverlayTrack();
+            trackIndex = Math.Clamp(trackIndex, 0, OverlayTracks.Count - 1);
+            var track = OverlayTracks[trackIndex];
+
             var overlay = new CinematicOperation
             {
                 FilePath = filePath,
                 OpDuration = duration,
                 VideoEndTime = duration,
                 StartTime = startTime,
+                PlacementCenterX = track.DefaultCenterX,
+                PlacementCenterY = track.DefaultCenterY,
                 Thumbnail = thumbnail
             };
-            OverlayClips.Add(overlay);
+            track.Clips.Add(overlay);
             SelectedOverlay = overlay;
         }
 
-        // Serialization wrapper so the JSON file can hold both timeline nodes and overlay clips
+        // Serialization wrapper. OverlayTracks is the current shape; OverlayClips is the legacy
+        // flat list, still read so older project files migrate into track 0.
         private class ProjectData
         {
             public System.Collections.ObjectModel.ObservableCollection<CinematicOperation> TimelineNodes { get; set; } = new();
+            public System.Collections.ObjectModel.ObservableCollection<OverlayTrack> OverlayTracks { get; set; } = new();
             public System.Collections.ObjectModel.ObservableCollection<CinematicOperation> OverlayClips { get; set; } = new();
         }
 
@@ -472,7 +518,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
             var data = new ProjectData
             {
                 TimelineNodes = TimelineNodes,
-                OverlayClips = OverlayClips
+                OverlayTracks = OverlayTracks
             };
             var options = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
             using var stream = await file.OpenStreamForWriteAsync();
@@ -493,7 +539,8 @@ namespace ModernImageViewer.VideoDirector.ViewModels
             var trimmed = json.TrimStart();
 
             System.Collections.ObjectModel.ObservableCollection<CinematicOperation> nodes = null;
-            System.Collections.ObjectModel.ObservableCollection<CinematicOperation> overlays = null;
+            System.Collections.ObjectModel.ObservableCollection<OverlayTrack> tracks = null;
+            System.Collections.ObjectModel.ObservableCollection<CinematicOperation> legacyOverlays = null;
 
             if (trimmed.StartsWith("["))
             {
@@ -507,7 +554,8 @@ namespace ModernImageViewer.VideoDirector.ViewModels
                 if (data != null)
                 {
                     nodes = data.TimelineNodes;
-                    overlays = data.OverlayClips;
+                    tracks = data.OverlayTracks;
+                    legacyOverlays = data.OverlayClips;
                 }
             }
 
@@ -521,15 +569,28 @@ namespace ModernImageViewer.VideoDirector.ViewModels
                 }
             }
 
-            OverlayClips.Clear();
-            if (overlays != null)
+            OverlayTracks.Clear();
+            if (tracks != null && tracks.Count > 0)
             {
-                foreach (var overlay in overlays)
+                foreach (var track in tracks)
                 {
-                    OverlayClips.Add(overlay);
-                    _ = LoadOverlayThumbnailAsync(overlay, dispatcher);
+                    if (OverlayTracks.Count >= MaxOverlayTracks) break;
+                    OverlayTracks.Add(track);
+                    foreach (var clip in track.Clips) _ = LoadOverlayThumbnailAsync(clip, dispatcher);
                 }
             }
+            else if (legacyOverlays != null && legacyOverlays.Count > 0)
+            {
+                // Migrate an older flat overlay list into track 0.
+                var track = AddOverlayTrack();
+                foreach (var clip in legacyOverlays)
+                {
+                    track.Clips.Add(clip);
+                    _ = LoadOverlayThumbnailAsync(clip, dispatcher);
+                }
+            }
+            if (OverlayTracks.Count == 0) AddOverlayTrack();
+            OnPropertyChanged(nameof(CanAddOverlayTrack));
         }
 
         private async Task LoadThumbnailAsync(CinematicOperation node, Microsoft.UI.Dispatching.DispatcherQueue dispatcher)
@@ -576,7 +637,8 @@ namespace ModernImageViewer.VideoDirector.ViewModels
         public void Clear()
         {
             TimelineNodes.Clear();
-            OverlayClips.Clear();
+            OverlayTracks.Clear();
+            AddOverlayTrack(); // keep at least one upper track
         }
     }
 }

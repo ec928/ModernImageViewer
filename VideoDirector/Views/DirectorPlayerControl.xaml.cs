@@ -19,12 +19,26 @@ namespace ModernImageViewer.VideoDirector.Views
     // near an edge = one-dimension resize, near a corner = two-dimension resize).
     public enum BoxGrab { Move, Left, Right, Top, Bottom, TopLeft, TopRight, BottomLeft, BottomRight }
 
+    // One upper track's render surfaces. Pre-declared and bounded (3); the engine addresses them
+    // generically by track index via OverlayVisuals[i] — no per-track code paths (§7B).
+    public sealed class OverlayVisual
+    {
+        public Microsoft.UI.Xaml.Controls.Grid Grid;
+        public Microsoft.UI.Xaml.Controls.MediaPlayerElement Video;
+        public Microsoft.UI.Xaml.Controls.Image Still;
+        public Microsoft.UI.Xaml.Media.CompositeTransform Transform;
+        public Microsoft.UI.Xaml.Controls.Grid Handles;
+    }
+
     public sealed partial class DirectorPlayerControl : UserControl
     {
         private bool _isDragging = false;
         private Point _lastPointerPosition;
-        private int _dragSlot;
+        private int _dragSlot = -1;
         private BoxGrab _dragGrab;
+
+        // Index 0..2 == overlay track 0..2. Built once from the pre-declared XAML units.
+        public OverlayVisual[] OverlayVisuals { get; private set; }
 
         // How close (px) to an edge counts as grabbing that edge for a resize.
         private const double HandleThreshold = 20.0;
@@ -44,16 +58,24 @@ namespace ModernImageViewer.VideoDirector.Views
         public DirectorPlayerControl()
         {
             this.InitializeComponent();
+
+            OverlayVisuals = new[]
+            {
+                new OverlayVisual { Grid = OverlayGrid1, Video = OverlayPlayer1, Still = OverlayImage1, Transform = OverlayTransform1, Handles = OverlayHandles1 },
+                new OverlayVisual { Grid = OverlayGrid2, Video = OverlayPlayer2, Still = OverlayImage2, Transform = OverlayTransform2, Handles = OverlayHandles2 },
+                new OverlayVisual { Grid = OverlayGrid3, Video = OverlayPlayer3, Still = OverlayImage3, Transform = OverlayTransform3, Handles = OverlayHandles3 },
+            };
         }
 
-        // Which PiP box (if any) is under the given InputLayer-space point; topmost (slot 2) wins.
-        // The overlay grids are positioned via Margin + Width/Height in the same coordinate space
-        // as the full-screen InputLayer, so a plain bounds test is valid.
+        // Which PiP box (if any) is under the given InputLayer-space point; topmost track wins.
+        // Returns a 0-based track index, or -1 for none. The overlay grids are positioned via
+        // Margin + Width/Height in the same coordinate space as the full-screen InputLayer, so a
+        // plain bounds test is valid.
         private int HitTestOverlaySlot(Point p)
         {
-            if (IsInsideBox(OverlayGrid2, p)) return 2;
-            if (IsInsideBox(OverlayGrid1, p)) return 1;
-            return 0;
+            for (int i = OverlayVisuals.Length - 1; i >= 0; i--)
+                if (IsInsideBox(OverlayVisuals[i].Grid, p)) return i;
+            return -1;
         }
 
         private static bool IsInsideBox(Grid g, Point p)
@@ -66,7 +88,7 @@ namespace ModernImageViewer.VideoDirector.Views
         // Classify where in the box the cursor is: near an edge/corner (resize) or interior (move).
         private BoxGrab ClassifyGrab(int slot, Point p)
         {
-            var g = slot == 2 ? OverlayGrid2 : OverlayGrid1;
+            var g = OverlayVisuals[slot].Grid;
             double relX = p.X - g.Margin.Left;
             double relY = p.Y - g.Margin.Top;
             // Keep the threshold below half the box so a tiny box still has a movable interior.
@@ -92,7 +114,7 @@ namespace ModernImageViewer.VideoDirector.Views
             if (InputMode == PlayerInputMode.ArrangePips)
             {
                 _dragSlot = HitTestOverlaySlot(p);
-                if (_dragSlot == 0) return; // clicked empty canvas — nothing to arrange
+                if (_dragSlot < 0) return; // clicked empty canvas — nothing to arrange
                 _dragGrab = ClassifyGrab(_dragSlot, p);
                 _isDragging = true;
                 _lastPointerPosition = p;
@@ -116,7 +138,7 @@ namespace ModernImageViewer.VideoDirector.Views
 
             if (InputMode == PlayerInputMode.ArrangePips)
             {
-                if (_dragSlot > 0) OverlayBoxDragged?.Invoke(this, (_dragSlot, _dragGrab, deltaX, deltaY));
+                if (_dragSlot >= 0) OverlayBoxDragged?.Invoke(this, (_dragSlot, _dragGrab, deltaX, deltaY));
                 return;
             }
 
@@ -129,14 +151,14 @@ namespace ModernImageViewer.VideoDirector.Views
         private void InputLayer_PointerReleased(object sender, PointerRoutedEventArgs e)
         {
             _isDragging = false;
-            _dragSlot = 0;
+            _dragSlot = -1;
             InputLayer.ReleasePointerCapture(e.Pointer);
         }
 
         private void InputLayer_PointerCanceled(object sender, PointerRoutedEventArgs e)
         {
             _isDragging = false;
-            _dragSlot = 0;
+            _dragSlot = -1;
             InputLayer.ReleasePointerCapture(e.Pointer);
         }
 
@@ -148,7 +170,7 @@ namespace ModernImageViewer.VideoDirector.Views
             if (InputMode == PlayerInputMode.ArrangePips)
             {
                 int slot = HitTestOverlaySlot(pt.Position);
-                if (slot > 0) OverlayBoxWheel?.Invoke(this, (slot, delta));
+                if (slot >= 0) OverlayBoxWheel?.Invoke(this, (slot, delta));
                 return;
             }
 

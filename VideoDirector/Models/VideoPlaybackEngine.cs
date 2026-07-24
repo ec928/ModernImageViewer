@@ -47,16 +47,16 @@ namespace ModernImageViewer.VideoDirector.Models
 
         public CinematicOperation? CurrentPlayingOperation { get; private set; }
 
-        // Overlay state
-        private MediaPlayer _overlayMediaPlayer1;
-        private MediaPlayer _overlayMediaPlayer2;
-        private CinematicOperation _activeOverlay1;
-        private CinematicOperation _activeOverlay2;
-        private bool _isEditingOverlay = false;
-        // Native aspect (w/h) of each slot's overlay video, cached when the media opens, so
+        // Overlay state — one entry per upper track, indexed 0..MaxOverlayTracks-1. Track i owns
+        // player[i] and the pre-declared render surface OverlayVisuals[i] (§7B): no per-track code
+        // paths, so adding a track is data, not new branches.
+        private const int MaxOverlayTracks = DirectorViewModel.MaxOverlayTracks;
+        private readonly MediaPlayer[] _overlayPlayer = new MediaPlayer[MaxOverlayTracks];
+        private readonly CinematicOperation[] _activeOverlay = new CinematicOperation[MaxOverlayTracks];
+        // Native aspect (w/h) of each track's overlay video, cached when the media opens, so
         // the placement box can be sized to the video's shape (no black bars).
-        private double _overlayAspect1 = 0;
-        private double _overlayAspect2 = 0;
+        private readonly double[] _overlayAspect = new double[MaxOverlayTracks];
+        private bool _isEditingOverlay = false;
         // Story time as of the start of the currently-playing clip; CurrentStoryTime is
         // derived from this plus the active player's real position every render frame.
         private TimeSpan _storyTimeAtClipStart = TimeSpan.Zero;
@@ -194,8 +194,7 @@ namespace ModernImageViewer.VideoDirector.Models
             // Overlay players are driven from the per-frame render loop, which stops running
             // entirely while paused — so they must be paused explicitly here rather than
             // relying on the render loop to catch up to the paused state.
-            _overlayMediaPlayer1.Pause();
-            _overlayMediaPlayer2.Pause();
+            for (int i = 0; i < MaxOverlayTracks; i++) _overlayPlayer[i]?.Pause();
 
             _dispatcher.TryEnqueue(() => UpdateWysiwygOverlay());
         }
@@ -217,17 +216,16 @@ namespace ModernImageViewer.VideoDirector.Models
                 otherPlayer.Play();
             }
 
-            // Resume whichever overlay slots are currently occupied; EvaluateOverlays will
+            // Resume whichever overlay tracks are currently occupied; EvaluateOverlays will
             // re-sync their exact position on the next render tick via drift correction.
-            if (_activeOverlay1 != null && _viewModel.PlaybackSpeed > 0)
+            if (_viewModel.PlaybackSpeed > 0)
             {
-                _overlayMediaPlayer1.PlaybackSession.PlaybackRate = _viewModel.PlaybackSpeed;
-                _overlayMediaPlayer1.Play();
-            }
-            if (_activeOverlay2 != null && _viewModel.PlaybackSpeed > 0)
-            {
-                _overlayMediaPlayer2.PlaybackSession.PlaybackRate = _viewModel.PlaybackSpeed;
-                _overlayMediaPlayer2.Play();
+                for (int i = 0; i < MaxOverlayTracks; i++)
+                {
+                    if (_activeOverlay[i] == null || _overlayPlayer[i]?.PlaybackSession == null) continue;
+                    _overlayPlayer[i].PlaybackSession.PlaybackRate = _viewModel.PlaybackSpeed;
+                    _overlayPlayer[i].Play();
+                }
             }
         }
 
@@ -1227,92 +1225,66 @@ namespace ModernImageViewer.VideoDirector.Models
 
         private void InitializeOverlayPlayers()
         {
-            _overlayMediaPlayer1 = new MediaPlayer();
-            _overlayMediaPlayer1.IsLoopingEnabled = false;
-            _overlayMediaPlayer1.AutoPlay = false;
-            _overlayMediaPlayer1.CommandManager.IsEnabled = false;
-            _playerControl.OverlayPlayer1.SetMediaPlayer(_overlayMediaPlayer1);
-
-            _overlayMediaPlayer2 = new MediaPlayer();
-            _overlayMediaPlayer2.IsLoopingEnabled = false;
-            _overlayMediaPlayer2.AutoPlay = false;
-            _overlayMediaPlayer2.CommandManager.IsEnabled = false;
-            _playerControl.OverlayPlayer2.SetMediaPlayer(_overlayMediaPlayer2);
-
-            // Upper-track audio is muted by default — Track 1 is the audio bed. Per-clip
-            // unmute is a later addition. Without this, a close-up overlaid on the same scene
-            // as Track 1 doubles/echoes the audio.
-            _overlayMediaPlayer1.IsMuted = true;
-            _overlayMediaPlayer2.IsMuted = true;
+            for (int i = 0; i < MaxOverlayTracks; i++)
+            {
+                var player = new MediaPlayer
+                {
+                    IsLoopingEnabled = false,
+                    AutoPlay = false,
+                    // Upper-track audio is muted by default — Track 1 is the audio bed. Per-clip
+                    // unmute is a later addition. Without this, a close-up overlaid on the same
+                    // scene as Track 1 doubles/echoes the audio.
+                    IsMuted = true
+                };
+                player.CommandManager.IsEnabled = false;
+                _overlayPlayer[i] = player;
+                _playerControl.OverlayVisuals[i].Video.SetMediaPlayer(player);
+            }
         }
 
+        // The generic per-track evaluation (§7B). One loop body, indexed by track — no slot
+        // branches. Each track is strict (its clips never overlap), so at most ONE clip is active
+        // per track, which is why track i can own exactly one player/surface.
         private void EvaluateOverlays(TimeSpan currentStoryTime)
         {
-            var overlays = _viewModel.OverlayClips;
-            if (overlays.Count == 0)
-            {
-                // Fast path: no overlays configured, ensure both slots are hidden
-                if (_activeOverlay1 != null) ReleaseOverlaySlot(1);
-                if (_activeOverlay2 != null) ReleaseOverlaySlot(2);
-                return;
-            }
+            var tracks = _viewModel.OverlayTracks;
 
-            // Determine which overlays should be active right now (max 2). Ordered by
-            // collection position; per-clip z-order is superseded by track-level z-order
-            // in the multi-track model.
-            CinematicOperation desired1 = null;
-            CinematicOperation desired2 = null;
-
-            foreach (var overlay in overlays)
+            for (int i = 0; i < MaxOverlayTracks; i++)
             {
-                if (overlay.IsActiveAt(currentStoryTime))
+                var desired = i < tracks.Count ? ResolveActiveClip(tracks[i], currentStoryTime) : null;
+
+                if (_activeOverlay[i] != desired)
                 {
-                    if (desired1 == null) desired1 = overlay;
-                    else if (desired2 == null) { desired2 = overlay; break; }
+                    if (desired != null) ActivateOverlaySlot(i, desired, currentStoryTime);
+                    else ReleaseOverlaySlot(i);
                 }
-            }
+                else if (_activeOverlay[i] != null)
+                {
+                    // Drift correction: re-seek if this track's player drifts > 200ms
+                    ApplyOverlayDriftCorrection(i, _activeOverlay[i], currentStoryTime);
+                }
 
-            // Slot 1
-            if (_activeOverlay1 != desired1)
-            {
-                if (desired1 != null)
-                    ActivateOverlaySlot(1, desired1, currentStoryTime);
-                else
-                    ReleaseOverlaySlot(1);
+                if (_activeOverlay[i] != null)
+                    ApplyOverlayTransform(i, _activeOverlay[i], currentStoryTime);
             }
-            else if (_activeOverlay1 != null)
-            {
-                // Drift correction: re-seek if overlay player drifts > 200ms
-                ApplyOverlayDriftCorrection(1, _activeOverlay1, currentStoryTime);
-            }
+        }
 
-            // Slot 2
-            if (_activeOverlay2 != desired2)
-            {
-                if (desired2 != null)
-                    ActivateOverlaySlot(2, desired2, currentStoryTime);
-                else
-                    ReleaseOverlaySlot(2);
-            }
-            else if (_activeOverlay2 != null)
-            {
-                ApplyOverlayDriftCorrection(2, _activeOverlay2, currentStoryTime);
-            }
-
-            // Apply transforms for active overlays
-            if (_activeOverlay1 != null) ApplyOverlayTransform(1, _activeOverlay1, currentStoryTime);
-            if (_activeOverlay2 != null) ApplyOverlayTransform(2, _activeOverlay2, currentStoryTime);
+        // Strict track ⇒ the first clip whose window contains t is the only one.
+        private static CinematicOperation ResolveActiveClip(OverlayTrack track, TimeSpan t)
+        {
+            foreach (var clip in track.Clips)
+                if (clip.IsActiveAt(t)) return clip;
+            return null;
         }
 
         private void ActivateOverlaySlot(int slot, CinematicOperation overlay, TimeSpan currentStoryTime)
         {
-            var player = slot == 1 ? _overlayMediaPlayer1 : _overlayMediaPlayer2;
-            var grid = slot == 1 ? _playerControl.OverlayGrid1 : _playerControl.OverlayGrid2;
+            var player = _overlayPlayer[slot];
+            var grid = _playerControl.OverlayVisuals[slot].Grid;
 
             // Mark active immediately so repeated per-frame EvaluateOverlays ticks don't
             // re-trigger this while the media is still opening asynchronously.
-            if (slot == 1) _activeOverlay1 = overlay;
-            else _activeOverlay2 = overlay;
+            _activeOverlay[slot] = overlay;
 
             grid.Opacity = overlay.Opacity;
 
@@ -1330,7 +1302,7 @@ namespace ModernImageViewer.VideoDirector.Models
 
                     // The overlay this slot wants may have changed while we were waiting
                     // (e.g. playback moved past it, or it got released) — bail if so.
-                    var currentSlotOverlay = slot == 1 ? _activeOverlay1 : _activeOverlay2;
+                    var currentSlotOverlay = _activeOverlay[slot];
                     if (currentSlotOverlay != overlay) return;
 
                     SeekAndPlayOverlay(sender, overlay, _viewModel.CurrentStoryTime);
@@ -1363,7 +1335,7 @@ namespace ModernImageViewer.VideoDirector.Models
             uint vh = player.PlaybackSession.NaturalVideoHeight;
             if (vw == 0 || vh == 0) return;
             double aspect = (double)vw / vh;
-            if (slot == 1) _overlayAspect1 = aspect; else _overlayAspect2 = aspect;
+            _overlayAspect[slot] = aspect;
         }
 
         // Positions, sizes and clips the placement box (the overlay grid) from the clip's
@@ -1373,8 +1345,8 @@ namespace ModernImageViewer.VideoDirector.Models
         // spill outside the box.
         private void ApplyOverlayBox(int slot, CinematicOperation overlay, bool editMode)
         {
-            var grid = slot == 1 ? _playerControl.OverlayGrid1 : _playerControl.OverlayGrid2;
-            double aspect = slot == 1 ? _overlayAspect1 : _overlayAspect2;
+            var grid = _playerControl.OverlayVisuals[slot].Grid;
+            double aspect = _overlayAspect[slot];
             double vpW = _playerControl.ActualWidth;
             double vpH = _playerControl.ActualHeight;
             if (aspect <= 0 || vpW <= 0 || vpH <= 0) return;
@@ -1402,17 +1374,17 @@ namespace ModernImageViewer.VideoDirector.Models
             bool arrangeIdle = !editMode && !_isAnimating;
             var vis = arrangeIdle ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
 
-            var handles = slot == 1 ? _playerControl.OverlayHandles1 : _playerControl.OverlayHandles2;
+            var handles = _playerControl.OverlayVisuals[slot].Handles;
             if (handles != null) handles.Visibility = vis;
 
-            var image = slot == 1 ? _playerControl.OverlayImage1 : _playerControl.OverlayImage2;
+            var image = _playerControl.OverlayVisuals[slot].Still;
             if (image != null)
             {
                 image.Visibility = vis;
                 if (arrangeIdle) image.Source = overlay.Thumbnail;
             }
 
-            var playerElement = slot == 1 ? _playerControl.OverlayPlayer1 : _playerControl.OverlayPlayer2;
+            var playerElement = _playerControl.OverlayVisuals[slot].Video;
             if (playerElement != null)
                 playerElement.Visibility = arrangeIdle
                     ? Microsoft.UI.Xaml.Visibility.Collapsed
@@ -1475,15 +1447,15 @@ namespace ModernImageViewer.VideoDirector.Models
 
         private void ReleaseOverlaySlot(int slot)
         {
-            var player = slot == 1 ? _overlayMediaPlayer1 : _overlayMediaPlayer2;
-            var grid = slot == 1 ? _playerControl.OverlayGrid1 : _playerControl.OverlayGrid2;
+            var player = _overlayPlayer[slot];
+            var grid = _playerControl.OverlayVisuals[slot].Grid;
 
             player.Pause();
             player.Source = null; // Release GPU decode pipeline
             grid.Opacity = 0;
 
             // Reset content transform + clear the placement box so no stale size/clip lingers.
-            var transform = slot == 1 ? _playerControl.OverlayTransform1 : _playerControl.OverlayTransform2;
+            var transform = _playerControl.OverlayVisuals[slot].Transform;
             transform.ScaleX = 1;
             transform.ScaleY = 1;
             transform.TranslateX = 0;
@@ -1493,13 +1465,13 @@ namespace ModernImageViewer.VideoDirector.Models
             grid.Clip = null;
             grid.Margin = new Microsoft.UI.Xaml.Thickness(0);
 
-            if (slot == 1) { _activeOverlay1 = null; _overlayAspect1 = 0; }
-            else { _activeOverlay2 = null; _overlayAspect2 = 0; }
+            _activeOverlay[slot] = null;
+            _overlayAspect[slot] = 0;
         }
 
         private void ApplyOverlayTransform(int slot, CinematicOperation overlay, TimeSpan currentStoryTime)
         {
-            var transform = slot == 1 ? _playerControl.OverlayTransform1 : _playerControl.OverlayTransform2;
+            var transform = _playerControl.OverlayVisuals[slot].Transform;
 
             // Content framing interpolated over the overlay's OWN duration (Ken Burns / push-in),
             // using the same marks + curve as Track 1. Static clip = StartMark == EndMark.
@@ -1562,7 +1534,7 @@ namespace ModernImageViewer.VideoDirector.Models
 
         private void ApplyOverlayDriftCorrection(int slot, CinematicOperation overlay, TimeSpan currentStoryTime)
         {
-            var player = slot == 1 ? _overlayMediaPlayer1 : _overlayMediaPlayer2;
+            var player = _overlayPlayer[slot];
             if (player.PlaybackSession == null) return;
 
             TimeSpan expectedPosition = overlay.VideoStartTime + (currentStoryTime - overlay.StartTime);
@@ -1608,8 +1580,13 @@ namespace ModernImageViewer.VideoDirector.Models
         {
             // While a Track 2 clip is being content-edited full-screen, slot 1 is the edit
             // surface — don't let a StopPlayback teardown wipe it.
-            if (!_isEditingOverlay && _activeOverlay1 != null) ReleaseOverlaySlot(1);
-            if (_activeOverlay2 != null) ReleaseOverlaySlot(2);
+            // Track 0 is the edit surface while a Track 2+ clip is being content-edited — don't
+            // let a StopPlayback teardown wipe it. All other tracks always release.
+            for (int i = 0; i < MaxOverlayTracks; i++)
+            {
+                if (i == 0 && _isEditingOverlay) continue;
+                if (_activeOverlay[i] != null) ReleaseOverlaySlot(i);
+            }
         }
 
         // ==================== Two modes: Arrange (default) and Edit ====================
@@ -1668,16 +1645,19 @@ namespace ModernImageViewer.VideoDirector.Models
         {
             if (overlay == null || string.IsNullOrWhiteSpace(overlay.FilePath)) return;
 
-            SetEditModeState(overlay, _overlayMediaPlayer1, isOverlayEdit: true); // keeps slot 1
+            // Track 0's surface is reused as the full-screen content-edit surface for ANY upper
+            // clip, whichever track it belongs to; every other track is hidden while editing.
+            SetEditModeState(overlay, _overlayPlayer[0], isOverlayEdit: true);
             StopPlayback();
             UpdateWysiwygOverlay();
-            if (_activeOverlay2 != null) ReleaseOverlaySlot(2); // hide any other PiP
+            for (int i = 1; i < MaxOverlayTracks; i++)
+                if (_activeOverlay[i] != null) ReleaseOverlaySlot(i);
 
-            _activeOverlay1 = overlay;
+            _activeOverlay[0] = overlay;
 
-            var player = _overlayMediaPlayer1;
-            var grid = _playerControl.OverlayGrid1;
-            var transform = _playerControl.OverlayTransform1;
+            var player = _overlayPlayer[0];
+            var grid = _playerControl.OverlayVisuals[0].Grid;
+            var transform = _playerControl.OverlayVisuals[0].Transform;
 
             if (player.Source == null || !string.Equals((player.Source as MediaSource)?.Uri?.LocalPath, overlay.FilePath, StringComparison.OrdinalIgnoreCase))
             {
@@ -1688,20 +1668,20 @@ namespace ModernImageViewer.VideoDirector.Models
                 await Task.WhenAny(tcs.Task, Task.Delay(1500));
                 player.MediaOpened -= handler;
             }
-            if (_activeOverlay1 != overlay) return;
+            if (_activeOverlay[0] != overlay) return;
 
             if (player.PlaybackSession != null) player.PlaybackSession.Position = overlay.VideoStartTime;
             player.Pause();
 
             _dispatcher.TryEnqueue(() =>
             {
-                if (_activeOverlay1 != overlay) return;
+                if (_activeOverlay[0] != overlay) return;
                 transform.ScaleX = overlay.StartMark.Scale;
                 transform.ScaleY = overlay.StartMark.Scale;
                 transform.TranslateX = overlay.StartMark.X;
                 transform.TranslateY = overlay.StartMark.Y;
                 CacheOverlayAspect(1, player);
-                ApplyOverlayBox(1, overlay, true); // full-screen for content framing
+                ApplyOverlayBox(0, overlay, true); // full-screen for content framing
                 grid.Opacity = 1.0;
                 // Hide the Track 1 base so ONLY this overlay clip is shown while editing it.
                 _playerA.Opacity = 0;
@@ -1716,8 +1696,8 @@ namespace ModernImageViewer.VideoDirector.Models
         public void OnViewportResized()
         {
             UpdateWysiwygOverlay();
-            if (_isEditingOverlay && _activeOverlay1 != null)
-                ApplyOverlayBox(1, _activeOverlay1, true);
+            if (_isEditingOverlay && _activeOverlay[0] != null)
+                ApplyOverlayBox(0, _activeOverlay[0], true);
         }
 
         // ---- Clip-scoped Edit-mode preview (Play in Edit mode = this clip's Ken Burns only) ----
@@ -1772,7 +1752,7 @@ namespace ModernImageViewer.VideoDirector.Models
         private void OnOverlayBoxDragged(object sender, (int slot, Views.BoxGrab grab, double dx, double dy) e)
         {
             if (_mode != EditorMode.Arrange) return;
-            var overlay = e.slot == 1 ? _activeOverlay1 : _activeOverlay2;
+            var overlay = _activeOverlay[e.slot];
             if (overlay == null) return;
             double vpW = _playerControl.ActualWidth, vpH = _playerControl.ActualHeight;
             if (vpW <= 0 || vpH <= 0) return;
@@ -1788,7 +1768,7 @@ namespace ModernImageViewer.VideoDirector.Models
 
             // Edge/corner grab = reshape. Work in pixels: move only the grabbed edges, keep the
             // opposite edges anchored, then convert back to independent width/height + centre.
-            double aspect = e.slot == 1 ? _overlayAspect1 : _overlayAspect2;
+            double aspect = _overlayAspect[e.slot];
             if (aspect <= 0) return;
             double fitW, fitH;
             if (aspect >= vpW / vpH) { fitW = vpW; fitH = vpW / aspect; }
@@ -1823,7 +1803,7 @@ namespace ModernImageViewer.VideoDirector.Models
         private void OnOverlayBoxWheel(object sender, (int slot, int delta) e)
         {
             if (_mode != EditorMode.Arrange) return;
-            var overlay = e.slot == 1 ? _activeOverlay1 : _activeOverlay2;
+            var overlay = _activeOverlay[e.slot];
             if (overlay == null) return;
             // Wheel = uniform resize: scales both dimensions, preserving the box's current shape.
             double f = e.delta > 0 ? 1.08 : 1.0 / 1.08;
