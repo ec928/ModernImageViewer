@@ -31,6 +31,8 @@ namespace ModernImageViewer.VideoDirector.Views
         private CinematicOperation _dragClip;
         private bool _dragIsSpine;
         private double _dragGrabOffsetSec;
+        private double _dragCursorX;      // live cursor x, for the spine ghost
+        private int _dragInsertIndex;     // where the ghost would drop
 
         public VideoDirectorControl()
         {
@@ -130,15 +132,46 @@ namespace ModernImageViewer.VideoDirector.Views
             Canvas.SetLeft(ruler, 0); Canvas.SetTop(ruler, 0);
             TimelineBar.Children.Add(ruler);
 
-            for (int i = 0; i < ViewModel.TimelineNodes.Count; i++)
+            var spineColor = Microsoft.UI.ColorHelper.FromArgb(0xFF, 0x3B, 0x82, 0xF6);
+            var transColor = Microsoft.UI.ColorHelper.FromArgb(0xFF, 0x64, 0x74, 0x8B);
+            bool spineGhost = _timelineMovingClip && _dragIsSpine && _dragClip != null;
+
+            if (!spineGhost)
             {
-                var clip = ViewModel.TimelineNodes[i];
-                double x = ViewModel.GetSpineClipStart(i).TotalSeconds * _timelinePxPerSec;
-                double cw = clip.OpDuration.TotalSeconds * _timelinePxPerSec;
-                AddTimelineBlock(x, RowSpineY, cw, BlockH, Microsoft.UI.ColorHelper.FromArgb(0xFF, 0x3B, 0x82, 0xF6), clip); // spine
-                double tw = clip.TransitionDuration.TotalSeconds * _timelinePxPerSec;
-                if (tw > 0.5)
-                    AddTimelineBlock(x + cw, RowSpineY, tw, BlockH, Microsoft.UI.ColorHelper.FromArgb(0xFF, 0x64, 0x74, 0x8B)); // transition
+                for (int i = 0; i < ViewModel.TimelineNodes.Count; i++)
+                {
+                    var clip = ViewModel.TimelineNodes[i];
+                    double x = ViewModel.GetSpineClipStart(i).TotalSeconds * _timelinePxPerSec;
+                    double cw = clip.OpDuration.TotalSeconds * _timelinePxPerSec;
+                    AddTimelineBlock(x, RowSpineY, cw, BlockH, spineColor, clip);
+                    double tw = clip.TransitionDuration.TotalSeconds * _timelinePxPerSec;
+                    if (tw > 0.5)
+                        AddTimelineBlock(x + cw, RowSpineY, tw, BlockH, transColor);
+                }
+            }
+            else
+            {
+                // Spine is order-based, so there is no continuous position to write. Instead the
+                // other clips reflow with a gap at the insertion point, and the grabbed clip is
+                // drawn as a free ghost under the cursor. The order only changes on release.
+                double dragW = _dragClip.OpDuration.TotalSeconds * _timelinePxPerSec;
+                double x = 0;
+                int drawn = 0;
+                foreach (var clip in ViewModel.TimelineNodes)
+                {
+                    if (clip == _dragClip) continue;
+                    if (drawn == _dragInsertIndex) x += dragW;   // open the drop gap
+                    double cw = clip.OpDuration.TotalSeconds * _timelinePxPerSec;
+                    AddTimelineBlock(x, RowSpineY, cw, BlockH, spineColor, clip);
+                    double tw = clip.TransitionDuration.TotalSeconds * _timelinePxPerSec;
+                    if (tw > 0.5) AddTimelineBlock(x + cw, RowSpineY, tw, BlockH, transColor);
+                    x += cw + tw;
+                    drawn++;
+                }
+
+                double ghostX = _dragCursorX - _dragGrabOffsetSec * _timelinePxPerSec;
+                AddTimelineBlock(ghostX, RowSpineY, dragW, BlockH,
+                    Microsoft.UI.ColorHelper.FromArgb(0xCC, 0x93, 0xC5, 0xFD), _dragClip); // ghost
             }
 
             // One row per upper track (§7B) — same loop for 1 track or 3.
@@ -163,6 +196,33 @@ namespace ModernImageViewer.VideoDirector.Views
             _playheadKnob.Points.Add(new Windows.Foundation.Point(5.5, 9));
             TimelineBar.Children.Add(_playheadKnob);
             UpdatePlayhead();
+            BuildTrackLabels();
+        }
+
+        // "Track 1".."Track 4" in the left gutter, vertically aligned to each row.
+        private void BuildTrackLabels()
+        {
+            if (TimelineLabels == null) return;
+            TimelineLabels.Children.Clear();
+            TimelineLabels.Height = TimelineBarHeight;
+
+            AddTrackLabel("Track 1", RowSpineY);
+            for (int ti = 0; ti < ViewModel.OverlayTracks.Count; ti++)
+                AddTrackLabel("Track " + (ti + 2), RowOvY + ti * RowPitch);
+        }
+
+        private void AddTrackLabel(string text, double y)
+        {
+            var label = new TextBlock
+            {
+                Text = text,
+                FontSize = 10,
+                IsHitTestVisible = false,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray)
+            };
+            Canvas.SetLeft(label, 4);
+            Canvas.SetTop(label, y + 1);
+            TimelineLabels.Children.Add(label);
         }
 
         private void AddTimelineBlock(double x, double y, double width, double height, Windows.UI.Color color, CinematicOperation clip = null)
@@ -233,20 +293,121 @@ namespace ModernImageViewer.VideoDirector.Views
             if (!_timelineMovingClip && Math.Abs(p.X - _timelinePressPoint.X) < 4) return;
             _timelineMovingClip = true;
 
-            // Both move live: overlay repositions in time, spine reorders as the cursor crosses slots.
-            if (_dragIsSpine) ReorderSpineTo(_dragClip, p.X);
+            if (_dragIsSpine)
+            {
+                // Ghost follows the cursor; the order itself is committed on release.
+                _dragCursorX = p.X;
+                _dragInsertIndex = ComputeSpineInsertIndex(p.X);
+                BuildTimelineBar();
+            }
             else MoveOverlayTo(p.X);
+        }
+
+        // Insertion index = how many OTHER spine clips have their centre left of the cursor,
+        // measured in the layout with the dragged clip removed. Monotonic, so it can't oscillate.
+        private int ComputeSpineInsertIndex(double cursorX)
+        {
+            int insert = 0;
+            double x = 0;
+            foreach (var clip in ViewModel.TimelineNodes)
+            {
+                if (clip == _dragClip) continue;
+                double w = clip.OpDuration.TotalSeconds * _timelinePxPerSec;
+                if (x + w / 2 < cursorX) insert++;
+                x += w + clip.TransitionDuration.TotalSeconds * _timelinePxPerSec;
+            }
+            return insert;
         }
 
         private void TimelineBar_PointerReleased(object sender, PointerRoutedEventArgs e)
         {
             TimelineBar.ReleasePointerCapture(e.Pointer);
-            if (_timelinePressed && _dragClip != null && !_timelineMovingClip)
-                SelectClip(_dragClip, _dragIsSpine); // a tap (no drag) selects
+            if (_timelinePressed && _dragClip != null)
+            {
+                if (!_timelineMovingClip) SelectClip(_dragClip, _dragIsSpine); // a tap selects
+                else if (_dragIsSpine)
+                {
+                    // Commit the reorder exactly once, at the ghost's drop position.
+                    int cur = ViewModel.TimelineNodes.IndexOf(_dragClip);
+                    int target = Math.Clamp(_dragInsertIndex, 0, ViewModel.TimelineNodes.Count - 1);
+                    if (cur >= 0 && target != cur) ViewModel.TimelineNodes.Move(cur, target);
+                }
+            }
             _timelinePressed = false;
             _timelineScrubbing = false;
             _timelineMovingClip = false;
             _dragClip = null;
+            BuildTimelineBar(); // clear the ghost / settle the layout
+        }
+
+        // Right-click a block for Duplicate / Remove (re-homed from the old dock tile menus).
+        private void TimelineBar_RightTapped(object sender, Microsoft.UI.Xaml.Input.RightTappedRoutedEventArgs e)
+        {
+            var p = e.GetPosition(TimelineBar);
+            var hit = HitClip(p);
+            if (hit.clip == null) return;
+
+            SelectClip(hit.clip, hit.isSpine);
+
+            var flyout = new MenuFlyout();
+            var dup = new MenuFlyoutItem { Text = "Duplicate" };
+            dup.Click += (s, ev) => DuplicateClip(hit.clip, hit.isSpine);
+            var del = new MenuFlyoutItem { Text = "Remove" };
+            del.Click += (s, ev) => RemoveClip(hit.clip, hit.isSpine);
+            flyout.Items.Add(dup);
+            flyout.Items.Add(del);
+            flyout.ShowAt(TimelineBar, new Microsoft.UI.Xaml.Controls.Primitives.FlyoutShowOptions { Position = p });
+            e.Handled = true;
+        }
+
+        private void DuplicateClip(CinematicOperation clip, bool isSpine)
+        {
+            var copy = new CinematicOperation
+            {
+                FilePath = clip.FilePath,
+                VideoStartTime = clip.VideoStartTime,
+                VideoEndTime = clip.VideoEndTime,
+                OpDuration = clip.OpDuration,
+                CurveProfile = clip.CurveProfile,
+                StartMark = new SpatialMark(clip.StartMark.Scale, clip.StartMark.X, clip.StartMark.Y),
+                EndMark = new SpatialMark(clip.EndMark.Scale, clip.EndMark.X, clip.EndMark.Y),
+                TransitionDuration = clip.TransitionDuration,
+                TransitionStyle = clip.TransitionStyle,
+                Opacity = clip.Opacity,
+                PlacementWidth = clip.PlacementWidth,
+                PlacementHeight = clip.PlacementHeight,
+                PlacementCenterX = clip.PlacementCenterX,
+                PlacementCenterY = clip.PlacementCenterY,
+                Thumbnail = clip.Thumbnail
+            };
+
+            if (isSpine)
+            {
+                int i = ViewModel.TimelineNodes.IndexOf(clip);
+                if (i >= 0) ViewModel.TimelineNodes.Insert(i + 1, copy);
+            }
+            else
+            {
+                var track = TrackOf(clip);
+                int i = track?.Clips.IndexOf(clip) ?? -1;
+                if (i < 0) return;
+                copy.StartTime = clip.StartTime + clip.OpDuration; // place right after the original
+                track.Clips.Insert(i + 1, copy);
+            }
+        }
+
+        private void RemoveClip(CinematicOperation clip, bool isSpine)
+        {
+            if (isSpine)
+            {
+                ViewModel.TimelineNodes.Remove(clip);
+                if (ViewModel.SelectedTimelineNode == clip) ViewModel.SelectedTimelineNode = null;
+            }
+            else
+            {
+                TrackOf(clip)?.Clips.Remove(clip);
+                if (ViewModel.SelectedOverlay == clip) ViewModel.SelectedOverlay = null;
+            }
         }
 
         // Map x -> story time and seek the composite (spine frame + active overlays).
@@ -310,16 +471,6 @@ namespace ModernImageViewer.VideoDirector.Views
             BuildTimelineBar();
         }
 
-        // Spine drag = reorder (order-based, gapless): drop onto whichever slot x falls in.
-        private void ReorderSpineTo(CinematicOperation clip, double x)
-        {
-            if (_timelinePxPerSec <= 0) return;
-            int cur = ViewModel.TimelineNodes.IndexOf(clip);
-            if (cur < 0) return;
-            var t = TimeSpan.FromSeconds(Math.Max(0, x / _timelinePxPerSec));
-            int target = Math.Clamp(ViewModel.GetTimelineIndexForStoryTime(t), 0, ViewModel.TimelineNodes.Count - 1);
-            if (target != cur) ViewModel.TimelineNodes.Move(cur, target);
-        }
 
         private void UpdatePlayhead()
         {

@@ -301,52 +301,25 @@
                 Padding="8,6"
                 AllowDrop="True" DragOver="OverlaySection_DragOver" Drop="OverlaySection_Drop">
             <StackPanel Spacing="4">
-                <!-- Proportional timeline + playhead (§7E/F). Activity view: spine (top) + overlay
-                     blocks (below) drawn to scale on one shared time axis; the playhead tracks the
-                     story position and (next) scrubs. Laid out in code (TimelineBar_*). -->
+                <!-- Proportional timeline + playhead (§7E/F). Activity view: spine (top row) +
+                     one row per upper track, drawn to scale on one shared time axis, with the
+                     playhead tracking story position. Track labels sit in a fixed-width gutter on
+                     the left; the Canvas keeps x=0 == time 0. Laid out in code (TimelineBar_*). -->
                 <Border Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" CornerRadius="4">
-                    <Canvas x:Name="TimelineBar" Height="52" HorizontalAlignment="Stretch"
-                            Background="Transparent" SizeChanged="TimelineBar_SizeChanged"
-                            PointerPressed="TimelineBar_PointerPressed"
-                            PointerMoved="TimelineBar_PointerMoved"
-                            PointerReleased="TimelineBar_PointerReleased" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="58" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Canvas x:Name="TimelineLabels" Grid.Column="0" Background="Transparent" IsHitTestVisible="False" />
+                        <Canvas x:Name="TimelineBar" Grid.Column="1" Height="52" HorizontalAlignment="Stretch"
+                                Background="Transparent" SizeChanged="TimelineBar_SizeChanged"
+                                PointerPressed="TimelineBar_PointerPressed"
+                                PointerMoved="TimelineBar_PointerMoved"
+                                PointerReleased="TimelineBar_PointerReleased"
+                                RightTapped="TimelineBar_RightTapped" />
+                    </Grid>
                 </Border>
-
-                <!-- Track legend + add. The proportional timeline above is now the single track
-                     display (replaces the old equal-tile lanes); click a block to select a clip. -->
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" Margin="0,0,14,0">
-                        <Rectangle Width="10" Height="10" RadiusX="2" RadiusY="2" Fill="#3B82F6" />
-                        <TextBlock Text="Track 1" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    </StackPanel>
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-                        <Rectangle Width="10" Height="10" RadiusX="2" RadiusY="2" Fill="#F59E0B" />
-                        <TextBlock Text="Track 2" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    </StackPanel>
-                    <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6">
-                        <Button Click="AddOverlayTrack_Click" Padding="8,2"
-                                IsEnabled="{Binding CanAddOverlayTrack}"
-                                ToolTipService.ToolTip="Add another upper track (max 3 overlay tracks)">
-                            <StackPanel Orientation="Horizontal" Spacing="4">
-                                <FontIcon Glyph="&#xE710;" FontSize="11" />
-                                <TextBlock Text="Add Track" FontSize="11" />
-                            </StackPanel>
-                        </Button>
-                        <Button Click="AddOverlay_Click" Padding="8,2"
-                                ToolTipService.ToolTip="Add an overlay clip to the first upper track">
-                            <StackPanel Orientation="Horizontal" Spacing="4">
-                                <FontIcon Glyph="&#xE710;" FontSize="11" />
-                                <TextBlock Text="Add Overlay" FontSize="11" />
-                            </StackPanel>
-                        </Button>
-                    </StackPanel>
-                </Grid>
             </StackPanel>
         </Border>
     </Grid>

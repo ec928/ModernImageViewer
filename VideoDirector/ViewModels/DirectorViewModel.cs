@@ -330,7 +330,14 @@ namespace ModernImageViewer.VideoDirector.ViewModels
         public DirectorViewModel()
         {
             TimelineNodes.CollectionChanged += TimelineNodes_CollectionChanged;
-            AddOverlayTrack(); // always at least one upper track
+            EnsureOverlayTracks(); // always the full set of upper tracks (Track 2..4)
+        }
+
+        // The track count is fixed: 1 spine + MaxOverlayTracks upper tracks are always present,
+        // so the timeline always shows Track 1..4 and nothing has to be "added".
+        public void EnsureOverlayTracks()
+        {
+            while (OverlayTracks.Count < MaxOverlayTracks) AddOverlayTrack();
         }
 
         private void TimelineNodes_CollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
@@ -589,7 +596,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
                     _ = LoadOverlayThumbnailAsync(clip, dispatcher);
                 }
             }
-            if (OverlayTracks.Count == 0) AddOverlayTrack();
+            EnsureOverlayTracks(); // top up so the timeline always shows the full Track 1..4 set
             OnPropertyChanged(nameof(CanAddOverlayTrack));
         }
 
@@ -638,7 +645,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
         {
             TimelineNodes.Clear();
             OverlayTracks.Clear();
-            AddOverlayTrack(); // keep at least one upper track
+            EnsureOverlayTracks();
         }
     }
 }

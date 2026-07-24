@@ -1680,7 +1680,10 @@ namespace ModernImageViewer.VideoDirector.Models
                 transform.ScaleY = overlay.StartMark.Scale;
                 transform.TranslateX = overlay.StartMark.X;
                 transform.TranslateY = overlay.StartMark.Y;
-                CacheOverlayAspect(1, player);
+                // Must cache into the SAME index the edit surface uses (0) — caching elsewhere
+                // leaves a stale aspect here, which sizes the box to the wrong shape and makes
+                // UniformToFill crop the clip (e.g. a portrait clip shown as a cropped landscape).
+                CacheOverlayAspect(0, player);
                 ApplyOverlayBox(0, overlay, true); // full-screen for content framing
                 grid.Opacity = 1.0;
                 // Hide the Track 1 base so ONLY this overlay clip is shown while editing it.
