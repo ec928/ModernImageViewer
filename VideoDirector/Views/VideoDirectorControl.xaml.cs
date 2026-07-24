@@ -504,6 +504,16 @@ namespace ModernImageViewer.VideoDirector.Views
             _contextIsSpine = hit.isSpine;
         }
 
+        private void TimelineSplit_Click(object sender, RoutedEventArgs e)
+        {
+            if (_contextClip != null) SplitClip(_contextClip, _contextIsSpine);
+        }
+
+        private void TimelineSnapshot_Click(object sender, RoutedEventArgs e)
+        {
+            if (_contextClip != null) SnapshotClip(_contextClip, _contextIsSpine);
+        }
+
         private void TimelineDuplicate_Click(object sender, RoutedEventArgs e)
         {
             if (_contextClip != null) DuplicateClip(_contextClip, _contextIsSpine);
@@ -514,23 +524,98 @@ namespace ModernImageViewer.VideoDirector.Views
             if (_contextClip != null) RemoveClip(_contextClip, _contextIsSpine);
         }
 
+        // A full clone of a clip's editable state. SourceDuration and PlaybackSpeed must precede
+        // the trim: the trim setters clamp against the source length and derive OpDuration from speed.
+        private static CinematicOperation CloneClip(CinematicOperation clip) => new CinematicOperation
+        {
+            FilePath = clip.FilePath,
+            SourceDuration = clip.SourceDuration,
+            SourceAspect = clip.SourceAspect,
+            PlaybackSpeed = clip.PlaybackSpeed,
+            VideoStartTime = clip.VideoStartTime,
+            VideoEndTime = clip.VideoEndTime,
+            CurveProfile = clip.CurveProfile,
+            StartMark = new SpatialMark(clip.StartMark.Scale, clip.StartMark.X, clip.StartMark.Y),
+            EndMark = new SpatialMark(clip.EndMark.Scale, clip.EndMark.X, clip.EndMark.Y),
+            TransitionDuration = clip.TransitionDuration,
+            TransitionStyle = clip.TransitionStyle,
+            Opacity = clip.Opacity,
+            PlacementWidth = clip.PlacementWidth,
+            PlacementHeight = clip.PlacementHeight,
+            PlacementCenterX = clip.PlacementCenterX,
+            PlacementCenterY = clip.PlacementCenterY,
+            Thumbnail = clip.Thumbnail
+        };
+
+        // Insert a new clip right after `after` on the same track (spine order, or the overlay
+        // track), placing overlays at the requested start time clamped to a free slot.
+        private void InsertAfter(CinematicOperation after, bool isSpine, CinematicOperation toInsert, double overlayStartSec)
+        {
+            if (isSpine)
+            {
+                int i = ViewModel.TimelineNodes.IndexOf(after);
+                if (i >= 0) ViewModel.TimelineNodes.Insert(i + 1, toInsert);
+            }
+            else
+            {
+                var track = TrackOf(after);
+                int i = track?.Clips.IndexOf(after) ?? -1;
+                if (i < 0) return;
+                toInsert.StartTime = TimeSpan.FromSeconds(
+                    track.ClampToFreeSlot(null, overlayStartSec, toInsert.OpDuration.TotalSeconds));
+                track.Clips.Insert(i + 1, toInsert);
+            }
+            ViewModel.RecordIfChanged();
+            BuildTimelineBar();
+            _playbackEngine?.RefreshComposite();
+        }
+
         private void DuplicateClip(CinematicOperation clip, bool isSpine)
         {
-            var copy = new CinematicOperation
+            var copy = CloneClip(clip);
+            InsertAfter(clip, isSpine, copy, clip.StartTime.TotalSeconds + clip.OpDuration.TotalSeconds);
+        }
+
+        // Cut the clip in two at the playhead (or its midpoint if the playhead isn't inside it).
+        private void SplitClip(CinematicOperation clip, bool isSpine)
+        {
+            double startS = clip.VideoStartTime.TotalSeconds;
+            double endS = clip.VideoEndTime.TotalSeconds;
+            double window = endS - startS;
+            if (window < 0.4) return; // too short to split into two usable halves
+
+            double cutS = startS + SplitFraction(clip, isSpine) * window;
+
+            var second = CloneClip(clip);
+            clip.VideoEndTime = TimeSpan.FromSeconds(cutS);      // first half ends at the cut
+            second.VideoStartTime = TimeSpan.FromSeconds(cutS);  // second half starts at the cut
+            second.VideoEndTime = TimeSpan.FromSeconds(endS);
+
+            // Second half sits immediately after the (now shorter) first half.
+            InsertAfter(clip, isSpine, second, clip.StartTime.TotalSeconds + clip.OpDuration.TotalSeconds);
+        }
+
+        // Freeze the current frame as a 10s still with a slow Ken Burns push-in — a one-click
+        // alternative to duplicate-then-set-speed-0-and-marks.
+        private void SnapshotClip(CinematicOperation clip, bool isSpine)
+        {
+            double startS = clip.VideoStartTime.TotalSeconds;
+            double window = clip.VideoEndTime.TotalSeconds - startS;
+            double frozen = startS + SplitFraction(clip, isSpine) * window;
+            double srcLen = clip.SourceDuration.TotalSeconds > 0 ? clip.SourceDuration.TotalSeconds : frozen + 1;
+            frozen = Math.Clamp(frozen, 0, Math.Max(0, srcLen - 0.2));
+
+            var snap = new CinematicOperation
             {
                 FilePath = clip.FilePath,
-                // SourceDuration and PlaybackSpeed must precede the trim: the trim setters clamp
-                // against the source length and derive OpDuration from the speed.
                 SourceDuration = clip.SourceDuration,
                 SourceAspect = clip.SourceAspect,
-                PlaybackSpeed = clip.PlaybackSpeed,
-                VideoStartTime = clip.VideoStartTime,
-                VideoEndTime = clip.VideoEndTime,
-                CurveProfile = clip.CurveProfile,
-                StartMark = new SpatialMark(clip.StartMark.Scale, clip.StartMark.X, clip.StartMark.Y),
-                EndMark = new SpatialMark(clip.EndMark.Scale, clip.EndMark.X, clip.EndMark.Y),
-                TransitionDuration = clip.TransitionDuration,
-                TransitionStyle = clip.TransitionStyle,
+                PlaybackSpeed = 0,   // still — set before OpDuration so 10s is a hold time, not a re-trim
+                VideoStartTime = TimeSpan.FromSeconds(frozen),
+                VideoEndTime = TimeSpan.FromSeconds(Math.Min(srcLen, frozen + 0.1)),
+                OpDuration = TimeSpan.FromSeconds(10),
+                StartMark = new SpatialMark(1.0f, 0, 0),
+                EndMark = new SpatialMark(1.25f, 0, 0), // default push-in
                 Opacity = clip.Opacity,
                 PlacementWidth = clip.PlacementWidth,
                 PlacementHeight = clip.PlacementHeight,
@@ -539,20 +624,21 @@ namespace ModernImageViewer.VideoDirector.Views
                 Thumbnail = clip.Thumbnail
             };
 
-            if (isSpine)
-            {
-                int i = ViewModel.TimelineNodes.IndexOf(clip);
-                if (i >= 0) ViewModel.TimelineNodes.Insert(i + 1, copy);
-            }
-            else
-            {
-                var track = TrackOf(clip);
-                int i = track?.Clips.IndexOf(clip) ?? -1;
-                if (i < 0) return;
-                copy.StartTime = clip.StartTime + clip.OpDuration; // place right after the original
-                track.Clips.Insert(i + 1, copy);
-            }
-            ViewModel.RecordIfChanged();
+            InsertAfter(clip, isSpine, snap, clip.StartTime.TotalSeconds + clip.OpDuration.TotalSeconds);
+        }
+
+        // Where to cut/freeze within a clip's source window, as a 0..1 fraction: the playhead if it
+        // falls inside this clip, otherwise the midpoint. Kept off the very edges so no sliver.
+        private double SplitFraction(CinematicOperation clip, bool isSpine)
+        {
+            double op = clip.OpDuration.TotalSeconds;
+            if (op <= 0) return 0.5;
+            double clipStartStory = isSpine
+                ? ViewModel.GetSpineClipStart(ViewModel.TimelineNodes.IndexOf(clip)).TotalSeconds
+                : clip.StartTime.TotalSeconds;
+            double into = ViewModel.CurrentStoryTime.TotalSeconds - clipStartStory;
+            double f = (into > 0 && into < op) ? into / op : 0.5;
+            return Math.Clamp(f, 0.05, 0.95);
         }
 
         private void RemoveClip(CinematicOperation clip, bool isSpine)

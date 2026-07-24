@@ -431,6 +431,10 @@
                                  pointer event (which never fired reliably). -->
                             <Canvas.ContextFlyout>
                                 <MenuFlyout Opening="TimelineContextMenu_Opening">
+                                    <MenuFlyoutItem x:Name="TimelineSplitItem" Text="Split at playhead" Click="TimelineSplit_Click" />
+                                    <MenuFlyoutItem x:Name="TimelineSnapshotItem" Text="Snapshot (10s still)" Click="TimelineSnapshot_Click"
+                                                    ToolTipService.ToolTip="Freeze this frame as a 10s still with a slow Ken Burns push-in" />
+                                    <MenuFlyoutSeparator />
                                     <MenuFlyoutItem x:Name="TimelineDuplicateItem" Text="Duplicate" Click="TimelineDuplicate_Click" />
                                     <MenuFlyoutItem x:Name="TimelineRemoveItem" Text="Remove" Click="TimelineRemove_Click" />
                                 </MenuFlyout>
