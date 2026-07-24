@@ -33,6 +33,8 @@ namespace ModernImageViewer.VideoDirector.Models
         {
             public ExportOutcome Outcome { get; init; }
             public string Message { get; init; } = string.Empty;
+            // Clips left out of the render because their source file was missing.
+            public List<string> SkippedFiles { get; init; } = new();
         }
 
         // Create a trimmed MediaClip from a clip model — shared by spine and overlays. Returns null
@@ -72,7 +74,7 @@ namespace ModernImageViewer.VideoDirector.Models
         // per overlay track. Overlays within a track never overlap in time (enforced on add/move),
         // which is exactly the constraint MediaOverlayLayer requires.
         public async Task<MediaComposition> BuildCompositionAsync(
-            IEnumerable<CinematicOperation> spine, IEnumerable<OverlayTrack> overlayTracks)
+            IEnumerable<CinematicOperation> spine, IEnumerable<OverlayTrack> overlayTracks, List<string> skipped)
         {
             var composition = new MediaComposition();
 
@@ -81,6 +83,7 @@ namespace ModernImageViewer.VideoDirector.Models
                 if (op == null || string.IsNullOrWhiteSpace(op.FilePath)) continue;
                 var clip = await CreateClipAsync(op);
                 if (clip != null) composition.Clips.Add(clip);
+                else skipped?.Add(System.IO.Path.GetFileName(op.FilePath));
             }
 
             if (overlayTracks != null)
@@ -94,7 +97,7 @@ namespace ModernImageViewer.VideoDirector.Models
                     {
                         if (op == null || string.IsNullOrWhiteSpace(op.FilePath)) continue;
                         var clip = await CreateClipAsync(op);
-                        if (clip == null) continue;
+                        if (clip == null) { skipped?.Add(System.IO.Path.GetFileName(op.FilePath)); continue; }
 
                         double boxW = Math.Clamp(op.PlacementWidth, 0.01, 1.0) * OutputWidth;
                         double boxH = Math.Clamp(op.PlacementHeight, 0.01, 1.0) * OutputHeight;
@@ -123,18 +126,19 @@ namespace ModernImageViewer.VideoDirector.Models
             IEnumerable<CinematicOperation> spine, IEnumerable<OverlayTrack> overlayTracks,
             StorageFile output, IProgress<double> progress)
         {
+            var skipped = new List<string>();
             MediaComposition composition;
             try
             {
-                composition = await BuildCompositionAsync(spine, overlayTracks);
+                composition = await BuildCompositionAsync(spine, overlayTracks, skipped);
             }
             catch (Exception ex)
             {
-                return new ExportResult { Outcome = ExportOutcome.Failed, Message = ex.Message };
+                return new ExportResult { Outcome = ExportOutcome.Failed, Message = ex.Message, SkippedFiles = skipped };
             }
 
             if (composition.Clips.Count == 0)
-                return new ExportResult { Outcome = ExportOutcome.NothingToRender, Message = "No renderable Track 1 clips." };
+                return new ExportResult { Outcome = ExportOutcome.NothingToRender, Message = "No renderable Track 1 clips.", SkippedFiles = skipped };
 
             var profile = MediaEncodingProfile.CreateMp4(VideoEncodingQuality.HD1080p);
 
@@ -146,12 +150,12 @@ namespace ModernImageViewer.VideoDirector.Models
 
                 var reason = await render;
                 return reason == TranscodeFailureReason.None
-                    ? new ExportResult { Outcome = ExportOutcome.Success, Message = output.Path }
-                    : new ExportResult { Outcome = ExportOutcome.Failed, Message = reason.ToString() };
+                    ? new ExportResult { Outcome = ExportOutcome.Success, Message = output.Path, SkippedFiles = skipped }
+                    : new ExportResult { Outcome = ExportOutcome.Failed, Message = reason.ToString(), SkippedFiles = skipped };
             }
             catch (Exception ex)
             {
-                return new ExportResult { Outcome = ExportOutcome.Failed, Message = ex.Message };
+                return new ExportResult { Outcome = ExportOutcome.Failed, Message = ex.Message, SkippedFiles = skipped };
             }
         }
     }

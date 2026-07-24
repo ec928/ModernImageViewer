@@ -1010,7 +1010,10 @@ namespace ModernImageViewer.VideoDirector.Views
             switch (result.Outcome)
             {
                 case Models.VideoExporter.ExportOutcome.Success:
-                    await ShowExportMessage("Export complete", $"Saved to:\n{result.Message}");
+                    var msg = $"Saved to:\n{result.Message}";
+                    if (result.SkippedFiles.Count > 0)
+                        msg += $"\n\nSkipped {result.SkippedFiles.Count} clip(s) with missing files:\n• " + string.Join("\n• ", result.SkippedFiles);
+                    await ShowExportMessage("Export complete", msg);
                     break;
                 case Models.VideoExporter.ExportOutcome.NothingToRender:
                     await ShowExportMessage("Nothing to export", result.Message);
