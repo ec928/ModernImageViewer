@@ -1851,6 +1851,10 @@ namespace ModernImageViewer.VideoDirector.Models
         private void OnOverlayBoxDragged(object sender, (int slot, Views.BoxGrab grab, double dx, double dy) e)
         {
             if (_mode != EditorMode.Arrange) return;
+            // §7A invariant: never manipulate a live video surface. While playing, the PiP IS the
+            // video surface (handles are hidden for the same reason) — dragging it is what could
+            // still turn it green. Arrange when paused; playback is for watching.
+            if (_isAnimating) return;
             var overlay = _activeOverlay[e.slot];
             if (overlay == null) return;
             double vpW = _playerControl.ActualWidth, vpH = _playerControl.ActualHeight;
@@ -1902,6 +1906,7 @@ namespace ModernImageViewer.VideoDirector.Models
         private void OnOverlayBoxWheel(object sender, (int slot, int delta) e)
         {
             if (_mode != EditorMode.Arrange) return;
+            if (_isAnimating) return;   // same invariant: no resizing a live video surface
             var overlay = _activeOverlay[e.slot];
             if (overlay == null) return;
             // Wheel = uniform resize: scales both dimensions, preserving the box's current shape.
