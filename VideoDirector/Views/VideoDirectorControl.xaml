@@ -46,15 +46,20 @@
                     Background="{x:Bind ViewModel.IsEditMode, Mode=OneWay, Converter={StaticResource BoolToBadgeBrushConverter}}">
                 <TextBlock Text="{x:Bind ViewModel.ModeLabel, Mode=OneWay}" Foreground="White" FontSize="12" FontWeight="SemiBold" />
             </Border>
-            <AppBarSeparator />
-            <!-- Global actions -->
-            <Border CornerRadius="4" Background="#99000000">
-                <CommandBar DefaultLabelPosition="Collapsed" Background="Transparent" Padding="0"
-                            OverflowButtonVisibility="Collapsed">
-                    <AppBarButton Icon="Save" Label="Save" Click="Save_Click" ToolTipService.ToolTip="Save project" />
-                    <AppBarButton Icon="OpenFile" Label="Load" Click="Load_Click" ToolTipService.ToolTip="Load project" />
-                    <AppBarButton Icon="Delete" Label="Clear" Click="Clear_Click" ToolTipService.ToolTip="Clear project" />
-                </CommandBar>
+            <!-- Global actions: plain icon buttons (a CommandBar fights a small right-aligned
+                 group). Save / Load / Clear — project scope only. -->
+            <Border CornerRadius="4" Background="#99000000" VerticalAlignment="Center" Padding="3">
+                <StackPanel Orientation="Horizontal" Spacing="2">
+                    <Button Click="Save_Click" Width="34" Height="34" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="4" ToolTipService.ToolTip="Save project">
+                        <SymbolIcon Symbol="Save" Foreground="White" />
+                    </Button>
+                    <Button Click="Load_Click" Width="34" Height="34" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="4" ToolTipService.ToolTip="Load project">
+                        <SymbolIcon Symbol="OpenFile" Foreground="White" />
+                    </Button>
+                    <Button Click="Clear_Click" Width="34" Height="34" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="4" ToolTipService.ToolTip="Clear project">
+                        <SymbolIcon Symbol="Delete" Foreground="White" />
+                    </Button>
+                </StackPanel>
             </Border>
         </StackPanel>
 
