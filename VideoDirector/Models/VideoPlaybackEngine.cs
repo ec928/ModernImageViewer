@@ -1345,7 +1345,7 @@ namespace ModernImageViewer.VideoDirector.Models
                     DetachOverlayVideo(track);
                     v.Still.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
                     v.Still.Source = null;
-                    if (v.Handles != null) v.Handles.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
+                    if (v.Frame != null) v.Frame.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
                     v.Grid.Opacity = 0;
                     break;
 
@@ -1353,34 +1353,22 @@ namespace ModernImageViewer.VideoDirector.Models
                     DetachOverlayVideo(track);              // the invariant
                     v.Still.Source = clip?.Thumbnail;
                     v.Still.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
-                    // The FRAME marks every arrangeable PiP (so you can always see the boxes, even
-                    // with nothing selected); the 8 GRIPS appear only on the selected one, which is
-                    // what was visually noisy. Any PiP stays grabbable — hit-testing is geometric.
-                    if (v.Handles != null)
-                    {
-                        v.Handles.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
-                        SetGripsVisible(v.Handles, clip != null && ReferenceEquals(clip, _viewModel.SelectedClip));
-                    }
+                    // A frame marks every arrangeable PiP. No drawn handles: reshape grab-zones
+                    // are geometric edge/corner bands on the InputLayer, so handles were decoration
+                    // that also made chrome depend on a selection you cannot make while arranging.
+                    if (v.Frame != null) v.Frame.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
                     v.Grid.Opacity = clip?.Opacity ?? 1.0;
                     break;
 
                 case OverlayRender.Video:
                     v.Still.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
-                    if (v.Handles != null) v.Handles.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
+                    if (v.Frame != null) v.Frame.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
                     AttachOverlayVideo(track);
                     v.Grid.Opacity = clip?.Opacity ?? 1.0;
                     break;
             }
         }
 
-        // The chrome container holds a Border (the frame) plus 8 handle Rectangles; this toggles
-        // just the handles, leaving the frame visible.
-        private static void SetGripsVisible(Microsoft.UI.Xaml.Controls.Grid handles, bool visible)
-        {
-            var vis = visible ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
-            foreach (var child in handles.Children)
-                if (child is Microsoft.UI.Xaml.Shapes.Rectangle grip) grip.Visibility = vis;
-        }
 
         // A MediaPlayerElement with no MediaPlayer has no video surface to render at all.
         private void DetachOverlayVideo(int track)

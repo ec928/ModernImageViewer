@@ -27,7 +27,7 @@ namespace ModernImageViewer.VideoDirector.Views
         public Microsoft.UI.Xaml.Controls.MediaPlayerElement Video;
         public Microsoft.UI.Xaml.Controls.Image Still;
         public Microsoft.UI.Xaml.Media.CompositeTransform Transform;
-        public Microsoft.UI.Xaml.Controls.Grid Handles;
+        public Microsoft.UI.Xaml.Controls.Grid Frame;
     }
 
     public sealed partial class DirectorPlayerControl : UserControl
@@ -61,9 +61,9 @@ namespace ModernImageViewer.VideoDirector.Views
 
             OverlayVisuals = new[]
             {
-                new OverlayVisual { Grid = OverlayGrid1, Video = OverlayPlayer1, Still = OverlayImage1, Transform = OverlayTransform1, Handles = OverlayHandles1 },
-                new OverlayVisual { Grid = OverlayGrid2, Video = OverlayPlayer2, Still = OverlayImage2, Transform = OverlayTransform2, Handles = OverlayHandles2 },
-                new OverlayVisual { Grid = OverlayGrid3, Video = OverlayPlayer3, Still = OverlayImage3, Transform = OverlayTransform3, Handles = OverlayHandles3 },
+                new OverlayVisual { Grid = OverlayGrid1, Video = OverlayPlayer1, Still = OverlayImage1, Transform = OverlayTransform1, Frame = OverlayFrame1 },
+                new OverlayVisual { Grid = OverlayGrid2, Video = OverlayPlayer2, Still = OverlayImage2, Transform = OverlayTransform2, Frame = OverlayFrame2 },
+                new OverlayVisual { Grid = OverlayGrid3, Video = OverlayPlayer3, Still = OverlayImage3, Transform = OverlayTransform3, Frame = OverlayFrame3 },
             };
         }
 
