@@ -1989,6 +1989,14 @@ namespace ModernImageViewer.VideoDirector.Models
             // not fire a seek back into the player, so there's no feedback loop.)
             if (_editPlayer?.PlaybackSession != null)
                 _viewModel.CurrentOperationTime = _editPlayer.PlaybackSession.Position;
+
+            // Keep the telemetry HUD live while previewing in Edit — the composite render loop that
+            // normally drives it doesn't run here, so without this it froze until you paused.
+            if ((DateTime.Now - _lastTelemetryUpdate).TotalMilliseconds >= 100)
+            {
+                _lastTelemetryUpdate = DateTime.Now;
+                UpdateTelemetryOverlay(true);
+            }
         }
 
         // ---- Arrange mode: drag / wheel the PiP under the cursor (the hit slot) ----
