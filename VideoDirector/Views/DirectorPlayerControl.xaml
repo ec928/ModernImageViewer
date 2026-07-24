@@ -56,8 +56,12 @@
                 </MediaPlayerElement.RenderTransform>
             </MediaPlayerElement>
             <!-- Still-image proxy for Arrange/scrub (§7A): a plain bitmap reshapes/moves/crops
-                 cleanly where the live video surface goes blank/green. Video shows only at playback. -->
-            <Image x:Name="OverlayImage1" x:FieldModifier="public" Stretch="Uniform" Visibility="Collapsed" />
+                 cleanly where the live video surface goes blank/green. Video shows only at playback.
+                 UniformToFill is correct ONLY because the box is shaped from the clip's real
+                 SourceAspect: the VideosView thumbnail is itself a letterboxed 16:9 image, and
+                 filling crops its bars away so the actual content fills the box (and matches how
+                 the video crop-fills at playback). -->
+            <Image x:Name="OverlayImage1" x:FieldModifier="public" Stretch="UniformToFill" Visibility="Collapsed" />
             <!-- Reshape chrome (Arrange only): outline + 8 drag handles. Visual only — the
                  full-screen InputLayer does the hit-testing, so these never intercept input.
                  Handles sit flush inside the box edges so the box clip doesn't crop them. -->
@@ -83,7 +87,7 @@
                     <CompositeTransform x:Name="OverlayTransform2" x:FieldModifier="public" />
                 </MediaPlayerElement.RenderTransform>
             </MediaPlayerElement>
-            <Image x:Name="OverlayImage2" x:FieldModifier="public" Stretch="Uniform" Visibility="Collapsed" />
+            <Image x:Name="OverlayImage2" x:FieldModifier="public" Stretch="UniformToFill" Visibility="Collapsed" />
             <Grid x:Name="OverlayHandles2" x:FieldModifier="public" IsHitTestVisible="False" Visibility="Collapsed">
                 <Border BorderBrush="#99FFFFFF" BorderThickness="1" />
                 <Rectangle Style="{StaticResource PipHandleStyle}" HorizontalAlignment="Left"   VerticalAlignment="Top" />
@@ -108,7 +112,7 @@
                     <CompositeTransform x:Name="OverlayTransform3" x:FieldModifier="public" />
                 </MediaPlayerElement.RenderTransform>
             </MediaPlayerElement>
-            <Image x:Name="OverlayImage3" x:FieldModifier="public" Stretch="Uniform" Visibility="Collapsed" />
+            <Image x:Name="OverlayImage3" x:FieldModifier="public" Stretch="UniformToFill" Visibility="Collapsed" />
             <Grid x:Name="OverlayHandles3" x:FieldModifier="public" IsHitTestVisible="False" Visibility="Collapsed">
                 <Border BorderBrush="#99FFFFFF" BorderThickness="1" />
                 <Rectangle Style="{StaticResource PipHandleStyle}" HorizontalAlignment="Left"   VerticalAlignment="Top" />
