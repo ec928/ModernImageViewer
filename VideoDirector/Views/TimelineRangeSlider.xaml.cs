@@ -61,6 +61,7 @@ namespace ModernImageViewer.VideoDirector.Views
                 // Zooming is explicit (scroll) so the scale is never secretly a sub-window.
                 if (e.Property == MaximumProperty)
                 {
+                    slider._trimmedView = false;
                     slider._viewStart = 0;
                     slider._viewSpan = Math.Max(0.01, slider.Maximum);
                 }
@@ -72,6 +73,21 @@ namespace ModernImageViewer.VideoDirector.Views
         // so a drag covers fewer seconds per pixel — that's what makes trimming a long source precise.
         private double _viewStart;
         private double _viewSpan;
+
+        // Trimmed view: the scrubber collapses to just [In, Out] and hides the trim handles, so it
+        // acts as a plain playback scrubber for the resulting short clip. Double-click exits it.
+        private bool _trimmedView;
+
+        public void EnterTrimmedView()
+        {
+            double inS = Math.Clamp(TrimStart, 0, Max);
+            double outS = Math.Clamp(TrimEnd, 0, Max);
+            if (outS - inS < 0.05) return; // nothing meaningful to show
+            _trimmedView = true;
+            _viewStart = inS;
+            _viewSpan = outS - inS;
+            UpdateUI();
+        }
 
         private double Max => Math.Max(0.01, Maximum);
 
@@ -130,6 +146,12 @@ namespace ModernImageViewer.VideoDirector.Views
             Canvas.SetLeft(StartThumb, startX);
             Canvas.SetLeft(EndThumb, endX);
             Canvas.SetLeft(PlayheadThumb, posX);
+
+            // In trimmed view the whole track IS the clip, so the In/Out handles are hidden — it's a
+            // plain playback scrubber. The active-range highlight then fills the track.
+            var handleVis = _trimmedView ? Visibility.Collapsed : Visibility.Visible;
+            StartThumb.Visibility = handleVis;
+            EndThumb.Visibility = handleVis;
 
             ActiveTrack.Margin = new Thickness(12 + startRatio * trackWidth, 0, 0, 0);
             ActiveTrack.Width = Math.Max(0, (endRatio - startRatio) * trackWidth);
@@ -249,6 +271,7 @@ namespace ModernImageViewer.VideoDirector.Views
         // Double-click fits the whole source back into view.
         private void RootGrid_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
         {
+            _trimmedView = false; // back to the full source, handles shown, so you can re-trim
             _viewStart = 0;
             _viewSpan = Max;
             UpdateUI();

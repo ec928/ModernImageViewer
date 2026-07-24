@@ -794,18 +794,11 @@ namespace ModernImageViewer.VideoDirector.Views
 
         // Keyframe capture is identical for every track: it grabs the current content framing
         // (the edit-mode transform) onto the selected clip. One handler, whichever track is live.
-        // Set the clip's in/out point to the current playhead position within the source. The
-        // reliable way to trim a long clip regardless of zoom: position the playhead, then set here.
-        private void SetInAtPlayhead_Click(object sender, RoutedEventArgs e)
+        // Collapse the scrubber to just the trimmed range so it plays/scrubs the resulting short
+        // clip like any other clip. Double-clicking the scrubber returns to the full source.
+        private void Trim_Click(object sender, RoutedEventArgs e)
         {
-            if (ViewModel.SelectedClip is CinematicOperation clip)
-                clip.VideoStartTime = TimeSpan.FromSeconds(ViewModel.CurrentOperationTimeSeconds);
-        }
-
-        private void SetOutAtPlayhead_Click(object sender, RoutedEventArgs e)
-        {
-            if (ViewModel.SelectedClip is CinematicOperation clip)
-                clip.VideoEndTime = TimeSpan.FromSeconds(ViewModel.CurrentOperationTimeSeconds);
+            ClipScrubber?.EnterTrimmedView();
         }
 
         private void SetStart_Click(object sender, RoutedEventArgs e)
