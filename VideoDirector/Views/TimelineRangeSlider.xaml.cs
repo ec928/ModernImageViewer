@@ -56,32 +56,15 @@ namespace ModernImageViewer.VideoDirector.Views
         {
             if (d is TimelineRangeSlider slider)
             {
-                // A new clip (Maximum changes) frames the view on the trim region so the In/Out
-                // handles start spread apart, instead of collapsed onto one pixel of a 50-min source.
-                if (e.Property == MaximumProperty) slider.FrameTrim();
+                // A new clip (Maximum changes) shows the WHOLE source: the track spans [0, source],
+                // so the right edge is always the source end and dragging can reach any position.
+                // Zooming is explicit (scroll) so the scale is never secretly a sub-window.
+                if (e.Property == MaximumProperty)
+                {
+                    slider._viewStart = 0;
+                    slider._viewSpan = Math.Max(0.01, slider.Maximum);
+                }
                 if (!slider._isDragging) slider.UpdateUI();
-            }
-        }
-
-        // Default the visible window to the trim [In, Out] with a window of padding on each side
-        // (handles land at ~1/3 and ~2/3), so they're immediately distinguishable. Double-click
-        // still resets to the whole clip. Falls back to full view if the trim isn't a sub-range.
-        private void FrameTrim()
-        {
-            double max = Max;
-            double inS = Math.Clamp(TrimStart, 0, max);
-            double outS = Math.Clamp(TrimEnd, 0, max);
-            double window = outS - inS;
-            if (window > 0 && window < max)
-            {
-                double pad = Math.Max(1.0, window);
-                _viewSpan = Math.Min(max, window + 2 * pad);
-                _viewStart = Math.Clamp(inS - pad, 0, Math.Max(0, max - _viewSpan));
-            }
-            else
-            {
-                _viewStart = 0;
-                _viewSpan = max;
             }
         }
 
