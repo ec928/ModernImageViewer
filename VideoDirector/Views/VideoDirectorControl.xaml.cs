@@ -108,8 +108,11 @@ namespace ModernImageViewer.VideoDirector.Views
         // one shared px=seconds scale (§7E). Scrub on the ruler; drag clips in their rows.
         private const double RulerH = 14, RowSpineY = 16, RowOvY = 34, BlockH = 16, RowPitch = 18;
 
-        // Bar height grows with the number of upper tracks.
-        private double TimelineBarHeight => RowOvY + Math.Max(1, ViewModel.OverlayTracks.Count) * RowPitch + 2;
+        // Bar height grows with the number of upper tracks. The last row is BlockH tall starting at
+        // (count-1)*RowPitch, so allow for that plus a small bottom margin — otherwise the bottom
+        // track gets clipped by a few pixels.
+        private double TimelineBarHeight =>
+            RowOvY + (Math.Max(1, ViewModel.OverlayTracks.Count) - 1) * RowPitch + BlockH + 6;
 
         private void BuildTimelineBar()
         {
@@ -314,7 +317,7 @@ namespace ModernImageViewer.VideoDirector.Views
                 _dragInsertIndex = ComputeSpineInsertIndex(p.X);
                 BuildTimelineBar();
             }
-            else MoveOverlayTo(p.X);
+            else MoveOverlayTo(p);   // x = time, y = which track
         }
 
         // Insertion index = how many OTHER spine clips have their centre left of the cursor,
@@ -487,15 +490,55 @@ namespace ModernImageViewer.VideoDirector.Views
             else ViewModel.SelectedOverlay = clip; // PropertyChanged enters overlay edit
         }
 
-        // Overlay drag = free reposition in time (set StartTime), keeping the grab offset.
-        private void MoveOverlayTo(double x)
+        // Overlay drag: horizontally = reposition in time, vertically = move to another track.
+        private void MoveOverlayTo(Windows.Foundation.Point p)
         {
             if (_dragClip == null || _timelinePxPerSec <= 0) return;
+
+            // Vertical: which track row is the cursor over?
+            int targetIndex = p.Y >= RowOvY ? (int)((p.Y - RowOvY) / RowPitch) : 0;
+            targetIndex = Math.Clamp(targetIndex, 0, ViewModel.OverlayTracks.Count - 1);
+            var target = ViewModel.OverlayTracks[targetIndex];
+            var current = TrackOf(_dragClip);
+            if (current != null && !ReferenceEquals(current, target))
+            {
+                current.Clips.Remove(_dragClip);
+                target.Clips.Add(_dragClip);
+            }
+
+            // Horizontal: set the start time, clamped so it can't overlap siblings on this track
+            // (tracks are strict — an overlap would silently hide one clip at playback).
             double total = ViewModel.TotalStoryDuration.TotalSeconds;
-            double newStart = (x / _timelinePxPerSec) - _dragGrabOffsetSec;
-            newStart = Math.Clamp(newStart, 0, Math.Max(0, total - _dragClip.OpDuration.TotalSeconds));
+            double dur = _dragClip.OpDuration.TotalSeconds;
+            double newStart = (p.X / _timelinePxPerSec) - _dragGrabOffsetSec;
+            newStart = Math.Clamp(newStart, 0, Math.Max(0, total - dur));
+            newStart = ClampToFreeSlot(target, _dragClip, newStart, dur);
             _dragClip.StartTime = TimeSpan.FromSeconds(newStart);
             BuildTimelineBar();
+        }
+
+        // Keep a moving clip inside the free gap between its neighbours on the same track.
+        private static double ClampToFreeSlot(OverlayTrack track, CinematicOperation moving, double start, double dur)
+        {
+            double lower = 0, upper = double.MaxValue;
+            double centre = start + dur / 2;
+
+            foreach (var other in track.Clips)
+            {
+                if (ReferenceEquals(other, moving)) continue;
+                double s = other.StartTimeSeconds;
+                double e = s + other.OpDuration.TotalSeconds;
+
+                if (e <= centre) lower = Math.Max(lower, e);          // neighbour to our left
+                else if (s >= centre) upper = Math.Min(upper, s);     // neighbour to our right
+                else if (centre < (s + e) / 2) upper = Math.Min(upper, s);
+                else lower = Math.Max(lower, e);
+            }
+
+            if (start < lower) start = lower;
+            if (upper != double.MaxValue && start + dur > upper) start = upper - dur;
+            if (start < lower) start = lower;   // no room in this gap — park against the left edge
+            return Math.Max(0, start);
         }
 
 
