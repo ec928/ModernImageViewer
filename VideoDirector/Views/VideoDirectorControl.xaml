@@ -351,13 +351,28 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <local:TimelineRangeSlider Grid.Column="0" Grid.ColumnSpan="3"
+                    <!-- Set the in/out point to the current playhead — the reliable way to trim a
+                         long clip: scrub/click to the exact frame (zoom in first if you like), then
+                         set the point here, no tiny handle to chase. -->
+                    <Button Grid.Column="0" Click="SetInAtPlayhead_Click" IsEnabled="{Binding HasSelection}"
+                            Height="28" Padding="8,0" Margin="0,0,6,0" FontSize="11" VerticalAlignment="Center"
+                            Background="Transparent" BorderThickness="1" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" CornerRadius="4"
+                            ToolTipService.ToolTip="Set Clip Start to the playhead">
+                        <TextBlock Text="[ In" />
+                    </Button>
+                    <local:TimelineRangeSlider Grid.Column="1"
                                                Maximum="{x:Bind ViewModel.CurrentOperationDurationSeconds, Mode=OneWay}"
                                                Position="{x:Bind ViewModel.CurrentOperationTimeSeconds, Mode=TwoWay}"
                                                TrimStart="{Binding SelectedClip.VideoStartTime, Mode=TwoWay, Converter={StaticResource TimeSpanToDoubleSecondsConverter}}"
                                                TrimEnd="{Binding SelectedClip.VideoEndTime, Mode=TwoWay, Converter={StaticResource TimeSpanToDoubleSecondsConverter}}"
                                                InteractionStarted="TimelineRangeSlider_InteractionStarted"
                                                InteractionCompleted="TimelineRangeSlider_InteractionCompleted" />
+                    <Button Grid.Column="2" Click="SetOutAtPlayhead_Click" IsEnabled="{Binding HasSelection}"
+                            Height="28" Padding="8,0" Margin="6,0,0,0" FontSize="11" VerticalAlignment="Center"
+                            Background="Transparent" BorderThickness="1" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" CornerRadius="4"
+                            ToolTipService.ToolTip="Set Clip End to the playhead">
+                        <TextBlock Text="Out ]" />
+                    </Button>
                 </Grid>
                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" HorizontalAlignment="Center">
                     <!-- Toggles Column -->
