@@ -21,8 +21,11 @@
     </UserControl.Resources>
 
     <UserControl.KeyboardAccelerators>
-        <!-- Escape leaves Edit mode. -->
+        <!-- Escape leaves Edit mode; Space toggles play/pause; Delete removes the selected clip.
+             Space/Delete are ignored while a text field has focus (see the handlers). -->
         <KeyboardAccelerator Key="Escape" Invoked="EscapeAccelerator_Invoked" />
+        <KeyboardAccelerator Key="Space" Invoked="PlayPauseAccelerator_Invoked" />
+        <KeyboardAccelerator Key="Delete" Invoked="DeleteAccelerator_Invoked" />
     </UserControl.KeyboardAccelerators>
 
     <Grid Background="Black" AllowDrop="True" DragOver="Grid_DragOver" Drop="Grid_Drop">

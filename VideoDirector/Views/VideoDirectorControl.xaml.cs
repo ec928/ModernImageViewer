@@ -964,8 +964,27 @@ namespace ModernImageViewer.VideoDirector.Views
             }
         }
 
-        private void Clear_Click(object sender, RoutedEventArgs e)
+        private async void Clear_Click(object sender, RoutedEventArgs e)
         {
+            bool hasContent = ViewModel.TimelineNodes.Count > 0;
+            if (!hasContent)
+                foreach (var t in ViewModel.OverlayTracks)
+                    if (t.Clips.Count > 0) { hasContent = true; break; }
+
+            if (hasContent)
+            {
+                var dialog = new ContentDialog
+                {
+                    Title = "Clear project?",
+                    Content = "This removes every clip from all tracks. It can't be undone.",
+                    PrimaryButtonText = "Clear",
+                    CloseButtonText = "Cancel",
+                    DefaultButton = ContentDialogButton.Close,
+                    XamlRoot = this.XamlRoot
+                };
+                if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+            }
+
             ViewModel.Clear();
         }
 
@@ -1085,6 +1104,33 @@ namespace ModernImageViewer.VideoDirector.Views
         {
             if (ViewModel.IsEditMode) { ExitEditMode(); args.Handled = true; }
         }
+
+        // Space = play/pause. Ignored while typing so it doesn't hijack text entry.
+        private void PlayPauseAccelerator_Invoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender,
+                                                  Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
+        {
+            if (IsTextInputFocused()) return;
+            args.Handled = true;
+            PlayPause_Click(this, null);
+        }
+
+        // Delete = remove the selected clip (never while typing or during playback). If the clip is
+        // being edited, drop back to Arrange first so we don't linger in Edit on a deleted clip.
+        private void DeleteAccelerator_Invoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender,
+                                               Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
+        {
+            if (IsTextInputFocused() || ViewModel.IsPlaying || ViewModel.SelectedClip == null) return;
+            args.Handled = true;
+            var clip = ViewModel.SelectedClip;
+            bool isSpine = ViewModel.IsTrack1Selected;
+            if (ViewModel.IsEditMode) ExitEditMode();
+            RemoveClip(clip, isSpine);
+        }
+
+        // A NumberBox hosts an inner TextBox, so a focused TextBox means the user is typing —
+        // in which case Space/Delete must reach the field, not trigger a shortcut.
+        private bool IsTextInputFocused()
+            => FocusManager.GetFocusedElement(this.XamlRoot) is TextBox;
 
 
 
