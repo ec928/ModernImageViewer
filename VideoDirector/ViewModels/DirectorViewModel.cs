@@ -471,6 +471,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
         public async Task AddOverlayAsync(string filePath, TimeSpan startTime, int trackIndex = 0)
         {
             TimeSpan duration = TimeSpan.FromSeconds(5);
+            double sourceAspect = 0;
             Microsoft.UI.Xaml.Media.Imaging.BitmapImage? thumbnail = null;
             try
             {
@@ -479,6 +480,12 @@ namespace ModernImageViewer.VideoDirector.ViewModels
                 if (props != null && props.Duration.TotalSeconds > 0)
                 {
                     duration = props.Duration;
+                }
+                // Real frame dimensions — the PiP box is shaped from these, NOT from the thumbnail
+                // (VideosView thumbnails are letterboxed 16:9 even for portrait video).
+                if (props != null && props.Width > 0 && props.Height > 0)
+                {
+                    sourceAspect = (double)props.Width / props.Height;
                 }
 
                 var thumb = await file.GetThumbnailAsync(Windows.Storage.FileProperties.ThumbnailMode.VideosView, 480, Windows.Storage.FileProperties.ThumbnailOptions.UseCurrentScale);
@@ -508,6 +515,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
                 OpDuration = duration,
                 VideoEndTime = duration,
                 StartTime = startTime,
+                SourceAspect = sourceAspect,
                 PlacementCenterX = track.DefaultCenterX,
                 PlacementCenterY = track.DefaultCenterY,
                 Thumbnail = thumbnail

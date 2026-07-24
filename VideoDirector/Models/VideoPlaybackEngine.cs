@@ -1279,15 +1279,11 @@ namespace ModernImageViewer.VideoDirector.Models
                     _activeOverlay[i] = desired;
                     if (desired == null) { SetOverlayRender(i, OverlayRender.Hidden, null); continue; }
 
-                    // Shape the box from the THUMBNAIL's aspect when it's known. NOTE: a BitmapImage
-                    // reports 0 until it has finished loading, so this can legitimately be skipped
-                    // on early passes — which is exactly why the still uses Stretch="Uniform":
-                    // a wrong box shape then just letterboxes instead of cropping the image away.
-                    var thumb = desired.Thumbnail;
-                    if (thumb != null && thumb.PixelHeight > 0 && thumb.PixelWidth > 0)
-                        _overlayAspect[i] = (double)thumb.PixelWidth / thumb.PixelHeight;
-                    else if (_overlayAspect[i] <= 0)
-                        _overlayAspect[i] = 16.0 / 9.0;   // sane default so the box can be laid out
+                    // Shape the box from the SOURCE VIDEO's aspect. Never from the thumbnail:
+                    // VideosView thumbnails are letterboxed 16:9 even for portrait clips, which
+                    // made every box landscape and cropped the subject's head off.
+                    if (desired.SourceAspect > 0) _overlayAspect[i] = desired.SourceAspect;
+                    else if (_overlayAspect[i] <= 0) _overlayAspect[i] = 16.0 / 9.0; // until known
 
                     SetOverlayRender(i, OverlayRender.Still, desired);
                     ApplyOverlayBox(i, desired, false);
@@ -1348,12 +1344,14 @@ namespace ModernImageViewer.VideoDirector.Models
                     DetachOverlayVideo(track);              // the invariant
                     v.Still.Source = clip?.Thumbnail;
                     v.Still.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
-                    // Chrome only on the SELECTED PiP — 8 handles on every overlay at once is
-                    // visual noise. Any PiP is still grabbable (hit-testing is geometric).
+                    // The FRAME marks every arrangeable PiP (so you can always see the boxes, even
+                    // with nothing selected); the 8 GRIPS appear only on the selected one, which is
+                    // what was visually noisy. Any PiP stays grabbable — hit-testing is geometric.
                     if (v.Handles != null)
-                        v.Handles.Visibility = (clip != null && ReferenceEquals(clip, _viewModel.SelectedClip))
-                            ? Microsoft.UI.Xaml.Visibility.Visible
-                            : Microsoft.UI.Xaml.Visibility.Collapsed;
+                    {
+                        v.Handles.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
+                        SetGripsVisible(v.Handles, clip != null && ReferenceEquals(clip, _viewModel.SelectedClip));
+                    }
                     v.Grid.Opacity = clip?.Opacity ?? 1.0;
                     break;
 
@@ -1364,6 +1362,15 @@ namespace ModernImageViewer.VideoDirector.Models
                     v.Grid.Opacity = clip?.Opacity ?? 1.0;
                     break;
             }
+        }
+
+        // The chrome container holds a Border (the frame) plus 8 handle Rectangles; this toggles
+        // just the handles, leaving the frame visible.
+        private static void SetGripsVisible(Microsoft.UI.Xaml.Controls.Grid handles, bool visible)
+        {
+            var vis = visible ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
+            foreach (var child in handles.Children)
+                if (child is Microsoft.UI.Xaml.Shapes.Rectangle grip) grip.Visibility = vis;
         }
 
         // A MediaPlayerElement with no MediaPlayer has no video surface to render at all.
@@ -1458,6 +1465,10 @@ namespace ModernImageViewer.VideoDirector.Models
             if (vw == 0 || vh == 0) return;
             double aspect = (double)vw / vh;
             _overlayAspect[slot] = aspect;
+            // Backfill the clip so Arrange can shape its box correctly without loading video
+            // (covers clips from older projects that were saved before SourceAspect existed).
+            var active = _activeOverlay[slot];
+            if (active != null && active.SourceAspect <= 0) active.SourceAspect = aspect;
         }
 
         // Positions, sizes and clips the placement box (the overlay grid) from the clip's

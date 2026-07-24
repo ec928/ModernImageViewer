@@ -204,6 +204,17 @@ namespace ModernImageViewer.VideoDirector.Models
         // framing (marks). Track 1 ignores placement (it is always full-frame). This is what
         // lets a clip be framed full-screen while editing but shown as a corner PiP at playback.
 
+        // The SOURCE video's natural aspect (width/height), captured when the clip is added. The
+        // PiP box is shaped from this. Do NOT infer it from the thumbnail: ThumbnailMode.VideosView
+        // returns a letterboxed 16:9 image even for portrait video, which makes every box landscape
+        // and crops the subject. 0 = not yet known (backfilled once the media opens).
+        private double _sourceAspect;
+        public double SourceAspect
+        {
+            get => _sourceAspect;
+            set => SetProperty(ref _sourceAspect, value);
+        }
+
         // Box size as INDEPENDENT fractions of the video's viewport-fit size (0.3 = 30%).
         // Width and Height are decoupled so the PiP box can be reshaped to any aspect; the
         // video content crop-fills the box (UniformToFill + clip) so it never distorts.
