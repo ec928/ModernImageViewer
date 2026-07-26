@@ -254,12 +254,13 @@ Working prototype. Build green. Commits, oldest → newest:
   Arrange drag/wheel move+resize of the PiP under the cursor; Exit button; EDIT/ARRANGE badge.
 - `3b913e9` — fix: Edit mode now shows **only** the edited clip (was leaking the overlay over
   Track 1 via a stale flag); moved Exit button clear of the title-bar drag region.
+- `3bd1a15` — fix trim getting undone across clips (TwoWay binding stomp).
+- `95cd10a` — upgrade Ken Burns spatial transform loop to hardware-synchronized decode position.
+- `c45c45c` — compact Inspector UI and move PiP size info to Telemetry HUD.
+- `a3adb0c` — fix Track 1 Ken Burns still-image wall-clock synchronization, guard per-frame GPU layout/composition invalidations, and remove redundant edit mode canvas border.
 
 **What actually works now:** the two-mode architecture (§5A) — Edit mode frames one clip with
-Ken-Burns preview; Arrange mode shows the composite and lets you drag + wheel-resize a Track 2
-PiP. Plus: Track 1 sequential base, Track 2 overlays (up to **two simultaneous PiPs**, each
-independently framed/placed/animated), motion, opacity, muted audio, add/duplicate/remove, the
-bottom dock.
+Ken-Burns preview (clean canvas without redundant outer borders); Arrange mode shows the composite and lets you drag + wheel-resize PiPs. Plus: Track 1 sequential base with hardware/wall-clock synchronized Ken Burns, overlay tracks (Tracks 2–4, up to **three simultaneous PiPs**, each independently framed/placed/animated without stuttering), motion, opacity, muted audio, add/duplicate/remove, Telemetry HUD, and the consolidated timeline toolbar & track dock.
 
 **Placement representation:** `PlacementWidth` + `PlacementHeight` + `PlacementCenterX/Y`
 (normalized 0..1) on the clip — **independent dimensions**, so the box can be reshaped to any

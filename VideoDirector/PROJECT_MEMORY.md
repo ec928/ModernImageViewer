@@ -30,6 +30,12 @@ This ledger documents all completed features, bug fixes, and architectural optim
 * **Trim "Messy Blob" Resolution**: Solved the visual scaling issue where trimming a short clip (e.g., 10 seconds) from a massive source video (e.g., 45 minutes) caused the trim controls and clip segment to collapse into an unusable, unreadable "messy blob." Trim view scaling is properly handled for ergonomics.
 * **WYSIWYG Canvas Polish**: Removed the inactive outer full-frame white bounding box (`WysiwygFullFrameRect`) during Edit mode preview in `VideoPlaybackEngine.cs`. The canvas now displays *only* the active, useful boundary box for the clip being edited.
 * **Inspector Formatted Timecodes**: Added human-readable timecode labels (`00:00:00.00`) in the Inspector panel alongside numeric inputs for professional time tracking and precision.
+* **Compact Inspector & Telemetry HUD (`c45c45c`)**: Re-homed PiP size coordinates and operational readouts into a clean Telemetry HUD, compacting the Inspector UI for better workflow clarity.
+
+### 🚀 Playback Engine Synchronization & Performance Polish (`95cd10a`, `a3adb0c`)
+* **Wall-Clock Time Advancement for Still Ken Burns**: Resolved continuous audio/video stuttering and drift-correction seek-jumping on overlay tracks (Tracks 2–4) when Track 1 plays a still image with Ken Burns applied. When `op.IsStill` is true, master story time and spatial animation progress advance continuously via real wall-clock time rather than remaining frozen at `MediaPlayer.Position = 0:00`.
+* **Per-Frame UI Layout & GPU Composition Optimization**: Guarded overlay bounding box layout adjustments (`grid.Margin = ...` in `ApplyOverlayBox`) and `CompositeTransform` property assignments (`ApplyMarksAtProgress`) against redundant per-frame overwrites (`Math.Abs(...) > 0.0001` and `Margin.Left != left`). This eliminates 60 FPS unnecessary Measure/Arrange XAML layout passes and prevents dirtying DirectComposition visual trees when transforms and bounding boxes are static.
+* **Canvas Edit Mode Visual Cleanliness**: Removed the redundant thick outer accent border (`<Border BorderThickness="3" ... />`) around the video canvas during Edit mode in `VideoDirectorControl.xaml`. Edit mode visual indicators are now cleanly confined to the inspector panel header and the interactive WYSIWYG crop/motion overlays directly on the video.
 
 ---
 
