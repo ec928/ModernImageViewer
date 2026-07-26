@@ -879,6 +879,21 @@ namespace ModernImageViewer.VideoDirector.Models
                 if (currentActivePlayer?.PlaybackSession != null)
                 {
                     _playerControl.TelemetryClipTime.Text = $"Clip Time : {currentActivePlayer.PlaybackSession.Position:hh\\:mm\\:ss\\.ff} / {clipEndTime:hh\\:mm\\:ss\\.ff} [{currentFileName}]";
+                    uint nw = currentActivePlayer.PlaybackSession.NaturalVideoWidth;
+                    uint nh = currentActivePlayer.PlaybackSession.NaturalVideoHeight;
+                    if (activeOp != null && (_viewModel.IsOverlaySelected || _isEditingOverlay || activeOp.PlacementWidth < 1.0 || activeOp.PlacementHeight < 1.0))
+                    {
+                        _playerControl.TelemetryVideoSize.Text = $"PiP Size  : W:{activeOp.PlacementWidth * 100:F1}% H:{activeOp.PlacementHeight * 100:F1}% (Res: {nw}x{nh})";
+                    }
+                    else
+                    {
+                        _playerControl.TelemetryVideoSize.Text = $"Resolution: {nw}x{nh} px (100% Full Frame)";
+                    }
+                    _playerControl.TelemetryVideoSize.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
+                }
+                else
+                {
+                    _playerControl.TelemetryVideoSize.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
                 }
                 
                 if (activeTransform != null) {

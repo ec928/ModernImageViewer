@@ -121,52 +121,26 @@
                             <StackPanel Spacing="2">
                                 <!-- 1. Transform & Overlay (Contains Zoom/Motion & PiP) -->
                                 <Expander Header="Transform &amp; Overlay" IsExpanded="True" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" CornerRadius="4,4,0,0">
-                                    <StackPanel Spacing="12">
-                                        <!-- Overlay Placement (visible only if overlay) -->
-                                        <StackPanel Spacing="8" Visibility="{Binding IsOverlaySelected, Converter={StaticResource BoolToVisConverter}}">
-                                            <!-- Opacity -->
-                                            <StackPanel Spacing="4">
-                                                <TextBlock Text="Opacity" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                                <NumberBox local:NumberBoxExtensions.FractionDigits="2" Value="{Binding SelectedClip.Opacity, Mode=TwoWay, FallbackValue=1.0}"
-                                                           SmallChange="0.1" LargeChange="0.25" Minimum="0" Maximum="1" SpinButtonPlacementMode="Compact" />
-                                            </StackPanel>
-                                            
-                                            <!-- PiP Width/Height side-by-side -->
-                                            <StackPanel Spacing="4">
-                                                <TextBlock Text="PiP Size (Width / Height)" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                                <Grid ColumnSpacing="8">
-                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                                                    <NumberBox Grid.Column="0" local:NumberBoxExtensions.FractionDigits="2" Value="{Binding SelectedClip.PlacementWidth, Mode=TwoWay, FallbackValue=0.3}"
-                                                               SmallChange="0.05" LargeChange="0.1" Minimum="0.05" Maximum="1.0" SpinButtonPlacementMode="Compact"
-                                                               ToolTipService.ToolTip="Width fraction" />
-                                                    <NumberBox Grid.Column="1" local:NumberBoxExtensions.FractionDigits="2" Value="{Binding SelectedClip.PlacementHeight, Mode=TwoWay, FallbackValue=0.3}"
-                                                               SmallChange="0.05" LargeChange="0.1" Minimum="0.05" Maximum="1.0" SpinButtonPlacementMode="Compact"
-                                                               ToolTipService.ToolTip="Height fraction" />
-                                                </Grid>
-                                            </StackPanel>
-                                        </StackPanel>
-
-                                        <!-- Zoom & Motion (Always visible) -->
-                                        <StackPanel Spacing="8">
-                                            <TextBlock Text="Zoom &amp; Motion Controls" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" ToolTipService.ToolTip="Scroll/drag the video to frame it, then set Start / Mid / End. Same on every track."/>
-                                            <StackPanel Orientation="Horizontal" Spacing="4">
-                                                <Button Content="Start" Width="60" FontWeight="SemiBold" Click="SetStart_Click" ToolTipService.ToolTip="Set Start Keyframe" Foreground="Cyan" />
-                                                <Button Content="Mid" Width="60" FontWeight="SemiBold" Click="SetMid_Click" RightTapped="ClearMid_RightTapped" ToolTipService.ToolTip="Set Mid Keyframe (right-click to clear)" Foreground="DeepSkyBlue" />
-                                                <Button Content="End" Width="60" FontWeight="SemiBold" Click="SetEnd_Click" ToolTipService.ToolTip="Set End Keyframe" Foreground="RoyalBlue" />
-                                                <ToggleButton x:Name="RecordButton" Click="RecordButton_Click" ToolTipService.ToolTip="Record Motion (Track 1)" Height="32" Padding="8,4" CornerRadius="4" IsEnabled="{Binding IsTrack1Selected}">
-                                                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                                        <SymbolIcon x:Name="RecordIcon" Symbol="Video" Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
-                                                        <TextBlock Text="Record" Foreground="{ThemeResource SystemFillColorCriticalBrush}" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                                    </StackPanel>
-                                                </ToggleButton>
-                                            </StackPanel>
+                                    <!-- Zoom & Motion (Always visible) -->
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="Zoom &amp; Motion Controls" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" ToolTipService.ToolTip="Scroll/drag the video to frame it, then set Start / Mid / End. Same on every track."/>
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <Button Content="Start" Width="60" FontWeight="SemiBold" Click="SetStart_Click" ToolTipService.ToolTip="Set Start Keyframe" Foreground="Cyan" />
+                                            <Button Content="Mid" Width="60" FontWeight="SemiBold" Click="SetMid_Click" RightTapped="ClearMid_RightTapped" ToolTipService.ToolTip="Set Mid Keyframe (right-click to clear)" Foreground="DeepSkyBlue" />
+                                            <Button Content="End" Width="60" FontWeight="SemiBold" Click="SetEnd_Click" ToolTipService.ToolTip="Set End Keyframe" Foreground="RoyalBlue" />
+                                            <ToggleButton x:Name="RecordButton" Click="RecordButton_Click" ToolTipService.ToolTip="Record Motion (Track 1)" Height="32" Padding="8,4" CornerRadius="4" IsEnabled="{Binding IsTrack1Selected}">
+                                                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                                    <SymbolIcon x:Name="RecordIcon" Symbol="Video" Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+                                                    <TextBlock Text="Record" Foreground="{ThemeResource SystemFillColorCriticalBrush}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </ToggleButton>
                                         </StackPanel>
                                     </StackPanel>
                                 </Expander>
 
                                 <!-- 2. Time & Trimming -->
                                 <Expander Header="Time &amp; Trimming" IsExpanded="True" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" CornerRadius="0">
-                                    <StackPanel Spacing="12">
+                                    <StackPanel Spacing="8">
                                         <!-- Timeline Position -->
                                         <StackPanel Spacing="4">
                                             <Grid>
@@ -219,8 +193,8 @@
                                 </Expander>
 
                                 <!-- 3. Playback -->
-                                <Expander Header="Playback" IsExpanded="False" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" CornerRadius="0">
-                                    <StackPanel Spacing="12">
+                                <Expander Header="Playback" IsExpanded="True" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" CornerRadius="0">
+                                    <StackPanel Spacing="8">
                                         <!-- Curve Profile -->
                                         <StackPanel Spacing="4">
                                             <TextBlock Text="Curve Profile" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
@@ -231,15 +205,17 @@
                                             </ComboBox>
                                         </StackPanel>
                                         
-                                        <!-- Playback Speed & Volume -->
+                                        <!-- Playback Speed, Volume & Opacity -->
                                         <StackPanel Spacing="4">
-                                            <TextBlock Text="Playback Speed / Volume" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                            <TextBlock Text="Speed / Volume / Opacity" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                             <Grid ColumnSpacing="8">
-                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                                                 <NumberBox Grid.Column="0" local:NumberBoxExtensions.FractionDigits="2" Value="{Binding SelectedClip.PlaybackSpeed, Mode=TwoWay, FallbackValue=1.0}"
                                                            SmallChange="0.25" LargeChange="1.0" Minimum="0" Maximum="8" SpinButtonPlacementMode="Compact" ToolTipService.ToolTip="Speed" />
                                                 <NumberBox Grid.Column="1" local:NumberBoxExtensions.FractionDigits="2" Value="{Binding SelectedClip.Volume, Mode=TwoWay, FallbackValue=1.0}"
                                                            SmallChange="0.1" LargeChange="0.25" Minimum="0" Maximum="1" SpinButtonPlacementMode="Compact" ToolTipService.ToolTip="Volume" />
+                                                <NumberBox Grid.Column="2" local:NumberBoxExtensions.FractionDigits="2" Value="{Binding SelectedClip.Opacity, Mode=TwoWay, FallbackValue=1.0}"
+                                                           SmallChange="0.1" LargeChange="0.25" Minimum="0" Maximum="1" SpinButtonPlacementMode="Compact" IsEnabled="{Binding IsOverlaySelected}" ToolTipService.ToolTip="Opacity (Overlay Only)" />
                                             </Grid>
                                         </StackPanel>
                                     </StackPanel>
@@ -248,23 +224,20 @@
                                 <!-- 4. Transitions (Track 1 only) -->
                                 <Expander Header="Transitions" IsExpanded="True" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" CornerRadius="0,0,4,4"
                                           Visibility="{Binding IsTrack1Selected, Converter={StaticResource BoolToVisConverter}}">
-                                    <StackPanel Spacing="12">
-                                        <StackPanel Spacing="4">
-                                            <TextBlock Text="Transition Style" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                            <ComboBox SelectedIndex="{Binding SelectedClip.TransitionStyleIndex, Mode=TwoWay, FallbackValue=0}" HorizontalAlignment="Stretch">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="Transition Style / Length (s)" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                        <Grid ColumnSpacing="8">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="3*" /><ColumnDefinition Width="2*" /></Grid.ColumnDefinitions>
+                                            <ComboBox Grid.Column="0" SelectedIndex="{Binding SelectedClip.TransitionStyleIndex, Mode=TwoWay, FallbackValue=0}" HorizontalAlignment="Stretch" ToolTipService.ToolTip="Transition Style">
                                                 <x:String>HardSnap</x:String>
                                                 <x:String>Crossfade</x:String>
                                                 <x:String>CinematicBridge</x:String>
                                                 <x:String>DipToColor</x:String>
                                             </ComboBox>
-                                        </StackPanel>
-                                        
-                                        <StackPanel Spacing="4">
-                                            <TextBlock Text="Transition Length" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                            <NumberBox local:NumberBoxExtensions.FractionDigits="1" Value="{Binding SelectedClip.TransitionDuration, Mode=TwoWay, Converter={StaticResource TimeSpanToDoubleSecondsConverter}, FallbackValue=0.0}"
+                                            <NumberBox Grid.Column="1" local:NumberBoxExtensions.FractionDigits="1" Value="{Binding SelectedClip.TransitionDuration, Mode=TwoWay, Converter={StaticResource TimeSpanToDoubleSecondsConverter}, FallbackValue=0.0}"
                                                        IsEnabled="{Binding SelectedClip.TransitionEditable}"
-                                                       SmallChange="0.1" LargeChange="0.5" Minimum="0" SpinButtonPlacementMode="Compact" />
-                                        </StackPanel>
+                                                       SmallChange="0.1" LargeChange="0.5" Minimum="0" SpinButtonPlacementMode="Compact" ToolTipService.ToolTip="Transition Length in Seconds" />
+                                        </Grid>
                                     </StackPanel>
                                 </Expander>
                             </StackPanel>

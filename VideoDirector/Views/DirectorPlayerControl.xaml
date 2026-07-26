@@ -111,6 +111,7 @@
                     <TextBlock Text="TELEMETRY" FontWeight="Bold" Foreground="Lime"/>
                     <TextBlock x:Name="TelemetryStoryTime" x:FieldModifier="public" Foreground="White" FontFamily="Consolas" />
                     <TextBlock x:Name="TelemetryClipTime" x:FieldModifier="public" Foreground="White" FontFamily="Consolas" />
+                    <TextBlock x:Name="TelemetryVideoSize" x:FieldModifier="public" Foreground="Yellow" FontFamily="Consolas" />
                     <TextBlock x:Name="TelemetryOperationInfo" x:FieldModifier="public" Foreground="White" FontFamily="Consolas" />
                     <TextBlock x:Name="TelemetryStartMarkInfo" x:FieldModifier="public" Foreground="Cyan" FontFamily="Consolas" />
                     <TextBlock x:Name="TelemetryMidMarkInfo" x:FieldModifier="public" Foreground="DeepSkyBlue" FontFamily="Consolas" />
