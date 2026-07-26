@@ -774,18 +774,28 @@ namespace ModernImageViewer.VideoDirector.Models
                 fadingInPlayer.Volume = transProgress * _fadeInVolume;
             }
 
-            void UpdateSpatial(CinematicOperation op, DateTime startTime, TimeSpan duration, Microsoft.UI.Xaml.Media.CompositeTransform transform)
+            void UpdateSpatial(CinematicOperation op, Windows.Media.Playback.MediaPlayer player, DateTime startTime, TimeSpan duration, Microsoft.UI.Xaml.Media.CompositeTransform transform)
             {
                 if (op == null || transform == null) return;
-                var spatialElapsed = DateTime.Now - startTime;
-                var spatialProgress = duration.TotalMilliseconds > 0
-                    ? spatialElapsed.TotalMilliseconds / duration.TotalMilliseconds
-                    : 1;
+                double spatialProgress = 1.0;
+                if (duration.TotalMilliseconds > 0)
+                {
+                    if (player?.PlaybackSession != null)
+                    {
+                        var actualElapsed = player.PlaybackSession.Position - op.VideoStartTime;
+                        spatialProgress = Math.Clamp(actualElapsed.TotalMilliseconds / duration.TotalMilliseconds, 0.0, 1.0);
+                    }
+                    else
+                    {
+                        var spatialElapsed = DateTime.Now - startTime;
+                        spatialProgress = Math.Clamp(spatialElapsed.TotalMilliseconds / duration.TotalMilliseconds, 0.0, 1.0);
+                    }
+                }
                 ApplyMarksAtProgress(op, spatialProgress, transform);
             }
 
-            UpdateSpatial(_opA, _opAStartTime, _opADuration, _playerControl.TransformA);
-            UpdateSpatial(_opB, _opBStartTime, _opBDuration, _playerControl.TransformB);
+            UpdateSpatial(_opA, _mediaPlayerA, _opAStartTime, _opADuration, _playerControl.TransformA);
+            UpdateSpatial(_opB, _mediaPlayerB, _opBStartTime, _opBDuration, _playerControl.TransformB);
 
             // CurrentStoryTime only gets bumped at clip boundaries elsewhere in this class —
             // it does not tick on its own. Advance it continuously here from the active
@@ -2019,6 +2029,10 @@ namespace ModernImageViewer.VideoDirector.Models
             double dur = _editClip.OpDuration.TotalSeconds;
             if (dur <= 0) dur = 1;
             double progress = (DateTime.Now - _editPreviewStart).TotalSeconds / dur;
+            if (_editPlayer?.PlaybackSession != null)
+            {
+                progress = (_editPlayer.PlaybackSession.Position - _editClip.VideoStartTime).TotalSeconds / dur;
+            }
             if (progress >= 1.0)
             {
                 _editPreviewStart = DateTime.Now; // loop the preview
@@ -2030,7 +2044,7 @@ namespace ModernImageViewer.VideoDirector.Models
                     if (_editClip.PlaybackSpeed > 0) _editPlayer.Play();
                 }
             }
-            ApplyMarksAtProgress(_editClip, progress, _playerControl.ActiveTransform);
+            ApplyMarksAtProgress(_editClip, Math.Clamp(progress, 0.0, 1.0), _playerControl.ActiveTransform);
 
             // Drive the per-clip scrubber off the real decode position so it tracks the preview.
             // (Assigning CurrentOperationTime — not …Seconds — only notifies the slider; it does
