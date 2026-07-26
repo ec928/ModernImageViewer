@@ -10,5 +10,7 @@
     <local:FloatFormatConverter x:Key="FloatFormatConverter" />
     <local:TimeSpanToDoubleSecondsConverter x:Key="TimeSpanToDoubleSecondsConverter" />
     <local:BoolToBadgeBrushConverter x:Key="BoolToBadgeBrushConverter" />
+    <local:ModeLabelToForegroundConverter x:Key="ModeLabelToForegroundConverter" />
+    <local:ModeLabelToBackgroundConverter x:Key="ModeLabelToBackgroundConverter" />
 
 </ResourceDictionary>

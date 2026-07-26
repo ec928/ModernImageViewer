@@ -5,10 +5,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
-    Background="Black"
-    CornerRadius="8"
-    Margin="12,0,12,0">
-
+    Background="Black">
 
     <Grid>
         <!-- The A-B Roll Media Players -->
@@ -17,13 +14,13 @@
                 <Grid.RenderTransform>
                     <CompositeTransform x:Name="TransformB" x:FieldModifier="public" />
                 </Grid.RenderTransform>
-                <MediaPlayerElement x:Name="PlayerB" x:FieldModifier="public" AreTransportControlsEnabled="False" Stretch="Uniform" Opacity="0" />
+                <MediaPlayerElement x:Name="PlayerB" x:FieldModifier="public" AreTransportControlsEnabled="False" Stretch="UniformToFill" Opacity="0" />
             </Grid>
             <Grid x:Name="GridA" x:FieldModifier="public" RenderTransformOrigin="0.5,0.5">
                 <Grid.RenderTransform>
                     <CompositeTransform x:Name="TransformA" x:FieldModifier="public" />
                 </Grid.RenderTransform>
-                <MediaPlayerElement x:Name="PlayerA" x:FieldModifier="public" AreTransportControlsEnabled="False" Stretch="Uniform" Opacity="1" />
+                <MediaPlayerElement x:Name="PlayerA" x:FieldModifier="public" AreTransportControlsEnabled="False" Stretch="UniformToFill" Opacity="1" />
             </Grid>
         </Grid>
 
@@ -94,7 +91,7 @@
             <Rectangle x:Name="WysiwygStartRect" x:FieldModifier="public" Stroke="Cyan" Fill="Transparent" StrokeThickness="2" StrokeDashArray="4,4" Visibility="Collapsed" />
             <Rectangle x:Name="WysiwygMidRect" x:FieldModifier="public" Stroke="DeepSkyBlue" Fill="Transparent" StrokeThickness="2" StrokeDashArray="4,4" Visibility="Collapsed" />
             <Rectangle x:Name="WysiwygEndRect" x:FieldModifier="public" Stroke="RoyalBlue" Fill="Transparent" StrokeThickness="2" StrokeDashArray="4,4" Visibility="Collapsed" />
-            <Rectangle x:Name="WysiwygFullFrameRect" x:FieldModifier="public" Stroke="#80FFFFFF" StrokeThickness="1" Visibility="Collapsed" />
+            <Rectangle x:Name="WysiwygFullFrameRect" x:FieldModifier="public" Stroke="#80FFFFFF" StrokeThickness="2" Visibility="Collapsed" />
         </Canvas>
 
         <!-- Interactive Input Layer for Manual Targeting -->

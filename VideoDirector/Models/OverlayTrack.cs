@@ -37,6 +37,22 @@ namespace ModernImageViewer.VideoDirector.Models
         // others on this track. The track is strict — only one clip can be active at a time, so an
         // overlap would silently hide one at playback. Pass the clip being moved so it ignores
         // itself; pass null when placing a brand-new clip.
+        public void ResolveOverlaps()
+        {
+            var sorted = new System.Collections.Generic.List<CinematicOperation>(Clips);
+            sorted.Sort((a, b) => a.StartTimeSeconds.CompareTo(b.StartTimeSeconds));
+            for (int i = 1; i < sorted.Count; i++)
+            {
+                var prev = sorted[i - 1];
+                var curr = sorted[i];
+                double prevEnd = prev.StartTimeSeconds + prev.OpDuration.TotalSeconds;
+                if (curr.StartTimeSeconds < prevEnd)
+                {
+                    curr.StartTimeSeconds = prevEnd;
+                }
+            }
+        }
+
         public double ClampToFreeSlot(CinematicOperation moving, double start, double dur)
         {
             start = Math.Max(0, start);

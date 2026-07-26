@@ -280,6 +280,40 @@ namespace ModernImageViewer.VideoDirector.Models
             set => StartTime = TimeSpan.FromSeconds(value);
         }
 
+        [JsonIgnore]
+        public string StartTimeFormatted => FormatTime(_startTime);
+        [JsonIgnore]
+        public string SourceDurationFormatted => FormatTime(_sourceDuration);
+        [JsonIgnore]
+        public string OpDurationFormatted => FormatTime(_opDuration);
+        [JsonIgnore]
+        public string VideoStartTimeFormatted => FormatTime(_videoStartTime);
+        [JsonIgnore]
+        public string VideoEndTimeFormatted => FormatTime(_videoEndTime);
+
+        private static string FormatTime(TimeSpan t)
+        {
+            int h = (int)t.TotalHours;
+            int m = t.Minutes;
+            double s = t.Seconds + t.Milliseconds / 1000.0;
+            return h > 0 ? $"{h:00}:{m:00}:{s:00.0}" : $"{m:00}:{s:00.0}";
+        }
+
+        protected override void OnPropertyChanged([System.Runtime.CompilerServices.CallerMemberName] string? propertyName = null)
+        {
+            base.OnPropertyChanged(propertyName);
+            if (propertyName == nameof(StartTime) || propertyName == nameof(StartTimeSeconds))
+                base.OnPropertyChanged(nameof(StartTimeFormatted));
+            else if (propertyName == nameof(SourceDuration) || propertyName == nameof(SourceDurationSeconds))
+                base.OnPropertyChanged(nameof(SourceDurationFormatted));
+            else if (propertyName == nameof(OpDuration))
+                base.OnPropertyChanged(nameof(OpDurationFormatted));
+            else if (propertyName == nameof(VideoStartTime))
+                base.OnPropertyChanged(nameof(VideoStartTimeFormatted));
+            else if (propertyName == nameof(VideoEndTime))
+                base.OnPropertyChanged(nameof(VideoEndTimeFormatted));
+        }
+
         // Compositing opacity when this clip sits on an upper track. 1 = opaque.
         private float _opacity = 1.0f;
         public float Opacity

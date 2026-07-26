@@ -134,7 +134,7 @@ namespace ModernImageViewer.VideoDirector.Views
             {
                 return accentBrush;
             }
-            return new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x99, 0, 0, 0));
+            return new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White);
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, string language)
@@ -148,6 +148,44 @@ namespace ModernImageViewer.VideoDirector.Views
         public object Convert(object value, Type targetType, object parameter, string language)
         {
             return value != null;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, string language)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
+    // Converts ModeLabel ("EDIT", "PLAYBACK"/"PLAY", "ARRANGE") into vibrant foreground colors
+    public class ModeLabelToForegroundConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, string language)
+        {
+            string mode = (value as string)?.ToUpperInvariant() ?? "ARRANGE";
+            if (mode == "EDIT")
+                return new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 255, 82, 82)); // Red
+            if (mode == "PLAYBACK" || mode == "PLAY")
+                return new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 76, 175, 80)); // Green
+            return new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 0, 188, 212)); // Cyan
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, string language)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
+    // Converts ModeLabel ("EDIT", "PLAYBACK"/"PLAY", "ARRANGE") into translucent background badge tints
+    public class ModeLabelToBackgroundConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, string language)
+        {
+            string mode = (value as string)?.ToUpperInvariant() ?? "ARRANGE";
+            if (mode == "EDIT")
+                return new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(40, 255, 82, 82)); // Red tint
+            if (mode == "PLAYBACK" || mode == "PLAY")
+                return new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(40, 76, 175, 80)); // Green tint
+            return new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(40, 0, 188, 212)); // Cyan tint
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, string language)

@@ -61,16 +61,14 @@ namespace ModernImageViewer.VideoDirector.Views
         {
             if (d is TimelineRangeSlider slider)
             {
-                // A new clip (Maximum changes) shows the WHOLE source: the track spans [0, source],
-                // so the right edge is always the source end and dragging can reach any position.
-                // Zooming is explicit (scroll) so the scale is never secretly a sub-window.
-                if (e.Property == MaximumProperty)
+                if ((e.Property == MaximumProperty || e.Property == TrimStartProperty || e.Property == TrimEndProperty) && !slider._isDragging)
                 {
-                    slider._trimmedView = false;
-                    slider._viewStart = 0;
-                    slider._viewSpan = Math.Max(0.01, slider.Maximum);
+                    slider.AutoFitTrimRange();
                 }
-                if (!slider._isDragging) slider.UpdateUI();
+                else if (!slider._isDragging)
+                {
+                    slider.UpdateUI();
+                }
             }
         }
 
@@ -82,6 +80,35 @@ namespace ModernImageViewer.VideoDirector.Views
         // Trimmed view: the scrubber collapses to just [In, Out] and hides the trim handles, so it
         // acts as a plain playback scrubber for the resulting short clip. Double-click exits it.
         private bool _trimmedView;
+
+        // Smart Zoom / Auto-Frame: automatically frames the visible scrubber window around the active
+        // trim region [TrimStart, TrimEnd] with comfortable padding, so that short slices out of long
+        // videos (e.g. 10s from a 45m clip) never look like a messy 1-pixel blob.
+        public void AutoFitTrimRange()
+        {
+            if (_isDragging) return;
+            _trimmedView = false;
+            double inS = Math.Clamp(TrimStart, 0, Max);
+            double outS = Math.Clamp(TrimEnd, 0, Max);
+            double duration = Math.Max(0, outS - inS);
+
+            // If untrimmed or takes up most of the video, show full source.
+            if (duration <= 0.05 || duration >= Max * 0.95)
+            {
+                _viewStart = 0;
+                _viewSpan = Max;
+            }
+            else
+            {
+                // Pad by 50% of duration on each side, clamped between 2s and full Max.
+                double padding = Math.Clamp(duration * 0.5, 2.0, Max);
+                double start = Math.Max(0, inS - padding);
+                double end = Math.Min(Max, outS + padding);
+                _viewStart = start;
+                _viewSpan = Math.Max(0.1, end - start);
+            }
+            UpdateUI();
+        }
 
         public void EnterTrimmedView()
         {
@@ -275,13 +302,20 @@ namespace ModernImageViewer.VideoDirector.Views
             e.Handled = true;
         }
 
-        // Double-click fits the whole source back into view.
+        // Double-click toggles between full source view and Smart Auto-Frame around the trimmed region.
         private void RootGrid_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
         {
-            _trimmedView = false; // back to the full source, handles shown, so you can re-trim
-            _viewStart = 0;
-            _viewSpan = Max;
-            UpdateUI();
+            if (_viewSpan >= Max * 0.98)
+            {
+                AutoFitTrimRange();
+            }
+            else
+            {
+                _trimmedView = false;
+                _viewStart = 0;
+                _viewSpan = Max;
+                UpdateUI();
+            }
         }
     }
 }

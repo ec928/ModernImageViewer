@@ -246,7 +246,7 @@ namespace ModernImageViewer.VideoDirector.ViewModels
             get
             {
                 if (_isEditMode) return "EDIT";
-                return _isPlaying ? "PLAY" : "ARRANGE";
+                return _isPlaying ? "PLAYBACK" : "ARRANGE";
             }
         }
 
@@ -279,12 +279,21 @@ namespace ModernImageViewer.VideoDirector.ViewModels
             }
         }
 
+        private bool _isSnappingEnabled = true;
+        public bool IsSnappingEnabled { get => _isSnappingEnabled; set => SetProperty(ref _isSnappingEnabled, value); }
+
+        private bool _isRippleEditEnabled = true;
+        public bool IsRippleEditEnabled { get => _isRippleEditEnabled; set => SetProperty(ref _isRippleEditEnabled, value); }
+
+        private bool _showAudioWaveforms = false;
+        public bool ShowAudioWaveforms { get => _showAudioWaveforms; set => SetProperty(ref _showAudioWaveforms, value); }
+
         public double CurrentOperationTimeSeconds
         {
             get => _currentOperationTime.TotalSeconds;
             set
             {
-                if (Math.Abs(_currentOperationTime.TotalSeconds - value) > 0.1)
+                if (Math.Abs(_currentOperationTime.TotalSeconds - value) > 0.001)
                 {
                     CurrentOperationTime = TimeSpan.FromSeconds(value);
                     OperationSeekRequested?.Invoke(this, CurrentOperationTime);

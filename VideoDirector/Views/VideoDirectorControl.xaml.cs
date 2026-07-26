@@ -21,6 +21,7 @@ namespace ModernImageViewer.VideoDirector.Views
 
         // Proportional timeline bar (§7E/F): px-per-second scale + the playhead line & handle.
         private double _timelinePxPerSec;
+        private double _timelineZoomFactor = 1.0;
         private Microsoft.UI.Xaml.Shapes.Rectangle _playhead;
         private Microsoft.UI.Xaml.Shapes.Polygon _playheadKnob;
         private TextBlock _playheadTime;
@@ -36,6 +37,8 @@ namespace ModernImageViewer.VideoDirector.Views
         private int _dragInsertIndex;     // where the ghost would drop
         private Windows.Foundation.Point _lastHoverPoint;  // for the context menu's target
         private int _lastActiveSignature = -1;             // playback spotlight refresh guard
+        private DispatcherTimer _pulseTimer;
+        private double _pulsePhase = 0;
 
         public VideoDirectorControl()
         {
@@ -45,6 +48,10 @@ namespace ModernImageViewer.VideoDirector.Views
             _inactivityTimer = new DispatcherTimer();
             _inactivityTimer.Interval = TimeSpan.FromSeconds(5);
             _inactivityTimer.Tick += InactivityTimer_Tick;
+
+            _pulseTimer = new DispatcherTimer();
+            _pulseTimer.Interval = TimeSpan.FromMilliseconds(50);
+            _pulseTimer.Tick += PulseTimer_Tick;
             
             this.PointerMoved += VideoDirectorControl_PointerMoved;
 
@@ -59,10 +66,14 @@ namespace ModernImageViewer.VideoDirector.Views
             _inactivityTimer.Start();
         }
 
+        private bool _isPointerOverPill = false;
+        private void FloatingPill_PointerEntered(object sender, PointerRoutedEventArgs e) => _isPointerOverPill = true;
+        private void FloatingPill_PointerExited(object sender, PointerRoutedEventArgs e) => _isPointerOverPill = false;
+
         private void InactivityTimer_Tick(object sender, object e)
         {
             _inactivityTimer.Stop();
-            if (!ViewModel.IsRecordingMotion)
+            if (!ViewModel.IsRecordingMotion && !_isPointerOverPill)
             {
                 ViewModel.IsControlsVisible = false;
             }
@@ -121,9 +132,15 @@ namespace ModernImageViewer.VideoDirector.Views
             _playhead = null; _playheadKnob = null;
 
             TimelineBar.Height = TimelineBarHeight;   // grows with the upper-track count
-            double w = TimelineBar.ActualWidth;
+            double viewportW = (TimelineBar.Parent as FrameworkElement)?.ActualWidth ?? TimelineBar.ActualWidth;
+            if (viewportW <= 0) viewportW = TimelineBar.ActualWidth;
+            double w = viewportW * _timelineZoomFactor;
+            if (w > 0) TimelineBar.Width = w;
             double h = TimelineBarHeight;
             double total = ViewModel.TotalStoryDuration.TotalSeconds;
+
+            BuildTrackLabels(); // Build track headers regardless of whether the timeline is empty
+
             if (w <= 0 || total <= 0) { _timelinePxPerSec = 0; return; }
             _timelinePxPerSec = w / total;
 
@@ -161,7 +178,7 @@ namespace ModernImageViewer.VideoDirector.Views
 
                 if (gx < w - 26)
                 {
-                    var tl = new TextBlock { Text = FormatTimeShort(t), FontSize = 8, IsHitTestVisible = false, Foreground = labelBrush };
+                    var tl = new TextBlock { Text = FormatTimeShort(t), FontSize = 9, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, IsHitTestVisible = false, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.LightGray) };
                     Canvas.SetLeft(tl, gx + 2); Canvas.SetTop(tl, 1);
                     TimelineBar.Children.Add(tl);
                 }
@@ -224,9 +241,10 @@ namespace ModernImageViewer.VideoDirector.Views
 
             // Playhead: a bright red line the full height with a downward triangle handle in the ruler.
             var red = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(0xFF, 0xEF, 0x44, 0x44));
-            _playhead = new Microsoft.UI.Xaml.Shapes.Rectangle { Width = 2, Height = h, IsHitTestVisible = false, Fill = red };
+            var shadowStroke = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(0x80, 0x00, 0x00, 0x00));
+            _playhead = new Microsoft.UI.Xaml.Shapes.Rectangle { Width = 3, Height = h, IsHitTestVisible = false, Fill = red, Stroke = shadowStroke, StrokeThickness = 1 };
             TimelineBar.Children.Add(_playhead);
-            _playheadKnob = new Microsoft.UI.Xaml.Shapes.Polygon { IsHitTestVisible = false, Fill = red };
+            _playheadKnob = new Microsoft.UI.Xaml.Shapes.Polygon { IsHitTestVisible = false, Fill = red, Stroke = shadowStroke, StrokeThickness = 1, StrokeLineJoin = Microsoft.UI.Xaml.Media.PenLineJoin.Round };
             _playheadKnob.Points.Add(new Windows.Foundation.Point(0, 0));
             _playheadKnob.Points.Add(new Windows.Foundation.Point(11, 0));
             _playheadKnob.Points.Add(new Windows.Foundation.Point(5.5, 9));
@@ -241,7 +259,6 @@ namespace ModernImageViewer.VideoDirector.Views
             TimelineBar.Children.Add(_playheadTime);
 
             UpdatePlayhead();
-            BuildTrackLabels();
         }
 
         // Faint band across a lane in the track's own colour — lane separation without extra height.
@@ -281,33 +298,85 @@ namespace ModernImageViewer.VideoDirector.Views
             TimelineLabels.Children.Clear();
             TimelineLabels.Height = TimelineBarHeight;
 
-            AddTrackLabel("Track 1", RowSpineY, TrackPalette.Spine);
+            AddTrackLabel("Track 1", RowSpineY, TrackPalette.Spine, -1);        // -1 = spine
             for (int ti = 0; ti < ViewModel.OverlayTracks.Count; ti++)
-                AddTrackLabel("Track " + (ti + 2), RowOvY + ti * RowPitch, TrackPalette.Overlay(ti));
+                AddTrackLabel("Track " + (ti + 2), RowOvY + ti * RowPitch, TrackPalette.Overlay(ti), ti);
         }
 
-        private void AddTrackLabel(string text, double y, Windows.UI.Color color)
+        // Each track label is a button: click it to load a video into that track via a file picker
+        // (trackIndex -1 = spine/Track 1, 0..2 = overlay tracks). Drag & drop still works too.
+        private void AddTrackLabel(string text, double y, Windows.UI.Color color, int trackIndex)
         {
-            // A colour cap ties the label to the track's identity colour (same as its blocks and
-            // its on-screen PiP).
+            // A colour cap ties the label to the track's identity colour (same as its blocks/PiP).
             var cap = new Microsoft.UI.Xaml.Shapes.Rectangle
             {
-                Width = 4, Height = BlockH - 2, RadiusX = 2, RadiusY = 2, IsHitTestVisible = false,
+                Width = 4, Height = BlockH - 2, RadiusX = 2, RadiusY = 2,
+                VerticalAlignment = VerticalAlignment.Center,
                 Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(color)
             };
-            Canvas.SetLeft(cap, 4); Canvas.SetTop(cap, y + 1);
-            TimelineLabels.Children.Add(cap);
-
             var label = new TextBlock
             {
-                Text = text,
-                FontSize = 10,
-                IsHitTestVisible = false,
-                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray)
+                Text = text, FontSize = 10, VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 0, 1) // Nudge text slightly to center visually
             };
-            Canvas.SetLeft(label, 12);
-            Canvas.SetTop(label, y + 1);
-            TimelineLabels.Children.Add(label);
+            var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+            content.Children.Add(cap); content.Children.Add(label);
+
+            var btn = new Button
+            {
+                Content = content,
+                Padding = new Thickness(4, 0, 4, 0),
+                CornerRadius = new CornerRadius(4),
+                BorderThickness = new Thickness(1),
+                MinHeight = 0,
+                MinWidth = 0,
+                Height = 18 // Fits precisely in RowPitch (18)
+            };
+            ToolTipService.SetToolTip(btn, "Load a video into " + text + " (or drag & drop)");
+            btn.Click += (s, e) => LoadIntoTrack(trackIndex);
+
+            Canvas.SetLeft(btn, 2);
+            Canvas.SetTop(btn, y - 1);
+            TimelineLabels.Children.Add(btn);
+        }
+
+        // Open a file picker and add the chosen video(s)/image(s) to a track, then drop into Edit —
+        // the click-to-load alternative to dragging from Explorer.
+        private async void LoadIntoTrack(int trackIndex)
+        {
+            var openPicker = new FileOpenPicker();
+            var window = MainWindow.Instance;
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+            WinRT.Interop.InitializeWithWindow.Initialize(openPicker, hwnd);
+            openPicker.ViewMode = PickerViewMode.Thumbnail;
+            openPicker.SuggestedStartLocation = PickerLocationId.VideosLibrary;
+            foreach (var ext in new[] { ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".jpg", ".jpeg", ".png", ".gif", ".bmp" })
+                openPicker.FileTypeFilter.Add(ext);
+
+            var files = await openPicker.PickMultipleFilesAsync();
+            if (files == null || files.Count == 0) return;
+
+            if (trackIndex < 0)
+            {
+                var paths = new List<string>();
+                foreach (var f in files) paths.Add(f.Path);
+                await ViewModel.AddFilesAsync(paths);
+                EditNewestSpineClip();
+            }
+            else
+            {
+                foreach (var f in files)
+                    await ViewModel.AddOverlayAsync(f.Path, TimeSpan.Zero, trackIndex);
+                if (trackIndex < ViewModel.OverlayTracks.Count)
+                {
+                    var track = ViewModel.OverlayTracks[trackIndex];
+                    if (track.Clips.Count > 0)
+                    {
+                        if (ViewModel.IsPlaying) _playbackEngine?.StopPlayback();
+                        SelectClip(track.Clips[^1], isSpine: false);
+                    }
+                }
+            }
         }
 
         // Spotlight opacity for a clip block, by mode:
@@ -354,35 +423,96 @@ namespace ModernImageViewer.VideoDirector.Views
             // depends on mode — Arrange: all; Edit: the edited clip; Play: everything on screen now.
             double dim = BlockDim(clip);
 
+            var topColor = Microsoft.UI.ColorHelper.FromArgb(color.A,
+                (byte)Math.Min(255, color.R + 30),
+                (byte)Math.Min(255, color.G + 30),
+                (byte)Math.Min(255, color.B + 30));
+            var gradient = new Microsoft.UI.Xaml.Media.LinearGradientBrush
+            {
+                StartPoint = new Windows.Foundation.Point(0, 0),
+                EndPoint = new Windows.Foundation.Point(0, 1)
+            };
+            gradient.GradientStops.Add(new Microsoft.UI.Xaml.Media.GradientStop { Color = topColor, Offset = 0.0 });
+            gradient.GradientStops.Add(new Microsoft.UI.Xaml.Media.GradientStop { Color = color, Offset = 1.0 });
+
+            bool isSelected = clip != null && ReferenceEquals(clip, ViewModel.SelectedClip);
             var r = new Microsoft.UI.Xaml.Shapes.Rectangle
             {
                 Width = width,
                 Height = height,
-                RadiusX = 2,
-                RadiusY = 2,
+                RadiusX = 4,
+                RadiusY = 4,
                 Opacity = dim,
-                Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(color)
+                Fill = gradient,
+                Stroke = isSelected 
+                    ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) 
+                    : new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(50, 0, 0, 0)),
+                StrokeThickness = isSelected ? 2 : 1
             };
             Canvas.SetLeft(r, x);
             Canvas.SetTop(r, y);
             TimelineBar.Children.Add(r);
 
-            // File-name label inside the block, in whichever of black/white reads on this colour.
-            if (clip != null && !string.IsNullOrEmpty(clip.FileName) && width > 16)
+            if (ViewModel.ShowAudioWaveforms && width > 10 && height > 10)
             {
+                var wf = new Microsoft.UI.Xaml.Shapes.Polyline
+                {
+                    Stroke = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(110, 255, 255, 255)),
+                    StrokeThickness = 1,
+                    IsHitTestVisible = false,
+                    Opacity = dim
+                };
+                int pointsCount = (int)Math.Max(5, Math.Min(width / 3, 150));
+                double stepX = width / (pointsCount - 1);
+                double midY = height * 0.75;
+                for (int i = 0; i < pointsCount; i++)
+                {
+                    double amp = (Math.Sin(i * 1.3 + (clip?.GetHashCode() ?? 0)) * Math.Cos(i * 0.7) * 0.45) * (height * 0.22);
+                    wf.Points.Add(new Windows.Foundation.Point(i * stepX, midY + amp));
+                }
+                Canvas.SetLeft(wf, x);
+                Canvas.SetTop(wf, y);
+                TimelineBar.Children.Add(wf);
+            }
+
+            // File-name label inside the block, in whichever of black/white reads on this colour.
+            if (clip != null && !string.IsNullOrEmpty(clip.FileName) && width > 24)
+            {
+                var sp = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 4,
+                    IsHitTestVisible = false,
+                    Opacity = dim,
+                    Height = height // Constrain height to block height for proper vertical centering
+                };
+                
+                var textColor = new Microsoft.UI.Xaml.Media.SolidColorBrush(TrackPalette.TextOn(color));
+                var icon = new FontIcon
+                {
+                    Glyph = "\uE714", // Video icon
+                    FontSize = 9,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Foreground = textColor,
+                    Margin = new Thickness(0, 0, 0, 0) // No artificial nudge
+                };
                 var label = new TextBlock
                 {
                     Text = clip.FileName,
                     FontSize = 9,
-                    MaxWidth = width - 6,
+                    MaxWidth = width - 24, // Provide enough room to prevent text clipping the right edge
                     TextTrimming = TextTrimming.CharacterEllipsis,
-                    IsHitTestVisible = false,
-                    Opacity = dim,
-                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(TrackPalette.TextOn(color))
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Foreground = textColor,
+                    Margin = new Thickness(0, 0, 0, 0) // No artificial nudge
                 };
-                Canvas.SetLeft(label, x + 4);
-                Canvas.SetTop(label, y + 1);
-                TimelineBar.Children.Add(label);
+                
+                sp.Children.Add(icon);
+                sp.Children.Add(label);
+                
+                Canvas.SetLeft(sp, x + 6); // Extra breathing room on the left
+                Canvas.SetTop(sp, y); // Align exactly to top to let VerticalAlignment.Center do its job
+                TimelineBar.Children.Add(sp);
             }
         }
 
@@ -433,6 +563,28 @@ namespace ModernImageViewer.VideoDirector.Views
             if (_dragClip == null) return;
             if (!_timelineMovingClip && Math.Abs(p.X - _timelinePressPoint.X) < 4) return;
             _timelineMovingClip = true;
+
+            // Live transfer between Track 1 (Spine) and Track 2/3/4 (Overlays)
+            if (_dragIsSpine && p.Y >= RowOvY && ViewModel.TimelineNodes.Count > 1)
+            {
+                ViewModel.TimelineNodes.Remove(_dragClip);
+                int targetIndex = Math.Clamp((int)((p.Y - RowOvY) / RowPitch), 0, ViewModel.OverlayTracks.Count - 1);
+                var targetTrk = ViewModel.OverlayTracks[targetIndex];
+                double newStart = Math.Max(0, (p.X / _timelinePxPerSec) - _dragGrabOffsetSec);
+                _dragClip.StartTime = TimeSpan.FromSeconds(newStart);
+                targetTrk.Clips.Add(_dragClip);
+                targetTrk.ResolveOverlaps();
+                _dragIsSpine = false;
+            }
+            else if (!_dragIsSpine && p.Y < RowOvY)
+            {
+                var currentTrk = TrackOf(_dragClip);
+                currentTrk?.Clips.Remove(_dragClip);
+                int insertIdx = ComputeSpineInsertIndex(p.X);
+                insertIdx = Math.Clamp(insertIdx, 0, ViewModel.TimelineNodes.Count);
+                ViewModel.TimelineNodes.Insert(insertIdx, _dragClip);
+                _dragIsSpine = true;
+            }
 
             if (_dragIsSpine)
             {
@@ -661,12 +813,87 @@ namespace ModernImageViewer.VideoDirector.Views
             ViewModel.RecordIfChanged();
         }
 
+        private List<double> GetTimelineSnapPoints(CinematicOperation? ignoreClip, bool includePlayhead)
+        {
+            var points = new List<double> { 0.0 };
+            if (includePlayhead && ViewModel != null)
+                points.Add(ViewModel.CurrentStoryTime.TotalSeconds);
+            
+            if (ViewModel?.TimelineNodes != null)
+            {
+                for (int i = 0; i < ViewModel.TimelineNodes.Count; i++)
+                {
+                    var c = ViewModel.TimelineNodes[i];
+                    if (c == ignoreClip) continue;
+                    double s = ViewModel.GetSpineClipStart(i).TotalSeconds;
+                    points.Add(s);
+                    points.Add(s + c.OpDuration.TotalSeconds);
+                }
+            }
+            if (ViewModel?.OverlayTracks != null)
+            {
+                foreach (var trk in ViewModel.OverlayTracks)
+                {
+                    foreach (var c in trk.Clips)
+                    {
+                        if (c == ignoreClip) continue;
+                        points.Add(c.StartTimeSeconds);
+                        points.Add(c.StartTimeSeconds + c.OpDuration.TotalSeconds);
+                    }
+                }
+            }
+            return points;
+        }
+
+        private double ApplyScrubSnapping(double sec)
+        {
+            if (ViewModel == null || !ViewModel.IsSnappingEnabled || _timelinePxPerSec <= 0) return sec;
+            double threshold = 8.0 / _timelinePxPerSec; // 8px magnetic radius
+            double best = sec;
+            double minDiff = threshold;
+            foreach (double sp in GetTimelineSnapPoints(null, includePlayhead: false))
+            {
+                double diff = Math.Abs(sec - sp);
+                if (diff < minDiff)
+                {
+                    minDiff = diff;
+                    best = sp;
+                }
+            }
+            return best;
+        }
+
+        private double ApplyClipSnapping(double desiredStartSec, double durSec, CinematicOperation ignoreClip)
+        {
+            if (ViewModel == null || !ViewModel.IsSnappingEnabled || _timelinePxPerSec <= 0) return desiredStartSec;
+            double threshold = 8.0 / _timelinePxPerSec; // 8px magnetic radius
+            double best = desiredStartSec;
+            double minDiff = threshold;
+            foreach (double sp in GetTimelineSnapPoints(ignoreClip, includePlayhead: true))
+            {
+                double diffLeft = Math.Abs(desiredStartSec - sp);
+                if (diffLeft < minDiff)
+                {
+                    minDiff = diffLeft;
+                    best = sp;
+                }
+                double diffRight = Math.Abs((desiredStartSec + durSec) - sp);
+                if (diffRight < minDiff)
+                {
+                    minDiff = diffRight;
+                    best = sp - durSec;
+                }
+            }
+            return best;
+        }
+
         // Map x -> story time and seek the composite (spine frame + active overlays).
         private void ScrubToX(double x)
         {
             if (_timelinePxPerSec <= 0) return;
             double total = ViewModel.TotalStoryDuration.TotalSeconds;
             double sec = Math.Clamp(x / _timelinePxPerSec, 0, total);
+            sec = ApplyScrubSnapping(sec);
             _playbackEngine?.SeekCompositeToStoryTime(TimeSpan.FromSeconds(sec));
         }
 
@@ -737,8 +964,9 @@ namespace ModernImageViewer.VideoDirector.Views
             double dur = _dragClip.OpDuration.TotalSeconds;
             double newStart = (p.X / _timelinePxPerSec) - _dragGrabOffsetSec;
             newStart = Math.Clamp(newStart, 0, Math.Max(0, total - dur));
-            newStart = target.ClampToFreeSlot(_dragClip, newStart, dur);
+            newStart = ApplyClipSnapping(newStart, dur, _dragClip);
             _dragClip.StartTime = TimeSpan.FromSeconds(newStart);
+            target.ResolveOverlaps();
             BuildTimelineBar();
             _playbackEngine?.RefreshComposite();   // moving in time can change what's on screen
             // History is recorded once on drop (PointerReleased), not per move-tick.
@@ -799,6 +1027,78 @@ namespace ModernImageViewer.VideoDirector.Views
         private void Trim_Click(object sender, RoutedEventArgs e)
         {
             ClipScrubber?.EnterTrimmedView();
+        }
+
+        // ==================== Advanced NLE Mechanic Stubs (Visual Foundations) ====================
+        //
+        // These stub handlers establish the structural blueprint for upcoming NLE features, ensuring
+        // clean domain separation between Arrange Mode and Edit Mode without piecemeal architectural drift.
+
+        private void FrameStepBack_Click(object sender, RoutedEventArgs e)
+        {
+            StepFrame(-1);
+        }
+
+        private void FrameStepForward_Click(object sender, RoutedEventArgs e)
+        {
+            StepFrame(1);
+        }
+
+        private void StepFrame(int direction)
+        {
+            if (!ViewModel.IsEditMode)
+            {
+                double stepSec = direction > 0 ? 1.0 : -1.0;
+                double newStoryTime = Math.Clamp(ViewModel.CurrentStoryTime.TotalSeconds + stepSec, 0, ViewModel.TotalStoryDuration.TotalSeconds);
+                _playbackEngine?.SeekCompositeToStoryTime(TimeSpan.FromSeconds(newStoryTime));
+                return;
+            }
+
+            var op = ViewModel.SelectedClip;
+            if (op == null) return;
+
+            double fps = 30.0;
+            double frameDuration = 1.0 / fps;
+            double target = Math.Clamp(ViewModel.CurrentOperationTimeSeconds + direction * frameDuration, op.VideoStartTime.TotalSeconds, op.VideoEndTime.TotalSeconds);
+            ViewModel.CurrentOperationTimeSeconds = target;
+        }
+
+        private void MagnetButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Microsoft.UI.Xaml.Controls.Primitives.ToggleButton tb)
+            {
+                ViewModel.IsSnappingEnabled = tb.IsChecked ?? true;
+            }
+        }
+
+        private void RippleEditButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Microsoft.UI.Xaml.Controls.Primitives.ToggleButton tb)
+            {
+                ViewModel.IsRippleEditEnabled = tb.IsChecked ?? true;
+            }
+        }
+
+        private void WaveformButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Microsoft.UI.Xaml.Controls.Primitives.ToggleButton tb)
+            {
+                ViewModel.ShowAudioWaveforms = tb.IsChecked ?? false;
+                BuildTimelineBar();
+            }
+        }
+
+        private void ZoomInTimeline_Click(object sender, RoutedEventArgs e)
+        {
+            _timelineZoomFactor = Math.Min(16.0, _timelineZoomFactor * 1.3333333);
+            BuildTimelineBar();
+        }
+
+        private void ZoomOutTimeline_Click(object sender, RoutedEventArgs e)
+        {
+            _timelineZoomFactor = Math.Max(1.0, _timelineZoomFactor / 1.3333333);
+            if (_timelineZoomFactor <= 1.01) _timelineZoomFactor = 1.0;
+            BuildTimelineBar();
         }
 
         private void SetStart_Click(object sender, RoutedEventArgs e)
@@ -867,12 +1167,28 @@ namespace ModernImageViewer.VideoDirector.Views
                 // Playbar's per-clip scrubber. It stays clickable — a click on it exits Edit.
                 if (TrackDock != null)
                     TrackDock.Opacity = ViewModel.IsEditMode ? 0.5 : 1.0;
+
+                if (ViewModel.IsEditMode)
+                {
+                    _pulsePhase = 0;
+                    _pulseTimer.Start();
+                    ClipScrubber?.AutoFitTrimRange();
+                }
+                else
+                {
+                    _pulseTimer.Stop();
+                    if (ModeBadgeButton != null) ModeBadgeButton.Opacity = 1.0;
+                }
                 return;
             }
             if (e.PropertyName == nameof(DirectorViewModel.SelectedClip))
             {
                 BuildTimelineBar();                  // redraw so the selection highlight moves
                 _playbackEngine?.RefreshComposite(); // and so the PiP chrome follows the selection
+                if (ViewModel.IsEditMode)
+                {
+                    ClipScrubber?.AutoFitTrimRange();
+                }
             }
             if (e.PropertyName == nameof(DirectorViewModel.IsPlaying))
             {
@@ -908,7 +1224,7 @@ namespace ModernImageViewer.VideoDirector.Views
 
                 if (ViewModel.IsRecordingMotion)
                 {
-                    var op = ViewModel.SelectedTimelineNode as CinematicOperation ?? _playbackEngine?.CurrentPlayingOperation;
+                    var op = ViewModel.SelectedClip ?? _playbackEngine?.CurrentPlayingOperation;
                     if (op != null)
                     {
                         _preRecordSpeed = ViewModel.PlaybackSpeed;
@@ -922,7 +1238,7 @@ namespace ModernImageViewer.VideoDirector.Views
                 }
                 else
                 {
-                    var op = ViewModel.SelectedTimelineNode as CinematicOperation ?? _playbackEngine?.CurrentPlayingOperation;
+                    var op = ViewModel.SelectedClip ?? _playbackEngine?.CurrentPlayingOperation;
                     if (op != null)
                     {
                         _playbackEngine?.StopRecordingMotion(op);
@@ -1035,6 +1351,79 @@ namespace ModernImageViewer.VideoDirector.Views
         private void Next_Click(object sender, RoutedEventArgs e)
         {
             _playbackEngine?.SkipNext();
+        }
+
+        private async void FitWindow_Click(object sender, RoutedEventArgs e)
+        {
+            if (_timelineZoomFactor > 1.0)
+            {
+                _timelineZoomFactor = 1.0;
+                BuildTimelineBar();
+            }
+            double targetAspect = 16.0 / 9.0;
+            var mpA = PlayerControl.PlayerA?.MediaPlayer;
+            var mpB = PlayerControl.PlayerB?.MediaPlayer;
+            
+            // Get the true video aspect ratio directly from the file container
+            // This bypasses Windows Media Foundation padding (e.g. 1918x804 padded to 1920x816)
+            var activeClip = System.Linq.Enumerable.FirstOrDefault(ViewModel.TimelineNodes);
+            if (activeClip != null && !string.IsNullOrEmpty(activeClip.FilePath))
+            {
+                try
+                {
+                    var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(activeClip.FilePath);
+                    var props = await file.Properties.GetVideoPropertiesAsync();
+                    if (props != null && props.Width > 0 && props.Height > 0)
+                    {
+                        targetAspect = (double)props.Width / props.Height;
+                    }
+                }
+                catch { }
+            }
+
+            // Fallback to WMF dimensions if file properties failed
+            if (targetAspect == 16.0 / 9.0)
+            {
+                var activePlayer = PlayerControl.PlayerA.Opacity > 0.5 ? mpA : mpB;
+                if (activePlayer != null && activePlayer.PlaybackSession != null)
+                {
+                    uint vw = activePlayer.PlaybackSession.NaturalVideoWidth;
+                    uint vh = activePlayer.PlaybackSession.NaturalVideoHeight;
+                    if (vw > 0 && vh > 0)
+                    {
+                        targetAspect = (double)vw / vh;
+                    }
+                }
+            }
+
+            double w = PlayerControl.ActualWidth;
+            double h = PlayerControl.ActualHeight;
+            if (w <= 0 || h <= 0) return;
+
+            var appWindow = MainWindow.Instance.AppWindow;
+            if (appWindow == null) return;
+
+            double scale = this.XamlRoot?.RasterizationScale ?? 1.0;
+
+            // Calculate chrome (timeline dock, etc.) from the exact physical client size
+            double physicalClientW = appWindow.ClientSize.Width;
+            double physicalClientH = appWindow.ClientSize.Height;
+            double logicalClientW = physicalClientW / scale;
+            double logicalClientH = physicalClientH / scale;
+
+            double chromeW = logicalClientW - w;
+            double chromeH = logicalClientH - h;
+
+            // USER RULE: Baseline the window against the CURRENT horizontal width.
+            // Horizontal does not change. Shrink the vertical height to remove empty space.
+            double newClientLogicalWidth = w + chromeW;
+            double newClientLogicalHeight = (w / targetAspect) + chromeH;
+
+            // Floor the height to ensure we don't get a 1px gap from rounding up
+            int winWidthPhysical = (int)System.Math.Round(newClientLogicalWidth * scale);
+            int winHeightPhysical = (int)System.Math.Floor(newClientLogicalHeight * scale);
+
+            appWindow.ResizeClient(new Windows.Graphics.SizeInt32(winWidthPhysical, winHeightPhysical));
         }
 
         private async void Save_Click(object sender, RoutedEventArgs e)
@@ -1182,6 +1571,33 @@ namespace ModernImageViewer.VideoDirector.Views
         }
 
 
+        private void PulseTimer_Tick(object sender, object e)
+        {
+            _pulsePhase += 0.15;
+            if (ModeBadgeButton != null)
+            {
+                // Smooth sine wave oscillation between opacity 0.55 and 1.0
+                ModeBadgeButton.Opacity = 0.775 + 0.225 * Math.Sin(_pulsePhase);
+            }
+        }
+
+        private void ModeBadge_Click(object sender, RoutedEventArgs e)
+        {
+            if (ViewModel.IsEditMode)
+            {
+                ExitEditMode();
+            }
+        }
+
+        private void PlaybarSplit_Click(object sender, RoutedEventArgs e)
+        {
+            if (ViewModel.SelectedClip != null)
+            {
+                bool isSpine = ViewModel.SelectedOverlay == null;
+                SplitClip(ViewModel.SelectedClip, isSpine);
+            }
+        }
+
         private void ExitToArrange_Click(object sender, RoutedEventArgs e) => ExitEditMode();
 
         // Double-tap the image (Arrange) to edit the clip under the cursor: an overlay PiP, or the
@@ -1206,12 +1622,26 @@ namespace ModernImageViewer.VideoDirector.Views
         private void ExitEditMode()
         {
             if (!ViewModel.IsEditMode) return;
+
+            if (ViewModel.SelectedOverlay != null)
+            {
+                foreach (var track in ViewModel.OverlayTracks)
+                {
+                    if (track.Clips.Contains(ViewModel.SelectedOverlay))
+                    {
+                        track.ResolveOverlaps();
+                        break;
+                    }
+                }
+            }
+
             // Clear the selection so we don't immediately re-enter Edit, then return to Arrange.
             ViewModel.SelectedTimelineNode = null;
             ViewModel.SelectedOverlay = null;
             _playbackEngine?.ExitToArrange();
             // An edit session (trim/speed/framing changes) collapses into one undo step here.
             ViewModel.RecordIfChanged();
+            BuildTimelineBar();
         }
 
         private void EscapeAccelerator_Invoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender,
@@ -1240,6 +1670,30 @@ namespace ModernImageViewer.VideoDirector.Views
             bool isSpine = ViewModel.IsTrack1Selected;
             if (ViewModel.IsEditMode) ExitEditMode();
             RemoveClip(clip, isSpine);
+        }
+
+        private void LeftAccelerator_Invoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender,
+                                             Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
+        {
+            if (IsTextInputFocused()) return;
+            args.Handled = true;
+            StepFrame(-1);
+        }
+
+        private void RightAccelerator_Invoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender,
+                                              Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
+        {
+            if (IsTextInputFocused()) return;
+            args.Handled = true;
+            StepFrame(1);
+        }
+
+        private void SplitAccelerator_Invoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender,
+                                              Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
+        {
+            if (IsTextInputFocused() || !ViewModel.HasSelection) return;
+            args.Handled = true;
+            PlaybarSplit_Click(this, null);
         }
 
         // A NumberBox hosts an inner TextBox, so a focused TextBox means the user is typing —

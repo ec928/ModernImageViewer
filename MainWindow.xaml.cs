@@ -49,6 +49,7 @@ namespace ModernImageViewer
         private void OnPropertyChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
         private readonly AppWindow _appWindow;
+        public AppWindow AppWindow => _appWindow;
         private AppSettings _currentSettings = new AppSettings();
         private readonly IntPtr _hWnd;
         private readonly KeyEventHandler _globalKeyDownHandler;

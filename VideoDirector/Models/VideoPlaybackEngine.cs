@@ -955,6 +955,27 @@ namespace ModernImageViewer.VideoDirector.Models
             double W = _playerControl.ActualWidth > 0 ? _playerControl.ActualWidth : 1920;
             double H = _playerControl.ActualHeight > 0 ? _playerControl.ActualHeight : 1080;
 
+            // If we're editing an overlay track, the crop box aspect ratio must match the PiP's aspect ratio.
+            double boxW = W;
+            double boxH = H;
+            if (_viewModel.IsOverlaySelected)
+            {
+                double pipAspect = (16.0 / 9.0) * (op.PlacementWidth / op.PlacementHeight);
+                double videoAspect = W / H;
+
+                // When Scale=1 (UniformToFill), the PiP crop box fits the video on one axis.
+                if (pipAspect > videoAspect)
+                {
+                    boxW = W;
+                    boxH = W / pipAspect;
+                }
+                else
+                {
+                    boxH = H;
+                    boxW = H * pipAspect;
+                }
+            }
+
             void DrawRect(Microsoft.UI.Xaml.Shapes.Rectangle rect, SpatialMark targetMark, bool show)
             {
                 if (!show || targetMark == null)
@@ -975,10 +996,10 @@ namespace ModernImageViewer.VideoDirector.Models
 
                 if (St <= 0) St = 1;
 
-                double currentLeft = (-W / 2 - txt) * (Sc / St) + W / 2 + txc;
-                double currentTop = (-H / 2 - tyt) * (Sc / St) + H / 2 + tyc;
-                double currentWidth = W * (Sc / St);
-                double currentHeight = H * (Sc / St);
+                double currentLeft = (-boxW / 2 - txt) * (Sc / St) + W / 2 + txc;
+                double currentTop = (-boxH / 2 - tyt) * (Sc / St) + H / 2 + tyc;
+                double currentWidth = boxW * (Sc / St);
+                double currentHeight = boxH * (Sc / St);
 
                 Microsoft.UI.Xaml.Controls.Canvas.SetLeft(rect, currentLeft);
                 Microsoft.UI.Xaml.Controls.Canvas.SetTop(rect, currentTop);
@@ -991,7 +1012,11 @@ namespace ModernImageViewer.VideoDirector.Models
             DrawRect(_playerControl.WysiwygEndRect, op.EndMark, true);
 
             // Draw Full Frame representation (Scale=1, Tx=0, Ty=0)
-            DrawRect(_playerControl.WysiwygFullFrameRect, new SpatialMark(1f, 0f, 0f), true);
+            // This should always represent the physical bounds of the source video (W x H)
+            // so it outlines the media itself, rather than the cropped PiP box.
+            boxW = W;
+            boxH = H;
+            DrawRect(_playerControl.WysiwygFullFrameRect, new SpatialMark(1f, 0f, 0f), false);
         }
 
         // Backfill the true source length from the opened media. Covers clips from older projects
