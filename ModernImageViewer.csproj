@@ -77,9 +77,6 @@
     <Page Update="Cinematic\CinematicWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
     </Page>
-    <Page Update="VideoDirector\Views\DirectorPlayerControl.xaml">
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
   </ItemGroup>
 
   <!--

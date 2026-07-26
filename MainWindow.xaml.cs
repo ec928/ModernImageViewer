@@ -257,6 +257,7 @@ namespace ModernImageViewer
             public int DirectorWindowY { get; set; } = -1;
             public float Gamma { get; set; } = 2.2f;
             public string ImageEditorPath { get; set; } = "mspaint.exe";
+            public string VideoDirectorPath { get; set; } = string.Empty;
             public List<string> RecentFolders { get; set; } = new();
         }
 
@@ -392,43 +393,67 @@ namespace ModernImageViewer
         // This is throwaway code. We will replace it with a proper CollageEditorWindow later.
         private CollageEditorWindow? _collageEditorWindow;
 
-        private void OpenDirector_Click(object sender, RoutedEventArgs e)
+        private async void OpenDirector_Click(object sender, RoutedEventArgs e)
         {
-            if (_appWindow != null)
+            try
             {
-                // First, flush the currently visible mode's bounds to _currentSettings and disk
-                SaveAllSettings();
-
-                if (DirectorControl.Visibility == Visibility.Visible)
+                string path = _currentSettings.VideoDirectorPath;
+                if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
                 {
-                    DirectorControl.Visibility = Visibility.Collapsed;
-                    
-                    _appWindow.Resize(new Windows.Graphics.SizeInt32(_currentSettings.WindowWidth, _currentSettings.WindowHeight));
-                    if (_currentSettings.WindowX != -1 && _currentSettings.WindowY != -1)
-                        _appWindow.Move(new Windows.Graphics.PointInt32(_currentSettings.WindowX, _currentSettings.WindowY));
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = path,
+                        UseShellExecute = true
+                    });
+                    return;
                 }
-                else
-                {
-                    DirectorControl.Visibility = Visibility.Visible;
-                    ViewerControl.Visibility = Visibility.Collapsed; // Hide standard viewer if open
 
-                    _appWindow.Resize(new Windows.Graphics.SizeInt32(_currentSettings.DirectorWindowWidth, _currentSettings.DirectorWindowHeight));
-                    if (_currentSettings.DirectorWindowX != -1 && _currentSettings.DirectorWindowY != -1)
-                        _appWindow.Move(new Windows.Graphics.PointInt32(_currentSettings.DirectorWindowX, _currentSettings.DirectorWindowY));
+                // Check standard fallback locations
+                string[] fallbacks = new[]
+                {
+                    System.IO.Path.Combine(AppContext.BaseDirectory, "VideoDirector.exe"),
+                    System.IO.Path.Combine(AppContext.BaseDirectory, @"..\VideoDirector\VideoDirector.exe"),
+                    @"c:\Users\chan_\OneDrive\Apps\VideoDirector\VideoDirector.exe"
+                };
+
+                foreach (var candidate in fallbacks)
+                {
+                    if (File.Exists(candidate))
+                    {
+                        _currentSettings.VideoDirectorPath = candidate;
+                        SaveAllSettings();
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = candidate,
+                            UseShellExecute = true
+                        });
+                        return;
+                    }
+                }
+
+                // Prompt user to locate VideoDirector.exe if missing
+                var picker = new Windows.Storage.Pickers.FileOpenPicker();
+                var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+                WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+                picker.ViewMode = Windows.Storage.Pickers.PickerViewMode.Thumbnail;
+                picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.ComputerFolder;
+                picker.FileTypeFilter.Add(".exe");
+
+                var file = await picker.PickSingleFileAsync();
+                if (file != null)
+                {
+                    _currentSettings.VideoDirectorPath = file.Path;
+                    SaveAllSettings();
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = file.Path,
+                        UseShellExecute = true
+                    });
                 }
             }
-            else
+            catch (Exception ex)
             {
-                // Toggle visibility of the director control (fallback if _appWindow missing)
-                if (DirectorControl.Visibility == Visibility.Visible)
-                {
-                    DirectorControl.Visibility = Visibility.Collapsed;
-                }
-                else
-                {
-                    DirectorControl.Visibility = Visibility.Visible;
-                    ViewerControl.Visibility = Visibility.Collapsed; // Hide standard viewer if open
-                }
+                System.Diagnostics.Debug.WriteLine($"Failed to launch Video Director: {ex.Message}");
             }
         }
 
@@ -470,20 +495,10 @@ namespace ModernImageViewer
 
                 if (_appWindow.Presenter is OverlappedPresenter p && p.State == OverlappedPresenterState.Minimized) return;
 
-                if (DirectorControl.Visibility == Visibility.Visible)
-                {
-                    _currentSettings.DirectorWindowWidth = _appWindow.Size.Width;
-                    _currentSettings.DirectorWindowHeight = _appWindow.Size.Height;
-                    _currentSettings.DirectorWindowX = _appWindow.Position.X;
-                    _currentSettings.DirectorWindowY = _appWindow.Position.Y;
-                }
-                else
-                {
-                    _currentSettings.WindowWidth = _appWindow.Size.Width;
-                    _currentSettings.WindowHeight = _appWindow.Size.Height;
-                    _currentSettings.WindowX = _appWindow.Position.X;
-                    _currentSettings.WindowY = _appWindow.Position.Y;
-                }
+                _currentSettings.WindowWidth = _appWindow.Size.Width;
+                _currentSettings.WindowHeight = _appWindow.Size.Height;
+                _currentSettings.WindowX = _appWindow.Position.X;
+                _currentSettings.WindowY = _appWindow.Position.Y;
 
                 _currentSettings.Gamma = _currentGamma;
                 _currentSettings.ImageEditorPath = ImageEditorPath;

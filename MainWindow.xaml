@@ -3,7 +3,6 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:ModernImageViewer"
     xmlns:canvas="using:Microsoft.Graphics.Canvas.UI.Xaml"
-    xmlns:vd="using:ModernImageViewer.VideoDirector.Views"
     x:Class="ModernImageViewer.MainWindow"
     Title="Modern Image Viewer">
 
@@ -199,10 +198,6 @@
                                               RenameRequested="ViewerControl_RenameRequested"
                                               DeleteRequested="ViewerControl_DeleteRequested"
                                               AddToCollageRequested="ViewerControl_AddToCollageRequested" />
-
-                    <vd:VideoDirectorControl x:Name="DirectorControl"
-                                             Visibility="Collapsed"
-                                             Canvas.ZIndex="1000" />
 
                     <Grid x:Name="MultiSelectActionBar" Visibility="Collapsed" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,24" Canvas.ZIndex="500">
                         <Border Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="16,8">
