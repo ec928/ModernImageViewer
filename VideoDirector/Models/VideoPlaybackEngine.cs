@@ -77,6 +77,7 @@ namespace ModernImageViewer.VideoDirector.Models
             _viewModel.PlaybackSpeedChanged += ViewModel_PlaybackSpeedChanged;
             _viewModel.OperationSeekRequested += ViewModel_OperationSeekRequested;
             _viewModel.PropertyChanged += ViewModel_PropertyChanged;
+            _viewModel.TimelineNodes.CollectionChanged += (s, e) => OnTimelineSequenceChanged();
 
             // Arrange mode: drag/wheel the PiP under the cursor.
             _playerControl.OverlayBoxDragged += OnOverlayBoxDragged;
@@ -96,6 +97,37 @@ namespace ModernImageViewer.VideoDirector.Models
             if (e.PropertyName == nameof(DirectorViewModel.IsTelemetryVisible))
             {
                 _dispatcher.TryEnqueue(() => UpdateTelemetryOverlay());
+            }
+            else if (e.PropertyName == nameof(DirectorViewModel.TotalStoryTime))
+            {
+                OnTimelineSequenceChanged();
+            }
+        }
+
+        private void OnTimelineSequenceChanged()
+        {
+            if (_playbackCts != null && !_playbackCts.IsCancellationRequested)
+            {
+                if (_isPaused)
+                {
+                    // If paused when the timeline sequence changes, stop the stale playback loop.
+                    // Clicking Play later will start a clean loop from the current playhead position.
+                    StopPlayback(cancelRecording: false);
+                    _isPaused = false;
+                    _viewModel.IsPlaying = false;
+                }
+                else if (_isAnimating)
+                {
+                    // If actively playing when the sequence changes, restart playback at the current playhead position.
+                    var at = _viewModel.CurrentStoryTime;
+                    int startIdx = _viewModel.GetTimelineIndexForStoryTime(at);
+                    var offset = at - _viewModel.GetSpineClipStart(startIdx);
+                    if (offset < TimeSpan.Zero) offset = TimeSpan.Zero;
+                    if (startIdx >= 0 && startIdx < _viewModel.TimelineNodes.Count
+                        && offset > _viewModel.TimelineNodes[startIdx].OpDuration) offset = TimeSpan.Zero;
+
+                    _ = StartPlaybackAsync(startIdx, offset);
+                }
             }
         }
 
@@ -780,7 +812,7 @@ namespace ModernImageViewer.VideoDirector.Models
                 double spatialProgress = 1.0;
                 if (duration.TotalMilliseconds > 0)
                 {
-                    if (player?.PlaybackSession != null)
+                    if (!op.IsStill && player?.PlaybackSession != null)
                     {
                         var actualElapsed = player.PlaybackSession.Position - op.VideoStartTime;
                         spatialProgress = Math.Clamp(actualElapsed.TotalMilliseconds / duration.TotalMilliseconds, 0.0, 1.0);
@@ -804,16 +836,25 @@ namespace ModernImageViewer.VideoDirector.Models
             // real playback, which is what caused the overlay stutter.
             var storyTimePlayer = _isPlayerAActive ? _mediaPlayerA : _mediaPlayerB;
             var storyTimeOp = _isPlayerAActive ? _opA : _opB;
-            if (storyTimeOp != null && storyTimePlayer?.PlaybackSession != null)
+            var storyTimeStart = _isPlayerAActive ? _opAStartTime : _opBStartTime;
+            if (storyTimeOp != null)
             {
                 // Video position advances at the clip's own playback rate, but story time is
                 // measured in real sequence seconds — a clip at 2x contributes half as much
                 // story time as video watched. Divide by the clip speed so the per-frame
                 // advance maxes out at exactly OpDuration, matching the boundary accounting.
-                double clipSpeed = storyTimeOp.PlaybackSpeed > 0 ? storyTimeOp.PlaybackSpeed : 1.0;
-                double videoElapsed = (storyTimePlayer.PlaybackSession.Position - storyTimeOp.VideoStartTime).TotalSeconds;
+                double videoElapsed;
+                if (!storyTimeOp.IsStill && storyTimePlayer?.PlaybackSession != null)
+                {
+                    double clipSpeed = storyTimeOp.PlaybackSpeed > 0 ? storyTimeOp.PlaybackSpeed : 1.0;
+                    videoElapsed = (storyTimePlayer.PlaybackSession.Position - storyTimeOp.VideoStartTime).TotalSeconds / clipSpeed;
+                }
+                else
+                {
+                    videoElapsed = (DateTime.Now - storyTimeStart).TotalSeconds;
+                }
                 if (videoElapsed < 0) videoElapsed = 0;
-                _viewModel.CurrentStoryTime = _storyTimeAtClipStart + TimeSpan.FromSeconds(videoElapsed / clipSpeed);
+                _viewModel.CurrentStoryTime = _storyTimeAtClipStart + TimeSpan.FromSeconds(videoElapsed);
             }
 
             // Evaluate overlay clips against master story time
@@ -1035,13 +1076,6 @@ namespace ModernImageViewer.VideoDirector.Models
             DrawRect(_playerControl.WysiwygStartRect, op.StartMark, true);
             DrawRect(_playerControl.WysiwygMidRect, op.MidMark, true);
             DrawRect(_playerControl.WysiwygEndRect, op.EndMark, true);
-
-            // Draw Full Frame representation (Scale=1, Tx=0, Ty=0)
-            // This should always represent the physical bounds of the source video (W x H)
-            // so it outlines the media itself, rather than the cropped PiP box.
-            boxW = W;
-            boxH = H;
-            DrawRect(_playerControl.WysiwygFullFrameRect, new SpatialMark(1f, 0f, 0f), false);
         }
 
         // Backfill the true source length from the opened media. Covers clips from older projects
@@ -1619,7 +1653,10 @@ namespace ModernImageViewer.VideoDirector.Models
             // and silently never fired — the render mode is now set explicitly by SetOverlayRender
             // at each state transition, never as a side effect of laying out a box.
 
-            grid.Margin = new Microsoft.UI.Xaml.Thickness(left, top, 0, 0);
+            if (grid.Margin.Left != left || grid.Margin.Top != top)
+            {
+                grid.Margin = new Microsoft.UI.Xaml.Thickness(left, top, 0, 0);
+            }
             // Only resize + reallocate the clip when the box dimensions actually change
             // (avoids per-frame allocation during playback).
             if (grid.Width != boxW || grid.Height != boxH)
@@ -1716,14 +1753,7 @@ namespace ModernImageViewer.VideoDirector.Models
             double rawProgress = overlay.OpDuration.TotalMilliseconds > 0
                 ? (currentStoryTime - overlay.StartTime).TotalMilliseconds / overlay.OpDuration.TotalMilliseconds
                 : 0;
-            ApplyMarksAtProgress(overlay, rawProgress, transform);
-
-            // Marks store the pan in EDIT-mode pixels, where the box fills the frame (placement
-            // = 1). The PiP box is smaller, so an unscaled pan would be exaggerated and push the
-            // video off-centre (a gap on one side). Scale the translation by the box fraction so
-            // the framing looks identical at any PiP size. (Zoom is relative, so it needs no scaling.)
-            transform.TranslateX *= overlay.PlacementWidth;
-            transform.TranslateY *= overlay.PlacementHeight;
+            ApplyMarksAtProgress(overlay, rawProgress, transform, overlay.PlacementWidth, overlay.PlacementHeight);
 
             // Placement box (where/how big on screen), clipped so framing can't spill out.
             ApplyOverlayBox(slot, overlay, false);
@@ -1732,7 +1762,7 @@ namespace ModernImageViewer.VideoDirector.Models
         // Applies a clip's Start/Mid/End marks to a transform at the given progress (0..1),
         // eased by the clip's CurveProfile. Shared by Track 1 (UpdateSpatial) and upper-track
         // overlay content so motion behaves identically on every track.
-        private void ApplyMarksAtProgress(CinematicOperation op, double rawProgress, Microsoft.UI.Xaml.Media.CompositeTransform transform)
+        private void ApplyMarksAtProgress(CinematicOperation op, double rawProgress, Microsoft.UI.Xaml.Media.CompositeTransform transform, double panScaleX = 1.0, double panScaleY = 1.0)
         {
             if (op == null || transform == null) return;
             double progress = Math.Clamp(rawProgress, 0, 1);
@@ -1743,37 +1773,47 @@ namespace ModernImageViewer.VideoDirector.Models
             else if (op.CurveProfile == CurveProfile.DirectorsArc)
                 easedProgress = 1 - Math.Pow(1 - progress, 3);
 
+            double newScaleX, newTranslateX, newTranslateY;
             if (op.MidMark != null)
             {
                 if (easedProgress < 0.5)
                 {
                     double p = easedProgress * 2;
-                    transform.ScaleX = op.StartMark.Scale + (op.MidMark.Scale - op.StartMark.Scale) * p;
-                    transform.TranslateX = op.StartMark.X + (op.MidMark.X - op.StartMark.X) * p;
-                    transform.TranslateY = op.StartMark.Y + (op.MidMark.Y - op.StartMark.Y) * p;
+                    newScaleX = op.StartMark.Scale + (op.MidMark.Scale - op.StartMark.Scale) * p;
+                    newTranslateX = op.StartMark.X + (op.MidMark.X - op.StartMark.X) * p;
+                    newTranslateY = op.StartMark.Y + (op.MidMark.Y - op.StartMark.Y) * p;
                 }
                 else
                 {
                     double p = (easedProgress - 0.5) * 2;
-                    transform.ScaleX = op.MidMark.Scale + (op.EndMark.Scale - op.MidMark.Scale) * p;
-                    transform.TranslateX = op.MidMark.X + (op.EndMark.X - op.MidMark.X) * p;
-                    transform.TranslateY = op.MidMark.Y + (op.EndMark.Y - op.MidMark.Y) * p;
+                    newScaleX = op.MidMark.Scale + (op.EndMark.Scale - op.MidMark.Scale) * p;
+                    newTranslateX = op.MidMark.X + (op.EndMark.X - op.MidMark.X) * p;
+                    newTranslateY = op.MidMark.Y + (op.EndMark.Y - op.MidMark.Y) * p;
                 }
-                transform.ScaleY = transform.ScaleX;
             }
             else
             {
-                transform.ScaleX = op.StartMark.Scale + (op.EndMark.Scale - op.StartMark.Scale) * easedProgress;
-                transform.ScaleY = transform.ScaleX;
-                transform.TranslateX = op.StartMark.X + (op.EndMark.X - op.StartMark.X) * easedProgress;
-                transform.TranslateY = op.StartMark.Y + (op.EndMark.Y - op.StartMark.Y) * easedProgress;
+                newScaleX = op.StartMark.Scale + (op.EndMark.Scale - op.StartMark.Scale) * easedProgress;
+                newTranslateX = op.StartMark.X + (op.EndMark.X - op.StartMark.X) * easedProgress;
+                newTranslateY = op.StartMark.Y + (op.EndMark.Y - op.StartMark.Y) * easedProgress;
             }
+
+            newTranslateX *= panScaleX;
+            newTranslateY *= panScaleY;
+
+            if (Math.Abs(transform.ScaleX - newScaleX) > 0.0001)
+            {
+                transform.ScaleX = newScaleX;
+                transform.ScaleY = newScaleX;
+            }
+            if (Math.Abs(transform.TranslateX - newTranslateX) > 0.01) transform.TranslateX = newTranslateX;
+            if (Math.Abs(transform.TranslateY - newTranslateY) > 0.01) transform.TranslateY = newTranslateY;
         }
 
         private void ApplyOverlayDriftCorrection(int slot, CinematicOperation overlay, TimeSpan currentStoryTime)
         {
             var player = _overlayPlayer[slot];
-            if (player.PlaybackSession == null) return;
+            if (overlay.IsStill || player.PlaybackSession == null) return;
 
             // Match SeekAndPlayOverlay: source advances at the clip's own speed.
             double clipSpeed = overlay.PlaybackSpeed;

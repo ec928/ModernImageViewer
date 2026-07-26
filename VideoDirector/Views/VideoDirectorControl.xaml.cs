@@ -39,6 +39,7 @@ namespace ModernImageViewer.VideoDirector.Views
         private int _lastActiveSignature = -1;             // playback spotlight refresh guard
         private DispatcherTimer _pulseTimer;
         private double _pulsePhase = 0;
+        private readonly Dictionary<CinematicOperation, List<UIElement>> _clipBlockElements = new();
 
         public VideoDirectorControl()
         {
@@ -129,6 +130,7 @@ namespace ModernImageViewer.VideoDirector.Views
         {
             if (TimelineBar == null) return;
             TimelineBar.Children.Clear();
+            _clipBlockElements.Clear();
             _playhead = null; _playheadKnob = null;
 
             TimelineBar.Height = TimelineBarHeight;   // grows with the upper-track count
@@ -453,6 +455,16 @@ namespace ModernImageViewer.VideoDirector.Views
             Canvas.SetTop(r, y);
             TimelineBar.Children.Add(r);
 
+            if (clip != null)
+            {
+                if (!_clipBlockElements.TryGetValue(clip, out var list))
+                {
+                    list = new List<UIElement>();
+                    _clipBlockElements[clip] = list;
+                }
+                list.Add(r);
+            }
+
             if (ViewModel.ShowAudioWaveforms && width > 10 && height > 10)
             {
                 var wf = new Microsoft.UI.Xaml.Shapes.Polyline
@@ -473,6 +485,8 @@ namespace ModernImageViewer.VideoDirector.Views
                 Canvas.SetLeft(wf, x);
                 Canvas.SetTop(wf, y);
                 TimelineBar.Children.Add(wf);
+
+                if (clip != null && _clipBlockElements.TryGetValue(clip, out var listWf)) listWf.Add(wf);
             }
 
             // File-name label inside the block, in whichever of black/white reads on this colour.
@@ -513,6 +527,8 @@ namespace ModernImageViewer.VideoDirector.Views
                 Canvas.SetLeft(sp, x + 6); // Extra breathing room on the left
                 Canvas.SetTop(sp, y); // Align exactly to top to let VerticalAlignment.Center do its job
                 TimelineBar.Children.Add(sp);
+
+                if (clip != null && _clipBlockElements.TryGetValue(clip, out var listSp)) listSp.Add(sp);
             }
         }
 
@@ -590,8 +606,20 @@ namespace ModernImageViewer.VideoDirector.Views
             {
                 // Ghost follows the cursor; the order itself is committed on release.
                 _dragCursorX = p.X;
-                _dragInsertIndex = ComputeSpineInsertIndex(p.X);
-                BuildTimelineBar();
+                int newIndex = ComputeSpineInsertIndex(p.X);
+                if (newIndex != _dragInsertIndex)
+                {
+                    _dragInsertIndex = newIndex;
+                    BuildTimelineBar();
+                }
+                else if (_clipBlockElements.TryGetValue(_dragClip, out var ghostElements))
+                {
+                    double ghostX = _dragCursorX - _dragGrabOffsetSec * _timelinePxPerSec;
+                    foreach (var el in ghostElements)
+                    {
+                        Canvas.SetLeft(el, el is StackPanel ? ghostX + 6 : ghostX);
+                    }
+                }
             }
             else MoveOverlayTo(p);   // x = time, y = which track
         }
@@ -632,6 +660,11 @@ namespace ModernImageViewer.VideoDirector.Views
                     int cur = ViewModel.TimelineNodes.IndexOf(_dragClip);
                     int target = Math.Clamp(_dragInsertIndex, 0, ViewModel.TimelineNodes.Count - 1);
                     if (cur >= 0 && target != cur) ViewModel.TimelineNodes.Move(cur, target);
+                }
+                else
+                {
+                    TrackOf(_dragClip)?.ResolveOverlaps();
+                    _playbackEngine?.RefreshComposite();
                 }
             }
             _timelinePressed = false;
@@ -952,7 +985,8 @@ namespace ModernImageViewer.VideoDirector.Views
             targetIndex = Math.Clamp(targetIndex, 0, ViewModel.OverlayTracks.Count - 1);
             var target = ViewModel.OverlayTracks[targetIndex];
             var current = TrackOf(_dragClip);
-            if (current != null && !ReferenceEquals(current, target))
+            bool trackChanged = current != null && !ReferenceEquals(current, target);
+            if (trackChanged)
             {
                 current.Clips.Remove(_dragClip);
                 target.Clips.Add(_dragClip);
@@ -966,9 +1000,23 @@ namespace ModernImageViewer.VideoDirector.Views
             newStart = Math.Clamp(newStart, 0, Math.Max(0, total - dur));
             newStart = ApplyClipSnapping(newStart, dur, _dragClip);
             _dragClip.StartTime = TimeSpan.FromSeconds(newStart);
-            target.ResolveOverlaps();
-            BuildTimelineBar();
-            _playbackEngine?.RefreshComposite();   // moving in time can change what's on screen
+
+            if (trackChanged)
+            {
+                target.ResolveOverlaps();
+                BuildTimelineBar();
+                _playbackEngine?.RefreshComposite();
+            }
+            else if (_clipBlockElements.TryGetValue(_dragClip, out var elements))
+            {
+                double newX = newStart * _timelinePxPerSec;
+                double rowY = RowOvY + targetIndex * RowPitch;
+                foreach (var el in elements)
+                {
+                    Canvas.SetLeft(el, el is StackPanel ? newX + 6 : newX);
+                    Canvas.SetTop(el, rowY);
+                }
+            }
             // History is recorded once on drop (PointerReleased), not per move-tick.
         }
 

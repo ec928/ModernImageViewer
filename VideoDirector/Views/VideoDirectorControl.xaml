@@ -53,12 +53,6 @@
              window caption/drag region. -->
 
 
-        <!-- Unmistakable EDIT indicator: an accent border around the canvas. The textual indicator
-             and the way out (Done) now live in the inspector panel header, next to the edit
-             controls, rather than as a separate floating pill. -->
-        <Border Grid.Row="0" IsHitTestVisible="False" CornerRadius="8" Margin="12,0,12,0"
-                BorderBrush="{ThemeResource AccentFillColorDefaultBrush}" BorderThickness="3"
-                Visibility="{x:Bind ViewModel.IsEditMode, Mode=OneWay, Converter={StaticResource BoolToVisConverter}}" />
 
         <!-- Foreground Layer: Floating Edit Badge -->
         <Border x:Name="EditModeBadge" Background="#D9E81123" CornerRadius="8" Padding="16,8" 

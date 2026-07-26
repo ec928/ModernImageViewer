@@ -91,7 +91,6 @@
             <Rectangle x:Name="WysiwygStartRect" x:FieldModifier="public" Stroke="Cyan" Fill="Transparent" StrokeThickness="2" StrokeDashArray="4,4" Visibility="Collapsed" />
             <Rectangle x:Name="WysiwygMidRect" x:FieldModifier="public" Stroke="DeepSkyBlue" Fill="Transparent" StrokeThickness="2" StrokeDashArray="4,4" Visibility="Collapsed" />
             <Rectangle x:Name="WysiwygEndRect" x:FieldModifier="public" Stroke="RoyalBlue" Fill="Transparent" StrokeThickness="2" StrokeDashArray="4,4" Visibility="Collapsed" />
-            <Rectangle x:Name="WysiwygFullFrameRect" x:FieldModifier="public" Stroke="#80FFFFFF" StrokeThickness="2" Visibility="Collapsed" />
         </Canvas>
 
         <!-- Interactive Input Layer for Manual Targeting -->
