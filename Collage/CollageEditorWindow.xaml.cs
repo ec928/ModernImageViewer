@@ -765,9 +765,9 @@ namespace ModernImageViewer.Collage
             if (CollageCanvasControl == null || CollageCanvasControl.Project == null) return;
             if (CollageCanvasControl.SelectedElements.Count == 0) return;
 
-            bool isBorder = sender == BorderSlider;
-            bool isRadius = sender == RadiusSlider;
-            bool isShadow = sender == ShadowSlider;
+            bool isBorder = ReferenceEquals(sender, BorderSlider);
+            bool isRadius = ReferenceEquals(sender, RadiusSlider);
+            bool isShadow = ReferenceEquals(sender, ShadowSlider);
 
             foreach (var el in CollageCanvasControl.SelectedElements)
             {
@@ -781,7 +781,7 @@ namespace ModernImageViewer.Collage
             CollageCanvasControl.Invalidate();
         }
 
-        private void CollageCanvasControl_SelectionChanged(object sender, EventArgs e)
+        private void CollageCanvasControl_SelectionChanged(object? sender, EventArgs e)
         {
             _isUpdatingUI = true;
 
@@ -805,9 +805,9 @@ namespace ModernImageViewer.Collage
 
         private void UndoLayout_Click(object sender, RoutedEventArgs e)
         {
-            if (_undoStack.Count > 0)
+            if (_undoStack.First is { } firstNode)
             {
-                _project = _undoStack.First.Value;
+                _project = firstNode.Value;
                 _undoStack.RemoveFirst();
                 CollageCanvasControl.Project = _project;
                 CollageCanvasControl.Invalidate();

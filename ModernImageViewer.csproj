@@ -93,7 +93,10 @@
     <PublishReadyToRun Condition="'$(Configuration)' == 'Debug'">False</PublishReadyToRun>
     <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">True</PublishReadyToRun>
     <PublishTrimmed Condition="'$(Configuration)' == 'Debug'">False</PublishTrimmed>
-    <PublishTrimmed Condition="'$(Configuration)' != 'Debug'">True</PublishTrimmed>
+    <PublishTrimmed Condition="'$(Configuration)' != 'Debug'">False</PublishTrimmed>
+    <!-- Deliberately NOT single-file: the self-extract step dominated cold start. -->
+    <PublishSingleFile>False</PublishSingleFile>
     <ApplicationIcon>ModernImageViewer.ico</ApplicationIcon>
   </PropertyGroup>
+
 </Project>

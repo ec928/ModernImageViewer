@@ -56,7 +56,9 @@ namespace ModernImageViewer
                 if (HoverTriggerZone != null) HoverTriggerZone.Visibility = Visibility.Collapsed;
                 ViewerControl.TargetImage = phantomItem;
 
-                if (App.GlobalImageCache.TryGetValue(filePath, out var existing)) existing.Dispose();
+                // Release, not Dispose: a detached window may hold a reference to this entry.
+                // Refcounting frees it only once the last holder is done with it.
+                if (App.GlobalImageCache.TryGetValue(filePath, out var existing)) existing.Release();
                 App.GlobalImageCache[filePath] = fastEntry;
 
                 TryDisposeRawGpuBitmap();

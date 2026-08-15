@@ -96,7 +96,7 @@ namespace ModernImageViewer.Cinematic
             float maxZoom = scaleToFit * (1.0f + ((float)settings.IntensityPercent / 100.0f) * 1.5f);
 
             bool hasManualTarget = settings.FocusTargetRect.HasValue;
-            if (hasManualTarget) maxZoom = Math.Max(maxZoom, StrategyMath.GetExplicitTargetScale(settings.FocusTargetRect.Value, bounds, intel.ImageSize));
+            if (settings.FocusTargetRect is { } manualTarget) maxZoom = Math.Max(maxZoom, StrategyMath.GetExplicitTargetScale(manualTarget, bounds, intel.ImageSize));
 
             bool zoomIn = settings.DirectionMode == 1 || (settings.DirectionMode != 2 && rnd.Next(2) == 0);
             transform.StartScale = settings.DirectionMode == 3 ? maxZoom : (zoomIn ? baseZoom : maxZoom);
@@ -134,7 +134,7 @@ namespace ModernImageViewer.Cinematic
             float maxZoom = minScale * (1.0f + ((float)settings.IntensityPercent / 100.0f) * 1.5f);
 
             bool hasManualTarget = settings.FocusTargetRect.HasValue;
-            if (hasManualTarget) maxZoom = Math.Max(maxZoom, StrategyMath.GetExplicitTargetScale(settings.FocusTargetRect.Value, bounds, intel.ImageSize));
+            if (settings.FocusTargetRect is { } manualTarget) maxZoom = Math.Max(maxZoom, StrategyMath.GetExplicitTargetScale(manualTarget, bounds, intel.ImageSize));
 
             bool zoomIn = settings.DirectionMode == 1 || (settings.DirectionMode != 2 && rnd.Next(2) == 0);
             transform.StartScale = settings.DirectionMode == 3 ? maxZoom : (zoomIn ? baseZoom : maxZoom);

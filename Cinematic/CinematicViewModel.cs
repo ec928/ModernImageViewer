@@ -15,7 +15,7 @@ namespace ModernImageViewer.Cinematic.ViewModels
 {
     public class SlideIndicatorItem : INotifyPropertyChanged
     {
-        public event PropertyChangedEventHandler PropertyChanged;
+        public event PropertyChangedEventHandler? PropertyChanged;
         public int Index { get; set; }
         private bool _isActive;
         public bool IsActive 
@@ -38,8 +38,8 @@ namespace ModernImageViewer.Cinematic.ViewModels
     {
         private readonly DispatcherQueue _dispatcher;
         public ObservableCollection<SlideIndicatorItem> SlideIndicators { get; } = new();
-        public event PropertyChangedEventHandler PropertyChanged;
-        protected void OnPropertyChanged([CallerMemberName] string propertyName = null)
+        public event PropertyChangedEventHandler? PropertyChanged;
+        protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
         {
             if (_dispatcher != null && !_dispatcher.HasThreadAccess)
             {
@@ -51,7 +51,7 @@ namespace ModernImageViewer.Cinematic.ViewModels
             }
         }
 
-        protected bool SetProperty<T>(ref T storage, T value, [CallerMemberName] string propertyName = null)
+        protected bool SetProperty<T>(ref T storage, T value, [CallerMemberName] string? propertyName = null)
         {
             if (Equals(storage, value)) return false;
             storage = value;
@@ -82,8 +82,8 @@ namespace ModernImageViewer.Cinematic.ViewModels
         public string CurrentFileName => ImagePaths.Count > 0 ? Path.GetFileName(ImagePaths[_currentIndex]) : string.Empty;
 
         // Events that the View code-behind listens to
-        public event Action TrajectoryRefreshRequested;
-        public event Action SlideNavigationRequested;
+        public event Action? TrajectoryRefreshRequested;
+        public event Action? SlideNavigationRequested;
 
         private bool _isPlaying = true;
         public bool IsPlaying

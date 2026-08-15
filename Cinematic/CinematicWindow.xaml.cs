@@ -253,7 +253,8 @@ namespace ModernImageViewer.Cinematic
                         _injectFrozenCoordinates = false;
                     }
 
-                    _primaryFrame.Trajectory = newTrajectory;
+                    // Non-null: guarded by the _primaryFrame == null early-return at the top of this method.
+                    _primaryFrame!.Trajectory = newTrajectory;
                     _slideDurationSeconds = _primaryFrame.Trajectory.RecommendedDurationSeconds;
                     SlideshowCanvas.Invalidate();
                     DispatcherQueue.TryEnqueue(() => UpdateGhostViewport());
@@ -427,7 +428,7 @@ namespace ModernImageViewer.Cinematic
             return newFrame;
         }
 
-        private void CompositionTarget_Rendering(object sender, object e)
+        private void CompositionTarget_Rendering(object? sender, object e)
         {
             if (_primaryFrame == null || SlideshowCanvas == null) return;
 
@@ -559,7 +560,8 @@ namespace ModernImageViewer.Cinematic
                 }
                 else if (_currentSequence.Count > 0)
                 {
-                    _primaryFrame.Trajectory = _currentSequence.Dequeue();
+                    // Non-null: guarded by the _primaryFrame == null early-return at the top of this method.
+                    _primaryFrame!.Trajectory = _currentSequence.Dequeue();
                     _slideDurationSeconds = _primaryFrame.Trajectory.RecommendedDurationSeconds;
                     _slideStartTime = totalTime;
                     elapsedSeconds = 0;
@@ -572,7 +574,7 @@ namespace ModernImageViewer.Cinematic
             }
 
             float mainT = (float)Math.Clamp(progress, 0.0, 1.0);
-            UpdateFrameVectors(_primaryFrame, mainT, ViewModel.GetCurrentEffectiveSettings().IntensityPercent);
+            UpdateFrameVectors(_primaryFrame!, mainT, ViewModel.GetCurrentEffectiveSettings().IntensityPercent);
 
             if (elapsedSeconds >= cfStartElapsed && _secondaryFrame != null)
             {

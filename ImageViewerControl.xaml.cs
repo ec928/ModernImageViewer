@@ -303,10 +303,11 @@ namespace ModernImageViewer
                     _playbackTimer.Start();
                 }
 
-                if (_effectStack.Crop != null && _animationFrames[0].GpuBitmap != null)
+                var firstGpuBitmap = _animationFrames[0].GpuBitmap;
+                if (_effectStack.Crop != null && firstGpuBitmap != null)
                 {
-                    _effectStack.Crop.Source = _animationFrames[0].GpuBitmap;
-                    _effectStack.Crop.SourceRectangle = _animationFrames[0].GpuBitmap.Bounds;
+                    _effectStack.Crop.Source = firstGpuBitmap;
+                    _effectStack.Crop.SourceRectangle = firstGpuBitmap.Bounds;
                 }
             }
             else

@@ -49,7 +49,7 @@ namespace ModernImageViewer
         private void OnPropertyChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
         private readonly AppWindow _appWindow;
-        public AppWindow AppWindow => _appWindow;
+        public new AppWindow AppWindow => _appWindow;
         private AppSettings _currentSettings = new AppSettings();
         private readonly IntPtr _hWnd;
         private readonly KeyEventHandler _globalKeyDownHandler;
@@ -184,10 +184,11 @@ namespace ModernImageViewer
 
                         if (App.GlobalImageCache.TryGetValue(path, out var oldEntry))
                         {
-                            if (!DetachedPaths.ContainsKey(path))
-                            {
-                                oldEntry.Dispose();
-                            }
+                            // Release unconditionally rather than skipping when a detached window
+                            // holds the path. Skipping leaked the cache's own reference: the slot
+                            // was overwritten below, so nothing ever released it and the refcount
+                            // could never reach zero. Release is correct in both cases.
+                            oldEntry.Release();
                         }
                         if (hfEntry != null) App.GlobalImageCache[path] = hfEntry;
 

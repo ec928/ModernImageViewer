@@ -260,7 +260,7 @@ namespace ModernImageViewer.Collage
                 if (!CollageCanvasControl.ReadyToDraw) return;
 
                 App.GlobalImageCache.TryGetValue(element.ImagePath, out var entry);
-                CanvasBitmap highResBitmap = null;
+                CanvasBitmap? highResBitmap = null;
 
                 if (entry?.Profile != null)
                 {
@@ -1520,7 +1520,8 @@ namespace ModernImageViewer.Collage
                 }
             }
 
-            foreach (var element in _project.Elements)
+            // Non-null: guarded by the _project == null early-return at the top of this method.
+            foreach (var element in _project!.Elements)
             {
                 if (!RectsIntersect(visibleRect, element.Layout)) continue;
 
