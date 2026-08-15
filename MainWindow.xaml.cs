@@ -414,7 +414,9 @@ namespace ModernImageViewer
                 {
                     System.IO.Path.Combine(AppContext.BaseDirectory, "VideoDirector.exe"),
                     System.IO.Path.Combine(AppContext.BaseDirectory, @"..\VideoDirector\VideoDirector.exe"),
-                    @"c:\Users\chan_\OneDrive\Apps\VideoDirector\VideoDirector.exe"
+                    System.IO.Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                        @"OneDrive\Apps\VideoDirector\VideoDirector.exe")
                 };
 
                 foreach (var candidate in fallbacks)
