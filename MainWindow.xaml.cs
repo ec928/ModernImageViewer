@@ -227,6 +227,28 @@ namespace ModernImageViewer
             };
         }
 
+        /// <summary>
+        /// Opens the project's issue tracker in the default browser. Most users reach the app
+        /// through a Releases zip and never see the repository, so the feedback route has to be
+        /// reachable from inside the app to be used at all.
+        /// </summary>
+        private void ReportProblem_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "https://github.com/ec928/ModernImageViewer/issues/new/choose",
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                // Never let a missing browser association take the app down.
+                Debug.WriteLine($"[ReportProblem] Could not open issue tracker: {ex.Message}");
+            }
+        }
+
         public void RegisterDetachedWindow(string path)
         {
             if (string.IsNullOrEmpty(path)) return;

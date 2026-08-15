@@ -83,11 +83,19 @@
                         </Grid>
 
                         <Grid Grid.Row="1" Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
                             <Button Click="OpenDirector_Click" HorizontalAlignment="Stretch" Margin="3" ToolTipService.ToolTip="Open Video Director">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <SymbolIcon Symbol="Video"/>
                                     <TextBlock Text="Video Director"/>
                                 </StackPanel>
+                            </Button>
+                            <Button Grid.Column="1" Click="ReportProblem_Click" Margin="3"
+                                    ToolTipService.ToolTip="Report a problem or suggest a feature (opens GitHub in your browser)">
+                                <SymbolIcon Symbol="Help"/>
                             </Button>
                         </Grid>
 

@@ -1,0 +1,60 @@
+name: Bug report
+description: Something crashes, misbehaves, or performs badly
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. The details below are what make a bug
+        reproducible — without them most reports can't be acted on.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+      placeholder: I opened a folder of ~4000 RAW exports and the thumbnails stopped loading after about 200.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: The version of the release zip you downloaded, or the commit if you built it yourself.
+      placeholder: e.g. v0.9.2 beta
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      description: Press Win+R, type `winver`, and paste what it shows.
+      placeholder: e.g. Windows 11 Pro 24H2 (build 26100.1742)
+    validations:
+      required: true
+
+  - type: textarea
+    id: images
+    attributes:
+      label: Image details (if relevant)
+      description: Format, rough dimensions, file size, and how many were in the folder.
+      placeholder: e.g. HEIC, 8064x6048, ~14 MB each, about 2500 in the folder
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Screenshots, GPU model, or anything else you think matters. Drag images straight in.
