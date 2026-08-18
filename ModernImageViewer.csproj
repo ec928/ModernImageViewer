@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
 	<WindowsPackageType>None</WindowsPackageType>
 	<SelfContained>true</SelfContained>
@@ -24,6 +24,12 @@
     -->
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+
+    <!-- Pinned so EVERY publish lands in the Release folder, however it is invoked.
+         Without it a bare `dotnet publish` uses the SDK default and buries the output
+         in bin\x64\Release\win-x64\publish\ - a nested copy of the folder it
+         just built, leaving two candidate exes to choose between. -->
+    <PublishDir>bin\$(Platform)\$(Configuration)\</PublishDir>
 
     <!--
       Ship English resources only. Note this handles .NET satellite assemblies but NOT
