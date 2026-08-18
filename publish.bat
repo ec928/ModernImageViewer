@@ -9,9 +9,14 @@ REM  not depend on a .pubxml (the publish profiles are gitignored and local to
 REM  the author's machine).
 REM
 REM  Usage:
-REM    publish.bat                     -> publishes to .\publish\
+REM    publish.bat                     -> publishes to .\bin\x64\Release\
 REM    publish.bat "D:\somewhere"      -> publishes to that folder
 REM    publish.bat "D:\somewhere" nosmoke
+REM
+REM  Output goes to bin\x64\Release, not a separate publish folder. "dotnet publish"
+REM  has to build before it copies, and that build lands in bin\x64\Release whatever
+REM  happens - so publishing elsewhere just leaves a half-built Release folder sitting
+REM  beside the real one, and two candidate exes to pick between.
 REM
 REM  Deliberately NOT single-file: single-file self-extracts the whole runtime
 REM  to %TEMP% on the first launch after every publish, which measurably slows
@@ -19,8 +24,8 @@ REM  cold start (~2.8s to first window versus ~1.5s for loose files).
 REM ============================================================================
 
 set "OUTDIR=%~1"
-if "%OUTDIR%"=="" set "OUTDIR=%~dp0publish"
-if /i "%OUTDIR%"=="nosmoke" set "OUTDIR=%~dp0publish"
+if "%OUTDIR%"=="" set "OUTDIR=%~dp0bin\x64\Release"
+if /i "%OUTDIR%"=="nosmoke" set "OUTDIR=%~dp0bin\x64\Release"
 
 set "PROJ=%~dp0ModernImageViewer.csproj"
 
@@ -30,6 +35,14 @@ echo  Output: %OUTDIR%
 echo ============================================================
 echo.
 
+REM The trailing backslash on PublishDir below is DOUBLED deliberately. MSBuild wants a
+REM trailing separator, but a single backslash immediately before the closing quote
+REM escapes that quote - the argument then runs on and MSBuild creates a directory
+REM literally named 'Release   --nologo'. Doubling it escapes the backslash instead, so
+REM the quote closes properly.
+REM
+REM Comments cannot go inside the ^ continuation block below: a batch file treats the
+REM continued lines as one command, so a REM in the middle is passed through as arguments.
 dotnet publish "%PROJ%" ^
   -c Release ^
   -r win-x64 ^
@@ -37,14 +50,18 @@ dotnet publish "%PROJ%" ^
   -p:SelfContained=true ^
   -p:PublishSingleFile=false ^
   -p:PublishTrimmed=false ^
-  -p:PublishDir="%OUTDIR%\" ^
+  -p:PublishDir="%OUTDIR%\\" ^
   --nologo
 
 if errorlevel 1 goto :failed
 if not exist "%OUTDIR%\ModernImageViewer.exe" goto :failed
 
 echo.
-echo Publish reported success. Verifying output...
+echo Publish reported success. Copying documentation...
+copy /Y "%~dp0LICENSE" "%OUTDIR%\" >nul
+copy /Y "%~dp0README.md" "%OUTDIR%\" >nul
+
+echo Verifying output...
 
 REM A part-installed .NET SDK can produce a build that compiles cleanly but
 REM crashes at startup, with framework assemblies published stripped.
