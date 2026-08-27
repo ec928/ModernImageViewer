@@ -20,21 +20,25 @@ namespace ModernImageViewer.Cinematic
                 Faces = new List<Rect>(intel.Faces)
             };
 
-            if (settings.FocusTargetRect.HasValue)
+            if (settings.StartCrop is Rect startCrop && settings.EndCrop is Rect endCrop)
             {
-                var rect = settings.FocusTargetRect.Value;
-                float cx = (float)((rect.X + rect.Width / 2.0) * localIntel.ImageSize.Width);
-                float cy = (float)((rect.Y + rect.Height / 2.0) * localIntel.ImageSize.Height);
-                localIntel.SaliencyTarget = new Vector2(cx, cy);
-
-                Rect manualTargetFace = new Rect(
-                    rect.X * localIntel.ImageSize.Width,
-                    rect.Y * localIntel.ImageSize.Height,
-                    rect.Width * localIntel.ImageSize.Width,
-                    rect.Height * localIntel.ImageSize.Height
-                );
-
-                localIntel.Faces = new List<Rect> { manualTargetFace };
+                var start = CameraMath.CameraFromCrop(startCrop, bounds, localIntel.ImageSize);
+                var end = CameraMath.CameraFromCrop(endCrop, bounds, localIntel.ImageSize);
+                queue.Enqueue(new CameraTransform
+                {
+                    StrategyName = "Custom",
+                    Technique = "Custom",
+                    Mode = LayoutMode.Fullscreen,
+                    StartScale = start.Scale,
+                    StartPan = start.Pan,
+                    EndScale = end.Scale,
+                    EndPan = end.Pan,
+                    RecommendedDurationSeconds = settings.DurationSeconds,
+                    CrossfadeDurationSeconds = 2.5,
+                    EaseKind = string.IsNullOrEmpty(settings.CurveOverride) ? "EaseInOut" : settings.CurveOverride,
+                    IsSnapZoom = settings.CurveOverride == "SnapZoom"
+                });
+                return queue;
             }
 
             GeneratePrimarySequence(queue, localIntel, bounds, settings);
@@ -89,7 +93,21 @@ namespace ModernImageViewer.Cinematic
                 queue.Enqueue(continuationShot);
             }
 
+            foreach (var shot in queue) ApplyCurve(shot, settings);
             return queue;
+        }
+
+        private static void ApplyCurve(CameraTransform shot, SlideSettings settings)
+        {
+            if (!string.IsNullOrEmpty(settings.CurveOverride) && settings.CurveOverride != "EaseInOut")
+            {
+                shot.EaseKind = settings.CurveOverride;
+                shot.IsSnapZoom = settings.CurveOverride == "SnapZoom";
+            }
+            else
+            {
+                shot.EaseKind = shot.IsSnapZoom ? "SnapZoom" : "EaseInOut";
+            }
         }
 
         private void GeneratePrimarySequence(Queue<CameraTransform> queue, SceneIntelligence intel, Size bounds, SlideSettings settings)

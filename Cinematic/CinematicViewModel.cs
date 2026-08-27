@@ -131,14 +131,48 @@ namespace ModernImageViewer.Cinematic.ViewModels
                     }
                     OnPropertyChanged(nameof(PanelHeader));
                     OnPropertyChanged(nameof(OverrideButtonText));
+                    OnPropertyChanged(nameof(RevertButtonVisibility));
+                    OnPropertyChanged(nameof(CanRevertZoomPan));
+                    OnPropertyChanged(nameof(CanSaveZoomPan));
+                    OnPropertyChanged(nameof(SaveHint));
                     RefreshAllProperties();
                     _ = AutoSaveAsync();
                 }
             }
         }
 
-        public string PanelHeader => IsOverrideMode ? "Slide Override" : "Global Defaults";
-        public string OverrideButtonText => IsOverrideMode ? "Revert to Global Auto" : "Customize This Slide";
+        private bool _hasUnsavedZoomPan;
+        public bool HasUnsavedZoomPan
+        {
+            get => _hasUnsavedZoomPan;
+            set
+            {
+                if (SetProperty(ref _hasUnsavedZoomPan, value))
+                {
+                    OnPropertyChanged(nameof(PanelHeader));
+                    OnPropertyChanged(nameof(CanSaveZoomPan));
+                    OnPropertyChanged(nameof(CanRevertZoomPan));
+                    OnPropertyChanged(nameof(SaveHint));
+                }
+            }
+        }
+
+        public string PanelHeader => HasUnsavedZoomPan
+            ? (IsOverrideMode
+                ? "DRAFT — custom zoom/pan changed, not saved"
+                : "DRAFT — you moved zoom/pan, not saved")
+            : (IsOverrideMode
+                ? "CUSTOM — you saved zoom/pan for this slide"
+                : "AUTO — engine zoom/pan, not customized");
+        public string OverrideButtonText => IsOverrideMode ? "Revert to Auto" : "Using Auto";
+        public Visibility RevertButtonVisibility => Visibility.Visible;
+        public bool CanSaveZoomPan => HasUnsavedZoomPan;
+        public bool CanRevertZoomPan => HasUnsavedZoomPan || IsOverrideMode;
+        public string SaveHint => HasUnsavedZoomPan
+            ? "Not saved. The show still uses the last saved state (Auto or previous Custom) until you Save."
+            : IsOverrideMode
+                ? "Saved. This slide uses your zoom/pan, not the engine."
+                : "Not customized. The rectangles are the engine's zoom/pan. Dragging them makes a draft — Save to keep it.";
 
         // TwoWay Bound Slider Properties
         public double DurationSeconds
@@ -148,6 +182,24 @@ namespace ModernImageViewer.Cinematic.ViewModels
             {
                 if (Math.Abs(DurationSeconds - value) < 0.001) return;
                 if (IsOverrideMode) CurrentDraft.DurationSeconds = value; else ActiveProject.GlobalDefaults.DurationSeconds = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(DurationLabel));
+                RequestRefresh();
+                _ = AutoSaveAsync();
+            }
+        }
+
+        public string DurationLabel => $"{DurationSeconds:0} s";
+
+        public string CurveOverride
+        {
+            get => IsOverrideMode
+                ? (CurrentDraft.CurveOverride ?? ActiveProject.GlobalDefaults.CurveOverride)
+                : ActiveProject.GlobalDefaults.CurveOverride;
+            set
+            {
+                if (string.IsNullOrEmpty(value) || CurveOverride == value) return;
+                if (IsOverrideMode) CurrentDraft.CurveOverride = value; else ActiveProject.GlobalDefaults.CurveOverride = value;
                 OnPropertyChanged();
                 RequestRefresh();
                 _ = AutoSaveAsync();
@@ -315,6 +367,8 @@ namespace ModernImageViewer.Cinematic.ViewModels
         private void RefreshAllProperties()
         {
             OnPropertyChanged(nameof(DurationSeconds));
+            OnPropertyChanged(nameof(DurationLabel));
+            OnPropertyChanged(nameof(CurveOverride));
             OnPropertyChanged(nameof(IntensityPercent));
             OnPropertyChanged(nameof(BeatCount));
             OnPropertyChanged(nameof(TechniqueOverride));
@@ -336,9 +390,15 @@ namespace ModernImageViewer.Cinematic.ViewModels
                 _isOverrideMode = false;
             }
 
+            _hasUnsavedZoomPan = false;
             OnPropertyChanged(nameof(IsOverrideMode));
             OnPropertyChanged(nameof(PanelHeader));
             OnPropertyChanged(nameof(OverrideButtonText));
+            OnPropertyChanged(nameof(RevertButtonVisibility));
+            OnPropertyChanged(nameof(HasUnsavedZoomPan));
+            OnPropertyChanged(nameof(CanSaveZoomPan));
+            OnPropertyChanged(nameof(CanRevertZoomPan));
+            OnPropertyChanged(nameof(SaveHint));
             RefreshAllProperties();
         }
 
@@ -347,6 +407,40 @@ namespace ModernImageViewer.Cinematic.ViewModels
             if (!IsOverrideMode) IsOverrideMode = true;
             CurrentDraft.FocusTargetRect = rect;
             RequestRefresh();
+            _ = AutoSaveAsync();
+        }
+
+        public void SaveKeyframeCrops(NormalizedRect start, NormalizedRect end)
+        {
+            if (!IsOverrideMode) IsOverrideMode = true;
+            CurrentDraft.StartCrop = start;
+            CurrentDraft.EndCrop = end;
+            HasUnsavedZoomPan = false;
+            RequestRefresh();
+            _ = AutoSaveAsync();
+        }
+
+        public void MarkZoomPanDraft()
+        {
+            HasUnsavedZoomPan = true;
+        }
+
+        public void RevertToAuto()
+        {
+            CurrentDraft.StartCrop = null;
+            CurrentDraft.EndCrop = null;
+            CurrentDraft.FocusTargetRect = null;
+            HasUnsavedZoomPan = false;
+            if (!string.IsNullOrEmpty(CurrentFileName)) ActiveProject.Ledger.Remove(CurrentFileName);
+            CurrentDraft = new SlideSequenceDefinition { FileName = CurrentFileName, IsUserOverridden = false };
+            _isOverrideMode = false;
+            OnPropertyChanged(nameof(IsOverrideMode));
+            OnPropertyChanged(nameof(PanelHeader));
+            OnPropertyChanged(nameof(OverrideButtonText));
+            OnPropertyChanged(nameof(CanRevertZoomPan));
+            OnPropertyChanged(nameof(CanSaveZoomPan));
+            OnPropertyChanged(nameof(SaveHint));
+            RefreshAllProperties();
             _ = AutoSaveAsync();
         }
 

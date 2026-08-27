@@ -84,60 +84,116 @@
 
             <SplitView.Pane>
                 <Grid x:Name="DirectorPanelGrid" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" Padding="24,40,24,24">
-                    <StackPanel Spacing="24">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="{x:Bind ViewModel.PanelHeader, Mode=OneWay}" Style="{ThemeResource TitleTextBlockStyle}" />
-                            <ToggleButton Content="{x:Bind ViewModel.OverrideButtonText, Mode=OneWay}" IsChecked="{x:Bind ViewModel.IsOverrideMode, Mode=TwoWay}" HorizontalAlignment="Stretch" ToolTipService.ToolTip="Toggle between Auto sequence and manual focal override" />
-                        </StackPanel>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Spacing="20">
+                        <Border Background="{ThemeResource LayerFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}"
+                                BorderThickness="1" CornerRadius="12" Padding="16">
+                            <StackPanel Spacing="14">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="Ken Burns" Style="{ThemeResource SubtitleTextBlockStyle}" />
+                                    <TextBlock Text="{x:Bind ViewModel.PanelHeader, Mode=OneWay}" TextWrapping="Wrap" Opacity="0.85" />
+                                    <TextBlock x:Name="ZoomPanReadout" FontSize="12" Opacity="0.7" />
+                                </StackPanel>
+
+                                <Button Content="Preview" Click="BtnPreview_Click" HorizontalAlignment="Stretch"
+                                        ToolTipService.ToolTip="Play this shot as it will appear" />
+                                <Grid ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Button Content="Save" Click="BtnSaveZoomPan_Click" HorizontalAlignment="Stretch"
+                                            IsEnabled="{x:Bind ViewModel.CanSaveZoomPan, Mode=OneWay}"
+                                            Style="{ThemeResource AccentButtonStyle}"
+                                            ToolTipService.ToolTip="Save this slide's zoom/pan. Until then the show uses Auto or the last save." />
+                                    <Button Content="Revert" Click="BtnClearTarget_Click" HorizontalAlignment="Stretch" Grid.Column="1"
+                                            IsEnabled="{x:Bind ViewModel.CanRevertZoomPan, Mode=OneWay}"
+                                            ToolTipService.ToolTip="Throw away draft and saved zoom/pan. Engine Auto again." />
+                                </Grid>
+
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="Curve" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                                    <ComboBox HorizontalAlignment="Stretch" SelectedValue="{x:Bind ViewModel.CurveOverride, Mode=TwoWay}" SelectedValuePath="Tag">
+                                        <ComboBoxItem Content="Ease in-out" Tag="EaseInOut" />
+                                        <ComboBoxItem Content="Linear" Tag="Linear" />
+                                        <ComboBoxItem Content="Ease in" Tag="EaseIn" />
+                                        <ComboBoxItem Content="Ease out" Tag="EaseOut" />
+                                        <ComboBoxItem Content="Snap zoom" Tag="SnapZoom" />
+                                    </ComboBox>
+                                </StackPanel>
+
+                                <StackPanel Spacing="6">
+                                    <Grid>
+                                        <TextBlock Text="Duration" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                                        <TextBlock Text="{x:Bind ViewModel.DurationLabel, Mode=OneWay}" HorizontalAlignment="Right"
+                                                   Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                                    </Grid>
+                                    <Slider Minimum="3" Maximum="30" Value="{x:Bind ViewModel.DurationSeconds, Mode=TwoWay}"
+                                            ToolTipService.ToolTip="How long this shot holds" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Background="{ThemeResource LayerFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}"
+                                BorderThickness="1" CornerRadius="12" Padding="16">
+                            <StackPanel Spacing="14">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="Global" Style="{ThemeResource SubtitleTextBlockStyle}" />
+                                    <TextBlock Text="Engine defaults for Auto shots" FontSize="12" Opacity="0.7" />
+                                </StackPanel>
+
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="Technique" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                                    <ComboBox HorizontalAlignment="Stretch" SelectedValue="{x:Bind ViewModel.TechniqueOverride, Mode=TwoWay}" SelectedValuePath="Tag">
+                                        <ComboBoxItem Content="Auto (engine choice)" Tag="Auto" />
+                                        <ComboBoxItem Content="Contextual Drift" Tag="ContextualDrift" />
+                                        <ComboBoxItem Content="Ethereal Hold" Tag="EtherealHold" />
+                                        <ComboBoxItem Content="Intimate Reveal" Tag="IntimateReveal" />
+                                        <ComboBoxItem Content="Discovery Track" Tag="DiscoveryTrack" />
+                                    </ComboBox>
+                                </StackPanel>
+
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="Motion intensity" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                                    <Slider Minimum="0" Maximum="100" Value="{x:Bind ViewModel.IntensityPercent, Mode=TwoWay}"
+                                            ToolTipService.ToolTip="How aggressive Auto zoom and pan are" />
+                                </StackPanel>
+
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="Sequence beats" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                                    <Slider Minimum="1" Maximum="5" TickFrequency="1" TickPlacement="Outside" SnapsTo="Ticks"
+                                            Value="{x:Bind ViewModel.BeatCount, Mode=TwoWay}"
+                                            ToolTipService.ToolTip="How many camera moves Auto chains on a slide" />
+                                </StackPanel>
+
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="Motion direction" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                                    <ComboBox HorizontalAlignment="Stretch" SelectedValue="{x:Bind ViewModel.DirectionOverride, Mode=TwoWay}" SelectedValuePath="Tag">
+                                        <ComboBoxItem Content="Auto (random)" Tag="0" />
+                                        <ComboBoxItem Content="Zoom in" Tag="1" />
+                                        <ComboBoxItem Content="Zoom out" Tag="2" />
+                                        <ComboBoxItem Content="Pan only" Tag="3" />
+                                    </ComboBox>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
 
                         <StackPanel Spacing="8">
-                            <TextBlock Text="Cinematic Technique" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
-                            <ComboBox HorizontalAlignment="Stretch" SelectedValue="{x:Bind ViewModel.TechniqueOverride, Mode=TwoWay}" SelectedValuePath="Tag">
-                                <ComboBoxItem Content="Auto (Engine Choice)" Tag="Auto" />
-                                <ComboBoxItem Content="Contextual Drift (1-Beat)" Tag="ContextualDrift" />
-                                <ComboBoxItem Content="The Ethereal Hold (1-Beat)" Tag="EtherealHold" />
-                                <ComboBoxItem Content="The Intimate Reveal (Cut)" Tag="IntimateReveal" />
-                                <ComboBoxItem Content="The Discovery Track (Snap-Zoom)" Tag="DiscoveryTrack" />
-                            </ComboBox>
-                        </StackPanel>
-
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Local Duration (Seconds)" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
-                            <Slider Minimum="3" Maximum="30" Value="{x:Bind ViewModel.DurationSeconds, Mode=TwoWay}" ToolTipService.ToolTip="Adjust slide pacing" />
-                        </StackPanel>
-
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Motion Intensity (%)" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
-                            <Slider Minimum="0" Maximum="100" Value="{x:Bind ViewModel.IntensityPercent, Mode=TwoWay}" ToolTipService.ToolTip="Adjust scaling aggressiveness" />
-                        </StackPanel>
-
-                        <StackPanel Spacing="8" Margin="0,12,0,0">
-                            <TextBlock Text="Sequence Beats (Combos)" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
-                            <Slider Minimum="1" Maximum="5" TickFrequency="1" TickPlacement="Outside" SnapsTo="Ticks" Value="{x:Bind ViewModel.BeatCount, Mode=TwoWay}" ToolTipService.ToolTip="Chain multiple camera moves together" />
-                        </StackPanel>
-
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Motion Direction" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
-                            <ComboBox HorizontalAlignment="Stretch" SelectedValue="{x:Bind ViewModel.DirectionOverride, Mode=TwoWay}" SelectedValuePath="Tag">
-                                <ComboBoxItem Content="Auto (Random)" Tag="0" />
-                                <ComboBoxItem Content="Force Zoom In" Tag="1" />
-                                <ComboBoxItem Content="Force Zoom Out" Tag="2" />
-                                <ComboBoxItem Content="Pan Only (Close-Up)" Tag="3" />
-                            </ComboBox>
-                        </StackPanel>
-
-                        <StackPanel Spacing="8" Margin="0,20,0,0">
-                            <Button Content="Undo Last Move" Click="BtnUndo_Click" HorizontalAlignment="Stretch" ToolTipService.ToolTip="Revert target box to previous location" />
+                            <Button Content="Undo last move" Click="BtnUndo_Click" HorizontalAlignment="Stretch"
+                                    ToolTipService.ToolTip="Put the last zoom/pan rectangle back" />
                             <Grid ColumnSpacing="8">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
-                                <Button Content="Load Project" Click="BtnLoad_Click" HorizontalAlignment="Stretch" Grid.Column="0" ToolTipService.ToolTip="Import an existing Cinematic JSON project" />
-                                <Button Content="Export Project" Click="BtnExport_Click" HorizontalAlignment="Stretch" Grid.Column="1" Style="{ThemeResource AccentButtonStyle}" ToolTipService.ToolTip="Save your customized timelines to disk" />
+                                <Button Content="Load" Click="BtnLoad_Click" HorizontalAlignment="Stretch" ToolTipService.ToolTip="Import a Cinematic JSON project" />
+                                <Button Content="Export" Click="BtnExport_Click" HorizontalAlignment="Stretch" Grid.Column="1" ToolTipService.ToolTip="Save the project to disk" />
                             </Grid>
                         </StackPanel>
                     </StackPanel>
+                    </ScrollViewer>
                 </Grid>
             </SplitView.Pane>
 
@@ -145,90 +201,59 @@
                 <Grid>
                     <canvas:CanvasControl x:Name="SlideshowCanvas" CreateResources="SlideshowCanvas_CreateResources" Draw="SlideshowCanvas_Draw" SizeChanged="SlideshowCanvas_SizeChanged" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
 
-                    <!-- Floating Instructional Hint -->
-                    <Border x:Name="WysiwygHint" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,48,0,0" Background="#DD000000" CornerRadius="8" Padding="16,12" BorderBrush="#55FFFFFF" BorderThickness="1" IsHitTestVisible="False" Canvas.ZIndex="500">
-                        <StackPanel Spacing="4" HorizontalAlignment="Center">
-                            <TextBlock Text="Target Edit Mode" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center"/>
-                            <TextBlock Text="Drag the viewfinder to set the focal point. Use your scroll wheel to resize." Foreground="#CCCCCC" FontSize="13" />
-                        </StackPanel>
-                    </Border>
+                    <Border x:Name="WysiwygHint" Visibility="Collapsed" IsHitTestVisible="False" />
+                    <Border x:Name="TelemetryOverlay" Visibility="Collapsed" IsHitTestVisible="False" />
 
-                    <Border x:Name="TelemetryOverlay" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="24" Background="#CC000000" CornerRadius="8" Padding="16" Visibility="Collapsed" IsHitTestVisible="False">
-                        <StackPanel Spacing="8">
-                            <Border x:Name="StateBadge" CornerRadius="4" Padding="8,4" Background="#33FFFFFF" HorizontalAlignment="Left">
-                                <TextBlock x:Name="StateText" FontWeight="Bold" FontFamily="Consolas" FontSize="14" Foreground="White" />
-                            </Border>
-                            <TextBlock x:Name="TelemetryText" FontFamily="Consolas" FontSize="14" Foreground="#4AF626" Opacity="0.9" TextWrapping="Wrap" />
-                        </StackPanel>
-                    </Border>
-
-                    <Canvas x:Name="WysiwygOverlay" Visibility="Collapsed" Background="Transparent" 
+                    <Canvas x:Name="WysiwygOverlay" Visibility="Collapsed" Background="#01000000"
                             HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                             SizeChanged="WysiwygOverlay_SizeChanged"
+                            PointerPressed="WysiwygOverlay_PointerPressed"
+                            PointerMoved="WysiwygOverlay_PointerMoved"
+                            PointerReleased="WysiwygOverlay_PointerReleased"
+                            PointerCanceled="WysiwygOverlay_PointerReleased"
                             PointerWheelChanged="WysiwygOverlay_PointerWheelChanged">
 
-                        <!-- Ghost Viewport Indicator -->
-                        <Rectangle x:Name="GhostViewport" Stroke="#33FFFFFF" StrokeThickness="1" StrokeDashArray="4,4" IsHitTestVisible="False" Visibility="Collapsed">
-                            <Rectangle.RenderTransform>
-                                <MatrixTransform x:Name="GhostTransform" />
-                            </Rectangle.RenderTransform>
-                        </Rectangle>
+                        <Line x:Name="MotionPath" Stroke="#AAFFFFFF" StrokeThickness="2" IsHitTestVisible="False" />
 
-                        <!-- Focus Target Box (Cleaned of Handles and KeyDown) -->
-                        <Border x:Name="FocusTargetBox" Width="160" Height="90" 
-                                BorderBrush="{ThemeResource SystemAccentColor}" BorderThickness="2" CornerRadius="0"
-                                Background="#330078D7" HorizontalAlignment="Left" VerticalAlignment="Top"
-                                PointerPressed="FocusTargetBox_PointerPressed" PointerMoved="FocusTargetBox_PointerMoved"
-                                PointerReleased="FocusTargetBox_PointerReleased" PointerCanceled="FocusTargetBox_PointerReleased">
-
-                            <Border.RenderTransform>
-                                <TranslateTransform x:Name="FocusBoxTransform" X="0" Y="0" />
-                            </Border.RenderTransform>
-
-                            <Grid>
-                                <Button x:Name="BtnClearTarget" Click="BtnClearTarget_Click" Width="24" Height="24" Padding="0" 
-                                        Background="#CC000000" BorderThickness="0" CornerRadius="12"
-                                        HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-12,-12,0"
-                                        ToolTipService.ToolTip="Clear Manual Target">
-                                    <SymbolIcon Symbol="Cancel" Foreground="White" />
-                                </Button>
-
-                                <!-- Rule of Thirds Grid -->
-                                <Grid>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="*"/>
-                                        <RowDefinition Height="*"/>
-                                        <RowDefinition Height="*"/>
-                                    </Grid.RowDefinitions>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-
-                                    <Border BorderBrush="#66FFFFFF" BorderThickness="0,0,1,1" Grid.Row="0" Grid.Column="0" />
-                                    <Border BorderBrush="#66FFFFFF" BorderThickness="0,0,1,1" Grid.Row="0" Grid.Column="1" />
-                                    <Border BorderBrush="#66FFFFFF" BorderThickness="0,0,0,1" Grid.Row="0" Grid.Column="2" />
-                                    <Border BorderBrush="#66FFFFFF" BorderThickness="0,0,1,1" Grid.Row="1" Grid.Column="0" />
-                                    <Border BorderBrush="#66FFFFFF" BorderThickness="0,0,1,1" Grid.Row="1" Grid.Column="1" />
-                                    <Border BorderBrush="#66FFFFFF" BorderThickness="0,0,0,1" Grid.Row="1" Grid.Column="2" />
-                                    <Border BorderBrush="#66FFFFFF" BorderThickness="0,0,1,0" Grid.Row="2" Grid.Column="0" />
-                                    <Border BorderBrush="#66FFFFFF" BorderThickness="0,0,1,0" Grid.Row="2" Grid.Column="1" />
-
-                                    <!-- Area Readout -->
-                                    <Border Background="#99000000" CornerRadius="4" Padding="4,2" HorizontalAlignment="Center" VerticalAlignment="Center" Grid.Row="1" Grid.Column="1">
-                                        <TextBlock x:Name="AreaReadoutText" Text="15%" FontSize="11" FontWeight="Bold" Foreground="White" />
-                                    </Border>
-                                </Grid>
-
-                                <!-- Resize Handles -->
-                                <Thumb x:Name="ThumbTopLeft" Width="12" Height="12" Background="White" BorderBrush="Black" BorderThickness="1" CornerRadius="0" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-6,-6,0,0" DragStarted="Thumb_DragStarted" DragDelta="ThumbTopLeft_DragDelta" DragCompleted="Thumb_DragCompleted" />
-                                <Thumb x:Name="ThumbTopRight" Width="12" Height="12" Background="White" BorderBrush="Black" BorderThickness="1" CornerRadius="0" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-6,-6,0" DragStarted="Thumb_DragStarted" DragDelta="ThumbTopRight_DragDelta" DragCompleted="Thumb_DragCompleted" />
-                                <Thumb x:Name="ThumbBottomLeft" Width="12" Height="12" Background="White" BorderBrush="Black" BorderThickness="1" CornerRadius="0" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-6,0,0,-6" DragStarted="Thumb_DragStarted" DragDelta="ThumbBottomLeft_DragDelta" DragCompleted="Thumb_DragCompleted" />
-                                <Thumb x:Name="ThumbBottomRight" Width="12" Height="12" Background="White" BorderBrush="Black" BorderThickness="1" CornerRadius="0" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-6,-6" DragStarted="Thumb_DragStarted" DragDelta="ThumbBottomRight_DragDelta" DragCompleted="Thumb_DragCompleted" />
-                            </Grid>
+                        <Border x:Name="StartFrameBox" Width="200" Height="112" Canvas.Left="0" Canvas.Top="0"
+                                BorderBrush="#FF00D4FF" BorderThickness="4" Background="#1800D4FF"
+                                Tag="start" IsHitTestVisible="False">
+                            <Border Background="#EE003044" Padding="8,3" CornerRadius="3" Margin="6"
+                                    HorizontalAlignment="Left" VerticalAlignment="Top">
+                                <TextBlock Text="Zoom/pan start" FontWeight="Bold" Foreground="#FF00D4FF" FontSize="12" />
+                            </Border>
                         </Border>
+                        <Border x:Name="EndFrameBox" Width="200" Height="112" Canvas.Left="0" Canvas.Top="0"
+                                BorderBrush="#FFFF8A00" BorderThickness="2" Background="#18FF8A00"
+                                Tag="end" IsHitTestVisible="False">
+                            <Border Background="#EE402000" Padding="8,3" CornerRadius="3" Margin="6"
+                                    HorizontalAlignment="Right" VerticalAlignment="Bottom">
+                                <TextBlock Text="Zoom/pan end" FontWeight="Bold" Foreground="#FFFF8A00" FontSize="12" />
+                            </Border>
+                        </Border>
+
+                        <Rectangle x:Name="HandleTL" Width="16" Height="16" Fill="White" Stroke="#FF00D4FF" StrokeThickness="2" Tag="tl" PointerPressed="Handle_PointerPressed" />
+                        <Rectangle x:Name="HandleTR" Width="16" Height="16" Fill="White" Stroke="#FF00D4FF" StrokeThickness="2" Tag="tr" PointerPressed="Handle_PointerPressed" />
+                        <Rectangle x:Name="HandleBL" Width="16" Height="16" Fill="White" Stroke="#FF00D4FF" StrokeThickness="2" Tag="bl" PointerPressed="Handle_PointerPressed" />
+                        <Rectangle x:Name="HandleBR" Width="16" Height="16" Fill="White" Stroke="#FF00D4FF" StrokeThickness="2" Tag="br" PointerPressed="Handle_PointerPressed" />
                     </Canvas>
+
+                    <Border x:Name="StatusBanner" Visibility="Collapsed" HorizontalAlignment="Left" VerticalAlignment="Top"
+                            Margin="16,16,0,0" Background="#EE111111" Padding="14,10" CornerRadius="8"
+                            IsHitTestVisible="False">
+                        <StackPanel Spacing="4" MaxWidth="420">
+                            <Border x:Name="StateBadge" CornerRadius="4" Padding="8,4" HorizontalAlignment="Left">
+                                <TextBlock x:Name="StateText" FontWeight="Bold" FontSize="16" Foreground="White" />
+                            </Border>
+                            <TextBlock x:Name="StatusDetailText" FontSize="13" Foreground="#EEEEEE" TextWrapping="Wrap" />
+                            <TextBlock x:Name="TelemetryText" FontFamily="Consolas" FontSize="12" Foreground="#BBBBBB" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+                    <Border x:Name="PreviewBanner" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Top"
+                            Margin="0,16,0,0" Background="#EE8B0000" Padding="16,10" CornerRadius="8"
+                            IsHitTestVisible="False">
+                        <TextBlock Text="PREVIEWING THIS SHOT — playback, not the still editor" FontWeight="Bold" Foreground="White" />
+                    </Border>
                 </Grid>
             </SplitView.Content>
         </SplitView>

@@ -33,7 +33,10 @@ namespace ModernImageViewer.Cinematic.Data
                             overrideDef.FocusTargetRect.Y,
                             overrideDef.FocusTargetRect.Width,
                             overrideDef.FocusTargetRect.Height)
-                        : null
+                        : null,
+                    StartCrop = ToRect(overrideDef.StartCrop),
+                    EndCrop = ToRect(overrideDef.EndCrop),
+                    CurveOverride = overrideDef.CurveOverride ?? GlobalDefaults.CurveOverride
                 };
             }
 
@@ -46,8 +49,17 @@ namespace ModernImageViewer.Cinematic.Data
                 DirectionMode = GlobalDefaults.DirectionOverride,
                 UseTilt = GlobalDefaults.UseTilt,
                 UseNarrativeArc = GlobalDefaults.UseNarrativeArc,
-                FocusTargetRect = null
+                FocusTargetRect = null,
+                StartCrop = null,
+                EndCrop = null,
+                CurveOverride = GlobalDefaults.CurveOverride
             };
+        }
+
+        private static Windows.Foundation.Rect? ToRect(NormalizedRect? r)
+        {
+            if (r == null) return null;
+            return new Windows.Foundation.Rect(r.X, r.Y, r.Width, r.Height);
         }
     }
 
@@ -73,6 +85,9 @@ namespace ModernImageViewer.Cinematic.Data
 
         [JsonPropertyName("useNarrativeArc")]
         public bool UseNarrativeArc { get; set; } = true;
+
+        [JsonPropertyName("curveOverride")]
+        public string CurveOverride { get; set; } = "EaseInOut";
     }
 
     public class SlideSequenceDefinition
@@ -92,6 +107,12 @@ namespace ModernImageViewer.Cinematic.Data
         [JsonPropertyName("focusTargetRect")]
         public NormalizedRect? FocusTargetRect { get; set; }
 
+        [JsonPropertyName("startCrop")]
+        public NormalizedRect? StartCrop { get; set; }
+
+        [JsonPropertyName("endCrop")]
+        public NormalizedRect? EndCrop { get; set; }
+
         [JsonPropertyName("directionOverride")]
         public int? DirectionOverride { get; set; }
 
@@ -100,6 +121,9 @@ namespace ModernImageViewer.Cinematic.Data
 
         [JsonPropertyName("isUserOverridden")]
         public bool IsUserOverridden { get; set; } = false;
+
+        [JsonPropertyName("curveOverride")]
+        public string? CurveOverride { get; set; }
     }
 
     public class NormalizedRect

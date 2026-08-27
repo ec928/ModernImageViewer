@@ -18,6 +18,7 @@
     <WinUISDKReferences>false</WinUISDKReferences>
     <EnableMsixTooling>true</EnableMsixTooling>
     <Nullable>enable</Nullable>
+    <DefaultItemExcludes>$(DefaultItemExcludes);_revert_cinematic\**</DefaultItemExcludes>
 
     <!--
       Single source of truth for the shipped version. Until 0.10.0 these were unset, so

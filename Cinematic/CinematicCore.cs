@@ -15,8 +15,11 @@ namespace ModernImageViewer.Cinematic
         public bool UseNarrativeArc { get; set; } = true;
         public string TechniqueOverride { get; set; } = "Auto";
         public Rect? FocusTargetRect { get; set; }
+        public Rect? StartCrop { get; set; }
+        public Rect? EndCrop { get; set; }
         public double DurationSeconds { get; set; } = 10.0;
         public int BeatCount { get; set; } = 1;
+        public string CurveOverride { get; set; } = "EaseInOut";
     }
 
     public class SceneIntelligence
@@ -44,6 +47,7 @@ namespace ModernImageViewer.Cinematic
         public double CrossfadeDurationSeconds { get; set; } = 2.5;
         public bool RequiresCut { get; set; } = false;
         public bool IsSnapZoom { get; set; } = false;
+        public string EaseKind { get; set; } = "EaseInOut";
     }
 
     public static class CameraMath
@@ -71,6 +75,30 @@ namespace ModernImageViewer.Cinematic
             float driftY = isHumanOverride ? 0f : (float)((rnd.NextDouble() - 0.5) * bh * 0.1);
 
             return new Vector2(Math.Clamp(idealX + driftX, minX, maxX), Math.Clamp(idealY + driftY, minY, maxY));
+        }
+
+        public static Rect CropFromCamera(float scale, Vector2 pan, Size canvas, Size img)
+        {
+            if (scale <= 0.0001f) scale = 1f;
+            double iw = Math.Max(1, img.Width);
+            double ih = Math.Max(1, img.Height);
+            double left = (0 - pan.X) / scale;
+            double top = (0 - pan.Y) / scale;
+            double w = canvas.Width / scale;
+            double h = canvas.Height / scale;
+            return new Rect(left / iw, top / ih, w / iw, h / ih);
+        }
+
+        public static (float Scale, Vector2 Pan) CameraFromCrop(Rect norm, Size canvas, Size img)
+        {
+            float iw = Math.Max(1f, (float)img.Width);
+            float ih = Math.Max(1f, (float)img.Height);
+            float rw = Math.Max(0.02f, (float)norm.Width) * iw;
+            float rh = Math.Max(0.02f, (float)norm.Height) * ih;
+            float scale = Math.Max((float)canvas.Width / rw, (float)canvas.Height / rh);
+            float cx = ((float)norm.X + (float)norm.Width / 2f) * iw;
+            float cy = ((float)norm.Y + (float)norm.Height / 2f) * ih;
+            return (scale, new Vector2((float)canvas.Width / 2f - cx * scale, (float)canvas.Height / 2f - cy * scale));
         }
     }
 }

@@ -1,5 +1,6 @@
 using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Effects;
+using Microsoft.Graphics.Canvas.Text;
 using Microsoft.Graphics.Canvas.UI.Xaml;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
@@ -17,7 +18,7 @@ using Windows.Storage;
 using ModernImageViewer.Cinematic.Data;
 using ModernImageViewer.Cinematic.ViewModels;
 using ModernImageViewer.Cinematic.Services;
-using Microsoft.UI.Xaml.Controls.Primitives;
+
 
 namespace ModernImageViewer.Cinematic
 {
@@ -43,6 +44,14 @@ namespace ModernImageViewer.Cinematic
         private SlideFrame? _secondaryFrame;
 
         private bool _isPreloading = false;
+        private bool _previewing = false;
+        private Border? _activeKeyframeBox;
+        private bool _selectedIsStart = true;
+        private bool _isDraggingBox;
+        private bool _isResizing;
+        private string _resizeCorner = "";
+        private Windows.Foundation.Point _dragStartPoint;
+        private double _boxStartLeft, _boxStartTop, _boxStartW, _boxStartH;
         private TimeSpan _slideStartTime = TimeSpan.Zero;
         private float _crossfadeBlurAlpha = 0f;
         private float _crossfadeSubjectAlpha = 0f;
@@ -56,14 +65,6 @@ namespace ModernImageViewer.Cinematic
         private int _currentTransitionType = -1;
         private int _trajectoryUpdateId = 0;
 
-        // Freeze-Frame State Machine
-        private bool _isTargetingFrozen = false;
-        private TimeSpan _lastRenderTime = TimeSpan.Zero;
-        private bool _injectFrozenCoordinates = false;
-        private float _frozenScale;
-        private Vector2 _frozenPan;
-        private float _frozenRotation;
-
         private Queue<CameraTransform> _currentSequence = new();
         private Queue<CameraTransform> _nextSequence = new();
 
@@ -73,6 +74,9 @@ namespace ModernImageViewer.Cinematic
             public SceneIntelligence Intelligence { get; }
             public CameraTransform Trajectory { get; set; } = new();
             public bool IsSharedResource { get; set; } = false;
+            public Rect EngineStartCrop;
+            public Rect EngineEndCrop;
+            public bool HasEngineCrops;
 
             public float CurrentScale;
             public Vector2 CurrentPan;
@@ -216,9 +220,67 @@ namespace ModernImageViewer.Cinematic
                 _faceDetector = await FaceDetector.CreateAsync();
         }
 
-        private async void UpdateActiveTrajectoriesAsync()
+        private void DiscardPreload()
+        {
+            _isPreloading = false;
+            _nextSequence.Clear();
+            if (_secondaryFrame != null)
+            {
+                if (_primaryFrame == null || _secondaryFrame.GpuBitmap != _primaryFrame.GpuBitmap)
+                    _secondaryFrame.Dispose();
+                _secondaryFrame = null;
+            }
+        }
+
+        private void SnapshotEngineCrops(SlideFrame frame, CameraTransform traj, Size canvas)
+        {
+            var img = frame.Intelligence.ImageSize;
+            frame.EngineStartCrop = CameraMath.CropFromCamera(traj.StartScale, traj.StartPan, canvas, img);
+            frame.EngineEndCrop = CameraMath.CropFromCamera(traj.EndScale, traj.EndPan, canvas, img);
+            frame.HasEngineCrops = true;
+        }
+
+        private void ApplyCropsToTrajectory(Rect startCrop, Rect endCrop)
+        {
+            if (_primaryFrame == null) return;
+            var canvas = SlideshowCanvas.Size;
+            var img = _primaryFrame.Intelligence.ImageSize;
+            var s = CameraMath.CameraFromCrop(startCrop, canvas, img);
+            var e = CameraMath.CameraFromCrop(endCrop, canvas, img);
+            _primaryFrame.Trajectory.StartScale = s.Scale;
+            _primaryFrame.Trajectory.StartPan = s.Pan;
+            _primaryFrame.Trajectory.EndScale = e.Scale;
+            _primaryFrame.Trajectory.EndPan = e.Pan;
+            var curve = ViewModel.CurveOverride;
+            _primaryFrame.Trajectory.EaseKind = string.IsNullOrEmpty(curve) ? "EaseInOut" : curve;
+            _primaryFrame.Trajectory.IsSnapZoom = curve == "SnapZoom";
+            _slideDurationSeconds = _primaryFrame.Trajectory.RecommendedDurationSeconds;
+        }
+
+        private async void UpdateActiveTrajectoriesAsync(bool forceEngineReroll = false)
         {
             if (_primaryFrame == null || SlideshowCanvas.ActualWidth <= 0) return;
+
+            var settings = ViewModel.GetCurrentEffectiveSettings();
+            bool customCrops = settings.StartCrop is Rect && settings.EndCrop is Rect;
+
+            if (!forceEngineReroll && !customCrops && _primaryFrame.HasEngineCrops && !ViewModel.HasUnsavedZoomPan)
+            {
+                ApplyCropsToTrajectory(_primaryFrame.EngineStartCrop, _primaryFrame.EngineEndCrop);
+                if (DirectorSidebar.IsPaneOpen && !_previewing) ResetKeyframeBoxes();
+                UpdateStatusUi();
+                SlideshowCanvas.Invalidate();
+                return;
+            }
+
+            if (!forceEngineReroll && customCrops && !ViewModel.HasUnsavedZoomPan)
+            {
+                ApplyCropsToTrajectory(settings.StartCrop!.Value, settings.EndCrop!.Value);
+                if (DirectorSidebar.IsPaneOpen && !_previewing) ResetKeyframeBoxes();
+                UpdateStatusUi();
+                SlideshowCanvas.Invalidate();
+                return;
+            }
 
             int currentId = ++_trajectoryUpdateId;
             await Task.Delay(50);
@@ -227,35 +289,27 @@ namespace ModernImageViewer.Cinematic
             _mathCts?.Cancel();
             _mathCts = new CancellationTokenSource();
             var token = _mathCts.Token;
-
-            var settings = ViewModel.GetCurrentEffectiveSettings();
             var request = new PlaybackRequest(SlideshowCanvas.Size, settings);
 
             try
             {
                 var newSequence = await Task.Run(() => _director.GetSequence(_primaryFrame.Intelligence, request.Bounds, request.Settings, token), token);
 
-                if (!token.IsCancellationRequested)
+                if (!token.IsCancellationRequested && newSequence.Count > 0)
                 {
                     _currentSequence = newSequence;
                     var newTrajectory = _currentSequence.Dequeue();
-
-                    // Seamless Resume Injection
-                    if (_injectFrozenCoordinates && _primaryFrame != null)
-                    {
-                        newTrajectory.StartScale = _frozenScale;
-                        newTrajectory.StartPan = _frozenPan;
-                        newTrajectory.StartRotation = _frozenRotation;
-
-                        _slideStartTime = TimeSpan.Zero;
-                        _injectFrozenCoordinates = false;
-                    }
-
-                    // Non-null: guarded by the _primaryFrame == null early-return at the top of this method.
                     _primaryFrame!.Trajectory = newTrajectory;
                     _slideDurationSeconds = _primaryFrame.Trajectory.RecommendedDurationSeconds;
+                    if (!customCrops)
+                        SnapshotEngineCrops(_primaryFrame, newTrajectory, request.Bounds);
                     SlideshowCanvas.Invalidate();
-                    DispatcherQueue.TryEnqueue(() => UpdateGhostViewport());
+                    DispatcherQueue.TryEnqueue(() =>
+                    {
+                        if (DirectorSidebar.IsPaneOpen && !_previewing && !ViewModel.HasUnsavedZoomPan)
+                            ResetKeyframeBoxes();
+                        UpdateStatusUi();
+                    });
                 }
             }
             catch (TaskCanceledException) { }
@@ -308,19 +362,21 @@ namespace ModernImageViewer.Cinematic
                 _primaryFrame?.Dispose();
                 _primaryFrame = newFrame;
                 _currentSequence = queue;
-                _primaryFrame.Trajectory = _currentSequence.Dequeue();
+                _primaryFrame.Trajectory = _currentSequence.Count > 0 ? _currentSequence.Dequeue() : new CameraTransform();
+                if (request.Settings.StartCrop == null || request.Settings.EndCrop == null)
+                    SnapshotEngineCrops(_primaryFrame, _primaryFrame.Trajectory, request.Bounds);
 
                 _slideDurationSeconds = _primaryFrame.Trajectory.RecommendedDurationSeconds;
                 _slideStartTime = TimeSpan.Zero;
                 _crossfadeBlurAlpha = 0f;
                 _crossfadeSubjectAlpha = 0f;
 
-                if (!ViewModel.IsPlaying)
+                if (!ViewModel.IsPlaying && !DirectorSidebar.IsPaneOpen)
                 {
                     ViewModel.TogglePlay();
                 }
 
-                ResetTargetBoxVisuals();
+                ResetKeyframeBoxes();
             }
             finally
             {
@@ -350,7 +406,9 @@ namespace ModernImageViewer.Cinematic
                 {
                     _secondaryFrame = frame;
                     _nextSequence = queue;
-                    _secondaryFrame.Trajectory = _nextSequence.Dequeue();
+                    _secondaryFrame.Trajectory = _nextSequence.Count > 0 ? _nextSequence.Dequeue() : new CameraTransform();
+                    if (request.Settings.StartCrop == null || request.Settings.EndCrop == null)
+                        SnapshotEngineCrops(_secondaryFrame, _secondaryFrame.Trajectory, request.Bounds);
                 }
                 else DispatcherQueue.TryEnqueue(() => frame.Dispose());
             }
@@ -376,10 +434,12 @@ namespace ModernImageViewer.Cinematic
                     {
                         _primaryFrame = frame;
                         _currentSequence = queue;
-                        _primaryFrame.Trajectory = _currentSequence.Dequeue();
+                        _primaryFrame.Trajectory = _currentSequence.Count > 0 ? _currentSequence.Dequeue() : new CameraTransform();
+                        if (request.Settings.StartCrop == null || request.Settings.EndCrop == null)
+                            SnapshotEngineCrops(_primaryFrame, _primaryFrame.Trajectory, request.Bounds);
                         _slideDurationSeconds = _primaryFrame.Trajectory.RecommendedDurationSeconds;
                         _slideStartTime = TimeSpan.Zero;
-                        ResetTargetBoxVisuals();
+                        ResetKeyframeBoxes();
                     });
                 }
                 else DispatcherQueue.TryEnqueue(() => frame.Dispose());
@@ -434,63 +494,14 @@ namespace ModernImageViewer.Cinematic
             var args = e as RenderingEventArgs;
             TimeSpan totalTime = args?.RenderingTime ?? TimeSpan.Zero;
 
-            if (TelemetryText != null && TelemetryOverlay.Visibility == Visibility.Visible)
-            {
-                if (StateText != null && StateBadge != null)
-                {
-                    if (ViewModel.IsOverrideMode)
-                    {
-                        StateText.Text = "ENGINE STATE: CUSTOM OVERRIDE";
-                        StateText.Foreground = _telemetryOverrideText;
-                        StateBadge.Background = _telemetryOverrideBg;
-                    }
-                    else
-                    {
-                        StateText.Text = "ENGINE STATE: AUTO (Global Default)";
-                        StateText.Foreground = _telemetryAutoText;
-                        StateBadge.Background = _telemetryAutoBg;
-                    }
-                }
-
-                string easing = _primaryFrame.Trajectory.IsSnapZoom ? "Snap-Zoom Curve" : "Cubic";
-                string displayTechnique = string.IsNullOrEmpty(_primaryFrame.Trajectory.Technique) ? "None" : _primaryFrame.Trajectory.Technique;
-                var effective = ViewModel.GetCurrentEffectiveSettings();
-                string targetStatus = effective.FocusTargetRect != null ? $"Manual Target Lock" : "Auto (Engine Choice)";
-
-                double elapsedForTelemetry = ViewModel.IsPlaying ? (totalTime - _slideStartTime).TotalSeconds : 0;
-                double remainingForTelemetry = Math.Max(0, _slideDurationSeconds - elapsedForTelemetry);
-
-                TelemetryText.Text =
-                    $"Slide: {ViewModel.CurrentIndex + 1} / {ViewModel.ImagePaths.Count}\n" +
-                    $"File: {ViewModel.CurrentFileName}\n" +
-                    $"Target: {targetStatus}\n" +
-                    $"Technique: {displayTechnique}\n" +
-                    $"Strategy: {_primaryFrame.Trajectory.StrategyName}\n" +
-                    $"Easing: {easing} | Int: {effective.IntensityPercent}%\n" +
-                    $"Zoom: {_primaryFrame.Trajectory.StartScale:F2}x → {_primaryFrame.Trajectory.EndScale:F2}x\n" +
-                    $"Pan Cur:  ({_primaryFrame.CurrentPan.X:F0}, {_primaryFrame.CurrentPan.Y:F0})\n" +
-                    $"Pan Dest: ({_primaryFrame.Trajectory.EndPan.X:F0}, {_primaryFrame.Trajectory.EndPan.Y:F0})\n" +
-                    $"Remaining: {remainingForTelemetry:F1}s";
-            }
+            if (DirectorSidebar.IsPaneOpen)
+                UpdateStatusUi();
 
             if (!ViewModel.IsPlaying || _isManuallyNavigating)
             {
-                if (_isTargetingFrozen || (TelemetryOverlay != null && TelemetryOverlay.Visibility == Visibility.Visible))
+                if (DirectorSidebar.IsPaneOpen && !_previewing)
                     SlideshowCanvas.Invalidate();
                 return;
-            }
-
-            if (_lastRenderTime == TimeSpan.Zero) _lastRenderTime = totalTime;
-            TimeSpan delta = totalTime - _lastRenderTime;
-            _lastRenderTime = totalTime;
-
-            if (_isTargetingFrozen)
-            {
-                if (_slideStartTime != TimeSpan.Zero)
-                {
-                    _slideStartTime += delta;
-                }
-                SlideshowCanvas.Invalidate();
             }
 
             if (_slideStartTime == TimeSpan.Zero) _slideStartTime = totalTime;
@@ -526,6 +537,16 @@ namespace ModernImageViewer.Cinematic
 
             if (progress >= 1.0)
             {
+                if (_previewing)
+                {
+                    _previewing = false;
+                    if (ViewModel.IsPlaying) ViewModel.TogglePlay();
+                    DiscardPreload();
+                    SlideProgressBar.Value = 0;
+                    SyncPlayPauseUI();
+                    SlideshowCanvas.Invalidate();
+                    return;
+                }
                 if (_secondaryFrame != null)
                 {
                     var oldPrimary = _primaryFrame;
@@ -635,19 +656,11 @@ namespace ModernImageViewer.Cinematic
         {
             var imgSize = frame.Intelligence.ImageSize;
             var traj = frame.Trajectory;
-            bool isEditMode = DirectorSidebar.IsPaneOpen && !ViewModel.IsPlaying;
+            bool isEditMode = DirectorSidebar.IsPaneOpen && !_previewing;
 
             if (isEditMode)
             {
-                float scaleToFit = (float)Math.Min(bounds.Width / imgSize.Width, bounds.Height / imgSize.Height);
-                float drawW = (float)(imgSize.Width * scaleToFit);
-                float drawH = (float)(imgSize.Height * scaleToFit);
-                float offsetX = (float)(bounds.Width - drawW) / 2f;
-                float offsetY = (float)(bounds.Height - drawH) / 2f;
-
-                var editTransform = Matrix3x2.CreateScale(scaleToFit) * Matrix3x2.CreateTranslation(offsetX, offsetY);
-                args.DrawingSession.Transform = editTransform;
-                args.DrawingSession.DrawImage(frame.GpuBitmap, 0, 0, frame.GpuBitmap.Bounds, 1.0f, CanvasImageInterpolation.HighQualityCubic);
+                DrawEditWorkspace(args, frame, bounds);
                 return;
             }
 
@@ -708,17 +721,16 @@ namespace ModernImageViewer.Cinematic
         // --------------------------------------------------------
         private void SyncPlayPauseUI()
         {
-            if (DirectorSidebar.IsPaneOpen)
-            {
-                WysiwygOverlay.Visibility = Visibility.Visible;
-                WysiwygHint.Visibility = Visibility.Visible;
-                ResetTargetBoxVisuals();
-            }
-            else
-            {
-                WysiwygOverlay.Visibility = Visibility.Collapsed;
-                WysiwygHint.Visibility = Visibility.Collapsed;
-            }
+            if (DirectorSidebar.IsPaneOpen && ViewModel.IsPlaying && !_previewing)
+                ViewModel.TogglePlay();
+
+            bool showEditOverlay = DirectorSidebar.IsPaneOpen && !_previewing;
+            WysiwygOverlay.Visibility = showEditOverlay ? Visibility.Visible : Visibility.Collapsed;
+            WysiwygHint.Visibility = Visibility.Collapsed;
+            StatusBanner.Visibility = DirectorSidebar.IsPaneOpen ? Visibility.Visible : Visibility.Collapsed;
+            PreviewBanner.Visibility = _previewing ? Visibility.Visible : Visibility.Collapsed;
+            if (showEditOverlay && !ViewModel.HasUnsavedZoomPan) ResetKeyframeBoxes();
+            UpdateStatusUi();
 
             if (ViewModel.IsPlaying)
             {
@@ -727,310 +739,439 @@ namespace ModernImageViewer.Cinematic
             SlideshowCanvas.Invalidate();
         }
 
+        private void UpdateStatusUi()
+        {
+            if (StateText == null || _primaryFrame == null) return;
+            var traj = _primaryFrame.Trajectory;
+            bool draft = ViewModel.HasUnsavedZoomPan;
+            bool custom = ViewModel.IsOverrideMode;
+
+            if (draft)
+            {
+                StateText.Text = "DRAFT — not saved";
+                StateText.Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 210, 70));
+                StateBadge.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(60, 255, 200, 0));
+            }
+            else if (custom)
+            {
+                StateText.Text = "CUSTOM — you saved this zoom/pan";
+                StateText.Foreground = _telemetryOverrideText;
+                StateBadge.Background = _telemetryOverrideBg;
+            }
+            else
+            {
+                StateText.Text = "AUTO — engine zoom/pan, not customized";
+                StateText.Foreground = _telemetryAutoText;
+                StateBadge.Background = _telemetryAutoBg;
+            }
+
+            string zoom = $"Zoom/pan {traj.StartScale:F2}× → {traj.EndScale:F2}×";
+            string who = draft
+                ? "Show still uses the last saved state until you Save."
+                : custom
+                    ? "This slide uses your saved rectangles, not the engine."
+                    : "These rectangles are the engine's. Different start/end is normal Auto Ken Burns — not your edit.";
+            if (StatusDetailText != null) StatusDetailText.Text = who;
+            if (ZoomPanReadout != null) ZoomPanReadout.Text = zoom;
+            if (TelemetryText != null)
+            {
+                TelemetryText.Text =
+                    $"{zoom}\n" +
+                    $"Slide {ViewModel.CurrentIndex + 1} / {ViewModel.ImagePaths.Count}  ·  {ViewModel.CurrentFileName}\n" +
+                    $"Saved: {(custom ? "Custom zoom/pan" : "Auto (engine)")}  ·  Unsaved draft: {(draft ? "yes" : "no")}";
+            }
+        }
+
+        private void DrawEditWorkspace(CanvasDrawEventArgs args, SlideFrame frame, Size bounds)
+        {
+            var imgSize = frame.Intelligence.ImageSize;
+            if (!TryEditLayout(bounds.Width, bounds.Height, imgSize, out float scale, out float drawW, out float drawH, out float ox, out float oy))
+                return;
+
+            var ds = args.DrawingSession;
+            ds.Transform = Matrix3x2.CreateScale(scale) * Matrix3x2.CreateTranslation(ox, oy);
+            ds.DrawImage(frame.GpuBitmap, 0, 0, frame.GpuBitmap.Bounds, 1.0f, CanvasImageInterpolation.HighQualityCubic);
+            ds.Transform = Matrix3x2.Identity;
+
+            var selected = SelectedBox();
+            if (selected != null)
+            {
+                float l = (float)Canvas.GetLeft(selected);
+                float t = (float)Canvas.GetTop(selected);
+                float w = (float)selected.Width;
+                float h = (float)selected.Height;
+                var dim = Windows.UI.Color.FromArgb(150, 0, 0, 0);
+                ds.FillRectangle(0, 0, (float)bounds.Width, t, dim);
+                ds.FillRectangle(0, t + h, (float)bounds.Width, (float)bounds.Height - (t + h), dim);
+                ds.FillRectangle(0, t, l, h, dim);
+                ds.FillRectangle(l + w, t, (float)bounds.Width - (l + w), h, dim);
+            }
+
+            DrawFramedPreview(ds, frame, bounds);
+        }
+
+        private void DrawFramedPreview(Microsoft.Graphics.Canvas.CanvasDrawingSession ds, SlideFrame frame, Size bounds)
+        {
+            if (SelectedBox() == null || bounds.Width < 1) return;
+
+            float pipW = 280f;
+            float pipH = pipW * (float)(bounds.Height / Math.Max(1, bounds.Width));
+            float pipX = 16f;
+            float pipY = (float)bounds.Height - pipH - 16f;
+            var pipRect = new Rect(pipX, pipY, pipW, pipH);
+            float k = pipW / (float)Math.Max(1, bounds.Width);
+            float scale = _selectedIsStart ? frame.Trajectory.StartScale : frame.Trajectory.EndScale;
+            var pan = _selectedIsStart ? frame.Trajectory.StartPan : frame.Trajectory.EndPan;
+
+            ds.FillRectangle(pipRect, Windows.UI.Color.FromArgb(240, 0, 0, 0));
+            using (ds.CreateLayer(1f, pipRect))
+            {
+                ds.Transform = Matrix3x2.CreateScale(scale * k) * Matrix3x2.CreateTranslation(pan.X * k + pipX, pan.Y * k + pipY);
+                ds.DrawImage(frame.GpuBitmap, 0, 0, frame.GpuBitmap.Bounds, 1.0f, CanvasImageInterpolation.HighQualityCubic);
+                ds.Transform = Matrix3x2.Identity;
+            }
+
+            var accent = _selectedIsStart
+                ? Windows.UI.Color.FromArgb(255, 0, 212, 255)
+                : Windows.UI.Color.FromArgb(255, 255, 138, 0);
+            ds.DrawRectangle(pipRect, accent, 2.5f);
+            using var fmt = new CanvasTextFormat { FontSize = 13, FontFamily = "Segoe UI" };
+            ds.DrawText(_selectedIsStart ? "Zoom/pan start, filling the screen" : "Zoom/pan end, filling the screen",
+                pipX + 8, pipY + 6, accent, fmt);
+        }
+
         private void WysiwygOverlay_SizeChanged(object sender, SizeChangedEventArgs e)
         {
-            if (DirectorSidebar.IsPaneOpen && !ViewModel.IsPlaying)
-            {
-                ResetTargetBoxVisuals();
-            }
+            if (DirectorSidebar.IsPaneOpen && !ViewModel.IsPlaying && !_isDraggingBox && !_isResizing)
+                ResetKeyframeBoxes();
         }
 
         private void WysiwygOverlay_PointerWheelChanged(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
         {
-            if (_primaryFrame == null || WysiwygOverlay.ActualWidth == 0) return;
+            var box = SelectedBox();
+            if (box == null || _primaryFrame == null) return;
+            if (!TryEditLayout(WysiwygOverlay.ActualWidth, WysiwygOverlay.ActualHeight, _primaryFrame.Intelligence.ImageSize, out _, out double drawW, out double drawH, out double ox, out double oy))
+                return;
 
-            var delta = e.GetCurrentPoint(WysiwygOverlay).Properties.MouseWheelDelta;
-            double aspectRatio = WysiwygOverlay.ActualWidth / WysiwygOverlay.ActualHeight;
-
-            double oldWidth = FocusTargetBox.Width;
-            double oldHeight = FocusTargetBox.Height;
-
-            bool isFineIncrement = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down) ||
-                                   Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
-
-            double step = isFineIncrement ? 2.0 : 30.0;
-            double newWidth = delta > 0 ? oldWidth - step : oldWidth + step;
-
-            newWidth = Math.Clamp(newWidth, 80, WysiwygOverlay.ActualWidth);
-            double newHeight = newWidth / aspectRatio;
-
-            double widthDiff = oldWidth - newWidth;
-            double heightDiff = oldHeight - newHeight;
-
-            double newX = Math.Clamp(FocusBoxTransform.X + (widthDiff / 2.0), 0, WysiwygOverlay.ActualWidth - newWidth);
-            double newY = Math.Clamp(FocusBoxTransform.Y + (heightDiff / 2.0), 0, WysiwygOverlay.ActualHeight - newHeight);
-
-            FocusTargetBox.Width = newWidth;
-            FocusTargetBox.Height = newHeight;
-            FocusBoxTransform.X = newX;
-            FocusBoxTransform.Y = newY;
-
-            UpdateAreaReadout();
-
-            _isTargetingFrozen = true;
-            CommitTargetToViewModel();
-            _isTargetingFrozen = false;
-
+            double aspect = OutputAspect();
+            double oldW = box.Width, oldH = box.Height;
+            double oldL = Canvas.GetLeft(box), oldT = Canvas.GetTop(box);
+            double delta = e.GetCurrentPoint(WysiwygOverlay).Properties.MouseWheelDelta;
+            double newW = oldW + (delta > 0 ? -28 : 28);
+            ApplyBoxRect(box, oldL + (oldW - newW) / 2, oldT + (oldH - newW / aspect) / 2, newW, newW / aspect);
+            ApplyChrome();
+            CommitKeyframeCrops(persist: false);
+            SlideshowCanvas.Invalidate();
             e.Handled = true;
         }
 
-        private void UpdateGhostViewport()
+        private bool TryEditLayout(double viewW, double viewH, Size img, out float scale, out float drawW, out float drawH, out float ox, out float oy)
         {
-            if (_primaryFrame?.Trajectory == null || WysiwygOverlay.ActualWidth == 0 || WysiwygOverlay.ActualHeight == 0)
-            {
-                GhostViewport.Visibility = Visibility.Collapsed;
-                return;
-            }
-
-            var bounds = new Size(WysiwygOverlay.ActualWidth, WysiwygOverlay.ActualHeight);
-            GhostViewport.Width = bounds.Width;
-            GhostViewport.Height = bounds.Height;
-            GhostViewport.Visibility = Visibility.Visible;
-
-            float scaleToFit = (float)Math.Min(bounds.Width / _primaryFrame.Intelligence.ImageSize.Width, bounds.Height / _primaryFrame.Intelligence.ImageSize.Height);
-            float offsetX = (float)(bounds.Width - (_primaryFrame.Intelligence.ImageSize.Width * scaleToFit)) / 2f;
-            float offsetY = (float)(bounds.Height - (_primaryFrame.Intelligence.ImageSize.Height * scaleToFit)) / 2f;
-            var editTransform = Matrix3x2.CreateScale(scaleToFit) * Matrix3x2.CreateTranslation(offsetX, offsetY);
-
-            var traj = _primaryFrame.Trajectory;
-            var centerPoint = new Vector2((float)bounds.Width / 2f, (float)bounds.Height / 2f);
-            
-            var playbackTransform = Matrix3x2.CreateScale(traj.EndScale) * Matrix3x2.CreateTranslation(traj.EndPan) * Matrix3x2.CreateRotation(traj.EndRotation, centerPoint);
-
-            if (Matrix3x2.Invert(playbackTransform, out Matrix3x2 invPlayback))
-            {
-                var combined = invPlayback * editTransform;
-                GhostTransform.Matrix = new Microsoft.UI.Xaml.Media.Matrix(combined.M11, combined.M12, combined.M21, combined.M22, combined.M31, combined.M32);
-            }
+            scale = drawW = drawH = ox = oy = 0;
+            if (viewW <= 1 || viewH <= 1) return false;
+            double iw = Math.Max(1, img.Width);
+            double ih = Math.Max(1, img.Height);
+            double pad = Math.Clamp(Math.Min(viewW, viewH) * 0.09, 52, 96);
+            double availW = Math.Max(32, viewW - 2 * pad);
+            double availH = Math.Max(32, viewH - 2 * pad);
+            scale = (float)Math.Min(availW / iw, availH / ih);
+            drawW = (float)(iw * scale);
+            drawH = (float)(ih * scale);
+            ox = (float)((viewW - drawW) / 2);
+            oy = (float)((viewH - drawH) / 2);
+            return drawW > 1 && drawH > 1;
         }
 
-        private void ResetTargetBoxVisuals()
+        private bool TryEditLayout(double viewW, double viewH, Size img, out float scale, out double drawW, out double drawH, out double ox, out double oy)
         {
-            if (WysiwygOverlay.ActualWidth == 0 || WysiwygOverlay.ActualHeight == 0) return;
+            bool ok = TryEditLayout(viewW, viewH, img, out scale, out float fw, out float fh, out float fox, out float foy);
+            drawW = fw; drawH = fh; ox = fox; oy = foy;
+            return ok;
+        }
 
-            if (ViewModel.CurrentDraft.FocusTargetRect != null && _primaryFrame != null)
+        private double OutputAspect() => SlideshowCanvas.ActualWidth / Math.Max(1, SlideshowCanvas.ActualHeight);
+
+        private Border? SelectedBox() => _selectedIsStart ? StartFrameBox : EndFrameBox;
+
+        private void PlaceCrop(Border box, Rect crop, double drawW, double drawH, double ox, double oy)
+        {
+            box.Width = Math.Max(8, crop.Width * drawW);
+            box.Height = Math.Max(8, crop.Height * drawH);
+            Canvas.SetLeft(box, ox + crop.X * drawW);
+            Canvas.SetTop(box, oy + crop.Y * drawH);
+        }
+
+        private void ApplyBoxRect(Border box, double left, double top, double width, double height)
+        {
+            double aspect = OutputAspect();
+            double viewW = WysiwygOverlay.ActualWidth;
+            double viewH = WysiwygOverlay.ActualHeight;
+            width = Math.Clamp(width, 32, viewW);
+            height = width / aspect;
+            if (height > viewH) { height = viewH; width = height * aspect; }
+            left = Math.Clamp(left, 0, viewW - width);
+            top = Math.Clamp(top, 0, viewH - height);
+            box.Width = width;
+            box.Height = height;
+            Canvas.SetLeft(box, left);
+            Canvas.SetTop(box, top);
+        }
+
+        private Rect CropFromBox(Border box, double drawW, double drawH, double ox, double oy)
+        {
+            double x = (Canvas.GetLeft(box) - ox) / drawW;
+            double y = (Canvas.GetTop(box) - oy) / drawH;
+            double w = Math.Max(0.02, box.Width / drawW);
+            double h = Math.Max(0.02, box.Height / drawH);
+            return new Rect(x, y, w, h);
+        }
+
+        private void ResetKeyframeBoxes()
+        {
+            if (StartFrameBox == null || EndFrameBox == null || _primaryFrame == null) return;
+            if (_isDraggingBox || _isResizing) return;
+            if (ViewModel.HasUnsavedZoomPan) { ApplyChrome(); UpdateStatusUi(); return; }
+            if (!TryEditLayout(WysiwygOverlay.ActualWidth, WysiwygOverlay.ActualHeight, _primaryFrame.Intelligence.ImageSize, out _, out double drawW, out double drawH, out double ox, out double oy))
+                return;
+
+            var canvas = new Size(SlideshowCanvas.ActualWidth, SlideshowCanvas.ActualHeight);
+            var img = _primaryFrame.Intelligence.ImageSize;
+            var traj = _primaryFrame.Trajectory;
+
+            Rect start, end;
+            if (ViewModel.IsOverrideMode && ViewModel.CurrentDraft.StartCrop != null && ViewModel.CurrentDraft.EndCrop != null)
             {
-                double scaleToFit = Math.Min(WysiwygOverlay.ActualWidth / _primaryFrame.Intelligence.ImageSize.Width, WysiwygOverlay.ActualHeight / _primaryFrame.Intelligence.ImageSize.Height);
-                double drawW = _primaryFrame.Intelligence.ImageSize.Width * scaleToFit;
-                double drawH = _primaryFrame.Intelligence.ImageSize.Height * scaleToFit;
-                double offsetX = (WysiwygOverlay.ActualWidth - drawW) / 2.0;
-                double offsetY = (WysiwygOverlay.ActualHeight - drawH) / 2.0;
-
-                FocusTargetBox.Width = ViewModel.CurrentDraft.FocusTargetRect.Width * drawW;
-                FocusTargetBox.Height = ViewModel.CurrentDraft.FocusTargetRect.Height * drawH;
-                FocusBoxTransform.X = (ViewModel.CurrentDraft.FocusTargetRect.X * drawW) + offsetX;
-                FocusBoxTransform.Y = (ViewModel.CurrentDraft.FocusTargetRect.Y * drawH) + offsetY;
+                start = new Rect(ViewModel.CurrentDraft.StartCrop.X, ViewModel.CurrentDraft.StartCrop.Y, ViewModel.CurrentDraft.StartCrop.Width, ViewModel.CurrentDraft.StartCrop.Height);
+                end = new Rect(ViewModel.CurrentDraft.EndCrop.X, ViewModel.CurrentDraft.EndCrop.Y, ViewModel.CurrentDraft.EndCrop.Width, ViewModel.CurrentDraft.EndCrop.Height);
+            }
+            else if (_primaryFrame.HasEngineCrops)
+            {
+                start = _primaryFrame.EngineStartCrop;
+                end = _primaryFrame.EngineEndCrop;
             }
             else
             {
-                double aspectRatio = WysiwygOverlay.ActualWidth / WysiwygOverlay.ActualHeight;
-                double defaultWidth = Math.Max(120, WysiwygOverlay.ActualWidth * 0.25);
-                double defaultHeight = defaultWidth / aspectRatio;
-
-                FocusTargetBox.Width = defaultWidth;
-                FocusTargetBox.Height = defaultHeight;
-                FocusBoxTransform.X = (WysiwygOverlay.ActualWidth - defaultWidth) / 2.0;
-                FocusBoxTransform.Y = (WysiwygOverlay.ActualHeight - defaultHeight) / 2.0;
+                start = CameraMath.CropFromCamera(traj.StartScale, traj.StartPan, canvas, img);
+                end = CameraMath.CropFromCamera(traj.EndScale, traj.EndPan, canvas, img);
+                SnapshotEngineCrops(_primaryFrame, traj, canvas);
             }
 
-            UpdateAreaReadout();
+            PlaceCrop(StartFrameBox, start, drawW, drawH, ox, oy);
+            PlaceCrop(EndFrameBox, end, drawW, drawH, ox, oy);
+            ApplyCropsToTrajectory(start, end);
+            SelectKeyframe(_selectedIsStart);
         }
 
-        private bool _isDraggingBox = false;
-        private Windows.Foundation.Point _dragStartPoint;
-
-        private void FocusTargetBox_PointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+        private void ApplyChrome()
         {
-            _isDraggingBox = true;
-            _isTargetingFrozen = true;
-            FocusTargetBox.CapturePointer(e.Pointer);
-            _dragStartPoint = e.GetCurrentPoint(WysiwygOverlay).Position;
-            e.Handled = true;
+            if (StartFrameBox == null) return;
 
-            ViewModel.CaptureUndoSnapshot();
+            var box = SelectedBox();
+            if (box == null) return;
+            double l = Canvas.GetLeft(box), t = Canvas.GetTop(box), w = box.Width, h = box.Height, hs = 16;
+            Canvas.SetLeft(HandleTL, l - hs / 2); Canvas.SetTop(HandleTL, t - hs / 2);
+            Canvas.SetLeft(HandleTR, l + w - hs / 2); Canvas.SetTop(HandleTR, t - hs / 2);
+            Canvas.SetLeft(HandleBL, l - hs / 2); Canvas.SetTop(HandleBL, t + h - hs / 2);
+            Canvas.SetLeft(HandleBR, l + w - hs / 2); Canvas.SetTop(HandleBR, t + h - hs / 2);
+
+            var stroke = _selectedIsStart
+                ? new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 212, 255))
+                : new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 138, 0));
+            HandleTL.Stroke = stroke; HandleTR.Stroke = stroke; HandleBL.Stroke = stroke; HandleBR.Stroke = stroke;
+            Canvas.SetZIndex(HandleTL, 30); Canvas.SetZIndex(HandleTR, 30);
+            Canvas.SetZIndex(HandleBL, 30); Canvas.SetZIndex(HandleBR, 30);
+
+            MotionPath.X1 = Canvas.GetLeft(StartFrameBox) + StartFrameBox.Width / 2;
+            MotionPath.Y1 = Canvas.GetTop(StartFrameBox) + StartFrameBox.Height / 2;
+            MotionPath.X2 = Canvas.GetLeft(EndFrameBox) + EndFrameBox.Width / 2;
+            MotionPath.Y2 = Canvas.GetTop(EndFrameBox) + EndFrameBox.Height / 2;
         }
 
-        private void FocusTargetBox_PointerMoved(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+        private void SelectKeyframe(bool start)
         {
-            if (!_isDraggingBox || _primaryFrame == null) return;
-
-            var currentPoint = e.GetCurrentPoint(WysiwygOverlay).Position;
-            double deltaX = currentPoint.X - _dragStartPoint.X;
-            double deltaY = currentPoint.Y - _dragStartPoint.Y;
-
-            FocusBoxTransform.X = Math.Clamp(FocusBoxTransform.X + deltaX, 0, WysiwygOverlay.ActualWidth - FocusTargetBox.Width);
-            FocusBoxTransform.Y = Math.Clamp(FocusBoxTransform.Y + deltaY, 0, WysiwygOverlay.ActualHeight - FocusTargetBox.Height);
-            _dragStartPoint = currentPoint;
-        }
-
-        private void FocusTargetBox_PointerReleased(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
-        {
-            _isDraggingBox = false;
-            FocusTargetBox.ReleasePointerCapture(e.Pointer);
-
-            if (_primaryFrame != null)
+            _selectedIsStart = start;
+            _activeKeyframeBox = start ? StartFrameBox : EndFrameBox;
+            if (StartFrameBox != null)
             {
-                _frozenScale = _primaryFrame.CurrentScale;
-                _frozenPan = _primaryFrame.CurrentPan;
-                _frozenRotation = _primaryFrame.CurrentRotation;
-                _injectFrozenCoordinates = true;
+                StartFrameBox.BorderThickness = new Thickness(start ? 4 : 2);
+                EndFrameBox.BorderThickness = new Thickness(start ? 2 : 4);
+                Canvas.SetZIndex(StartFrameBox, start ? 20 : 10);
+                Canvas.SetZIndex(EndFrameBox, start ? 10 : 20);
+            }
+            ApplyChrome();
+            SlideshowCanvas.Invalidate();
+        }
 
-                double scaleToFit = Math.Min(WysiwygOverlay.ActualWidth / _primaryFrame.Intelligence.ImageSize.Width, WysiwygOverlay.ActualHeight / _primaryFrame.Intelligence.ImageSize.Height);
-                double drawW = _primaryFrame.Intelligence.ImageSize.Width * scaleToFit;
-                double drawH = _primaryFrame.Intelligence.ImageSize.Height * scaleToFit;
-                double offsetX = (WysiwygOverlay.ActualWidth - drawW) / 2.0;
-                double offsetY = (WysiwygOverlay.ActualHeight - drawH) / 2.0;
+        private bool TryReadCrops(out Rect start, out Rect end)
+        {
+            start = end = default;
+            if (_primaryFrame == null) return false;
+            if (!TryEditLayout(WysiwygOverlay.ActualWidth, WysiwygOverlay.ActualHeight, _primaryFrame.Intelligence.ImageSize, out _, out double drawW, out double drawH, out double ox, out double oy))
+                return false;
+            start = CropFromBox(StartFrameBox, drawW, drawH, ox, oy);
+            end = CropFromBox(EndFrameBox, drawW, drawH, ox, oy);
+            return true;
+        }
 
-                double imgX = (FocusBoxTransform.X - offsetX) / drawW;
-                double imgY = (FocusBoxTransform.Y - offsetY) / drawH;
-                double imgW = FocusTargetBox.Width / drawW;
-                double imgH = FocusTargetBox.Height / drawH;
+        private void ApplyBoxesToTrajectory()
+        {
+            if (_primaryFrame == null || !TryReadCrops(out var start, out var end)) return;
+            var canvas = new Size(SlideshowCanvas.ActualWidth, SlideshowCanvas.ActualHeight);
+            var img = _primaryFrame.Intelligence.ImageSize;
+            var s = CameraMath.CameraFromCrop(start, canvas, img);
+            var e = CameraMath.CameraFromCrop(end, canvas, img);
+            _primaryFrame.Trajectory.StartScale = s.Scale;
+            _primaryFrame.Trajectory.StartPan = s.Pan;
+            _primaryFrame.Trajectory.EndScale = e.Scale;
+            _primaryFrame.Trajectory.EndPan = e.Pan;
+            _primaryFrame.Trajectory.StrategyName = ViewModel.HasUnsavedZoomPan || ViewModel.IsOverrideMode ? "Custom" : _primaryFrame.Trajectory.StrategyName;
+        }
 
-                var rect = new NormalizedRect
-                {
-                    X = Math.Clamp(imgX, 0.0, 1.0),
-                    Y = Math.Clamp(imgY, 0.0, 1.0),
-                    Width = Math.Clamp(imgW, 0.01, 1.0),
-                    Height = Math.Clamp(imgH, 0.01, 1.0)
-                };
+        private void CommitKeyframeCrops(bool persist)
+        {
+            if (!TryReadCrops(out var start, out var end)) return;
+            ApplyBoxesToTrajectory();
+            if (persist)
+            {
+                ViewModel.SaveKeyframeCrops(
+                    new NormalizedRect { X = start.X, Y = start.Y, Width = start.Width, Height = start.Height },
+                    new NormalizedRect { X = end.X, Y = end.Y, Width = end.Width, Height = end.Height });
+            }
+            else
+            {
+                ViewModel.MarkZoomPanDraft();
+            }
+            UpdateStatusUi();
+        }
 
-                ViewModel.RegisterFocusTarget(rect);
+        private void BeginBoxInteraction(Border box, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e, bool resize, string corner)
+        {
+            SelectKeyframe(box == StartFrameBox);
+            _isDraggingBox = !resize;
+            _isResizing = resize;
+            _resizeCorner = corner;
+            _dragStartPoint = e.GetCurrentPoint(WysiwygOverlay).Position;
+            _boxStartLeft = Canvas.GetLeft(box);
+            _boxStartTop = Canvas.GetTop(box);
+            _boxStartW = box.Width;
+            _boxStartH = box.Height;
+            WysiwygOverlay.CapturePointer(e.Pointer);
+            ViewModel.CaptureUndoSnapshot();
+            e.Handled = true;
+        }
+
+        private static bool BoxContains(Border box, Windows.Foundation.Point p)
+        {
+            double l = Canvas.GetLeft(box), t = Canvas.GetTop(box);
+            return p.X >= l && p.X <= l + box.Width && p.Y >= t && p.Y <= t + box.Height;
+        }
+
+        private Border? SmallestBoxAt(Windows.Foundation.Point p)
+        {
+            bool inStart = StartFrameBox != null && BoxContains(StartFrameBox, p);
+            bool inEnd = EndFrameBox != null && BoxContains(EndFrameBox, p);
+            if (inStart && inEnd)
+            {
+                double sa = StartFrameBox!.Width * StartFrameBox.Height;
+                double ea = EndFrameBox!.Width * EndFrameBox.Height;
+                return sa <= ea ? StartFrameBox : EndFrameBox;
+            }
+            if (inEnd) return EndFrameBox;
+            if (inStart) return StartFrameBox;
+            return null;
+        }
+
+        private void WysiwygOverlay_PointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+        {
+            if (_isDraggingBox || _isResizing) return;
+            var box = SmallestBoxAt(e.GetCurrentPoint(WysiwygOverlay).Position);
+            if (box == null) return;
+            BeginBoxInteraction(box, e, resize: false, corner: "");
+        }
+
+        private void Handle_PointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+        {
+            if (sender is not FrameworkElement handle || SelectedBox() is not Border box) return;
+            BeginBoxInteraction(box, e, resize: true, corner: handle.Tag as string ?? "br");
+        }
+
+        private void WysiwygOverlay_PointerMoved(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+        {
+            if ((!_isDraggingBox && !_isResizing) || SelectedBox() is not Border box || _primaryFrame == null) return;
+            if (WysiwygOverlay.ActualWidth <= 1) return;
+
+            var now = e.GetCurrentPoint(WysiwygOverlay).Position;
+            double dx = now.X - _dragStartPoint.X;
+            double dy = now.Y - _dragStartPoint.Y;
+            double aspect = OutputAspect();
+
+            if (_isResizing)
+            {
+                double newW = _resizeCorner is "tl" or "bl" ? _boxStartW - dx : _boxStartW + dx;
+                double newL = _resizeCorner is "tl" or "bl" ? _boxStartLeft + (_boxStartW - newW) : _boxStartLeft;
+                double newH = newW / aspect;
+                double newT = _resizeCorner is "tl" or "tr" ? _boxStartTop + _boxStartH - newH : _boxStartTop;
+                ApplyBoxRect(box, newL, newT, newW, newH);
+            }
+            else
+            {
+                ApplyBoxRect(box, _boxStartLeft + dx, _boxStartTop + dy, _boxStartW, _boxStartH);
             }
 
-            _isTargetingFrozen = false;
+            ApplyChrome();
+            SlideshowCanvas.Invalidate();
+        }
+
+        private void WysiwygOverlay_PointerReleased(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+        {
+            if (!_isDraggingBox && !_isResizing) return;
+            _isDraggingBox = false;
+            _isResizing = false;
+            try { WysiwygOverlay.ReleasePointerCapture(e.Pointer); } catch { }
+            CommitKeyframeCrops(persist: false);
+            SlideshowCanvas.Invalidate();
             e.Handled = true;
+        }
+
+        private void BtnPreview_Click(object sender, RoutedEventArgs e)
+        {
+            if (_primaryFrame == null) return;
+            if (ViewModel.HasUnsavedZoomPan || ViewModel.IsOverrideMode)
+                ApplyBoxesToTrajectory();
+            _previewing = true;
+            WysiwygOverlay.Visibility = Visibility.Collapsed;
+            WysiwygHint.Visibility = Visibility.Collapsed;
+            PreviewBanner.Visibility = Visibility.Visible;
+            StatusBanner.Visibility = Visibility.Visible;
+            _slideStartTime = TimeSpan.Zero;
+            if (!ViewModel.IsPlaying) ViewModel.TogglePlay();
+            UpdateStatusUi();
+            SlideshowCanvas.Invalidate();
+        }
+
+        private void BtnSaveZoomPan_Click(object sender, RoutedEventArgs e)
+        {
+            CommitKeyframeCrops(persist: true);
+            SlideshowCanvas.Invalidate();
         }
 
         private void BtnClearTarget_Click(object sender, RoutedEventArgs e)
         {
-            ViewModel.CurrentDraft.FocusTargetRect = null;
-            ViewModel.IsOverrideMode = false;
-            ResetTargetBoxVisuals();
-        }
-
-        private void UpdateAreaReadout()
-        {
-            double boxArea = FocusTargetBox.Width * FocusTargetBox.Height;
-            double totalArea = WysiwygOverlay.ActualWidth * WysiwygOverlay.ActualHeight;
-            double percent = (boxArea / totalArea) * 100.0;
-            if (AreaReadoutText != null) AreaReadoutText.Text = $"{Math.Round(percent)}%";
-        }
-
-        private void CommitTargetToViewModel()
-        {
-            if (_primaryFrame == null) return;
-
-            _frozenScale = _primaryFrame.CurrentScale;
-            _frozenPan = _primaryFrame.CurrentPan;
-            _frozenRotation = _primaryFrame.CurrentRotation;
-            _injectFrozenCoordinates = true;
-
-            double scaleToFit = Math.Min(WysiwygOverlay.ActualWidth / _primaryFrame.Intelligence.ImageSize.Width, WysiwygOverlay.ActualHeight / _primaryFrame.Intelligence.ImageSize.Height);
-            double drawW = _primaryFrame.Intelligence.ImageSize.Width * scaleToFit;
-            double drawH = _primaryFrame.Intelligence.ImageSize.Height * scaleToFit;
-            double offsetX = (WysiwygOverlay.ActualWidth - drawW) / 2.0;
-            double offsetY = (WysiwygOverlay.ActualHeight - drawH) / 2.0;
-
-            double imgX = (FocusBoxTransform.X - offsetX) / drawW;
-            double imgY = (FocusBoxTransform.Y - offsetY) / drawH;
-            double imgW = FocusTargetBox.Width / drawW;
-            double imgH = FocusTargetBox.Height / drawH;
-
-            var rect = new NormalizedRect
+            _previewing = false;
+            if (ViewModel.IsPlaying) ViewModel.TogglePlay();
+            DiscardPreload();
+            ViewModel.RevertToAuto();
+            if (_primaryFrame != null && _primaryFrame.HasEngineCrops)
             {
-                X = Math.Clamp(imgX, 0.0, 1.0),
-                Y = Math.Clamp(imgY, 0.0, 1.0),
-                Width = Math.Clamp(imgW, 0.01, 1.0),
-                Height = Math.Clamp(imgH, 0.01, 1.0)
-            };
-
-            ViewModel.RegisterFocusTarget(rect);
-            UpdateGhostViewport();
-        }
-
-        private void Thumb_DragStarted(object sender, DragStartedEventArgs e)
-        {
-            _isTargetingFrozen = true;
-            ViewModel.CaptureUndoSnapshot();
-        }
-
-        private void Thumb_DragCompleted(object sender, DragCompletedEventArgs e)
-        {
-            CommitTargetToViewModel();
-            _isTargetingFrozen = false;
-        }
-
-        private void ThumbTopLeft_DragDelta(object sender, DragDeltaEventArgs e)
-        {
-            double newWidth = Math.Max(80, FocusTargetBox.Width - e.HorizontalChange);
-            double aspectRatio = WysiwygOverlay.ActualWidth / WysiwygOverlay.ActualHeight;
-            double newHeight = newWidth / aspectRatio;
-
-            double widthDiff = FocusTargetBox.Width - newWidth;
-            double heightDiff = FocusTargetBox.Height - newHeight;
-
-            double newX = Math.Clamp(FocusBoxTransform.X + widthDiff, 0, FocusBoxTransform.X + FocusTargetBox.Width - 80);
-            double newY = Math.Clamp(FocusBoxTransform.Y + heightDiff, 0, FocusBoxTransform.Y + FocusTargetBox.Height - (80 / aspectRatio));
-
-            FocusTargetBox.Width = newWidth;
-            FocusTargetBox.Height = newHeight;
-            FocusBoxTransform.X = newX;
-            FocusBoxTransform.Y = newY;
-            UpdateAreaReadout();
-        }
-
-        private void ThumbTopRight_DragDelta(object sender, DragDeltaEventArgs e)
-        {
-            double newWidth = Math.Max(80, FocusTargetBox.Width + e.HorizontalChange);
-            double aspectRatio = WysiwygOverlay.ActualWidth / WysiwygOverlay.ActualHeight;
-            double newHeight = newWidth / aspectRatio;
-
-            double heightDiff = FocusTargetBox.Height - newHeight;
-
-            double newX = FocusBoxTransform.X;
-            double newY = Math.Clamp(FocusBoxTransform.Y + heightDiff, 0, FocusBoxTransform.Y + FocusTargetBox.Height - (80 / aspectRatio));
-
-            if (newX + newWidth <= WysiwygOverlay.ActualWidth)
-            {
-                FocusTargetBox.Width = newWidth;
-                FocusTargetBox.Height = newHeight;
-                FocusBoxTransform.Y = newY;
-                UpdateAreaReadout();
+                ApplyCropsToTrajectory(_primaryFrame.EngineStartCrop, _primaryFrame.EngineEndCrop);
+                ResetKeyframeBoxes();
             }
-        }
-
-        private void ThumbBottomLeft_DragDelta(object sender, DragDeltaEventArgs e)
-        {
-            double newWidth = Math.Max(80, FocusTargetBox.Width - e.HorizontalChange);
-            double aspectRatio = WysiwygOverlay.ActualWidth / WysiwygOverlay.ActualHeight;
-            double newHeight = newWidth / aspectRatio;
-
-            double widthDiff = FocusTargetBox.Width - newWidth;
-
-            double newX = Math.Clamp(FocusBoxTransform.X + widthDiff, 0, FocusBoxTransform.X + FocusTargetBox.Width - 80);
-            double newY = FocusBoxTransform.Y;
-
-            if (newY + newHeight <= WysiwygOverlay.ActualHeight)
+            else
             {
-                FocusTargetBox.Width = newWidth;
-                FocusTargetBox.Height = newHeight;
-                FocusBoxTransform.X = newX;
-                UpdateAreaReadout();
+                UpdateActiveTrajectoriesAsync(forceEngineReroll: true);
             }
-        }
-
-        private void ThumbBottomRight_DragDelta(object sender, DragDeltaEventArgs e)
-        {
-            double newWidth = Math.Max(80, FocusTargetBox.Width + e.HorizontalChange);
-            double aspectRatio = WysiwygOverlay.ActualWidth / WysiwygOverlay.ActualHeight;
-            double newHeight = newWidth / aspectRatio;
-
-            if (FocusBoxTransform.X + newWidth <= WysiwygOverlay.ActualWidth && FocusBoxTransform.Y + newHeight <= WysiwygOverlay.ActualHeight)
-            {
-                FocusTargetBox.Width = newWidth;
-                FocusTargetBox.Height = newHeight;
-                UpdateAreaReadout();
-            }
+            UpdateStatusUi();
+            SlideshowCanvas.Invalidate();
         }
 
         private void RootGrid_PointerMoved(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
@@ -1043,7 +1184,6 @@ namespace ModernImageViewer.Cinematic
         private void RootGrid_PointerExited(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
         {
             ActionBar.Opacity = 0;
-            DirectorSidebar.IsPaneOpen = false;
         }
 
         private void Scrubber_Click(object sender, RoutedEventArgs e)
@@ -1062,6 +1202,18 @@ namespace ModernImageViewer.Cinematic
 
         private void BtnPlayStop_Click(object sender, RoutedEventArgs e)
         {
+            if (DirectorSidebar.IsPaneOpen && !_previewing)
+            {
+                BtnPreview_Click(sender, e);
+                return;
+            }
+            if (_previewing && ViewModel.IsPlaying)
+            {
+                _previewing = false;
+                ViewModel.TogglePlay();
+                SyncPlayPauseUI();
+                return;
+            }
             ViewModel.TogglePlay();
             SyncPlayPauseUI();
         }
@@ -1096,23 +1248,47 @@ namespace ModernImageViewer.Cinematic
 
         private void DirectorSidebar_PaneOpening(Microsoft.UI.Xaml.Controls.SplitView sender, object args)
         {
+            _previewing = false;
+            DiscardPreload();
             if (ViewModel.IsPlaying) ViewModel.TogglePlay();
-            WysiwygOverlay.Visibility = Visibility.Visible;
-            WysiwygHint.Visibility = Visibility.Visible;
-            TelemetryOverlay.Visibility = Visibility.Visible;
-            ResetTargetBoxVisuals();
+            SyncPlayPauseUI();
         }
 
         private void DirectorSidebar_PaneClosed(Microsoft.UI.Xaml.Controls.SplitView sender, object args)
         {
+            bool wasPreviewing = _previewing;
+            _previewing = false;
             WysiwygOverlay.Visibility = Visibility.Collapsed;
             WysiwygHint.Visibility = Visibility.Collapsed;
-            TelemetryOverlay.Visibility = Visibility.Collapsed;
-            if (!ViewModel.IsPlaying)
+            if (StatusBanner != null) StatusBanner.Visibility = Visibility.Collapsed;
+            if (PreviewBanner != null) PreviewBanner.Visibility = Visibility.Collapsed;
+            DiscardPreload();
+            if (wasPreviewing)
+            {
+                if (ViewModel.IsPlaying) ViewModel.TogglePlay();
+                _slideStartTime = TimeSpan.Zero;
+            }
+            else if (!ViewModel.IsPlaying)
             {
                 ViewModel.TogglePlay();
                 _slideStartTime = TimeSpan.Zero;
             }
+        }
+
+        private float ApplyEase(CameraTransform traj, float raw)
+        {
+            float t = Math.Clamp(raw, 0f, 1f);
+            string kind = string.IsNullOrEmpty(traj.EaseKind)
+                ? (traj.IsSnapZoom ? "SnapZoom" : "EaseInOut")
+                : traj.EaseKind;
+            return kind switch
+            {
+                "Linear" => t,
+                "EaseIn" => t * t * t,
+                "EaseOut" => 1f - (float)Math.Pow(1f - t, 3),
+                "SnapZoom" => SnapZoomEase(t),
+                _ => StandardEase(t)
+            };
         }
 
         private float StandardEase(float t) => t < 0.5f ? 4f * t * t * t : 1f - (float)Math.Pow(-2f * t + 2f, 3f) / 2f;
@@ -1137,7 +1313,7 @@ namespace ModernImageViewer.Cinematic
         private void UpdateFrameVectors(SlideFrame frame, float rawProgress, double intensityPercent)
         {
             var traj = frame.Trajectory;
-            float t = traj.IsSnapZoom ? SnapZoomEase(rawProgress) : StandardEase(rawProgress);
+            float t = ApplyEase(traj, rawProgress);
 
             frame.CurrentScale = traj.StartScale + (traj.EndScale - traj.StartScale) * t;
             frame.CurrentRotation = traj.StartRotation + (traj.EndRotation - traj.StartRotation) * t;
@@ -1146,7 +1322,7 @@ namespace ModernImageViewer.Cinematic
             Vector2 delta = traj.EndPan - traj.StartPan;
             float travel = delta.Length();
 
-            if (travel > 5f && !traj.IsSnapZoom)
+            if (travel > 5f && !traj.IsSnapZoom && traj.EaseKind != "Linear" && traj.EaseKind != "SnapZoom")
             {
                 Vector2 perp = new Vector2(-delta.Y, delta.X);
                 if (perp.LengthSquared() > 0.0001f)
