@@ -25,7 +25,7 @@
                               HorizontalAlignment="Stretch"
                               VerticalAlignment="Stretch" />
 
-        <!-- TEMPORARY ZOOM HUD (Reliable timer version) -->
+        <!-- Zoom HUD -->
         <Border x:Name="ZoomIndicatorContainer"
                 Background="#AA1F1F1F"
                 CornerRadius="6"

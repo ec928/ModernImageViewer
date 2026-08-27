@@ -2,7 +2,9 @@
   <PropertyGroup>
 	<WindowsPackageType>None</WindowsPackageType>
 	<SelfContained>true</SelfContained>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and '$(Platform)' == 'x64'">win-x64</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and '$(Platform)' == 'x86'">win-x86</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and '$(Platform)' == 'ARM64'">win-arm64</RuntimeIdentifier>
 	<WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>  
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
@@ -16,6 +18,17 @@
     <WinUISDKReferences>false</WinUISDKReferences>
     <EnableMsixTooling>true</EnableMsixTooling>
     <Nullable>enable</Nullable>
+
+    <!--
+      Single source of truth for the shipped version. Until 0.10.0 these were unset, so
+      every build stamped the SDK default 1.0.0.0 and the v0.9.0 zip shipped an exe
+      whose properties disagreed with its own release tag. Bump Version here when
+      tagging; the release tag, the zip name and the exe properties then all agree.
+    -->
+    <Version>0.10.0</Version>
+    <AssemblyVersion>0.10.0.0</AssemblyVersion>
+    <FileVersion>0.10.0.0</FileVersion>
+    <Product>ModernImageViewer</Product>
 
     <!--
       Output straight to bin\<Platform>\<Config>\ instead of the default
@@ -74,6 +87,19 @@
 
   <ItemGroup>
     <Manifest Include="$(ApplicationManifest)" />
+  </ItemGroup>
+
+  <!--
+    The test project lives at tests\ModernImageViewer.Tests so a clone gets it. This app
+    uses the SDK's default **\*.cs glob, which would otherwise pull the test sources into
+    the app and fail the build on the missing xunit reference. Exclude the whole folder.
+  -->
+  <ItemGroup>
+    <Compile Remove="tests\**" />
+    <None Remove="tests\**" />
+    <Page Remove="tests\**" />
+    <EmbeddedResource Remove="tests\**" />
+    <ApplicationDefinition Remove="tests\**" />
   </ItemGroup>
 
   <!--

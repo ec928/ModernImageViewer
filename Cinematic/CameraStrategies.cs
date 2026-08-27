@@ -61,7 +61,6 @@ namespace ModernImageViewer.Cinematic
 
         public static float GetExplicitTargetScale(Rect targetRect, Size bounds, Size imgSize)
         {
-            // PURE FLOAT: Completely eradicates the CS0266 implicit double conversion errors
             float bw = (float)bounds.Width; float bh = (float)bounds.Height;
             float iw = (float)imgSize.Width; float ih = (float)imgSize.Height;
             float tw = (float)targetRect.Width; float th = (float)targetRect.Height;

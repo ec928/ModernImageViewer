@@ -29,11 +29,20 @@ namespace ModernImageViewer.Cinematic.Services
 
                 token.ThrowIfCancellationRequested();
 
-                // === IMPROVED: Full color-managed decode ===
+                uint decW = decoder.PixelWidth;
+                uint decH = decoder.PixelHeight;
+                var transform = new BitmapTransform { InterpolationMode = BitmapInterpolationMode.Fant };
+                if (decW > ViewerEngine.DisplayMaxEdge || decH > ViewerEngine.DisplayMaxEdge)
+                {
+                    double ratio = Math.Min((double)ViewerEngine.DisplayMaxEdge / decW, (double)ViewerEngine.DisplayMaxEdge / decH);
+                    transform.ScaledWidth = (uint)Math.Max(1, decW * ratio);
+                    transform.ScaledHeight = (uint)Math.Max(1, decH * ratio);
+                }
+
                 softwareBitmap = await decoder.GetSoftwareBitmapAsync(
                     BitmapPixelFormat.Bgra8,
                     BitmapAlphaMode.Premultiplied,
-                    new BitmapTransform(),
+                    transform,
                     ExifOrientationMode.RespectExifOrientation,
                     ColorManagementMode.ColorManageToSRgb);
 

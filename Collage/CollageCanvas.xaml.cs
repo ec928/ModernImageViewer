@@ -36,6 +36,7 @@ namespace ModernImageViewer.Collage
         // === High-Res on-demand support ===
         private readonly HashSet<string> _highResInflight = new(StringComparer.OrdinalIgnoreCase);
         private const float HighResZoomThreshold = 1.8f;
+        private const int MaxHighResBitmaps = 3;
 
         private float _globalZoom = 1.0f;
         private double _viewOffsetX = 0;
@@ -94,6 +95,7 @@ namespace ModernImageViewer.Collage
         private void CollageCanvas_Unloaded(object sender, RoutedEventArgs e)
         {
             ReleaseLocalGpuResources();
+            CollageCellRenderer.ResetSharedEffects();
         }
 
         private void CollageCanvasControl_CreateResources(CanvasControl sender, Microsoft.Graphics.Canvas.UI.CanvasCreateResourcesEventArgs args)
@@ -218,6 +220,13 @@ namespace ModernImageViewer.Collage
             }
         }
 
+        private void SetLocalGpu(string path, CanvasBitmap bitmap)
+        {
+            if (_localGpuCache.TryGetValue(path, out var previous) && !ReferenceEquals(previous, bitmap))
+                previous?.Dispose();
+            _localGpuCache[path] = bitmap;
+        }
+
         private async Task ReloadImageAsync(string path)
         {
             if (string.IsNullOrEmpty(path)) return;
@@ -228,17 +237,16 @@ namespace ModernImageViewer.Collage
                 if (entry?.Bitmap != null && CollageCanvasControl.ReadyToDraw)
                 {
                     var localGpuBitmap = CanvasBitmap.CreateFromSoftwareBitmap(CollageCanvasControl.Device, entry.Bitmap);
-
-                    _localGpuCache[path] = localGpuBitmap;
+                    SetLocalGpu(path, localGpuBitmap);
 
                     entry.Bitmap.Dispose();
                     entry.Bitmap = null;
-                    App.GlobalImageCache[path] = entry;
+                    ImageCache.Publish(path, entry);
 
                     Invalidate();
                 }
             }
-            catch { }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Collage reload] {path}: {ex.Message}"); }
             finally
             {
                 _inflightLoads.Remove(path);
@@ -259,82 +267,79 @@ namespace ModernImageViewer.Collage
             {
                 if (!CollageCanvasControl.ReadyToDraw) return;
 
-                App.GlobalImageCache.TryGetValue(element.ImagePath, out var entry);
-                CanvasBitmap? highResBitmap = null;
+                var file = await StorageFile.GetFileFromPathAsync(element.ImagePath);
+                using var stream = await file.OpenReadAsync();
+                var decoder = await BitmapDecoder.CreateAsync(stream);
 
-                if (entry?.Profile != null)
+                uint w = decoder.PixelWidth;
+                uint h = decoder.PixelHeight;
+                var transform = new BitmapTransform { InterpolationMode = BitmapInterpolationMode.Fant };
+                if (w > ViewerEngine.DisplayMaxEdge || h > ViewerEngine.DisplayMaxEdge)
                 {
-                    // Improved path: Use WIC for profiled images to preserve more color accuracy
-                    highResBitmap = await LoadHighResWithColorManagementAsync(element.ImagePath);
-                }
-                else
-                {
-                    // Fast path for standard images
-                    highResBitmap = await CanvasBitmap.LoadAsync(CollageCanvasControl.Device, element.ImagePath);
+                    double ratio = Math.Min((double)ViewerEngine.DisplayMaxEdge / w, (double)ViewerEngine.DisplayMaxEdge / h);
+                    transform.ScaledWidth = (uint)Math.Max(1, w * ratio);
+                    transform.ScaledHeight = (uint)Math.Max(1, h * ratio);
                 }
 
-                if (element != null && _project?.Elements.Contains(element) == true)
+                using var softwareBitmap = await decoder.GetSoftwareBitmapAsync(
+                    BitmapPixelFormat.Bgra8,
+                    BitmapAlphaMode.Premultiplied,
+                    transform,
+                    ExifOrientationMode.RespectExifOrientation,
+                    ColorManagementMode.ColorManageToSRgb);
+
+                if (softwareBitmap == null) return;
+                var highResBitmap = CanvasBitmap.CreateFromSoftwareBitmap(CollageCanvasControl.Device, softwareBitmap);
+
+                if (_project?.Elements.Contains(element) == true && NeedsHighRes(element))
                 {
                     element.HighResBitmap?.Dispose();
                     element.HighResBitmap = highResBitmap;
+                    TrimHighResBitmaps(element);
                     Invalidate();
                 }
                 else
                 {
-                    highResBitmap?.Dispose();
+                    highResBitmap.Dispose();
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // Fallback to simple load
-                try
-                {
-                    var fallback = await CanvasBitmap.LoadAsync(CollageCanvasControl.Device, element.ImagePath);
-                    if (element != null && _project?.Elements.Contains(element) == true)
-                    {
-                        element.HighResBitmap?.Dispose();
-                        element.HighResBitmap = fallback;
-                        Invalidate();
-                    }
-                }
-                catch { }
+                System.Diagnostics.Debug.WriteLine($"[Collage high-res] {element.ImagePath}: {ex.Message}");
             }
             finally
             {
-                if (element != null) element.IsHighResLoading = false;
-                _highResInflight.Remove(element?.ImagePath ?? string.Empty);
+                element.IsHighResLoading = false;
+                _highResInflight.Remove(element.ImagePath);
             }
         }
 
-        private async Task<CanvasBitmap> LoadHighResWithColorManagementAsync(string path)
+        private static bool NeedsHighRes(CollageElement element, IList<CollageElement>? selected = null)
         {
-            if (!CollageCanvasControl.ReadyToDraw)
-                return await CanvasBitmap.LoadAsync(CollageCanvasControl.Device, path);
+            if (element.Zoom >= HighResZoomThreshold) return true;
+            return selected != null && selected.Contains(element);
+        }
 
-            try
+        private void TrimHighResBitmaps(CollageElement? keep)
+        {
+            if (_project == null) return;
+            var extras = _project.Elements
+                .Where(el => el.HasHighRes && el != keep && !SelectedElements.Contains(el) && el.Zoom < HighResZoomThreshold)
+                .ToList();
+            int over = _project.Elements.Count(el => el.HasHighRes) - MaxHighResBitmaps;
+            for (int i = 0; i < extras.Count && over > 0; i++, over--)
+                extras[i].ReleaseHighResBitmap();
+        }
+
+        private void ReleaseUnusedHighRes()
+        {
+            if (_project == null) return;
+            foreach (var el in _project.Elements)
             {
-                var file = await StorageFile.GetFileFromPathAsync(path);
-                using var stream = await file.OpenReadAsync();
-
-                var decoder = await BitmapDecoder.CreateAsync(stream);
-                var softwareBitmap = await decoder.GetSoftwareBitmapAsync(
-                    BitmapPixelFormat.Bgra8,
-                    BitmapAlphaMode.Premultiplied);
-
-                try
-                {
-                    return CanvasBitmap.CreateFromSoftwareBitmap(
-                        CollageCanvasControl.Device, softwareBitmap);
-                }
-                finally
-                {
-                    softwareBitmap.Dispose();
-                }
+                if (el.HasHighRes && !NeedsHighRes(el, SelectedElements))
+                    el.ReleaseHighResBitmap();
             }
-            catch
-            {
-                return await CanvasBitmap.LoadAsync(CollageCanvasControl.Device, path);
-            }
+            TrimHighResBitmaps(null);
         }
         private System.Numerics.Matrix3x2 GetRenderMatrix()
         {
@@ -592,7 +597,7 @@ namespace ModernImageViewer.Collage
 
             if (string.IsNullOrEmpty(el.ImagePath)) return;
 
-            if (!App.GlobalImageCache.TryGetValue(el.ImagePath, out var entry) || entry == null)
+            if (!ImageCache.TryGet(el.ImagePath, out var entry) || entry == null)
             {
                 _ = ReloadImageAsync(el.ImagePath);
                 return;
@@ -615,7 +620,7 @@ namespace ModernImageViewer.Collage
 
             if (string.IsNullOrEmpty(el.ImagePath)) return;
 
-            if (!App.GlobalImageCache.TryGetValue(el.ImagePath, out var entry) || entry == null)
+            if (!ImageCache.TryGet(el.ImagePath, out var entry) || entry == null)
             {
                 _ = ReloadImageAsync(el.ImagePath);
                 return;
@@ -638,7 +643,7 @@ namespace ModernImageViewer.Collage
 
             if (string.IsNullOrEmpty(el.ImagePath)) return;
 
-            if (!App.GlobalImageCache.TryGetValue(el.ImagePath, out var entry) || entry == null || !_localGpuCache.TryGetValue(el.ImagePath, out var localGpuBitmap) || localGpuBitmap == null)
+            if (!ImageCache.TryGet(el.ImagePath, out var entry) || entry == null || !_localGpuCache.TryGetValue(el.ImagePath, out var localGpuBitmap) || localGpuBitmap == null)
             {
                 _ = ReloadImageAsync(el.ImagePath);
                 return;
@@ -770,10 +775,7 @@ namespace ModernImageViewer.Collage
         {
             if (e.Key == VirtualKey.Delete && SelectedElements.Count > 0 && _project != null)
             {
-                foreach (var el in SelectedElements.Where(el => !el.IsLocked && !el.IsAnchored).ToList())
-                    _project.Elements.Remove(el);
-                ClearSelection();
-                Invalidate();
+                RemoveSelectedCells_Click(sender, e);
                 e.Handled = true;
             }
         }
@@ -817,7 +819,7 @@ namespace ModernImageViewer.Collage
             if (_project == null) return null;
 
             ImageCacheEntry? entry = null;
-            if (!App.GlobalImageCache.TryGetValue(path, out entry))
+            if (!ImageCache.TryGet(path, out entry))
             {
                 try
                 {
@@ -825,14 +827,14 @@ namespace ModernImageViewer.Collage
                     if (entry?.Bitmap != null && CollageCanvasControl.ReadyToDraw)
                     {
                         var localGpuBitmap = CanvasBitmap.CreateFromSoftwareBitmap(CollageCanvasControl.Device, entry.Bitmap);
-                        _localGpuCache[path] = localGpuBitmap;
+                        SetLocalGpu(path, localGpuBitmap);
 
                         entry.Bitmap.Dispose();
                         entry.Bitmap = null;
-                        App.GlobalImageCache[path] = entry;
+                        ImageCache.Publish(path, entry);
                     }
                 }
-                catch { }
+                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Collage drop] {path}: {ex.Message}"); }
             }
 
             var newCell = new CollageElement
@@ -1530,9 +1532,8 @@ namespace ModernImageViewer.Collage
 
                 if (!string.IsNullOrEmpty(element.ImagePath))
                 {
-                    App.GlobalImageCache.TryGetValue(element.ImagePath, out entry);
+                    ImageCache.TryGet(element.ImagePath, out entry);
 
-                    // Prefer HighRes if available
                     if (element.HasHighRes && element.HighResBitmap != null)
                     {
                         localGpuBitmap = element.HighResBitmap;
@@ -1552,9 +1553,7 @@ namespace ModernImageViewer.Collage
                         }
                     }
 
-                    // Request high-res when zoomed in or selected
-                    bool shouldRequestHighRes =
-                        (element.Zoom >= HighResZoomThreshold || SelectedElements.Contains(element)) &&
+                    bool shouldRequestHighRes = NeedsHighRes(element, SelectedElements) &&
                         !element.HasHighRes &&
                         !element.IsHighResLoading;
 
@@ -1565,6 +1564,10 @@ namespace ModernImageViewer.Collage
                         {
                             _ = LoadHighResAsync(el);
                         });
+                    }
+                    else if (element.HasHighRes && !NeedsHighRes(element, SelectedElements))
+                    {
+                        element.ReleaseHighResBitmap();
                     }
                 }
 

@@ -65,6 +65,7 @@ namespace ModernImageViewer
         public event EventHandler? RenameRequested;
         public event EventHandler? DeleteRequested;
         public event EventHandler? AddToCollageRequested;
+        public event EventHandler<float>? GammaChanged;
 
         // Tear-Off Pipeline
         public event EventHandler<Point>? TearOffInitiated;
@@ -204,6 +205,7 @@ namespace ModernImageViewer
             _hudTimer?.Stop();
             _scrollQualityTimer?.Stop();
             PreviewCanvas?.RemoveFromVisualTree();
+            _effectStack.Dispose();
         }
 
         private void CanvasDevice_DeviceLost(CanvasDevice sender, object args)
@@ -784,7 +786,6 @@ namespace ModernImageViewer
             _isFitToWindow = false;
             float dpiScale = PreviewCanvas != null ? PreviewCanvas.Dpi / 96.0f : 1.0f;
 
-            // CS8602 fix: Enforced ImageScroll! to assure the compiler of the prior null-check
             var result = ViewerMath.CalculateWheelZoom(
                 _targetZoom, ImageScroll!.ZoomFactor,
                 (float)ImageScroll.MinZoomFactor, (float)ImageScroll.MaxZoomFactor,
@@ -819,6 +820,7 @@ namespace ModernImageViewer
             if (sender is RadioMenuFlyoutItem i && float.TryParse(i.Tag?.ToString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float gamma))
             {
                 SetGammaLevel(gamma);
+                GammaChanged?.Invoke(this, gamma);
             }
         }
 

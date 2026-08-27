@@ -8,9 +8,13 @@ A high-performance, hardware-accelerated image viewer built for creators, 3D art
 
 **GPU-Accelerated Rendering** — Powered by Win2D (Direct2D) for near-instant rendering and smooth scaling, offloading heavy image decoding to the graphics card.
 
-**Massive Folder Support** — A tiered-decoding architecture allows seamless browsing of folders containing thousands of high-resolution (10 MB+) images without stuttering or memory growth.
+**Massive Folder Support** — A tiered-decoding architecture allows seamless browsing of folders containing thousands of high-resolution (10 MB+) images without stuttering or unbounded memory growth. Preview, display, and high-fidelity tiers are capped (see `ARCHITECTURE.md`).
 
 **Native Windows 11 Design** — Built on the Windows App SDK (WinUI 3) for a clean, modern aesthetic with Mica material and native OS performance.
+
+**Collage and Cinematic (beta)** — In-app collage editor and cinematic slideshow/director. These are still being hardened; save often.
+
+HEIC/HEIF and AVIF need the corresponding Windows codecs installed. If a file will not open, the viewer shows a short HUD message rather than a blank canvas.
 
 ## 🛠 Technical Stack
 
@@ -52,7 +56,7 @@ publish.bat nosmoke    # publish only
 
 Exit codes: `0` success, `1` publish failed, `2` output looks wrong, `3` app crashed on launch.
 
-> Both the publish profile and `publish.bat` contain an absolute `PublishDir` pointing at the author's machine — change it to a path of your own before publishing.
+> `publish.bat` is the supported ship path (relative output under `bin\x64\Release`). Visual Studio `.pubxml` files now use the same relative `PublishDir`. Pass an extra folder argument to `publish.bat` if you want a different destination.
 
 > Deliberately **not** published as a single file. Single-file self-extracts ~277 MB to `%TEMP%` on the first launch after every publish, measured at ~2.8 s to first window versus ~1.5 s for loose files.
 

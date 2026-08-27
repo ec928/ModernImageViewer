@@ -91,7 +91,7 @@ namespace ModernImageViewer
         private int _refCount = 1;
 
         public SoftwareBitmap? Bitmap { get; set; }
-        public List<(SoftwareBitmap Bitmap, TimeSpan Delay, ushort Disposal)>? RawFrames { get; set; }
+        public List<(SoftwareBitmap Bitmap, TimeSpan Delay, ushort Disposal, float Left, float Top)>? RawFrames { get; set; }
 
         public CanvasBitmap? GpuBitmap { get; set; }
         public AnimationFrame[]? AnimationFrames { get; set; }
@@ -167,7 +167,8 @@ namespace ModernImageViewer
 
     public static class ViewerEngine
     {
-        private static readonly string[] ColorProfileProperty = ["System.Image.ColorProfile"];
+        public const uint DisplayMaxEdge = 4096;
+        public const uint HighFidelityMaxEdge = 16384;
 
         public static async Task<ImageCacheEntry?> DecodeFastPreviewAsync(string path, CancellationToken token = default)
         {
@@ -211,10 +212,14 @@ namespace ModernImageViewer
 
                     if (softwareBitmap != null) { softwareBitmap.DpiX = 96; softwareBitmap.DpiY = 96; }
 
-                    // Returns with initial _refCount = 1
                     return new ImageCacheEntry { Bitmap = softwareBitmap, Profile = null, NativeWidth = nativeW, NativeHeight = nativeH, IsHighFidelity = false };
                 }
-                catch { return null; }
+                catch (OperationCanceledException) { return null; }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[DecodePreview] {path}: {ex.Message}");
+                    return null;
+                }
             }, token);
         }
 
@@ -233,46 +238,28 @@ namespace ModernImageViewer
                     double nativeW = decoder.OrientedPixelWidth;
                     double nativeH = decoder.OrientedPixelHeight;
 
-                    ColorManagementProfile? prof = null;
-                    try
-                    {
-                        var props = await decoder.BitmapProperties.GetPropertiesAsync(ColorProfileProperty).AsTask(token);
-                        if (props.TryGetValue("System.Image.ColorProfile", out var profileProperty) && profileProperty.Value is byte[] profileBytes)
-                        {
-                            prof = ColorManagementProfile.CreateCustom(profileBytes);
-                        }
-                    }
-                    catch { }
-
-                    if (prof == null) prof = new ColorManagementProfile(CanvasColorSpace.Srgb);
                     if (token.IsCancellationRequested) return null;
 
                     BitmapPixelFormat format = decoder.BitmapPixelFormat == BitmapPixelFormat.Rgba16 ? BitmapPixelFormat.Rgba16 : BitmapPixelFormat.Bgra8;
 
-                    uint maxTexSize = 16384;
                     uint decW = decoder.PixelWidth;
                     uint decH = decoder.PixelHeight;
-
-                    BitmapTransform transform = new BitmapTransform { InterpolationMode = BitmapInterpolationMode.Fant };
-                    if (decW > maxTexSize || decH > maxTexSize)
-                    {
-                        double ratio = Math.Min((double)maxTexSize / decW, (double)maxTexSize / decH);
-                        transform.ScaledWidth = (uint)Math.Max(1, decW * ratio);
-                        transform.ScaledHeight = (uint)Math.Max(1, decH * ratio);
-                    }
+                    float canvasScale = 1f;
+                    if (decW > HighFidelityMaxEdge || decH > HighFidelityMaxEdge)
+                        canvasScale = (float)Math.Min((double)HighFidelityMaxEdge / decW, (double)HighFidelityMaxEdge / decH);
 
                     uint frameCount = decoder.FrameCount;
 
                     if (frameCount > 1)
                     {
-                        var rawFrames = new List<(SoftwareBitmap, TimeSpan, ushort)>();
+                        var rawFrames = new List<(SoftwareBitmap Bitmap, TimeSpan Delay, ushort Disposal, float Left, float Top)>();
                         try
                         {
                             for (uint i = 0; i < frameCount; i++)
                             {
                                 if (token.IsCancellationRequested)
                                 {
-                                    foreach (var f in rawFrames) f.Item1.Dispose();
+                                    foreach (var f in rawFrames) f.Bitmap.Dispose();
                                     rawFrames.Clear();
                                     return null;
                                 }
@@ -281,9 +268,14 @@ namespace ModernImageViewer
 
                                 TimeSpan delay = TimeSpan.FromMilliseconds(100);
                                 ushort disposal = 0;
+                                float left = 0;
+                                float top = 0;
                                 try
                                 {
-                                    var props = await frame.BitmapProperties.GetPropertiesAsync(new[] { "/grctlext/Delay", "/grctlext/Disposal" }).AsTask(token);
+                                    var props = await frame.BitmapProperties.GetPropertiesAsync(new[]
+                                    {
+                                        "/grctlext/Delay", "/grctlext/Disposal", "/imgdesc/Left", "/imgdesc/Top"
+                                    }).AsTask(token);
                                     if (props.TryGetValue("/grctlext/Delay", out var delayProp) && delayProp.Value is ushort delayVal)
                                     {
                                         if (delayVal > 0) delay = TimeSpan.FromMilliseconds(delayVal * 10);
@@ -292,33 +284,38 @@ namespace ModernImageViewer
                                     {
                                         disposal = dispVal;
                                     }
+                                    if (props.TryGetValue("/imgdesc/Left", out var leftProp) && leftProp.Value is ushort leftVal)
+                                        left = leftVal;
+                                    if (props.TryGetValue("/imgdesc/Top", out var topProp) && topProp.Value is ushort topVal)
+                                        top = topVal;
                                 }
-                                catch { }
+                                catch (Exception ex) { Debug.WriteLine($"[GIF frame props] {ex.Message}"); }
 
                                 var softwareBitmap = await frame.GetSoftwareBitmapAsync(
                                     format,
                                     BitmapAlphaMode.Premultiplied,
-                                    transform,
+                                    new BitmapTransform(),
                                     ExifOrientationMode.RespectExifOrientation,
                                     ColorManagementMode.ColorManageToSRgb).AsTask(token);
 
                                 if (softwareBitmap != null)
                                 {
                                     softwareBitmap.DpiX = 96; softwareBitmap.DpiY = 96;
-                                    rawFrames.Add((softwareBitmap, delay, disposal));
+                                    rawFrames.Add((softwareBitmap, delay, disposal, left, top));
                                 }
                             }
                         }
-                        catch
+                        catch (Exception ex)
                         {
-                            foreach (var f in rawFrames) f.Item1?.Dispose();
+                            Debug.WriteLine($"[DecodeGIF] {path}: {ex.Message}");
+                            foreach (var f in rawFrames) f.Bitmap?.Dispose();
                             rawFrames.Clear();
                             return null;
                         }
 
                         if (token.IsCancellationRequested)
                         {
-                            foreach (var f in rawFrames) f.Item1.Dispose();
+                            foreach (var f in rawFrames) f.Bitmap.Dispose();
                             rawFrames.Clear();
                             return null;
                         }
@@ -326,6 +323,13 @@ namespace ModernImageViewer
                     }
                     else
                     {
+                        BitmapTransform transform = new BitmapTransform { InterpolationMode = BitmapInterpolationMode.Fant };
+                        if (canvasScale < 1f)
+                        {
+                            transform.ScaledWidth = (uint)Math.Max(1, decW * canvasScale);
+                            transform.ScaledHeight = (uint)Math.Max(1, decH * canvasScale);
+                        }
+
                         var softwareBitmap = await decoder.GetSoftwareBitmapAsync(
                             format,
                             BitmapAlphaMode.Premultiplied,
@@ -339,7 +343,12 @@ namespace ModernImageViewer
                         return new ImageCacheEntry { Bitmap = softwareBitmap, Profile = null, NativeWidth = nativeW, NativeHeight = nativeH, IsHighFidelity = true };
                     }
                 }
-                catch { return null; }
+                catch (OperationCanceledException) { return null; }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[DecodeHF] {path}: {ex.Message}");
+                    return null;
+                }
             });
         }
 
@@ -366,32 +375,77 @@ namespace ModernImageViewer
 
                 if (entry.RawFrames != null && entry.RawFrames.Count > 1)
                 {
-                    entry.AnimationFrames = new AnimationFrame[entry.RawFrames.Count];
-                    CanvasRenderTarget? previousFrame = null;
-                    ushort lastDisposal = 0;
-
-                    for (int i = 0; i < entry.RawFrames.Count; i++)
+                    float canvasW = (float)Math.Max(1, entry.NativeWidth);
+                    float canvasH = (float)Math.Max(1, entry.NativeHeight);
+                    if (canvasW > HighFidelityMaxEdge || canvasH > HighFidelityMaxEdge)
                     {
-                        var raw = entry.RawFrames[i];
-                        var currentTarget = new CanvasRenderTarget(device, (float)entry.NativeWidth, (float)entry.NativeHeight, 96f);
+                        float s = Math.Min(HighFidelityMaxEdge / canvasW, HighFidelityMaxEdge / canvasH);
+                        canvasW = Math.Max(1, canvasW * s);
+                        canvasH = Math.Max(1, canvasH * s);
+                    }
 
-                        using (var ds = currentTarget.CreateDrawingSession())
+                    float pixelScale = canvasW / (float)Math.Max(1, entry.NativeWidth);
+
+                    entry.AnimationFrames = new AnimationFrame[entry.RawFrames.Count];
+                    using var working = new CanvasRenderTarget(device, canvasW, canvasH, 96f);
+                    using (var clear = working.CreateDrawingSession())
+                        clear.Clear(Microsoft.UI.Colors.Transparent);
+
+                    CanvasRenderTarget? restore = null;
+                    ushort lastDisposal = 0;
+                    Windows.Foundation.Rect lastRect = default;
+
+                    try
+                    {
+                        for (int i = 0; i < entry.RawFrames.Count; i++)
                         {
-                            ds.Clear(Microsoft.UI.Colors.Transparent);
+                            var raw = entry.RawFrames[i];
+                            using var deltaBitmap = CanvasBitmap.CreateFromSoftwareBitmap(device, raw.Bitmap);
 
-                            if (previousFrame != null && lastDisposal != 2)
+                            float destW = deltaBitmap.SizeInPixels.Width * pixelScale;
+                            float destH = deltaBitmap.SizeInPixels.Height * pixelScale;
+                            var destRect = new Windows.Foundation.Rect(raw.Left * pixelScale, raw.Top * pixelScale, destW, destH);
+
+                            using (var ds = working.CreateDrawingSession())
                             {
-                                ds.DrawImage(previousFrame);
+                                if (i > 0)
+                                {
+                                    if (lastDisposal == 2)
+                                    {
+                                        ds.Blend = CanvasBlend.Copy;
+                                        ds.FillRectangle(lastRect, Microsoft.UI.Colors.Transparent);
+                                        ds.Blend = CanvasBlend.SourceOver;
+                                    }
+                                    else if (lastDisposal == 3 && restore != null)
+                                    {
+                                        ds.Blend = CanvasBlend.Copy;
+                                        ds.DrawImage(restore);
+                                        ds.Blend = CanvasBlend.SourceOver;
+                                    }
+                                }
+
+                                if (raw.Disposal == 3)
+                                {
+                                    restore?.Dispose();
+                                    restore = CloneRenderTarget(device, working, canvasW, canvasH);
+                                }
+
+                                ds.DrawImage(deltaBitmap, destRect);
                             }
 
-                            using var deltaBitmap = CanvasBitmap.CreateFromSoftwareBitmap(device, raw.Bitmap);
-                            ds.DrawImage(deltaBitmap);
+                            entry.AnimationFrames[i] = new AnimationFrame
+                            {
+                                GpuBitmap = CloneRenderTarget(device, working, canvasW, canvasH),
+                                Delay = raw.Delay
+                            };
+                            lastDisposal = raw.Disposal;
+                            lastRect = destRect;
+                            raw.Bitmap.Dispose();
                         }
-
-                        entry.AnimationFrames[i] = new AnimationFrame { GpuBitmap = currentTarget, Delay = raw.Delay };
-                        previousFrame = currentTarget;
-                        lastDisposal = raw.Disposal;
-                        raw.Bitmap.Dispose();
+                    }
+                    finally
+                    {
+                        restore?.Dispose();
                     }
 
                     entry.RawFrames.Clear();
@@ -423,6 +477,15 @@ namespace ModernImageViewer
                 }
                 return false;
             }
+        }
+
+        private static CanvasRenderTarget CloneRenderTarget(CanvasDevice device, CanvasRenderTarget source, float width, float height)
+        {
+            var copy = new CanvasRenderTarget(device, width, height, 96f);
+            using var ds = copy.CreateDrawingSession();
+            ds.Clear(Microsoft.UI.Colors.Transparent);
+            ds.DrawImage(source);
+            return copy;
         }
 
         public static bool RecycleFile(string path)
@@ -457,9 +520,14 @@ namespace ModernImageViewer
                     File.Move(oldPath, newPath);
                     item.Path = newPath;
                     item.Name = Path.GetFileName(newPath);
+                    ImageCache.Rename(oldPath, newPath);
                     return true;
                 }
-                catch { return false; }
+                catch (Exception ex)
+                {
+                    await ShowMessageAsync(xamlRoot, "Rename failed", ex.Message);
+                    return false;
+                }
             }
             return false;
         }
@@ -467,7 +535,16 @@ namespace ModernImageViewer
         public static async Task<bool> DeleteImageAsync(ImageItem item, XamlRoot xamlRoot)
         {
             var dialog = new ContentDialog { Title = "Delete", Content = "Move to Recycle Bin?", PrimaryButtonText = "Yes", SecondaryButtonText = "No", XamlRoot = xamlRoot };
-            return await dialog.ShowAsync() == ContentDialogResult.Primary && RecycleFile(item.Path);
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary) return false;
+            if (RecycleFile(item.Path)) return true;
+            await ShowMessageAsync(xamlRoot, "Delete failed", "The file could not be moved to the Recycle Bin.");
+            return false;
+        }
+
+        public static async Task ShowMessageAsync(XamlRoot xamlRoot, string title, string content)
+        {
+            var dialog = new ContentDialog { Title = title, Content = content, CloseButtonText = "OK", XamlRoot = xamlRoot };
+            await dialog.ShowAsync();
         }
     }
 

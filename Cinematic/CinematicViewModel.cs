@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
@@ -65,6 +66,7 @@ namespace ModernImageViewer.Cinematic.ViewModels
 
         public List<string> ImagePaths { get; }
         private int _currentIndex;
+        private int? _pendingNextIndex;
         public int CurrentIndex
         {
             get => _currentIndex;
@@ -220,19 +222,41 @@ namespace ModernImageViewer.Cinematic.ViewModels
 
         public void TogglePlay() => IsPlaying = !IsPlaying;
 
-        public void MoveNext()
+        public int PeekNextIndex()
         {
-            if (ImagePaths.Count == 0) return;
+            if (_pendingNextIndex is int stored && stored >= 0 && stored < ImagePaths.Count)
+                return stored;
 
+            int next;
             if (IsShuffleEnabled)
             {
-                CurrentIndex = Random.Shared.Next(ImagePaths.Count);
+                if (ImagePaths.Count <= 1)
+                    next = CurrentIndex;
+                else
+                {
+                    next = Random.Shared.Next(ImagePaths.Count);
+                    if (next == CurrentIndex)
+                        next = (next + 1) % ImagePaths.Count;
+                }
             }
             else
             {
-                if (!IsLoopEnabled && CurrentIndex >= ImagePaths.Count - 1) return;
-                CurrentIndex = (CurrentIndex + 1) % ImagePaths.Count;
+                next = (CurrentIndex + 1) % ImagePaths.Count;
             }
+
+            _pendingNextIndex = next;
+            return next;
+        }
+
+        public void ClearPendingNextIndex() => _pendingNextIndex = null;
+
+        public void MoveNext()
+        {
+            if (ImagePaths.Count == 0) return;
+            if (!IsShuffleEnabled && !IsLoopEnabled && CurrentIndex >= ImagePaths.Count - 1) return;
+
+            CurrentIndex = PeekNextIndex();
+            _pendingNextIndex = null;
 
             if (_dispatcher != null && !_dispatcher.HasThreadAccess)
                 _dispatcher.TryEnqueue(() => SlideNavigationRequested?.Invoke());
@@ -244,19 +268,14 @@ namespace ModernImageViewer.Cinematic.ViewModels
         {
             if (ImagePaths.Count == 0) return;
 
-            if (IsShuffleEnabled)
+            if (!IsShuffleEnabled && !IsLoopEnabled && CurrentIndex >= ImagePaths.Count - 1 && _pendingNextIndex == null)
             {
-                CurrentIndex = Random.Shared.Next(ImagePaths.Count);
+                IsPlaying = false;
+                return;
             }
-            else
-            {
-                if (!IsLoopEnabled && CurrentIndex >= ImagePaths.Count - 1)
-                {
-                    IsPlaying = false;
-                    return;
-                }
-                CurrentIndex = (CurrentIndex + 1) % ImagePaths.Count;
-            }
+
+            CurrentIndex = PeekNextIndex();
+            _pendingNextIndex = null;
         }
 
         public void MovePrevious()
@@ -382,21 +401,20 @@ namespace ModernImageViewer.Cinematic.ViewModels
         {
             try
             {
-                var folder = ApplicationData.Current.LocalFolder;
-                var file = await folder.CreateFileAsync("CinematicAutoSave.json", CreationCollisionOption.ReplaceExisting);
+                string path = Path.Combine(AppPaths.LocalDirectory, "CinematicAutoSave.json");
                 string json = JsonSerializer.Serialize(ActiveProject, new JsonSerializerOptions { WriteIndented = true });
-                await Windows.Storage.FileIO.WriteTextAsync(file, json);
+                await File.WriteAllTextAsync(path, json);
             }
-            catch { }
+            catch (Exception ex) { Debug.WriteLine($"[Cinematic] AutoSave: {ex.Message}"); }
         }
 
         public async Task RestoreAutoSaveAsync()
         {
             try
             {
-                var folder = ApplicationData.Current.LocalFolder;
-                var file = await folder.GetFileAsync("CinematicAutoSave.json");
-                string json = await Windows.Storage.FileIO.ReadTextAsync(file);
+                string path = Path.Combine(AppPaths.LocalDirectory, "CinematicAutoSave.json");
+                if (!File.Exists(path)) return;
+                string json = await File.ReadAllTextAsync(path);
                 var loadedProject = JsonSerializer.Deserialize<CinematicProject>(json);
                 if (loadedProject != null)
                 {
@@ -405,7 +423,7 @@ namespace ModernImageViewer.Cinematic.ViewModels
                     RequestRefresh();
                 }
             }
-            catch { }
+            catch (Exception ex) { Debug.WriteLine($"[Cinematic] RestoreAutoSave: {ex.Message}"); }
         }
     }
 }

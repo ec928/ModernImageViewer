@@ -123,9 +123,7 @@ namespace ModernImageViewer.Cinematic
                 presenter.IsResizable = true;
 
                 // Standard .NET Persistence for Unpackaged WinUI 3 Apps
-                string settingsDir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ModernImageViewer");
-                System.IO.Directory.CreateDirectory(settingsDir);
-                string settingsFile = System.IO.Path.Combine(settingsDir, "WindowBounds.json");
+                string settingsFile = System.IO.Path.Combine(AppPaths.LocalDirectory, "WindowBounds.json");
 
                 try
                 {
@@ -267,6 +265,7 @@ namespace ModernImageViewer.Cinematic
         {
             if (_isManuallyNavigating || ViewModel.ImagePaths.Count == 0) return;
             _isManuallyNavigating = true;
+            ViewModel.ClearPendingNextIndex();
 
             try
             {
@@ -476,7 +475,8 @@ namespace ModernImageViewer.Cinematic
 
             if (!ViewModel.IsPlaying || _isManuallyNavigating)
             {
-                SlideshowCanvas.Invalidate();
+                if (_isTargetingFrozen || (TelemetryOverlay != null && TelemetryOverlay.Visibility == Visibility.Visible))
+                    SlideshowCanvas.Invalidate();
                 return;
             }
 
@@ -508,25 +508,18 @@ namespace ModernImageViewer.Cinematic
 
                 if (_currentSequence.Count > 0)
                 {
-                    var nextTransform = _currentSequence.Peek();
-                    if (nextTransform.RequiresCut) { }
                     _isPreloading = false;
                 }
                 else
                 {
-                    int nextIndex = ViewModel.CurrentIndex;
-                    if (ViewModel.IsShuffleEnabled)
-                    {
-                        nextIndex = Random.Shared.Next(ViewModel.ImagePaths.Count);
-                    }
-                    else if (ViewModel.IsLoopEnabled || ViewModel.CurrentIndex < ViewModel.ImagePaths.Count - 1)
-                    {
-                        nextIndex = (ViewModel.CurrentIndex + 1) % ViewModel.ImagePaths.Count;
-                    }
-
+                    int nextIndex = ViewModel.PeekNextIndex();
                     if (nextIndex != ViewModel.CurrentIndex && _sessionCts != null)
                     {
                         _ = PreloadNextImageAsync(nextIndex, _sessionCts.Token);
+                    }
+                    else
+                    {
+                        _isPreloading = false;
                     }
                 }
             }
@@ -1171,9 +1164,7 @@ namespace ModernImageViewer.Cinematic
         {
             try
             {
-                string settingsDir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ModernImageViewer");
-                System.IO.Directory.CreateDirectory(settingsDir);
-                string settingsFile = System.IO.Path.Combine(settingsDir, "WindowBounds.json");
+                string settingsFile = System.IO.Path.Combine(AppPaths.LocalDirectory, "WindowBounds.json");
 
                 var bounds = new Dictionary<string, int>
                 {
@@ -1217,6 +1208,7 @@ namespace ModernImageViewer.Cinematic
             {
                 _lastCanvasWidth = e.NewSize.Width;
                 _lastCanvasHeight = e.NewSize.Height;
+                UpdateActiveTrajectoriesAsync();
             }
         }
     }

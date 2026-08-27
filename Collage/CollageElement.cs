@@ -25,7 +25,6 @@ namespace ModernImageViewer.Collage
         private float _cornerRadius = 0f;
         private float _shadowSize = 0f;
 
-        // === NEW: High-Resolution Support ===
         [JsonIgnore]
         public CanvasBitmap? HighResBitmap { get; set; }
 
@@ -34,8 +33,6 @@ namespace ModernImageViewer.Collage
 
         [JsonIgnore]
         public bool HasHighRes => HighResBitmap != null;
-
-        // === Existing properties remain unchanged below this line ===
 
         [JsonIgnore]
         public Rect Layout

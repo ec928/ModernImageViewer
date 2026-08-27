@@ -95,9 +95,7 @@ namespace ModernImageViewer
             ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".heic", ".heif", ".avif"
         };
 
-        private readonly string _settingsPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "ModernImageViewer", "settings.json");
+        private readonly string _settingsPath = Path.Combine(AppPaths.LocalDirectory, "settings.json");
 
         public MainWindow()
         {
@@ -119,6 +117,7 @@ namespace ModernImageViewer
                 RootGrid.RemoveHandler(UIElement.KeyDownEvent, _globalKeyDownHandler);
                 Instance = null;
                 SaveAllSettings();
+                StopFolderWatcher();
                 _hfPromotionTimer?.Stop();
                 _hfCts?.Cancel();
                 _hfCts?.Dispose();
@@ -182,15 +181,7 @@ namespace ModernImageViewer
                         _rawGpuBitmap = hfEntry.GpuBitmap;
                         _rawGpuProfile = hfEntry.Profile;
 
-                        if (App.GlobalImageCache.TryGetValue(path, out var oldEntry))
-                        {
-                            // Release unconditionally rather than skipping when a detached window
-                            // holds the path. Skipping leaked the cache's own reference: the slot
-                            // was overwritten below, so nothing ever released it and the refcount
-                            // could never reach zero. Release is correct in both cases.
-                            oldEntry.Release();
-                        }
-                        if (hfEntry != null) App.GlobalImageCache[path] = hfEntry;
+                        if (hfEntry != null) ImageCache.Publish(path, hfEntry);
 
                         _isHighFidelityActive = true;
 
@@ -214,6 +205,7 @@ namespace ModernImageViewer
                 {
                     ViewerControl.SetGammaLevel(_currentGamma);
                     ViewerControl.SetDetachLimitState((int)CurrentDetachLimit);
+                    ViewerControl.GammaChanged += (_, gamma) => ApplyGamma(gamma);
                 }
 
                 if (!string.IsNullOrEmpty(StartupFilePath) && File.Exists(StartupFilePath))
@@ -267,6 +259,17 @@ namespace ModernImageViewer
             ManageCache(_currentIndex, 0);
         }
 
+        public event Action<float>? GammaApplied;
+
+        public void ApplyGamma(float gamma)
+        {
+            if (Math.Abs(_currentGamma - gamma) < 0.01f) return;
+            _currentGamma = gamma;
+            ViewerControl?.SetGammaLevel(gamma);
+            GammaApplied?.Invoke(gamma);
+            SaveAllSettings();
+        }
+
         private sealed class AppSettings
         {
             public int Version { get; set; } = 1;
@@ -315,8 +318,7 @@ namespace ModernImageViewer
 
                 try
                 {
-                    string settingsDir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ModernImageViewer");
-                    string cinematicBoundsPath = System.IO.Path.Combine(settingsDir, "WindowBounds.json");
+                    string cinematicBoundsPath = Path.Combine(AppPaths.LocalDirectory, "WindowBounds.json");
                     if (File.Exists(cinematicBoundsPath))
                     {
                         File.Delete(cinematicBoundsPath);
@@ -412,8 +414,6 @@ namespace ModernImageViewer
         }
 
 
-        // === TEMPORARY TEST HARNESS FOR COLLAGE PROTOTYPE ===
-        // This is throwaway code. We will replace it with a proper CollageEditorWindow later.
         private CollageEditorWindow? _collageEditorWindow;
 
         private async void OpenDirector_Click(object sender, RoutedEventArgs e)
@@ -431,14 +431,10 @@ namespace ModernImageViewer
                     return;
                 }
 
-                // Check standard fallback locations
                 string[] fallbacks = new[]
                 {
                     System.IO.Path.Combine(AppContext.BaseDirectory, "VideoDirector.exe"),
-                    System.IO.Path.Combine(AppContext.BaseDirectory, @"..\VideoDirector\VideoDirector.exe"),
-                    System.IO.Path.Combine(
-                        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                        @"OneDrive\Apps\VideoDirector\VideoDirector.exe")
+                    System.IO.Path.Combine(AppContext.BaseDirectory, @"..\VideoDirector\VideoDirector.exe")
                 };
 
                 foreach (var candidate in fallbacks)
@@ -600,8 +596,8 @@ namespace ModernImageViewer
             var dialog = new ContentDialog
             {
                 Title = "Delete Selected Files",
-                Content = $"Are you sure you want to delete {selectedItems.Count} files?",
-                PrimaryButtonText = "Delete",
+                Content = $"Move {selectedItems.Count} files to the Recycle Bin?",
+                PrimaryButtonText = "Recycle",
                 CloseButtonText = "Cancel",
                 XamlRoot = RootGrid.XamlRoot,
                 RequestedTheme = ElementTheme.Dark
@@ -610,19 +606,22 @@ namespace ModernImageViewer
             var result = await dialog.ShowAsync();
             if (result == ContentDialogResult.Primary)
             {
+                int failed = 0;
                 foreach (var item in selectedItems)
                 {
-                    try
+                    if (ViewerEngine.RecycleFile(item.Path))
                     {
-                        var file = await StorageFile.GetFileFromPathAsync(item.Path);
-                        await file.DeleteAsync();
+                        ImageCache.Evict(item.Path);
                         Images.Remove(item);
                     }
-                    catch (Exception ex)
+                    else
                     {
-                        Debug.WriteLine($"Failed to delete {item.Path}: {ex.Message}");
+                        failed++;
+                        Debug.WriteLine($"Failed to recycle {item.Path}");
                     }
                 }
+                if (failed > 0)
+                    await ViewerEngine.ShowMessageAsync(RootGrid.XamlRoot, "Delete", $"{failed} file(s) could not be moved to the Recycle Bin.");
             }
             ImageGrid.SelectedItems.Clear();
         }

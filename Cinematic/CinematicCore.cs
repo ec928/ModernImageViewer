@@ -50,7 +50,6 @@ namespace ModernImageViewer.Cinematic
     {
         public static Vector2 GetTargetedPan(Vector2 targetPoint, float scale, Rect bounds, Size imgSize, Random rnd, bool isHumanOverride = false)
         {
-            // PURE FLOAT CONVERSION: Prevents CS0266 double-to-float compile errors
             float bw = (float)bounds.Width; float bh = (float)bounds.Height;
             float iw = (float)imgSize.Width; float ih = (float)imgSize.Height;
 

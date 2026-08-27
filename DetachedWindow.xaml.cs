@@ -56,13 +56,18 @@ namespace ModernImageViewer
             this.Closed += DetachedWindow_Closed;
 
             MainWindow.Instance?.RegisterDetachedWindow(_imageItem.Path);
+            if (MainWindow.Instance != null)
+                MainWindow.Instance.GammaApplied += OnHostGammaChanged;
 
             ViewerControl.TargetImage = _imageItem;
             ViewerControl.IsStandaloneMode = true;
             ViewerControl.SetGammaLevel(initialGamma);
+            ViewerControl.GammaChanged += (_, g) => MainWindow.Instance?.ApplyGamma(g);
 
             LoadImageAsync();
         }
+
+        private void OnHostGammaChanged(float gamma) => ViewerControl.SetGammaLevel(gamma);
 
         private void AppWindow_Changed(AppWindow sender, AppWindowChangedEventArgs args)
         {
@@ -214,12 +219,12 @@ namespace ModernImageViewer
         {
             _appWindow.Changed -= AppWindow_Changed;
             RootGrid.RemoveHandler(UIElement.KeyDownEvent, _globalKeyDownHandler);
+            if (MainWindow.Instance != null)
+                MainWindow.Instance.GammaApplied -= OnHostGammaChanged;
             MainWindow.Instance?.UnregisterDetachedWindow(_imageItem.Path);
 
-            // Clean release of the reference back to the app pool
             _localCacheEntry?.Release();
 
-            // Sever XAML-wired event handlers to allow garbage collection
             ViewerControl.CloseRequested -= ViewerControl_CloseRequested;
             ViewerControl.ToggleFullscreenRequested -= ViewerControl_ToggleFullscreenRequested;
             ViewerControl.SizeToImageRequested -= ViewerControl_SizeToImageRequested;
@@ -228,6 +233,7 @@ namespace ModernImageViewer
             ViewerControl.EditRequested -= ViewerControl_EditRequested;
             ViewerControl.RenameRequested -= ViewerControl_RenameRequested;
             ViewerControl.DeleteRequested -= ViewerControl_DeleteRequested;
+            ViewerControl.AddToCollageRequested -= ViewerControl_AddToCollageRequested;
             ViewerControl.ShowInExplorerRequested -= ViewerControl_ShowInExplorerRequested;
         }
 
@@ -247,7 +253,7 @@ namespace ModernImageViewer
 
             try
             {
-                App.GlobalImageCache.TryGetValue(_imageItem.Path, out var sharedEntry);
+                ImageCache.TryGet(_imageItem.Path, out var sharedEntry);
                 if (sharedEntry != null && (sharedEntry.GpuBitmap != null || sharedEntry.AnimationFrames != null) && sharedEntry.IsHighFidelity)
                 {
                     // Checkout a reference from the global cache
@@ -373,9 +379,11 @@ namespace ModernImageViewer
 
         private async void ViewerControl_RenameRequested(object? sender, EventArgs e)
         {
+            string oldPath = _imageItem.Path;
             if (await ViewerEngine.RenameImageAsync(_imageItem, this.Content.XamlRoot))
             {
                 this.Title = _imageItem.Name;
+                MainWindow.Instance?.NotifyImageRenamed(oldPath, _imageItem.Path);
                 LoadImageAsync();
             }
         }
@@ -384,8 +392,14 @@ namespace ModernImageViewer
         {
             if (await ViewerEngine.DeleteImageAsync(_imageItem, this.Content.XamlRoot))
             {
+                MainWindow.Instance?.NotifyImageDeleted(_imageItem.Path);
                 this.Close();
             }
+        }
+
+        private void ViewerControl_AddToCollageRequested(object? sender, EventArgs e)
+        {
+            MainWindow.Instance?.AddImageToCollage(_imageItem.Path);
         }
     }
 }

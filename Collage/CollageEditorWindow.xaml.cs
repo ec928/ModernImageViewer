@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml.Media;
 using ModernImageViewer.Collage;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -32,6 +33,7 @@ namespace ModernImageViewer.Collage
         private double _defaultCanvasWidth = 1920;
         private double _defaultCanvasHeight = 1080;
         private bool _isUpdatingUI = false;
+        private bool _allowClose;
 
         public CollageEditorWindow()
         {
@@ -70,10 +72,11 @@ namespace ModernImageViewer.Collage
             {
                 _undoStack.AddFirst(previousState);
                 if (_undoStack.Count > MaxUndoSteps) _undoStack.RemoveLast();
+                _project.HasUnsavedChanges = true;
             };
             CollageCanvasControl.SelectionChanged += CollageCanvasControl_SelectionChanged;
 
-            this.Closed += (s, e) => SaveWindowState();
+            this.Closed += CollageEditorWindow_Closed;
             RootGrid.Loaded += Window_Loaded;
 
             UpdateProjectUI();
@@ -101,7 +104,48 @@ namespace ModernImageViewer.Collage
             };
 
             _project.Elements.Add(newCell);
+            _project.HasUnsavedChanges = true;
             CollageCanvasControl.Invalidate();
+        }
+
+        private async void CollageEditorWindow_Closed(object sender, WindowEventArgs args)
+        {
+            if (_allowClose)
+            {
+                SaveWindowState();
+                return;
+            }
+
+            if (_project.HasUnsavedChanges)
+            {
+                args.Handled = true;
+                var dialog = new ContentDialog
+                {
+                    Title = "Unsaved collage",
+                    Content = "Save changes before closing?",
+                    PrimaryButtonText = "Save",
+                    SecondaryButtonText = "Discard",
+                    CloseButtonText = "Cancel",
+                    XamlRoot = RootGrid.XamlRoot
+                };
+                var result = await dialog.ShowAsync();
+                if (result == ContentDialogResult.Primary)
+                {
+                    if (await SaveProjectAsync(forcePicker: false))
+                    {
+                        _allowClose = true;
+                        Close();
+                    }
+                }
+                else if (result == ContentDialogResult.Secondary)
+                {
+                    _allowClose = true;
+                    Close();
+                }
+                return;
+            }
+
+            SaveWindowState();
         }
 
         private void LayoutButton_Click(object sender, RoutedEventArgs e)
@@ -498,27 +542,57 @@ namespace ModernImageViewer.Collage
 
         private async void SaveProject_Click(object sender, RoutedEventArgs e)
         {
-            if (_project == null) return;
-            var picker = new FileSavePicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary, SuggestedFileName = _project.Name };
-            picker.FileTypeChoices.Add("Collage Project", new List<string> { ".collage" });
-            WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
-            var file = await picker.PickSaveFileAsync();
-            if (file == null) return;
+            await SaveProjectAsync(forcePicker: true);
+        }
+
+        private async Task<bool> SaveProjectAsync(bool forcePicker)
+        {
+            if (_project == null) return false;
+
+            StorageFile? file = null;
+            if (!forcePicker && !string.IsNullOrEmpty(_lastSavedPath) && File.Exists(_lastSavedPath))
+            {
+                file = await StorageFile.GetFileFromPathAsync(_lastSavedPath);
+            }
+            else
+            {
+                var picker = new FileSavePicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary, SuggestedFileName = _project.Name };
+                picker.FileTypeChoices.Add("Collage Project", new List<string> { ".collage" });
+                WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+                file = await picker.PickSaveFileAsync();
+            }
+            if (file == null) return false;
 
             try
             {
                 await FileIO.WriteTextAsync(file, JsonSerializer.Serialize(_project, new JsonSerializerOptions { WriteIndented = true }));
                 _lastSavedPath = file.Path;
+                _project.HasUnsavedChanges = false;
                 UpdateProjectUI();
+                return true;
             }
             catch (Exception ex)
             {
                 await ShowErrorDialog("Save Failed", ex.Message);
+                return false;
             }
         }
 
         private async void LoadProject_Click(object sender, RoutedEventArgs e)
         {
+            if (_project.HasUnsavedChanges)
+            {
+                var confirm = new ContentDialog
+                {
+                    Title = "Unsaved collage",
+                    Content = "Load a project and discard current changes?",
+                    PrimaryButtonText = "Discard and load",
+                    CloseButtonText = "Cancel",
+                    XamlRoot = RootGrid.XamlRoot
+                };
+                if (await confirm.ShowAsync() != ContentDialogResult.Primary) return;
+            }
+
             var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
             picker.FileTypeFilter.Add(".collage");
             WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
@@ -539,13 +613,12 @@ namespace ModernImageViewer.Collage
                     {
                         var entry = await ViewerEngine.DecodeFastPreviewAsync(element.ImagePath);
                         if (entry?.Bitmap != null)
-                        {
-                            App.GlobalImageCache[element.ImagePath] = entry;
-                        }
+                            ImageCache.Publish(element.ImagePath, entry);
                     }
-                    catch { }
+                    catch (Exception ex) { Debug.WriteLine($"[Collage load] {element.ImagePath}: {ex.Message}"); }
                 }
                 _project = loaded;
+                _project.HasUnsavedChanges = false;
                 CollageCanvasControl.Project = _project;
                 _lastSavedPath = file.Path;
                 UpdateProjectUI();
@@ -597,6 +670,7 @@ namespace ModernImageViewer.Collage
                 if (jpegQuality < 0) return;
             }
 
+            var bitmapsToDispose = new List<CanvasBitmap>();
             try
             {
                 using var renderTarget = new CanvasRenderTarget(
@@ -606,7 +680,6 @@ namespace ModernImageViewer.Collage
                     96);
 
                 var elementBitmaps = new Dictionary<CollageElement, CanvasBitmap>();
-                var bitmapsToDispose = new List<CanvasBitmap>();
 
                 foreach (var element in _project.Elements)
                 {
@@ -623,12 +696,12 @@ namespace ModernImageViewer.Collage
                             var imgFile = await StorageFile.GetFileFromPathAsync(element.ImagePath);
                             using var imgStream = await imgFile.OpenReadAsync();
                             var decoder = await BitmapDecoder.CreateAsync(imgStream);
-                            var softwareBitmap = await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
+                            using var softwareBitmap = await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
                             var bmp = CanvasBitmap.CreateFromSoftwareBitmap(renderTarget.Device, softwareBitmap);
                             elementBitmaps[element] = bmp;
                             bitmapsToDispose.Add(bmp);
                         }
-                        catch { }
+                        catch (Exception ex) { Debug.WriteLine($"[Collage export] {element.ImagePath}: {ex.Message}"); }
                     }
                 }
 
@@ -639,12 +712,10 @@ namespace ModernImageViewer.Collage
                     foreach (var element in _project.Elements)
                     {
                         elementBitmaps.TryGetValue(element, out var bitmapToUse);
-                        
+
                         ImageCacheEntry? entry = null;
                         if (!string.IsNullOrEmpty(element.ImagePath))
-                        {
-                            App.GlobalImageCache.TryGetValue(element.ImagePath, out entry);
-                        }
+                            ImageCache.TryGet(element.ImagePath, out entry);
 
                         var clipGeom = element.GetOrUpdateClipGeometry(renderTarget);
                         CollageCellRenderer.DrawCell(ds, element, entry, bitmapToUse, 2.2f, clipGeom);
@@ -652,25 +723,21 @@ namespace ModernImageViewer.Collage
                 }
 
                 using var stream = await file.OpenAsync(FileAccessMode.ReadWrite);
-                stream.Size = 0; // Explicitly truncate file to prevent corruption on overwrite
+                stream.Size = 0;
 
                 if (!isJpeg)
-                {
                     await renderTarget.SaveAsync(stream, CanvasBitmapFileFormat.Png);
-                }
                 else
-                {
                     await renderTarget.SaveAsync(stream, CanvasBitmapFileFormat.Jpeg, jpegQuality / 100f);
-                }
-
-                foreach (var bmp in bitmapsToDispose)
-                {
-                    bmp.Dispose();
-                }
             }
             catch (Exception ex)
             {
                 await ShowErrorDialog("Export Failed", ex.Message);
+            }
+            finally
+            {
+                foreach (var bmp in bitmapsToDispose)
+                    bmp.Dispose();
             }
         }
 

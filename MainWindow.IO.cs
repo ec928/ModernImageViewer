@@ -19,6 +19,8 @@ namespace ModernImageViewer
         private bool _isSidebarHooked = false;
         private TreeViewNode? _pendingNodeToSelect;
         private int _pendingTargetIndex = 0;
+        private FileSystemWatcher? _folderWatcher;
+        private Microsoft.UI.Dispatching.DispatcherQueueTimer? _folderWatchTimer;
 
         private bool HasSupportedImages(string folderPath)
         {
@@ -58,8 +60,7 @@ namespace ModernImageViewer
 
                 // Release, not Dispose: a detached window may hold a reference to this entry.
                 // Refcounting frees it only once the last holder is done with it.
-                if (App.GlobalImageCache.TryGetValue(filePath, out var existing)) existing.Release();
-                App.GlobalImageCache[filePath] = fastEntry;
+                ImageCache.Publish(filePath, fastEntry);
 
                 TryDisposeRawGpuBitmap();
                 _rawGpuBitmap = fastEntry.GpuBitmap;
@@ -261,20 +262,31 @@ namespace ModernImageViewer
                         {
                             var yieldBatch = batch.ToList();
                             batch.Clear();
-                            DispatcherQueue.TryEnqueue(() => { Images.AddRange(yieldBatch); });
+                            int enqueueId = myScanId;
+                            DispatcherQueue.TryEnqueue(() =>
+                            {
+                                if (enqueueId != _currentScanId) return;
+                                Images.AddRange(yieldBatch);
+                            });
                         }
                     }
 
                     if (batch.Count > 0 && myScanId == _currentScanId)
                     {
                         var yieldBatch = batch.ToList();
-                        DispatcherQueue.TryEnqueue(() => { Images.AddRange(yieldBatch); });
+                        int enqueueId = myScanId;
+                        DispatcherQueue.TryEnqueue(() =>
+                        {
+                            if (enqueueId != _currentScanId) return;
+                            Images.AddRange(yieldBatch);
+                        });
                     }
                 });
 
                 if (myScanId == _currentScanId)
                 {
                     if (Images.Count > 0) AddFolderToRecent(folderPath);
+                    RestartFolderWatcher(folderPath);
                 }
             }
             finally
@@ -286,6 +298,70 @@ namespace ModernImageViewer
                     if (LoadingOverlay != null) LoadingOverlay.Visibility = Visibility.Collapsed;
                 }
             }
+        }
+
+        private void RestartFolderWatcher(string folderPath)
+        {
+            try
+            {
+                _folderWatcher?.Dispose();
+                _folderWatcher = null;
+                if (string.IsNullOrEmpty(folderPath) || !Directory.Exists(folderPath)) return;
+
+                _folderWatcher = new FileSystemWatcher(folderPath)
+                {
+                    NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.CreationTime,
+                    IncludeSubdirectories = false,
+                    EnableRaisingEvents = true
+                };
+                _folderWatcher.Created += OnFolderWatchEvent;
+                _folderWatcher.Deleted += OnFolderWatchEvent;
+                _folderWatcher.Renamed += OnFolderWatchRenamed;
+                _folderWatcher.Changed += OnFolderWatchEvent;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[FolderWatch] {ex.Message}");
+            }
+        }
+
+        private void OnFolderWatchRenamed(object sender, RenamedEventArgs e) => OnFolderWatchEvent(sender, e);
+
+        private void OnFolderWatchEvent(object sender, FileSystemEventArgs e)
+        {
+            string ext = Path.GetExtension(e.Name ?? e.FullPath);
+            if (!SupportedExtensions.Contains(ext)) return;
+            ScheduleFolderRefresh();
+        }
+
+        private void ScheduleFolderRefresh()
+        {
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                if (_folderWatchTimer == null)
+                {
+                    _folderWatchTimer = DispatcherQueue.CreateTimer();
+                    _folderWatchTimer.Interval = TimeSpan.FromMilliseconds(800);
+                    _folderWatchTimer.IsRepeating = false;
+                    _folderWatchTimer.Tick += (s, args) =>
+                    {
+                        _folderWatchTimer.Stop();
+                        if (_isScanning) return;
+                        if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible) return;
+                        if (!string.IsNullOrEmpty(_currentDirectory))
+                            _ = ScanFolder(_currentDirectory);
+                    };
+                }
+                _folderWatchTimer.Stop();
+                _folderWatchTimer.Start();
+            });
+        }
+
+        internal void StopFolderWatcher()
+        {
+            _folderWatchTimer?.Stop();
+            _folderWatcher?.Dispose();
+            _folderWatcher = null;
         }
 
         private void PopulateTreeView(DirectoryInfo? parentDir, List<FolderItem> hopDirs, List<FolderItem> subDirs, string currentFolderPath, int currentImageCount = 0)

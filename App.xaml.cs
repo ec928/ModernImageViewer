@@ -1,6 +1,5 @@
 ﻿using Microsoft.UI.Xaml;
 using System;
-using System.Collections.Concurrent;
 using System.IO;
 
 namespace ModernImageViewer
@@ -8,10 +7,6 @@ namespace ModernImageViewer
     public partial class App : Application
     {
         private Window? _window;
-
-        // Centralized thread-safe image cache
-        public static ConcurrentDictionary<string, ImageCacheEntry> GlobalImageCache { get; }
-            = new(StringComparer.OrdinalIgnoreCase);
 
         public App()
         {
@@ -22,7 +17,12 @@ namespace ModernImageViewer
         private void App_UnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
         {
             System.Diagnostics.Debug.WriteLine($"[CRITICAL] Unhandled Exception: {e.Exception}");
-            e.Handled = true;
+            try
+            {
+                ImageCache.Clear();
+            }
+            catch { }
+            e.Handled = false;
         }
 
         protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)

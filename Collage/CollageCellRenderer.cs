@@ -89,7 +89,15 @@ namespace ModernImageViewer.Collage
 
             using (session.CreateLayer(1f, clipGeometry))
             {
+                var prior = session.Transform;
+                if (Math.Abs(element.Rotation) > 0.01f)
+                {
+                    float cx = (float)(element.Layout.X + element.Layout.Width / 2.0);
+                    float cy = (float)(element.Layout.Y + element.Layout.Height / 2.0);
+                    session.Transform = prior * Matrix3x2.CreateRotation(element.Rotation * MathF.PI / 180f, new Vector2(cx, cy));
+                }
                 session.DrawImage(effects.EncodeToSrgb, new Vector2((float)drawX, (float)drawY));
+                session.Transform = prior;
             }
         }
     }
