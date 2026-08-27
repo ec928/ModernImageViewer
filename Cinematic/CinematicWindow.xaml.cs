@@ -12,6 +12,7 @@ using System.Collections.Generic;
 using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
 using Windows.Media.FaceAnalysis;
 using Windows.Storage;
@@ -36,6 +37,9 @@ namespace ModernImageViewer.Cinematic
         private sealed record PlaybackRequest(Size Bounds, SlideSettings Settings);
 
         private AppWindow _appWindow;
+        private Windows.Graphics.SizeInt32 _restoreSize;
+        private Windows.Graphics.PointInt32 _restorePos;
+        private bool _haveRestoreBounds;
         private CanvasDevice? _canvasDevice;
         private FaceDetector? _faceDetector;
         private readonly CinematicDirector _director = new();
@@ -61,6 +65,9 @@ namespace ModernImageViewer.Cinematic
         private double _lastCanvasHeight;
 
         private DispatcherQueueTimer _idleTimer;
+        private bool _pointerOverChrome;
+        private int _seqScrollGeneration;
+        private bool _sequenceWanted;
         private bool _isManuallyNavigating = false;
         private int _currentTransitionType = -1;
         private int _trajectoryUpdateId = 0;
@@ -109,10 +116,18 @@ namespace ModernImageViewer.Cinematic
         {
             this.InitializeComponent();
             this.ExtendsContentIntoTitleBar = true;
+            ApplyPlaybarToggle(BtnDirectorToggle, false);
+            ApplyPlaybarToggle(BtnSequenceToggle, false);
 
             ViewModel = new CinematicViewModel(imagePaths, startIndex);
             ViewModel.TrajectoryRefreshRequested += () => UpdateActiveTrajectoriesAsync();
             ViewModel.SlideNavigationRequested += () => _ = ManualNavigateAsync();
+            ViewModel.SequenceChanged += () => DiscardPreload();
+            ViewModel.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(ViewModel.CurrentIndex))
+                    DispatcherQueue.TryEnqueue(ScrollSequenceToCurrent);
+            };
             _ = ViewModel.RestoreAutoSaveAsync();
 
             var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
@@ -126,33 +141,8 @@ namespace ModernImageViewer.Cinematic
                 presenter.IsMinimizable = true;
                 presenter.IsResizable = true;
 
-                // Standard .NET Persistence for Unpackaged WinUI 3 Apps
-                string settingsFile = System.IO.Path.Combine(AppPaths.LocalDirectory, "WindowBounds.json");
-
-                try
-                {
-                    if (System.IO.File.Exists(settingsFile))
-                    {
-                        var json = System.IO.File.ReadAllText(settingsFile);
-                        var bounds = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, int>>(json);
-                        if (bounds != null)
-                        {
-                            if (bounds.TryGetValue("Width", out int w) && bounds.TryGetValue("Height", out int h))
-                                _appWindow.Resize(new Windows.Graphics.SizeInt32(w, h));
-
-                            if (bounds.TryGetValue("X", out int x) && bounds.TryGetValue("Y", out int y))
-                                _appWindow.Move(new Windows.Graphics.PointInt32(x, y));
-                        }
-                    }
-                    else
-                    {
-                        SetDefaultCinematicBounds();
-                    }
-                }
-                catch
-                {
-                    SetDefaultCinematicBounds();
-                }
+                RestoreCinematicWindowPlacement(presenter);
+                _appWindow.Changed += CinematicAppWindow_Changed;
             }
 
             _idleTimer = DispatcherQueue.CreateTimer();
@@ -163,6 +153,68 @@ namespace ModernImageViewer.Cinematic
             CompositionTarget.Rendering += CompositionTarget_Rendering;
             this.Closed += CinematicWindow_Closed;
             this.Activate();
+        }
+
+        private void RestoreCinematicWindowPlacement(OverlappedPresenter presenter)
+        {
+            string settingsFile = System.IO.Path.Combine(AppPaths.LocalDirectory, "WindowBounds.json");
+            try
+            {
+                var displayArea = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(_appWindow.Id, Microsoft.UI.Windowing.DisplayAreaFallback.Primary);
+                var work = displayArea.WorkArea;
+
+                int w = 0, h = 0, x = int.MinValue, y = int.MinValue;
+                bool maximized = false;
+                if (System.IO.File.Exists(settingsFile))
+                {
+                    var json = System.IO.File.ReadAllText(settingsFile);
+                    var bounds = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, int>>(json);
+                    if (bounds != null)
+                    {
+                        bounds.TryGetValue("Width", out w);
+                        bounds.TryGetValue("Height", out h);
+                        if (bounds.TryGetValue("X", out int sx)) x = sx;
+                        if (bounds.TryGetValue("Y", out int sy)) y = sy;
+                        maximized = bounds.TryGetValue("Maximized", out int mx) && mx == 1;
+                    }
+                }
+
+                bool fillsWork = w >= work.Width - 32 && h >= work.Height - 32;
+                if (w < 400 || h < 300 || fillsWork)
+                {
+                    if (fillsWork) maximized = true;
+                    h = (int)(work.Height * 0.9375);
+                    w = (int)(h * (16.0 / 9.0));
+                    x = int.MinValue;
+                    y = int.MinValue;
+                }
+
+                _appWindow.Resize(new Windows.Graphics.SizeInt32(w, h));
+                if (x != int.MinValue && y != int.MinValue)
+                    _appWindow.Move(new Windows.Graphics.PointInt32(x, y));
+
+                _restoreSize = new Windows.Graphics.SizeInt32(w, h);
+                _restorePos = _appWindow.Position;
+                _haveRestoreBounds = true;
+
+                if (maximized) presenter.Maximize();
+            }
+            catch
+            {
+                SetDefaultCinematicBounds();
+            }
+        }
+
+        private void CinematicAppWindow_Changed(AppWindow sender, AppWindowChangedEventArgs args)
+        {
+            if (!args.DidSizeChange && !args.DidPositionChange && !args.DidPresenterChange) return;
+            if (_appWindow.Presenter is OverlappedPresenter p && p.State == OverlappedPresenterState.Restored
+                && _appWindow.Size.Width > 0 && _appWindow.Size.Height > 0)
+            {
+                _restoreSize = _appWindow.Size;
+                _restorePos = _appWindow.Position;
+                _haveRestoreBounds = true;
+            }
         }
 
         private void SetDefaultCinematicBounds()
@@ -395,8 +447,7 @@ namespace ModernImageViewer.Cinematic
                 return;
             }
 
-            string nextFileName = System.IO.Path.GetFileName(ViewModel.ImagePaths[indexToLoad]);
-            var request = new PlaybackRequest(SlideshowCanvas.Size, ViewModel.GetEffectiveSettingsFor(nextFileName));
+            var request = new PlaybackRequest(SlideshowCanvas.Size, ViewModel.GetEffectiveSettingsForIndex(indexToLoad));
 
             try
             {
@@ -777,7 +828,7 @@ namespace ModernImageViewer.Cinematic
             {
                 TelemetryText.Text =
                     $"{zoom}\n" +
-                    $"Slide {ViewModel.CurrentIndex + 1} / {ViewModel.ImagePaths.Count}  ·  {ViewModel.CurrentFileName}\n" +
+                    $"Slide {ViewModel.CurrentIndex + 1} / {ViewModel.Track.Count}  ·  {ViewModel.CurrentFileName}\n" +
                     $"Saved: {(custom ? "Custom zoom/pan" : "Auto (engine)")}  ·  Unsaved draft: {(draft ? "yes" : "no")}";
             }
         }
@@ -1174,9 +1225,44 @@ namespace ModernImageViewer.Cinematic
             SlideshowCanvas.Invalidate();
         }
 
+        private void PinChromeForDrag()
+        {
+            _pointerOverChrome = true;
+            if (ActionBar != null) ActionBar.Opacity = 1.0;
+            _idleTimer.Stop();
+        }
+
+        private void RootGrid_DragOver(object sender, DragEventArgs e)
+        {
+            PinChromeForDrag();
+            e.AcceptedOperation = SequenceBar.Visibility == Visibility.Visible && e.DataView.Contains(StandardDataFormats.StorageItems)
+                ? DataPackageOperation.Copy
+                : DataPackageOperation.None;
+        }
+
+        private void RootGrid_Drop(object sender, DragEventArgs e)
+        {
+            if (SequenceBar.Visibility == Visibility.Visible)
+                SequenceBar_Drop(sender, e);
+        }
+
         private void RootGrid_PointerMoved(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
         {
             if (ActionBar != null) ActionBar.Opacity = 1.0;
+            _idleTimer.Stop();
+            if (!_pointerOverChrome) _idleTimer.Start();
+        }
+
+        private void Chrome_PointerEntered(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+        {
+            _pointerOverChrome = true;
+            if (ActionBar != null) ActionBar.Opacity = 1.0;
+            _idleTimer.Stop();
+        }
+
+        private void Chrome_PointerExited(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+        {
+            _pointerOverChrome = false;
             _idleTimer.Stop();
             _idleTimer.Start();
         }
@@ -1186,16 +1272,128 @@ namespace ModernImageViewer.Cinematic
             ActionBar.Opacity = 0;
         }
 
-        private void Scrubber_Click(object sender, RoutedEventArgs e)
+        private void SequenceStrip_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (sender is Button btn && btn.CommandParameter is int index)
+            if (SequenceStrip.SelectedIndex >= 0 && SequenceStrip.SelectedIndex != ViewModel.CurrentIndex)
+                ViewModel.NavigateTo(SequenceStrip.SelectedIndex);
+            ScrollSequenceToCurrent();
+        }
+
+        private void ScrollSequenceToCurrent()
+        {
+            if (SequenceBar == null || SequenceBar.Visibility != Visibility.Visible || SequenceStrip == null) return;
+            int index = ViewModel.CurrentIndex;
+            if (index < 0 || index >= ViewModel.Track.Count) return;
+
+            int gen = ++_seqScrollGeneration;
+            if (SequenceStrip.ContainerFromIndex(index) is FrameworkElement)
             {
-                ViewModel.NavigateTo(index);
+                CenterSequenceItem(index);
+                return;
+            }
+            SequenceStrip.ScrollIntoView(ViewModel.Track[index]);
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                if (gen != _seqScrollGeneration) return;
+                CenterSequenceItem(index);
+            });
+        }
+
+        private void CenterSequenceItem(int index)
+        {
+            if (SequenceStrip.ContainerFromIndex(index) is not FrameworkElement container) return;
+            var sv = FindScrollViewer(SequenceStrip);
+            if (sv == null || sv.ActualWidth <= 1) return;
+            var origin = container.TransformToVisual(sv).TransformPoint(new Windows.Foundation.Point(0, 0));
+            double itemCenter = origin.X + container.ActualWidth / 2.0;
+            double target = sv.HorizontalOffset + itemCenter - sv.ViewportWidth / 2.0;
+            target = Math.Clamp(target, 0, Math.Max(0, sv.ExtentWidth - sv.ViewportWidth));
+            sv.ChangeView(target, null, null, disableAnimation: true);
+        }
+
+        private static ScrollViewer? FindScrollViewer(DependencyObject root)
+        {
+            int n = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(root);
+            for (int i = 0; i < n; i++)
+            {
+                var child = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(root, i);
+                if (child is ScrollViewer sv) return sv;
+                var nested = FindScrollViewer(child);
+                if (nested != null) return nested;
+            }
+            return null;
+        }
+
+        private void SequenceStrip_DragItemsCompleted(ListViewBase sender, DragItemsCompletedEventArgs args)
+        {
+            ViewModel.NotifyTrackReordered();
+            DiscardPreload();
+        }
+
+        private void BtnSeqNew_Click(object sender, RoutedEventArgs e)
+        {
+            DiscardPreload();
+            ViewModel.ResetToLaunchSet();
+        }
+
+        private void BtnSeqHide_Click(object sender, RoutedEventArgs e) => ViewModel.HideCurrentClip();
+        private void BtnSeqRemove_Click(object sender, RoutedEventArgs e)
+        {
+            DiscardPreload();
+            ViewModel.RemoveCurrentClip();
+        }
+        private void BtnSeqDuplicate_Click(object sender, RoutedEventArgs e) => ViewModel.DuplicateCurrentClip();
+
+        private async void BtnSeqAddFromFolder_Click(object sender, RoutedEventArgs e)
+        {
+            var picker = new Windows.Storage.Pickers.FolderPicker();
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+            picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.PicturesLibrary;
+            picker.FileTypeFilter.Add("*");
+            StorageFolder? folder = await picker.PickSingleFolderAsync();
+            if (folder == null) return;
+            DiscardPreload();
+            ViewModel.AddFromFolder(folder.Path);
+        }
+
+        private void SequenceBar_DragOver(object sender, DragEventArgs e)
+        {
+            PinChromeForDrag();
+            e.AcceptedOperation = e.DataView.Contains(StandardDataFormats.StorageItems)
+                ? DataPackageOperation.Copy
+                : DataPackageOperation.None;
+            e.Handled = true;
+        }
+
+        private async void SequenceBar_Drop(object sender, DragEventArgs e)
+        {
+            if (!e.DataView.Contains(StandardDataFormats.StorageItems)) return;
+            var items = await e.DataView.GetStorageItemsAsync();
+            var paths = new List<string>();
+            foreach (var item in items)
+            {
+                if (item is StorageFile file)
+                    paths.Add(file.Path);
+                else if (item is StorageFolder folder)
+                {
+                    foreach (var f in await folder.GetFilesAsync())
+                        paths.Add(f.Path);
+                }
+            }
+            if (paths.Count > 0)
+            {
+                DiscardPreload();
+                ViewModel.AddPaths(paths);
             }
         }
 
         private void IdleTimer_Tick(DispatcherQueueTimer sender, object args)
         {
+            if (_pointerOverChrome)
+            {
+                _idleTimer.Start();
+                return;
+            }
             if (ActionBar != null) ActionBar.Opacity = 0.0;
             _idleTimer.Stop();
         }
@@ -1218,7 +1416,56 @@ namespace ModernImageViewer.Cinematic
             SyncPlayPauseUI();
         }
 
-        private void BtnDirectorToggle_Click(object sender, RoutedEventArgs e) => DirectorSidebar.IsPaneOpen = !DirectorSidebar.IsPaneOpen;
+        private void BtnSequenceToggle_Click(object sender, RoutedEventArgs e)
+        {
+            if (DirectorSidebar.IsPaneOpen)
+            {
+                BtnSequenceToggle.IsChecked = false;
+                ApplyPlaybarToggle(BtnSequenceToggle, false);
+                SequenceBar.Visibility = Visibility.Collapsed;
+                return;
+            }
+            _sequenceWanted = BtnSequenceToggle.IsChecked == true;
+            SequenceBar.Visibility = _sequenceWanted ? Visibility.Visible : Visibility.Collapsed;
+            ApplyPlaybarToggle(BtnSequenceToggle, _sequenceWanted);
+            if (_sequenceWanted) DispatcherQueue.TryEnqueue(ScrollSequenceToCurrent);
+        }
+
+        private void HideSequenceForKenBurns()
+        {
+            _sequenceWanted = BtnSequenceToggle.IsChecked == true || SequenceBar.Visibility == Visibility.Visible;
+            SequenceBar.Visibility = Visibility.Collapsed;
+            BtnSequenceToggle.IsChecked = false;
+            ApplyPlaybarToggle(BtnSequenceToggle, false);
+        }
+
+        private void RestoreSequenceAfterKenBurns()
+        {
+            BtnSequenceToggle.IsChecked = _sequenceWanted;
+            SequenceBar.Visibility = _sequenceWanted ? Visibility.Visible : Visibility.Collapsed;
+            ApplyPlaybarToggle(BtnSequenceToggle, _sequenceWanted);
+            if (_sequenceWanted) DispatcherQueue.TryEnqueue(ScrollSequenceToCurrent);
+        }
+
+        private void BtnDirectorToggle_Click(object sender, RoutedEventArgs e)
+        {
+            bool on = BtnDirectorToggle.IsChecked == true;
+            DirectorSidebar.IsPaneOpen = on;
+            ApplyPlaybarToggle(BtnDirectorToggle, on);
+        }
+
+        private static void ApplyPlaybarToggle(Microsoft.UI.Xaml.Controls.Primitives.ToggleButton btn, bool on)
+        {
+            btn.Background = on
+                ? new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 120, 215))
+                : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            var fg = on
+                ? new SolidColorBrush(Microsoft.UI.Colors.White)
+                : new SolidColorBrush(Windows.UI.Color.FromArgb(255, 180, 180, 180));
+            btn.Foreground = fg;
+            if (btn.Content is SymbolIcon icon)
+                icon.Foreground = fg;
+        }
         private void BtnBack_Click(object sender, RoutedEventArgs e) => ViewModel.MovePrevious();
         private void BtnForward_Click(object sender, RoutedEventArgs e) => ViewModel.MoveNext();
         private void BtnUndo_Click(object sender, RoutedEventArgs e) => ViewModel.ExecuteUndo();
@@ -1252,6 +1499,9 @@ namespace ModernImageViewer.Cinematic
             DiscardPreload();
             if (ViewModel.IsPlaying) ViewModel.TogglePlay();
             SyncPlayPauseUI();
+            BtnDirectorToggle.IsChecked = true;
+            ApplyPlaybarToggle(BtnDirectorToggle, true);
+            HideSequenceForKenBurns();
         }
 
         private void DirectorSidebar_PaneClosed(Microsoft.UI.Xaml.Controls.SplitView sender, object args)
@@ -1273,6 +1523,9 @@ namespace ModernImageViewer.Cinematic
                 ViewModel.TogglePlay();
                 _slideStartTime = TimeSpan.Zero;
             }
+            BtnDirectorToggle.IsChecked = false;
+            ApplyPlaybarToggle(BtnDirectorToggle, false);
+            RestoreSequenceAfterKenBurns();
         }
 
         private float ApplyEase(CameraTransform traj, float raw)
@@ -1341,16 +1594,21 @@ namespace ModernImageViewer.Cinematic
             try
             {
                 string settingsFile = System.IO.Path.Combine(AppPaths.LocalDirectory, "WindowBounds.json");
+                bool maximized = _appWindow.Presenter is OverlappedPresenter op && op.State == OverlappedPresenterState.Maximized;
+                var size = _haveRestoreBounds ? _restoreSize : _appWindow.Size;
+                var pos = _haveRestoreBounds ? _restorePos : _appWindow.Position;
 
                 var bounds = new Dictionary<string, int>
                 {
-                    { "Width", _appWindow.Size.Width },
-                    { "Height", _appWindow.Size.Height },
-                    { "X", _appWindow.Position.X },
-                    { "Y", _appWindow.Position.Y }
+                    { "Width", size.Width },
+                    { "Height", size.Height },
+                    { "X", pos.X },
+                    { "Y", pos.Y },
+                    { "Maximized", maximized ? 1 : 0 }
                 };
 
                 System.IO.File.WriteAllText(settingsFile, System.Text.Json.JsonSerializer.Serialize(bounds));
+                _appWindow.Changed -= CinematicAppWindow_Changed;
 
                 _idleTimer?.Stop();
                 _sessionCts?.Cancel();

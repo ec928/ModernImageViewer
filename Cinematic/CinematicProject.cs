@@ -14,6 +14,9 @@ namespace ModernImageViewer.Cinematic.Data
         [JsonPropertyName("ledger")]
         public Dictionary<string, SlideSequenceDefinition> Ledger { get; set; } = new();
 
+        [JsonPropertyName("sequence")]
+        public List<TrackClipRecord> Sequence { get; set; } = new();
+
         public SlideSettings GetEffectiveSettings(string fileName)
         {
             if (Ledger.TryGetValue(fileName, out var overrideDef) && overrideDef.IsUserOverridden)
@@ -124,6 +127,18 @@ namespace ModernImageViewer.Cinematic.Data
 
         [JsonPropertyName("curveOverride")]
         public string? CurveOverride { get; set; }
+    }
+
+    public class TrackClipRecord
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; set; } = string.Empty;
+
+        [JsonPropertyName("filePath")]
+        public string FilePath { get; set; } = string.Empty;
+
+        [JsonPropertyName("isHidden")]
+        public bool IsHidden { get; set; }
     }
 
     public class NormalizedRect

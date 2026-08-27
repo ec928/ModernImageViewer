@@ -7,38 +7,87 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Storage;
 using ModernImageViewer.Cinematic.Data;
 using Microsoft.UI.Dispatching;
 using System.Collections.ObjectModel;
+using System.Linq;
 
 namespace ModernImageViewer.Cinematic.ViewModels
 {
-    public class SlideIndicatorItem : INotifyPropertyChanged
+    public class TrackClip : INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler? PropertyChanged;
-        public int Index { get; set; }
-        private bool _isActive;
-        public bool IsActive 
-        { 
-            get => _isActive; 
-            set 
-            { 
-                if (_isActive != value) 
-                { 
-                    _isActive = value; 
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsActive))); 
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Opacity))); 
-                } 
-            } 
+        public string Id { get; set; } = Guid.NewGuid().ToString("N");
+        public string FilePath { get; set; } = string.Empty;
+        public string FileName => Path.GetFileName(FilePath);
+
+        private BitmapImage? _thumbnail;
+        public BitmapImage? Thumbnail
+        {
+            get => _thumbnail;
+            set { _thumbnail = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Thumbnail))); }
         }
-        public double Opacity => IsActive ? 1.0 : 0.3;
+
+        private bool _isHidden;
+        public bool IsHidden
+        {
+            get => _isHidden;
+            set
+            {
+                if (_isHidden == value) return;
+                _isHidden = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsHidden)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(StatusLabel)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(TileOpacity)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(StatusBrush)));
+            }
+        }
+
+        private bool _isCustom;
+        public bool IsCustom
+        {
+            get => _isCustom;
+            set
+            {
+                if (_isCustom == value) return;
+                _isCustom = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsCustom)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(StatusLabel)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(StatusBrush)));
+            }
+        }
+
+        private bool _isActive;
+        public bool IsActive
+        {
+            get => _isActive;
+            set
+            {
+                if (_isActive == value) return;
+                _isActive = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsActive)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(TileOpacity)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ActiveBorderOpacity)));
+            }
+        }
+
+        public string StatusLabel => IsHidden ? "Hidden" : (IsCustom ? "Custom" : "Auto");
+        public double TileOpacity => IsHidden ? 0.32 : (IsActive ? 1.0 : 0.72);
+        public double ActiveBorderOpacity => IsActive ? 1.0 : 0.0;
+        public SolidColorBrush StatusBrush => new SolidColorBrush(IsHidden
+            ? Windows.UI.Color.FromArgb(200, 80, 80, 80)
+            : IsCustom
+                ? Windows.UI.Color.FromArgb(220, 200, 110, 20)
+                : Windows.UI.Color.FromArgb(200, 50, 90, 140));
     }
 
     public class CinematicViewModel : INotifyPropertyChanged
     {
         private readonly DispatcherQueue _dispatcher;
-        public ObservableCollection<SlideIndicatorItem> SlideIndicators { get; } = new();
+        public ObservableCollection<TrackClip> Track { get; } = new();
         public event PropertyChangedEventHandler? PropertyChanged;
         protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
         {
@@ -65,6 +114,12 @@ namespace ModernImageViewer.Cinematic.ViewModels
         private (string FileName, string Snapshot) _undoSnapshot = (string.Empty, string.Empty);
 
         public List<string> ImagePaths { get; }
+        private readonly List<string> _launchPaths = new();
+        private readonly HashSet<string> _sourceFolders = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".heic", ".heif", ".avif"
+        };
         private int _currentIndex;
         private int? _pendingNextIndex;
         public int CurrentIndex
@@ -75,13 +130,14 @@ namespace ModernImageViewer.Cinematic.ViewModels
                 if (SetProperty(ref _currentIndex, value))
                 {
                     SyncStateForCurrentSlide();
-                    for (int i = 0; i < SlideIndicators.Count; i++)
-                        SlideIndicators[i].IsActive = (i == _currentIndex);
+                    RefreshActiveClip();
                 }
             }
         }
 
-        public string CurrentFileName => ImagePaths.Count > 0 ? Path.GetFileName(ImagePaths[_currentIndex]) : string.Empty;
+        public TrackClip? CurrentClip => Track.Count > 0 && _currentIndex >= 0 && _currentIndex < Track.Count ? Track[_currentIndex] : null;
+        public string CurrentClipId => CurrentClip?.Id ?? string.Empty;
+        public string CurrentFileName => CurrentClip?.FileName ?? string.Empty;
 
         // Events that the View code-behind listens to
         public event Action? TrajectoryRefreshRequested;
@@ -121,11 +177,12 @@ namespace ModernImageViewer.Cinematic.ViewModels
                     if (value)
                     {
                         CurrentDraft.IsUserOverridden = true;
-                        if (!string.IsNullOrEmpty(CurrentFileName)) ActiveProject.Ledger[CurrentFileName] = CurrentDraft;
+                        CurrentDraft.FileName = CurrentFileName;
+                        if (!string.IsNullOrEmpty(CurrentClipId)) ActiveProject.Ledger[CurrentClipId] = CurrentDraft;
                     }
                     else
                     {
-                        if (!string.IsNullOrEmpty(CurrentFileName)) ActiveProject.Ledger.Remove(CurrentFileName);
+                        RemoveLedgerForCurrent();
                         SyncStateForCurrentSlide();
                         RequestRefresh();
                     }
@@ -136,6 +193,7 @@ namespace ModernImageViewer.Cinematic.ViewModels
                     OnPropertyChanged(nameof(CanSaveZoomPan));
                     OnPropertyChanged(nameof(SaveHint));
                     RefreshAllProperties();
+                    RefreshClipStatuses();
                     _ = AutoSaveAsync();
                 }
             }
@@ -264,11 +322,15 @@ namespace ModernImageViewer.Cinematic.ViewModels
         {
             _dispatcher = DispatcherQueue.GetForCurrentThread();
             ImagePaths = imagePaths ?? new List<string>();
-            for (int i = 0; i < ImagePaths.Count; i++)
-                SlideIndicators.Add(new SlideIndicatorItem { Index = i });
-            _currentIndex = Math.Max(0, Math.Min(startIndex, ImagePaths.Count - 1));
-            if (SlideIndicators.Count > 0)
-                SlideIndicators[_currentIndex].IsActive = true;
+            _launchPaths.AddRange(ImagePaths);
+            foreach (var path in ImagePaths)
+            {
+                Track.Add(CreateClip(path));
+                var dir = Path.GetDirectoryName(path);
+                if (!string.IsNullOrEmpty(dir)) _sourceFolders.Add(dir);
+            }
+            _currentIndex = Math.Max(0, Math.Min(startIndex, Track.Count - 1));
+            RefreshActiveClip();
             SyncStateForCurrentSlide();
         }
 
@@ -276,24 +338,36 @@ namespace ModernImageViewer.Cinematic.ViewModels
 
         public int PeekNextIndex()
         {
-            if (_pendingNextIndex is int stored && stored >= 0 && stored < ImagePaths.Count)
+            if (_pendingNextIndex is int stored && stored >= 0 && stored < Track.Count && !Track[stored].IsHidden)
                 return stored;
+
+            var visible = VisibleIndices();
+            if (visible.Count == 0) return CurrentIndex;
+            if (visible.Count == 1) return visible[0];
 
             int next;
             if (IsShuffleEnabled)
             {
-                if (ImagePaths.Count <= 1)
-                    next = CurrentIndex;
-                else
-                {
-                    next = Random.Shared.Next(ImagePaths.Count);
-                    if (next == CurrentIndex)
-                        next = (next + 1) % ImagePaths.Count;
-                }
+                next = visible[Random.Shared.Next(visible.Count)];
+                if (next == CurrentIndex)
+                    next = visible[(visible.IndexOf(next) + 1) % visible.Count];
             }
             else
             {
-                next = (CurrentIndex + 1) % ImagePaths.Count;
+                int pos = visible.IndexOf(CurrentIndex);
+                if (pos >= 0)
+                {
+                    if (pos + 1 < visible.Count) next = visible[pos + 1];
+                    else if (IsLoopEnabled) next = visible[0];
+                    else next = CurrentIndex;
+                }
+                else
+                {
+                    int after = visible.FindIndex(i => i > CurrentIndex);
+                    if (after >= 0) next = visible[after];
+                    else if (IsLoopEnabled) next = visible[0];
+                    else next = visible[^1];
+                }
             }
 
             _pendingNextIndex = next;
@@ -304,53 +378,51 @@ namespace ModernImageViewer.Cinematic.ViewModels
 
         public void MoveNext()
         {
-            if (ImagePaths.Count == 0) return;
-            if (!IsShuffleEnabled && !IsLoopEnabled && CurrentIndex >= ImagePaths.Count - 1) return;
-
-            CurrentIndex = PeekNextIndex();
+            if (Track.Count == 0) return;
+            int next = PeekNextIndex();
+            if (!IsLoopEnabled && next == CurrentIndex && !IsShuffleEnabled)
+                return;
+            CurrentIndex = next;
             _pendingNextIndex = null;
-
-            if (_dispatcher != null && !_dispatcher.HasThreadAccess)
-                _dispatcher.TryEnqueue(() => SlideNavigationRequested?.Invoke());
-            else
-                SlideNavigationRequested?.Invoke();
+            RaiseNav();
         }
 
         public void AdvanceToNextSlideSilently()
         {
-            if (ImagePaths.Count == 0) return;
-
-            if (!IsShuffleEnabled && !IsLoopEnabled && CurrentIndex >= ImagePaths.Count - 1 && _pendingNextIndex == null)
+            if (Track.Count == 0) return;
+            int next = PeekNextIndex();
+            if (!IsLoopEnabled && next == CurrentIndex && !IsShuffleEnabled)
             {
                 IsPlaying = false;
                 return;
             }
-
-            CurrentIndex = PeekNextIndex();
+            CurrentIndex = next;
             _pendingNextIndex = null;
         }
 
         public void MovePrevious()
         {
-            if (ImagePaths.Count == 0) return;
-            CurrentIndex = (CurrentIndex - 1 >= 0) ? CurrentIndex - 1 : ImagePaths.Count - 1;
-            
-            if (_dispatcher != null && !_dispatcher.HasThreadAccess)
-                _dispatcher.TryEnqueue(() => SlideNavigationRequested?.Invoke());
+            if (Track.Count == 0) return;
+            var visible = VisibleIndices();
+            if (visible.Count == 0) return;
+            int pos = visible.IndexOf(CurrentIndex);
+            int prev;
+            if (pos > 0) prev = visible[pos - 1];
+            else if (pos == 0) prev = visible[^1];
             else
-                SlideNavigationRequested?.Invoke();
+            {
+                int before = visible.FindLastIndex(i => i < CurrentIndex);
+                prev = before >= 0 ? visible[before] : visible[^1];
+            }
+            CurrentIndex = prev;
+            RaiseNav();
         }
 
         public void NavigateTo(int index)
         {
-            if (index >= 0 && index < ImagePaths.Count)
-            {
-                CurrentIndex = index;
-                if (_dispatcher != null && !_dispatcher.HasThreadAccess)
-                    _dispatcher.TryEnqueue(() => SlideNavigationRequested?.Invoke());
-                else
-                    SlideNavigationRequested?.Invoke();
-            }
+            if (index < 0 || index >= Track.Count || index == CurrentIndex) return;
+            CurrentIndex = index;
+            RaiseNav();
         }
 
         private void RequestRefresh() 
@@ -375,11 +447,243 @@ namespace ModernImageViewer.Cinematic.ViewModels
             OnPropertyChanged(nameof(DirectionOverride));
         }
 
+        private List<int> VisibleIndices()
+        {
+            var list = new List<int>();
+            for (int i = 0; i < Track.Count; i++)
+                if (!Track[i].IsHidden) list.Add(i);
+            return list;
+        }
+
+        private void RaiseNav()
+        {
+            if (_dispatcher != null && !_dispatcher.HasThreadAccess)
+                _dispatcher.TryEnqueue(() => SlideNavigationRequested?.Invoke());
+            else
+                SlideNavigationRequested?.Invoke();
+        }
+
+        private void RefreshActiveClip()
+        {
+            for (int i = 0; i < Track.Count; i++)
+                Track[i].IsActive = (i == _currentIndex);
+            RefreshClipStatuses();
+            OnPropertyChanged(nameof(HideButtonLabel));
+        }
+
+        public string HideButtonLabel => CurrentClip?.IsHidden == true ? "Unhide" : "Hide";
+
+        public void RefreshClipStatuses()
+        {
+            foreach (var clip in Track)
+            {
+                clip.IsCustom = (ActiveProject.Ledger.TryGetValue(clip.Id, out var byId) && byId.IsUserOverridden)
+                    || (ActiveProject.Ledger.TryGetValue(clip.FileName, out var byName) && byName.IsUserOverridden);
+            }
+        }
+
+        private TrackClip CreateClip(string path, bool hidden = false)
+        {
+            var clip = new TrackClip { FilePath = path, IsHidden = hidden };
+            try
+            {
+                var bmp = new BitmapImage();
+                bmp.DecodePixelWidth = 160;
+                bmp.UriSource = new Uri(path, UriKind.Absolute);
+                clip.Thumbnail = bmp;
+            }
+            catch { }
+            return clip;
+        }
+
+        private void RebuildImagePaths()
+        {
+            ImagePaths.Clear();
+            foreach (var clip in Track)
+                ImagePaths.Add(clip.FilePath);
+        }
+
+        private void PersistSequence()
+        {
+            ActiveProject.Sequence = Track.Select(c => new TrackClipRecord
+            {
+                Id = c.Id,
+                FilePath = c.FilePath,
+                IsHidden = c.IsHidden
+            }).ToList();
+            _ = AutoSaveAsync();
+        }
+
+        private void RemoveLedgerForCurrent()
+        {
+            if (!string.IsNullOrEmpty(CurrentClipId)) ActiveProject.Ledger.Remove(CurrentClipId);
+            if (!string.IsNullOrEmpty(CurrentFileName)) ActiveProject.Ledger.Remove(CurrentFileName);
+        }
+
+        public void HideCurrentClip()
+        {
+            if (CurrentClip == null) return;
+            if (VisibleIndices().Count <= 1 && !CurrentClip.IsHidden) return;
+            CurrentClip.IsHidden = !CurrentClip.IsHidden;
+            OnPropertyChanged(nameof(HideButtonLabel));
+            PersistSequence();
+            _pendingNextIndex = null;
+        }
+
+        public void RemoveCurrentClip()
+        {
+            if (Track.Count <= 1 || CurrentClip == null) return;
+            int removeAt = CurrentIndex;
+            RemoveLedgerForCurrent();
+            Track.RemoveAt(removeAt);
+            RebuildImagePaths();
+            int next = Math.Min(removeAt, Track.Count - 1);
+            var visible = VisibleIndices();
+            if (visible.Count > 0 && (next < 0 || Track[next].IsHidden))
+                next = visible[0];
+            _currentIndex = Math.Max(0, next);
+            OnPropertyChanged(nameof(CurrentIndex));
+            RefreshActiveClip();
+            SyncStateForCurrentSlide();
+            PersistSequence();
+            RaiseNav();
+        }
+
+        public void ResetToLaunchSet()
+        {
+            string? keep = CurrentClip?.FilePath;
+            Track.Clear();
+            foreach (var path in _launchPaths)
+            {
+                if (!File.Exists(path)) continue;
+                Track.Add(CreateClip(path));
+            }
+            RebuildImagePaths();
+            _pendingNextIndex = null;
+            int idx = -1;
+            if (!string.IsNullOrEmpty(keep))
+            {
+                for (int i = 0; i < Track.Count; i++)
+                    if (string.Equals(Track[i].FilePath, keep, StringComparison.OrdinalIgnoreCase)) { idx = i; break; }
+            }
+            _currentIndex = idx >= 0 ? idx : 0;
+            OnPropertyChanged(nameof(CurrentIndex));
+            RefreshActiveClip();
+            SyncStateForCurrentSlide();
+            PersistSequence();
+            SequenceChanged?.Invoke();
+            RaiseNav();
+        }
+
+        public void DuplicateCurrentClip()
+        {
+            if (CurrentClip == null) return;
+            var src = CurrentClip;
+            var copy = CreateClip(src.FilePath, src.IsHidden);
+            if (src.IsCustom && ActiveProject.Ledger.TryGetValue(src.Id, out var def))
+            {
+                var clone = JsonSerializer.Deserialize<SlideSequenceDefinition>(JsonSerializer.Serialize(def)) ?? new SlideSequenceDefinition();
+                clone.FileName = copy.FileName;
+                ActiveProject.Ledger[copy.Id] = clone;
+                copy.IsCustom = true;
+            }
+            else if (src.IsCustom && ActiveProject.Ledger.TryGetValue(src.FileName, out var byName))
+            {
+                var clone = JsonSerializer.Deserialize<SlideSequenceDefinition>(JsonSerializer.Serialize(byName)) ?? new SlideSequenceDefinition();
+                ActiveProject.Ledger[copy.Id] = clone;
+                copy.IsCustom = true;
+            }
+            int insertAt = Math.Min(CurrentIndex + 1, Track.Count);
+            Track.Insert(insertAt, copy);
+            RebuildImagePaths();
+            PersistSequence();
+            NavigateTo(insertAt);
+        }
+
+        public int AddFromFolder(string dir)
+        {
+            if (string.IsNullOrWhiteSpace(dir) || !Directory.Exists(dir)) return 0;
+            _sourceFolders.Add(dir);
+            var existing = new HashSet<string>(Track.Select(c => c.FilePath), StringComparer.OrdinalIgnoreCase);
+            int added = 0;
+            string[] files;
+            try { files = Directory.GetFiles(dir); }
+            catch { return 0; }
+            foreach (var file in files.OrderBy(f => f, StringComparer.OrdinalIgnoreCase))
+            {
+                if (!ImageExtensions.Contains(Path.GetExtension(file))) continue;
+                if (!existing.Add(file)) continue;
+                Track.Add(CreateClip(file));
+                added++;
+            }
+            if (added > 0)
+            {
+                RebuildImagePaths();
+                PersistSequence();
+                SequenceChanged?.Invoke();
+            }
+            return added;
+        }
+
+        public int AddPaths(IEnumerable<string> paths)
+        {
+            var existing = new HashSet<string>(Track.Select(c => c.FilePath), StringComparer.OrdinalIgnoreCase);
+            int added = 0;
+            int insertAt = Math.Min(CurrentIndex + 1, Track.Count);
+            foreach (var path in paths)
+            {
+                if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) continue;
+                if (!ImageExtensions.Contains(Path.GetExtension(path))) continue;
+                if (!existing.Add(path)) continue;
+                var dir = Path.GetDirectoryName(path);
+                if (!string.IsNullOrEmpty(dir)) _sourceFolders.Add(dir);
+                Track.Insert(insertAt, CreateClip(path));
+                insertAt++;
+                added++;
+            }
+            if (added > 0)
+            {
+                RebuildImagePaths();
+                PersistSequence();
+                SequenceChanged?.Invoke();
+            }
+            return added;
+        }
+
+        public void NotifyTrackReordered()
+        {
+            string id = CurrentClipId;
+            RebuildImagePaths();
+            if (!string.IsNullOrEmpty(id))
+            {
+                for (int i = 0; i < Track.Count; i++)
+                {
+                    if (Track[i].Id == id)
+                    {
+                        _currentIndex = i;
+                        OnPropertyChanged(nameof(CurrentIndex));
+                        break;
+                    }
+                }
+            }
+            RefreshActiveClip();
+            PersistSequence();
+            SequenceChanged?.Invoke();
+        }
+
+        public event Action? SequenceChanged;
+
         public void SyncStateForCurrentSlide()
         {
-            if (string.IsNullOrEmpty(CurrentFileName)) return;
+            if (string.IsNullOrEmpty(CurrentFileName) && string.IsNullOrEmpty(CurrentClipId)) return;
 
-            if (ActiveProject.Ledger.TryGetValue(CurrentFileName, out var savedDef))
+            SlideSequenceDefinition? savedDef = null;
+            if (!string.IsNullOrEmpty(CurrentClipId) && ActiveProject.Ledger.TryGetValue(CurrentClipId, out var byId))
+                savedDef = byId;
+            else if (!string.IsNullOrEmpty(CurrentFileName) && ActiveProject.Ledger.TryGetValue(CurrentFileName, out var byName))
+                savedDef = byName;
+
+            if (savedDef != null)
             {
                 CurrentDraft = savedDef;
                 _isOverrideMode = CurrentDraft.IsUserOverridden;
@@ -400,6 +704,7 @@ namespace ModernImageViewer.Cinematic.ViewModels
             OnPropertyChanged(nameof(CanRevertZoomPan));
             OnPropertyChanged(nameof(SaveHint));
             RefreshAllProperties();
+            RefreshClipStatuses();
         }
 
         public void RegisterFocusTarget(NormalizedRect rect)
@@ -416,6 +721,7 @@ namespace ModernImageViewer.Cinematic.ViewModels
             CurrentDraft.StartCrop = start;
             CurrentDraft.EndCrop = end;
             HasUnsavedZoomPan = false;
+            RefreshClipStatuses();
             RequestRefresh();
             _ = AutoSaveAsync();
         }
@@ -431,7 +737,7 @@ namespace ModernImageViewer.Cinematic.ViewModels
             CurrentDraft.EndCrop = null;
             CurrentDraft.FocusTargetRect = null;
             HasUnsavedZoomPan = false;
-            if (!string.IsNullOrEmpty(CurrentFileName)) ActiveProject.Ledger.Remove(CurrentFileName);
+            RemoveLedgerForCurrent();
             CurrentDraft = new SlideSequenceDefinition { FileName = CurrentFileName, IsUserOverridden = false };
             _isOverrideMode = false;
             OnPropertyChanged(nameof(IsOverrideMode));
@@ -441,6 +747,7 @@ namespace ModernImageViewer.Cinematic.ViewModels
             OnPropertyChanged(nameof(CanSaveZoomPan));
             OnPropertyChanged(nameof(SaveHint));
             RefreshAllProperties();
+            RefreshClipStatuses();
             _ = AutoSaveAsync();
         }
 
@@ -457,8 +764,11 @@ namespace ModernImageViewer.Cinematic.ViewModels
 
             CurrentDraft = JsonSerializer.Deserialize<SlideSequenceDefinition>(_undoSnapshot.Snapshot) ?? new SlideSequenceDefinition();
 
-            if (CurrentDraft.IsUserOverridden) ActiveProject.Ledger[CurrentFileName] = CurrentDraft;
-            else ActiveProject.Ledger.Remove(CurrentFileName);
+            if (CurrentDraft.IsUserOverridden)
+            {
+                if (!string.IsNullOrEmpty(CurrentClipId)) ActiveProject.Ledger[CurrentClipId] = CurrentDraft;
+            }
+            else RemoveLedgerForCurrent();
 
             SyncStateForCurrentSlide();
             RequestRefresh();
@@ -467,14 +777,31 @@ namespace ModernImageViewer.Cinematic.ViewModels
 
         public SlideSettings GetCurrentEffectiveSettings()
         {
+            if (!string.IsNullOrEmpty(CurrentClipId) && ActiveProject.Ledger.ContainsKey(CurrentClipId))
+                return ActiveProject.GetEffectiveSettings(CurrentClipId);
             if (string.IsNullOrEmpty(CurrentFileName)) return new SlideSettings();
             return ActiveProject.GetEffectiveSettings(CurrentFileName);
         }
 
         public SlideSettings GetEffectiveSettingsFor(string fileName) => ActiveProject.GetEffectiveSettings(fileName);
 
+        public SlideSettings GetEffectiveSettingsForIndex(int index)
+        {
+            if (index < 0 || index >= Track.Count) return new SlideSettings();
+            var clip = Track[index];
+            if (ActiveProject.Ledger.ContainsKey(clip.Id))
+                return ActiveProject.GetEffectiveSettings(clip.Id);
+            return ActiveProject.GetEffectiveSettings(clip.FileName);
+        }
+
         public async Task ExportProjectAsync(StorageFile file)
         {
+            ActiveProject.Sequence = Track.Select(c => new TrackClipRecord
+            {
+                Id = c.Id,
+                FilePath = c.FilePath,
+                IsHidden = c.IsHidden
+            }).ToList();
             string json = JsonSerializer.Serialize(ActiveProject, new JsonSerializerOptions { WriteIndented = true });
             await Windows.Storage.FileIO.WriteTextAsync(file, json);
         }
@@ -486,6 +813,7 @@ namespace ModernImageViewer.Cinematic.ViewModels
             if (loadedProject != null)
             {
                 ActiveProject = loadedProject;
+                ApplySequenceFromProject();
                 SyncStateForCurrentSlide();
                 RequestRefresh();
             }
@@ -495,6 +823,12 @@ namespace ModernImageViewer.Cinematic.ViewModels
         {
             try
             {
+                ActiveProject.Sequence = Track.Select(c => new TrackClipRecord
+                {
+                    Id = c.Id,
+                    FilePath = c.FilePath,
+                    IsHidden = c.IsHidden
+                }).ToList();
                 string path = Path.Combine(AppPaths.LocalDirectory, "CinematicAutoSave.json");
                 string json = JsonSerializer.Serialize(ActiveProject, new JsonSerializerOptions { WriteIndented = true });
                 await File.WriteAllTextAsync(path, json);
@@ -518,6 +852,26 @@ namespace ModernImageViewer.Cinematic.ViewModels
                 }
             }
             catch (Exception ex) { Debug.WriteLine($"[Cinematic] RestoreAutoSave: {ex.Message}"); }
+        }
+
+        private void ApplySequenceFromProject()
+        {
+            if (ActiveProject.Sequence == null || ActiveProject.Sequence.Count == 0) return;
+            var clips = new List<TrackClip>();
+            foreach (var rec in ActiveProject.Sequence)
+            {
+                if (string.IsNullOrWhiteSpace(rec.FilePath) || !File.Exists(rec.FilePath)) continue;
+                var clip = CreateClip(rec.FilePath, rec.IsHidden);
+                if (!string.IsNullOrEmpty(rec.Id)) clip.Id = rec.Id;
+                clips.Add(clip);
+            }
+            if (clips.Count == 0) return;
+            Track.Clear();
+            foreach (var clip in clips) Track.Add(clip);
+            RebuildImagePaths();
+            if (_currentIndex >= Track.Count) _currentIndex = Math.Max(0, Track.Count - 1);
+            OnPropertyChanged(nameof(CurrentIndex));
+            RefreshActiveClip();
         }
     }
 }
