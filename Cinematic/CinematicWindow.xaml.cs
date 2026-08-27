@@ -344,7 +344,16 @@ namespace ModernImageViewer.Cinematic
             var curve = ViewModel.CurveOverride;
             _primaryFrame.Trajectory.EaseKind = string.IsNullOrEmpty(curve) ? "EaseInOut" : curve;
             _primaryFrame.Trajectory.IsSnapZoom = curve == "SnapZoom";
-            _slideDurationSeconds = _primaryFrame.Trajectory.RecommendedDurationSeconds;
+            double duration = ViewModel.GetCurrentEffectiveSettings().DurationSeconds;
+            if (duration > 0)
+            {
+                _primaryFrame.Trajectory.RecommendedDurationSeconds = duration;
+                _slideDurationSeconds = duration;
+            }
+            else
+            {
+                _slideDurationSeconds = _primaryFrame.Trajectory.RecommendedDurationSeconds;
+            }
         }
 
         private async void UpdateActiveTrajectoriesAsync(bool forceEngineReroll = false)
@@ -1612,6 +1621,9 @@ namespace ModernImageViewer.Cinematic
             if (StatusBanner != null) StatusBanner.Visibility = Visibility.Collapsed;
             if (PreviewBanner != null) PreviewBanner.Visibility = Visibility.Collapsed;
             DiscardPreload();
+            if (ViewModel.HasUnsavedZoomPan)
+                ViewModel.DiscardZoomPanDraft();
+            UpdateActiveTrajectoriesAsync();
             if (wasPreviewing)
             {
                 if (ViewModel.IsPlaying) ViewModel.TogglePlay();

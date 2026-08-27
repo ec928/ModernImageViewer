@@ -245,7 +245,8 @@ namespace ModernImageViewer.Cinematic.ViewModels
             set
             {
                 if (Math.Abs(DurationSeconds - value) < 0.001) return;
-                if (IsOverrideMode) CurrentDraft.DurationSeconds = value; else ActiveProject.GlobalDefaults.DurationSeconds = value;
+                if (!IsOverrideMode) IsOverrideMode = true;
+                CurrentDraft.DurationSeconds = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(DurationLabel));
                 RequestRefresh();
@@ -289,8 +290,7 @@ namespace ModernImageViewer.Cinematic.ViewModels
             set
             {
                 if (BeatCount == value) return;
-                if (!IsOverrideMode) IsOverrideMode = true;
-                CurrentDraft.BeatCount = value;
+                if (IsOverrideMode) CurrentDraft.BeatCount = value; else ActiveProject.GlobalDefaults.BeatCount = value;
                 OnPropertyChanged();
                 RequestRefresh();
                 _ = AutoSaveAsync();
@@ -770,6 +770,12 @@ namespace ModernImageViewer.Cinematic.ViewModels
         public void MarkZoomPanDraft()
         {
             HasUnsavedZoomPan = true;
+        }
+
+        public void DiscardZoomPanDraft()
+        {
+            if (!HasUnsavedZoomPan) return;
+            HasUnsavedZoomPan = false;
         }
 
         public void RevertToAuto()

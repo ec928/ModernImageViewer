@@ -151,7 +151,12 @@ namespace ModernImageViewer.Collage
         [JsonIgnore]
         public bool NeedsContentFill { get; set; }
 
-        public float Rotation { get; set; }
+        private float _rotation;
+        public float Rotation
+        {
+            get => _rotation;
+            set { if (Math.Abs(_rotation - value) > 0.01f) { _rotation = value; OnPropertyChanged(); } }
+        }
 
         [JsonIgnore]
         private CanvasGeometry? _cachedClip;

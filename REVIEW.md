@@ -68,3 +68,4 @@ The Win2D viewer core is real, but GPU lifetime was not reference-counted end-to
 - 2026-08-26: Fix pass landed (see statuses). Remaining: split oversized code-behinds (I3); collage hit-testing still uses unrotated AABB.
 - 2026-08-27: Verification pass. Release build clean (0 warnings, 0 errors); 5/5 tests pass. Found and fixed #28 and #29. Removed a stale 5.7 MB `build.log`. Released as v0.10.0.
 - 2026-08-27: Follow-up pass. Cache display refcount, device-lost GIF eviction, file-activation HF, watcher deferral, cinematic clean Play + crash restore, playback clock. Remaining: I3 god windows; collage AABB hit-test; directed Play pacing/music/Open-show (proposal).
+- 2026-08-27: Ken Burns duration is this-slide (marks Custom); beats stay global on Auto; unsaved zoom/pan is discarded on pane close. Collage dirty tracking survives JSON load; export decodes native with EXIF/sRGB and disposes per cell.

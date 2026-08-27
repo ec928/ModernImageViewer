@@ -585,12 +585,21 @@ namespace ModernImageViewer.Collage
                 var confirm = new ContentDialog
                 {
                     Title = "Unsaved collage",
-                    Content = "Load a project and discard current changes?",
-                    PrimaryButtonText = "Discard and load",
+                    Content = "Save changes before loading another project?",
+                    PrimaryButtonText = "Save",
+                    SecondaryButtonText = "Discard",
                     CloseButtonText = "Cancel",
                     XamlRoot = RootGrid.XamlRoot
                 };
-                if (await confirm.ShowAsync() != ContentDialogResult.Primary) return;
+                var choice = await confirm.ShowAsync();
+                if (choice == ContentDialogResult.Primary)
+                {
+                    if (!await SaveProjectAsync(forcePicker: false)) return;
+                }
+                else if (choice != ContentDialogResult.Secondary)
+                {
+                    return;
+                }
             }
 
             var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
@@ -620,6 +629,7 @@ namespace ModernImageViewer.Collage
                     }
                     catch (Exception ex) { Debug.WriteLine($"[Collage load] {element.ImagePath}: {ex.Message}"); }
                 }
+                _undoStack.Clear();
                 _project = loaded;
                 _project.HasUnsavedChanges = false;
                 CollageCanvasControl.Project = _project;
@@ -673,7 +683,6 @@ namespace ModernImageViewer.Collage
                 if (jpegQuality < 0) return;
             }
 
-            var bitmapsToDispose = new List<CanvasBitmap>();
             try
             {
                 using var renderTarget = new CanvasRenderTarget(
@@ -682,46 +691,29 @@ namespace ModernImageViewer.Collage
                     (float)_project.CanvasHeight,
                     96);
 
-                var elementBitmaps = new Dictionary<CollageElement, CanvasBitmap>();
+                using (var clear = renderTarget.CreateDrawingSession())
+                    clear.Clear(HexToColor(_project.BackgroundColor));
 
                 foreach (var element in _project.Elements)
                 {
-                    if (string.IsNullOrEmpty(element.ImagePath)) continue;
-
-                    if (element.HighResBitmap != null)
+                    CanvasBitmap? exportBitmap = null;
+                    try
                     {
-                        elementBitmaps[element] = element.HighResBitmap;
-                    }
-                    else
-                    {
-                        try
-                        {
-                            var imgFile = await StorageFile.GetFileFromPathAsync(element.ImagePath);
-                            using var imgStream = await imgFile.OpenReadAsync();
-                            var decoder = await BitmapDecoder.CreateAsync(imgStream);
-                            using var softwareBitmap = await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
-                            var bmp = CanvasBitmap.CreateFromSoftwareBitmap(renderTarget.Device, softwareBitmap);
-                            elementBitmaps[element] = bmp;
-                            bitmapsToDispose.Add(bmp);
-                        }
-                        catch (Exception ex) { Debug.WriteLine($"[Collage export] {element.ImagePath}: {ex.Message}"); }
-                    }
-                }
-
-                using (var ds = renderTarget.CreateDrawingSession())
-                {
-                    ds.Clear(HexToColor(_project.BackgroundColor));
-
-                    foreach (var element in _project.Elements)
-                    {
-                        elementBitmaps.TryGetValue(element, out var bitmapToUse);
+                        if (!string.IsNullOrEmpty(element.ImagePath))
+                            exportBitmap = await DecodeNativeForExportAsync(element.ImagePath, renderTarget.Device);
 
                         ImageCacheEntry? entry = null;
                         if (!string.IsNullOrEmpty(element.ImagePath))
                             ImageCache.TryGet(element.ImagePath, out entry);
 
                         var clipGeom = element.GetOrUpdateClipGeometry(renderTarget);
-                        CollageCellRenderer.DrawCell(ds, element, entry, bitmapToUse, 2.2f, clipGeom);
+                        using var ds = renderTarget.CreateDrawingSession();
+                        CollageCellRenderer.DrawCell(ds, element, entry, exportBitmap, 2.2f, clipGeom);
+                    }
+                    catch (Exception ex) { Debug.WriteLine($"[Collage export] {element.ImagePath}: {ex.Message}"); }
+                    finally
+                    {
+                        exportBitmap?.Dispose();
                     }
                 }
 
@@ -737,11 +729,32 @@ namespace ModernImageViewer.Collage
             {
                 await ShowErrorDialog("Export Failed", ex.Message);
             }
-            finally
+        }
+
+        private static async Task<CanvasBitmap?> DecodeNativeForExportAsync(string path, CanvasDevice device)
+        {
+            var imgFile = await StorageFile.GetFileFromPathAsync(path);
+            using var imgStream = await imgFile.OpenReadAsync();
+            var decoder = await BitmapDecoder.CreateAsync(imgStream);
+
+            uint w = decoder.PixelWidth;
+            uint h = decoder.PixelHeight;
+            var transform = new BitmapTransform { InterpolationMode = BitmapInterpolationMode.Fant };
+            if (w > ViewerEngine.HighFidelityMaxEdge || h > ViewerEngine.HighFidelityMaxEdge)
             {
-                foreach (var bmp in bitmapsToDispose)
-                    bmp.Dispose();
+                double ratio = Math.Min((double)ViewerEngine.HighFidelityMaxEdge / w, (double)ViewerEngine.HighFidelityMaxEdge / h);
+                transform.ScaledWidth = (uint)Math.Max(1, w * ratio);
+                transform.ScaledHeight = (uint)Math.Max(1, h * ratio);
             }
+
+            using var softwareBitmap = await decoder.GetSoftwareBitmapAsync(
+                BitmapPixelFormat.Bgra8,
+                BitmapAlphaMode.Premultiplied,
+                transform,
+                ExifOrientationMode.RespectExifOrientation,
+                ColorManagementMode.ColorManageToSRgb);
+            if (softwareBitmap == null) return null;
+            return CanvasBitmap.CreateFromSoftwareBitmap(device, softwareBitmap);
         }
 
         private async Task<int> ShowJpegQualityDialogAsync()
@@ -880,6 +893,7 @@ namespace ModernImageViewer.Collage
                 _project = firstNode.Value;
                 _undoStack.RemoveFirst();
                 CollageCanvasControl.Project = _project;
+                UpdateProjectUI();
                 CollageCanvasControl.Invalidate();
             }
         }

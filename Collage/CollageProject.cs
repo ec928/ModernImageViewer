@@ -54,7 +54,19 @@ namespace ModernImageViewer.Collage
             set { if (_lastModified != value) { _lastModified = value; OnPropertyChanged(); } }
         }
 
-        public ObservableCollection<CollageElement> Elements { get; set; } = new();
+        private ObservableCollection<CollageElement> _elements = new();
+
+        public ObservableCollection<CollageElement> Elements
+        {
+            get => _elements;
+            set
+            {
+                if (ReferenceEquals(_elements, value)) return;
+                UnhookElements(_elements);
+                _elements = value ?? new ObservableCollection<CollageElement>();
+                HookElements(_elements);
+            }
+        }
 
         [JsonIgnore]
         public bool HasUnsavedChanges { get; set; } = false;
@@ -62,16 +74,63 @@ namespace ModernImageViewer.Collage
         public event PropertyChangedEventHandler? PropertyChanged;
 
         protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+            if (propertyName is nameof(Name) or nameof(BackgroundColor) or nameof(DefaultCellSpacing)
+                or nameof(CanvasWidth) or nameof(CanvasHeight))
+            {
+                MarkDirty();
+            }
+        }
+
+        public void MarkDirty()
+        {
+            HasUnsavedChanges = true;
+            _lastModified = DateTime.Now;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(LastModified)));
+        }
 
         public CollageProject()
         {
-            Elements.CollectionChanged += (s, e) =>
-            {
-                HasUnsavedChanges = true;
-                LastModified = DateTime.Now;
-            };
+            HookElements(_elements);
         }
+
+        private void HookElements(ObservableCollection<CollageElement> elements)
+        {
+            elements.CollectionChanged += OnElementsChanged;
+            foreach (var el in elements)
+            {
+                el.PropertyChanged -= OnElementPropertyChanged;
+                el.PropertyChanged += OnElementPropertyChanged;
+            }
+        }
+
+        private void UnhookElements(ObservableCollection<CollageElement> elements)
+        {
+            elements.CollectionChanged -= OnElementsChanged;
+            foreach (var el in elements)
+                el.PropertyChanged -= OnElementPropertyChanged;
+        }
+
+        private void OnElementsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        {
+            if (e.OldItems != null)
+            {
+                foreach (CollageElement el in e.OldItems)
+                    el.PropertyChanged -= OnElementPropertyChanged;
+            }
+            if (e.NewItems != null)
+            {
+                foreach (CollageElement el in e.NewItems)
+                {
+                    el.PropertyChanged -= OnElementPropertyChanged;
+                    el.PropertyChanged += OnElementPropertyChanged;
+                }
+            }
+            MarkDirty();
+        }
+
+        private void OnElementPropertyChanged(object? sender, PropertyChangedEventArgs e) => MarkDirty();
 
         public void ApplyDefaultTwoCellTemplate()
         {
@@ -82,7 +141,6 @@ namespace ModernImageViewer.Collage
 
             Elements.Add(new CollageElement { Layout = new Rect(gap, gap, (w - gap * 3) / 2, h - gap * 2) });
             Elements.Add(new CollageElement { Layout = new Rect(gap * 2 + (w - gap * 3) / 2, gap, (w - gap * 3) / 2, h - gap * 2) });
-            HasUnsavedChanges = true;
         }
 
         public Rect GetContentBounds()
@@ -543,13 +601,14 @@ namespace ModernImageViewer.Collage
         {
             var clone = new CollageProject
             {
-                Name = this.Name + " (Copy)",
+                Name = this.Name,
                 BackgroundColor = this.BackgroundColor,
                 DefaultCellSpacing = this.DefaultCellSpacing,
                 CanvasWidth = this.CanvasWidth,
                 CanvasHeight = this.CanvasHeight
             };
             foreach (var el in this.Elements) clone.Elements.Add(el.Clone());
+            clone.HasUnsavedChanges = false;
             return clone;
         }
 
@@ -591,6 +650,7 @@ namespace ModernImageViewer.Collage
                 default:
                     return;
             }
+            MarkDirty();
         }
     }
 }
