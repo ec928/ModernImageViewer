@@ -21,6 +21,7 @@ namespace ModernImageViewer
         private int _pendingTargetIndex = 0;
         private FileSystemWatcher? _folderWatcher;
         private Microsoft.UI.Dispatching.DispatcherQueueTimer? _folderWatchTimer;
+        private bool _folderWatchDirty;
 
         private bool HasSupportedImages(string folderPath)
         {
@@ -91,6 +92,7 @@ namespace ModernImageViewer
                 _ = targetItem.LoadExifAsync(_exifCts.Token);
 
                 ManageCache(_currentIndex, 1);
+                if (!_isHighFidelityActive) _hfPromotionTimer?.Start();
             }
             else
             {
@@ -106,7 +108,11 @@ namespace ModernImageViewer
             if (string.IsNullOrEmpty(folderPath) || !Directory.Exists(folderPath)) return;
 
             int myScanId = ++_currentScanId;
+            _isScanning = false;
             _currentDirectory = folderPath;
+            Images.Clear();
+            if (LoadingRing != null) LoadingRing.IsActive = false;
+            if (LoadingOverlay != null) LoadingOverlay.Visibility = Visibility.Collapsed;
 
             UpdateBreadcrumbs(folderPath);
 
@@ -296,6 +302,7 @@ namespace ModernImageViewer
                     _isScanning = false;
                     if (LoadingRing != null) LoadingRing.IsActive = false;
                     if (LoadingOverlay != null) LoadingOverlay.Visibility = Visibility.Collapsed;
+                    if (_folderWatchDirty) ScheduleFolderRefresh();
                 }
             }
         }
@@ -325,13 +332,22 @@ namespace ModernImageViewer
             }
         }
 
-        private void OnFolderWatchRenamed(object sender, RenamedEventArgs e) => OnFolderWatchEvent(sender, e);
+        private void OnFolderWatchRenamed(object sender, RenamedEventArgs e)
+        {
+            if (IsSupportedWatchName(e.OldName) || IsSupportedWatchName(e.Name) || IsSupportedWatchName(e.FullPath))
+                ScheduleFolderRefresh();
+        }
 
         private void OnFolderWatchEvent(object sender, FileSystemEventArgs e)
         {
-            string ext = Path.GetExtension(e.Name ?? e.FullPath);
-            if (!SupportedExtensions.Contains(ext)) return;
+            if (!IsSupportedWatchName(e.Name ?? e.FullPath)) return;
             ScheduleFolderRefresh();
+        }
+
+        private static bool IsSupportedWatchName(string? name)
+        {
+            if (string.IsNullOrEmpty(name)) return false;
+            return SupportedExtensions.Contains(Path.GetExtension(name));
         }
 
         private void ScheduleFolderRefresh()
@@ -346,8 +362,12 @@ namespace ModernImageViewer
                     _folderWatchTimer.Tick += (s, args) =>
                     {
                         _folderWatchTimer.Stop();
-                        if (_isScanning) return;
-                        if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible) return;
+                        if (_isScanning || (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible))
+                        {
+                            _folderWatchDirty = true;
+                            return;
+                        }
+                        _folderWatchDirty = false;
                         if (!string.IsNullOrEmpty(_currentDirectory))
                             _ = ScanFolder(_currentDirectory);
                     };
@@ -355,6 +375,13 @@ namespace ModernImageViewer
                 _folderWatchTimer.Stop();
                 _folderWatchTimer.Start();
             });
+        }
+
+        internal void FlushDeferredFolderRefresh()
+        {
+            if (!_folderWatchDirty) return;
+            if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible) return;
+            ScheduleFolderRefresh();
         }
 
         internal void StopFolderWatcher()

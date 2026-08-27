@@ -90,7 +90,7 @@ namespace ModernImageViewer.Cinematic.Services
                         BitmapPixelFormat.Bgra8,
                         BitmapAlphaMode.Ignore,
                         proxyTransform,
-                        ExifOrientationMode.IgnoreExifOrientation,
+                        ExifOrientationMode.RespectExifOrientation,
                         ColorManagementMode.DoNotColorManage);
 
                     token.ThrowIfCancellationRequested();

@@ -223,7 +223,9 @@ namespace ModernImageViewer
                 MainWindow.Instance.GammaApplied -= OnHostGammaChanged;
             MainWindow.Instance?.UnregisterDetachedWindow(_imageItem.Path);
 
+            ViewerControl.PrepareForNewImage(null);
             _localCacheEntry?.Release();
+            _localCacheEntry = null;
 
             ViewerControl.CloseRequested -= ViewerControl_CloseRequested;
             ViewerControl.ToggleFullscreenRequested -= ViewerControl_ToggleFullscreenRequested;
@@ -253,14 +255,13 @@ namespace ModernImageViewer
 
             try
             {
+                var sharedDevice = CanvasDevice.GetSharedDevice();
                 ImageCache.TryGet(_imageItem.Path, out var sharedEntry);
-                if (sharedEntry != null && (sharedEntry.GpuBitmap != null || sharedEntry.AnimationFrames != null) && sharedEntry.IsHighFidelity)
+                if (sharedEntry != null && sharedEntry.IsHighFidelity && sharedEntry.HasDecodableContent
+                    && (sharedDevice == null || sharedEntry.DeviceMatches(sharedDevice)))
                 {
-                    // Checkout a reference from the global cache
-                    sharedEntry.AddRef();
                     _localCacheEntry?.Release();
-                    _localCacheEntry = sharedEntry;
-
+                    _localCacheEntry = null;
                     ViewerControl.InjectImage(sharedEntry, false);
                     ApplyInitialZoomOrFit();
                     return;

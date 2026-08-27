@@ -231,22 +231,31 @@ namespace ModernImageViewer.Collage
         {
             if (string.IsNullOrEmpty(path)) return;
 
+            ImageCacheEntry? entry = null;
             try
             {
-                var entry = await ViewerEngine.DecodeFastPreviewAsync(path);
-                if (entry?.Bitmap != null && CollageCanvasControl.ReadyToDraw)
+                entry = await ViewerEngine.DecodeFastPreviewAsync(path);
+                if (entry?.Bitmap == null || !CollageCanvasControl.ReadyToDraw)
                 {
-                    var localGpuBitmap = CanvasBitmap.CreateFromSoftwareBitmap(CollageCanvasControl.Device, entry.Bitmap);
-                    SetLocalGpu(path, localGpuBitmap);
+                    entry?.Release();
+                    return;
+                }
 
-                    entry.Bitmap.Dispose();
-                    entry.Bitmap = null;
+                var localGpuBitmap = CanvasBitmap.CreateFromSoftwareBitmap(CollageCanvasControl.Device, entry.Bitmap);
+                SetLocalGpu(path, localGpuBitmap);
+
+                if (ImageCache.HasUsableDecode(path))
+                    entry.Release();
+                else
                     ImageCache.Publish(path, entry);
 
-                    Invalidate();
-                }
+                Invalidate();
             }
-            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Collage reload] {path}: {ex.Message}"); }
+            catch (Exception ex)
+            {
+                entry?.Release();
+                System.Diagnostics.Debug.WriteLine($"[Collage reload] {path}: {ex.Message}");
+            }
             finally
             {
                 _inflightLoads.Remove(path);
@@ -289,9 +298,11 @@ namespace ModernImageViewer.Collage
                     ColorManagementMode.ColorManageToSRgb);
 
                 if (softwareBitmap == null) return;
+                if (!CollageCanvasControl.ReadyToDraw || _project?.Elements.Contains(element) != true)
+                    return;
                 var highResBitmap = CanvasBitmap.CreateFromSoftwareBitmap(CollageCanvasControl.Device, softwareBitmap);
 
-                if (_project?.Elements.Contains(element) == true && NeedsHighRes(element))
+                if (NeedsHighRes(element))
                 {
                     element.HighResBitmap?.Dispose();
                     element.HighResBitmap = highResBitmap;
@@ -819,7 +830,7 @@ namespace ModernImageViewer.Collage
             if (_project == null) return null;
 
             ImageCacheEntry? entry = null;
-            if (!ImageCache.TryGet(path, out entry))
+            if (!ImageCache.HasUsableDecode(path))
             {
                 try
                 {
@@ -828,13 +839,18 @@ namespace ModernImageViewer.Collage
                     {
                         var localGpuBitmap = CanvasBitmap.CreateFromSoftwareBitmap(CollageCanvasControl.Device, entry.Bitmap);
                         SetLocalGpu(path, localGpuBitmap);
-
-                        entry.Bitmap.Dispose();
-                        entry.Bitmap = null;
                         ImageCache.Publish(path, entry);
                     }
+                    else
+                    {
+                        entry?.Release();
+                    }
                 }
-                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Collage drop] {path}: {ex.Message}"); }
+                catch (Exception ex)
+                {
+                    entry?.Release();
+                    System.Diagnostics.Debug.WriteLine($"[Collage drop] {path}: {ex.Message}");
+                }
             }
 
             var newCell = new CollageElement

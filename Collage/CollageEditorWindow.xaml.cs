@@ -611,9 +611,12 @@ namespace ModernImageViewer.Collage
                     if (string.IsNullOrEmpty(element.ImagePath)) continue;
                     try
                     {
+                        if (ImageCache.HasUsableDecode(element.ImagePath)) continue;
                         var entry = await ViewerEngine.DecodeFastPreviewAsync(element.ImagePath);
                         if (entry?.Bitmap != null)
                             ImageCache.Publish(element.ImagePath, entry);
+                        else
+                            entry?.Release();
                     }
                     catch (Exception ex) { Debug.WriteLine($"[Collage load] {element.ImagePath}: {ex.Message}"); }
                 }

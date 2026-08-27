@@ -74,6 +74,7 @@ namespace ModernImageViewer.Cinematic
 
         private Queue<CameraTransform> _currentSequence = new();
         private Queue<CameraTransform> _nextSequence = new();
+        private readonly TaskCompletionSource<bool> _restoreGate = new();
 
         private class SlideFrame : IDisposable
         {
@@ -122,13 +123,20 @@ namespace ModernImageViewer.Cinematic
             ViewModel = new CinematicViewModel(imagePaths, startIndex);
             ViewModel.TrajectoryRefreshRequested += () => UpdateActiveTrajectoriesAsync();
             ViewModel.SlideNavigationRequested += () => _ = ManualNavigateAsync();
-            ViewModel.SequenceChanged += () => DiscardPreload();
+            ViewModel.SequenceChanged += () =>
+            {
+                ViewModel.ClearPendingNextIndex();
+                DiscardPreload();
+            };
             ViewModel.PropertyChanged += (_, e) =>
             {
                 if (e.PropertyName == nameof(ViewModel.CurrentIndex))
                     DispatcherQueue.TryEnqueue(ScrollSequenceToCurrent);
             };
-            _ = ViewModel.RestoreAutoSaveAsync();
+            bool otherShowOpen = (MainWindow.Instance?.CinematicWindowCount ?? 0) > 0;
+            if (otherShowOpen || !CinematicViewModel.CrashAutoSaveExists())
+                _restoreGate.TrySetResult(true);
+            RootGrid.Loaded += CinematicRoot_Loaded;
 
             var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
             var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
@@ -153,6 +161,36 @@ namespace ModernImageViewer.Cinematic
             CompositionTarget.Rendering += CompositionTarget_Rendering;
             this.Closed += CinematicWindow_Closed;
             this.Activate();
+        }
+
+        private async void CinematicRoot_Loaded(object sender, RoutedEventArgs e)
+        {
+            RootGrid.Loaded -= CinematicRoot_Loaded;
+            try
+            {
+                bool otherShowOpen = (MainWindow.Instance?.CinematicWindowCount ?? 1) > 1;
+                if (!otherShowOpen && CinematicViewModel.CrashAutoSaveExists() && RootGrid.XamlRoot != null)
+                {
+                    var dialog = new ContentDialog
+                    {
+                        Title = "Restore unsaved show?",
+                        Content = "A previous cinematic session did not close cleanly. Restore it, or start this Play from the stills you just opened?",
+                        PrimaryButtonText = "Restore",
+                        SecondaryButtonText = "Start fresh",
+                        XamlRoot = RootGrid.XamlRoot
+                    };
+                    var result = await dialog.ShowAsync();
+                    if (result == ContentDialogResult.Primary)
+                        await ViewModel.RestoreAutoSaveAsync();
+                    else
+                        await ViewModel.DiscardAutoSaveAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Cinematic] Restore prompt: {ex.Message}");
+            }
+            _restoreGate.TrySetResult(true);
         }
 
         private void RestoreCinematicWindowPlacement(OverlappedPresenter presenter)
@@ -336,22 +374,23 @@ namespace ModernImageViewer.Cinematic
 
             int currentId = ++_trajectoryUpdateId;
             await Task.Delay(50);
-            if (currentId != _trajectoryUpdateId) return;
+            if (currentId != _trajectoryUpdateId || _primaryFrame == null) return;
 
             _mathCts?.Cancel();
             _mathCts = new CancellationTokenSource();
             var token = _mathCts.Token;
             var request = new PlaybackRequest(SlideshowCanvas.Size, settings);
+            var intel = _primaryFrame.Intelligence;
 
             try
             {
-                var newSequence = await Task.Run(() => _director.GetSequence(_primaryFrame.Intelligence, request.Bounds, request.Settings, token), token);
+                var newSequence = await Task.Run(() => _director.GetSequence(intel, request.Bounds, request.Settings, token), token);
 
-                if (!token.IsCancellationRequested && newSequence.Count > 0)
+                if (!token.IsCancellationRequested && newSequence.Count > 0 && _primaryFrame != null)
                 {
                     _currentSequence = newSequence;
                     var newTrajectory = _currentSequence.Dequeue();
-                    _primaryFrame!.Trajectory = newTrajectory;
+                    _primaryFrame.Trajectory = newTrajectory;
                     _slideDurationSeconds = _primaryFrame.Trajectory.RecommendedDurationSeconds;
                     if (!customCrops)
                         SnapshotEngineCrops(_primaryFrame, newTrajectory, request.Bounds);
@@ -395,10 +434,18 @@ namespace ModernImageViewer.Cinematic
                     _secondaryFrame = null;
                 }
 
-                var newFrame = await DecodeAndMarshalImageAsync(ViewModel.CurrentIndex, token);
+                int loadIndex = ViewModel.CurrentIndex;
+                var newFrame = await DecodeAndMarshalImageAsync(loadIndex, token);
                 if (newFrame == null || token.IsCancellationRequested)
                 {
                     if (newFrame != null) DispatcherQueue.TryEnqueue(() => newFrame.Dispose());
+                    if (newFrame == null && !token.IsCancellationRequested)
+                    {
+                        ViewModel.MarkClipFailed(loadIndex);
+                        int skip = ViewModel.PeekNextIndex();
+                        if (skip != loadIndex)
+                            DispatcherQueue.TryEnqueue(() => ViewModel.NavigateTo(skip));
+                    }
                     return;
                 }
 
@@ -441,8 +488,9 @@ namespace ModernImageViewer.Cinematic
             var frame = await DecodeAndMarshalImageAsync(indexToLoad, token);
             if (frame == null || token.IsCancellationRequested)
             {
-                // Marshaled Thread Affinity for unmanaged GPU resource disposal
                 if (frame != null) DispatcherQueue.TryEnqueue(() => frame.Dispose());
+                if (frame == null && !token.IsCancellationRequested)
+                    ViewModel.MarkClipFailed(indexToLoad);
                 _isPreloading = false;
                 return;
             }
@@ -469,6 +517,9 @@ namespace ModernImageViewer.Cinematic
 
         private async Task InitialLoadAsync()
         {
+            await _restoreGate.Task;
+            if (_canvasDevice == null) return;
+
             _sessionCts?.Cancel();
             _sessionCts = new CancellationTokenSource();
             var token = _sessionCts.Token;
@@ -521,20 +572,32 @@ namespace ModernImageViewer.Cinematic
                         newFrame = new SlideFrame(gpuBitmap, result.Intel);
                     }
                 }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Cinematic] GPU upload: {ex.Message}");
+                }
                 finally
                 {
                     result.Bitmap.Dispose();
-                    tcs.SetResult(true);
+                    tcs.TrySetResult(true);
                 }
             });
 
             if (!isEnqueued)
             {
                 result.Bitmap.Dispose();
-                tcs.SetResult(false);
+                tcs.TrySetResult(false);
             }
 
-            await tcs.Task;
+            using (token.Register(() => tcs.TrySetResult(false)))
+                await tcs.Task;
+
+            if (token.IsCancellationRequested && newFrame != null)
+            {
+                var leak = newFrame;
+                newFrame = null;
+                DispatcherQueue.TryEnqueue(() => leak.Dispose());
+            }
             return newFrame;
         }
 
@@ -625,7 +688,6 @@ namespace ModernImageViewer.Cinematic
                 }
                 else if (_currentSequence.Count > 0)
                 {
-                    // Non-null: guarded by the _primaryFrame == null early-return at the top of this method.
                     _primaryFrame!.Trajectory = _currentSequence.Dequeue();
                     _slideDurationSeconds = _primaryFrame.Trajectory.RecommendedDurationSeconds;
                     _slideStartTime = totalTime;
@@ -634,7 +696,26 @@ namespace ModernImageViewer.Cinematic
                 }
                 else
                 {
-                    progress = 1.0;
+                    int next = ViewModel.PeekNextIndex();
+                    if (next == ViewModel.CurrentIndex)
+                    {
+                        if (!ViewModel.IsLoopEnabled)
+                        {
+                            ViewModel.IsPlaying = false;
+                            SyncPlayPauseUI();
+                            progress = 1.0;
+                        }
+                        else
+                        {
+                            _slideStartTime = totalTime;
+                            elapsedSeconds = 0;
+                            progress = 0;
+                        }
+                    }
+                    else
+                    {
+                        progress = 1.0;
+                    }
                 }
             }
 
@@ -1490,7 +1571,25 @@ namespace ModernImageViewer.Cinematic
             openPicker.FileTypeFilter.Add(".json");
 
             StorageFile file = await openPicker.PickSingleFileAsync();
-            if (file != null) await ViewModel.LoadProjectAsync(file);
+            if (file == null) return;
+            var (applied, loaded, missing) = await ViewModel.LoadProjectAsync(file);
+            if (!applied)
+            {
+                await ViewerEngine.ShowMessageAsync(RootGrid.XamlRoot,
+                    "Could not open show",
+                    missing > 0
+                        ? "None of the stills in that file are still on disk."
+                        : "The file could not be read.");
+                return;
+            }
+            if (missing > 0)
+            {
+                await ViewerEngine.ShowMessageAsync(RootGrid.XamlRoot,
+                    "Some stills are missing",
+                    $"{missing} file(s) were skipped. Playing {loaded} still(s) that are still on disk.");
+            }
+            DiscardPreload();
+            _ = ManualNavigateAsync();
         }
 
         private void DirectorSidebar_PaneOpening(Microsoft.UI.Xaml.Controls.SplitView sender, object args)
@@ -1613,10 +1712,17 @@ namespace ModernImageViewer.Cinematic
                 _idleTimer?.Stop();
                 _sessionCts?.Cancel();
                 _mathCts?.Cancel();
+                _restoreGate.TrySetResult(true);
                 CompositionTarget.Rendering -= CompositionTarget_Rendering;
                 if (SlideshowCanvas != null) SlideshowCanvas.RemoveFromVisualTree();
                 _primaryFrame?.Dispose();
                 _secondaryFrame?.Dispose();
+                _primaryFrame = null;
+                _secondaryFrame = null;
+                _canvasDevice = null;
+
+                if (MainWindow.Instance == null || MainWindow.Instance.CinematicWindowCount <= 1)
+                    _ = ViewModel.DiscardAutoSaveAsync();
             }
             catch { }
         }

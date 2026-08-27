@@ -54,9 +54,17 @@ The Win2D viewer core is real, but GPU lifetime was not reference-counted end-to
 | I6 | fixed | Relative pubxml; `publish.bat` remains the supported ship path |
 | I7 | fixed | README notes collage/cinematic beta and HEIC/AVIF codecs |
 | I8 | fixed | Debounced `FileSystemWatcher` refreshes the grid when the preview is closed |
+| I9 | fixed | Displayed cache entries `AddRef` in `InjectImage`; collage does not Publish over a live decode |
+| I10 | fixed | Device-lost clears the shared cache (GIF frames included) before re-decode |
+| I11 | fixed | File-activation HF timer restarts after the scan sets `_currentIndex` |
+| I12 | fixed | Prefetch `finally` only removes its own CTS |
+| I13 | fixed | Folder watcher defers refresh while preview/scan is busy; rename checks old and new extension |
+| I14 | fixed | Cinematic Play is clean; autosave is crash restore (prompt + atomic write); New clears ledger |
+| I15 | fixed | Cinematic pending next is clip id; loop/stop at end; failed files skipped; windows rooted |
 
 ## Log
 
 - 2026-08-26: Review filed. Fix pass started.
 - 2026-08-26: Fix pass landed (see statuses). Remaining: split oversized code-behinds (I3); collage hit-testing still uses unrotated AABB.
 - 2026-08-27: Verification pass. Release build clean (0 warnings, 0 errors); 5/5 tests pass. Found and fixed #28 and #29. Removed a stale 5.7 MB `build.log`. Released as v0.10.0.
+- 2026-08-27: Follow-up pass. Cache display refcount, device-lost GIF eviction, file-activation HF, watcher deferral, cinematic clean Play + crash restore, playback clock. Remaining: I3 god windows; collage AABB hit-test; directed Play pacing/music/Open-show (proposal).

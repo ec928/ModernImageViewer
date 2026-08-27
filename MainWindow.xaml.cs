@@ -164,7 +164,7 @@ namespace ModernImageViewer
 
                         if (token.IsCancellationRequested || promoteId != _currentImageLoadId || hfEntry == null)
                         {
-                            hfEntry?.Dispose();
+                            hfEntry?.Release();
                             return;
                         }
 
@@ -172,7 +172,7 @@ namespace ModernImageViewer
 
                         if (!success || token.IsCancellationRequested || promoteId != _currentImageLoadId)
                         {
-                            hfEntry.Dispose();
+                            hfEntry.Release();
                             return;
                         }
 
@@ -181,14 +181,12 @@ namespace ModernImageViewer
                         _rawGpuBitmap = hfEntry.GpuBitmap;
                         _rawGpuProfile = hfEntry.Profile;
 
-                        if (hfEntry != null) ImageCache.Publish(path, hfEntry);
+                        if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible)
+                            ViewerControl.InjectImage(hfEntry, false);
+
+                        ImageCache.Publish(path, hfEntry);
 
                         _isHighFidelityActive = true;
-
-                        if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible && hfEntry != null)
-                        {
-                            ViewerControl.InjectImage(hfEntry, false);
-                        }
                     }
                 }
                 catch (Exception ex)
@@ -415,6 +413,17 @@ namespace ModernImageViewer
 
 
         private CollageEditorWindow? _collageEditorWindow;
+        private readonly List<ModernImageViewer.Cinematic.CinematicWindow> _cinematicWindows = new();
+
+        public int CinematicWindowCount => _cinematicWindows.Count;
+
+        public void OpenCinematic(List<string> paths, int startIndex)
+        {
+            if (paths == null || paths.Count == 0) return;
+            var window = new ModernImageViewer.Cinematic.CinematicWindow(paths, startIndex);
+            _cinematicWindows.Add(window);
+            window.Closed += (_, _) => _cinematicWindows.Remove(window);
+        }
 
         private async void OpenDirector_Click(object sender, RoutedEventArgs e)
         {
@@ -541,8 +550,7 @@ namespace ModernImageViewer
         private void PlayCinematicFolder_Click(object sender, RoutedEventArgs e)
         {
             if (Images.Count == 0) return;
-            var currentFiles = Images.Select(img => img.Path).ToList();
-            var cinematicWindow = new ModernImageViewer.Cinematic.CinematicWindow(currentFiles, 0);
+            OpenCinematic(Images.Select(img => img.Path).ToList(), 0);
         }
 
         private void ImageGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -563,8 +571,7 @@ namespace ModernImageViewer
         {
             var selectedItems = ImageGrid.SelectedItems.OfType<ImageItem>().ToList();
             if (selectedItems.Count == 0) return;
-            var paths = selectedItems.Select(i => i.Path).ToList();
-            var cinematicWindow = new ModernImageViewer.Cinematic.CinematicWindow(paths, 0);
+            OpenCinematic(selectedItems.Select(i => i.Path).ToList(), 0);
             ImageGrid.SelectedItems.Clear();
         }
 

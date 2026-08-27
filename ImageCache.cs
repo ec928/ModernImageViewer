@@ -34,25 +34,35 @@ namespace ModernImageViewer
         /// Releases any different previous occupant. Will not replace a high-fidelity
         /// entry with a preview — the incoming entry is Released instead.
         /// </summary>
+        public static bool HasUsableDecode(string path) =>
+            TryGet(path, out var existing) && existing != null && existing.HasDecodableContent;
+
         public static void Publish(string path, ImageCacheEntry entry)
         {
             if (string.IsNullOrEmpty(path) || entry == null) return;
 
-            if (Entries.TryGetValue(path, out var existing))
+            while (true)
             {
-                if (ReferenceEquals(existing, entry)) return;
-
-                if (existing.IsHighFidelity && !entry.IsHighFidelity)
+                if (Entries.TryGetValue(path, out var existing))
                 {
-                    entry.Release();
-                    return;
+                    if (ReferenceEquals(existing, entry)) return;
+
+                    if (existing.IsHighFidelity && !entry.IsHighFidelity)
+                    {
+                        entry.Release();
+                        return;
+                    }
+
+                    if (!Entries.TryRemove(path, out var removed))
+                        continue;
+
+                    if (removed != null && !ReferenceEquals(removed, entry))
+                        removed.Release();
                 }
 
-                if (Entries.TryRemove(path, out var removed) && removed != null && !ReferenceEquals(removed, entry))
-                    removed.Release();
+                if (Entries.TryAdd(path, entry))
+                    return;
             }
-
-            Entries[path] = entry;
         }
 
         public static void Evict(string path)

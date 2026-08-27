@@ -101,6 +101,23 @@ namespace ModernImageViewer
         public double NativeHeight { get; set; }
         public bool IsHighFidelity { get; set; } = false;
 
+        public bool HasDecodableContent =>
+            GpuBitmap != null || Bitmap != null || AnimationFrames != null;
+
+        public bool DeviceMatches(CanvasDevice device)
+        {
+            if (GpuBitmap != null) return GpuBitmap.Device == device;
+            if (AnimationFrames != null)
+            {
+                foreach (var frame in AnimationFrames)
+                {
+                    if (frame?.GpuBitmap != null)
+                        return frame.GpuBitmap.Device == device;
+                }
+            }
+            return true;
+        }
+
         public void AddRef()
         {
             Interlocked.Increment(ref _refCount);
@@ -349,7 +366,7 @@ namespace ModernImageViewer
                     Debug.WriteLine($"[DecodeHF] {path}: {ex.Message}");
                     return null;
                 }
-            });
+            }, token);
         }
 
         public static CanvasBitmap? CreateGpuBitmap(SoftwareBitmap softwareBitmap)

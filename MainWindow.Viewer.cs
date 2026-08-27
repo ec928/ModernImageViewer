@@ -166,7 +166,7 @@ namespace ModernImageViewer
 
                 if (isCached && cachedEntry != null)
                 {
-                    if (cachedEntry.GpuBitmap != null && cachedEntry.GpuBitmap.Device != _canvasDevice)
+                    if (_canvasDevice != null && !cachedEntry.DeviceMatches(_canvasDevice))
                     {
                         ImageCache.Evict(currentItem.Path);
                         cachedEntry = null;
@@ -349,7 +349,11 @@ namespace ModernImageViewer
                     catch (Exception ex) { Debug.WriteLine($"[Prefetch] {path}: {ex.Message}"); }
                     finally
                     {
-                        this.DispatcherQueue.TryEnqueue(() => _activeDecodes.Remove(path));
+                        this.DispatcherQueue.TryEnqueue(() =>
+                        {
+                            if (_activeDecodes.TryGetValue(path, out var current) && ReferenceEquals(current, cts))
+                                _activeDecodes.Remove(path);
+                        });
                     }
                 }, token);
             }
@@ -439,18 +443,16 @@ namespace ModernImageViewer
 
                     if (HasSupportedImages(targetFolder))
                     {
-                        _ = ScanFolder(targetFolder).ContinueWith(t =>
+                        _ = ScanFolder(targetFolder).ContinueWith(_ =>
                         {
                             DispatcherQueue.TryEnqueue(() =>
                             {
+                                if (!string.Equals(_currentDirectory, targetFolder, StringComparison.OrdinalIgnoreCase))
+                                    return;
                                 if (Images.Count > 0)
-                                {
                                     LoadFullImage(stepDirection > 0 ? 0 : Images.Count - 1, stepDirection);
-                                }
                                 else
-                                {
                                     ClosePreviewInternal();
-                                }
                             });
                         });
                     }
@@ -494,6 +496,7 @@ namespace ModernImageViewer
             if (HoverTriggerZone != null) HoverTriggerZone.Visibility = Visibility.Visible;
 
             TryDisposeRawGpuBitmap();
+            FlushDeferredFolderRefresh();
 
             if (_currentIndex >= 0 && _currentIndex < Images.Count && ImageGrid != null)
             {
@@ -739,6 +742,7 @@ namespace ModernImageViewer
         private void ViewerControl_DeviceLostRestoring(object sender, EventArgs e)
         {
             _canvasDevice = CanvasDevice.GetSharedDevice();
+            ImageCache.Clear();
             if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible && _currentIndex >= 0)
             {
                 LoadFullImage(_currentIndex, 1);

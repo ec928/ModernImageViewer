@@ -24,11 +24,11 @@ WIC color-manages to sRGB. The draw path does **not** use Win2D `ColorManagement
 
 `ImageCache` is the only writer of the shared decode cache.
 
-- `Publish(path, entry)` — cache takes the entry (initial refcount 1). Releases any *different* previous occupant. Will not replace a high-fidelity entry with a preview.
-- `TryGet` — borrow. The main viewer may draw a cached entry while the key remains in the keep-alive set; it must not `Dispose` fields on that entry.
-- `Evict(path)` — `Release` + remove. A detached window that `AddRef`s the same entry keeps it alive until it `Release`s.
+- `Publish(path, entry)` — cache takes the entry (initial refcount 1). Releases any *different* previous occupant. Will not replace a high-fidelity entry with a preview. Uses `TryRemove`/`TryAdd`, never a raw indexer write.
+- `TryGet` — borrow. A surface that draws an entry must `AddRef` for the time it holds GPU pointers (`ImageViewerControl.InjectImage`) and `Release` in `PrepareForNewImage` / Unload / device-lost. Collage must not `Publish` over a slot that already has decodable content.
+- `Evict(path)` — `Release` + remove. A detached window that displays a cache entry keeps it alive via the control’s `AddRef` until it `Release`s. Unpublished detached HF is an extra construction hold, released on close.
 - `Rename(old, new)` — move the slot; release anything displaced at `new`.
-- Never `dictionary[path] = entry`. Never `Dispose()` GPU fields on a shared entry. Device-lost: `Evict` and re-decode.
+- Never `dictionary[path] = entry`. Never `Dispose()` GPU fields on a shared entry. Device-lost: `ImageCache.Clear()` (including GIF `AnimationFrames`) and re-decode. Treat animation-frame device mismatch like `GpuBitmap` mismatch.
 
 Collage keeps a **local** `CanvasBitmap` dictionary (`SetLocalGpu`) bound to that canvas's device. It may `Publish` a preview entry for native width/height, but must not clobber HF.
 
@@ -40,7 +40,7 @@ GPU objects (`CanvasBitmap`, `CanvasRenderTarget`, Win2D effects) are created an
 
 `ScanFolder` increments `_currentScanId`. Every UI marshal that mutates `Images` must capture that id and no-op if it no longer matches. A new scan may `Images.Clear()` only after in-flight batches have been dropped (they check the id).
 
-A debounced `FileSystemWatcher` on `_currentDirectory` re-runs `ScanFolder` when the grid is showing (preview closed). It does not interrupt an open viewer.
+A debounced `FileSystemWatcher` on `_currentDirectory` re-runs `ScanFolder` when the grid is showing (preview closed). Events while the preview is open or a scan is running set a dirty flag and run when the preview closes / the scan finishes. A rename is dirty if either the old or new extension is supported.
 
 ## GIF compositing
 
@@ -61,6 +61,12 @@ Disposal: 0/1 keep, 2 restore background (punch frame rect), 3 restore to previo
 `publish.bat` is the supported ship path. It publishes self-contained x64 loose files to `bin\x64\Release\`, copies `LICENSE` and `README.md` in, checks `System.Private.Xml.dll` is full size (a part-installed SDK yields a build that compiles but crashes on launch), then smoke-launches the exe. Do not ship a zip that skipped the smoke test.
 
 Tests live at `tests\ModernImageViewer.Tests` **inside** the repo. `ViewerMath.cs` is linked in by source rather than by project reference: the app targets `net8.0-windows10.0.19041.0` with WinUI, which an ordinary test project cannot reference. Keep pure geometry in `ViewerMath` so it stays testable.
+
+## Cinematic direction
+
+Product proposal (not implemented): `CINEMATIC_PROPOSAL.md`. Bar is **excellent cinematic in this app**: directed Play on a filled show, optional Edit show, music, present. VideoDirector remains the compositor / MP4 export app.
+
+A new Play from the grid or viewer starts from the launch list. `CinematicAutoSave.json` is a crash restore only: written atomically while a show is open, deleted on clean close of the last cinematic window, offered once on the next Play if the file is still there.
 
 ## Known remaining debt
 

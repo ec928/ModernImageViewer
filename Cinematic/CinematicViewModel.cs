@@ -14,6 +14,7 @@ using ModernImageViewer.Cinematic.Data;
 using Microsoft.UI.Dispatching;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading;
 
 namespace ModernImageViewer.Cinematic.ViewModels
 {
@@ -121,7 +122,12 @@ namespace ModernImageViewer.Cinematic.ViewModels
             ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".heic", ".heif", ".avif"
         };
         private int _currentIndex;
-        private int? _pendingNextIndex;
+        private string? _pendingNextClipId;
+        private readonly HashSet<string> _failedClipIds = new();
+        private readonly SemaphoreSlim _autoSaveLock = new(1, 1);
+
+        public static string AutoSaveFilePath => Path.Combine(AppPaths.LocalDirectory, "CinematicAutoSave.json");
+        public static bool CrashAutoSaveExists() => File.Exists(AutoSaveFilePath);
         public int CurrentIndex
         {
             get => _currentIndex;
@@ -338,10 +344,15 @@ namespace ModernImageViewer.Cinematic.ViewModels
 
         public int PeekNextIndex()
         {
-            if (_pendingNextIndex is int stored && stored >= 0 && stored < Track.Count && !Track[stored].IsHidden)
-                return stored;
+            if (_pendingNextClipId != null)
+            {
+                int stored = IndexOfClipId(_pendingNextClipId);
+                if (stored >= 0 && !Track[stored].IsHidden && !_failedClipIds.Contains(_pendingNextClipId))
+                    return stored;
+                _pendingNextClipId = null;
+            }
 
-            var visible = VisibleIndices();
+            var visible = VisiblePlayableIndices();
             if (visible.Count == 0) return CurrentIndex;
             if (visible.Count == 1) return visible[0];
 
@@ -370,11 +381,19 @@ namespace ModernImageViewer.Cinematic.ViewModels
                 }
             }
 
-            _pendingNextIndex = next;
+            if (next >= 0 && next < Track.Count)
+                _pendingNextClipId = Track[next].Id;
             return next;
         }
 
-        public void ClearPendingNextIndex() => _pendingNextIndex = null;
+        public void ClearPendingNextIndex() => _pendingNextClipId = null;
+
+        public void MarkClipFailed(int index)
+        {
+            if (index < 0 || index >= Track.Count) return;
+            _failedClipIds.Add(Track[index].Id);
+            _pendingNextClipId = null;
+        }
 
         public void MoveNext()
         {
@@ -383,7 +402,7 @@ namespace ModernImageViewer.Cinematic.ViewModels
             if (!IsLoopEnabled && next == CurrentIndex && !IsShuffleEnabled)
                 return;
             CurrentIndex = next;
-            _pendingNextIndex = null;
+            _pendingNextClipId = null;
             RaiseNav();
         }
 
@@ -397,7 +416,7 @@ namespace ModernImageViewer.Cinematic.ViewModels
                 return;
             }
             CurrentIndex = next;
-            _pendingNextIndex = null;
+            _pendingNextClipId = null;
         }
 
         public void MovePrevious()
@@ -453,6 +472,26 @@ namespace ModernImageViewer.Cinematic.ViewModels
             for (int i = 0; i < Track.Count; i++)
                 if (!Track[i].IsHidden) list.Add(i);
             return list;
+        }
+
+        private List<int> VisiblePlayableIndices()
+        {
+            var list = new List<int>();
+            for (int i = 0; i < Track.Count; i++)
+            {
+                if (!Track[i].IsHidden && !_failedClipIds.Contains(Track[i].Id))
+                    list.Add(i);
+            }
+            return list;
+        }
+
+        private int IndexOfClipId(string id)
+        {
+            for (int i = 0; i < Track.Count; i++)
+            {
+                if (Track[i].Id == id) return i;
+            }
+            return -1;
         }
 
         private void RaiseNav()
@@ -527,7 +566,7 @@ namespace ModernImageViewer.Cinematic.ViewModels
             CurrentClip.IsHidden = !CurrentClip.IsHidden;
             OnPropertyChanged(nameof(HideButtonLabel));
             PersistSequence();
-            _pendingNextIndex = null;
+            _pendingNextClipId = null;
         }
 
         public void RemoveCurrentClip()
@@ -551,15 +590,17 @@ namespace ModernImageViewer.Cinematic.ViewModels
 
         public void ResetToLaunchSet()
         {
+            ActiveProject = new CinematicProject();
             string? keep = CurrentClip?.FilePath;
             Track.Clear();
+            _failedClipIds.Clear();
             foreach (var path in _launchPaths)
             {
                 if (!File.Exists(path)) continue;
                 Track.Add(CreateClip(path));
             }
             RebuildImagePaths();
-            _pendingNextIndex = null;
+            _pendingNextClipId = null;
             int idx = -1;
             if (!string.IsNullOrEmpty(keep))
             {
@@ -796,62 +837,105 @@ namespace ModernImageViewer.Cinematic.ViewModels
 
         public async Task ExportProjectAsync(StorageFile file)
         {
-            ActiveProject.Sequence = Track.Select(c => new TrackClipRecord
-            {
-                Id = c.Id,
-                FilePath = c.FilePath,
-                IsHidden = c.IsHidden
-            }).ToList();
+            SnapshotSequence();
             string json = JsonSerializer.Serialize(ActiveProject, new JsonSerializerOptions { WriteIndented = true });
             await Windows.Storage.FileIO.WriteTextAsync(file, json);
         }
 
-        public async Task LoadProjectAsync(StorageFile file)
+        public async Task<(bool Applied, int Loaded, int Missing)> LoadProjectAsync(StorageFile file)
         {
             string json = await Windows.Storage.FileIO.ReadTextAsync(file);
             var loadedProject = JsonSerializer.Deserialize<CinematicProject>(json);
-            if (loadedProject != null)
-            {
-                ActiveProject = loadedProject;
-                ApplySequenceFromProject();
-                SyncStateForCurrentSlide();
-                RequestRefresh();
-            }
+            if (loadedProject == null) return (false, 0, 0);
+
+            int missing = CountMissing(loadedProject);
+            int present = (loadedProject.Sequence?.Count ?? 0) - missing;
+            if (loadedProject.Sequence != null && loadedProject.Sequence.Count > 0 && present <= 0)
+                return (false, 0, missing);
+
+            ActiveProject = loadedProject;
+            ApplySequenceFromProject();
+            _pendingNextClipId = null;
+            _failedClipIds.Clear();
+            SyncStateForCurrentSlide();
+            RequestRefresh();
+            SequenceChanged?.Invoke();
+            RaiseNav();
+            return (true, Track.Count, missing);
         }
 
         public async Task AutoSaveAsync()
         {
+            await _autoSaveLock.WaitAsync();
             try
             {
-                ActiveProject.Sequence = Track.Select(c => new TrackClipRecord
-                {
-                    Id = c.Id,
-                    FilePath = c.FilePath,
-                    IsHidden = c.IsHidden
-                }).ToList();
-                string path = Path.Combine(AppPaths.LocalDirectory, "CinematicAutoSave.json");
+                SnapshotSequence();
+                string path = AutoSaveFilePath;
+                string tmp = path + ".tmp";
                 string json = JsonSerializer.Serialize(ActiveProject, new JsonSerializerOptions { WriteIndented = true });
-                await File.WriteAllTextAsync(path, json);
+                await File.WriteAllTextAsync(tmp, json);
+                File.Copy(tmp, path, overwrite: true);
+                File.Delete(tmp);
             }
             catch (Exception ex) { Debug.WriteLine($"[Cinematic] AutoSave: {ex.Message}"); }
+            finally { _autoSaveLock.Release(); }
+        }
+
+        public async Task DiscardAutoSaveAsync()
+        {
+            await _autoSaveLock.WaitAsync();
+            try
+            {
+                string path = AutoSaveFilePath;
+                if (File.Exists(path)) File.Delete(path);
+                string tmp = path + ".tmp";
+                if (File.Exists(tmp)) File.Delete(tmp);
+            }
+            catch (Exception ex) { Debug.WriteLine($"[Cinematic] DiscardAutoSave: {ex.Message}"); }
+            finally { _autoSaveLock.Release(); }
         }
 
         public async Task RestoreAutoSaveAsync()
         {
             try
             {
-                string path = Path.Combine(AppPaths.LocalDirectory, "CinematicAutoSave.json");
+                string path = AutoSaveFilePath;
                 if (!File.Exists(path)) return;
                 string json = await File.ReadAllTextAsync(path);
                 var loadedProject = JsonSerializer.Deserialize<CinematicProject>(json);
-                if (loadedProject != null)
-                {
-                    ActiveProject = loadedProject;
-                    SyncStateForCurrentSlide();
-                    RequestRefresh();
-                }
+                if (loadedProject == null) return;
+                ActiveProject = loadedProject;
+                ApplySequenceFromProject();
+                _pendingNextClipId = null;
+                _failedClipIds.Clear();
+                SyncStateForCurrentSlide();
+                RequestRefresh();
+                SequenceChanged?.Invoke();
+                RaiseNav();
             }
             catch (Exception ex) { Debug.WriteLine($"[Cinematic] RestoreAutoSave: {ex.Message}"); }
+        }
+
+        private void SnapshotSequence()
+        {
+            ActiveProject.Sequence = Track.Select(c => new TrackClipRecord
+            {
+                Id = c.Id,
+                FilePath = c.FilePath,
+                IsHidden = c.IsHidden
+            }).ToList();
+        }
+
+        private static int CountMissing(CinematicProject project)
+        {
+            if (project.Sequence == null) return 0;
+            int missing = 0;
+            foreach (var rec in project.Sequence)
+            {
+                if (string.IsNullOrWhiteSpace(rec.FilePath) || !File.Exists(rec.FilePath))
+                    missing++;
+            }
+            return missing;
         }
 
         private void ApplySequenceFromProject()

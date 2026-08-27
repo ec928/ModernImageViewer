@@ -76,6 +76,7 @@ namespace ModernImageViewer
         private CanvasDevice? _canvasDevice;
         private CanvasBitmap? _rawGpuBitmap;
         private ColorManagementProfile? _rawGpuProfile;
+        private ImageCacheEntry? _displayedEntry;
         private EffectStack _effectStack = new();
 
         // --- Animation State ---
@@ -198,6 +199,15 @@ namespace ModernImageViewer
             }
         }
 
+        private void ReleaseDisplayedEntry()
+        {
+            if (_effectStack.Crop != null) _effectStack.Crop.Source = null;
+            _displayedEntry?.Release();
+            _displayedEntry = null;
+            _rawGpuBitmap = null;
+            _animationFrames = null;
+        }
+
         private void ImageViewerControl_Unloaded(object sender, RoutedEventArgs e)
         {
             if (_canvasDevice != null) _canvasDevice.DeviceLost -= CanvasDevice_DeviceLost;
@@ -205,6 +215,7 @@ namespace ModernImageViewer
             _hudTimer?.Stop();
             _scrollQualityTimer?.Stop();
             PreviewCanvas?.RemoveFromVisualTree();
+            ReleaseDisplayedEntry();
             _effectStack.Dispose();
         }
 
@@ -215,6 +226,7 @@ namespace ModernImageViewer
                 if (_canvasDevice != null) _canvasDevice.DeviceLost -= CanvasDevice_DeviceLost;
                 _canvasDevice = CanvasDevice.GetSharedDevice();
                 if (_canvasDevice != null) _canvasDevice.DeviceLost += CanvasDevice_DeviceLost;
+                ReleaseDisplayedEntry();
                 _effectStack.Dispose();
                 _effectStack.Initialize();
 
@@ -233,8 +245,7 @@ namespace ModernImageViewer
         public void PrepareForNewImage(Microsoft.UI.Xaml.Media.ImageSource? thumbnail)
         {
             _playbackTimer?.Stop();
-            _animationFrames = null;
-            _rawGpuBitmap = null;
+            ReleaseDisplayedEntry();
             _rawGpuProfile = null;
             _previewResourcesLoaded = false;
             _isHighFidelityActive = false;
@@ -283,6 +294,14 @@ namespace ModernImageViewer
 
         public void InjectImage(ImageCacheEntry entry, bool resetView = true)
         {
+            if (!ReferenceEquals(_displayedEntry, entry))
+            {
+                if (_effectStack.Crop != null) _effectStack.Crop.Source = null;
+                _displayedEntry?.Release();
+                entry.AddRef();
+                _displayedEntry = entry;
+            }
+
             _rawGpuBitmap = entry.GpuBitmap;
             _animationFrames = entry.AnimationFrames;
             _rawGpuProfile = entry.Profile;
@@ -867,7 +886,7 @@ namespace ModernImageViewer
             var currentFiles = main.Images.Select(img => img.Path).ToList();
             int startIndex = main.Images.IndexOf(TargetImage);
 
-            var cinematicWindow = new ModernImageViewer.Cinematic.CinematicWindow(currentFiles, startIndex);
+            main.OpenCinematic(currentFiles, startIndex);
         }
 
         private void EditImage_Click(object sender, RoutedEventArgs e)
