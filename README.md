@@ -62,4 +62,4 @@ Exit codes: `0` success, `1` publish failed, `2` output looks wrong, `3` app cra
 
 ## 💬 Feedback
 
-This is an active public beta. If you encounter bugs, performance issues, or have feature requests, please open a ticket in the [Issues](https://github.com/ec928/ModernImageViewer/issues) tab.
+This is an active public beta. If you encounter bugs, performance issues, or have feature requests, please open a ticket in the [Issues](https://github.com/ec928/ModernImageViewer/issues) tab — or use **Report a problem** in the app's About dialog, which opens the same place.

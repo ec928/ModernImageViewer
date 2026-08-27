@@ -1,4 +1,4 @@
-using Microsoft.Graphics.Canvas;
+﻿using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Effects;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -218,24 +218,26 @@ namespace ModernImageViewer
         }
 
         /// <summary>
-        /// Opens the project's issue tracker in the default browser. Most users reach the app
-        /// through a Releases zip and never see the repository, so the feedback route has to be
-        /// reachable from inside the app to be used at all.
+        /// Shows the About dialog. Most users reach the app through a Releases zip and never
+        /// see the repository, so what the app is and how to report a problem both have to be
+        /// reachable from inside the app.
         /// </summary>
-        private void ReportProblem_Click(object sender, RoutedEventArgs e)
+        private async void About_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                var dialog = new AboutDialog
                 {
-                    FileName = "https://github.com/ec928/ModernImageViewer/issues/new/choose",
-                    UseShellExecute = true
-                });
+                    XamlRoot = RootGrid.XamlRoot,
+                    RequestedTheme = ElementTheme.Dark
+                };
+                await dialog.ShowAsync();
             }
             catch (Exception ex)
             {
-                // Never let a missing browser association take the app down.
-                Debug.WriteLine($"[ReportProblem] Could not open issue tracker: {ex.Message}");
+                // async void: ShowAsync throws if a dialog is already open, and
+                // App_UnhandledException sets Handled = false, so this must not escape.
+                Debug.WriteLine($"[About] Could not show dialog: {ex.Message}");
             }
         }
 
