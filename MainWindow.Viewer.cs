@@ -1,4 +1,4 @@
-using Microsoft.Graphics.Canvas;
+﻿using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Effects;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -545,8 +545,56 @@ namespace ModernImageViewer
             catch { }
         }
 
+        /// <summary>
+        /// Hold Alt to peek at the sidebar; release to put it away. Unlike the hover zone,
+        /// this works while an image is open: reaching for a key is deliberate, whereas the
+        /// hover guard exists to stop the pointer drifting left and opening the pane by
+        /// accident.
+        /// </summary>
+        private void BeginAltPeek()
+        {
+            if (SidebarView == null || _altPeekOpenedSidebar) return;
+            // Already open by hover, pin or click: leave it alone so the release does not
+            // close something Alt did not open.
+            if (SidebarView.IsPaneOpen) return;
+
+            SidebarView.IsPaneOpen = true;
+            _altPeekOpenedSidebar = true;
+        }
+
+        private void EndAltPeek()
+        {
+            if (!_altPeekOpenedSidebar) return;
+            _altPeekOpenedSidebar = false;
+            if (SidebarView != null) SidebarView.IsPaneOpen = false;
+        }
+
+        private void MainWindow_Activated(object sender, WindowActivatedEventArgs args)
+        {
+            if (args.WindowActivationState == WindowActivationState.Deactivated) EndAltPeek();
+        }
+
+        private void Global_KeyUp(object sender, KeyRoutedEventArgs e)
+        {
+            if (e.Key == Windows.System.VirtualKey.Menu)
+            {
+                EndAltPeek();
+                e.Handled = true;
+            }
+        }
+
         private void Global_KeyDown(object sender, KeyRoutedEventArgs e)
         {
+            if (e.Key == Windows.System.VirtualKey.Menu)
+            {
+                // WasKeyDown filters the auto-repeat that follows a held key.
+                if (!e.KeyStatus.WasKeyDown) BeginAltPeek();
+                // Handled so a bare Alt does not move focus to the window's system menu.
+                // Alt+key combinations are unaffected: the system tracks the modifier itself.
+                e.Handled = true;
+                return;
+            }
+
             if (e.Key == Windows.System.VirtualKey.F11)
             {
                 ToggleFullscreen();

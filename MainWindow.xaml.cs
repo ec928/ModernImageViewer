@@ -53,6 +53,10 @@ namespace ModernImageViewer
         private AppSettings _currentSettings = new AppSettings();
         private readonly IntPtr _hWnd;
         private readonly KeyEventHandler _globalKeyDownHandler;
+        private readonly KeyEventHandler _globalKeyUpHandler;
+        // True only while the sidebar is open *because* Alt is held, so releasing
+        // Alt never closes a pane the user opened by hover or by clicking.
+        private bool _altPeekOpenedSidebar;
 
         private List<FolderItem> _hopFolders = [];
         private readonly ObservableCollection<string> _breadcrumbs = [];
@@ -115,6 +119,7 @@ namespace ModernImageViewer
             this.Closed += (s, e) =>
             {
                 RootGrid.RemoveHandler(UIElement.KeyDownEvent, _globalKeyDownHandler);
+                RootGrid.RemoveHandler(UIElement.KeyUpEvent, _globalKeyUpHandler);
                 Instance = null;
                 SaveAllSettings();
                 StopFolderWatcher();
@@ -132,6 +137,12 @@ namespace ModernImageViewer
 
             _globalKeyDownHandler = new KeyEventHandler(Global_KeyDown);
             RootGrid.AddHandler(UIElement.KeyDownEvent, _globalKeyDownHandler, true);
+            _globalKeyUpHandler = new KeyEventHandler(Global_KeyUp);
+            RootGrid.AddHandler(UIElement.KeyUpEvent, _globalKeyUpHandler, true);
+
+            // Alt+Tab steals focus while Alt is still down, so the KeyUp that would end an
+            // Alt peek never arrives. Deactivation is the only reliable end of that gesture.
+            this.Activated += MainWindow_Activated;
             RootGrid.PointerMoved += RootGrid_PointerMoved;
             FolderBreadcrumb.ItemsSource = _breadcrumbs;
 

@@ -60,6 +60,19 @@ Exit codes: `0` success, `1` publish failed, `2` output looks wrong, `3` app cra
 
 > Deliberately **not** published as a single file. Single-file self-extracts ~277 MB to `%TEMP%` on the first launch after every publish, measured at ~2.8 s to first window versus ~1.5 s for loose files.
 
+## ⌨️ Shortcuts
+
+| | |
+|---|---|
+| **Alt** (hold) | Peek at the sidebar; it closes when you let go |
+| **F11** | Fullscreen |
+| **← / →** | Previous / next image |
+| **Home / End** | First / last image |
+| **Delete** | Send to the Recycle Bin |
+| **Esc** | Close the preview |
+
+The sidebar also opens when the pointer reaches the left edge. Alt works whether or not an image is open, so you can jump folders without leaving the viewer.
+
 ## 💬 Feedback
 
 This is an active public beta. If you encounter bugs, performance issues, or have feature requests, please open a ticket in the [Issues](https://github.com/ec928/ModernImageViewer/issues) tab — or use **Report a problem** in the app's About dialog, which opens the same place.
