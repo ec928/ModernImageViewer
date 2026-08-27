@@ -41,6 +41,8 @@ The Win2D viewer core is real, but GPU lifetime was not reference-counted end-to
 | 27 | nit | Package.appxmanifest | fixed | Unused `systemAIModels` capability removed |
 | 28 | bug | ModernImageViewer.slnx | fixed | Test project sat *outside* the repo and was untracked; the committed slnx pointed at `..\ModernImageViewer.Tests`, so a fresh clone got no tests and a solution that would not load. Moved to `tests\ModernImageViewer.Tests`, with a `Compile Remove="tests\**"` in the app csproj so the SDK's default glob does not compile the test sources into the app. |
 | 29 | bug | ModernImageViewer.csproj | fixed | No `Version` was ever set, so every build stamped the SDK default `1.0.0.0` — the shipped v0.9.0 exe disagreed with its own release tag. `Version`/`AssemblyVersion`/`FileVersion` now pinned. |
+| 30 | bug | Cinematic/CinematicWindow.xaml.cs | fixed | Three `async void` methods (trajectory update, add-from-folder, sequence drop) caught nothing or only `TaskCanceledException`. `App_UnhandledException` sets `Handled = false`, so a camera-math fault or a drop from a vanished network path terminated the whole viewer. Each now logs and continues. |
+| 31 | bug | ARCHITECTURE.md | fixed | Referenced `CINEMATIC_PROPOSAL.md`, which was untracked — the doc was absent from every clone. Now committed. |
 
 ## Improvements
 
@@ -69,3 +71,4 @@ The Win2D viewer core is real, but GPU lifetime was not reference-counted end-to
 - 2026-08-27: Verification pass. Release build clean (0 warnings, 0 errors); 5/5 tests pass. Found and fixed #28 and #29. Removed a stale 5.7 MB `build.log`. Released as v0.10.0.
 - 2026-08-27: Follow-up pass. Cache display refcount, device-lost GIF eviction, file-activation HF, watcher deferral, cinematic clean Play + crash restore, playback clock. Remaining: I3 god windows; collage AABB hit-test; directed Play pacing/music/Open-show (proposal).
 - 2026-08-27: Ken Burns duration is this-slide (marks Custom); beats stay global on Auto; unsaved zoom/pan is discarded on pane close. Collage dirty tracking survives JSON load; export decodes native with EXIF/sRGB and disposes per cell.
+- 2026-08-27: Release pass for v0.11.0. Build clean (0 warnings, 0 errors); 5/5 tests pass. Guarded three `async void` paths in `CinematicWindow` that could terminate the app (#30). Committed `CINEMATIC_PROPOSAL.md`, which `ARCHITECTURE.md` referenced but no clone had (#31). Deleted the `_revert_cinematic` snapshot and its build exclusion — git holds the same bytes at 46ba963.

@@ -1,4 +1,4 @@
-using Microsoft.Graphics.Canvas;
+﻿using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Effects;
 using Microsoft.Graphics.Canvas.Text;
 using Microsoft.Graphics.Canvas.UI.Xaml;
@@ -413,6 +413,13 @@ namespace ModernImageViewer.Cinematic
                 }
             }
             catch (TaskCanceledException) { }
+            catch (Exception ex)
+            {
+                // async void: nothing awaits this, and App_UnhandledException sets
+                // Handled = false, so an escaping camera-math fault would terminate the
+                // whole viewer rather than just fail to re-aim this slide.
+                System.Diagnostics.Debug.WriteLine($"[Cinematic] Trajectory update: {ex.Message}");
+            }
         }
 
         private async Task ManualNavigateAsync()
@@ -1440,10 +1447,17 @@ namespace ModernImageViewer.Cinematic
             WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
             picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.PicturesLibrary;
             picker.FileTypeFilter.Add("*");
-            StorageFolder? folder = await picker.PickSingleFolderAsync();
-            if (folder == null) return;
-            DiscardPreload();
-            ViewModel.AddFromFolder(folder.Path);
+            try
+            {
+                StorageFolder? folder = await picker.PickSingleFolderAsync();
+                if (folder == null) return;
+                DiscardPreload();
+                ViewModel.AddFromFolder(folder.Path);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Cinematic] Add from folder: {ex.Message}");
+            }
         }
 
         private void SequenceBar_DragOver(object sender, DragEventArgs e)
@@ -1458,22 +1472,29 @@ namespace ModernImageViewer.Cinematic
         private async void SequenceBar_Drop(object sender, DragEventArgs e)
         {
             if (!e.DataView.Contains(StandardDataFormats.StorageItems)) return;
-            var items = await e.DataView.GetStorageItemsAsync();
-            var paths = new List<string>();
-            foreach (var item in items)
+            try
             {
-                if (item is StorageFile file)
-                    paths.Add(file.Path);
-                else if (item is StorageFolder folder)
+                var items = await e.DataView.GetStorageItemsAsync();
+                var paths = new List<string>();
+                foreach (var item in items)
                 {
-                    foreach (var f in await folder.GetFilesAsync())
-                        paths.Add(f.Path);
+                    if (item is StorageFile file)
+                        paths.Add(file.Path);
+                    else if (item is StorageFolder folder)
+                    {
+                        foreach (var f in await folder.GetFilesAsync())
+                            paths.Add(f.Path);
+                    }
+                }
+                if (paths.Count > 0)
+                {
+                    DiscardPreload();
+                    ViewModel.AddPaths(paths);
                 }
             }
-            if (paths.Count > 0)
+            catch (Exception ex)
             {
-                DiscardPreload();
-                ViewModel.AddPaths(paths);
+                System.Diagnostics.Debug.WriteLine($"[Cinematic] Sequence drop: {ex.Message}");
             }
         }
 

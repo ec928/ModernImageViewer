@@ -12,7 +12,7 @@ A high-performance, hardware-accelerated image viewer built for creators, 3D art
 
 **Native Windows 11 Design** — Built on the Windows App SDK (WinUI 3) for a clean, modern aesthetic with Mica material and native OS performance.
 
-**Collage and Cinematic (beta)** — In-app collage editor and cinematic slideshow/director. These are still being hardened; save often.
+**Collage and Cinematic (beta)** — In-app collage editor, and a cinematic slideshow whose show you can edit: reorder, hide and duplicate slides, hold a Ken Burns move on one slide, and save or reload the show. These are still being hardened; save often.
 
 HEIC/HEIF and AVIF need the corresponding Windows codecs installed. If a file will not open, the viewer shows a short HUD message rather than a blank canvas.
 

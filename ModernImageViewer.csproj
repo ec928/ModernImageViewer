@@ -18,7 +18,6 @@
     <WinUISDKReferences>false</WinUISDKReferences>
     <EnableMsixTooling>true</EnableMsixTooling>
     <Nullable>enable</Nullable>
-    <DefaultItemExcludes>$(DefaultItemExcludes);_revert_cinematic\**</DefaultItemExcludes>
 
     <!--
       Single source of truth for the shipped version. Until 0.10.0 these were unset, so
@@ -26,9 +25,9 @@
       whose properties disagreed with its own release tag. Bump Version here when
       tagging; the release tag, the zip name and the exe properties then all agree.
     -->
-    <Version>0.10.0</Version>
-    <AssemblyVersion>0.10.0.0</AssemblyVersion>
-    <FileVersion>0.10.0.0</FileVersion>
+    <Version>0.11.0</Version>
+    <AssemblyVersion>0.11.0.0</AssemblyVersion>
+    <FileVersion>0.11.0.0</FileVersion>
     <Product>ModernImageViewer</Product>
 
     <!--
