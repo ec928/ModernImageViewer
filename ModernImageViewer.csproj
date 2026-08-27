@@ -166,17 +166,37 @@
 
 
   <!--
-    WindowsAppSDK self-contained deployment ships Windows ML (onnxruntime + DirectML,
-    ~38 MB). Its own targets only suppress these for Framework/Passthrough modes, not
-    SelfContained. This app never touches the ML APIs, so delete them from the output.
+    WindowsAppSDK self-contained deployment ships the whole Windows AI stack: the native
+    ML runtime (onnxruntime + DirectML, ~38 MB), its managed wrapper, and the projection
+    assemblies and winmds for AI Foundation, Machine Learning, Text, Imaging, Vision,
+    Semantic Search, Content Safety and the NPU workload selector (~5 MB more). The SDK's
+    own targets only suppress the native pair for Framework/Passthrough modes, not
+    SelfContained, and never touch the rest.
+
+    This app uses none of it. Note Microsoft.Graphics.Imaging is the AI imaging API
+    (super-resolution, object removal) and is unrelated to Win2D, which lives in
+    Microsoft.Graphics.Canvas and is NOT matched by these patterns.
+
     Deleted from $(OutDir) rather than filtered from the publish list: PublishDir is the
     build output folder, so the build has already copied them by the time publish runs.
-    If ML APIs are ever used, delete this target.
+    If any AI API is ever used, delete this target - a missing projection assembly fails
+    at load time, not at build time.
   -->
   <Target Name="RemoveUnusedWindowsML" AfterTargets="Build;Publish">
     <ItemGroup>
       <_UnusedMl Include="$(OutDir)onnxruntime.dll" />
       <_UnusedMl Include="$(OutDir)DirectML.dll" />
+      <_UnusedMl Include="$(OutDir)Microsoft.ML.OnnxRuntime.dll" />
+      <_UnusedMl Include="$(OutDir)NPUDetect.dll" />
+      <_UnusedMl Include="$(OutDir)Microsoft.Windows.AI.*" />
+      <_UnusedMl Include="$(OutDir)Microsoft.Windows.Internal.AI.*" />
+      <_UnusedMl Include="$(OutDir)Microsoft.Windows.*Vision*" />
+      <_UnusedMl Include="$(OutDir)Microsoft.Windows.*SemanticSearch*" />
+      <_UnusedMl Include="$(OutDir)Microsoft.Windows.*ImageCreation*" />
+      <_UnusedMl Include="$(OutDir)Microsoft.Windows.*ContentModeration*" />
+      <_UnusedMl Include="$(OutDir)Microsoft.Windows.Workloads*" />
+      <_UnusedMl Include="$(OutDir)workloads.*.json" />
+      <_UnusedMl Include="$(OutDir)Microsoft.Graphics.*Imaging*" />
     </ItemGroup>
     <Delete Files="@(_UnusedMl)" ContinueOnError="true" />
   </Target>
