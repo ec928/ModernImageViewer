@@ -72,6 +72,10 @@ A new Play from the grid or viewer starts from the launch list. `CinematicAutoSa
 
 Holding Alt opens the sidebar and releasing closes it. `_altPeekOpenedSidebar` records whether Alt was what opened it, so a release never closes a pane the user opened by hover or by clicking. Alt+Tab leaves the window without ever delivering the key-up, so `Activated` (`WindowActivationState.Deactivated`) ends the peek as well. The bare Alt key-down is marked handled so it does not move focus to the window's system menu; Alt+key combinations are unaffected because the system tracks the modifier itself.
 
+## Name ordering
+
+Anything that orders file or folder names for display goes through `NaturalSort`, which calls the shell's `StrCmpLogicalW` — the function Explorer's Name column uses. Ordinal comparison sorts digit runs as characters, which puts 10 between 1 and 2. Do not hand-roll a replacement: leading zeros, embedded spaces and punctuation all have to match, and any divergence is the same bug in a narrower case. `StringComparer.OrdinalIgnoreCase` stays correct for dictionary keys and path equality, which are lookups rather than display order.
+
 ## Known remaining debt
 
 - Collage and cinematic windows are still large code-behinds. Further splits (`FolderScanService`, director UI vs playback) are welcome but not required for correctness. Tracked as improvement I3 in `REVIEW.md`.

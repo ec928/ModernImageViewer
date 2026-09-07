@@ -44,6 +44,7 @@ The Win2D viewer core is real, but GPU lifetime was not reference-counted end-to
 | 30 | bug | Cinematic/CinematicWindow.xaml.cs | fixed | Three `async void` methods (trajectory update, add-from-folder, sequence drop) caught nothing or only `TaskCanceledException`. `App_UnhandledException` sets `Handled = false`, so a camera-math fault or a drop from a vanished network path terminated the whole viewer. Each now logs and continues. |
 | 31 | bug | ARCHITECTURE.md | fixed | Referenced `CINEMATIC_PROPOSAL.md`, which was untracked — the doc was absent from every clone. Now committed. |
 | 32 | suggestion | MainWindow.xaml | fixed | The `?` button jumped straight to the GitHub issue tracker with no explanation of where it was sending you. Replaced with a standard About dialog: what the app is, the version read from the assembly, and Report a problem / View on GitHub as dialog buttons. |
+| 33 | bug | MainWindow.IO.cs | fixed | Name ordering used ordinal comparison, so a numbered folder read 1, 10, 11, ... 2, 20 instead of Explorer's order. All six name-sort sites (image grid, four folder-tree sorts, Name Asc/Desc menu) now call `NaturalSort`, which wraps the shell's own `StrCmpLogicalW`. |
 
 ## Improvements
 
@@ -75,3 +76,4 @@ The Win2D viewer core is real, but GPU lifetime was not reference-counted end-to
 - 2026-08-27: Release pass for v0.11.0. Build clean (0 warnings, 0 errors); 5/5 tests pass. Guarded three `async void` paths in `CinematicWindow` that could terminate the app (#30). Committed `CINEMATIC_PROPOSAL.md`, which `ARCHITECTURE.md` referenced but no clone had (#31). Deleted the `_revert_cinematic` snapshot and its build exclusion — git holds the same bytes at 46ba963.
 - 2026-08-27: v0.11.1. About dialog replaces the bare `?` (#32). Verified by driving the real UI: first build opened scrolled to the bottom because focus landed on a link inside the scroll area, and the links rendered as dead plain text — both fixed by moving the actions to dialog buttons.
 - 2026-08-27: v0.11.2. Hold Alt to peek at the sidebar (Ed's suggestion). Verified by driving the real window: the first harness attempt proved nothing because SetForegroundWindow failed silently and the synthetic Alt went to the terminal; AppActivate fixed it, and Ed confirmed by hand.
+- 2026-08-27: v0.11.3. Explorer name ordering (#33). `NaturalSort` calls `StrCmpLogicalW` rather than reimplementing the rule. Six xUnit cases, one encoding the exact order from Ed's screenshot; MIV tests 5 -> 11.

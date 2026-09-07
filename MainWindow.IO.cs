@@ -123,7 +123,7 @@ namespace ModernImageViewer
                 var dirInfo = new DirectoryInfo(folderPath);
 
                 var subDirsArr = dirInfo.GetDirectories("*", enumOptions);
-                Array.Sort(subDirsArr, (a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+                Array.Sort(subDirsArr, (a, b) => NaturalSort.Compare(a.Name, b.Name));
                 var subDirs = subDirsArr.Select(d => new FolderItem { Name = d.Name, Path = d.FullName }).ToList();
 
                 var parentDir = Directory.GetParent(folderPath);
@@ -132,7 +132,7 @@ namespace ModernImageViewer
                 if (parentDir != null)
                 {
                     var hopDirsArr = parentDir.GetDirectories("*", enumOptions);
-                    Array.Sort(hopDirsArr, (a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+                    Array.Sort(hopDirsArr, (a, b) => NaturalSort.Compare(a.Name, b.Name));
                     hopDirs = hopDirsArr.Select(d => new FolderItem { Name = d.Name, Path = d.FullName }).ToList();
                 }
 
@@ -194,7 +194,7 @@ namespace ModernImageViewer
                     var dirInfo = new DirectoryInfo(folderPath);
 
                     var subDirsArr = dirInfo.GetDirectories("*", enumOptions);
-                    Array.Sort(subDirsArr, (a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+                    Array.Sort(subDirsArr, (a, b) => NaturalSort.Compare(a.Name, b.Name));
                     var subDirs = subDirsArr.Select(d => new FolderItem { Name = d.Name, Path = d.FullName }).ToList();
 
                     var parentDir = Directory.GetParent(folderPath);
@@ -203,7 +203,7 @@ namespace ModernImageViewer
                     if (parentDir != null)
                     {
                         var hopDirsArr = parentDir.GetDirectories("*", enumOptions);
-                        Array.Sort(hopDirsArr, (a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+                        Array.Sort(hopDirsArr, (a, b) => NaturalSort.Compare(a.Name, b.Name));
                         hopDirs = hopDirsArr.Select(d => new FolderItem { Name = d.Name, Path = d.FullName }).ToList();
                     }
 
@@ -246,7 +246,7 @@ namespace ModernImageViewer
                         }
                     }
 
-                    filteredFiles.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+                    filteredFiles.Sort((a, b) => NaturalSort.Compare(a.Name, b.Name));
 
                     int batchSize = 100;
                     var batch = new List<ImageItem>(batchSize);
@@ -616,7 +616,9 @@ namespace ModernImageViewer
                 var currentItem = (_currentIndex >= 0 && _currentIndex < Images.Count) ? Images[_currentIndex] : null;
 
                 var sorted = tag.StartsWith("Name") ?
-                    (tag.EndsWith("Asc") ? Images.OrderBy(x => x.Name) : Images.OrderByDescending(x => x.Name)) :
+                    (tag.EndsWith("Asc")
+                        ? Images.OrderBy(x => x.Name, NaturalSort.Comparer)
+                        : Images.OrderByDescending(x => x.Name, NaturalSort.Comparer)) :
                     (tag.EndsWith("Asc") ? Images.OrderBy(x => x.DateModified) : Images.OrderByDescending(x => x.DateModified));
 
                 var sortedList = sorted.ToList();
