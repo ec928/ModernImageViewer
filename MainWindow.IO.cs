@@ -168,6 +168,7 @@ namespace ModernImageViewer
                 SyncTileCursor(scroll: returnedToFolder);
             }
             _listReturnPath = null;
+            UpdateHeaderFolderInfo();
         }
 
         private async Task ScanFolder(string folderPath)
@@ -293,6 +294,7 @@ namespace ModernImageViewer
                     else if (seeded)
                         SyncTileCursor(scroll: false);
                     _listReturnPath = null;
+                    UpdateHeaderFolderInfo();
                     RestartFolderWatcher(folderPath);
                 }
             }
@@ -303,6 +305,7 @@ namespace ModernImageViewer
                     _isScanning = false;
                     if (LoadingRing != null) LoadingRing.IsActive = false;
                     if (LoadingOverlay != null) LoadingOverlay.Visibility = Visibility.Collapsed;
+                    UpdateEmptyFolderState();
                     if (_folderWatchDirty) ScheduleFolderRefresh();
                 }
             }
@@ -499,6 +502,7 @@ namespace ModernImageViewer
             else
                 SyncTileCursor(scroll: false);
             _listReturnPath = null;
+            UpdateHeaderFolderInfo();
         }
 
         private void PopulateDriveRootTree(List<FolderItem> drives, string currentFolderPath, List<FolderItem> subDirs, string countText)
@@ -719,6 +723,7 @@ namespace ModernImageViewer
             if (path == DriveRootPath)
             {
                 _breadcrumbs.Add(DriveRootName);
+                UpdateHeaderFolderInfo();
                 return;
             }
             if (!string.IsNullOrEmpty(path))
@@ -728,6 +733,7 @@ namespace ModernImageViewer
                     _breadcrumbs.Add(part);
                 }
             }
+            UpdateHeaderFolderInfo();
         }
 
         private async void BreadcrumbBar_ItemClicked(BreadcrumbBar s, BreadcrumbBarItemClickedEventArgs a)

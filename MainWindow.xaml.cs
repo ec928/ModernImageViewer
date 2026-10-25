@@ -107,6 +107,7 @@ namespace ModernImageViewer
         };
 
         private readonly string _settingsPath = Path.Combine(AppPaths.LocalDirectory, "settings.json");
+        private Microsoft.UI.Dispatching.DispatcherQueueTimer? _boundsSaveTimer;
 
         public MainWindow()
         {
@@ -124,6 +125,27 @@ namespace ModernImageViewer
             titleBar.ButtonInactiveBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0);
             ApplyCaptionInset();
             SyncTileChrome();
+
+            _appWindow.Changed += (_, args) =>
+            {
+                if (_isFullscreen || (!args.DidSizeChange && !args.DidPositionChange)) return;
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    if (_boundsSaveTimer == null)
+                    {
+                        _boundsSaveTimer = DispatcherQueue.CreateTimer();
+                        _boundsSaveTimer.Interval = TimeSpan.FromMilliseconds(400);
+                        _boundsSaveTimer.IsRepeating = false;
+                        _boundsSaveTimer.Tick += (_, _) =>
+                        {
+                            _boundsSaveTimer.Stop();
+                            if (!_isFullscreen) SaveAllSettings();
+                        };
+                    }
+                    _boundsSaveTimer.Stop();
+                    _boundsSaveTimer.Start();
+                });
+            };
 
             _canvasDevice = CanvasDevice.GetSharedDevice();
 
@@ -210,7 +232,7 @@ namespace ModernImageViewer
                 var dialog = new AboutDialog
                 {
                     XamlRoot = RootGrid.XamlRoot,
-                    RequestedTheme = ElementTheme.Dark
+                    RequestedTheme = RootGrid.ActualTheme
                 };
                 await dialog.ShowAsync();
             }
@@ -326,7 +348,7 @@ namespace ModernImageViewer
                     
                     if (settings.WindowWidth == -1 || settings.WindowHeight == -1)
                     {
-                        int mainTargetWidth = (int)(targetHeight * 0.95);
+                        int mainTargetWidth = (int)Math.Round(targetHeight * (1278.0 / 1350.0));
                         settings.WindowWidth = mainTargetWidth;
                         settings.WindowHeight = targetHeight;
                     }
@@ -335,7 +357,7 @@ namespace ModernImageViewer
                 {
                     if (settings.DirectorWindowWidth == -1) settings.DirectorWindowWidth = 2400;
                     if (settings.DirectorWindowHeight == -1) settings.DirectorWindowHeight = 1350;
-                    if (settings.WindowWidth == -1) settings.WindowWidth = 1282;
+                    if (settings.WindowWidth == -1) settings.WindowWidth = 1278;
                     if (settings.WindowHeight == -1) settings.WindowHeight = 1350;
                 }
             }
@@ -343,11 +365,12 @@ namespace ModernImageViewer
             _currentSettings = settings;
             bool viewChanged = _listMode != settings.ListMode;
             _listMode = settings.ListMode;
+            ImageItem.ListRows = _listMode;
             // The panel can load during InitializeComponent, before settings are read.
             if (viewChanged && _imageWrapGrid != null)
                 ApplyViewMode();
 
-            int w = settings.WindowWidth < 300 ? 1280 : settings.WindowWidth;
+            int w = settings.WindowWidth < 300 ? 1278 : settings.WindowWidth;
             int h = settings.WindowHeight < 300 ? 1350 : settings.WindowHeight;
 
             _appWindow?.Resize(new Windows.Graphics.SizeInt32(w, h));
@@ -636,31 +659,57 @@ namespace ModernImageViewer
                 Content = $"Move {selectedItems.Count} files to the Recycle Bin?",
                 PrimaryButtonText = "Recycle",
                 CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Primary,
                 XamlRoot = RootGrid.XamlRoot,
-                RequestedTheme = ElementTheme.Dark
+                RequestedTheme = RootGrid.ActualTheme
             };
 
             var result = await dialog.ShowAsync();
             if (result == ContentDialogResult.Primary)
             {
-                int failed = 0;
-                foreach (var item in selectedItems)
+                bool watcherWasEnabled = _folderWatcher?.EnableRaisingEvents == true;
+                if (_folderWatcher != null) _folderWatcher.EnableRaisingEvents = false;
+                try
                 {
-                    if (ViewerEngine.RecycleFile(item.Path))
+                    await Task.WhenAll(selectedItems.Select(i => i.CancelAndAwaitTasksAsync()));
+                    var paths = selectedItems.Select(i => i.Path).ToList();
+                    bool batchOk = await Task.Run(() => ViewerEngine.RecycleFiles(paths));
+
+                    var deletedItems = new List<ImageItem>(selectedItems.Count);
+                    int failed = 0;
+                    if (batchOk)
                     {
-                        ImageCache.Evict(item.Path);
-                        RemoveDisplayedImage(item);
+                        deletedItems.AddRange(selectedItems);
                     }
                     else
                     {
-                        failed++;
-                        Debug.WriteLine($"Failed to recycle {item.Path}");
+                        foreach (var item in selectedItems)
+                        {
+                            bool gone = await Task.Run(() => !File.Exists(item.Path) || ViewerEngine.RecycleFile(item.Path));
+                            if (gone) deletedItems.Add(item);
+                            else
+                            {
+                                failed++;
+                                Debug.WriteLine($"Failed to recycle {item.Path}");
+                            }
+                        }
                     }
+
+                    ImageGrid.SelectedItems.Clear();
+                    foreach (var item in deletedItems)
+                        ImageCache.Evict(item.Path);
+                    RemoveDisplayedImages(deletedItems);
+                    UpdateHeaderFolderInfo();
+
+                    if (failed > 0)
+                        await ViewerEngine.ShowMessageAsync(RootGrid.XamlRoot, "Delete", $"{failed} file(s) could not be moved to the Recycle Bin.");
                 }
-                if (failed > 0)
-                    await ViewerEngine.ShowMessageAsync(RootGrid.XamlRoot, "Delete", $"{failed} file(s) could not be moved to the Recycle Bin.");
+                finally
+                {
+                    if (_folderWatcher != null && watcherWasEnabled)
+                        _folderWatcher.EnableRaisingEvents = true;
+                }
             }
-            ImageGrid.SelectedItems.Clear();
         }
 
         private void MultiSelectClear_Click(object sender, RoutedEventArgs e)
@@ -668,12 +717,36 @@ namespace ModernImageViewer
             ImageGrid.SelectedItems.Clear();
         }
 
+        private void ToggleGridItemSelection(ImageItem item)
+        {
+            if (item.IsDirectory) return;
+            if (ImageGrid.SelectedItems.Contains(item))
+                ImageGrid.SelectedItems.Remove(item);
+            else
+                ImageGrid.SelectedItems.Add(item);
+        }
+
+        private void TileCheck_PointerPressed(object sender, PointerRoutedEventArgs e)
+        {
+            var ptr = e.GetCurrentPoint((UIElement)sender);
+            if (ptr.Properties.IsLeftButtonPressed && sender is FrameworkElement el && el.DataContext is ImageItem item && !item.IsDirectory)
+            {
+                ToggleGridItemSelection(item);
+                e.Handled = true;
+            }
+        }
+
+        private void TileCheck_Tapped(object sender, TappedRoutedEventArgs e)
+        {
+            e.Handled = true;
+        }
+
         private void Card_PointerPressed(object sender, PointerRoutedEventArgs e)
         {
             var ptr = e.GetCurrentPoint((UIElement)sender);
             if (ptr.Properties.IsMiddleButtonPressed)
             {
-                if (sender is FrameworkElement el && el.DataContext is ImageItem imageItem)
+                if (sender is FrameworkElement el && el.DataContext is ImageItem imageItem && !imageItem.IsDirectory)
                 {
                     LaunchDetachedWindow(imageItem);
                     e.Handled = true;

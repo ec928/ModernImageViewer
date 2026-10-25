@@ -576,6 +576,23 @@ namespace ModernImageViewer
             catch { return false; }
         }
 
+        public static bool RecycleFiles(IReadOnlyList<string> paths)
+        {
+            if (paths == null || paths.Count == 0) return true;
+            if (paths.Count == 1) return RecycleFile(paths[0]);
+            try
+            {
+                var op = new NativeMethods.SHFILEOPSTRUCT
+                {
+                    wFunc = NativeMethods.FO_DELETE,
+                    pFrom = string.Join('\0', paths) + "\0\0",
+                    fFlags = NativeMethods.FOF_ALLOWUNDO | NativeMethods.FOF_NOCONFIRMATION | NativeMethods.FOF_SILENT
+                };
+                return NativeMethods.SHFileOperation(ref op) == 0 && !op.fAnyOperationsAborted;
+            }
+            catch { return false; }
+        }
+
         public static async Task<bool> RenameImageAsync(ImageItem item, XamlRoot xamlRoot)
         {
             var oldPath = item.Path;
@@ -612,9 +629,10 @@ namespace ModernImageViewer
 
         public static async Task<bool> DeleteImageAsync(ImageItem item, XamlRoot xamlRoot)
         {
-            var dialog = new ContentDialog { Title = "Delete", Content = "Move to Recycle Bin?", PrimaryButtonText = "Yes", SecondaryButtonText = "No", XamlRoot = xamlRoot };
+            var dialog = new ContentDialog { Title = "Delete", Content = "Move to Recycle Bin?", PrimaryButtonText = "Yes", SecondaryButtonText = "No", DefaultButton = ContentDialogButton.Primary, XamlRoot = xamlRoot };
             if (await dialog.ShowAsync() != ContentDialogResult.Primary) return false;
-            if (RecycleFile(item.Path)) return true;
+            string path = item.Path;
+            if (await Task.Run(() => RecycleFile(path))) return true;
             await ShowMessageAsync(xamlRoot, "Delete failed", "The file could not be moved to the Recycle Bin.");
             return false;
         }

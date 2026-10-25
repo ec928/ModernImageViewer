@@ -145,27 +145,77 @@
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
-                    <Grid x:Name="TileHeader" Height="32">
+                    <Grid x:Name="TileHeader" Height="36" Background="Transparent">
                         <Grid.Resources>
-                            <ControlTemplate x:Key="HeaderGlyph" TargetType="Button">
-                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </ControlTemplate>
+                            <Style x:Key="HeaderButtonStyle" TargetType="Button" BasedOn="{StaticResource SubtleButtonStyle}">
+                                <Setter Property="Width" Value="30"/>
+                                <Setter Property="Height" Value="28"/>
+                                <Setter Property="MinWidth" Value="0"/>
+                                <Setter Property="MinHeight" Value="0"/>
+                                <Setter Property="Padding" Value="0"/>
+                                <Setter Property="CornerRadius" Value="4"/>
+                            </Style>
                         </Grid.Resources>
                         <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition x:Name="CaptionInset" Width="140"/>
                         </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center" Margin="0,0,2,0">
-                            <Button Template="{StaticResource HeaderGlyph}" Width="28" Height="28" MinWidth="0" MinHeight="0" Padding="0" Background="Transparent" BorderThickness="0" Click="RefreshFolder_Click" ToolTipService.ToolTip="Refresh Current Folder">
-                                <FontIcon Glyph="&#xE117;" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center" Margin="6,0,0,0">
+                            <Button Style="{StaticResource HeaderButtonStyle}" Click="SidebarToggle_Click" ToolTipService.ToolTip="Navigation Sidebar (Hold Alt)">
+                                <FontIcon Glyph="&#xE700;" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             </Button>
-                            <Button Template="{StaticResource HeaderGlyph}" Width="28" Height="28" MinWidth="0" MinHeight="0" Padding="0" Background="Transparent" BorderThickness="0" Click="ResetWindow_Click" ToolTipService.ToolTip="Reset Window Size">
-                                <FontIcon Glyph="&#xE72C;" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <Button x:Name="HeaderFolderButton" Style="{StaticResource SubtleButtonStyle}" Height="28" MinWidth="0" MinHeight="0" Padding="8,0" CornerRadius="4"
+                                    Click="OpenCurrentDirectoryInExplorer_Click"
+                                    PointerEntered="HeaderFolderButton_PointerEntered"
+                                    PointerExited="HeaderFolderButton_PointerExited">
+                                <FlyoutBase.AttachedFlyout>
+                                    <Flyout x:Name="HeaderPathFlyout" Placement="BottomEdgeAlignedLeft" ShowMode="TransientWithDismissOnPointerMoveAway" ShouldConstrainToRootBounds="False">
+                                        <Flyout.FlyoutPresenterStyle>
+                                            <Style TargetType="FlyoutPresenter">
+                                                <Setter Property="Padding" Value="2"/>
+                                                <Setter Property="MinWidth" Value="0"/>
+                                                <Setter Property="MinHeight" Value="0"/>
+                                                <Setter Property="CornerRadius" Value="6"/>
+                                                <Setter Property="Background" Value="{ThemeResource SolidBackgroundFillColorTertiaryBrush}"/>
+                                                <Setter Property="BorderBrush" Value="{ThemeResource SurfaceStrokeColorFlyoutBrush}"/>
+                                                <Setter Property="BorderThickness" Value="1"/>
+                                            </Style>
+                                        </Flyout.FlyoutPresenterStyle>
+                                        <Button x:Name="HeaderPathFlyoutButton" Style="{StaticResource SubtleButtonStyle}" Padding="10,5" MinHeight="0" MinWidth="0" CornerRadius="4"
+                                                Click="OpenCurrentDirectoryInExplorer_Click"
+                                                PointerEntered="HeaderPathFlyout_PointerEntered"
+                                                PointerExited="HeaderPathFlyout_PointerExited">
+                                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                                <TextBlock x:Name="HeaderPathFlyoutText" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
+                                                <FontIcon Glyph="&#xE8A7;" FontFamily="Segoe Fluent Icons" FontSize="11" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </Flyout>
+                                </FlyoutBase.AttachedFlyout>
+                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                    <FontIcon Glyph="&#xE8B7;" FontFamily="Segoe Fluent Icons" FontSize="14" Foreground="#FFF8D348"/>
+                                    <TextBlock x:Name="HeaderFolderText" Text="Pictures" FontSize="12.5" FontWeight="SemiBold" VerticalAlignment="Center" MaxWidth="260" TextTrimming="CharacterEllipsis"/>
+                                    <Border x:Name="HeaderCountBadge" Background="{ThemeResource SubtleFillColorSecondaryBrush}" CornerRadius="9" Padding="7,1" VerticalAlignment="Center">
+                                        <TextBlock x:Name="HeaderCountText" Text="0" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    </Border>
+                                </StackPanel>
                             </Button>
-                            <Rectangle Width="1" Height="16" Margin="8,0" VerticalAlignment="Center" Fill="#99000000"/>
-                            <Button Template="{StaticResource HeaderGlyph}" Width="28" Height="28" MinWidth="0" MinHeight="0" Padding="0" Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Sort">
-                                <FontIcon Glyph="&#xE8CB;" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+
+                        <Border x:Name="HeaderDragRegion" Grid.Column="1" Background="Transparent"/>
+
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center" Margin="0,0,4,0">
+                            <Button Style="{StaticResource HeaderButtonStyle}" Click="RefreshFolder_Click" ToolTipService.ToolTip="Refresh Current Folder (F5)">
+                                <FontIcon Glyph="&#xE72C;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            </Button>
+                            <Button Style="{StaticResource HeaderButtonStyle}" Click="ResetWindow_Click" ToolTipService.ToolTip="Reset Window Size">
+                                <FontIcon Glyph="&#xE923;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            </Button>
+                            <Button Style="{StaticResource HeaderButtonStyle}" ToolTipService.ToolTip="Sort Images">
+                                <FontIcon Glyph="&#xE8CB;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 <Button.Flyout>
                                     <MenuFlyout x:Name="HeaderSortFlyout" Opening="HeaderSortFlyout_Opening">
                                         <RadioMenuFlyoutItem x:Name="HeaderSortNameAscItem" Text="Name (A-Z)" Click="Sort_Click" Tag="NameAsc" GroupName="HeaderSortGroup"/>
@@ -176,20 +226,71 @@
                                     </MenuFlyout>
                                 </Button.Flyout>
                             </Button>
-                            <Button x:Name="ViewModeButton" Template="{StaticResource HeaderGlyph}" Width="28" Height="28" MinWidth="0" MinHeight="0" Padding="0" Background="Transparent" BorderThickness="0" Click="ViewMode_Click" ToolTipService.ToolTip="List">
-                                <FontIcon x:Name="ViewModeIcon" Glyph="&#xE8FD;" FontSize="14"/>
-                            </Button>
+                            <Rectangle Width="1" Height="16" Margin="6,0" VerticalAlignment="Center" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"/>
+                            <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="5" Padding="2" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Spacing="1">
+                                    <Button x:Name="TilesModeButton" Style="{StaticResource HeaderButtonStyle}" Width="28" Height="22" CornerRadius="3" Click="TilesMode_Click" ToolTipService.ToolTip="Tile View">
+                                        <FontIcon x:Name="TilesModeIcon" Glyph="&#xE8A9;" FontSize="13"/>
+                                    </Button>
+                                    <Button x:Name="ListModeButton" Style="{StaticResource HeaderButtonStyle}" Width="28" Height="22" CornerRadius="3" Click="ListMode_Click" ToolTipService.ToolTip="List View">
+                                        <FontIcon x:Name="ListModeIcon" Glyph="&#xE8FD;" FontSize="13"/>
+                                    </Button>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
-                        <Rectangle Grid.ColumnSpan="3" Height="1" VerticalAlignment="Bottom" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.6" IsHitTestVisible="False"/>
+                        <Rectangle Grid.ColumnSpan="4" Height="1" VerticalAlignment="Bottom" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.6" IsHitTestVisible="False"/>
                     </Grid>
 
                     <Grid Grid.Row="1">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="*"/>
                             <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
-                    <GridView x:Name="ImageGrid" Padding="10,8,10,0" SizeChanged="ImageGrid_SizeChanged" ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionMode="Extended" SelectionChanged="ImageGrid_SelectionChanged" IsItemClickEnabled="True" ItemClick="ImageGrid_ItemClick" CanDragItems="True" DragItemsStarting="ImageGrid_DragItemsStarting" ItemsSource="{x:Bind Images, Mode=OneWay}" ContainerContentChanging="ImageGrid_ContainerContentChanging" FocusVisualPrimaryThickness="0" FocusVisualSecondaryThickness="0">
+                    <GridView x:Name="ImageGrid" Padding="10,8,10,0" SizeChanged="ImageGrid_SizeChanged" ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionMode="Extended" SelectionChanged="ImageGrid_SelectionChanged" IsItemClickEnabled="True" ItemClick="ImageGrid_ItemClick" RightTapped="ImageGrid_RightTapped" CanDragItems="True" DragItemsStarting="ImageGrid_DragItemsStarting" ItemsSource="{x:Bind Images, Mode=OneWay}" ContainerContentChanging="ImageGrid_ContainerContentChanging" FocusVisualPrimaryThickness="0" FocusVisualSecondaryThickness="0">
+                        <GridView.ItemContainerStyle>
+                            <Style TargetType="GridViewItem" BasedOn="{StaticResource DefaultGridViewItemStyle}">
+                                <Setter Property="MinWidth" Value="0"/>
+                                <Setter Property="MinHeight" Value="0"/>
+                                <Setter Property="Margin" Value="0"/>
+                                <Setter Property="Padding" Value="0"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+                            </Style>
+                        </GridView.ItemContainerStyle>
+                        <GridView.ContextFlyout>
+                            <MenuFlyout x:Name="GridItemContextFlyout">
+                                <MenuFlyoutItem x:Name="GridMenuOpenItem" Text="Open" Click="GridMenuOpen_Click">
+                                    <MenuFlyoutItem.Icon><SymbolIcon Symbol="View"/></MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutItem x:Name="GridMenuSelectItem" Text="Select" Click="GridMenuSelect_Click">
+                                    <MenuFlyoutItem.Icon><SymbolIcon Symbol="Accept"/></MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutItem x:Name="GridMenuDetachItem" Text="Detach in New Window" Click="GridMenuDetach_Click">
+                                    <MenuFlyoutItem.Icon><SymbolIcon Symbol="NewWindow"/></MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutSeparator x:Name="GridMenuPhotoSep1"/>
+                                <MenuFlyoutItem x:Name="GridMenuCinematicItem" Text="Play Cinematic Slideshow" Click="GridMenuCinematic_Click">
+                                    <MenuFlyoutItem.Icon><SymbolIcon Symbol="Play"/></MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutItem x:Name="GridMenuCollageItem" Text="Add to Collage" Click="GridMenuCollage_Click">
+                                    <MenuFlyoutItem.Icon><SymbolIcon Symbol="Pictures"/></MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutSeparator x:Name="GridMenuPhotoSep2"/>
+                                <MenuFlyoutItem x:Name="GridMenuEditItem" Text="Edit Image" Click="GridMenuEdit_Click">
+                                    <MenuFlyoutItem.Icon><SymbolIcon Symbol="Edit"/></MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutItem x:Name="GridMenuRenameItem" Text="Rename (F2)" Click="GridMenuRename_Click">
+                                    <MenuFlyoutItem.Icon><SymbolIcon Symbol="Rename"/></MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutItem x:Name="GridMenuDeleteItem" Text="Delete (Del)" Click="GridMenuDelete_Click">
+                                    <MenuFlyoutItem.Icon><SymbolIcon Symbol="Delete"/></MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutSeparator/>
+                                <MenuFlyoutItem Text="Show in Explorer" Click="GridMenuExplorer_Click">
+                                    <MenuFlyoutItem.Icon><SymbolIcon Symbol="Folder"/></MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                            </MenuFlyout>
+                        </GridView.ContextFlyout>
                         <GridView.Resources>
                             <Style x:Key="DenseListItemStyle" TargetType="GridViewItem" BasedOn="{StaticResource DefaultGridViewItemStyle}">
                                 <Setter Property="MinWidth" Value="0"/>
@@ -199,8 +300,8 @@
                                 <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                                 <Setter Property="VerticalContentAlignment" Value="Stretch"/>
                             </Style>
-                            <SolidColorBrush x:Key="GridViewItemBackgroundPointerOver" Color="#2A000000"/>
-                            <SolidColorBrush x:Key="GridViewItemBackgroundPressed" Color="#3D000000"/>
+                            <SolidColorBrush x:Key="GridViewItemBackgroundPointerOver" Color="Transparent"/>
+                            <SolidColorBrush x:Key="GridViewItemBackgroundPressed" Color="Transparent"/>
                             <SolidColorBrush x:Key="GridViewItemBackgroundSelected" Color="Transparent"/>
                             <SolidColorBrush x:Key="GridViewItemBackgroundSelectedPointerOver" Color="Transparent"/>
                             <SolidColorBrush x:Key="GridViewItemBackgroundSelectedPressed" Color="Transparent"/>
@@ -219,7 +320,7 @@
                         <GridView.ItemTemplate>
                             <DataTemplate x:DataType="local:ImageItem">
                                 <Grid>
-                                    <Grid Visibility="{x:Bind TileVisibility, Mode=OneWay}" Margin="4" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="4" PointerEntered="Card_PointerEntered" PointerExited="Card_PointerExited" PointerPressed="Card_PointerPressed">
+                                    <Grid Visibility="{x:Bind TileVisibility, Mode=OneWay}" Margin="5" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="6" PointerEntered="Card_PointerEntered" PointerExited="Card_PointerExited" PointerPressed="Card_PointerPressed">
                                         <Grid.ScaleTransition>
                                             <Vector3Transition Duration="0:0:0.15" />
                                         </Grid.ScaleTransition>
@@ -228,101 +329,132 @@
                                         </Grid.OpacityTransition>
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="*"/>
-                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="26"/>
                                         </Grid.RowDefinitions>
-                                        <Image Source="{x:Bind Thumbnail, Mode=OneWay}" x:Phase="2" Grid.Row="0" Stretch="UniformToFill" />
+                                        <Border Grid.Row="0" CornerRadius="5,5,0,0">
+                                            <Image Source="{x:Bind Thumbnail, Mode=OneWay}" x:Phase="2" Stretch="UniformToFill" />
+                                        </Border>
+                                        <Border Grid.Row="1" CornerRadius="0,0,5,5" IsHitTestVisible="False"
+                                                Background="{ThemeResource AccentFillColorDefaultBrush}"
+                                                Opacity="{x:Bind TileCaptionSelectionOpacity, Mode=OneWay}"/>
                                         <TextBlock Text="{x:Bind Name}"
                                                    x:Phase="1"
                                                    Grid.Row="1"
                                                    HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"
                                                    TextTrimming="CharacterEllipsis"
-                                                   TextWrapping="Wrap"
-                                                   MaxLines="2"
-                                                   Margin="4,4,4,6"
+                                                   MaxLines="1"
+                                                   Margin="8,0,8,1"
                                                    Style="{ThemeResource CaptionTextBlockStyle}"
                                                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-                                                   FontSize="11"
+                                                   FontSize="11.5"
                                                    ToolTipService.ToolTip="{x:Bind Name}"/>
-                                        <Border Grid.RowSpan="2" IsHitTestVisible="False" CornerRadius="4"
-                                                Background="{ThemeResource AccentFillColorDefaultBrush}"
-                                                Opacity="{x:Bind SelectionWashOpacity, Mode=OneWay}"/>
-                                        <Border Grid.RowSpan="2" IsHitTestVisible="False" BorderThickness="2" CornerRadius="4"
+                                        <Border Grid.RowSpan="2" IsHitTestVisible="False" BorderThickness="2" CornerRadius="6"
                                                 BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
                                                 Opacity="{x:Bind SelectionOpacity, Mode=OneWay}"/>
-                                        <Grid Grid.Row="0" Width="22" Height="22" Margin="6" HorizontalAlignment="Left" VerticalAlignment="Top"
-                                              IsHitTestVisible="False" Opacity="{x:Bind SelectionOpacity, Mode=OneWay}">
-                                            <Ellipse Fill="White"/>
-                                            <Ellipse Margin="2" Fill="{ThemeResource AccentFillColorDefaultBrush}"/>
-                                            <FontIcon Glyph="&#xE73E;" FontFamily="Segoe MDL2 Assets" FontSize="11" Foreground="White"
-                                                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        <Grid Grid.RowSpan="2" IsHitTestVisible="False" Opacity="{x:Bind KeyboardCursorOpacity, Mode=OneWay}">
+                                            <Border CornerRadius="6" BorderThickness="2" BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"/>
+                                            <Border Margin="2" CornerRadius="4" BorderThickness="1.2" BorderBrush="#E6FFFFFF"/>
                                         </Grid>
-                                        <Grid Grid.Row="0" IsHitTestVisible="False" Opacity="{x:Bind KeyboardCursorOpacity, Mode=OneWay}">
-                                            <Border Margin="4" CornerRadius="2" BorderThickness="1.5" BorderBrush="#F2FFFFFF"/>
-                                            <Border Margin="5.5" CornerRadius="1" BorderThickness="1" BorderBrush="#59000000"/>
+                                        <Grid Grid.Row="0" Width="28" Height="28" Margin="4" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                              Background="Transparent" PointerPressed="TileCheck_PointerPressed" Tapped="TileCheck_Tapped" ToolTipService.ToolTip="Select (Space or Ctrl+Click)">
+                                            <Grid Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  IsHitTestVisible="False" Opacity="{x:Bind HoverCheckOpacity, Mode=OneWay}">
+                                                <Ellipse Fill="#78000000" Stroke="#E6FFFFFF" StrokeThickness="1.5"/>
+                                                <FontIcon Glyph="&#xE73E;" FontFamily="Segoe MDL2 Assets" FontSize="9.5" Foreground="#D9FFFFFF"
+                                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Grid>
+                                            <Grid Width="22" Height="22" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  IsHitTestVisible="False" Opacity="{x:Bind SelectionOpacity, Mode=OneWay}">
+                                                <Ellipse Fill="White"/>
+                                                <Ellipse Margin="1.5" Fill="{ThemeResource AccentFillColorDefaultBrush}"/>
+                                                <FontIcon Glyph="&#xE73E;" FontFamily="Segoe MDL2 Assets" FontSize="11" Foreground="White"
+                                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Grid>
                                         </Grid>
                                     </Grid>
-                                    <Grid Visibility="{x:Bind ListVisibility, Mode=OneWay}" Margin="6,0,4,0" VerticalAlignment="Stretch">
+                                    <Grid Visibility="{x:Bind ListVisibility, Mode=OneWay}" Height="22" Margin="2,1" Padding="5,0,4,0" CornerRadius="3" VerticalAlignment="Center" Background="Transparent" PointerEntered="ListRow_PointerEntered" PointerExited="ListRow_PointerExited" PointerPressed="Card_PointerPressed">
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="22"/>
+                                            <ColumnDefinition Width="20"/>
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
-                                        <Border Grid.ColumnSpan="2" IsHitTestVisible="False" Margin="-6,0,-4,0"
+                                        <Border Grid.ColumnSpan="2" IsHitTestVisible="False" Margin="-5,0,-4,0" CornerRadius="3"
+                                                Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                                Opacity="{x:Bind ListHoverOpacity, Mode=OneWay}"/>
+                                        <Border Grid.ColumnSpan="2" IsHitTestVisible="False" Margin="-5,0,-4,0" CornerRadius="3"
                                                 Background="{ThemeResource AccentFillColorDefaultBrush}"
                                                 Opacity="{x:Bind SelectionWashOpacity, Mode=OneWay}"/>
-                                        <Border Grid.ColumnSpan="2" Width="3" HorizontalAlignment="Left" IsHitTestVisible="False" Margin="-6,0,0,0"
+                                        <Border Grid.ColumnSpan="2" Width="3" Height="14" CornerRadius="1.5" HorizontalAlignment="Left" VerticalAlignment="Center" IsHitTestVisible="False" Margin="-5,0,0,0"
                                                 Background="{ThemeResource AccentFillColorDefaultBrush}"
                                                 Opacity="{x:Bind SelectionOpacity, Mode=OneWay}"/>
-                                        <Grid Width="22" Height="20" VerticalAlignment="Center">
-                                            <Image Width="16" Height="16" Source="ms-appx:///ModernImageViewer.ico" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{x:Bind PhotoListIconVisibility, Mode=OneTime}"/>
-                                            <Grid Width="20" Height="20" Visibility="{x:Bind DirectoryListIconVisibility, Mode=OneTime}">
-                                                <FontIcon Glyph="&#xE8B7;" FontFamily="Segoe Fluent Icons" FontSize="18" Foreground="#FFF8D348" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{x:Bind DirectoryFallbackVisibility, Mode=OneWay}"/>
-                                                <FontIcon Glyph="&#xE74A;" FontFamily="Segoe Fluent Icons" FontSize="13" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{x:Bind ParentUpBadgeVisibility, Mode=OneWay}"/>
+                                        <Grid Width="20" Height="20" VerticalAlignment="Center">
+                                            <FontIcon Glyph="&#xEB9F;" FontFamily="Segoe Fluent Icons" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{x:Bind PhotoListIconVisibility, Mode=OneTime}"/>
+                                            <Grid Width="18" Height="18" Visibility="{x:Bind DirectoryListIconVisibility, Mode=OneTime}">
+                                                <FontIcon Glyph="&#xE8B7;" FontFamily="Segoe Fluent Icons" FontSize="16" Foreground="#FFF8D348" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{x:Bind DirectoryFallbackVisibility, Mode=OneWay}"/>
+                                                <FontIcon Glyph="&#xE74A;" FontFamily="Segoe Fluent Icons" FontSize="11" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{x:Bind ParentUpBadgeVisibility, Mode=OneWay}"/>
                                                 <Image Source="{x:Bind DirectoryIcon, Mode=OneWay}" Stretch="Uniform"/>
                                             </Grid>
                                         </Grid>
-                                        <TextBlock Grid.Column="1" Text="{x:Bind Name}" VerticalAlignment="Center" Margin="6,0,2,0" FontSize="12" TextTrimming="CharacterEllipsis"/>
-                                        <Border Grid.ColumnSpan="2" IsHitTestVisible="False" Margin="-6,0,-4,0" BorderThickness="1.5" BorderBrush="#E6000000" Opacity="{x:Bind KeyboardCursorOpacity, Mode=OneWay}"/>
-                                        <Border Grid.ColumnSpan="2" IsHitTestVisible="False" Margin="-4.5,1.5,-2.5,1.5" BorderThickness="1" BorderBrush="#F2FFFFFF" Opacity="{x:Bind KeyboardCursorOpacity, Mode=OneWay}"/>
+                                        <TextBlock Grid.Column="1" Text="{x:Bind Name}" VerticalAlignment="Center" Margin="5,0,2,0" FontSize="12" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{x:Bind Name}"/>
+                                        <Border Grid.ColumnSpan="2" IsHitTestVisible="False" Margin="-5,0,-4,0" CornerRadius="3" BorderThickness="1.5" BorderBrush="{ThemeResource AccentFillColorDefaultBrush}" Opacity="{x:Bind KeyboardCursorOpacity, Mode=OneWay}"/>
                                     </Grid>
                                 </Grid>
                             </DataTemplate>
                         </GridView.ItemTemplate>
                     </GridView>
 
+                    <Grid x:Name="EmptyFolderOverlay" Grid.Row="0" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" Canvas.ZIndex="100">
+                        <StackPanel Spacing="10" HorizontalAlignment="Center">
+                            <FontIcon Glyph="&#xEB9F;" FontFamily="Segoe Fluent Icons" FontSize="36" Foreground="{ThemeResource TextFillColorTertiaryBrush}" HorizontalAlignment="Center"/>
+                            <TextBlock x:Name="EmptyFolderTitle" Text="No photos in this folder" FontSize="14" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center"/>
+                            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,4,0,0">
+                                <Button x:Name="EmptyFolderSubfoldersButton" Click="ListMode_Click" Visibility="Collapsed" Padding="12,6" CornerRadius="4">
+                                    <TextBlock x:Name="EmptyFolderSubfoldersText" Text="View Subfolders in List Mode" FontSize="12"/>
+                                </Button>
+                                <Button Click="BrowseButton_Click" Padding="12,6" CornerRadius="4">
+                                    <TextBlock Text="Browse Folders…" FontSize="12"/>
+                                </Button>
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+
                     <Grid x:Name="LoadingOverlay" Visibility="Collapsed" Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}" Canvas.ZIndex="500">
                         <ProgressRing x:Name="LoadingRing" Width="50" Height="50" HorizontalAlignment="Center" VerticalAlignment="Center" IsActive="False" />
                     </Grid>
 
-                    <Grid x:Name="MultiSelectActionBar" Grid.Row="1" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,6,0,8">
-                        <Border Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="16,8">
-                            <StackPanel Orientation="Horizontal" Spacing="16">
-                                <TextBlock x:Name="MultiSelectCountText" Text="0 selected" VerticalAlignment="Center" Style="{ThemeResource BodyStrongTextBlockStyle}" Margin="0,0,8,0" />
+                    <Grid x:Name="MultiSelectActionBar" Grid.Row="0" Visibility="Collapsed" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,16" Canvas.ZIndex="300">
+                        <Border Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}" BorderThickness="1" CornerRadius="22" Padding="18,6" Translation="0,0,32">
+                            <Border.Shadow>
+                                <ThemeShadow/>
+                            </Border.Shadow>
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <TextBlock x:Name="MultiSelectCountText" Text="0 selected" VerticalAlignment="Center" Style="{ThemeResource BodyStrongTextBlockStyle}" Margin="0,0,6,0" />
 
-                                <Button Click="MultiSelectCinematic_Click" Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Play Cinematic">
+                                <Button Click="MultiSelectCinematic_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,6" CornerRadius="6" ToolTipService.ToolTip="Play Cinematic Slideshow">
                                     <SymbolIcon Symbol="Play" />
                                 </Button>
-                                <Button Click="MultiSelectCollage_Click" Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Add to Collage">
+                                <Button Click="MultiSelectCollage_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,6" CornerRadius="6" ToolTipService.ToolTip="Add to Collage">
                                     <SymbolIcon Symbol="Pictures" />
                                 </Button>
-                                <Button Click="MultiSelectDelete_Click" Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Delete">
-                                    <SymbolIcon Symbol="Delete" Foreground="Red" />
+                                <Button Click="MultiSelectDelete_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,6" CornerRadius="6" ToolTipService.ToolTip="Delete Selected (Del)">
+                                    <SymbolIcon Symbol="Delete" Foreground="#FFD13438" />
                                 </Button>
-                                <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,4" Opacity="0.4"/>
-                                <Button Click="MultiSelectClear_Click" Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Clear Selection">
+                                <Rectangle Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,0" Opacity="0.5"/>
+                                <Button Click="MultiSelectClear_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,6" CornerRadius="6" ToolTipService.ToolTip="Clear Selection (Esc)">
                                     <SymbolIcon Symbol="Cancel" />
                                 </Button>
                             </StackPanel>
                         </Border>
                     </Grid>
 
-                    <Grid x:Name="ListPreviewBar" Grid.Row="2" Visibility="Collapsed"
+                    <Grid x:Name="ListPreviewBar" Grid.Row="1" Visibility="Collapsed"
                           Background="{ThemeResource LayerFillColorDefaultBrush}"
                           BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="360"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <Grid Margin="16,8,16,8" VerticalAlignment="Center">
+                        <Grid Margin="18,10,16,10" VerticalAlignment="Center">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
@@ -332,37 +464,37 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock x:Name="PreviewNameText" Grid.ColumnSpan="2" Margin="0,0,0,4" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxLines="1"/>
-                            <StackPanel Grid.Row="1" Spacing="0">
+                            <TextBlock x:Name="PreviewNameText" Grid.ColumnSpan="2" Margin="0,0,0,6" FontSize="13.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxLines="1"/>
+                            <StackPanel Grid.Row="1" Spacing="2">
                                 <Grid Height="20">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="108"/>
+                                        <ColumnDefinition Width="104"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="Type" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
                                     <TextBlock x:Name="PreviewTypeText" Grid.Column="1" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                 </Grid>
-                                <Grid Height="20">
+                                <Grid x:Name="PreviewSizeRow" Height="20">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="108"/>
+                                        <ColumnDefinition Width="104"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="Size" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
                                     <TextBlock x:Name="PreviewSizeText" Grid.Column="1" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                 </Grid>
-                                <Grid Height="20">
+                                <Grid x:Name="PreviewModifiedRow" Height="20">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="108"/>
+                                        <ColumnDefinition Width="104"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="Date modified" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
                                     <TextBlock x:Name="PreviewModifiedText" Grid.Column="1" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                 </Grid>
                             </StackPanel>
-                            <StackPanel Grid.Row="1" Grid.Column="1" Margin="20,0,0,0" Spacing="0">
+                            <StackPanel x:Name="PreviewPhotoRightColumn" Grid.Row="1" Grid.Column="1" Margin="20,0,0,0" Spacing="2">
                                 <Grid Height="20">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="108"/>
+                                        <ColumnDefinition Width="104"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="Dimensions" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
@@ -370,16 +502,16 @@
                                 </Grid>
                                 <Grid Height="20">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="108"/>
+                                        <ColumnDefinition Width="104"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="Date taken" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
                                     <TextBlock x:Name="PreviewTakenText" Grid.Column="1" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                 </Grid>
                             </StackPanel>
-                            <Grid Grid.Row="2" Grid.ColumnSpan="2" Height="20" Margin="0,2,0,0">
+                            <Grid Grid.Row="2" Grid.ColumnSpan="2" Height="20" Margin="0,4,0,0">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="108"/>
+                                    <ColumnDefinition Width="104"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="Location" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
@@ -388,11 +520,11 @@
                                 </Button>
                             </Grid>
                         </Grid>
-                        <Border Grid.Column="1" Height="132" Margin="0,8,12,8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="4">
+                        <Border Grid.Column="1" Width="236" Height="124" Margin="0,8,14,8" Padding="4" Background="{ThemeResource SubtleFillColorTertiaryBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="6" Tapped="PreviewThumbnail_Tapped" ToolTipService.ToolTip="Click to open (Enter)">
                             <Grid>
-                                <Image x:Name="PreviewPlaceholder" Width="32" Height="32" Source="ms-appx:///ModernImageViewer.ico" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                <FontIcon x:Name="PreviewFolderIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE8B7;" FontSize="64" Foreground="#FFF8D348" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                <Image x:Name="PreviewFolderImage" Stretch="Uniform" MaxWidth="112" MaxHeight="112" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <FontIcon x:Name="PreviewPlaceholder" FontFamily="Segoe Fluent Icons" Glyph="&#xEB9F;" FontSize="28" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <FontIcon x:Name="PreviewFolderIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE8B7;" FontSize="54" Foreground="#FFF8D348" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <Image x:Name="PreviewFolderImage" Stretch="Uniform" MaxWidth="96" MaxHeight="96" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 <Image x:Name="PreviewImage" Stretch="Uniform" Visibility="Collapsed"/>
                             </Grid>
                         </Border>

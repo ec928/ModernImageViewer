@@ -1,4 +1,4 @@
-﻿using Microsoft.Graphics.Canvas;
+using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Effects;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
@@ -196,13 +196,33 @@ namespace ModernImageViewer
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(SelectionOpacity));
                 OnPropertyChanged(nameof(SelectionWashOpacity));
+                OnPropertyChanged(nameof(TileCaptionSelectionOpacity));
+                OnPropertyChanged(nameof(HoverCheckOpacity));
+                OnPropertyChanged(nameof(ListHoverOpacity));
             }
         }
 
         public double SelectionOpacity => _isGridSelected ? 1 : 0;
 
-        // Faint on a photograph so the picture stays readable. Stronger on a list row, where every cell looks the same.
-        public double SelectionWashOpacity => _isGridSelected ? (_isListRow ? 0.42 : 0.18) : 0;
+        private bool _isPointerHovered;
+        public bool IsPointerHovered
+        {
+            get => _isPointerHovered;
+            set
+            {
+                if (_isPointerHovered == value) return;
+                _isPointerHovered = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(HoverCheckOpacity));
+                OnPropertyChanged(nameof(ListHoverOpacity));
+            }
+        }
+
+        // Soft tint for the tile caption strip and list row pill so text and photos stay vibrant.
+        public double SelectionWashOpacity => _isGridSelected ? 0.16 : 0;
+        public double TileCaptionSelectionOpacity => _isGridSelected ? 0.16 : 0;
+        public double HoverCheckOpacity => (!_isGridSelected && _isPointerHovered && !IsDirectory) ? 1 : 0;
+        public double ListHoverOpacity => (!_isGridSelected && _isPointerHovered) ? 1 : 0;
 
         private bool _isLoadingThumb = false;
         private static readonly SemaphoreSlim _thumbSemaphore = new(4);
