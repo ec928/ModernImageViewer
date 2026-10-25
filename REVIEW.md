@@ -83,3 +83,4 @@ The Win2D viewer core is real, but GPU lifetime was not reference-counted end-to
 - 2026-10-25: v0.11.7. Arrow keys, Page Up, Page Down, Home, and End move a cursor on the tile grid. Enter opens that photo and Enter again returns to the tiles. The cursor is a thin ring, not a selection.
 - 2026-10-25: v0.11.8. The tile cursor is a light edge inside the photograph. The filename is left clear. A selected tile keeps its check and loses the box around the caption.
 - 2026-10-25: v0.11.9. A selected photograph gets an accent edge and a check on the picture. The filename stays clear.
+- 2026-10-25: v0.11.10. The header is a thin bar with refresh, reset, sort, and tiles or list. List view is filenames in columns. A separate window previews the cursor row and hides while a photo is open.

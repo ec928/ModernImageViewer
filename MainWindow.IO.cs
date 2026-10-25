@@ -576,10 +576,10 @@ namespace ModernImageViewer
 
         private async void RefreshFolder_Click(object s, RoutedEventArgs e)
         {
-            if (!string.IsNullOrEmpty(_currentDirectory) && Directory.Exists(_currentDirectory))
-            {
-                await ScanFolder(_currentDirectory);
-            }
+            if (string.IsNullOrEmpty(_currentDirectory) || !Directory.Exists(_currentDirectory)) return;
+            string? keepPath = _currentIndex >= 0 && _currentIndex < Images.Count ? Images[_currentIndex].Path : null;
+            await ScanFolder(_currentDirectory);
+            RestoreGridKeyFocus(keepPath);
         }
         private void ClearRecentFolders_Click(object sender, RoutedEventArgs e)
         {
@@ -625,8 +625,29 @@ namespace ModernImageViewer
                 SyncTileCursor(scroll: true);
 
                 _currentSettings.SortOrder = tag;
+                SyncSortChecks(tag);
                 SaveAllSettings();
             }
+        }
+
+        private void HeaderSortFlyout_Opening(object sender, object e) => SyncSortChecks(_currentSettings.SortOrder);
+
+        private void SyncSortChecks(string tag)
+        {
+            if (tag != "NameDesc" && tag != "DateDesc" && tag != "DateAsc") tag = "NameAsc";
+            SetSortCheck(SortNameAscItem, tag == "NameAsc");
+            SetSortCheck(SortNameDescItem, tag == "NameDesc");
+            SetSortCheck(SortDateAscItem, tag == "DateAsc");
+            SetSortCheck(SortDateDescItem, tag == "DateDesc");
+            SetSortCheck(HeaderSortNameAscItem, tag == "NameAsc");
+            SetSortCheck(HeaderSortNameDescItem, tag == "NameDesc");
+            SetSortCheck(HeaderSortDateAscItem, tag == "DateAsc");
+            SetSortCheck(HeaderSortDateDescItem, tag == "DateDesc");
+        }
+
+        private static void SetSortCheck(RadioMenuFlyoutItem? item, bool on)
+        {
+            if (item != null) item.IsChecked = on;
         }
 
         private void RecentFoldersMenu_Opening(object s, object e)

@@ -129,6 +129,8 @@ namespace ModernImageViewer
             if (index < 0 || index >= Images.Count || _canvasDevice == null) return;
 
             _currentIndex = index;
+            // Visible before the cursor sync so the list preview hides instead of flashing on top of the photo.
+            ViewerControl.Visibility = Visibility.Visible;
             SyncTileCursor(scroll: false);
             int myLoadId = ++_currentImageLoadId;
 
@@ -150,6 +152,7 @@ namespace ModernImageViewer
             var currentItem = Images[index];
 
             ViewerControl.Visibility = Visibility.Visible;
+            SyncTileChrome();
             if (HoverTriggerZone != null) HoverTriggerZone.Visibility = Visibility.Collapsed;
 
             ViewerControl.PrepareForNewImage(currentItem.Thumbnail);
@@ -322,15 +325,16 @@ namespace ModernImageViewer
                 ViewerControl.InjectImage(published, false);
         }
 
-        private static async Task<Size> GetNativeImageSizeAsync(string path)
+        private static async Task<Size> GetNativeImageSizeAsync(string path, CancellationToken token = default)
         {
             try
             {
-                var file = await StorageFile.GetFileFromPathAsync(path);
-                using var stream = await file.OpenReadAsync();
-                var decoder = await BitmapDecoder.CreateAsync(stream);
+                var file = await StorageFile.GetFileFromPathAsync(path).AsTask(token);
+                using var stream = await file.OpenReadAsync().AsTask(token);
+                var decoder = await BitmapDecoder.CreateAsync(stream).AsTask(token);
                 return new Size(decoder.OrientedPixelWidth, decoder.OrientedPixelHeight);
             }
+            catch (OperationCanceledException) { throw; }
             catch { return new Size(0, 0); }
         }
 
@@ -559,7 +563,9 @@ namespace ModernImageViewer
             ViewerControl.PrepareForNewImage(null);
 
             ViewerControl.Visibility = Visibility.Collapsed;
+            SyncTileChrome();
             if (HoverTriggerZone != null) HoverTriggerZone.Visibility = Visibility.Visible;
+            UpdateListPreview(_currentIndex >= 0 && _currentIndex < Images.Count ? Images[_currentIndex] : null);
 
             TryDisposeRawGpuBitmap();
             FlushDeferredFolderRefresh();
@@ -652,6 +658,36 @@ namespace ModernImageViewer
                 if (next != null) next.IsKeyboardCursor = true;
             }
             if (scroll && next != null) RevealTile(_currentIndex);
+            UpdateListPreview(next);
+        }
+
+        private ListPreviewWindow? _listPreview;
+        private bool _listPreviewDismissed;
+
+        // The preview is a separate window. Closing it stays closed until list view is entered again.
+        private void UpdateListPreview(ImageItem? item)
+        {
+            bool photoOpen = ViewerControl != null && ViewerControl.Visibility == Visibility.Visible;
+            if (_listMode && item != null && !_listPreviewDismissed && !photoOpen)
+            {
+                if (_listPreview == null)
+                {
+                    _listPreview = new ListPreviewWindow();
+                    _listPreview.Dismissed += (_, _) =>
+                    {
+                        _listPreviewDismissed = true;
+                        _listPreview = null;
+                    };
+                }
+                double scale = 1;
+                if (Content?.XamlRoot != null && Content.XamlRoot.RasterizationScale > 0)
+                    scale = Content.XamlRoot.RasterizationScale;
+                _listPreview.ShowItem(item, _hWnd, _appWindow, scale);
+            }
+            else
+            {
+                _listPreview?.HidePreview();
+            }
         }
 
         private int TileColumnCount()
@@ -678,9 +714,9 @@ namespace ModernImageViewer
 
         private int TopLeftVisibleTile()
         {
-            var sv = ImageGrid != null ? FindScrollViewer(ImageGrid) : null;
+            var scroll = ImageGrid != null ? FindScrollViewer(ImageGrid) : null;
             return ViewerMath.VisibleTileOrigin(
-                sv?.VerticalOffset ?? 0,
+                scroll?.VerticalOffset ?? 0,
                 ImageGrid?.Padding.Top ?? 0,
                 _imageWrapGrid?.ItemHeight ?? 164,
                 TileColumnCount(),
@@ -783,6 +819,13 @@ namespace ModernImageViewer
         private void RootGrid_PreviewKeyDown(object sender, KeyRoutedEventArgs e)
         {
             if (TileKeyFocusStays()) return;
+
+            // A focused header button keeps Enter. Arrows stay off the grid so they do not select.
+            if (FocusIsInside(TileHeader))
+            {
+                if (e.Key != Windows.System.VirtualKey.Enter) e.Handled = true;
+                return;
+            }
 
             if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible)
             {
@@ -888,17 +931,185 @@ namespace ModernImageViewer
                 {
                     appW.SetPresenter(Microsoft.UI.Windowing.AppWindowPresenterKind.Default);
                     this.ExtendsContentIntoTitleBar = true;
-                    this.SetTitleBar(DragZone);
-                    if (DragZone != null) DragZone.Visibility = Visibility.Visible;
                 }
                 else
                 {
                     this.ExtendsContentIntoTitleBar = false;
-                    if (DragZone != null) DragZone.Visibility = Visibility.Collapsed;
                     appW.SetPresenter(Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen);
                 }
             }
             _isFullscreen = !_isFullscreen;
+            SyncTileChrome();
+        }
+
+        // The header is the tile screen's title bar. A photo covers it, and the old drag strip comes back for that window.
+        private void SyncTileChrome()
+        {
+            bool grid = !_isFullscreen && (ViewerControl == null || ViewerControl.Visibility != Visibility.Visible);
+            if (TileHeader != null)
+                TileHeader.Visibility = grid ? Visibility.Visible : Visibility.Collapsed;
+            if (DragZone != null)
+            {
+                DragZone.Visibility = (!_isFullscreen && !grid) ? Visibility.Visible : Visibility.Collapsed;
+                if (grid) DragZone.Opacity = 0;
+            }
+            if (_isFullscreen) return;
+            UIElement? bar = grid ? TileHeader : DragZone;
+            if (bar != null) this.SetTitleBar(bar);
+        }
+
+        private void ApplyCaptionInset()
+        {
+            if (CaptionInset == null) return;
+            double scale = 1;
+            if (Content?.XamlRoot != null && Content.XamlRoot.RasterizationScale > 0)
+                scale = Content.XamlRoot.RasterizationScale;
+            double inset = _appWindow.TitleBar.RightInset / scale;
+            if (inset > 1) CaptionInset.Width = new GridLength(inset);
+        }
+
+        private bool _listMode;
+        private bool _applyingViewMode;
+        private const double ListRowHeight = 22;
+        private const double ListColumnWidth = 200;
+
+        private void ViewMode_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not FrameworkElement button || button.Tag is not string tag) return;
+            bool wantList = tag == "List";
+            if (wantList == _listMode) return;
+            if (wantList) _listPreviewDismissed = false;
+            _listMode = wantList;
+            ApplyViewMode();
+        }
+
+        private void ApplyViewMode()
+        {
+            if (ImageGrid == null || _applyingViewMode) return;
+            _applyingViewMode = true;
+            try
+            {
+            ImageItem.ListRows = _listMode;
+            foreach (var item in Images) item.IsListRow = _listMode;
+            if (TileViewIcon != null) TileViewIcon.Opacity = _listMode ? 0.35 : 1;
+            if (ListViewIcon != null) ListViewIcon.Opacity = _listMode ? 1 : 0.35;
+            ImageGrid.ItemContainerStyle = _listMode && ImageGrid.Resources["DenseListItemStyle"] is Style dense ? dense : null;
+            if (_listMode)
+                ImageGrid.Padding = new Thickness(0, 4, 0, 0);
+            else
+                ImageGrid.Padding = new Thickness(10, 8, 10, 0);
+            ApplyItemSize();
+            ImageGrid.UpdateLayout();
+            // List view has nothing to preview until a row is the cursor. A folder open leaves the index unset.
+            if (_listMode && Images.Count > 0 && (_currentIndex < 0 || _currentIndex >= Images.Count))
+            {
+                int origin = TopLeftVisibleTile();
+                _currentIndex = origin >= 0 && origin < Images.Count ? origin : 0;
+            }
+            SyncTileCursor(scroll: false);
+            KeepCursorInView();
+            // The click leaves focus on the header button, which then swallows the arrow keys.
+            // The wrap grid also resets its scroll offset while the new cell size is applied.
+            int index = _currentIndex;
+            ImageGrid.DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+            {
+                if (index != _currentIndex) return;
+                SyncTileCursor(scroll: false);
+                KeepCursorInView();
+                RootGrid.Focus(FocusState.Programmatic);
+            });
+            }
+            finally
+            {
+                _applyingViewMode = false;
+            }
+        }
+
+        // The refresh button sits in the header. A focused header button swallows arrow keys.
+        private void RestoreGridKeyFocus(string? keepPath)
+        {
+            if (_isScanning) return;
+            if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible) return;
+            if (!string.IsNullOrEmpty(keepPath))
+            {
+                for (int i = 0; i < Images.Count; i++)
+                {
+                    if (string.Equals(Images[i].Path, keepPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        _currentIndex = i;
+                        break;
+                    }
+                }
+            }
+            if (Images.Count > 0 && (_currentIndex < 0 || _currentIndex >= Images.Count))
+            {
+                int origin = TopLeftVisibleTile();
+                _currentIndex = origin >= 0 && origin < Images.Count ? origin : 0;
+            }
+            SyncTileCursor(scroll: false);
+            KeepCursorInView();
+            int index = _currentIndex;
+            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+            {
+                if (index != _currentIndex) return;
+                if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible) return;
+                RootGrid.Focus(FocusState.Programmatic);
+            });
+        }
+
+        private void KeepCursorInView()
+        {
+            if (_currentIndex < 0 || _currentIndex >= Images.Count) return;
+            RevealTile(_currentIndex);
+            if (_listMode) PinListToLeftEdge();
+        }
+
+        private void ApplyItemSize()
+        {
+            if (_imageWrapGrid == null) return;
+            if (_listMode)
+            {
+                double width = ListViewportWidth();
+                if (width > 1)
+                {
+                    int columns = Math.Max(2, (int)(width / ListColumnWidth));
+                    double itemWidth = Math.Floor(width / columns);
+                    if (Math.Abs(_imageWrapGrid.ItemWidth - itemWidth) > 1)
+                        _imageWrapGrid.ItemWidth = itemWidth;
+                }
+                _imageWrapGrid.ItemHeight = ListRowHeight;
+            }
+            else if (ThumbSizeSlider != null)
+            {
+                _imageWrapGrid.ItemWidth = _imageWrapGrid.ItemHeight = ThumbSizeSlider.Value;
+            }
+        }
+
+        private double ListViewportWidth()
+        {
+            var sv = ImageGrid != null ? FindScrollViewer(ImageGrid) : null;
+            if (sv != null && sv.ViewportWidth > 1) return sv.ViewportWidth;
+            if (_imageWrapGrid != null && _imageWrapGrid.ActualWidth > 1) return _imageWrapGrid.ActualWidth;
+            if (ImageGrid == null) return 0;
+            return Math.Max(0, ImageGrid.ActualWidth - ImageGrid.Padding.Left - ImageGrid.Padding.Right);
+        }
+
+        // The first list layout can leave the grid scrolled sideways, so the left column is cut off until a photo is opened.
+        private void PinListToLeftEdge()
+        {
+            var sv = FindScrollViewer(ImageGrid);
+            if (sv == null || sv.HorizontalOffset < 0.5) return;
+            sv.ChangeView(0, null, null, true);
+        }
+
+        private void ImageGrid_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (_listMode)
+            {
+                ApplyItemSize();
+                PinListToLeftEdge();
+            }
+            ApplyCaptionInset();
         }
 
         private void ResetWindow_Click(object s, RoutedEventArgs e)
@@ -938,15 +1149,13 @@ namespace ModernImageViewer
         private void ImageWrapGrid_Loaded(object sender, RoutedEventArgs e)
         {
             _imageWrapGrid = sender as ItemsWrapGrid;
-            if (_imageWrapGrid != null && ThumbSizeSlider != null)
-            {
-                _imageWrapGrid.ItemWidth = _imageWrapGrid.ItemHeight = ThumbSizeSlider.Value;
-            }
+            if (!_applyingViewMode) ApplyViewMode();
         }
 
         private void ThumbSizeSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
         {
-            if (_imageWrapGrid != null) _imageWrapGrid.ItemWidth = _imageWrapGrid.ItemHeight = e.NewValue;
+            if (!_listMode && _imageWrapGrid != null)
+                _imageWrapGrid.ItemWidth = _imageWrapGrid.ItemHeight = e.NewValue;
         }
 
         private void HoverZone_PointerEntered(object s, PointerRoutedEventArgs e)
@@ -981,9 +1190,16 @@ namespace ModernImageViewer
         {
             if (a.Item is ImageItem i)
             {
-                if (a.InRecycleQueue) i.ClearThumbnail();
-                else if (a.Phase == 2) _ = i.LoadThumbnailAsync();
-                else a.RegisterUpdateCallback(ImageGrid_ContainerContentChanging);
+                // List rows do not own a thumbnail. Clearing here would drop pictures the tile view already loaded.
+                if (a.InRecycleQueue)
+                {
+                    if (!_listMode) i.ClearThumbnail();
+                }
+                else if (!_listMode)
+                {
+                    if (a.Phase == 2) _ = i.LoadThumbnailAsync();
+                    else a.RegisterUpdateCallback(ImageGrid_ContainerContentChanging);
+                }
             }
         }
 

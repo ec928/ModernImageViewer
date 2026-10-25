@@ -16,6 +16,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.ApplicationModel.DataTransfer;
+using Windows.UI;
 using Windows.Storage;
 using ModernImageViewer.Collage;
 
@@ -114,12 +115,17 @@ namespace ModernImageViewer
             _appWindow = AppWindow.GetFromWindowId(wndId);
 
             this.ExtendsContentIntoTitleBar = true;
-            this.SetTitleBar(DragZone);
+            var titleBar = _appWindow.TitleBar;
+            titleBar.ButtonBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0);
+            titleBar.ButtonInactiveBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0);
+            ApplyCaptionInset();
+            SyncTileChrome();
 
             _canvasDevice = CanvasDevice.GetSharedDevice();
 
             this.Closed += (s, e) =>
             {
+                _listPreview?.Close();
                 RootGrid.RemoveHandler(UIElement.KeyDownEvent, _globalKeyDownHandler);
                 RootGrid.RemoveHandler(UIElement.KeyUpEvent, _globalKeyUpHandler);
                 Instance = null;
@@ -339,10 +345,7 @@ namespace ModernImageViewer
             if (settings.WindowX != -1 && settings.WindowY != -1)
                 _appWindow?.Move(new Windows.Graphics.PointInt32(settings.WindowX, settings.WindowY));
 
-            if (settings.SortOrder == "NameDesc") SortNameDescItem.IsChecked = true;
-            else if (settings.SortOrder == "DateDesc") SortDateDescItem.IsChecked = true;
-            else if (settings.SortOrder == "DateAsc") SortDateAscItem.IsChecked = true;
-            else SortNameAscItem.IsChecked = true;
+            SyncSortChecks(settings.SortOrder);
 
             _currentGamma = settings.Gamma;
             ImageEditorPath = settings.ImageEditorPath;

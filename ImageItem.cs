@@ -1,6 +1,7 @@
 ﻿using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Effects;
 using Microsoft.UI.Dispatching;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using System;
@@ -76,6 +77,32 @@ namespace ModernImageViewer
             set { if (_path != value) { _path = value; OnPropertyChanged(); } }
         }
         public DateTime DateModified { get; set; }
+        public string DateText => DateModified.ToString("yyyy-MM-dd HH:mm");
+
+        // The tile screen's list/tile switch. One template draws both, so the cell can change shape.
+        public static bool ListRows;
+
+        private bool _isListRow;
+        public ImageItem()
+        {
+            _isListRow = ListRows;
+        }
+
+        public bool IsListRow
+        {
+            get => _isListRow;
+            set
+            {
+                if (_isListRow == value) return;
+                _isListRow = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(TileVisibility));
+                OnPropertyChanged(nameof(ListVisibility));
+            }
+        }
+
+        public Visibility TileVisibility => _isListRow ? Visibility.Collapsed : Visibility.Visible;
+        public Visibility ListVisibility => _isListRow ? Visibility.Visible : Visibility.Collapsed;
         public string SizeString { get; set; } = string.Empty;
         public bool HasExifData { get; set; } = false;
 
