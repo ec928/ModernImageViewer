@@ -743,6 +743,16 @@ namespace ModernImageViewer
             if (isCtrl || isShift) return;
 
             if (e.ClickedItem is ImageItem i) LoadFullImage(Images.IndexOf(i));
+
+            // The grid selects whatever was clicked. A plain click only opens the photo,
+            // and the grid applies that selection around this call, so clear it once the
+            // click has finished or the border and the "1 selected" bar survive the viewer.
+            ImageGrid.SelectedItems.Clear();
+            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+            {
+                if (ImageGrid.SelectedItems.Count > 0)
+                    ImageGrid.SelectedItems.Clear();
+            });
         }
 
         private void DetachImage_Click(object sender, RoutedEventArgs e)

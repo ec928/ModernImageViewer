@@ -79,3 +79,4 @@ The Win2D viewer core is real, but GPU lifetime was not reference-counted end-to
 - 2026-08-27: v0.11.3. Explorer name ordering (#33). `NaturalSort` calls `StrCmpLogicalW` rather than reimplementing the rule. Six xUnit cases, one encoding the exact order from Ed's screenshot; MIV tests 5 -> 11.
 - 2026-09-17: v0.11.4. Persistent sorting order. Added `SortOrder` to `AppSettings`, applied persistent sort choice in `ScanFolder`, and updated UI to use `RadioMenuFlyoutItem` to show current state.
 - 2026-10-25: v0.11.5. The viewer decodes to the size of the screen, and to the file when zoomed past fit. A very wide image can fit. Large folders append instead of resetting. Drag-out attaches the file before the drag starts. Closing a floating window cancels a decode still in progress. Portrait slides blur the background once.
+- 2026-10-25: v0.11.6. A plain click opens a photo and leaves the grid with nothing selected. Ctrl or Shift still selects.
