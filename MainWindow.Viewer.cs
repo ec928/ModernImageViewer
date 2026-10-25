@@ -637,14 +637,7 @@ namespace ModernImageViewer
 
         private void MainWindow_Activated(object sender, WindowActivatedEventArgs args)
         {
-            if (args.WindowActivationState == WindowActivationState.Deactivated)
-            {
-                EndAltPeek();
-                return;
-            }
-
-            if (Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(this.Content.XamlRoot) == null)
-                RootGrid.Focus(FocusState.Programmatic);
+            if (args.WindowActivationState == WindowActivationState.Deactivated) EndAltPeek();
         }
 
         private ImageItem? _tileCursorItem;
@@ -757,7 +750,9 @@ namespace ModernImageViewer
 
         private bool TileKeyFocusStays()
         {
-            if (Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(this.Content.XamlRoot) is not DependencyObject node)
+            var xamlRoot = this.Content?.XamlRoot;
+            if (xamlRoot == null) return false;
+            if (Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(xamlRoot) is not DependencyObject node)
                 return false;
             if (node is TextBox or PasswordBox or RichEditBox or Slider or ComboBox or ComboBoxItem or MenuFlyoutItem)
                 return true;
@@ -773,7 +768,9 @@ namespace ModernImageViewer
         private bool FocusIsInside(DependencyObject? root)
         {
             if (root == null) return false;
-            if (Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(this.Content.XamlRoot) is not DependencyObject node)
+            var xamlRoot = this.Content?.XamlRoot;
+            if (xamlRoot == null) return false;
+            if (Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(xamlRoot) is not DependencyObject node)
                 return false;
             while (node != null)
             {

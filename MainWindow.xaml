@@ -182,11 +182,9 @@
            Foreground="{ThemeResource TextFillColorPrimaryBrush}"
            FontSize="11"
            ToolTipService.ToolTip="{x:Bind Name}"/>
-                                    <Border Grid.RowSpan="2" Margin="2" CornerRadius="3" BorderThickness="1.5" IsHitTestVisible="False" Opacity="{x:Bind KeyboardCursorOpacity, Mode=OneWay}">
-                                        <Border.BorderBrush>
-                                            <SolidColorBrush Color="{ThemeResource SystemAccentColor}" Opacity="0.9"/>
-                                        </Border.BorderBrush>
-                                    </Border>
+                                    <Border Grid.RowSpan="2" Margin="2" CornerRadius="3" BorderThickness="1.5" IsHitTestVisible="False"
+                                            BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+                                            Opacity="{x:Bind KeyboardCursorOpacity, Mode=OneWay}"/>
                                 </Grid>
                             </DataTemplate>
                         </GridView.ItemTemplate>
