@@ -81,3 +81,4 @@ The Win2D viewer core is real, but GPU lifetime was not reference-counted end-to
 - 2026-10-25: v0.11.5. The viewer decodes to the size of the screen, and to the file when zoomed past fit. A very wide image can fit. Large folders append instead of resetting. Drag-out attaches the file before the drag starts. Closing a floating window cancels a decode still in progress. Portrait slides blur the background once.
 - 2026-10-25: v0.11.6. A plain click opens a photo and leaves the grid with nothing selected. Ctrl or Shift still selects.
 - 2026-10-25: v0.11.7. Arrow keys, Page Up, Page Down, Home, and End move a cursor on the tile grid. Enter opens that photo and Enter again returns to the tiles. The cursor is a thin ring, not a selection.
+- 2026-10-25: v0.11.8. The tile cursor is a light edge inside the photograph. The filename is left clear. A selected tile keeps its check and loses the box around the caption.

@@ -151,6 +151,17 @@
             <SplitView.Content>
                 <Grid>
                     <GridView x:Name="ImageGrid" Padding="10,48,10,0" SelectionMode="Extended" SelectionChanged="ImageGrid_SelectionChanged" IsItemClickEnabled="True" ItemClick="ImageGrid_ItemClick" CanDragItems="True" DragItemsStarting="ImageGrid_DragItemsStarting" ItemsSource="{x:Bind Images, Mode=OneWay}" ContainerContentChanging="ImageGrid_ContainerContentChanging" FocusVisualPrimaryThickness="0" FocusVisualSecondaryThickness="0">
+                        <GridView.Resources>
+                            <SolidColorBrush x:Key="GridViewItemBackgroundSelected" Color="Transparent"/>
+                            <SolidColorBrush x:Key="GridViewItemBackgroundSelectedPointerOver" Color="Transparent"/>
+                            <SolidColorBrush x:Key="GridViewItemBackgroundSelectedPressed" Color="Transparent"/>
+                            <SolidColorBrush x:Key="GridViewItemSelectedBorderBrush" Color="Transparent"/>
+                            <SolidColorBrush x:Key="GridViewItemSelectedPointerOverBorderBrush" Color="Transparent"/>
+                            <SolidColorBrush x:Key="GridViewItemSelectedPressedBorderBrush" Color="Transparent"/>
+                            <SolidColorBrush x:Key="GridViewItemSelectedDisabledBorderBrush" Color="Transparent"/>
+                            <SolidColorBrush x:Key="GridViewItemSelectedInnerBorderBrush" Color="Transparent"/>
+                            <Thickness x:Key="GridViewItemSelectedBorderThickness">0</Thickness>
+                        </GridView.Resources>
                         <GridView.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <ItemsWrapGrid x:Name="ImageWrapGrid" Orientation="Horizontal" CacheLength="10" ItemWidth="164" ItemHeight="164" Loaded="ImageWrapGrid_Loaded" />
@@ -182,9 +193,10 @@
            Foreground="{ThemeResource TextFillColorPrimaryBrush}"
            FontSize="11"
            ToolTipService.ToolTip="{x:Bind Name}"/>
-                                    <Border Grid.RowSpan="2" Margin="2" CornerRadius="3" BorderThickness="1.5" IsHitTestVisible="False"
-                                            BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
-                                            Opacity="{x:Bind KeyboardCursorOpacity, Mode=OneWay}"/>
+                                    <Grid Grid.Row="0" IsHitTestVisible="False" Opacity="{x:Bind KeyboardCursorOpacity, Mode=OneWay}">
+                                        <Border Margin="4" CornerRadius="2" BorderThickness="1.5" BorderBrush="#F2FFFFFF"/>
+                                        <Border Margin="5.5" CornerRadius="1" BorderThickness="1" BorderBrush="#59000000"/>
+                                    </Grid>
                                 </Grid>
                             </DataTemplate>
                         </GridView.ItemTemplate>
