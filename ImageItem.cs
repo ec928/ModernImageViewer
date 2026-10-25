@@ -98,11 +98,52 @@ namespace ModernImageViewer
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(TileVisibility));
                 OnPropertyChanged(nameof(ListVisibility));
+                OnPropertyChanged(nameof(SelectionWashOpacity));
             }
         }
 
         public Visibility TileVisibility => _isListRow ? Visibility.Collapsed : Visibility.Visible;
         public Visibility ListVisibility => _isListRow ? Visibility.Visible : Visibility.Collapsed;
+
+        // A list cell that navigates. It is never one of the photos in Images.
+        public bool IsDirectory { get; private set; }
+        public bool IsParentDirectory { get; private set; }
+        public string DirectoryGlyph { get; private set; } = "";
+        public Visibility PhotoListIconVisibility => IsDirectory ? Visibility.Collapsed : Visibility.Visible;
+        public Visibility DirectoryListIconVisibility => IsDirectory ? Visibility.Visible : Visibility.Collapsed;
+
+        private ImageSource? _directoryIcon;
+        public ImageSource? DirectoryIcon
+        {
+            get => _directoryIcon;
+            set
+            {
+                if (ReferenceEquals(_directoryIcon, value)) return;
+                _directoryIcon = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(DirectoryFallbackVisibility));
+                OnPropertyChanged(nameof(ParentUpBadgeVisibility));
+            }
+        }
+
+        // Gold folder outline until the coloured Windows icon arrives.
+        public Visibility DirectoryFallbackVisibility => IsDirectory && _directoryIcon == null ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility ParentUpBadgeVisibility => IsParentDirectory && _directoryIcon == null ? Visibility.Visible : Visibility.Collapsed;
+
+        public static ImageItem CreateDirectory(string name, string path, bool parent, string glyph)
+        {
+            if (string.IsNullOrEmpty(name)) name = path ?? "";
+            return new ImageItem
+            {
+                Name = name,
+                Path = path ?? "",
+                IsDirectory = true,
+                IsParentDirectory = parent,
+                DirectoryGlyph = glyph ?? "",
+                IsListRow = true
+            };
+        }
+
         public string SizeString { get; set; } = string.Empty;
         public bool HasExifData { get; set; } = false;
 
@@ -154,10 +195,14 @@ namespace ModernImageViewer
                 _isGridSelected = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(SelectionOpacity));
+                OnPropertyChanged(nameof(SelectionWashOpacity));
             }
         }
 
         public double SelectionOpacity => _isGridSelected ? 1 : 0;
+
+        // Faint on a photograph so the picture stays readable. Stronger on a list row, where every cell looks the same.
+        public double SelectionWashOpacity => _isGridSelected ? (_isListRow ? 0.42 : 0.18) : 0;
 
         private bool _isLoadingThumb = false;
         private static readonly SemaphoreSlim _thumbSemaphore = new(4);
@@ -246,6 +291,7 @@ namespace ModernImageViewer
 
         public Task LoadThumbnailAsync()
         {
+            if (IsDirectory) return Task.CompletedTask;
             _thumbnailTask = InternalLoadThumbnailAsync();
             return _thumbnailTask;
         }

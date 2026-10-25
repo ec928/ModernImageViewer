@@ -82,6 +82,7 @@ namespace ModernImageViewer
             if (targetItem != null)
             {
                 _currentIndex = Images.IndexOf(targetItem);
+                if (_listMode) PlaceListCursorOnCurrentImage();
                 SyncTileCursor(scroll: false);
                 _currentRenderedItem = targetItem;
                 ViewerControl.TargetImage = targetItem;
@@ -98,6 +99,7 @@ namespace ModernImageViewer
             else
             {
                 _currentIndex = -1;
+                _listCursor = -1;
                 SyncTileCursor(scroll: false);
                 ClosePreviewInternal();
             }
@@ -107,12 +109,22 @@ namespace ModernImageViewer
 
         private async Task UpdateNavigationTreeOnlyAsync(string folderPath)
         {
+            if (folderPath == DriveRootPath)
+            {
+                ShowDriveList();
+                return;
+            }
             if (string.IsNullOrEmpty(folderPath) || !Directory.Exists(folderPath)) return;
 
             int myScanId = ++_currentScanId;
             _isScanning = false;
+            _listReturnPath = IsChildOf(_currentDirectory, folderPath) ? _currentDirectory : null;
             _currentDirectory = folderPath;
+            _currentIndex = -1;
+            _listCursor = -1;
             Images.Clear();
+            _childFolders = [];
+            if (_listEntries.Count > 0) _listEntries.Clear();
             if (LoadingRing != null) LoadingRing.IsActive = false;
             if (LoadingOverlay != null) LoadingOverlay.Visibility = Visibility.Collapsed;
 
@@ -146,11 +158,25 @@ namespace ModernImageViewer
             if (myScanId != _currentScanId) return;
 
             _hopFolders = folderData.HopDirs;
+            _childFolders = folderData.SubDirs;
             PopulateTreeView(folderData.Parent, folderData.HopDirs, folderData.SubDirs, folderPath, 0);
+            if (_listMode)
+            {
+                RebuildListEntries();
+                bool returnedToFolder = TryPlaceListCursorOnReturnedFolder();
+                if (!returnedToFolder) PlaceListCursorOnCurrentImage();
+                SyncTileCursor(scroll: returnedToFolder);
+            }
+            _listReturnPath = null;
         }
 
         private async Task ScanFolder(string folderPath)
         {
+            if (folderPath == DriveRootPath)
+            {
+                ShowDriveList();
+                return;
+            }
             if (string.IsNullOrEmpty(folderPath) || !Directory.Exists(folderPath)) return;
 
             if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible && !_isStartupIndexing)
@@ -160,6 +186,7 @@ namespace ModernImageViewer
             if (!_isStartupIndexing)
             {
                 _currentIndex = -1;
+                _listCursor = -1;
                 SyncTileCursor(scroll: false);
                 _currentRenderedItem = null;
                 _isHighFidelityActive = false;
@@ -175,6 +202,7 @@ namespace ModernImageViewer
 
             int myScanId = ++_currentScanId;
             _isScanning = true;
+            _listReturnPath = IsChildOf(_currentDirectory, folderPath) ? _currentDirectory : null;
             _currentDirectory = folderPath;
 
             UpdateBreadcrumbs(folderPath);
@@ -187,6 +215,8 @@ namespace ModernImageViewer
                 item.ClearThumbnail();
             }
             Images.Clear();
+            _childFolders = [];
+            if (_listEntries.Count > 0) _listEntries.Clear();
 
             var enumOptions = new EnumerationOptions { IgnoreInaccessible = true };
 
@@ -223,10 +253,15 @@ namespace ModernImageViewer
                 var items = fileTask.Result;
 
                 _hopFolders = folderData.HopDirs;
+                _childFolders = folderData.SubDirs;
                 PopulateTreeView(folderData.Parent, folderData.HopDirs, folderData.SubDirs, folderPath, items.Count);
 
-                if (LoadingRing != null) LoadingRing.IsActive = false;
-                if (LoadingOverlay != null) LoadingOverlay.Visibility = Visibility.Collapsed;
+                // Tile mode shows pictures as each batch lands. List mode waits, so the folder cells and the photos appear together.
+                if (!_listMode)
+                {
+                    if (LoadingRing != null) LoadingRing.IsActive = false;
+                    if (LoadingOverlay != null) LoadingOverlay.Visibility = Visibility.Collapsed;
+                }
 
                 const int batchSize = 100;
                 for (int i = 0; i < items.Count; i += batchSize)
@@ -240,7 +275,24 @@ namespace ModernImageViewer
 
                 if (myScanId == _currentScanId)
                 {
+                    if (_listMode) RebuildListEntries();
                     if (items.Count > 0) AddFolderToRecent(folderPath);
+                    bool seeded = false;
+                    if (items.Count > 0 && (_currentIndex < 0 || _currentIndex >= Images.Count))
+                    {
+                        _currentIndex = 0;
+                        seeded = true;
+                    }
+                    bool returnedToFolder = false;
+                    if (_listMode)
+                    {
+                        returnedToFolder = TryPlaceListCursorOnReturnedFolder();
+                        if (!returnedToFolder) PlaceListCursorOnCurrentImage();
+                        SyncTileCursor(scroll: returnedToFolder);
+                    }
+                    else if (seeded)
+                        SyncTileCursor(scroll: false);
+                    _listReturnPath = null;
                     RestartFolderWatcher(folderPath);
                 }
             }
@@ -387,6 +439,135 @@ namespace ModernImageViewer
             _folderWatcher = null;
         }
 
+        private static List<FolderItem> ListDrives()
+        {
+            var list = new List<FolderItem>();
+            DriveInfo[] drives;
+            try { drives = DriveInfo.GetDrives(); }
+            catch { return list; }
+            foreach (var drive in drives)
+            {
+                if (drive.DriveType == DriveType.NoRootDirectory) continue;
+                string letter = drive.Name.TrimEnd('\\', '/');
+                if (letter.Length == 0) continue;
+                string name = letter;
+                if (drive.DriveType == DriveType.Fixed)
+                {
+                    try
+                    {
+                        if (drive.IsReady && !string.IsNullOrWhiteSpace(drive.VolumeLabel))
+                            name = drive.VolumeLabel + " (" + letter + ")";
+                    }
+                    catch { }
+                }
+                list.Add(new FolderItem { Name = name, Path = drive.Name });
+            }
+            list.Sort((a, b) => string.Compare(a.Path, b.Path, StringComparison.OrdinalIgnoreCase));
+            return list;
+        }
+
+        // keepPath is the drive to land on when refreshing. Leaving a drive root lands on that drive.
+        private void ShowDriveList(string? keepPath = null)
+        {
+            ++_currentScanId;
+            _isScanning = false;
+            if (keepPath != null)
+                _listReturnPath = keepPath;
+            else if (!AtDriveRoot && IsDriveRoot(_currentDirectory))
+                _listReturnPath = _currentDirectory;
+            else
+                _listReturnPath = null;
+
+            _currentDirectory = DriveRootPath;
+            _currentIndex = -1;
+            Images.Clear();
+            _childFolders = ListDrives();
+            if (_listEntries.Count > 0) _listEntries.Clear();
+            UpdateBreadcrumbs(DriveRootPath);
+            PopulateDriveTree(_childFolders);
+            StopFolderWatcher();
+            if (LoadingRing != null) LoadingRing.IsActive = false;
+            if (LoadingOverlay != null) LoadingOverlay.Visibility = Visibility.Collapsed;
+
+            if (_listMode)
+            {
+                RebuildListEntries();
+                bool returned = TryPlaceListCursorOnReturnedFolder();
+                if (!returned) PlaceListCursorOnCurrentImage();
+                SyncTileCursor(scroll: returned);
+            }
+            else
+                SyncTileCursor(scroll: false);
+            _listReturnPath = null;
+        }
+
+        private void PopulateDriveRootTree(List<FolderItem> drives, string currentFolderPath, List<FolderItem> subDirs, string countText)
+        {
+            var parentNode = new TreeViewNode
+            {
+                Content = new FolderItem { Name = DriveRootName, Path = DriveRootPath, NodeOpacity = 0.5, NodeIcon = Symbol.Up },
+                IsExpanded = true
+            };
+            TreeViewNode? nodeToSelect = null;
+            int targetIndex = 0;
+            int currentIndex = 1;
+            foreach (var drive in drives)
+            {
+                bool isCurrent = SameDirectory(drive.Path, currentFolderPath);
+                var node = new TreeViewNode
+                {
+                    Content = new FolderItem
+                    {
+                        Name = drive.Name,
+                        Path = drive.Path,
+                        NodeOpacity = isCurrent ? 1.0 : 0.5,
+                        NodeFontWeight = isCurrent ? "Bold" : "Normal",
+                        Subtitle = isCurrent ? countText : string.Empty,
+                        SubtitleVisibility = isCurrent ? Visibility.Visible : Visibility.Collapsed
+                    }
+                };
+                if (isCurrent)
+                {
+                    node.IsExpanded = true;
+                    nodeToSelect = node;
+                    targetIndex = currentIndex;
+                    foreach (var sub in subDirs)
+                        node.Children.Add(new TreeViewNode { Content = new FolderItem { Name = sub.Name, Path = sub.Path } });
+                }
+                parentNode.Children.Add(node);
+                currentIndex++;
+            }
+            FolderTreeView.RootNodes.Add(parentNode);
+            if (nodeToSelect == null) return;
+            FolderTreeView.SelectedNode = nodeToSelect;
+            _pendingNodeToSelect = nodeToSelect;
+            _pendingTargetIndex = targetIndex;
+            _ = BringNodeIntoViewAsync(nodeToSelect, targetIndex);
+        }
+
+        private void PopulateDriveTree(List<FolderItem> drives)
+        {
+            if (FolderTreeView == null) return;
+            if (!_isSidebarHooked && SidebarView != null)
+            {
+                SidebarView.PaneOpened += SidebarView_PaneOpened;
+                _isSidebarHooked = true;
+            }
+            FolderTreeView.RootNodes.Clear();
+            var root = new TreeViewNode
+            {
+                Content = new FolderItem { Name = DriveRootName, Path = DriveRootPath, NodeFontWeight = "Bold" },
+                IsExpanded = true
+            };
+            foreach (var drive in drives)
+                root.Children.Add(new TreeViewNode { Content = new FolderItem { Name = drive.Name, Path = drive.Path } });
+            FolderTreeView.RootNodes.Add(root);
+            FolderTreeView.SelectedNode = root;
+            _pendingNodeToSelect = root;
+            _pendingTargetIndex = 0;
+            _ = BringNodeIntoViewAsync(root, 0);
+        }
+
         private void PopulateTreeView(DirectoryInfo? parentDir, List<FolderItem> hopDirs, List<FolderItem> subDirs, string currentFolderPath, int currentImageCount = 0)
         {
             if (FolderTreeView == null) return;
@@ -403,6 +584,12 @@ namespace ModernImageViewer
             }
 
             string countText = currentImageCount == 1 ? "1 image" : $"{currentImageCount} images";
+
+            if (parentDir == null && IsDriveRoot(currentFolderPath))
+            {
+                PopulateDriveRootTree(ListDrives(), currentFolderPath, subDirs, countText);
+                return;
+            }
 
             if (parentDir != null)
             {
@@ -529,6 +716,11 @@ namespace ModernImageViewer
         private void UpdateBreadcrumbs(string path)
         {
             _breadcrumbs.Clear();
+            if (path == DriveRootPath)
+            {
+                _breadcrumbs.Add(DriveRootName);
+                return;
+            }
             if (!string.IsNullOrEmpty(path))
             {
                 foreach (var part in path.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries))
@@ -541,6 +733,11 @@ namespace ModernImageViewer
         private async void BreadcrumbBar_ItemClicked(BreadcrumbBar s, BreadcrumbBarItemClickedEventArgs a)
         {
             if (_breadcrumbs.Count == 0) return;
+            if (a.Index == 0 && _breadcrumbs[0] == DriveRootName && _breadcrumbs.Count == 1)
+            {
+                ShowDriveList();
+                return;
+            }
             string newPath = _breadcrumbs[0] + (char)Path.DirectorySeparatorChar;
             for (int i = 1; i <= a.Index; i++) newPath = Path.Combine(newPath, _breadcrumbs[i]);
 
@@ -570,14 +767,29 @@ namespace ModernImageViewer
 
         private async void GoUp_Click(object s, RoutedEventArgs e)
         {
+            if (AtDriveRoot) return;
             var parent = Directory.GetParent(_currentDirectory);
             if (parent != null) await ScanFolder(parent.FullName);
+            else if (IsDriveRoot(_currentDirectory)) ShowDriveList();
         }
 
         private async void RefreshFolder_Click(object s, RoutedEventArgs e)
         {
+            if (AtDriveRoot)
+            {
+                string? keepDrive = null;
+                if (_listMode && _listCursor >= 0 && _listCursor < _listEntries.Count)
+                    keepDrive = _listEntries[_listCursor].Path;
+                ShowDriveList(keepDrive);
+                RestoreGridKeyFocus(keepDrive);
+                return;
+            }
             if (string.IsNullOrEmpty(_currentDirectory) || !Directory.Exists(_currentDirectory)) return;
-            string? keepPath = _currentIndex >= 0 && _currentIndex < Images.Count ? Images[_currentIndex].Path : null;
+            string? keepPath = null;
+            if (_listMode && _listCursor >= 0 && _listCursor < _listEntries.Count)
+                keepPath = _listEntries[_listCursor].Path;
+            else if (_currentIndex >= 0 && _currentIndex < Images.Count)
+                keepPath = Images[_currentIndex].Path;
             await ScanFolder(_currentDirectory);
             RestoreGridKeyFocus(keepPath);
         }
@@ -589,6 +801,11 @@ namespace ModernImageViewer
         private async void FolderTreeView_ItemInvoked(TreeView s, TreeViewItemInvokedEventArgs a)
         {
             string path = (a.InvokedItem is TreeViewNode n && n.Content is FolderItem fi) ? fi.Path : "";
+            if (path == DriveRootPath)
+            {
+                ShowDriveList();
+                return;
+            }
             if (!string.IsNullOrEmpty(path))
             {
                 bool hasImages = await Task.Run(() => HasSupportedImages(path));
@@ -622,6 +839,11 @@ namespace ModernImageViewer
                 Images.AddRange(sortedList);
 
                 if (currentItem != null) _currentIndex = Images.IndexOf(currentItem);
+                if (_listMode)
+                {
+                    RebuildListEntries();
+                    PlaceListCursorOnCurrentImage();
+                }
                 SyncTileCursor(scroll: true);
 
                 _currentSettings.SortOrder = tag;
@@ -702,10 +924,19 @@ namespace ModernImageViewer
 
         private void ShowInExplorer_Click(object s, RoutedEventArgs e)
         {
-            if (_currentIndex >= 0 && _currentIndex < Images.Count)
+            string? path = null;
+            if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible
+                && _currentIndex >= 0 && _currentIndex < Images.Count)
+                path = Images[_currentIndex].Path;
+            else
             {
-                Process.Start("explorer.exe", $"/select,\"{Images[_currentIndex].Path}\"");
+                var item = CursorItem();
+                if (item != null) path = item.Path;
             }
+            if (path == DriveRootPath)
+                Process.Start("explorer.exe", "shell:MyComputerFolder");
+            else if (!string.IsNullOrEmpty(path))
+                Process.Start("explorer.exe", $"/select,\"{path}\"");
         }
     }
 }

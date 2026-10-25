@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -16,6 +17,7 @@ using System.Threading.Tasks;
 using Windows.Foundation;
 using Windows.Graphics.Imaging;
 using Windows.Storage;
+using Windows.Storage.Streams;
 
 namespace ModernImageViewer
 {
@@ -129,6 +131,7 @@ namespace ModernImageViewer
             if (index < 0 || index >= Images.Count || _canvasDevice == null) return;
 
             _currentIndex = index;
+            if (_listMode) PlaceListCursorOnCurrentImage();
             // Visible before the cursor sync so the list preview hides instead of flashing on top of the photo.
             ViewerControl.Visibility = Visibility.Visible;
             SyncTileCursor(scroll: false);
@@ -565,7 +568,7 @@ namespace ModernImageViewer
             ViewerControl.Visibility = Visibility.Collapsed;
             SyncTileChrome();
             if (HoverTriggerZone != null) HoverTriggerZone.Visibility = Visibility.Visible;
-            UpdateListPreview(_currentIndex >= 0 && _currentIndex < Images.Count ? Images[_currentIndex] : null);
+            UpdateListPreview(CursorItem());
 
             TryDisposeRawGpuBitmap();
             FlushDeferredFolderRefresh();
@@ -647,47 +650,606 @@ namespace ModernImageViewer
         }
 
         private ImageItem? _tileCursorItem;
+        private Grid? _hoveredCard;
+        private static readonly Vector3 TilePopScale = new(1.05f, 1.05f, 1f);
+        private static readonly Vector3 TileRestScale = new(1f, 1f, 1f);
 
         private void SyncTileCursor(bool scroll)
         {
-            ImageItem? next = (_currentIndex >= 0 && _currentIndex < Images.Count) ? Images[_currentIndex] : null;
-            if (!ReferenceEquals(_tileCursorItem, next))
+            ImageItem? previous = _tileCursorItem;
+            ImageItem? next = CursorItem();
+            if (!ReferenceEquals(previous, next))
             {
-                if (_tileCursorItem != null) _tileCursorItem.IsKeyboardCursor = false;
+                if (previous != null) previous.IsKeyboardCursor = false;
                 _tileCursorItem = next;
                 if (next != null) next.IsKeyboardCursor = true;
             }
-            if (scroll && next != null) RevealTile(_currentIndex);
+            if (scroll && next != null) RevealTile(DisplayIndex());
             UpdateListPreview(next);
+            if (_listMode) return;
+            // The container for a tile that just scrolled into view may not exist until layout.
+            UpdateTilePop(previous);
+            UpdateTilePop(next);
+            ImageGrid?.DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+            {
+                if (_listMode) return;
+                UpdateTilePop(previous);
+                UpdateTilePop(_tileCursorItem);
+            });
         }
 
-        private ListPreviewWindow? _listPreview;
-        private bool _listPreviewDismissed;
+        // Same raise the pointer uses. A tile stays raised while the pointer is on it or it is the keyboard cursor.
+        private void UpdateTilePop(ImageItem? item)
+        {
+            if (item == null || ImageGrid == null || _listMode) return;
+            if (ImageGrid.ContainerFromItem(item) is not GridViewItem container) return;
+            if (TileCard(container) is not Grid card) return;
+            SetTileRaised(card, item.IsKeyboardCursor || ReferenceEquals(card, _hoveredCard));
+        }
 
-        // The preview is a separate window. Closing it stays closed until list view is entered again.
+        private static Grid? TileCard(GridViewItem container)
+        {
+            if (container.ContentTemplateRoot is not Grid root || root.Children.Count == 0) return null;
+            return root.Children[0] as Grid;
+        }
+
+        private static void SetTileRaised(Grid card, bool raised)
+        {
+            Vector3 scale = raised ? TilePopScale : TileRestScale;
+            if (card.Scale != scale) card.Scale = scale;
+            string key = raised ? "TextFillColorSecondaryBrush" : "CardStrokeColorDefaultBrush";
+            if (Application.Current.Resources.TryGetValue(key, out object brush) && brush is Brush stroke && !ReferenceEquals(card.BorderBrush, stroke))
+                card.BorderBrush = stroke;
+        }
+
+        private int DisplayCount() => _listMode ? _listEntries.Count : Images.Count;
+
+        private int DisplayIndex() => _listMode ? _listCursor : _currentIndex;
+
+        private ImageItem? CursorItem()
+        {
+            int index = DisplayIndex();
+            if (_listMode)
+                return index >= 0 && index < _listEntries.Count ? _listEntries[index] : null;
+            return index >= 0 && index < Images.Count ? Images[index] : null;
+        }
+
+        // The photo index stays the source of truth. The list cursor sits on that same photo, after the folder cells.
+        private void PlaceListCursorOnCurrentImage()
+        {
+            int prefix = _listEntries.Count - Images.Count;
+            if (prefix < 0) prefix = 0;
+            if (_currentIndex >= 0 && _currentIndex < Images.Count)
+            {
+                int at = prefix + _currentIndex;
+                if (at >= 0 && at < _listEntries.Count && ReferenceEquals(_listEntries[at], Images[_currentIndex]))
+                {
+                    _listCursor = at;
+                    return;
+                }
+                int found = _listEntries.IndexOf(Images[_currentIndex]);
+                if (found >= 0)
+                {
+                    _listCursor = found;
+                    return;
+                }
+            }
+            _listCursor = _listEntries.Count > 0 ? 0 : -1;
+        }
+
+        // Going up one level puts the cursor back on the folder we just left, so Right reaches the next one.
+        private bool TryPlaceListCursorOnReturnedFolder()
+        {
+            if (string.IsNullOrEmpty(_listReturnPath)) return false;
+            for (int i = 0; i < _listEntries.Count; i++)
+            {
+                var item = _listEntries[i];
+                if (!item.IsDirectory || !SameDirectory(item.Path, _listReturnPath)) continue;
+                _listCursor = i;
+                return true;
+            }
+            return false;
+        }
+
+        private static bool IsChildOf(string childDirectory, string parentDirectory)
+        {
+            if (string.IsNullOrEmpty(childDirectory) || string.IsNullOrEmpty(parentDirectory)) return false;
+            DirectoryInfo? parent;
+            try { parent = Directory.GetParent(childDirectory); }
+            catch { return false; }
+            return parent != null && SameDirectory(parent.FullName, parentDirectory);
+        }
+
+        private static bool SameDirectory(string a, string b)
+        {
+            static string Norm(string path) => path.TrimEnd('\\', '/');
+            return string.Equals(Norm(a), Norm(b), StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsDriveRoot(string path)
+        {
+            if (string.IsNullOrEmpty(path) || path == DriveRootPath) return false;
+            try
+            {
+                if (Directory.GetParent(path) != null) return false;
+            }
+            catch { return false; }
+            string trimmed = path.TrimEnd('\\', '/');
+            return trimmed.Length == 2 && trimmed[1] == ':';
+        }
+
+        private string CurrentLocationText()
+        {
+            if (AtDriveRoot) return DriveRootName;
+            if (string.IsNullOrEmpty(_currentDirectory)) return "";
+            string trimmed = _currentDirectory.TrimEnd('\\', '/');
+            if (trimmed.Length == 2 && trimmed[1] == ':') return trimmed + "\\";
+            return trimmed;
+        }
+
+        private void RebuildListEntries()
+        {
+            var entries = new List<ImageItem>(_childFolders.Count + Images.Count + 1);
+            if (!AtDriveRoot && !string.IsNullOrEmpty(_currentDirectory))
+            {
+                DirectoryInfo? parent = null;
+                try { parent = Directory.GetParent(_currentDirectory); } catch { parent = null; }
+                if (parent != null)
+                {
+                    string name = string.IsNullOrEmpty(parent.Name) ? parent.FullName : parent.Name;
+                    entries.Add(DirectoryCell(name, parent.FullName, true));
+                }
+                else if (IsDriveRoot(_currentDirectory))
+                    entries.Add(DirectoryCell(DriveRootName, DriveRootPath, true));
+            }
+            foreach (var folder in _childFolders)
+                entries.Add(DirectoryCell(folder.Name, folder.Path, false));
+            foreach (var image in Images)
+                entries.Add(image);
+            _listEntries.ResetWith(entries);
+        }
+
+        private ImageItem DirectoryCell(string name, string path, bool parent)
+        {
+            var cell = ImageItem.CreateDirectory(name, path, parent, "\uE8B7");
+            if (parent)
+            {
+                // The parent is "up", so it does not wear the same folder picture as a child.
+                if (_parentUpIcon != null) cell.DirectoryIcon = _parentUpIcon;
+                else _ = LoadParentUpIconAsync(cell);
+                return cell;
+            }
+            if (!string.IsNullOrEmpty(path) && _folderIcons.TryGetValue(path, out var icon))
+                cell.DirectoryIcon = icon;
+            else
+                _ = LoadDirectoryIconAsync(cell);
+            return cell;
+        }
+
+        private async Task LoadParentUpIconAsync(ImageItem item)
+        {
+            try
+            {
+                var icon = await (_parentUpIconTask ??= DecodeParentUpIconAsync());
+                if (icon == null) return;
+                _parentUpIcon = icon;
+                item.DirectoryIcon = icon;
+                ShowFolderIconInPreview(item, icon);
+            }
+            catch { }
+        }
+
+        private async Task<BitmapImage?> DecodeParentUpIconAsync()
+        {
+            byte[]? png = await Task.Run(NativeMethods.FolderBackPng);
+            if (png == null || png.Length == 0) return null;
+            var done = new TaskCompletionSource<BitmapImage?>();
+            bool queued = DispatcherQueue.TryEnqueue(() =>
+            {
+                try
+                {
+                    var stream = new InMemoryRandomAccessStream();
+                    var writer = new DataWriter(stream);
+                    writer.WriteBytes(png);
+                    var store = writer.StoreAsync();
+                    store.Completed = (_, storeStatus) =>
+                    {
+                        if (storeStatus != Windows.Foundation.AsyncStatus.Completed)
+                        {
+                            done.TrySetResult(null);
+                            return;
+                        }
+                        stream.Seek(0);
+                        var bmp = new BitmapImage();
+                        var op = bmp.SetSourceAsync(stream);
+                        op.Completed = (_, status) =>
+                        {
+                            if (status == Windows.Foundation.AsyncStatus.Completed && bmp.PixelWidth > 0 && bmp.PixelHeight > 0)
+                                done.TrySetResult(bmp);
+                            else done.TrySetResult(null);
+                        };
+                    };
+                }
+                catch { done.TrySetResult(null); }
+            });
+            if (!queued) return null;
+            return await done.Task;
+        }
+
+        private void ShowFolderIconInPreview(ImageItem item, ImageSource icon)
+        {
+            if (PreviewFolderImage == null) return;
+            if (!string.Equals(_previewPath, item.Path, StringComparison.OrdinalIgnoreCase)) return;
+            PreviewFolderImage.Source = icon;
+            PreviewFolderImage.Visibility = Visibility.Visible;
+            if (PreviewFolderIcon != null) PreviewFolderIcon.Visibility = Visibility.Collapsed;
+        }
+
+        private async Task LoadDirectoryIconAsync(ImageItem item)
+        {
+            if (string.IsNullOrEmpty(item.Path)) return;
+            await _folderIconGate.WaitAsync();
+            try
+            {
+                var folder = await StorageFolder.GetFolderFromPathAsync(item.Path);
+                using var thumb = await folder.GetThumbnailAsync(Windows.Storage.FileProperties.ThumbnailMode.SingleItem, 128, Windows.Storage.FileProperties.ThumbnailOptions.UseCurrentScale);
+                if (thumb == null || thumb.Size == 0) return;
+                var cloned = thumb.CloneStream();
+                var done = new TaskCompletionSource<BitmapImage?>();
+                bool queued = DispatcherQueue.TryEnqueue(() =>
+                {
+                    try
+                    {
+                        var bmp = new BitmapImage();
+                        var op = bmp.SetSourceAsync(cloned);
+                        op.Completed = (_, status) =>
+                        {
+                            try { cloned.Dispose(); } catch { }
+                            if (status == Windows.Foundation.AsyncStatus.Completed && bmp.PixelWidth > 0 && bmp.PixelHeight > 0)
+                                done.TrySetResult(bmp);
+                            else done.TrySetResult(null);
+                        };
+                    }
+                    catch
+                    {
+                        try { cloned.Dispose(); } catch { }
+                        done.TrySetResult(null);
+                    }
+                });
+                if (!queued)
+                {
+                    try { cloned.Dispose(); } catch { }
+                    return;
+                }
+                var ready = await done.Task;
+                if (ready == null) return;
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    RememberFolderIcon(item.Path, ready);
+                    item.DirectoryIcon = ready;
+                    ShowFolderIconInPreview(item, ready);
+                });
+            }
+            catch { }
+            finally { _folderIconGate.Release(); }
+        }
+
+        private void RememberFolderIcon(string path, ImageSource icon)
+        {
+            if (_folderIcons.Count > 200) _folderIcons.Clear();
+            _folderIcons[path] = icon;
+        }
+
+        private void RemoveDisplayedImage(ImageItem item)
+        {
+            int listIndex = _listEntries.IndexOf(item);
+            Images.Remove(item);
+            if (listIndex < 0) return;
+            _listEntries.RemoveAt(listIndex);
+            if (_listCursor > listIndex) _listCursor--;
+            if (_listCursor >= _listEntries.Count) _listCursor = _listEntries.Count - 1;
+        }
+
+        private string? _previewPath;
+        private int _previewGeneration;
+        private CancellationTokenSource? _previewCts;
+
+        // The list keeps its own rows. This band is a fixed strip under them, picture on the right.
         private void UpdateListPreview(ImageItem? item)
         {
             bool photoOpen = ViewerControl != null && ViewerControl.Visibility == Visibility.Visible;
-            if (_listMode && item != null && !_listPreviewDismissed && !photoOpen)
+            if (!_listMode || item == null || photoOpen)
             {
-                if (_listPreview == null)
-                {
-                    _listPreview = new ListPreviewWindow();
-                    _listPreview.Dismissed += (_, _) =>
-                    {
-                        _listPreviewDismissed = true;
-                        _listPreview = null;
-                    };
-                }
-                double scale = 1;
-                if (Content?.XamlRoot != null && Content.XamlRoot.RasterizationScale > 0)
-                    scale = Content.XamlRoot.RasterizationScale;
-                _listPreview.ShowItem(item, _hWnd, _appWindow, scale);
+                CancelPreviewLoad();
+                return;
+            }
+            if (ListPreviewBar != null) ListPreviewBar.Visibility = Visibility.Visible;
+            if (item.IsDirectory)
+            {
+                ShowDirectoryPreview(item);
+                return;
+            }
+            if (PreviewFolderIcon != null) PreviewFolderIcon.Visibility = Visibility.Collapsed;
+            if (PreviewFolderImage != null) PreviewFolderImage.Visibility = Visibility.Collapsed;
+            if (string.Equals(_previewPath, item.Path, StringComparison.OrdinalIgnoreCase)
+                && PreviewImage.Source != null
+                && PreviewImage.Visibility == Visibility.Visible)
+                return;
+
+            _previewPath = item.Path;
+            PreviewNameText.Text = item.Name;
+            PreviewTypeText.Text = FileTypeLabel(item.Name);
+            PreviewSizeText.Text = item.SizeString;
+            PreviewModifiedText.Text = item.DateModified.ToString("yyyy-MM-dd HH:mm");
+            PreviewDimensionsText.Text = "";
+            PreviewTakenText.Text = "None";
+            string folder = Path.GetDirectoryName(item.Path) ?? "";
+            PreviewLocationText.Text = folder;
+            ToolTipService.SetToolTip(PreviewLocationButton, item.Path);
+
+            if (PreviewThumbnailReady(item.Thumbnail))
+            {
+                PreviewImage.Source = item.Thumbnail;
+                PreviewImage.Visibility = Visibility.Visible;
+                PreviewPlaceholder.Visibility = Visibility.Collapsed;
             }
             else
             {
-                _listPreview?.HidePreview();
+                PreviewImage.Source = null;
+                PreviewImage.Visibility = Visibility.Collapsed;
+                PreviewPlaceholder.Visibility = Visibility.Visible;
             }
+
+            int generation = ++_previewGeneration;
+            CancelPreviewLoad();
+            _previewCts = new CancellationTokenSource();
+            _ = LoadListPreviewAsync(item, generation, _previewCts.Token);
+        }
+
+        private void ShowDirectoryPreview(ImageItem item)
+        {
+            _previewPath = item.Path;
+            _previewGeneration++;
+            CancelPreviewLoad();
+            PreviewNameText.Text = item.Name;
+            PreviewTypeText.Text = item.IsParentDirectory ? "Parent folder" : IsDriveRoot(item.Path) ? "Drive" : "Folder";
+            PreviewSizeText.Text = "None";
+            PreviewModifiedText.Text = "None";
+            PreviewDimensionsText.Text = "None";
+            PreviewTakenText.Text = "None";
+            // A folder cell is not the folder you are in. The location matches the sidebar.
+            PreviewLocationText.Text = CurrentLocationText();
+            ToolTipService.SetToolTip(PreviewLocationButton, item.Path == DriveRootPath ? CurrentLocationText() : item.Path);
+            PreviewImage.Source = null;
+            PreviewImage.Visibility = Visibility.Collapsed;
+            PreviewPlaceholder.Visibility = Visibility.Collapsed;
+            if (item.DirectoryIcon != null && PreviewFolderImage != null)
+            {
+                PreviewFolderImage.Source = item.DirectoryIcon;
+                PreviewFolderImage.Visibility = Visibility.Visible;
+                if (PreviewFolderIcon != null) PreviewFolderIcon.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                if (PreviewFolderImage != null)
+                {
+                    PreviewFolderImage.Source = null;
+                    PreviewFolderImage.Visibility = Visibility.Collapsed;
+                }
+                if (PreviewFolderIcon != null)
+                {
+                    PreviewFolderIcon.Glyph = "\uE8B7";
+                    PreviewFolderIcon.Visibility = Visibility.Visible;
+                }
+            }
+        }
+
+        private static bool PreviewThumbnailReady(ImageSource? source)
+        {
+            if (source is BitmapImage bmp) return bmp.PixelWidth > 0 && bmp.PixelHeight > 0;
+            return source is SoftwareBitmapSource;
+        }
+
+        private static string FileTypeLabel(string name)
+        {
+            string ext = Path.GetExtension(name);
+            if (ext.Length > 1) ext = ext.Substring(1).ToUpperInvariant();
+            if (ext == "JPEG") ext = "JPG";
+            return string.IsNullOrEmpty(ext) ? "File" : ext + " File";
+        }
+
+        private void CancelPreviewLoad()
+        {
+            _previewCts?.Cancel();
+            _previewCts?.Dispose();
+            _previewCts = null;
+        }
+
+        private async Task LoadListPreviewAsync(ImageItem item, int generation, CancellationToken token)
+        {
+            try
+            {
+                var sizeTask = ReadPreviewSizeAsync(item.Path, token);
+                var takenTask = ReadDateTakenAsync(item.Path, token);
+                ImageSource? thumb = PreviewThumbnailReady(item.Thumbnail) ? item.Thumbnail : null;
+                if (thumb == null)
+                    thumb = await ReadShellThumbnailAsync(item.Path, token);
+                if (thumb == null && !token.IsCancellationRequested)
+                    thumb = await ReadScaledPreviewAsync(item.Path, token);
+                Size size = await sizeTask;
+                DateTime? taken = await takenTask;
+                if (generation != _previewGeneration || token.IsCancellationRequested) return;
+
+                void Apply()
+                {
+                    if (generation != _previewGeneration || token.IsCancellationRequested) return;
+                    if (thumb != null)
+                    {
+                        item.Thumbnail = thumb;
+                        PreviewImage.Source = thumb;
+                        PreviewImage.Visibility = Visibility.Visible;
+                        PreviewPlaceholder.Visibility = Visibility.Collapsed;
+                    }
+                    if (size.Width >= 1 && size.Height >= 1)
+                        PreviewDimensionsText.Text = $"{(int)size.Width} × {(int)size.Height}";
+                    PreviewTakenText.Text = taken.HasValue ? taken.Value.ToString("yyyy-MM-dd HH:mm") : "None";
+                }
+
+                if (DispatcherQueue.HasThreadAccess) Apply();
+                else DispatcherQueue.TryEnqueue(Apply);
+            }
+            catch (OperationCanceledException) { }
+            catch { }
+        }
+
+        private static async Task<Size> ReadPreviewSizeAsync(string path, CancellationToken token)
+        {
+            try
+            {
+                var file = await StorageFile.GetFileFromPathAsync(path).AsTask(token);
+                using var stream = await file.OpenReadAsync().AsTask(token);
+                var decoder = await BitmapDecoder.CreateAsync(stream).AsTask(token);
+                return new Size(decoder.OrientedPixelWidth, decoder.OrientedPixelHeight);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch { return new Size(0, 0); }
+        }
+
+        private static async Task<DateTime?> ReadDateTakenAsync(string path, CancellationToken token)
+        {
+            try
+            {
+                var file = await StorageFile.GetFileFromPathAsync(path).AsTask(token);
+                var props = await file.Properties.RetrievePropertiesAsync(new[] { "System.Photo.DateTaken" }).AsTask(token);
+                if (props.TryGetValue("System.Photo.DateTaken", out object? value))
+                {
+                    if (value is DateTimeOffset dto) return dto.LocalDateTime;
+                    if (value is DateTime dt) return dt;
+                }
+                return null;
+            }
+            catch (OperationCanceledException) { throw; }
+            catch { return null; }
+        }
+
+        private async Task<ImageSource?> ReadShellThumbnailAsync(string path, CancellationToken token)
+        {
+            try
+            {
+                var file = await StorageFile.GetFileFromPathAsync(path).AsTask(token);
+                using var shell = await file.GetThumbnailAsync(Windows.Storage.FileProperties.ThumbnailMode.PicturesView, 400, Windows.Storage.FileProperties.ThumbnailOptions.UseCurrentScale).AsTask(token);
+                if (shell == null) return null;
+                var cloned = shell.CloneStream();
+                return await SetBitmapSourceAsync(cloned, token);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch { return null; }
+        }
+
+        private async Task<ImageSource?> ReadScaledPreviewAsync(string path, CancellationToken token)
+        {
+            const uint longest = 400;
+            SoftwareBitmap? softwareBitmap = null;
+            try
+            {
+                var file = await StorageFile.GetFileFromPathAsync(path).AsTask(token);
+                using var stream = await file.OpenReadAsync().AsTask(token);
+                var decoder = await BitmapDecoder.CreateAsync(stream).AsTask(token);
+                uint w = decoder.PixelWidth;
+                uint h = decoder.PixelHeight;
+                if (w < 1 || h < 1) return null;
+                double ratio = Math.Min(longest / (double)w, longest / (double)h);
+                if (ratio > 1) ratio = 1;
+                softwareBitmap = await decoder.GetSoftwareBitmapAsync(
+                    BitmapPixelFormat.Bgra8,
+                    BitmapAlphaMode.Premultiplied,
+                    new BitmapTransform
+                    {
+                        ScaledWidth = (uint)Math.Max(1, Math.Round(w * ratio)),
+                        ScaledHeight = (uint)Math.Max(1, Math.Round(h * ratio)),
+                        InterpolationMode = BitmapInterpolationMode.Fant
+                    },
+                    ExifOrientationMode.RespectExifOrientation,
+                    ColorManagementMode.ColorManageToSRgb).AsTask(token);
+
+                var done = new TaskCompletionSource<ImageSource?>();
+                var bitmap = softwareBitmap;
+                softwareBitmap = null;
+                bool enqueued = DispatcherQueue.TryEnqueue(() =>
+                {
+                    try
+                    {
+                        if (token.IsCancellationRequested)
+                        {
+                            bitmap.Dispose();
+                            done.TrySetCanceled(token);
+                            return;
+                        }
+                        var source = new SoftwareBitmapSource();
+                        var op = source.SetBitmapAsync(bitmap);
+                        op.Completed = (_, status) =>
+                        {
+                            try { bitmap.Dispose(); } catch { }
+                            if (status == Windows.Foundation.AsyncStatus.Completed) done.TrySetResult(source);
+                            else done.TrySetResult(null);
+                        };
+                    }
+                    catch
+                    {
+                        try { bitmap.Dispose(); } catch { }
+                        done.TrySetResult(null);
+                    }
+                });
+                if (!enqueued)
+                {
+                    bitmap.Dispose();
+                    return null;
+                }
+                return await done.Task;
+            }
+            catch (OperationCanceledException) { throw; }
+            catch { return null; }
+            finally
+            {
+                softwareBitmap?.Dispose();
+            }
+        }
+
+        private Task<ImageSource?> SetBitmapSourceAsync(IRandomAccessStream stream, CancellationToken token)
+        {
+            var done = new TaskCompletionSource<ImageSource?>();
+            bool enqueued = DispatcherQueue.TryEnqueue(() =>
+            {
+                try
+                {
+                    if (token.IsCancellationRequested)
+                    {
+                        stream.Dispose();
+                        done.TrySetCanceled(token);
+                        return;
+                    }
+                    var bmp = new BitmapImage();
+                    var op = bmp.SetSourceAsync(stream);
+                    op.Completed = (_, status) =>
+                    {
+                        try { stream.Dispose(); } catch { }
+                        if (status == Windows.Foundation.AsyncStatus.Completed && bmp.PixelWidth > 0 && bmp.PixelHeight > 0)
+                            done.TrySetResult(bmp);
+                        else done.TrySetResult(null);
+                    };
+                }
+                catch
+                {
+                    try { stream.Dispose(); } catch { }
+                    done.TrySetResult(null);
+                }
+            });
+            if (!enqueued)
+            {
+                stream.Dispose();
+                done.TrySetResult(null);
+            }
+            return done.Task;
         }
 
         private int TileColumnCount()
@@ -720,16 +1282,17 @@ namespace ModernImageViewer
                 ImageGrid?.Padding.Top ?? 0,
                 _imageWrapGrid?.ItemHeight ?? 164,
                 TileColumnCount(),
-                Images.Count);
+                DisplayCount());
         }
 
         private void RevealTile(int index)
         {
-            if (ImageGrid == null || index < 0 || index >= Images.Count) return;
+            if (ImageGrid == null || index < 0 || index >= DisplayCount()) return;
+            ImageItem item = _listMode ? _listEntries[index] : Images[index];
             var sv = FindScrollViewer(ImageGrid);
             if (sv == null)
             {
-                ImageGrid.ScrollIntoView(Images[index]);
+                ImageGrid.ScrollIntoView(item);
                 return;
             }
 
@@ -744,19 +1307,53 @@ namespace ModernImageViewer
 
         private void MoveTileCursor(Windows.System.VirtualKey key)
         {
-            if (Images.Count == 0 || _isScanning) return;
+            int count = DisplayCount();
+            if (count == 0 || _isScanning) return;
             if (!TryTileCursorKey(key, out var cursorKey)) return;
 
             int next = ViewerMath.MoveTileCursor(
-                _currentIndex, Images.Count, TileColumnCount(), VisibleTileRows(), TopLeftVisibleTile(), cursorKey);
+                DisplayIndex(), count, TileColumnCount(), VisibleTileRows(), TopLeftVisibleTile(), cursorKey);
             if (next < 0) return;
-            _currentIndex = next;
+            if (_listMode)
+            {
+                _listCursor = next;
+                var item = _listEntries[next];
+                if (!item.IsDirectory)
+                {
+                    int photo = Images.IndexOf(item);
+                    if (photo >= 0) _currentIndex = photo;
+                }
+            }
+            else _currentIndex = next;
             SyncTileCursor(scroll: true);
         }
 
         private void OpenCursorTile()
         {
-            if (Images.Count == 0 || _isScanning) return;
+            if (_isScanning) return;
+            if (_listMode)
+            {
+                if (_listEntries.Count == 0) return;
+                if (_listCursor < 0 || _listCursor >= _listEntries.Count)
+                {
+                    int origin = TopLeftVisibleTile();
+                    if (origin < 0 || origin >= _listEntries.Count) return;
+                    _listCursor = origin;
+                }
+                var item = _listEntries[_listCursor];
+                if (item.IsDirectory)
+                {
+                    if (item.Path == DriveRootPath)
+                        ShowDriveList();
+                    else if (!string.IsNullOrEmpty(item.Path) && Directory.Exists(item.Path))
+                        _ = ScanFolder(item.Path);
+                    return;
+                }
+                int photo = Images.IndexOf(item);
+                if (photo >= 0) LoadFullImage(photo);
+                return;
+            }
+            if (Images.Count == 0) return;
             if (_currentIndex < 0 || _currentIndex >= Images.Count)
             {
                 int origin = TopLeftVisibleTile();
@@ -826,6 +1423,9 @@ namespace ModernImageViewer
                 if (e.Key != Windows.System.VirtualKey.Enter) e.Handled = true;
                 return;
             }
+
+            // Enter on the location link opens Explorer. Arrows still move the list cursor.
+            if (e.Key == Windows.System.VirtualKey.Enter && FocusIsInside(ListPreviewBar)) return;
 
             if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible)
             {
@@ -972,15 +1572,23 @@ namespace ModernImageViewer
         private bool _applyingViewMode;
         private const double ListRowHeight = 22;
         private const double ListColumnWidth = 200;
+        // Same wrap as the photos. Folders are only the first cells, and only while the list is showing.
+        private readonly ObservableRangeCollection<ImageItem> _listEntries = [];
+        private List<FolderItem> _childFolders = [];
+        private int _listCursor = -1;
+        // Set only when the folder being opened is the parent of the one we are leaving.
+        private string? _listReturnPath;
+        private readonly Dictionary<string, ImageSource> _folderIcons = new(StringComparer.OrdinalIgnoreCase);
+        private readonly SemaphoreSlim _folderIconGate = new(4);
+        private BitmapImage? _parentUpIcon;
+        private Task<BitmapImage?>? _parentUpIconTask;
 
         private void ViewMode_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is not FrameworkElement button || button.Tag is not string tag) return;
-            bool wantList = tag == "List";
-            if (wantList == _listMode) return;
-            if (wantList) _listPreviewDismissed = false;
-            _listMode = wantList;
+            _listMode = !_listMode;
+            _currentSettings.ListMode = _listMode;
             ApplyViewMode();
+            SaveAllSettings();
         }
 
         private void ApplyViewMode()
@@ -991,21 +1599,36 @@ namespace ModernImageViewer
             {
             ImageItem.ListRows = _listMode;
             foreach (var item in Images) item.IsListRow = _listMode;
-            if (TileViewIcon != null) TileViewIcon.Opacity = _listMode ? 0.35 : 1;
-            if (ListViewIcon != null) ListViewIcon.Opacity = _listMode ? 1 : 0.35;
+            if (ViewModeIcon != null) ViewModeIcon.Glyph = _listMode ? "\uE8A9" : "\uE8FD";
+            if (ViewModeButton != null) ToolTipService.SetToolTip(ViewModeButton, _listMode ? "Tiles" : "List");
             ImageGrid.ItemContainerStyle = _listMode && ImageGrid.Resources["DenseListItemStyle"] is Style dense ? dense : null;
             if (_listMode)
                 ImageGrid.Padding = new Thickness(0, 4, 0, 0);
             else
                 ImageGrid.Padding = new Thickness(10, 8, 10, 0);
+            if (ListPreviewBar != null)
+                ListPreviewBar.Visibility = _listMode ? Visibility.Visible : Visibility.Collapsed;
+            if (_listMode)
+            {
+                RebuildListEntries();
+                if (!ReferenceEquals(ImageGrid.ItemsSource, _listEntries))
+                    ImageGrid.ItemsSource = _listEntries;
+                if (Images.Count > 0 && (_currentIndex < 0 || _currentIndex >= Images.Count))
+                    _currentIndex = 0;
+                PlaceListCursorOnCurrentImage();
+            }
+            else
+            {
+                if (_listCursor >= 0 && _listCursor < _listEntries.Count && !_listEntries[_listCursor].IsDirectory)
+                {
+                    int photo = Images.IndexOf(_listEntries[_listCursor]);
+                    if (photo >= 0) _currentIndex = photo;
+                }
+                if (!ReferenceEquals(ImageGrid.ItemsSource, Images))
+                    ImageGrid.ItemsSource = Images;
+            }
             ApplyItemSize();
             ImageGrid.UpdateLayout();
-            // List view has nothing to preview until a row is the cursor. A folder open leaves the index unset.
-            if (_listMode && Images.Count > 0 && (_currentIndex < 0 || _currentIndex >= Images.Count))
-            {
-                int origin = TopLeftVisibleTile();
-                _currentIndex = origin >= 0 && origin < Images.Count ? origin : 0;
-            }
             SyncTileCursor(scroll: false);
             KeepCursorInView();
             // The click leaves focus on the header button, which then swallows the arrow keys.
@@ -1030,22 +1653,43 @@ namespace ModernImageViewer
         {
             if (_isScanning) return;
             if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible) return;
-            if (!string.IsNullOrEmpty(keepPath))
+            bool found = false;
+            if (!string.IsNullOrEmpty(keepPath) && _listMode)
+            {
+                for (int i = 0; i < _listEntries.Count; i++)
+                {
+                    if (!string.Equals(_listEntries[i].Path, keepPath, StringComparison.OrdinalIgnoreCase)) continue;
+                    _listCursor = i;
+                    if (!_listEntries[i].IsDirectory)
+                        _currentIndex = Images.IndexOf(_listEntries[i]);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found && !string.IsNullOrEmpty(keepPath))
             {
                 for (int i = 0; i < Images.Count; i++)
                 {
                     if (string.Equals(Images[i].Path, keepPath, StringComparison.OrdinalIgnoreCase))
                     {
                         _currentIndex = i;
+                        if (_listMode) PlaceListCursorOnCurrentImage();
                         break;
                     }
                 }
             }
             if (Images.Count > 0 && (_currentIndex < 0 || _currentIndex >= Images.Count))
             {
-                int origin = TopLeftVisibleTile();
-                _currentIndex = origin >= 0 && origin < Images.Count ? origin : 0;
+                if (_listMode) _currentIndex = 0;
+                else
+                {
+                    int origin = TopLeftVisibleTile();
+                    _currentIndex = origin >= 0 && origin < Images.Count ? origin : 0;
+                }
+                if (_listMode) PlaceListCursorOnCurrentImage();
             }
+            else if (_listMode && (_listCursor < 0 || _listCursor >= _listEntries.Count))
+                PlaceListCursorOnCurrentImage();
             SyncTileCursor(scroll: false);
             KeepCursorInView();
             int index = _currentIndex;
@@ -1059,8 +1703,9 @@ namespace ModernImageViewer
 
         private void KeepCursorInView()
         {
-            if (_currentIndex < 0 || _currentIndex >= Images.Count) return;
-            RevealTile(_currentIndex);
+            int index = DisplayIndex();
+            if (index < 0 || index >= DisplayCount()) return;
+            RevealTile(index);
             if (_listMode) PinListToLeftEdge();
         }
 
@@ -1125,7 +1770,21 @@ namespace ModernImageViewer
             
             if (isCtrl || isShift) return;
 
-            if (e.ClickedItem is ImageItem i) LoadFullImage(Images.IndexOf(i));
+            if (e.ClickedItem is ImageItem i)
+            {
+                if (i.IsDirectory)
+                {
+                    if (i.Path == DriveRootPath)
+                        ShowDriveList();
+                    else if (!string.IsNullOrEmpty(i.Path) && Directory.Exists(i.Path))
+                        _ = ScanFolder(i.Path);
+                }
+                else
+                {
+                    int photo = Images.IndexOf(i);
+                    if (photo >= 0) LoadFullImage(photo);
+                }
+            }
 
             // The grid selects whatever was clicked. A plain click only opens the photo,
             // and the grid applies that selection around this call, so clear it once the
@@ -1188,8 +1847,19 @@ namespace ModernImageViewer
 
         private void ImageGrid_ContainerContentChanging(ListViewBase s, ContainerContentChangingEventArgs a)
         {
+            if (a.ItemContainer is GridViewItem container && TileCard(container) is Grid card)
+            {
+                if (a.InRecycleQueue)
+                {
+                    if (ReferenceEquals(_hoveredCard, card)) _hoveredCard = null;
+                    SetTileRaised(card, false);
+                }
+                else if (!_listMode && a.Item is ImageItem shown)
+                    SetTileRaised(card, shown.IsKeyboardCursor || ReferenceEquals(card, _hoveredCard));
+            }
             if (a.Item is ImageItem i)
             {
+                if (i.IsDirectory) return;
                 // List rows do not own a thumbnail. Clearing here would drop pictures the tile view already loaded.
                 if (a.InRecycleQueue)
                 {
@@ -1203,8 +1873,19 @@ namespace ModernImageViewer
             }
         }
 
-        private void Card_PointerEntered(object s, PointerRoutedEventArgs e) { if (s is UIElement el) el.Scale = new Vector3(1.05f, 1.05f, 1.0f); }
-        private void Card_PointerExited(object s, PointerRoutedEventArgs e) { if (s is UIElement el) el.Scale = new Vector3(1.0f, 1.0f, 1.0f); }
+        private void Card_PointerEntered(object s, PointerRoutedEventArgs e)
+        {
+            if (s is not Grid card) return;
+            _hoveredCard = card;
+            SetTileRaised(card, true);
+        }
+        private void Card_PointerExited(object s, PointerRoutedEventArgs e)
+        {
+            if (s is not Grid card) return;
+            if (ReferenceEquals(_hoveredCard, card)) _hoveredCard = null;
+            bool keep = !_listMode && card.DataContext is ImageItem item && item.IsKeyboardCursor;
+            SetTileRaised(card, keep);
+        }
         private void ClosePreview_Click(object? s, RoutedEventArgs? e) => ClosePreviewInternal();
 
         // --- Routed ViewerControl Events ---
@@ -1233,7 +1914,7 @@ namespace ModernImageViewer
             var item = Images.FirstOrDefault(i => i.Path.Equals(path, StringComparison.OrdinalIgnoreCase));
             if (item == null) return;
             bool wasCurrent = _currentRenderedItem == item || (_currentIndex >= 0 && _currentIndex < Images.Count && Images[_currentIndex] == item);
-            Images.Remove(item);
+            RemoveDisplayedImage(item);
             if (wasCurrent)
             {
                 if (Images.Count == 0) ClosePreviewInternal();
@@ -1380,7 +2061,7 @@ namespace ModernImageViewer
                 if (await ViewerEngine.DeleteImageAsync(_currentRenderedItem, this.Content.XamlRoot))
                 {
                     ImageCache.Evict(_currentRenderedItem.Path);
-                    Images.Remove(_currentRenderedItem);
+                    RemoveDisplayedImage(_currentRenderedItem);
                     if (Images.Count == 0) ClosePreviewInternal();
                     else LoadFullImage(Math.Min(_currentIndex, Images.Count - 1));
                 }

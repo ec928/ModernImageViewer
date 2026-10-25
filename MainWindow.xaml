@@ -176,17 +176,19 @@
                                     </MenuFlyout>
                                 </Button.Flyout>
                             </Button>
-                            <Button x:Name="TileViewButton" Template="{StaticResource HeaderGlyph}" Width="28" Height="28" MinWidth="0" MinHeight="0" Padding="0" Background="Transparent" BorderThickness="0" Click="ViewMode_Click" Tag="Tiles" ToolTipService.ToolTip="Tiles">
-                                <FontIcon x:Name="TileViewIcon" Glyph="&#xE8A9;" FontSize="14"/>
-                            </Button>
-                            <Button x:Name="ListViewButton" Template="{StaticResource HeaderGlyph}" Width="28" Height="28" MinWidth="0" MinHeight="0" Padding="0" Background="Transparent" BorderThickness="0" Click="ViewMode_Click" Tag="List" ToolTipService.ToolTip="List">
-                                <FontIcon x:Name="ListViewIcon" Glyph="&#xE8FD;" FontSize="14" Opacity="0.35"/>
+                            <Button x:Name="ViewModeButton" Template="{StaticResource HeaderGlyph}" Width="28" Height="28" MinWidth="0" MinHeight="0" Padding="0" Background="Transparent" BorderThickness="0" Click="ViewMode_Click" ToolTipService.ToolTip="List">
+                                <FontIcon x:Name="ViewModeIcon" Glyph="&#xE8FD;" FontSize="14"/>
                             </Button>
                         </StackPanel>
                         <Rectangle Grid.ColumnSpan="3" Height="1" VerticalAlignment="Bottom" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.6" IsHitTestVisible="False"/>
                     </Grid>
 
                     <Grid Grid.Row="1">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
                     <GridView x:Name="ImageGrid" Padding="10,8,10,0" SizeChanged="ImageGrid_SizeChanged" ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionMode="Extended" SelectionChanged="ImageGrid_SelectionChanged" IsItemClickEnabled="True" ItemClick="ImageGrid_ItemClick" CanDragItems="True" DragItemsStarting="ImageGrid_DragItemsStarting" ItemsSource="{x:Bind Images, Mode=OneWay}" ContainerContentChanging="ImageGrid_ContainerContentChanging" FocusVisualPrimaryThickness="0" FocusVisualSecondaryThickness="0">
                         <GridView.Resources>
                             <Style x:Key="DenseListItemStyle" TargetType="GridViewItem" BasedOn="{StaticResource DefaultGridViewItemStyle}">
@@ -195,7 +197,10 @@
                                 <Setter Property="Margin" Value="0"/>
                                 <Setter Property="Padding" Value="0"/>
                                 <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                <Setter Property="VerticalContentAlignment" Value="Stretch"/>
                             </Style>
+                            <SolidColorBrush x:Key="GridViewItemBackgroundPointerOver" Color="#2A000000"/>
+                            <SolidColorBrush x:Key="GridViewItemBackgroundPressed" Color="#3D000000"/>
                             <SolidColorBrush x:Key="GridViewItemBackgroundSelected" Color="Transparent"/>
                             <SolidColorBrush x:Key="GridViewItemBackgroundSelectedPointerOver" Color="Transparent"/>
                             <SolidColorBrush x:Key="GridViewItemBackgroundSelectedPressed" Color="Transparent"/>
@@ -238,13 +243,17 @@
                                                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"
                                                    FontSize="11"
                                                    ToolTipService.ToolTip="{x:Bind Name}"/>
-                                        <Border Grid.Row="0" IsHitTestVisible="False" BorderThickness="3" CornerRadius="2"
+                                        <Border Grid.RowSpan="2" IsHitTestVisible="False" CornerRadius="4"
+                                                Background="{ThemeResource AccentFillColorDefaultBrush}"
+                                                Opacity="{x:Bind SelectionWashOpacity, Mode=OneWay}"/>
+                                        <Border Grid.RowSpan="2" IsHitTestVisible="False" BorderThickness="2" CornerRadius="4"
                                                 BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
                                                 Opacity="{x:Bind SelectionOpacity, Mode=OneWay}"/>
-                                        <Grid Grid.Row="0" Width="18" Height="18" Margin="8" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                        <Grid Grid.Row="0" Width="22" Height="22" Margin="6" HorizontalAlignment="Left" VerticalAlignment="Top"
                                               IsHitTestVisible="False" Opacity="{x:Bind SelectionOpacity, Mode=OneWay}">
-                                            <Ellipse Fill="{ThemeResource AccentFillColorDefaultBrush}"/>
-                                            <FontIcon Glyph="&#xE73E;" FontFamily="Segoe MDL2 Assets" FontSize="10" Foreground="White"
+                                            <Ellipse Fill="White"/>
+                                            <Ellipse Margin="2" Fill="{ThemeResource AccentFillColorDefaultBrush}"/>
+                                            <FontIcon Glyph="&#xE73E;" FontFamily="Segoe MDL2 Assets" FontSize="11" Foreground="White"
                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                         </Grid>
                                         <Grid Grid.Row="0" IsHitTestVisible="False" Opacity="{x:Bind KeyboardCursorOpacity, Mode=OneWay}">
@@ -252,21 +261,28 @@
                                             <Border Margin="5.5" CornerRadius="1" BorderThickness="1" BorderBrush="#59000000"/>
                                         </Grid>
                                     </Grid>
-                                    <Grid Visibility="{x:Bind ListVisibility, Mode=OneWay}" Margin="6,0,4,0" VerticalAlignment="Center">
+                                    <Grid Visibility="{x:Bind ListVisibility, Mode=OneWay}" Margin="6,0,4,0" VerticalAlignment="Stretch">
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="18"/>
+                                            <ColumnDefinition Width="22"/>
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
-                                        <Grid Width="18" Height="18" VerticalAlignment="Center">
-                                            <FontIcon Glyph="&#xE91B;" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                            <Border IsHitTestVisible="False" BorderThickness="1" BorderBrush="{ThemeResource AccentFillColorDefaultBrush}" Opacity="{x:Bind SelectionOpacity, Mode=OneWay}"/>
-                                            <Grid Width="9" Height="9" HorizontalAlignment="Left" VerticalAlignment="Top" IsHitTestVisible="False" Opacity="{x:Bind SelectionOpacity, Mode=OneWay}">
-                                                <Ellipse Fill="{ThemeResource AccentFillColorDefaultBrush}"/>
-                                                <FontIcon Glyph="&#xE73E;" FontFamily="Segoe MDL2 Assets" FontSize="6" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        <Border Grid.ColumnSpan="2" IsHitTestVisible="False" Margin="-6,0,-4,0"
+                                                Background="{ThemeResource AccentFillColorDefaultBrush}"
+                                                Opacity="{x:Bind SelectionWashOpacity, Mode=OneWay}"/>
+                                        <Border Grid.ColumnSpan="2" Width="3" HorizontalAlignment="Left" IsHitTestVisible="False" Margin="-6,0,0,0"
+                                                Background="{ThemeResource AccentFillColorDefaultBrush}"
+                                                Opacity="{x:Bind SelectionOpacity, Mode=OneWay}"/>
+                                        <Grid Width="22" Height="20" VerticalAlignment="Center">
+                                            <Image Width="16" Height="16" Source="ms-appx:///ModernImageViewer.ico" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{x:Bind PhotoListIconVisibility, Mode=OneTime}"/>
+                                            <Grid Width="20" Height="20" Visibility="{x:Bind DirectoryListIconVisibility, Mode=OneTime}">
+                                                <FontIcon Glyph="&#xE8B7;" FontFamily="Segoe Fluent Icons" FontSize="18" Foreground="#FFF8D348" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{x:Bind DirectoryFallbackVisibility, Mode=OneWay}"/>
+                                                <FontIcon Glyph="&#xE74A;" FontFamily="Segoe Fluent Icons" FontSize="13" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{x:Bind ParentUpBadgeVisibility, Mode=OneWay}"/>
+                                                <Image Source="{x:Bind DirectoryIcon, Mode=OneWay}" Stretch="Uniform"/>
                                             </Grid>
                                         </Grid>
                                         <TextBlock Grid.Column="1" Text="{x:Bind Name}" VerticalAlignment="Center" Margin="6,0,2,0" FontSize="12" TextTrimming="CharacterEllipsis"/>
-                                        <Border Grid.ColumnSpan="2" IsHitTestVisible="False" Margin="-2,0" BorderThickness="1" BorderBrush="{ThemeResource AccentFillColorDefaultBrush}" Opacity="{x:Bind KeyboardCursorOpacity, Mode=OneWay}"/>
+                                        <Border Grid.ColumnSpan="2" IsHitTestVisible="False" Margin="-6,0,-4,0" BorderThickness="1.5" BorderBrush="#E6000000" Opacity="{x:Bind KeyboardCursorOpacity, Mode=OneWay}"/>
+                                        <Border Grid.ColumnSpan="2" IsHitTestVisible="False" Margin="-4.5,1.5,-2.5,1.5" BorderThickness="1" BorderBrush="#F2FFFFFF" Opacity="{x:Bind KeyboardCursorOpacity, Mode=OneWay}"/>
                                     </Grid>
                                 </Grid>
                             </DataTemplate>
@@ -277,7 +293,7 @@
                         <ProgressRing x:Name="LoadingRing" Width="50" Height="50" HorizontalAlignment="Center" VerticalAlignment="Center" IsActive="False" />
                     </Grid>
 
-                    <Grid x:Name="MultiSelectActionBar" Visibility="Collapsed" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,24" Canvas.ZIndex="500">
+                    <Grid x:Name="MultiSelectActionBar" Grid.Row="1" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,6,0,8">
                         <Border Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="16,8">
                             <StackPanel Orientation="Horizontal" Spacing="16">
                                 <TextBlock x:Name="MultiSelectCountText" Text="0 selected" VerticalAlignment="Center" Style="{ThemeResource BodyStrongTextBlockStyle}" Margin="0,0,8,0" />
@@ -296,6 +312,89 @@
                                     <SymbolIcon Symbol="Cancel" />
                                 </Button>
                             </StackPanel>
+                        </Border>
+                    </Grid>
+
+                    <Grid x:Name="ListPreviewBar" Grid.Row="2" Visibility="Collapsed"
+                          Background="{ThemeResource LayerFillColorDefaultBrush}"
+                          BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="360"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid Margin="16,8,16,8" VerticalAlignment="Center">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="PreviewNameText" Grid.ColumnSpan="2" Margin="0,0,0,4" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxLines="1"/>
+                            <StackPanel Grid.Row="1" Spacing="0">
+                                <Grid Height="20">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="108"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Type" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="PreviewTypeText" Grid.Column="1" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                </Grid>
+                                <Grid Height="20">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="108"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Size" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="PreviewSizeText" Grid.Column="1" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                </Grid>
+                                <Grid Height="20">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="108"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Date modified" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="PreviewModifiedText" Grid.Column="1" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                </Grid>
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Grid.Column="1" Margin="20,0,0,0" Spacing="0">
+                                <Grid Height="20">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="108"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Dimensions" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="PreviewDimensionsText" Grid.Column="1" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                </Grid>
+                                <Grid Height="20">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="108"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Date taken" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="PreviewTakenText" Grid.Column="1" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                </Grid>
+                            </StackPanel>
+                            <Grid Grid.Row="2" Grid.ColumnSpan="2" Height="20" Margin="0,2,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="108"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Location" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                                <Button x:Name="PreviewLocationButton" Grid.Column="1" Click="ShowInExplorer_Click" Background="Transparent" BorderThickness="0" Padding="0" MinWidth="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalAlignment="Center">
+                                    <TextBlock x:Name="PreviewLocationText" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                </Button>
+                            </Grid>
+                        </Grid>
+                        <Border Grid.Column="1" Height="132" Margin="0,8,12,8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="4">
+                            <Grid>
+                                <Image x:Name="PreviewPlaceholder" Width="32" Height="32" Source="ms-appx:///ModernImageViewer.ico" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <FontIcon x:Name="PreviewFolderIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE8B7;" FontSize="64" Foreground="#FFF8D348" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <Image x:Name="PreviewFolderImage" Stretch="Uniform" MaxWidth="112" MaxHeight="112" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <Image x:Name="PreviewImage" Stretch="Uniform" Visibility="Collapsed"/>
+                            </Grid>
                         </Border>
                     </Grid>
                     </Grid>

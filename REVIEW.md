@@ -84,3 +84,4 @@ The Win2D viewer core is real, but GPU lifetime was not reference-counted end-to
 - 2026-10-25: v0.11.8. The tile cursor is a light edge inside the photograph. The filename is left clear. A selected tile keeps its check and loses the box around the caption.
 - 2026-10-25: v0.11.9. A selected photograph gets an accent edge and a check on the picture. The filename stays clear.
 - 2026-10-25: v0.11.10. The header is a thin bar with refresh, reset, sort, and tiles or list. List view is filenames in columns. A separate window previews the cursor row and hides while a photo is open.
+- 2026-10-25: v0.11.11. The list preview is a band under the files. List view can open the parent folder, a subfolder, or another drive. The tiles or list choice is remembered. A selected tile is tinted, with a check. A selected list row is tinted across the row. The selection actions sit under the files. In tile view the keyboard cursor raises that tile.

@@ -78,6 +78,10 @@ namespace ModernImageViewer
         private bool _isStartupIndexing = false;
 
         private string _currentDirectory = string.Empty;
+        // Not a filesystem path. The list and sidebar use it as the level above the drives.
+        private const string DriveRootPath = "::{Drives}";
+        private const string DriveRootName = "This PC";
+        private bool AtDriveRoot => _currentDirectory == DriveRootPath;
         private DateTime _lastNavigationTime = DateTime.MinValue;
 
         private float _currentGamma = 2.2f;
@@ -125,7 +129,7 @@ namespace ModernImageViewer
 
             this.Closed += (s, e) =>
             {
-                _listPreview?.Close();
+                CancelPreviewLoad();
                 RootGrid.RemoveHandler(UIElement.KeyDownEvent, _globalKeyDownHandler);
                 RootGrid.RemoveHandler(UIElement.KeyUpEvent, _globalKeyUpHandler);
                 Instance = null;
@@ -262,6 +266,7 @@ namespace ModernImageViewer
             public string ImageEditorPath { get; set; } = "mspaint.exe";
             public string VideoDirectorPath { get; set; } = string.Empty;
             public string SortOrder { get; set; } = "NameAsc";
+            public bool ListMode { get; set; }
             public List<string> RecentFolders { get; set; } = new();
         }
 
@@ -336,6 +341,11 @@ namespace ModernImageViewer
             }
 
             _currentSettings = settings;
+            bool viewChanged = _listMode != settings.ListMode;
+            _listMode = settings.ListMode;
+            // The panel can load during InitializeComponent, before settings are read.
+            if (viewChanged && _imageWrapGrid != null)
+                ApplyViewMode();
 
             int w = settings.WindowWidth < 300 ? 1280 : settings.WindowWidth;
             int h = settings.WindowHeight < 300 ? 1350 : settings.WindowHeight;
@@ -544,14 +554,38 @@ namespace ModernImageViewer
             OpenCinematic(Images.Select(img => img.Path).ToList(), 0);
         }
 
+        private bool _strippingDirectorySelection;
+
         private void ImageGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            if (_strippingDirectorySelection) return;
             foreach (var item in e.RemovedItems.OfType<ImageItem>())
                 item.IsGridSelected = false;
+            var directories = new List<ImageItem>();
             foreach (var item in e.AddedItems.OfType<ImageItem>())
-                item.IsGridSelected = true;
+            {
+                if (item.IsDirectory) directories.Add(item);
+                else item.IsGridSelected = true;
+            }
+            if (directories.Count > 0)
+            {
+                _strippingDirectorySelection = true;
+                try
+                {
+                    foreach (var directory in directories)
+                    {
+                        if (ImageGrid.SelectedItems.Contains(directory))
+                            ImageGrid.SelectedItems.Remove(directory);
+                    }
+                }
+                finally { _strippingDirectorySelection = false; }
+            }
 
-            int count = ImageGrid.SelectedItems.Count;
+            int count = 0;
+            foreach (var item in ImageGrid.SelectedItems.OfType<ImageItem>())
+            {
+                if (!item.IsDirectory) count++;
+            }
             if (count > 0)
             {
                 MultiSelectCountText.Text = $"{count} selected";
@@ -565,7 +599,7 @@ namespace ModernImageViewer
 
         private void MultiSelectCinematic_Click(object sender, RoutedEventArgs e)
         {
-            var selectedItems = ImageGrid.SelectedItems.OfType<ImageItem>().ToList();
+            var selectedItems = ImageGrid.SelectedItems.OfType<ImageItem>().Where(i => !i.IsDirectory).ToList();
             if (selectedItems.Count == 0) return;
             OpenCinematic(selectedItems.Select(i => i.Path).ToList(), 0);
             ImageGrid.SelectedItems.Clear();
@@ -573,7 +607,7 @@ namespace ModernImageViewer
 
         private void MultiSelectCollage_Click(object sender, RoutedEventArgs e)
         {
-            var selectedItems = ImageGrid.SelectedItems.OfType<ImageItem>().ToList();
+            var selectedItems = ImageGrid.SelectedItems.OfType<ImageItem>().Where(i => !i.IsDirectory).ToList();
             if (selectedItems.Count == 0) return;
             
             if (_collageEditorWindow == null)
@@ -593,7 +627,7 @@ namespace ModernImageViewer
 
         private async void MultiSelectDelete_Click(object sender, RoutedEventArgs e)
         {
-            var selectedItems = ImageGrid.SelectedItems.OfType<ImageItem>().ToList();
+            var selectedItems = ImageGrid.SelectedItems.OfType<ImageItem>().Where(i => !i.IsDirectory).ToList();
             if (selectedItems.Count == 0) return;
 
             var dialog = new ContentDialog
@@ -615,7 +649,7 @@ namespace ModernImageViewer
                     if (ViewerEngine.RecycleFile(item.Path))
                     {
                         ImageCache.Evict(item.Path);
-                        Images.Remove(item);
+                        RemoveDisplayedImage(item);
                     }
                     else
                     {

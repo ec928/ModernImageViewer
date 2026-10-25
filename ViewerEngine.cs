@@ -77,6 +77,21 @@ namespace ModernImageViewer
                 index++;
             }
         }
+
+        // One notification for a full replacement. Images stays on AddRange: a Reset there recycles rows and restarts thumbnails.
+        public void ResetWith(IEnumerable<T> collection)
+        {
+            CheckReentrancy();
+            Items.Clear();
+            if (collection != null)
+            {
+                foreach (var item in collection)
+                    Items.Add(item);
+            }
+            OnPropertyChanged(new PropertyChangedEventArgs("Count"));
+            OnPropertyChanged(new PropertyChangedEventArgs("Item[]"));
+            OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+        }
     }
 
     public class AnimationFrame : IDisposable
@@ -642,5 +657,22 @@ namespace ModernImageViewer
 
         [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
         public static extern int SHFileOperation(ref SHFILEOPSTRUCT lpFileOp);
+
+        // Parent cell picture: the same empty-folder icon as a subdirectory, with a blue arrow on it.
+        public static byte[]? FolderBackPng()
+        {
+            using var stream = typeof(NativeMethods).Assembly.GetManifestResourceStream("ModernImageViewer.Assets.ParentFolder.png");
+            if (stream == null) return null;
+            var bytes = new byte[stream.Length];
+            int read = 0;
+            while (read < bytes.Length)
+            {
+                int n = stream.Read(bytes, read, bytes.Length - read);
+                if (n <= 0) return null;
+                read += n;
+            }
+            return bytes;
+        }
+
     }
 }
