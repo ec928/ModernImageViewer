@@ -18,6 +18,57 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
+        public void FitZoom_can_go_below_the_wheel_floor()
+        {
+            float zoom = ViewerMath.CalculateFitZoom(1000, 800, 20000, 10000, dpiScale: 1f, minZoom: ViewerMath.AbsoluteFitMinZoom, maxZoom: 20f);
+            Assert.Equal(0.05f, zoom, precision: 4);
+        }
+
+        [Fact]
+        public void ScrollZoomFloor_stays_at_the_wheel_floor_for_an_ordinary_fit()
+        {
+            Assert.Equal(0.1f, ViewerMath.ScrollZoomFloor(0.4f), precision: 4);
+        }
+
+        [Fact]
+        public void ScrollZoomFloor_drops_only_for_a_fit_below_the_wheel_floor()
+        {
+            Assert.Equal(0.05f, ViewerMath.ScrollZoomFloor(0.05f), precision: 4);
+        }
+
+        [Fact]
+        public void NextDecodeEdge_at_fit_is_the_screen_and_not_the_file()
+        {
+            float fit = 1600f / 6000f;
+            int edge = ViewerMath.NextDecodeEdge(6000, 4000, fit, fit, haveEdge: 1200, absoluteMax: 16384);
+            Assert.Equal(1600, edge);
+        }
+
+        [Fact]
+        public void NextDecodeEdge_past_fit_jumps_to_the_file()
+        {
+            float fit = 1600f / 6000f;
+            int edge = ViewerMath.NextDecodeEdge(6000, 4000, zoom: 0.5f, fit, haveEdge: 1600, absoluteMax: 16384);
+            Assert.Equal(6000, edge);
+        }
+
+        [Fact]
+        public void NextDecodeEdge_is_zero_when_the_bitmap_already_covers_the_view()
+        {
+            float fit = 1600f / 6000f;
+            int edge = ViewerMath.NextDecodeEdge(6000, 4000, fit, fit, haveEdge: 1600, absoluteMax: 16384);
+            Assert.Equal(0, edge);
+        }
+
+        [Fact]
+        public void NextDecodeEdge_growing_the_window_at_fit_asks_for_the_new_screen()
+        {
+            float fit = 2400f / 6000f;
+            int edge = ViewerMath.NextDecodeEdge(6000, 4000, fit, fit, haveEdge: 1600, absoluteMax: 16384);
+            Assert.Equal(2400, edge);
+        }
+
+        [Fact]
         public void ClampPan_stops_at_the_scroll_extent()
         {
             var (x, y) = ViewerMath.ClampPan(0, 0, 5000, -5000, horizOffset: 10, vertOffset: 10, scrollWidth: 100, scrollHeight: 100);

@@ -90,8 +90,9 @@ namespace ModernImageViewer.Cinematic
             public Vector2 CurrentPan;
             public float CurrentRotation;
 
-            public ColorMatrixEffect BlurColorMatrix { get; }
-            public GaussianBlurEffect BlurEffect { get; }
+            public ColorMatrixEffect? BlurColorMatrix { get; private set; }
+            public GaussianBlurEffect? BlurEffect { get; private set; }
+            public CanvasBitmap? BlurredBackground { get; private set; }
 
             public SlideFrame(CanvasBitmap bitmap, SceneIntelligence intel)
             {
@@ -100,10 +101,67 @@ namespace ModernImageViewer.Cinematic
 
                 BlurColorMatrix = new ColorMatrixEffect { Source = GpuBitmap, ColorMatrix = new Matrix5x4 { M11 = 0.5f, M22 = 0.5f, M33 = 0.5f, M44 = 1.0f, M54 = 0 } };
                 BlurEffect = new GaussianBlurEffect { Source = BlurColorMatrix, BlurAmount = 40.0f, BorderMode = EffectBorderMode.Hard };
+                BakeBlurredBackground();
+            }
+
+            /// <summary>
+            /// Blur a small copy once. Radius scales with the copy so the background matches a 40px blur of the full bitmap.
+            /// </summary>
+            private void BakeBlurredBackground()
+            {
+                if (BlurColorMatrix == null || BlurEffect == null) return;
+                CanvasRenderTarget? baked = null;
+                try
+                {
+                    float srcW = GpuBitmap.SizeInPixels.Width;
+                    float srcH = GpuBitmap.SizeInPixels.Height;
+                    float srcLong = Math.Max(srcW, srcH);
+                    if (srcLong < 1) return;
+
+                    const float proxyLong = 480f;
+                    float scale = srcLong <= proxyLong ? 1f : proxyLong / srcLong;
+                    float pw = Math.Max(1, MathF.Round(srcW * scale));
+                    float ph = Math.Max(1, MathF.Round(srcH * scale));
+
+                    using var down = new CanvasRenderTarget(GpuBitmap.Device, pw, ph, 96);
+                    using (var ds = down.CreateDrawingSession())
+                    {
+                        ds.Clear(Microsoft.UI.Colors.Transparent);
+                        ds.DrawImage(BlurColorMatrix, new Rect(0, 0, pw, ph), GpuBitmap.Bounds, 1f, CanvasImageInterpolation.Linear);
+                    }
+
+                    using var smallBlur = new GaussianBlurEffect
+                    {
+                        Source = down,
+                        BlurAmount = 40f * scale,
+                        BorderMode = EffectBorderMode.Hard
+                    };
+                    baked = new CanvasRenderTarget(GpuBitmap.Device, pw, ph, 96);
+                    using (var ds = baked.CreateDrawingSession())
+                    {
+                        ds.Clear(Microsoft.UI.Colors.Transparent);
+                        ds.DrawImage(smallBlur);
+                    }
+
+                    BlurredBackground = baked;
+                    baked = null;
+
+                    BlurEffect.Dispose();
+                    BlurEffect = null;
+                    BlurColorMatrix.Dispose();
+                    BlurColorMatrix = null;
+                }
+                catch (Exception ex)
+                {
+                    baked?.Dispose();
+                    System.Diagnostics.Debug.WriteLine($"[Cinematic] blur bake: {ex.Message}");
+                }
             }
 
             public void Dispose()
             {
+                BlurredBackground?.Dispose();
+                BlurredBackground = null;
                 if (!IsSharedResource)
                 {
                     GpuBitmap?.Dispose();
@@ -839,7 +897,19 @@ namespace ModernImageViewer.Cinematic
 
                     args.DrawingSession.Transform = bgTransform;
 
-                    args.DrawingSession.DrawImage(frame.BlurEffect, 0, 0, frame.GpuBitmap.Bounds, blurAlpha, CanvasImageInterpolation.Linear);
+                    if (frame.BlurredBackground != null)
+                    {
+                        args.DrawingSession.DrawImage(
+                            frame.BlurredBackground,
+                            new Rect(0, 0, frame.GpuBitmap.Size.Width, frame.GpuBitmap.Size.Height),
+                            frame.BlurredBackground.Bounds,
+                            blurAlpha,
+                            CanvasImageInterpolation.Linear);
+                    }
+                    else if (frame.BlurEffect != null)
+                    {
+                        args.DrawingSession.DrawImage(frame.BlurEffect, 0, 0, frame.GpuBitmap.Bounds, blurAlpha, CanvasImageInterpolation.Linear);
+                    }
                 }
 
                 if (subjectAlpha > 0f)

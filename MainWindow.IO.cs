@@ -1,4 +1,4 @@
-﻿using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System;
 using System.Collections.Generic;
@@ -73,7 +73,7 @@ namespace ModernImageViewer
 
                 ViewerControl.InjectImage(fastEntry, true);
 
-                if (!_isHighFidelityActive) _hfPromotionTimer?.Start();
+                QueueSharperDecode();
             }
 
             await ScanFolder(folderPath);
@@ -92,7 +92,7 @@ namespace ModernImageViewer
                 _ = targetItem.LoadExifAsync(_exifCts.Token);
 
                 ManageCache(_currentIndex, 1);
-                if (!_isHighFidelityActive) _hfPromotionTimer?.Start();
+                QueueSharperDecode();
             }
             else
             {
@@ -210,88 +210,34 @@ namespace ModernImageViewer
                     return new { SubDirs = subDirs, HopDirs = hopDirs, Parent = parentDir };
                 });
 
-                var countTask = Task.Run(() =>
-                {
-                    try
-                    {
-                        return Directory.EnumerateFiles(folderPath, "*.*", enumOptions)
-                            .Count(f => SupportedExtensions.Contains(Path.GetExtension(f)));
-                    }
-                    catch { return 0; }
-                });
+                var fileTask = Task.Run(() => BuildFolderImages(folderPath, myScanId));
 
-                await Task.WhenAll(dirTask, countTask);
+                await Task.WhenAll(dirTask, fileTask);
 
                 if (myScanId != _currentScanId) return;
 
                 var folderData = dirTask.Result;
-                int imageCount = countTask.Result;
+                var items = fileTask.Result;
 
                 _hopFolders = folderData.HopDirs;
-                PopulateTreeView(folderData.Parent, folderData.HopDirs, folderData.SubDirs, folderPath, imageCount);
+                PopulateTreeView(folderData.Parent, folderData.HopDirs, folderData.SubDirs, folderPath, items.Count);
 
-                await Task.Run(() =>
+                if (LoadingRing != null) LoadingRing.IsActive = false;
+                if (LoadingOverlay != null) LoadingOverlay.Visibility = Visibility.Collapsed;
+
+                const int batchSize = 100;
+                for (int i = 0; i < items.Count; i += batchSize)
                 {
-                    var dirInfo = new DirectoryInfo(folderPath);
-
-                    var allFiles = dirInfo.GetFiles("*.*", enumOptions);
-                    var filteredFiles = new List<FileInfo>(allFiles.Length);
-
-                    foreach (var fi in allFiles)
-                    {
-                        if (myScanId != _currentScanId) return;
-                        if (SupportedExtensions.Contains(fi.Extension))
-                        {
-                            filteredFiles.Add(fi);
-                        }
-                    }
-
-                    filteredFiles.Sort((a, b) => NaturalSort.Compare(a.Name, b.Name));
-
-                    int batchSize = 100;
-                    var batch = new List<ImageItem>(batchSize);
-
-                    foreach (var fi in filteredFiles)
-                    {
-                        if (myScanId != _currentScanId) break;
-
-                        batch.Add(new ImageItem
-                        {
-                            Name = fi.Name,
-                            Path = fi.FullName,
-                            DateModified = fi.LastWriteTime,
-                            SizeString = (fi.Length / 1024.0 < 1024) ? $"{fi.Length / 1024} KB" : $"{(fi.Length / 1048576.0):F2} MB",
-                            Dispatcher = this.DispatcherQueue
-                        });
-
-                        if (batch.Count >= batchSize)
-                        {
-                            var yieldBatch = batch.ToList();
-                            batch.Clear();
-                            int enqueueId = myScanId;
-                            DispatcherQueue.TryEnqueue(() =>
-                            {
-                                if (enqueueId != _currentScanId) return;
-                                Images.AddRange(yieldBatch);
-                            });
-                        }
-                    }
-
-                    if (batch.Count > 0 && myScanId == _currentScanId)
-                    {
-                        var yieldBatch = batch.ToList();
-                        int enqueueId = myScanId;
-                        DispatcherQueue.TryEnqueue(() =>
-                        {
-                            if (enqueueId != _currentScanId) return;
-                            Images.AddRange(yieldBatch);
-                        });
-                    }
-                });
+                    if (myScanId != _currentScanId) return;
+                    int count = Math.Min(batchSize, items.Count - i);
+                    Images.AddRange(items.GetRange(i, count));
+                    if (i + count < items.Count)
+                        await Task.Yield();
+                }
 
                 if (myScanId == _currentScanId)
                 {
-                    if (Images.Count > 0) AddFolderToRecent(folderPath);
+                    if (items.Count > 0) AddFolderToRecent(folderPath);
                     RestartFolderWatcher(folderPath);
                 }
             }
@@ -304,6 +250,53 @@ namespace ModernImageViewer
                     if (LoadingOverlay != null) LoadingOverlay.Visibility = Visibility.Collapsed;
                     if (_folderWatchDirty) ScheduleFolderRefresh();
                 }
+            }
+        }
+
+        private List<ImageItem> BuildFolderImages(string folderPath, int scanId)
+        {
+            try
+            {
+                var enumOptions = new EnumerationOptions { IgnoreInaccessible = true };
+                var allFiles = new DirectoryInfo(folderPath).GetFiles("*.*", enumOptions);
+                var filtered = new List<FileInfo>(allFiles.Length);
+                foreach (var fi in allFiles)
+                {
+                    if (scanId != _currentScanId) return new List<ImageItem>();
+                    if (SupportedExtensions.Contains(fi.Extension))
+                        filtered.Add(fi);
+                }
+
+                string sortOrder = _currentSettings.SortOrder;
+                if (sortOrder == "NameDesc")
+                    filtered.Sort((a, b) => NaturalSort.Compare(b.Name, a.Name));
+                else if (sortOrder == "DateDesc")
+                    filtered.Sort((a, b) => b.LastWriteTime.CompareTo(a.LastWriteTime));
+                else if (sortOrder == "DateAsc")
+                    filtered.Sort((a, b) => a.LastWriteTime.CompareTo(b.LastWriteTime));
+                else
+                    filtered.Sort((a, b) => NaturalSort.Compare(a.Name, b.Name));
+
+                var dispatcher = this.DispatcherQueue;
+                var items = new List<ImageItem>(filtered.Count);
+                foreach (var fi in filtered)
+                {
+                    if (scanId != _currentScanId) return new List<ImageItem>();
+                    items.Add(new ImageItem
+                    {
+                        Name = fi.Name,
+                        Path = fi.FullName,
+                        DateModified = fi.LastWriteTime,
+                        SizeString = (fi.Length / 1024.0 < 1024) ? $"{fi.Length / 1024} KB" : $"{(fi.Length / 1048576.0):F2} MB",
+                        Dispatcher = dispatcher
+                    });
+                }
+                return items;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[Scan] {folderPath}: {ex.Message}");
+                return new List<ImageItem>();
             }
         }
 
@@ -626,6 +619,9 @@ namespace ModernImageViewer
                 Images.AddRange(sortedList);
 
                 if (currentItem != null) _currentIndex = Images.IndexOf(currentItem);
+
+                _currentSettings.SortOrder = tag;
+                SaveAllSettings();
             }
         }
 

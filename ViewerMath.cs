@@ -4,6 +4,54 @@ namespace ModernImageViewer
 {
     public static partial class ViewerMath
     {
+        /// <summary>Lowest zoom the wheel can reach on an ordinary photo.</summary>
+        public const float WheelMinZoom = 0.1f;
+
+        /// <summary>Lowest zoom a fit is allowed to use. Below the wheel floor, so a very wide image can fit.</summary>
+        public const float AbsoluteFitMinZoom = 0.01f;
+
+        /// <summary>Long edge of the fast preview bitmap.</summary>
+        public const int PreviewLongEdge = 1200;
+
+        /// <summary>
+        /// Wheel floor for this image. An ordinary fit stays at <see cref="WheelMinZoom"/>.
+        /// A fit below that floor becomes the floor, so the whole image can be shown and the wheel cannot shrink it further.
+        /// </summary>
+        public static float ScrollZoomFloor(float fitZoom, float wheelMinZoom = WheelMinZoom)
+        {
+            if (float.IsNaN(fitZoom) || fitZoom <= 0) return wheelMinZoom;
+            return Math.Min(wheelMinZoom, fitZoom);
+        }
+
+        /// <summary>
+        /// Bitmap long edge that makes this zoom sharp. Zoom 1 is one image pixel per physical pixel.
+        /// </summary>
+        public static int RequiredLongEdge(double nativeW, double nativeH, float zoom, int absoluteMax)
+        {
+            double nativeLong = Math.Max(nativeW, nativeH);
+            if (nativeLong <= 1 || zoom <= 0 || absoluteMax < 1) return 1;
+            double need = Math.Min(nativeLong, nativeLong * zoom);
+            need = Math.Min(need, absoluteMax);
+            return Math.Max(1, (int)Math.Ceiling(need - 0.001));
+        }
+
+        /// <summary>
+        /// Next decode long edge, or 0 when <paramref name="haveEdge"/> is already sharp enough.
+        /// At fit, the next edge is only what the view needs. Zoomed past fit, it is the file, capped.
+        /// </summary>
+        public static int NextDecodeEdge(double nativeW, double nativeH, float zoom, float fitZoom, int haveEdge, int absoluteMax)
+        {
+            int need = RequiredLongEdge(nativeW, nativeH, zoom, absoluteMax);
+            if (haveEdge >= need) return 0;
+
+            bool atFit = fitZoom > 0 && zoom <= fitZoom * 1.02f + 0.001f;
+            if (atFit) return need;
+
+            double nativeLong = Math.Max(nativeW, nativeH);
+            int full = (int)Math.Ceiling(Math.Min(nativeLong, absoluteMax));
+            return Math.Max(need, Math.Max(1, full));
+        }
+
         public static float CalculateFitZoom(double viewW, double viewH, double logicalW, double logicalH, float dpiScale, float minZoom, float maxZoom)
         {
             if (viewW <= 0 || viewH <= 0 || logicalW <= 0 || logicalH <= 0) return 1.0f;

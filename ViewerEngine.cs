@@ -66,11 +66,16 @@ namespace ModernImageViewer
             var newItems = collection.ToList();
             if (newItems.Count == 0) return;
 
-            foreach (var item in newItems) Items.Add(item);
-
-            OnPropertyChanged(new PropertyChangedEventArgs("Count"));
-            OnPropertyChanged(new PropertyChangedEventArgs("Item[]"));
-            OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+            // One Add per item. A Reset recycles the visible rows and restarts their thumbnails.
+            int index = Count;
+            foreach (var item in newItems)
+            {
+                Items.Add(item);
+                OnPropertyChanged(new PropertyChangedEventArgs("Count"));
+                OnPropertyChanged(new PropertyChangedEventArgs("Item[]"));
+                OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, item, index));
+                index++;
+            }
         }
     }
 
@@ -100,6 +105,9 @@ namespace ModernImageViewer
         public double NativeWidth { get; set; }
         public double NativeHeight { get; set; }
         public bool IsHighFidelity { get; set; } = false;
+
+        /// <summary>Long edge of the decoded bitmap, in pixels. 0 if the decode did not record it.</summary>
+        public int DecodedLongEdge { get; set; }
 
         public bool HasDecodableContent =>
             GpuBitmap != null || Bitmap != null || AnimationFrames != null;
@@ -204,10 +212,11 @@ namespace ModernImageViewer
 
                     uint w = decoder.PixelWidth;
                     uint h = decoder.PixelHeight;
+                    uint previewEdge = (uint)ViewerMath.PreviewLongEdge;
 
-                    if (w > 1200 || h > 1200)
+                    if (w > previewEdge || h > previewEdge)
                     {
-                        double ratio = Math.Min(1200.0 / w, 1200.0 / h);
+                        double ratio = Math.Min((double)previewEdge / w, (double)previewEdge / h);
                         w = (uint)Math.Max(1, w * ratio);
                         h = (uint)Math.Max(1, h * ratio);
                     }
@@ -229,7 +238,15 @@ namespace ModernImageViewer
 
                     if (softwareBitmap != null) { softwareBitmap.DpiX = 96; softwareBitmap.DpiY = 96; }
 
-                    return new ImageCacheEntry { Bitmap = softwareBitmap, Profile = null, NativeWidth = nativeW, NativeHeight = nativeH, IsHighFidelity = false };
+                    return new ImageCacheEntry
+                    {
+                        Bitmap = softwareBitmap,
+                        Profile = null,
+                        NativeWidth = nativeW,
+                        NativeHeight = nativeH,
+                        IsHighFidelity = false,
+                        DecodedLongEdge = softwareBitmap == null ? 0 : (int)Math.Max(softwareBitmap.PixelWidth, softwareBitmap.PixelHeight)
+                    };
                 }
                 catch (OperationCanceledException) { return null; }
                 catch (Exception ex)
@@ -240,8 +257,11 @@ namespace ModernImageViewer
             }, token);
         }
 
-        public static async Task<ImageCacheEntry?> DecodeHighFidelityAsync(string path, CancellationToken token = default)
+        public static async Task<ImageCacheEntry?> DecodeHighFidelityAsync(string path, CancellationToken token = default, uint maxEdge = HighFidelityMaxEdge)
         {
+            if (maxEdge < 1) maxEdge = 1;
+            if (maxEdge > HighFidelityMaxEdge) maxEdge = HighFidelityMaxEdge;
+
             return await Task.Run(async () =>
             {
                 try
@@ -261,9 +281,8 @@ namespace ModernImageViewer
 
                     uint decW = decoder.PixelWidth;
                     uint decH = decoder.PixelHeight;
-                    float canvasScale = 1f;
-                    if (decW > HighFidelityMaxEdge || decH > HighFidelityMaxEdge)
-                        canvasScale = (float)Math.Min((double)HighFidelityMaxEdge / decW, (double)HighFidelityMaxEdge / decH);
+                    float longer = Math.Max(decW, decH);
+                    float canvasScale = longer > maxEdge ? maxEdge / longer : 1f;
 
                     uint frameCount = decoder.FrameCount;
 
@@ -336,7 +355,20 @@ namespace ModernImageViewer
                             rawFrames.Clear();
                             return null;
                         }
-                        return new ImageCacheEntry { RawFrames = rawFrames, Profile = null, NativeWidth = nativeW, NativeHeight = nativeH, IsHighFidelity = true };
+                        int nativeLong = (int)Math.Ceiling(Math.Max(nativeW, nativeH));
+                        int edge = nativeLong;
+                        if (edge > maxEdge) edge = (int)maxEdge;
+                        if (edge > HighFidelityMaxEdge) edge = (int)HighFidelityMaxEdge;
+                        int fullest = Math.Min(nativeLong, (int)HighFidelityMaxEdge);
+                        return new ImageCacheEntry
+                        {
+                            RawFrames = rawFrames,
+                            Profile = null,
+                            NativeWidth = nativeW,
+                            NativeHeight = nativeH,
+                            DecodedLongEdge = Math.Max(1, edge),
+                            IsHighFidelity = edge >= fullest - 1
+                        };
                     }
                     else
                     {
@@ -357,7 +389,18 @@ namespace ModernImageViewer
                         if (token.IsCancellationRequested) { softwareBitmap?.Dispose(); return null; }
                         if (softwareBitmap != null) { softwareBitmap.DpiX = 96; softwareBitmap.DpiY = 96; }
 
-                        return new ImageCacheEntry { Bitmap = softwareBitmap, Profile = null, NativeWidth = nativeW, NativeHeight = nativeH, IsHighFidelity = true };
+                        int decoded = softwareBitmap == null ? 0 : (int)Math.Max(softwareBitmap.PixelWidth, softwareBitmap.PixelHeight);
+                        int nativeLong = (int)Math.Ceiling(Math.Max(nativeW, nativeH));
+                        int fullest = Math.Min(Math.Max(1, nativeLong), (int)HighFidelityMaxEdge);
+                        return new ImageCacheEntry
+                        {
+                            Bitmap = softwareBitmap,
+                            Profile = null,
+                            NativeWidth = nativeW,
+                            NativeHeight = nativeH,
+                            DecodedLongEdge = decoded,
+                            IsHighFidelity = decoded >= fullest - 1
+                        };
                     }
                 }
                 catch (OperationCanceledException) { return null; }
@@ -394,9 +437,12 @@ namespace ModernImageViewer
                 {
                     float canvasW = (float)Math.Max(1, entry.NativeWidth);
                     float canvasH = (float)Math.Max(1, entry.NativeHeight);
-                    if (canvasW > HighFidelityMaxEdge || canvasH > HighFidelityMaxEdge)
+                    float cap = entry.DecodedLongEdge > 0 ? entry.DecodedLongEdge : HighFidelityMaxEdge;
+                    if (cap > HighFidelityMaxEdge) cap = HighFidelityMaxEdge;
+                    float canvasLong = Math.Max(canvasW, canvasH);
+                    if (canvasLong > cap)
                     {
-                        float s = Math.Min(HighFidelityMaxEdge / canvasW, HighFidelityMaxEdge / canvasH);
+                        float s = cap / canvasLong;
                         canvasW = Math.Max(1, canvasW * s);
                         canvasH = Math.Max(1, canvasH * s);
                     }

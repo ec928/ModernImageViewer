@@ -10,6 +10,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.UI.Dispatching;
 using Windows.Graphics.Imaging;
 
 namespace ModernImageViewer
@@ -25,6 +26,11 @@ namespace ModernImageViewer
         private KeyEventHandler _globalKeyDownHandler;
         private int _currentImageLoadId = 0;
         private ImageCacheEntry? _localCacheEntry;
+        private CancellationTokenSource? _loadCts;
+        private CancellationTokenSource? _promoteCts;
+        private DispatcherQueueTimer? _promoteTimer;
+        private int _promoteEdge;
+        private bool _closed;
         private float _initialZoom;
 
         private bool _isWindowDragging = false;
@@ -63,6 +69,7 @@ namespace ModernImageViewer
             ViewerControl.IsStandaloneMode = true;
             ViewerControl.SetGammaLevel(initialGamma);
             ViewerControl.GammaChanged += (_, g) => MainWindow.Instance?.ApplyGamma(g);
+            ViewerControl.ZoomChanged += (_, _) => QueuePromote();
 
             LoadImageAsync();
         }
@@ -223,6 +230,16 @@ namespace ModernImageViewer
                 MainWindow.Instance.GammaApplied -= OnHostGammaChanged;
             MainWindow.Instance?.UnregisterDetachedWindow(_imageItem.Path);
 
+            _closed = true;
+            _promoteTimer?.Stop();
+            _currentImageLoadId++;
+            _loadCts?.Cancel();
+            _loadCts?.Dispose();
+            _loadCts = null;
+            _promoteCts?.Cancel();
+            _promoteCts?.Dispose();
+            _promoteCts = null;
+
             ViewerControl.PrepareForNewImage(null);
             _localCacheEntry?.Release();
             _localCacheEntry = null;
@@ -248,50 +265,136 @@ namespace ModernImageViewer
             else ViewerControl.SetZoom(_initialZoom);
         }
 
+        private void QueuePromote()
+        {
+            if (_closed) return;
+            if (_promoteTimer == null)
+            {
+                _promoteTimer = DispatcherQueue.GetForCurrentThread().CreateTimer();
+                _promoteTimer.Interval = TimeSpan.FromMilliseconds(150);
+                _promoteTimer.IsRepeating = false;
+                _promoteTimer.Tick += (_, _) =>
+                {
+                    _promoteTimer?.Stop();
+                    _ = PromoteDisplayedAsync();
+                };
+            }
+            _promoteTimer.Stop();
+            _promoteTimer.Start();
+        }
+
         private async void LoadImageAsync()
         {
-            if (string.IsNullOrEmpty(_imageItem.Path)) return;
+            if (_closed || string.IsNullOrEmpty(_imageItem.Path)) return;
+
+            _loadCts?.Cancel();
+            _loadCts?.Dispose();
+            _loadCts = new CancellationTokenSource();
+            var token = _loadCts.Token;
             int myLoadId = ++_currentImageLoadId;
+            _promoteEdge = 0;
 
             try
             {
                 var sharedDevice = CanvasDevice.GetSharedDevice();
                 ImageCache.TryGet(_imageItem.Path, out var sharedEntry);
-                if (sharedEntry != null && sharedEntry.IsHighFidelity && sharedEntry.HasDecodableContent
+                if (sharedEntry != null && sharedEntry.HasDecodableContent
                     && (sharedDevice == null || sharedEntry.DeviceMatches(sharedDevice)))
                 {
-                    _localCacheEntry?.Release();
-                    _localCacheEntry = null;
-                    ViewerControl.InjectImage(sharedEntry, false);
-                    ApplyInitialZoomOrFit();
-                    return;
+                    if (sharedEntry.GpuBitmap == null && sharedEntry.AnimationFrames == null && sharedEntry.Bitmap != null)
+                    {
+                        sharedEntry.GpuBitmap = ViewerEngine.CreateGpuBitmap(sharedEntry.Bitmap);
+                        sharedEntry.Bitmap.Dispose();
+                        sharedEntry.Bitmap = null;
+                    }
+                    if (sharedEntry.GpuBitmap != null || sharedEntry.AnimationFrames != null)
+                    {
+                        ViewerControl.InjectImage(sharedEntry, false);
+                        ApplyInitialZoomOrFit();
+                        QueuePromote();
+                        return;
+                    }
                 }
 
-                var hfEntry = await ViewerEngine.DecodeHighFidelityAsync(_imageItem.Path);
-                if (myLoadId != _currentImageLoadId || hfEntry == null)
+                var preview = await ViewerEngine.DecodeFastPreviewAsync(_imageItem.Path, token);
+                if (_closed || token.IsCancellationRequested || myLoadId != _currentImageLoadId)
                 {
-                    hfEntry?.Release();
+                    preview?.Release();
                     return;
                 }
 
-                bool success = ViewerEngine.FinalizeHighFidelityGpuResources(hfEntry);
-
-                if (!success || myLoadId != _currentImageLoadId)
+                if (preview?.Bitmap != null)
                 {
-                    hfEntry.Release();
-                    return;
+                    preview.GpuBitmap = ViewerEngine.CreateGpuBitmap(preview.Bitmap);
+                    preview.Bitmap.Dispose();
+                    preview.Bitmap = null;
                 }
 
-                _localCacheEntry?.Release();
-                _localCacheEntry = hfEntry;
+                if (preview != null && (preview.GpuBitmap != null || preview.AnimationFrames != null))
+                {
+                    ImageCache.Publish(_imageItem.Path, preview);
+                    if (ImageCache.TryGet(_imageItem.Path, out var shown) && shown != null
+                        && (shown.GpuBitmap != null || shown.AnimationFrames != null))
+                    {
+                        ViewerControl.InjectImage(shown, false);
+                        ApplyInitialZoomOrFit();
+                    }
+                }
 
-                ViewerControl.InjectImage(hfEntry, false);
-                ApplyInitialZoomOrFit();
+                if (!_closed && myLoadId == _currentImageLoadId)
+                    QueuePromote();
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"Detached Load Failed: {ex.Message}");
             }
+        }
+
+        private async Task PromoteDisplayedAsync()
+        {
+            if (_closed) return;
+
+            double nativeW = ViewerControl.LogicalWidth;
+            double nativeH = ViewerControl.LogicalHeight;
+            if (nativeW <= 1 || nativeH <= 1) return;
+
+            int have = 0;
+            if (ImageCache.TryGet(_imageItem.Path, out var cached) && cached != null)
+                have = cached.DecodedLongEdge;
+
+            int edge = ViewerMath.NextDecodeEdge(nativeW, nativeH, ViewerControl.CurrentZoom, ViewerControl.FitZoom, have, (int)ViewerEngine.HighFidelityMaxEdge);
+            if (edge <= 0) return;
+            if (_promoteEdge >= edge && _promoteCts != null && !_promoteCts.IsCancellationRequested) return;
+
+            _promoteCts?.Cancel();
+            _promoteCts?.Dispose();
+            _promoteCts = new CancellationTokenSource();
+            var token = _promoteCts.Token;
+            int myLoadId = _currentImageLoadId;
+            _promoteEdge = edge;
+
+            var decoded = await ViewerEngine.DecodeHighFidelityAsync(_imageItem.Path, token, (uint)edge);
+            if (_closed || token.IsCancellationRequested || myLoadId != _currentImageLoadId || decoded == null)
+            {
+                decoded?.Release();
+                if (myLoadId == _currentImageLoadId && _promoteEdge == edge) _promoteEdge = 0;
+                return;
+            }
+
+            bool success = ViewerEngine.FinalizeHighFidelityGpuResources(decoded);
+            if (!success || _closed || token.IsCancellationRequested || myLoadId != _currentImageLoadId)
+            {
+                decoded.Release();
+                if (myLoadId == _currentImageLoadId && _promoteEdge == edge) _promoteEdge = 0;
+                return;
+            }
+
+            ImageCache.Publish(_imageItem.Path, decoded);
+            if (_closed || myLoadId != _currentImageLoadId) return;
+            if (!ImageCache.TryGet(_imageItem.Path, out var published) || published == null) return;
+            if (published.GpuBitmap == null && published.AnimationFrames == null) return;
+
+            ViewerControl.InjectImage(published, false);
         }
 
         private void ToggleFullscreen()

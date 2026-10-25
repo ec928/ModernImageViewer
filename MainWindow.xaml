@@ -1,4 +1,4 @@
-﻿<Window
+<Window
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:ModernImageViewer"
@@ -64,11 +64,11 @@
                                 <SymbolIcon Symbol="Sort"/>
                                 <Button.Flyout>
                                     <MenuFlyout>
-                                        <MenuFlyoutItem Text="Name (A-Z)" Click="Sort_Click" Tag="NameAsc"/>
-                                        <MenuFlyoutItem Text="Name (Z-A)" Click="Sort_Click" Tag="NameDesc"/>
+                                        <RadioMenuFlyoutItem x:Name="SortNameAscItem" Text="Name (A-Z)" Click="Sort_Click" Tag="NameAsc" GroupName="SortGroup"/>
+                                        <RadioMenuFlyoutItem x:Name="SortNameDescItem" Text="Name (Z-A)" Click="Sort_Click" Tag="NameDesc" GroupName="SortGroup"/>
                                         <MenuFlyoutSeparator/>
-                                        <MenuFlyoutItem Text="Date (Newest First)" Click="Sort_Click" Tag="DateDesc"/>
-                                        <MenuFlyoutItem Text="Date (Oldest First)" Click="Sort_Click" Tag="DateAsc"/>
+                                        <RadioMenuFlyoutItem x:Name="SortDateDescItem" Text="Date (Newest First)" Click="Sort_Click" Tag="DateDesc" GroupName="SortGroup"/>
+                                        <RadioMenuFlyoutItem x:Name="SortDateAscItem" Text="Date (Oldest First)" Click="Sort_Click" Tag="DateAsc" GroupName="SortGroup"/>
                                     </MenuFlyout>
                                 </Button.Flyout>
                             </Button>

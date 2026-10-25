@@ -1,4 +1,4 @@
-﻿using Microsoft.Graphics.Canvas;
+using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Effects;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -15,6 +15,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using ModernImageViewer.Collage;
 
@@ -80,6 +81,7 @@ namespace ModernImageViewer
 
         private float _currentGamma = 2.2f;
         private bool _isHighFidelityActive = false;
+        private int _promoteEdge;
 
         private double _logicalImageWidth = 1;
         private double _logicalImageHeight = 1;
@@ -153,52 +155,9 @@ namespace ModernImageViewer
             _hfPromotionTimer.Tick += async (s, e) =>
             {
                 _hfPromotionTimer?.Stop();
-
                 try
                 {
-                    if (!_isHighFidelityActive && _currentIndex >= 0 && _currentIndex < Images.Count)
-                    {
-                        int promoteId = _currentImageLoadId;
-                        var path = Images[_currentIndex].Path;
-
-                        _hfCts?.Cancel();
-                        _hfCts?.Dispose();
-                        _hfCts = new CancellationTokenSource();
-                        var token = _hfCts.Token;
-
-                        // Assigned to track background task (Fixes CS0649)
-                        _hfTask = Task.Run(async () =>
-                        {
-                            return await ViewerEngine.DecodeHighFidelityAsync(path, token);
-                        });
-                        var hfEntry = await _hfTask;
-
-                        if (token.IsCancellationRequested || promoteId != _currentImageLoadId || hfEntry == null)
-                        {
-                            hfEntry?.Release();
-                            return;
-                        }
-
-                        bool success = ViewerEngine.FinalizeHighFidelityGpuResources(hfEntry);
-
-                        if (!success || token.IsCancellationRequested || promoteId != _currentImageLoadId)
-                        {
-                            hfEntry.Release();
-                            return;
-                        }
-
-                        TryDisposeRawGpuBitmap();
-
-                        _rawGpuBitmap = hfEntry.GpuBitmap;
-                        _rawGpuProfile = hfEntry.Profile;
-
-                        if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible)
-                            ViewerControl.InjectImage(hfEntry, false);
-
-                        ImageCache.Publish(path, hfEntry);
-
-                        _isHighFidelityActive = true;
-                    }
+                    await PromoteDisplayedAsync();
                 }
                 catch (Exception ex)
                 {
@@ -215,6 +174,7 @@ namespace ModernImageViewer
                     ViewerControl.SetGammaLevel(_currentGamma);
                     ViewerControl.SetDetachLimitState((int)CurrentDetachLimit);
                     ViewerControl.GammaChanged += (_, gamma) => ApplyGamma(gamma);
+                    ViewerControl.ZoomChanged += (_, _) => QueueSharperDecode();
                 }
 
                 if (!string.IsNullOrEmpty(StartupFilePath) && File.Exists(StartupFilePath))
@@ -295,6 +255,7 @@ namespace ModernImageViewer
             public float Gamma { get; set; } = 2.2f;
             public string ImageEditorPath { get; set; } = "mspaint.exe";
             public string VideoDirectorPath { get; set; } = string.Empty;
+            public string SortOrder { get; set; } = "NameAsc";
             public List<string> RecentFolders { get; set; } = new();
         }
 
@@ -378,6 +339,11 @@ namespace ModernImageViewer
             if (settings.WindowX != -1 && settings.WindowY != -1)
                 _appWindow?.Move(new Windows.Graphics.PointInt32(settings.WindowX, settings.WindowY));
 
+            if (settings.SortOrder == "NameDesc") SortNameDescItem.IsChecked = true;
+            else if (settings.SortOrder == "DateDesc") SortDateDescItem.IsChecked = true;
+            else if (settings.SortOrder == "DateAsc") SortDateAscItem.IsChecked = true;
+            else SortNameAscItem.IsChecked = true;
+
             _currentGamma = settings.Gamma;
             ImageEditorPath = settings.ImageEditorPath;
 
@@ -395,32 +361,40 @@ namespace ModernImageViewer
             }
         }
 
-        private async void ImageGrid_DragItemsStarting(object sender, DragItemsStartingEventArgs e)
+        private void ImageGrid_DragItemsStarting(object sender, DragItemsStartingEventArgs e)
         {
-            var draggedItems = e.Items.OfType<ImageItem>().ToList();
-            if (draggedItems.Count == 0) return;
+            var paths = e.Items.OfType<ImageItem>()
+                .Select(i => i.Path)
+                .Where(p => !string.IsNullOrEmpty(p) && File.Exists(p))
+                .ToArray();
+            if (paths.Length == 0) return;
 
-            var storageFiles = new List<StorageFile>();
-
-            foreach (var item in draggedItems)
+            // The data package is read when this method returns. StorageFile is async, so the
+            // files are supplied when the drop target asks for them.
+            e.Data.RequestedOperation = DataPackageOperation.Copy | DataPackageOperation.Move;
+            e.Data.SetDataProvider(StandardDataFormats.StorageItems, request =>
             {
-                if (!string.IsNullOrEmpty(item.Path) && File.Exists(item.Path))
+                var deferral = request.GetDeferral();
+                _ = ProvideDraggedFilesAsync(request, deferral, paths);
+            });
+        }
+
+        private static async Task ProvideDraggedFilesAsync(DataProviderRequest request, DataProviderDeferral deferral, string[] paths)
+        {
+            try
+            {
+                var items = new List<IStorageItem>(paths.Length);
+                foreach (var path in paths)
                 {
-                    try
-                    {
-                        var file = await StorageFile.GetFileFromPathAsync(item.Path);
-                        storageFiles.Add(file);
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine($"Failed to get StorageFile for drag: {ex.Message}");
-                    }
+                    try { items.Add(await StorageFile.GetFileFromPathAsync(path)); }
+                    catch (Exception ex) { Debug.WriteLine($"[Drag] {path}: {ex.Message}"); }
                 }
+                if (items.Count > 0)
+                    request.SetData(items);
             }
-
-            if (storageFiles.Count > 0)
+            finally
             {
-                e.Data.SetStorageItems(storageFiles);
+                deferral.Complete();
             }
         }
 
@@ -545,6 +519,7 @@ namespace ModernImageViewer
 
                 _currentSettings.Gamma = _currentGamma;
                 _currentSettings.ImageEditorPath = ImageEditorPath;
+                _currentSettings.SortOrder = _currentSettings.SortOrder; // Will be updated when sorting, just to keep it
                 _currentSettings.RecentFolders = new List<string>(_recentFolders);
 
                 string json = System.Text.Json.JsonSerializer.Serialize(_currentSettings, new System.Text.Json.JsonSerializerOptions

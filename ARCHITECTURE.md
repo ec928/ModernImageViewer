@@ -14,9 +14,12 @@ Local state lives under `%LocalAppData%\ModernImageViewer\` (`settings.json`, co
 |------|----------|-----|------|
 | Thumbnail | ~250 | `ImageItem` (shell thumbnail, WIC fallback) | No |
 | Fast preview | 1200 | `ViewerEngine.DecodeFastPreviewAsync` | Uploaded on UI thread |
+| Viewer, fit | long edge of the view | main window and detached window, after the preview | Yes |
+| Viewer, zoomed past fit | native, capped at 16384 | same windows, one further decode | Yes |
 | Display / collage high-res / cinematic | 4096 | collage `LoadHighResAsync`, `SceneAnalysisService` | Yes |
-| High fidelity | 16384 | `ViewerEngine.DecodeHighFidelityAsync` | Composited then uploaded on UI thread |
 | Export | native | collage export | Temporary, disposed after save |
+
+`DecodeHighFidelityAsync(path, token, maxEdge)` is the viewer decode past the preview. `maxEdge` is the long edge to produce, never above 16384. At fit that edge is the view. Zoomed past fit it is the file, capped at 16384. The scroll wheel's lower limit stays 0.1 for an ordinary photo. Fit of a wider image may go below 0.1, and that fit becomes the wheel floor for that image only.
 
 WIC color-manages to sRGB. The draw path does **not** use Win2D `ColorManagementEffect`. Do not allocate a `ColorManagementProfile` unless a draw path consumes it.
 
@@ -24,9 +27,9 @@ WIC color-manages to sRGB. The draw path does **not** use Win2D `ColorManagement
 
 `ImageCache` is the only writer of the shared decode cache.
 
-- `Publish(path, entry)` — cache takes the entry (initial refcount 1). Releases any *different* previous occupant. Will not replace a high-fidelity entry with a preview. Uses `TryRemove`/`TryAdd`, never a raw indexer write.
+- `Publish(path, entry)` — cache takes the entry (initial refcount 1). Releases any *different* previous occupant. Will not replace a longer `DecodedLongEdge` with a shorter one (a high-fidelity entry still beats a preview when an edge was not recorded). Uses `TryRemove`/`TryAdd`, never a raw indexer write.
 - `TryGet` — borrow. A surface that draws an entry must `AddRef` for the time it holds GPU pointers (`ImageViewerControl.InjectImage`) and `Release` in `PrepareForNewImage` / Unload / device-lost. Collage must not `Publish` over a slot that already has decodable content.
-- `Evict(path)` — `Release` + remove. A detached window that displays a cache entry keeps it alive via the control’s `AddRef` until it `Release`s. Unpublished detached HF is an extra construction hold, released on close.
+- `Evict(path)` — `Release` + remove. A detached window that displays a cache entry keeps it alive via the control’s `AddRef` until it `Release`s. Closing the window cancels an in-flight decode and releases that entry if it has not been published.
 - `Rename(old, new)` — move the slot; release anything displaced at `new`.
 - Never `dictionary[path] = entry`. Never `Dispose()` GPU fields on a shared entry. Device-lost: `ImageCache.Clear()` (including GIF `AnimationFrames`) and re-decode. Treat animation-frame device mismatch like `GpuBitmap` mismatch.
 
@@ -39,6 +42,8 @@ GPU objects (`CanvasBitmap`, `CanvasRenderTarget`, Win2D effects) are created an
 ## Folder scan
 
 `ScanFolder` increments `_currentScanId`. Every UI marshal that mutates `Images` must capture that id and no-op if it no longer matches. A new scan may `Images.Clear()` only after in-flight batches have been dropped (they check the id).
+
+The file list is one enumeration. `AddRange` reports each appended item. It does not raise `Reset`, which recycles the visible rows and restarts their thumbnails on every batch.
 
 A debounced `FileSystemWatcher` on `_currentDirectory` re-runs `ScanFolder` when the grid is showing (preview closed). Events while the preview is open or a scan is running set a dirty flag and run when the preview closes / the scan finishes. A rename is dirty if either the old or new extension is supported.
 

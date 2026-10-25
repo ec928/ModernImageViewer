@@ -143,6 +143,7 @@ namespace ModernImageViewer
             var exifToken = _exifCts.Token;
 
             _isHighFidelityActive = false;
+            _promoteEdge = 0;
             _hfPromotionTimer?.Stop();
 
             var currentItem = Images[index];
@@ -248,12 +249,76 @@ namespace ModernImageViewer
 
                 ManageCache(index, stepDirection);
 
-                if (!_isHighFidelityActive) _hfPromotionTimer?.Start();
+                QueueSharperDecode();
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"LoadFullImage error: {ex.Message}");
             }
+        }
+
+        private void QueueSharperDecode()
+        {
+            if (ViewerControl == null || ViewerControl.Visibility != Visibility.Visible) return;
+            _hfPromotionTimer?.Stop();
+            _hfPromotionTimer?.Start();
+        }
+
+        private async Task PromoteDisplayedAsync()
+        {
+            if (ViewerControl == null || ViewerControl.Visibility != Visibility.Visible) return;
+            if (_currentIndex < 0 || _currentIndex >= Images.Count) return;
+
+            string path = Images[_currentIndex].Path;
+            double nativeW = ViewerControl.LogicalWidth;
+            double nativeH = ViewerControl.LogicalHeight;
+            if (nativeW <= 1 || nativeH <= 1) return;
+
+            int have = 0;
+            if (ImageCache.TryGet(path, out var cached) && cached != null)
+                have = cached.DecodedLongEdge;
+
+            int edge = ViewerMath.NextDecodeEdge(nativeW, nativeH, ViewerControl.CurrentZoom, ViewerControl.FitZoom, have, (int)ViewerEngine.HighFidelityMaxEdge);
+            if (edge <= 0) return;
+            if (_promoteEdge >= edge && _hfTask is { IsCompleted: false }) return;
+
+            int promoteId = _currentImageLoadId;
+            _hfCts?.Cancel();
+            _hfCts?.Dispose();
+            _hfCts = new CancellationTokenSource();
+            var token = _hfCts.Token;
+            _promoteEdge = edge;
+
+            _hfTask = ViewerEngine.DecodeHighFidelityAsync(path, token, (uint)edge);
+            var decoded = await _hfTask;
+
+            if (token.IsCancellationRequested || promoteId != _currentImageLoadId || decoded == null)
+            {
+                decoded?.Release();
+                if (promoteId == _currentImageLoadId && _promoteEdge == edge) _promoteEdge = 0;
+                return;
+            }
+
+            bool success = ViewerEngine.FinalizeHighFidelityGpuResources(decoded);
+            if (!success || token.IsCancellationRequested || promoteId != _currentImageLoadId)
+            {
+                decoded.Release();
+                if (promoteId == _currentImageLoadId && _promoteEdge == edge) _promoteEdge = 0;
+                return;
+            }
+
+            ImageCache.Publish(path, decoded);
+            if (promoteId != _currentImageLoadId) return;
+            if (!ImageCache.TryGet(path, out var published) || published == null) return;
+            if (published.GpuBitmap == null && published.AnimationFrames == null) return;
+
+            TryDisposeRawGpuBitmap();
+            _rawGpuBitmap = published.GpuBitmap;
+            _rawGpuProfile = published.Profile;
+            _isHighFidelityActive = published.IsHighFidelity;
+
+            if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible)
+                ViewerControl.InjectImage(published, false);
         }
 
         private static async Task<Size> GetNativeImageSizeAsync(string path)

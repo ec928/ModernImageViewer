@@ -48,6 +48,7 @@ namespace ModernImageViewer
         public double LogicalWidth => _logicalImageWidth;
         public double LogicalHeight => _logicalImageHeight;
         public float CurrentZoom => _targetZoom;
+        public float FitZoom => _currentFitFactor;
 
         // --- Events for Parent Windows ---
         public event EventHandler? CloseRequested;
@@ -66,6 +67,7 @@ namespace ModernImageViewer
         public event EventHandler? DeleteRequested;
         public event EventHandler? AddToCollageRequested;
         public event EventHandler<float>? GammaChanged;
+        public event EventHandler? ZoomChanged;
 
         // Tear-Off Pipeline
         public event EventHandler<Point>? TearOffInitiated;
@@ -307,7 +309,6 @@ namespace ModernImageViewer
             _rawGpuProfile = entry.Profile;
             _logicalImageWidth = entry.NativeWidth > 0 ? entry.NativeWidth : 1;
             _logicalImageHeight = entry.NativeHeight > 0 ? entry.NativeHeight : 1;
-            _isHighFidelityActive = entry.IsHighFidelity;
             _previewResourcesLoaded = true;
 
             if (_animationFrames != null && _animationFrames.Length > 1)
@@ -347,6 +348,9 @@ namespace ModernImageViewer
                 FitToWindow();
             }
 
+            int need = ViewerMath.RequiredLongEdge(_logicalImageWidth, _logicalImageHeight, _targetZoom, (int)ViewerEngine.HighFidelityMaxEdge);
+            _isHighFidelityActive = entry.IsHighFidelity || (entry.DecodedLongEdge > 0 && entry.DecodedLongEdge >= need);
+
             if (PlaceholderImage != null)
             {
                 PlaceholderImage.Visibility = Visibility.Collapsed;
@@ -376,6 +380,7 @@ namespace ModernImageViewer
                 ImageScroll.ChangeView(null, null, _targetZoom, true);
             }
             ShowHud();
+            ZoomChanged?.Invoke(this, EventArgs.Empty);
         }
 
         private void UpdateGridSize()
@@ -400,12 +405,23 @@ namespace ModernImageViewer
                 if (viewW > 0 && viewH > 0)
                 {
                     float dpiScale = PreviewCanvas.Dpi / 96.0f;
-                    double fitW = viewW / (_logicalImageWidth / dpiScale);
-                    double fitH = viewH / (_logicalImageHeight / dpiScale);
+                    float maxZoom = (float)ImageScroll.MaxZoomFactor;
+                    float fit = ViewerMath.CalculateFitZoom(viewW, viewH, _logicalImageWidth, _logicalImageHeight, dpiScale, ViewerMath.AbsoluteFitMinZoom, maxZoom);
+                    float floor = ViewerMath.ScrollZoomFloor(fit);
 
-                    _currentFitFactor = Math.Clamp((float)Math.Min(fitW, fitH), (float)ImageScroll.MinZoomFactor, (float)ImageScroll.MaxZoomFactor);
-                    _targetZoom = _currentFitFactor;
-                    ImageScroll.ChangeView(0, 0, _currentFitFactor, true);
+                    // Drop the floor before the view change when this image is wider than the wheel allows.
+                    // Raise it only after the view is already at fit, so a previous wide image cannot pin the wheel.
+                    if (floor < ImageScroll.MinZoomFactor)
+                        ImageScroll.MinZoomFactor = floor;
+
+                    _currentFitFactor = fit;
+                    _targetZoom = fit;
+                    ImageScroll.ChangeView(0, 0, fit, true);
+
+                    if (Math.Abs(ImageScroll.MinZoomFactor - floor) > 0.0001)
+                        ImageScroll.MinZoomFactor = floor;
+
+                    ZoomChanged?.Invoke(this, EventArgs.Empty);
                 }
             }
         }
@@ -767,6 +783,7 @@ namespace ModernImageViewer
 
                 _targetZoom = newZoom;
                 ImageScroll.ChangeView(targetX, targetY, _targetZoom, true);
+                ZoomChanged?.Invoke(this, EventArgs.Empty);
             }
             else
             {
@@ -823,6 +840,7 @@ namespace ModernImageViewer
             }
 
             ShowHud();
+            ZoomChanged?.Invoke(this, EventArgs.Empty);
             e.Handled = true;
         }
 

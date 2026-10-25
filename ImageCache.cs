@@ -31,8 +31,8 @@ namespace ModernImageViewer
 
         /// <summary>
         /// Inserts <paramref name="entry"/> as the cache-owned instance (its initial refcount).
-        /// Releases any different previous occupant. Will not replace a high-fidelity
-        /// entry with a preview — the incoming entry is Released instead.
+        /// Releases any different previous occupant. Will not replace a longer decode
+        /// with a shorter one — the incoming entry is Released instead.
         /// </summary>
         public static bool HasUsableDecode(string path) =>
             TryGet(path, out var existing) && existing != null && existing.HasDecodableContent;
@@ -47,7 +47,7 @@ namespace ModernImageViewer
                 {
                     if (ReferenceEquals(existing, entry)) return;
 
-                    if (existing.IsHighFidelity && !entry.IsHighFidelity)
+                    if (KeepsExisting(existing, entry))
                     {
                         entry.Release();
                         return;
@@ -63,6 +63,16 @@ namespace ModernImageViewer
                 if (Entries.TryAdd(path, entry))
                     return;
             }
+        }
+
+        /// <summary>
+        /// A longer decoded edge wins. When an edge was not recorded, a high-fidelity entry still beats a preview.
+        /// </summary>
+        private static bool KeepsExisting(ImageCacheEntry existing, ImageCacheEntry incoming)
+        {
+            if (existing.DecodedLongEdge > 0 && incoming.DecodedLongEdge > 0)
+                return existing.DecodedLongEdge >= incoming.DecodedLongEdge;
+            return existing.IsHighFidelity && !incoming.IsHighFidelity;
         }
 
         public static void Evict(string path)
