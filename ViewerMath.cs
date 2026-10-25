@@ -124,5 +124,104 @@ namespace ModernImageViewer
 
             return (tempX, tempY);
         }
+
+        public enum TileCursorKey
+        {
+            Left,
+            Right,
+            Up,
+            Down,
+            PageUp,
+            PageDown,
+            Home,
+            End
+        }
+
+        /// <summary>
+        /// Tile under the keyboard cursor after one key.
+        /// An index below zero means nothing is current yet: a direction key starts at
+        /// <paramref name="visibleOrigin"/> and then moves. Home and End ignore that origin.
+        /// Up and down stay in the column. A short last row has no cell past its last tile, so the cursor stays.
+        /// Page up and page down move by <paramref name="pageRows"/> rows in that same column.
+        /// </summary>
+        public static int MoveTileCursor(int index, int count, int columns, int pageRows, int visibleOrigin, TileCursorKey key)
+        {
+            if (count <= 0) return -1;
+            if (columns < 1) columns = 1;
+            if (pageRows < 1) pageRows = 1;
+            if (key == TileCursorKey.Home) return 0;
+            if (key == TileCursorKey.End) return count - 1;
+
+            if (index < 0 || index >= count)
+            {
+                index = visibleOrigin;
+                if (index < 0 || index >= count) index = 0;
+            }
+
+            switch (key)
+            {
+                case TileCursorKey.Left:
+                    return index == 0 ? 0 : index - 1;
+                case TileCursorKey.Right:
+                    return index == count - 1 ? index : index + 1;
+                case TileCursorKey.Up:
+                    return index < columns ? index : index - columns;
+                case TileCursorKey.Down:
+                    {
+                        int next = index + columns;
+                        return next >= count ? index : next;
+                    }
+                case TileCursorKey.PageUp:
+                    return MoveTileRow(index, count, columns, -pageRows);
+                case TileCursorKey.PageDown:
+                    return MoveTileRow(index, count, columns, pageRows);
+                default:
+                    return index;
+            }
+        }
+
+        /// <summary>Top-left tile currently on screen. The grid's top padding scrolls away with the tiles.</summary>
+        public static int VisibleTileOrigin(double verticalOffset, double paddingTop, double itemHeight, int columns, int count)
+        {
+            if (count <= 0) return -1;
+            if (columns < 1) columns = 1;
+            if (itemHeight <= 0) itemHeight = 1;
+            double y = verticalOffset - paddingTop;
+            if (double.IsNaN(y) || y < 0) y = 0;
+            int row = (int)(y / itemHeight);
+            if (row < 0) row = 0;
+            int origin = row * columns;
+            if (origin >= count) origin = count - 1;
+            return origin;
+        }
+
+        /// <summary>Scroll offset that brings the tile on screen and does not move when it is already fully visible.</summary>
+        public static double ScrollOffsetToReveal(double offset, double viewport, double itemStart, double itemSize)
+        {
+            if (itemSize <= 0 || viewport <= 0 || double.IsNaN(offset)) return offset;
+            if (offset < 0) offset = 0;
+            if (itemSize >= viewport) return Math.Max(0, itemStart);
+            double itemEnd = itemStart + itemSize;
+            if (itemStart < offset) return Math.Max(0, itemStart);
+            if (itemEnd > offset + viewport) return Math.Max(0, itemEnd - viewport);
+            return offset;
+        }
+
+        private static int MoveTileRow(int index, int count, int columns, int rowDelta)
+        {
+            int col = index % columns;
+            int row = index / columns;
+            int maxRow = (count - 1) / columns;
+            int targetRow = row + rowDelta;
+            if (targetRow < 0) targetRow = 0;
+            if (targetRow > maxRow) targetRow = maxRow;
+            int target = targetRow * columns + col;
+            if (target < count) return target;
+
+            targetRow--;
+            if (targetRow < 0) return index;
+            target = targetRow * columns + col;
+            return target < count ? target : index;
+        }
     }
 }

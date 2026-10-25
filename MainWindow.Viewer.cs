@@ -129,6 +129,7 @@ namespace ModernImageViewer
             if (index < 0 || index >= Images.Count || _canvasDevice == null) return;
 
             _currentIndex = index;
+            SyncTileCursor(scroll: false);
             int myLoadId = ++_currentImageLoadId;
 
             _hfCts?.Cancel();
@@ -636,7 +637,181 @@ namespace ModernImageViewer
 
         private void MainWindow_Activated(object sender, WindowActivatedEventArgs args)
         {
-            if (args.WindowActivationState == WindowActivationState.Deactivated) EndAltPeek();
+            if (args.WindowActivationState == WindowActivationState.Deactivated)
+            {
+                EndAltPeek();
+                return;
+            }
+
+            if (Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(this.Content.XamlRoot) == null)
+                RootGrid.Focus(FocusState.Programmatic);
+        }
+
+        private ImageItem? _tileCursorItem;
+
+        private void SyncTileCursor(bool scroll)
+        {
+            ImageItem? next = (_currentIndex >= 0 && _currentIndex < Images.Count) ? Images[_currentIndex] : null;
+            if (!ReferenceEquals(_tileCursorItem, next))
+            {
+                if (_tileCursorItem != null) _tileCursorItem.IsKeyboardCursor = false;
+                _tileCursorItem = next;
+                if (next != null) next.IsKeyboardCursor = true;
+            }
+            if (scroll && next != null) RevealTile(_currentIndex);
+        }
+
+        private int TileColumnCount()
+        {
+            double itemWidth = _imageWrapGrid?.ItemWidth ?? 164;
+            if (itemWidth < 1) itemWidth = 164;
+            double width = _imageWrapGrid?.ActualWidth ?? 0;
+            if (width < 1 && ImageGrid != null)
+                width = Math.Max(0, ImageGrid.ActualWidth - ImageGrid.Padding.Left - ImageGrid.Padding.Right);
+            if (width < 1) return 1;
+            return Math.Max(1, (int)(width / itemWidth));
+        }
+
+        private int VisibleTileRows()
+        {
+            double itemHeight = _imageWrapGrid?.ItemHeight ?? 164;
+            if (itemHeight < 1) itemHeight = 164;
+            var sv = ImageGrid != null ? FindScrollViewer(ImageGrid) : null;
+            double viewport = sv?.ViewportHeight ?? 0;
+            if (viewport < 1 && ImageGrid != null) viewport = ImageGrid.ActualHeight;
+            if (viewport < 1) return 1;
+            return Math.Max(1, (int)(viewport / itemHeight));
+        }
+
+        private int TopLeftVisibleTile()
+        {
+            var sv = ImageGrid != null ? FindScrollViewer(ImageGrid) : null;
+            return ViewerMath.VisibleTileOrigin(
+                sv?.VerticalOffset ?? 0,
+                ImageGrid?.Padding.Top ?? 0,
+                _imageWrapGrid?.ItemHeight ?? 164,
+                TileColumnCount(),
+                Images.Count);
+        }
+
+        private void RevealTile(int index)
+        {
+            if (ImageGrid == null || index < 0 || index >= Images.Count) return;
+            var sv = FindScrollViewer(ImageGrid);
+            if (sv == null)
+            {
+                ImageGrid.ScrollIntoView(Images[index]);
+                return;
+            }
+
+            int cols = TileColumnCount();
+            double itemHeight = _imageWrapGrid?.ItemHeight ?? 164;
+            if (itemHeight < 1) itemHeight = 164;
+            double itemStart = ImageGrid.Padding.Top + (index / cols) * itemHeight;
+            double next = ViewerMath.ScrollOffsetToReveal(sv.VerticalOffset, sv.ViewportHeight, itemStart, itemHeight);
+            if (Math.Abs(next - sv.VerticalOffset) > 0.5)
+                sv.ChangeView(null, next, null, true);
+        }
+
+        private void MoveTileCursor(Windows.System.VirtualKey key)
+        {
+            if (Images.Count == 0 || _isScanning) return;
+            if (!TryTileCursorKey(key, out var cursorKey)) return;
+
+            int next = ViewerMath.MoveTileCursor(
+                _currentIndex, Images.Count, TileColumnCount(), VisibleTileRows(), TopLeftVisibleTile(), cursorKey);
+            if (next < 0) return;
+            _currentIndex = next;
+            SyncTileCursor(scroll: true);
+        }
+
+        private void OpenCursorTile()
+        {
+            if (Images.Count == 0 || _isScanning) return;
+            if (_currentIndex < 0 || _currentIndex >= Images.Count)
+            {
+                int origin = TopLeftVisibleTile();
+                if (origin < 0) return;
+                _currentIndex = origin;
+            }
+            LoadFullImage(_currentIndex);
+        }
+
+        private static bool TryTileCursorKey(Windows.System.VirtualKey key, out ViewerMath.TileCursorKey cursorKey)
+        {
+            switch (key)
+            {
+                case Windows.System.VirtualKey.Left: cursorKey = ViewerMath.TileCursorKey.Left; return true;
+                case Windows.System.VirtualKey.Right: cursorKey = ViewerMath.TileCursorKey.Right; return true;
+                case Windows.System.VirtualKey.Up: cursorKey = ViewerMath.TileCursorKey.Up; return true;
+                case Windows.System.VirtualKey.Down: cursorKey = ViewerMath.TileCursorKey.Down; return true;
+                case Windows.System.VirtualKey.PageUp: cursorKey = ViewerMath.TileCursorKey.PageUp; return true;
+                case Windows.System.VirtualKey.PageDown: cursorKey = ViewerMath.TileCursorKey.PageDown; return true;
+                case Windows.System.VirtualKey.Home: cursorKey = ViewerMath.TileCursorKey.Home; return true;
+                case Windows.System.VirtualKey.End: cursorKey = ViewerMath.TileCursorKey.End; return true;
+                default:
+                    cursorKey = default;
+                    return false;
+            }
+        }
+
+        private bool TileKeyFocusStays()
+        {
+            if (Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(this.Content.XamlRoot) is not DependencyObject node)
+                return false;
+            if (node is TextBox or PasswordBox or RichEditBox or Slider or ComboBox or ComboBoxItem or MenuFlyoutItem)
+                return true;
+            while (node != null)
+            {
+                if (node is ContentDialog || node.GetType().Name == "MenuFlyoutPresenter")
+                    return true;
+                node = VisualTreeHelper.GetParent(node);
+            }
+            return false;
+        }
+
+        private bool FocusIsInside(DependencyObject? root)
+        {
+            if (root == null) return false;
+            if (Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(this.Content.XamlRoot) is not DependencyObject node)
+                return false;
+            while (node != null)
+            {
+                if (ReferenceEquals(node, root)) return true;
+                node = VisualTreeHelper.GetParent(node);
+            }
+            return false;
+        }
+
+        private void RootGrid_PreviewKeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            if (TileKeyFocusStays()) return;
+
+            if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible)
+            {
+                if (e.Key == Windows.System.VirtualKey.Enter)
+                {
+                    ClosePreviewInternal();
+                    e.Handled = true;
+                }
+                return;
+            }
+
+            bool isCursorKey = e.Key == Windows.System.VirtualKey.Enter || TryTileCursorKey(e.Key, out _);
+            if (!isCursorKey) return;
+
+            bool sidebarOpen = SidebarView != null && SidebarView.IsPaneOpen;
+            if (sidebarOpen && FocusIsInside(SidebarPane)) return;
+
+            if (sidebarOpen && e.Key != Windows.System.VirtualKey.Enter)
+            {
+                e.Handled = true;
+                return;
+            }
+
+            if (e.Key == Windows.System.VirtualKey.Enter) OpenCursorTile();
+            else MoveTileCursor(e.Key);
+            e.Handled = true;
         }
 
         private void Global_KeyUp(object sender, KeyRoutedEventArgs e)

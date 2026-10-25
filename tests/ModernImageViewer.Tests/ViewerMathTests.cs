@@ -89,6 +89,120 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
+        public void TileCursor_right_continues_onto_the_next_row()
+        {
+            int next = ViewerMath.MoveTileCursor(5, 20, columns: 6, pageRows: 3, visibleOrigin: 0, ViewerMath.TileCursorKey.Right);
+            Assert.Equal(6, next);
+        }
+
+        [Fact]
+        public void TileCursor_left_continues_onto_the_previous_row()
+        {
+            int next = ViewerMath.MoveTileCursor(6, 20, columns: 6, pageRows: 3, visibleOrigin: 0, ViewerMath.TileCursorKey.Left);
+            Assert.Equal(5, next);
+        }
+
+        [Fact]
+        public void TileCursor_left_of_the_first_tile_stays()
+        {
+            int next = ViewerMath.MoveTileCursor(0, 20, columns: 6, pageRows: 3, visibleOrigin: 0, ViewerMath.TileCursorKey.Left);
+            Assert.Equal(0, next);
+        }
+
+        [Fact]
+        public void TileCursor_right_of_the_last_tile_stays()
+        {
+            int next = ViewerMath.MoveTileCursor(19, 20, columns: 6, pageRows: 3, visibleOrigin: 0, ViewerMath.TileCursorKey.Right);
+            Assert.Equal(19, next);
+        }
+
+        [Fact]
+        public void TileCursor_up_on_the_first_row_stays()
+        {
+            int next = ViewerMath.MoveTileCursor(4, 20, columns: 6, pageRows: 3, visibleOrigin: 0, ViewerMath.TileCursorKey.Up);
+            Assert.Equal(4, next);
+        }
+
+        [Fact]
+        public void TileCursor_down_into_a_short_row_stays()
+        {
+            // 20 tiles, 6 columns. Index 16 is row 2, column 4. The last row has only two tiles.
+            int next = ViewerMath.MoveTileCursor(16, 20, columns: 6, pageRows: 3, visibleOrigin: 0, ViewerMath.TileCursorKey.Down);
+            Assert.Equal(16, next);
+        }
+
+        [Fact]
+        public void TileCursor_down_moves_one_row_in_the_same_column()
+        {
+            int next = ViewerMath.MoveTileCursor(4, 20, columns: 6, pageRows: 3, visibleOrigin: 0, ViewerMath.TileCursorKey.Down);
+            Assert.Equal(10, next);
+        }
+
+        [Fact]
+        public void TileCursor_page_down_skips_a_screen_in_the_same_column()
+        {
+            int next = ViewerMath.MoveTileCursor(4, 40, columns: 6, pageRows: 3, visibleOrigin: 0, ViewerMath.TileCursorKey.PageDown);
+            Assert.Equal(22, next);
+        }
+
+        [Fact]
+        public void TileCursor_page_down_lands_on_the_last_tile_in_that_column()
+        {
+            int next = ViewerMath.MoveTileCursor(4, 20, columns: 6, pageRows: 4, visibleOrigin: 0, ViewerMath.TileCursorKey.PageDown);
+            Assert.Equal(16, next);
+        }
+
+        [Fact]
+        public void TileCursor_page_up_stops_on_the_first_row()
+        {
+            int next = ViewerMath.MoveTileCursor(16, 20, columns: 6, pageRows: 4, visibleOrigin: 0, ViewerMath.TileCursorKey.PageUp);
+            Assert.Equal(4, next);
+        }
+
+        [Fact]
+        public void TileCursor_home_and_end()
+        {
+            Assert.Equal(0, ViewerMath.MoveTileCursor(8, 20, 6, 3, 12, ViewerMath.TileCursorKey.Home));
+            Assert.Equal(19, ViewerMath.MoveTileCursor(-1, 20, 6, 3, 12, ViewerMath.TileCursorKey.End));
+        }
+
+        [Fact]
+        public void TileCursor_first_key_starts_at_the_visible_tile_then_moves()
+        {
+            int next = ViewerMath.MoveTileCursor(-1, 40, columns: 6, pageRows: 3, visibleOrigin: 12, ViewerMath.TileCursorKey.Right);
+            Assert.Equal(13, next);
+        }
+
+        [Fact]
+        public void TileCursor_first_up_on_the_top_row_lands_on_the_visible_tile()
+        {
+            int next = ViewerMath.MoveTileCursor(-1, 40, columns: 6, pageRows: 3, visibleOrigin: 2, ViewerMath.TileCursorKey.Up);
+            Assert.Equal(2, next);
+        }
+
+        [Fact]
+        public void TileCursor_empty_folder_has_nowhere_to_go()
+        {
+            Assert.Equal(-1, ViewerMath.MoveTileCursor(-1, 0, 6, 3, 0, ViewerMath.TileCursorKey.Right));
+        }
+
+        [Fact]
+        public void VisibleTileOrigin_uses_the_row_at_the_top_of_the_screen()
+        {
+            Assert.Equal(0, ViewerMath.VisibleTileOrigin(0, paddingTop: 48, itemHeight: 164, columns: 6, count: 40));
+            Assert.Equal(6, ViewerMath.VisibleTileOrigin(48 + 164, 48, 164, 6, 40));
+            Assert.Equal(12, ViewerMath.VisibleTileOrigin(48 + 164 * 2 + 10, 48, 164, 6, 40));
+        }
+
+        [Fact]
+        public void ScrollOffsetToReveal_moves_only_when_the_tile_is_cut_off()
+        {
+            Assert.Equal(0, ViewerMath.ScrollOffsetToReveal(0, viewport: 400, itemStart: 10, itemSize: 164));
+            Assert.Equal(50, ViewerMath.ScrollOffsetToReveal(100, 400, itemStart: 50, itemSize: 164));
+            Assert.Equal(264, ViewerMath.ScrollOffsetToReveal(0, 400, itemStart: 500, itemSize: 164));
+        }
+
+        [Fact]
         public void DragPan_clamps_to_scrollable_range()
         {
             var (x, y) = ViewerMath.CalculateDragPan(

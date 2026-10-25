@@ -7,7 +7,8 @@
     Title="Modern Image Viewer">
 
     <Grid x:Name="RootGrid" Background="Transparent" IsTabStop="True" 
-          AllowDrop="True" DragOver="RootGrid_DragOver" Drop="RootGrid_Drop">
+          AllowDrop="True" DragOver="RootGrid_DragOver" Drop="RootGrid_Drop"
+          PreviewKeyDown="RootGrid_PreviewKeyDown">
 
         <Grid x:Name="DragZone" Height="45" VerticalAlignment="Top" HorizontalAlignment="Stretch" Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}" Opacity="0" Canvas.ZIndex="1000">
             <Grid.OpacityTransition>
@@ -181,6 +182,11 @@
            Foreground="{ThemeResource TextFillColorPrimaryBrush}"
            FontSize="11"
            ToolTipService.ToolTip="{x:Bind Name}"/>
+                                    <Border Grid.RowSpan="2" Margin="2" CornerRadius="3" BorderThickness="1.5" IsHitTestVisible="False" Opacity="{x:Bind KeyboardCursorOpacity, Mode=OneWay}">
+                                        <Border.BorderBrush>
+                                            <SolidColorBrush Color="{ThemeResource SystemAccentColor}" Opacity="0.9"/>
+                                        </Border.BorderBrush>
+                                    </Border>
                                 </Grid>
                             </DataTemplate>
                         </GridView.ItemTemplate>

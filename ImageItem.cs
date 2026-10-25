@@ -100,6 +100,22 @@ namespace ModernImageViewer
             set { _thumbnail = value; OnPropertyChanged(); }
         }
 
+        // Keyboard cursor on the tile grid. Not a multi-selection: the action bar stays hidden.
+        private bool _isKeyboardCursor;
+        public bool IsKeyboardCursor
+        {
+            get => _isKeyboardCursor;
+            set
+            {
+                if (_isKeyboardCursor == value) return;
+                _isKeyboardCursor = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(KeyboardCursorOpacity));
+            }
+        }
+
+        public double KeyboardCursorOpacity => _isKeyboardCursor ? 1 : 0;
+
         private bool _isLoadingThumb = false;
         private static readonly SemaphoreSlim _thumbSemaphore = new(4);
         private CancellationTokenSource? _cts;

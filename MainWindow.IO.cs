@@ -82,6 +82,7 @@ namespace ModernImageViewer
             if (targetItem != null)
             {
                 _currentIndex = Images.IndexOf(targetItem);
+                SyncTileCursor(scroll: false);
                 _currentRenderedItem = targetItem;
                 ViewerControl.TargetImage = targetItem;
                 ViewerControl.ShowHud();
@@ -97,6 +98,7 @@ namespace ModernImageViewer
             else
             {
                 _currentIndex = -1;
+                SyncTileCursor(scroll: false);
                 ClosePreviewInternal();
             }
 
@@ -158,6 +160,7 @@ namespace ModernImageViewer
             if (!_isStartupIndexing)
             {
                 _currentIndex = -1;
+                SyncTileCursor(scroll: false);
                 _currentRenderedItem = null;
                 _isHighFidelityActive = false;
                 _hfPromotionTimer?.Stop();
@@ -619,6 +622,7 @@ namespace ModernImageViewer
                 Images.AddRange(sortedList);
 
                 if (currentItem != null) _currentIndex = Images.IndexOf(currentItem);
+                SyncTileCursor(scroll: true);
 
                 _currentSettings.SortOrder = tag;
                 SaveAllSettings();
