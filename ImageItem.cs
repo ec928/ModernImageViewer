@@ -116,6 +116,22 @@ namespace ModernImageViewer
 
         public double KeyboardCursorOpacity => _isKeyboardCursor ? 1 : 0;
 
+        // Multi-select mark on the photograph. The grid's own box is hidden, so this is the visible selection.
+        private bool _isGridSelected;
+        public bool IsGridSelected
+        {
+            get => _isGridSelected;
+            set
+            {
+                if (_isGridSelected == value) return;
+                _isGridSelected = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(SelectionOpacity));
+            }
+        }
+
+        public double SelectionOpacity => _isGridSelected ? 1 : 0;
+
         private bool _isLoadingThumb = false;
         private static readonly SemaphoreSlim _thumbSemaphore = new(4);
         private CancellationTokenSource? _cts;

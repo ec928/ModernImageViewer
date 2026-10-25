@@ -193,6 +193,15 @@
            Foreground="{ThemeResource TextFillColorPrimaryBrush}"
            FontSize="11"
            ToolTipService.ToolTip="{x:Bind Name}"/>
+                                    <Border Grid.Row="0" IsHitTestVisible="False" BorderThickness="3" CornerRadius="2"
+                                            BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+                                            Opacity="{x:Bind SelectionOpacity, Mode=OneWay}"/>
+                                    <Grid Grid.Row="0" Width="18" Height="18" Margin="8" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                          IsHitTestVisible="False" Opacity="{x:Bind SelectionOpacity, Mode=OneWay}">
+                                        <Ellipse Fill="{ThemeResource AccentFillColorDefaultBrush}"/>
+                                        <FontIcon Glyph="&#xE73E;" FontFamily="Segoe MDL2 Assets" FontSize="10" Foreground="White"
+                                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Grid>
                                     <Grid Grid.Row="0" IsHitTestVisible="False" Opacity="{x:Bind KeyboardCursorOpacity, Mode=OneWay}">
                                         <Border Margin="4" CornerRadius="2" BorderThickness="1.5" BorderBrush="#F2FFFFFF"/>
                                         <Border Margin="5.5" CornerRadius="1" BorderThickness="1" BorderBrush="#59000000"/>

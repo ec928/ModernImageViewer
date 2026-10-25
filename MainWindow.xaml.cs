@@ -543,6 +543,11 @@ namespace ModernImageViewer
 
         private void ImageGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            foreach (var item in e.RemovedItems.OfType<ImageItem>())
+                item.IsGridSelected = false;
+            foreach (var item in e.AddedItems.OfType<ImageItem>())
+                item.IsGridSelected = true;
+
             int count = ImageGrid.SelectedItems.Count;
             if (count > 0)
             {
