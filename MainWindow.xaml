@@ -231,7 +231,7 @@
                                 </Button.Flyout>
                             </Button>
                         </StackPanel>
-                        <Rectangle Grid.ColumnSpan="4" Height="1" VerticalAlignment="Bottom" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.6" IsHitTestVisible="False"/>
+                        <Rectangle Grid.ColumnSpan="4" Height="1" VerticalAlignment="Bottom" Fill="{ThemeResource CardStrokeColorDefaultBrush}" IsHitTestVisible="False"/>
                     </Grid>
 
         <Grid x:Name="HoverTriggerZone" Grid.Row="1" Width="15" HorizontalAlignment="Left" Background="#01000000" PointerEntered="HoverZone_PointerEntered" Canvas.ZIndex="2000" />
@@ -325,7 +325,7 @@
                             <RowDefinition Height="*"/>
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
-                    <GridView x:Name="ImageGrid" Padding="10,8,10,0" SizeChanged="ImageGrid_SizeChanged" ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionMode="Extended" SelectionChanged="ImageGrid_SelectionChanged" IsItemClickEnabled="True" ItemClick="ImageGrid_ItemClick" RightTapped="ImageGrid_RightTapped" CanDragItems="True" DragItemsStarting="ImageGrid_DragItemsStarting" ItemsSource="{x:Bind Images, Mode=OneWay}" ContainerContentChanging="ImageGrid_ContainerContentChanging" FocusVisualPrimaryThickness="0" FocusVisualSecondaryThickness="0">
+                    <GridView x:Name="ImageGrid" Padding="10,12,10,0" SizeChanged="ImageGrid_SizeChanged" ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionMode="Extended" SelectionChanged="ImageGrid_SelectionChanged" IsItemClickEnabled="True" ItemClick="ImageGrid_ItemClick" RightTapped="ImageGrid_RightTapped" CanDragItems="True" DragItemsStarting="ImageGrid_DragItemsStarting" ItemsSource="{x:Bind Images, Mode=OneWay}" ContainerContentChanging="ImageGrid_ContainerContentChanging" FocusVisualPrimaryThickness="0" FocusVisualSecondaryThickness="0">
                         <GridView.ItemContainerStyle>
                             <Style TargetType="GridViewItem" BasedOn="{StaticResource DefaultGridViewItemStyle}">
                                 <Setter Property="MinWidth" Value="0"/>
@@ -473,7 +473,7 @@
                                                 Background="{ThemeResource AccentFillColorDefaultBrush}"
                                                 Opacity="{x:Bind SelectionOpacity, Mode=OneWay}"/>
                                         <Grid Width="20" Height="20" VerticalAlignment="Center">
-                                            <FontIcon Glyph="&#xEB9F;" FontFamily="Segoe Fluent Icons" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{x:Bind PhotoListIconVisibility, Mode=OneTime}"/>
+                                            <FontIcon Glyph="&#xEB9F;" FontFamily="Segoe Fluent Icons" FontSize="14.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{x:Bind PhotoListIconVisibility, Mode=OneTime}"/>
                                             <FontIcon Glyph="&#xE736;" FontFamily="Segoe Fluent Icons" FontSize="14" Foreground="{ThemeResource ComicIconBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{x:Bind ComicListIconVisibility, Mode=OneTime}"/>
                                             <Grid Width="18" Height="18" Visibility="{x:Bind DirectoryListIconVisibility, Mode=OneTime}">
                                                 <Grid Visibility="{x:Bind DirectoryFallbackVisibility, Mode=OneWay}">
@@ -536,25 +536,25 @@
                         </Border>
                     </Grid>
 
-                    <Grid x:Name="ListPreviewBar" Grid.Row="1" Visibility="Collapsed"
-                          Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                          BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
+                    <Grid x:Name="ListPreviewBar" Grid.Row="1" Height="180" Visibility="Collapsed"
+                          Background="Transparent"
+                          BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <Grid Margin="18,10,16,10" VerticalAlignment="Center">
+                        <Grid Margin="24,12,28,12" VerticalAlignment="Center">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto" MinWidth="220"/>
+                                <ColumnDefinition Width="Auto" MinWidth="220"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock x:Name="PreviewNameText" Grid.ColumnSpan="2" Margin="0,0,0,6" FontSize="13.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxLines="1"/>
-                            <StackPanel Grid.Row="1" Spacing="2">
+                            <TextBlock x:Name="PreviewNameText" Grid.ColumnSpan="2" Margin="0,0,0,8" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxLines="1"/>
+                            <StackPanel Grid.Row="1" Spacing="3">
                                 <Grid Height="20">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="104"/>
@@ -580,7 +580,7 @@
                                     <TextBlock x:Name="PreviewModifiedText" Grid.Column="1" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                 </Grid>
                             </StackPanel>
-                            <StackPanel x:Name="PreviewPhotoRightColumn" Grid.Row="1" Grid.Column="1" Margin="20,0,0,0" Spacing="2">
+                            <StackPanel x:Name="PreviewPhotoRightColumn" Grid.Row="1" Grid.Column="1" Margin="24,0,0,0" Spacing="3">
                                 <Grid Height="20">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="104"/>
@@ -598,7 +598,7 @@
                                     <TextBlock x:Name="PreviewTakenText" Grid.Column="1" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                 </Grid>
                             </StackPanel>
-                            <Grid Grid.Row="2" Grid.ColumnSpan="2" Height="20" Margin="0,4,0,0">
+                            <Grid Grid.Row="2" Grid.ColumnSpan="2" Height="20" Margin="0,6,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="104"/>
                                     <ColumnDefinition Width="*"/>
@@ -609,12 +609,17 @@
                                 </Button>
                             </Grid>
                         </Grid>
-                        <Border Grid.Column="1" Width="236" Height="124" Margin="0,8,14,8" Padding="4" Background="{ThemeResource SubtleFillColorTertiaryBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="6" Tapped="PreviewThumbnail_Tapped" ToolTipService.ToolTip="Click to open (Enter)">
+                        <Border Grid.Column="1"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                Margin="0,4,16,4"
+                                HorizontalAlignment="Right" VerticalAlignment="Stretch"
+                                Tapped="PreviewThumbnail_Tapped" ToolTipService.ToolTip="Click to open (Enter)">
                             <Grid>
-                                <FontIcon x:Name="PreviewPlaceholder" FontFamily="Segoe Fluent Icons" Glyph="&#xEB9F;" FontSize="28" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                <FontIcon x:Name="PreviewFolderIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE8B7;" FontSize="54" Foreground="#FFF8D348" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                <Image x:Name="PreviewFolderImage" Stretch="Uniform" MaxWidth="96" MaxHeight="96" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                <Image x:Name="PreviewImage" Stretch="Uniform" Visibility="Collapsed"/>
+                                <FontIcon x:Name="PreviewPlaceholder" FontFamily="Segoe Fluent Icons" Glyph="&#xEB9F;" FontSize="36" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <FontIcon x:Name="PreviewFolderIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE8B7;" FontSize="64" Foreground="#FFF8D348" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <Image x:Name="PreviewFolderImage" Stretch="Uniform" MaxWidth="120" MaxHeight="120" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <Image x:Name="PreviewImage" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Grid>
                         </Border>
                     </Grid>

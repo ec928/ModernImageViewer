@@ -1245,7 +1245,7 @@ namespace ModernImageViewer
             {
                 PreviewImage.Source = null;
                 PreviewImage.Visibility = Visibility.Collapsed;
-                PreviewPlaceholder.Visibility = Visibility.Visible;
+                PreviewPlaceholder.Visibility = Visibility.Collapsed;
             }
 
             int generation = ++_previewGeneration;
@@ -1390,7 +1390,7 @@ namespace ModernImageViewer
                 if (ComicArchive.IsEntryPath(path) || ComicArchive.IsComicArchivePath(path))
                     return null;
                 var file = await StorageFile.GetFileFromPathAsync(path).AsTask(token);
-                using var shell = await file.GetThumbnailAsync(Windows.Storage.FileProperties.ThumbnailMode.PicturesView, 400, Windows.Storage.FileProperties.ThumbnailOptions.UseCurrentScale).AsTask(token);
+                using var shell = await file.GetThumbnailAsync(Windows.Storage.FileProperties.ThumbnailMode.PicturesView, 640, Windows.Storage.FileProperties.ThumbnailOptions.UseCurrentScale).AsTask(token);
                 if (shell == null) return null;
                 var cloned = shell.CloneStream();
                 return await SetBitmapSourceAsync(cloned, token);
@@ -1401,7 +1401,7 @@ namespace ModernImageViewer
 
         private async Task<ImageSource?> ReadScaledPreviewAsync(string path, CancellationToken token)
         {
-            const uint longest = 400;
+            const uint longest = 640;
             SoftwareBitmap? softwareBitmap = null;
             try
             {
