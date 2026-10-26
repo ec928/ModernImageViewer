@@ -177,6 +177,7 @@
                                             <Style TargetType="FlyoutPresenter">
                                                 <Setter Property="Padding" Value="2"/>
                                                 <Setter Property="MinWidth" Value="0"/>
+                                                <Setter Property="MaxWidth" Value="960"/>
                                                 <Setter Property="MinHeight" Value="0"/>
                                                 <Setter Property="CornerRadius" Value="6"/>
                                                 <Setter Property="Background" Value="{ThemeResource SolidBackgroundFillColorTertiaryBrush}"/>
@@ -196,7 +197,7 @@
                                     </Flyout>
                                 </FlyoutBase.AttachedFlyout>
                                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                    <FontIcon Glyph="&#xE8B7;" FontFamily="Segoe Fluent Icons" FontSize="14" Foreground="#FFF8D348"/>
+                                    <FontIcon x:Name="HeaderFolderIcon" Glyph="&#xE8B7;" FontFamily="Segoe Fluent Icons" FontSize="14" Foreground="#FFF8D348"/>
                                     <TextBlock x:Name="HeaderFolderText" Text="Pictures" FontSize="12.5" FontWeight="SemiBold" VerticalAlignment="Center" MaxWidth="260" TextTrimming="CharacterEllipsis"/>
                                     <Border x:Name="HeaderCountBadge" Background="{ThemeResource SubtleFillColorSecondaryBrush}" CornerRadius="9" Padding="7,1" VerticalAlignment="Center">
                                         <TextBlock x:Name="HeaderCountText" Text="0" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
@@ -334,6 +335,12 @@
                                         <Border Grid.Row="0" CornerRadius="5,5,0,0">
                                             <Image Source="{x:Bind Thumbnail, Mode=OneWay}" x:Phase="2" Stretch="UniformToFill" />
                                         </Border>
+                                        <Border Grid.Row="0" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="6" Padding="6,2" CornerRadius="4" Background="#B8181818" BorderBrush="#40FFFFFF" BorderThickness="1" IsHitTestVisible="False" Visibility="{x:Bind ComicBadgeVisibility, Mode=OneTime}">
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <FontIcon Glyph="&#xE736;" FontFamily="Segoe Fluent Icons" FontSize="10" Foreground="#FFF8D348" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{x:Bind ComicBadgeText, Mode=OneTime}" FontSize="10" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Border>
                                         <Border Grid.Row="1" CornerRadius="0,0,5,5" IsHitTestVisible="False"
                                                 Background="{ThemeResource AccentFillColorDefaultBrush}"
                                                 Opacity="{x:Bind TileCaptionSelectionOpacity, Mode=OneWay}"/>
@@ -389,6 +396,7 @@
                                                 Opacity="{x:Bind SelectionOpacity, Mode=OneWay}"/>
                                         <Grid Width="20" Height="20" VerticalAlignment="Center">
                                             <FontIcon Glyph="&#xEB9F;" FontFamily="Segoe Fluent Icons" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{x:Bind PhotoListIconVisibility, Mode=OneTime}"/>
+                                            <FontIcon Glyph="&#xE736;" FontFamily="Segoe Fluent Icons" FontSize="14" Foreground="#FFF8D348" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{x:Bind ComicListIconVisibility, Mode=OneTime}"/>
                                             <Grid Width="18" Height="18" Visibility="{x:Bind DirectoryListIconVisibility, Mode=OneTime}">
                                                 <FontIcon Glyph="&#xE8B7;" FontFamily="Segoe Fluent Icons" FontSize="16" Foreground="#FFF8D348" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{x:Bind DirectoryFallbackVisibility, Mode=OneWay}"/>
                                                 <FontIcon Glyph="&#xE74A;" FontFamily="Segoe Fluent Icons" FontSize="11" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{x:Bind ParentUpBadgeVisibility, Mode=OneWay}"/>

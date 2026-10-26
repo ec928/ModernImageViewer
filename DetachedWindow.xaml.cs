@@ -420,7 +420,8 @@ namespace ModernImageViewer
         {
             if (!string.IsNullOrEmpty(_imageItem.Path))
             {
-                Process.Start("explorer.exe", $"/select,\"{_imageItem.Path}\"");
+                string path = ComicArchive.TrySplitEntryPath(_imageItem.Path, out string archivePath, out _) ? archivePath : _imageItem.Path;
+                Process.Start("explorer.exe", $"/select,\"{path}\"");
             }
         }
 

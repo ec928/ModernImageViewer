@@ -25,7 +25,9 @@ namespace ModernImageViewer
 
         private bool HasSupportedImages(string folderPath)
         {
-            if (string.IsNullOrEmpty(folderPath) || !Directory.Exists(folderPath)) return false;
+            if (string.IsNullOrEmpty(folderPath)) return false;
+            if (ComicArchive.IsComicArchivePath(folderPath)) return File.Exists(folderPath);
+            if (!Directory.Exists(folderPath)) return false;
             try
             {
                 var enumOptions = new EnumerationOptions { IgnoreInaccessible = true };
@@ -38,6 +40,12 @@ namespace ModernImageViewer
         public async void HandleFileActivation(string filePath)
         {
             if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) return;
+
+            if (ComicArchive.IsComicArchivePath(filePath))
+            {
+                await ScanFolder(filePath, openFirstPage: true);
+                return;
+            }
 
             string folderPath = Path.GetDirectoryName(filePath) ?? string.Empty;
             if (string.IsNullOrEmpty(folderPath)) return;
@@ -171,14 +179,15 @@ namespace ModernImageViewer
             UpdateHeaderFolderInfo();
         }
 
-        private async Task ScanFolder(string folderPath)
+        private async Task ScanFolder(string folderPath, bool openFirstPage = false)
         {
             if (folderPath == DriveRootPath)
             {
                 ShowDriveList();
                 return;
             }
-            if (string.IsNullOrEmpty(folderPath) || !Directory.Exists(folderPath)) return;
+            bool isComicArchive = ComicArchive.IsComicArchivePath(folderPath) && File.Exists(folderPath);
+            if (string.IsNullOrEmpty(folderPath) || (!Directory.Exists(folderPath) && !isComicArchive)) return;
 
             if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible && !_isStartupIndexing)
             {
@@ -205,6 +214,7 @@ namespace ModernImageViewer
             _isScanning = true;
             _listReturnPath = IsChildOf(_currentDirectory, folderPath) ? _currentDirectory : null;
             _currentDirectory = folderPath;
+            ViewerControl?.SetBookSpreadMode(isComicArchive);
 
             UpdateBreadcrumbs(folderPath);
 
@@ -225,11 +235,14 @@ namespace ModernImageViewer
             {
                 var dirTask = Task.Run(() =>
                 {
-                    var dirInfo = new DirectoryInfo(folderPath);
-
-                    var subDirsArr = dirInfo.GetDirectories("*", enumOptions);
-                    Array.Sort(subDirsArr, (a, b) => NaturalSort.Compare(a.Name, b.Name));
-                    var subDirs = subDirsArr.Select(d => new FolderItem { Name = d.Name, Path = d.FullName }).ToList();
+                    var subDirs = new List<FolderItem>();
+                    if (!isComicArchive)
+                    {
+                        var dirInfo = new DirectoryInfo(folderPath);
+                        var subDirsArr = dirInfo.GetDirectories("*", enumOptions);
+                        Array.Sort(subDirsArr, (a, b) => NaturalSort.Compare(a.Name, b.Name));
+                        subDirs = subDirsArr.Select(d => new FolderItem { Name = d.Name, Path = d.FullName }).ToList();
+                    }
 
                     var parentDir = Directory.GetParent(folderPath);
                     var hopDirs = new List<FolderItem>();
@@ -239,6 +252,23 @@ namespace ModernImageViewer
                         var hopDirsArr = parentDir.GetDirectories("*", enumOptions);
                         Array.Sort(hopDirsArr, (a, b) => NaturalSort.Compare(a.Name, b.Name));
                         hopDirs = hopDirsArr.Select(d => new FolderItem { Name = d.Name, Path = d.FullName }).ToList();
+
+                        if (isComicArchive)
+                        {
+                            var comicFiles = parentDir.GetFiles("*.*", enumOptions)
+                                .Where(f => ComicArchive.IsComicArchivePath(f.Name))
+                                .ToArray();
+                            Array.Sort(comicFiles, (a, b) => NaturalSort.Compare(a.Name, b.Name));
+                            foreach (var cf in comicFiles)
+                            {
+                                hopDirs.Add(new FolderItem
+                                {
+                                    Name = cf.Name,
+                                    Path = cf.FullName,
+                                    NodeIcon = Symbol.Library
+                                });
+                            }
+                        }
                     }
 
                     return new { SubDirs = subDirs, HopDirs = hopDirs, Parent = parentDir };
@@ -277,9 +307,10 @@ namespace ModernImageViewer
                 if (myScanId == _currentScanId)
                 {
                     if (_listMode) RebuildListEntries();
-                    if (items.Count > 0) AddFolderToRecent(folderPath);
+                    if (items.Count > 0 && !isComicArchive) AddFolderToRecent(folderPath);
+                    bool returnedToItem = TryPlaceTileCursorOnReturnedItem();
                     bool seeded = false;
-                    if (items.Count > 0 && (_currentIndex < 0 || _currentIndex >= Images.Count))
+                    if (!returnedToItem && items.Count > 0 && (_currentIndex < 0 || _currentIndex >= Images.Count))
                     {
                         _currentIndex = 0;
                         seeded = true;
@@ -289,13 +320,15 @@ namespace ModernImageViewer
                     {
                         returnedToFolder = TryPlaceListCursorOnReturnedFolder();
                         if (!returnedToFolder) PlaceListCursorOnCurrentImage();
-                        SyncTileCursor(scroll: returnedToFolder);
+                        SyncTileCursor(scroll: returnedToFolder || returnedToItem);
                     }
-                    else if (seeded)
-                        SyncTileCursor(scroll: false);
+                    else if (seeded || returnedToItem)
+                        SyncTileCursor(scroll: returnedToItem);
                     _listReturnPath = null;
                     UpdateHeaderFolderInfo();
-                    RestartFolderWatcher(folderPath);
+                    RestartFolderWatcher(isComicArchive ? string.Empty : folderPath);
+                    if (openFirstPage && Images.Count > 0)
+                        LoadFullImage(0);
                 }
             }
             finally
@@ -315,6 +348,26 @@ namespace ModernImageViewer
         {
             try
             {
+                var dispatcher = this.DispatcherQueue;
+                if (ComicArchive.IsComicArchivePath(folderPath))
+                {
+                    var pages = ComicArchive.ListPages(folderPath);
+                    var pageItems = new List<ImageItem>(pages.Count);
+                    foreach (var p in pages)
+                    {
+                        if (scanId != _currentScanId) return new List<ImageItem>();
+                        pageItems.Add(new ImageItem
+                        {
+                            Name = p.Name,
+                            Path = ComicArchive.BuildEntryPath(folderPath, p.EntryKey),
+                            DateModified = p.LastModified,
+                            SizeString = (p.Size / 1024.0 < 1024) ? $"{p.Size / 1024} KB" : $"{(p.Size / 1048576.0):F2} MB",
+                            Dispatcher = dispatcher
+                        });
+                    }
+                    return pageItems;
+                }
+
                 var enumOptions = new EnumerationOptions { IgnoreInaccessible = true };
                 var allFiles = new DirectoryInfo(folderPath).GetFiles("*.*", enumOptions);
                 var filtered = new List<FileInfo>(allFiles.Length);
@@ -335,7 +388,6 @@ namespace ModernImageViewer
                 else
                     filtered.Sort((a, b) => NaturalSort.Compare(a.Name, b.Name));
 
-                var dispatcher = this.DispatcherQueue;
                 var items = new List<ImageItem>(filtered.Count);
                 foreach (var fi in filtered)
                 {
@@ -587,7 +639,10 @@ namespace ModernImageViewer
                 _isSidebarHooked = true;
             }
 
-            string countText = currentImageCount == 1 ? "1 image" : $"{currentImageCount} images";
+            bool isComic = ComicArchive.IsComicArchivePath(currentFolderPath);
+            string countText = isComic
+                ? (currentImageCount == 1 ? "1 page" : $"{currentImageCount} pages")
+                : (currentImageCount == 1 ? "1 image" : $"{currentImageCount} images");
 
             if (parentDir == null && IsDriveRoot(currentFolderPath))
             {
@@ -609,6 +664,7 @@ namespace ModernImageViewer
                         {
                             Name = sibling.Name,
                             Path = sibling.Path,
+                            NodeIcon = sibling.NodeIcon,
                             NodeOpacity = isCurrent ? 1.0 : 0.5,
                             NodeFontWeight = isCurrent ? "Bold" : "Normal",
                             Subtitle = isCurrent ? countText : string.Empty,
@@ -726,9 +782,12 @@ namespace ModernImageViewer
                 UpdateHeaderFolderInfo();
                 return;
             }
-            if (!string.IsNullOrEmpty(path))
+            string breadcrumbPath = ComicArchive.IsComicArchivePath(path)
+                ? (Path.GetDirectoryName(path) ?? path)
+                : path;
+            if (!string.IsNullOrEmpty(breadcrumbPath))
             {
-                foreach (var part in path.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries))
+                foreach (var part in breadcrumbPath.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries))
                 {
                     _breadcrumbs.Add(part);
                 }
@@ -790,7 +849,7 @@ namespace ModernImageViewer
                 RestoreGridKeyFocus(keepDrive);
                 return;
             }
-            if (string.IsNullOrEmpty(_currentDirectory) || !Directory.Exists(_currentDirectory)) return;
+            if (string.IsNullOrEmpty(_currentDirectory) || (!Directory.Exists(_currentDirectory) && !ComicArchive.IsComicArchivePath(_currentDirectory))) return;
             string? keepPath = null;
             if (_listMode && _listCursor >= 0 && _listCursor < _listEntries.Count)
                 keepPath = _listEntries[_listCursor].Path;
@@ -942,7 +1001,11 @@ namespace ModernImageViewer
             if (path == DriveRootPath)
                 Process.Start("explorer.exe", "shell:MyComputerFolder");
             else if (!string.IsNullOrEmpty(path))
+            {
+                if (ComicArchive.TrySplitEntryPath(path, out string archivePath, out _))
+                    path = archivePath;
                 Process.Start("explorer.exe", $"/select,\"{path}\"");
+            }
         }
     }
 }

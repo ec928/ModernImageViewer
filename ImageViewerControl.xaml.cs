@@ -49,6 +49,29 @@ namespace ModernImageViewer
         public double LogicalHeight => _logicalImageHeight;
         public float CurrentZoom => _targetZoom;
         public float FitZoom => _currentFitFactor;
+        public bool BookSpreadMode { get; private set; }
+        public bool CoverPageSolo { get; private set; } = true;
+        public event EventHandler? BookSpreadChanged;
+
+        public bool IsWideEnoughForSpread => RootGrid != null && RootGrid.ActualHeight > 0 && (RootGrid.ActualWidth / RootGrid.ActualHeight) >= 1.15;
+        public bool IsShowingTwoPages => BookSpreadMode && _secondGpuBitmap != null && (_animationFrames == null || _animationFrames.Length <= 1) && IsWideEnoughForSpread;
+
+        private double EffectiveLogicalWidth
+        {
+            get
+            {
+                if (!IsShowingTwoPages || _secondLogicalWidth <= 0 || _secondLogicalHeight <= 0)
+                    return _logicalImageWidth;
+                double spreadH = Math.Max(_logicalImageHeight, _secondLogicalHeight);
+                double leftNormW = _logicalImageWidth * (spreadH / Math.Max(1, _logicalImageHeight));
+                double rightNormW = _secondLogicalWidth * (spreadH / Math.Max(1, _secondLogicalHeight));
+                return leftNormW + rightNormW;
+            }
+        }
+
+        private double EffectiveLogicalHeight => IsShowingTwoPages && _secondLogicalHeight > 0
+            ? Math.Max(_logicalImageHeight, _secondLogicalHeight)
+            : _logicalImageHeight;
 
         // --- Events for Parent Windows ---
         public event EventHandler? CloseRequested;
@@ -79,6 +102,12 @@ namespace ModernImageViewer
         private CanvasBitmap? _rawGpuBitmap;
         private ColorManagementProfile? _rawGpuProfile;
         private ImageCacheEntry? _displayedEntry;
+        private ImageCacheEntry? _secondDisplayedEntry;
+        private CanvasBitmap? _secondGpuBitmap;
+        private ImageItem? _secondTargetImage;
+        private double _secondLogicalWidth;
+        private double _secondLogicalHeight;
+        private bool _wasShowingTwoPages;
         private EffectStack _effectStack = new();
 
         // --- Animation State ---
@@ -208,6 +237,61 @@ namespace ModernImageViewer
             _displayedEntry = null;
             _rawGpuBitmap = null;
             _animationFrames = null;
+            ClearSecondPage();
+        }
+
+        public void ClearSecondPage()
+        {
+            _secondDisplayedEntry?.Release();
+            _secondDisplayedEntry = null;
+            _secondGpuBitmap = null;
+            _secondTargetImage = null;
+            _secondLogicalWidth = 0;
+            _secondLogicalHeight = 0;
+        }
+
+        public void InjectSpreadSecondPage(ImageCacheEntry? secondEntry, ImageItem? secondItem, bool resetView = false)
+        {
+            if (!ReferenceEquals(_secondDisplayedEntry, secondEntry))
+            {
+                _secondDisplayedEntry?.Release();
+                secondEntry?.AddRef();
+                _secondDisplayedEntry = secondEntry;
+            }
+
+            _secondGpuBitmap = secondEntry?.GpuBitmap;
+            _secondTargetImage = secondItem;
+            _secondLogicalWidth = (secondEntry != null && secondEntry.NativeWidth > 0) ? secondEntry.NativeWidth : (_secondGpuBitmap?.SizeInPixels.Width ?? 0);
+            _secondLogicalHeight = (secondEntry != null && secondEntry.NativeHeight > 0) ? secondEntry.NativeHeight : (_secondGpuBitmap?.SizeInPixels.Height ?? 0);
+            _wasShowingTwoPages = IsShowingTwoPages;
+
+            UpdateGridSize();
+            if (resetView || _isFitToWindow)
+                FitToWindow();
+
+            RequestRender();
+            ShowHud();
+        }
+
+        public void SetBookSpreadMode(bool enabled, bool notify = false)
+        {
+            BookSpreadMode = enabled;
+            if (BookSpreadMenuItem != null) BookSpreadMenuItem.IsChecked = enabled;
+            if (BookSpreadButton != null)
+            {
+                BookSpreadButton.Background = enabled
+                    ? (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"]
+                    : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            }
+            if (!enabled)
+            {
+                ClearSecondPage();
+                UpdateGridSize();
+                if (_isFitToWindow) FitToWindow();
+                RequestRender();
+            }
+            if (notify)
+                BookSpreadChanged?.Invoke(this, EventArgs.Empty);
         }
 
         private void ImageViewerControl_Unloaded(object sender, RoutedEventArgs e)
@@ -241,6 +325,12 @@ namespace ModernImageViewer
             _tempPanX = 0;
             _tempPanY = 0;
             _mouseWheelAccumulator = 0;
+            bool isMutateAllowed = TargetImage != null && !TargetImage.IsComicEntry;
+            Visibility mutateVis = isMutateAllowed ? Visibility.Visible : Visibility.Collapsed;
+            if (AddToCollageMenuItem != null) AddToCollageMenuItem.Visibility = mutateVis;
+            if (EditImageMenuItem != null) EditImageMenuItem.Visibility = mutateVis;
+            if (RenameImageMenuItem != null) RenameImageMenuItem.Visibility = mutateVis;
+            if (DeleteImageMenuItem != null) DeleteImageMenuItem.Visibility = mutateVis;
             ShowHud();
         }
 
@@ -388,14 +478,16 @@ namespace ModernImageViewer
             if (PreviewCanvas != null && ScrollViewportGrid != null)
             {
                 float dpiScale = PreviewCanvas.Dpi / 96.0f;
-                ScrollViewportGrid.Width = Math.Max(1, _logicalImageWidth / dpiScale);
-                ScrollViewportGrid.Height = Math.Max(1, _logicalImageHeight / dpiScale);
+                ScrollViewportGrid.Width = Math.Max(1, EffectiveLogicalWidth / dpiScale);
+                ScrollViewportGrid.Height = Math.Max(1, EffectiveLogicalHeight / dpiScale);
             }
         }
 
         public void FitToWindow()
         {
-            if (_logicalImageWidth > 0 && _logicalImageHeight > 0 && PreviewCanvas != null && ImageScroll != null && RootGrid != null)
+            double effW = EffectiveLogicalWidth;
+            double effH = EffectiveLogicalHeight;
+            if (effW > 0 && effH > 0 && PreviewCanvas != null && ImageScroll != null && RootGrid != null)
             {
                 _isFitToWindow = true;
 
@@ -406,7 +498,7 @@ namespace ModernImageViewer
                 {
                     float dpiScale = PreviewCanvas.Dpi / 96.0f;
                     float maxZoom = (float)ImageScroll.MaxZoomFactor;
-                    float fit = ViewerMath.CalculateFitZoom(viewW, viewH, _logicalImageWidth, _logicalImageHeight, dpiScale, ViewerMath.AbsoluteFitMinZoom, maxZoom);
+                    float fit = ViewerMath.CalculateFitZoom(viewW, viewH, effW, effH, dpiScale, ViewerMath.AbsoluteFitMinZoom, maxZoom);
                     float floor = ViewerMath.ScrollZoomFloor(fit);
 
                     // Drop the floor before the view change when this image is wider than the wheel allows.
@@ -449,11 +541,30 @@ namespace ModernImageViewer
 
             if (currentTarget == null) return;
 
-            crop.Source = currentTarget;
-
             try
             {
-                ViewerMath.DrawMappedImage(args.DrawingSession, sender.ActualWidth, sender.ActualHeight, _logicalImageWidth, _logicalImageHeight, -(ImageScroll?.HorizontalOffset ?? 0) + _tempPanX, -(ImageScroll?.VerticalOffset ?? 0) + _tempPanY, _targetZoom, _currentGamma, sender.Dpi / 96.0f, _isHighFidelityActive, currentTarget, _rawGpuProfile, crop, colorMgmt, decode, userGamma, transform, encode);
+                double panX = -(ImageScroll?.HorizontalOffset ?? 0) + _tempPanX;
+                double panY = -(ImageScroll?.VerticalOffset ?? 0) + _tempPanY;
+                float dpiScale = sender.Dpi / 96.0f;
+
+                if (IsShowingTwoPages && _secondGpuBitmap != null)
+                {
+                    ViewerMath.DrawDualMappedImages(
+                        args.DrawingSession,
+                        sender.ActualWidth, sender.ActualHeight,
+                        _logicalImageWidth, _logicalImageHeight,
+                        _secondLogicalWidth, _secondLogicalHeight,
+                        panX, panY,
+                        _targetZoom, _currentGamma, dpiScale,
+                        currentTarget, _secondGpuBitmap,
+                        crop, decode, userGamma, transform, encode);
+                }
+                else
+                {
+                    crop.Source = currentTarget;
+                    crop.SourceRectangle = currentTarget.Bounds;
+                    ViewerMath.DrawMappedImage(args.DrawingSession, sender.ActualWidth, sender.ActualHeight, _logicalImageWidth, _logicalImageHeight, panX, panY, _targetZoom, _currentGamma, dpiScale, _isHighFidelityActive, currentTarget, _rawGpuProfile, crop, colorMgmt, decode, userGamma, transform, encode);
+                }
             }
             catch (Exception ex) { Debug.WriteLine($"[Win2D Draw Error]: {ex.Message}"); }
         }
@@ -461,8 +572,20 @@ namespace ModernImageViewer
         public void ShowHud()
         {
             if (TargetImage == null) return;
-            if (HudFileName != null) HudFileName.Text = !string.IsNullOrWhiteSpace(TargetImage.Name) ? TargetImage.Name : " ";
-            if (HudSecondaryInfo != null) HudSecondaryInfo.Text = TargetImage.GetHudDisplayString(_logicalImageWidth, _logicalImageHeight);
+            if (IsShowingTwoPages && _secondTargetImage != null)
+            {
+                if (HudFileName != null) HudFileName.Text = $"{TargetImage.Name}  |  {_secondTargetImage.Name}";
+                string spreadPrefix = "2-Page Spread";
+                if (!IsStandaloneMode && MainWindow.Instance != null) { int idx1 = MainWindow.Instance.Images.IndexOf(TargetImage); int total = MainWindow.Instance.Images.Count; if (idx1 >= 0 && total > 0) spreadPrefix = $"Pages {idx1 + 1}–{Math.Min(total, idx1 + 2)} of {total}"; }
+                if (HudSecondaryInfo != null) HudSecondaryInfo.Text = $"{spreadPrefix} • {(int)EffectiveLogicalWidth} × {(int)EffectiveLogicalHeight} • {TargetImage.SizeString} + {_secondTargetImage.SizeString}";
+            }
+            else
+            {
+                if (HudFileName != null) HudFileName.Text = !string.IsNullOrWhiteSpace(TargetImage.Name) ? TargetImage.Name : " ";
+                string baseInfo = TargetImage.GetHudDisplayString(_logicalImageWidth, _logicalImageHeight);
+                if (!IsStandaloneMode && TargetImage.IsComicEntry && MainWindow.Instance != null) { int idx = MainWindow.Instance.Images.IndexOf(TargetImage); int total = MainWindow.Instance.Images.Count; if (idx >= 0 && total > 0) baseInfo = $"Page {idx + 1} of {total} • {(int)_logicalImageWidth} × {(int)_logicalImageHeight} • {TargetImage.SizeString}"; }
+                if (HudSecondaryInfo != null) HudSecondaryInfo.Text = baseInfo;
+            }
             if (HudZoomInfo != null) HudZoomInfo.Text = TargetImage.GetZoomString(_targetZoom);
             if (HudFidelity != null) HudFidelity.Text = _isHighFidelityActive ? "HF" : "LF";
 
@@ -539,6 +662,17 @@ namespace ModernImageViewer
 
         private void ToggleZoomMode_Click(object sender, RoutedEventArgs e) => ToggleZoomMode();
 
+        private void ToggleBookSpread_Click(object sender, RoutedEventArgs e)
+        {
+            SetBookSpreadMode(!BookSpreadMode, notify: true);
+        }
+
+        private void ToggleCoverSolo_Click(object sender, RoutedEventArgs e)
+        {
+            CoverPageSolo = CoverPageSoloMenuItem?.IsChecked ?? true;
+            BookSpreadChanged?.Invoke(this, EventArgs.Empty);
+        }
+
         private void SizeToWindow_Click(object sender, RoutedEventArgs e)
         {
             ToggleZoomMode(false);
@@ -558,8 +692,8 @@ namespace ModernImageViewer
             if (ImageScroll == null || PreviewCanvas == null) return true;
 
             float dpiScale = PreviewCanvas.Dpi / 96.0f;
-            double displayedImgW = (_logicalImageWidth / dpiScale) * _targetZoom;
-            double displayedImgH = (_logicalImageHeight / dpiScale) * _targetZoom;
+            double displayedImgW = (EffectiveLogicalWidth / dpiScale) * _targetZoom;
+            double displayedImgH = (EffectiveLogicalHeight / dpiScale) * _targetZoom;
 
             double viewW = ImageScroll.ActualWidth;
             double viewH = ImageScroll.ActualHeight;
@@ -759,9 +893,11 @@ namespace ModernImageViewer
 
                 float currentNativeZoom = ImageScroll.ZoomFactor;
                 float dpiScale = PreviewCanvas != null ? PreviewCanvas.Dpi / 96.0f : 1.0f;
+                double effW = EffectiveLogicalWidth;
+                double effH = EffectiveLogicalHeight;
 
-                double currentDisplayedW = (_logicalImageWidth / dpiScale) * currentNativeZoom;
-                double currentDisplayedH = (_logicalImageHeight / dpiScale) * currentNativeZoom;
+                double currentDisplayedW = (effW / dpiScale) * currentNativeZoom;
+                double currentDisplayedH = (effH / dpiScale) * currentNativeZoom;
 
                 double currentBlankOffsetX = currentDisplayedW < ImageScroll.ViewportWidth ? (ImageScroll.ViewportWidth - currentDisplayedW) / 2.0 : 0;
                 double currentBlankOffsetY = currentDisplayedH < ImageScroll.ViewportHeight ? (ImageScroll.ViewportHeight - currentDisplayedH) / 2.0 : 0;
@@ -772,8 +908,8 @@ namespace ModernImageViewer
                 double logicalClickX = (absoluteX - currentBlankOffsetX) / currentNativeZoom;
                 double logicalClickY = (absoluteY - currentBlankOffsetY) / currentNativeZoom;
 
-                double newDisplayedW = (_logicalImageWidth / dpiScale) * newZoom;
-                double newDisplayedH = (_logicalImageHeight / dpiScale) * newZoom;
+                double newDisplayedW = (effW / dpiScale) * newZoom;
+                double newDisplayedH = (effH / dpiScale) * newZoom;
 
                 double newBlankOffsetX = newDisplayedW < ImageScroll.ViewportWidth ? (ImageScroll.ViewportWidth - newDisplayedW) / 2.0 : 0;
                 double newBlankOffsetY = newDisplayedH < ImageScroll.ViewportHeight ? (ImageScroll.ViewportHeight - newDisplayedH) / 2.0 : 0;
@@ -827,7 +963,7 @@ namespace ModernImageViewer
                 (float)ImageScroll.MinZoomFactor, (float)ImageScroll.MaxZoomFactor,
                 ptr.Properties.MouseWheelDelta, ptr.Position.X, ptr.Position.Y,
                 ImageScroll.HorizontalOffset, ImageScroll.VerticalOffset,
-                _logicalImageWidth, _logicalImageHeight, dpiScale,
+                EffectiveLogicalWidth, EffectiveLogicalHeight, dpiScale,
                 ImageScroll.ViewportWidth, ImageScroll.ViewportHeight);
 
             _targetZoom = result.NewZoom;
@@ -848,7 +984,18 @@ namespace ModernImageViewer
 
         private void ImageScroll_SizeChanged(object s, SizeChangedEventArgs e)
         {
-            if (_isFitToWindow) FitToWindow();
+            bool nowTwoPages = IsShowingTwoPages;
+            if (nowTwoPages != _wasShowingTwoPages)
+            {
+                _wasShowingTwoPages = nowTwoPages;
+                UpdateGridSize();
+                FitToWindow();
+                ShowHud();
+            }
+            else if (_isFitToWindow)
+            {
+                FitToWindow();
+            }
             RequestRender();
         }
 

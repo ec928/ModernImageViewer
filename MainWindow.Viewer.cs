@@ -130,6 +130,12 @@ namespace ModernImageViewer
         {
             if (index < 0 || index >= Images.Count || _canvasDevice == null) return;
 
+            if (Images[index].IsComicArchive)
+            {
+                _ = ScanFolder(Images[index].Path, openFirstPage: true);
+                return;
+            }
+
             _currentIndex = index;
             if (_listMode) PlaceListCursorOnCurrentImage();
             // Visible before the cursor sync so the list preview hides instead of flashing on top of the photo.
@@ -254,6 +260,25 @@ namespace ModernImageViewer
 
                 ViewerControl.InjectImage(targetEntry, true);
 
+                if (ViewerControl.BookSpreadMode && targetEntry.AnimationFrames == null && CanPairWithNextPage(index, _logicalImageWidth, _logicalImageHeight))
+                {
+                    var nextItem = Images[index + 1];
+                    var secondEntry = await LoadOrDecodeSpreadEntryAsync(nextItem.Path, fastToken);
+                    if (myLoadId != _currentImageLoadId) return;
+                    if (secondEntry != null && secondEntry.GpuBitmap != null && secondEntry.AnimationFrames == null && IsPortraitPage(secondEntry.NativeWidth, secondEntry.NativeHeight))
+                    {
+                        ViewerControl.InjectSpreadSecondPage(secondEntry, nextItem, resetView: true);
+                    }
+                    else
+                    {
+                        ViewerControl.ClearSecondPage();
+                    }
+                }
+                else
+                {
+                    ViewerControl.ClearSecondPage();
+                }
+
                 ManageCache(index, stepDirection);
 
                 QueueSharperDecode();
@@ -262,6 +287,61 @@ namespace ModernImageViewer
             {
                 Debug.WriteLine($"LoadFullImage error: {ex.Message}");
             }
+        }
+
+        private static bool IsPortraitPage(double width, double height)
+        {
+            return width > 0 && height > 0 && (width / height) <= 1.05;
+        }
+
+        private bool CanPairWithNextPage(int index, double width, double height)
+        {
+            if (index < 0 || index + 1 >= Images.Count) return false;
+            if (ViewerControl != null && ViewerControl.CoverPageSolo && index == 0) return false;
+            if (Images[index].IsComicArchive || Images[index + 1].IsComicArchive) return false;
+            return IsPortraitPage(width, height);
+        }
+
+        private async Task<ImageCacheEntry?> LoadOrDecodeSpreadEntryAsync(string path, CancellationToken token)
+        {
+            if (ImageCache.TryGet(path, out var cached) && cached != null)
+            {
+                if (_canvasDevice != null && !cached.DeviceMatches(_canvasDevice))
+                {
+                    ImageCache.Evict(path);
+                }
+                else
+                {
+                    if (cached.GpuBitmap == null && cached.AnimationFrames == null && cached.Bitmap != null)
+                    {
+                        cached.GpuBitmap = ViewerEngine.CreateGpuBitmap(cached.Bitmap);
+                        cached.Bitmap.Dispose();
+                        cached.Bitmap = null;
+                    }
+                    if (cached.GpuBitmap != null || cached.AnimationFrames != null)
+                        return cached;
+                }
+            }
+
+            var result = await ViewerEngine.DecodeFastPreviewAsync(path, token);
+            if (token.IsCancellationRequested)
+            {
+                result?.Release();
+                return null;
+            }
+            if (result != null && result.Bitmap != null)
+            {
+                result.GpuBitmap = ViewerEngine.CreateGpuBitmap(result.Bitmap);
+                result.Bitmap.Dispose();
+                result.Bitmap = null;
+            }
+            if (result != null && (result.GpuBitmap != null || result.AnimationFrames != null))
+            {
+                ImageCache.Publish(path, result);
+                return result;
+            }
+            result?.Release();
+            return null;
         }
 
         private void QueueSharperDecode()
@@ -325,15 +405,41 @@ namespace ModernImageViewer
             _isHighFidelityActive = published.IsHighFidelity;
 
             if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible)
+            {
                 ViewerControl.InjectImage(published, false);
+
+                if (ViewerControl.IsShowingTwoPages && _currentIndex + 1 < Images.Count)
+                {
+                    var nextItem = Images[_currentIndex + 1];
+                    string nextPath = nextItem.Path;
+                    int haveNext = 0;
+                    if (ImageCache.TryGet(nextPath, out var cachedNext) && cachedNext != null)
+                        haveNext = cachedNext.DecodedLongEdge;
+                    if (haveNext < edge)
+                    {
+                        var decodedNext = await ViewerEngine.DecodeHighFidelityAsync(nextPath, token, (uint)edge);
+                        if (decodedNext != null && !token.IsCancellationRequested && promoteId == _currentImageLoadId)
+                        {
+                            if (ViewerEngine.FinalizeHighFidelityGpuResources(decodedNext))
+                            {
+                                ImageCache.Publish(nextPath, decodedNext);
+                                if (promoteId == _currentImageLoadId && ImageCache.TryGet(nextPath, out var pubNext) && pubNext?.GpuBitmap != null && ViewerControl != null && ViewerControl.Visibility == Visibility.Visible)
+                                    ViewerControl.InjectSpreadSecondPage(pubNext, nextItem, resetView: false);
+                            }
+                            else decodedNext.Release();
+                        }
+                        else decodedNext?.Release();
+                    }
+                }
+            }
         }
 
         private static async Task<Size> GetNativeImageSizeAsync(string path, CancellationToken token = default)
         {
             try
             {
-                var file = await StorageFile.GetFileFromPathAsync(path).AsTask(token);
-                using var stream = await file.OpenReadAsync().AsTask(token);
+                using var stream = await ViewerEngine.OpenImageStreamAsync(path, token);
+                if (stream == null) return new Size(0, 0);
                 var decoder = await BitmapDecoder.CreateAsync(stream).AsTask(token);
                 return new Size(decoder.OrientedPixelWidth, decoder.OrientedPixelHeight);
             }
@@ -499,14 +605,34 @@ namespace ModernImageViewer
                 return;
             }
 
+            if (step == 1 && ViewerControl != null && ViewerControl.IsShowingTwoPages)
+            {
+                step = 2;
+            }
+            else if (step == -1 && ViewerControl != null && ViewerControl.BookSpreadMode && ViewerControl.IsWideEnoughForSpread && CanPairSpreadAt(_currentIndex - 2))
+            {
+                step = -2;
+            }
+
             int nextIndex = _currentIndex + step;
             int stepDirection = step > 0 ? 1 : -1;
+
+            if (nextIndex >= Images.Count && step > 1 && _currentIndex + 1 < Images.Count)
+            {
+                nextIndex = _currentIndex + 1;
+            }
+            else if (nextIndex < 0 && step < -1 && _currentIndex - 1 >= 0)
+            {
+                nextIndex = 0;
+            }
 
             if (nextIndex >= Images.Count || nextIndex < 0)
             {
                 if (_currentIndex < 0 || _currentIndex >= Images.Count) return;
 
-                string currentFolderPath = Path.GetDirectoryName(Images[_currentIndex].Path)?.TrimEnd('\\', '/') ?? string.Empty;
+                string currentFolderPath = ComicArchive.TrySplitEntryPath(Images[_currentIndex].Path, out string archivePath, out _)
+                    ? archivePath.TrimEnd('\\', '/')
+                    : (Path.GetDirectoryName(Images[_currentIndex].Path)?.TrimEnd('\\', '/') ?? string.Empty);
                 int folderIdx = _hopFolders.FindIndex(f => f.Path.TrimEnd('\\', '/').Equals(currentFolderPath, StringComparison.OrdinalIgnoreCase));
                 int nextFolderIdx = folderIdx + stepDirection;
 
@@ -541,6 +667,18 @@ namespace ModernImageViewer
             {
                 LoadFullImage(nextIndex, stepDirection);
             }
+        }
+
+        private bool CanPairSpreadAt(int index)
+        {
+            if (index < 0 || index + 1 >= Images.Count) return false;
+            if (ViewerControl != null && ViewerControl.CoverPageSolo && index == 0) return false;
+            if (Images[index].IsComicArchive || Images[index + 1].IsComicArchive) return false;
+            if (ImageCache.TryGet(Images[index].Path, out var e1) && e1 != null && e1.NativeWidth > 0 && !IsPortraitPage(e1.NativeWidth, e1.NativeHeight))
+                return false;
+            if (ImageCache.TryGet(Images[index + 1].Path, out var e2) && e2 != null && e2.NativeWidth > 0 && !IsPortraitPage(e2.NativeWidth, e2.NativeHeight))
+                return false;
+            return true;
         }
 
         private static ScrollViewer? FindScrollViewer(DependencyObject d)
@@ -737,15 +875,32 @@ namespace ModernImageViewer
             _listCursor = _listEntries.Count > 0 ? 0 : -1;
         }
 
-        // Going up one level puts the cursor back on the folder we just left, so Right reaches the next one.
+        // Going up one level puts the cursor back on the folder or comic archive we just left, so Right reaches the next one.
         private bool TryPlaceListCursorOnReturnedFolder()
         {
             if (string.IsNullOrEmpty(_listReturnPath)) return false;
             for (int i = 0; i < _listEntries.Count; i++)
             {
                 var item = _listEntries[i];
-                if (!item.IsDirectory || !SameDirectory(item.Path, _listReturnPath)) continue;
+                if (!SameDirectory(item.Path, _listReturnPath)) continue;
                 _listCursor = i;
+                if (!item.IsDirectory)
+                {
+                    int photoIdx = Images.IndexOf(item);
+                    if (photoIdx >= 0) _currentIndex = photoIdx;
+                }
+                return true;
+            }
+            return false;
+        }
+
+        private bool TryPlaceTileCursorOnReturnedItem()
+        {
+            if (string.IsNullOrEmpty(_listReturnPath)) return false;
+            for (int i = 0; i < Images.Count; i++)
+            {
+                if (!SameDirectory(Images[i].Path, _listReturnPath)) continue;
+                _currentIndex = i;
                 return true;
             }
             return false;
@@ -1042,9 +1197,11 @@ namespace ModernImageViewer
             PreviewModifiedText.Text = item.DateModified.ToString("yyyy-MM-dd HH:mm");
             PreviewDimensionsText.Text = "—";
             PreviewTakenText.Text = "—";
-            string folder = Path.GetDirectoryName(item.Path) ?? "";
+            string folder = ComicArchive.TrySplitEntryPath(item.Path, out string archivePath, out _)
+                ? archivePath
+                : (Path.GetDirectoryName(item.Path) ?? "");
             PreviewLocationText.Text = folder;
-            ToolTipService.SetToolTip(PreviewLocationButton, item.Path);
+            ToolTipService.SetToolTip(PreviewLocationButton, folder);
 
             if (PreviewThumbnailReady(item.Thumbnail))
             {
@@ -1113,6 +1270,8 @@ namespace ModernImageViewer
             string ext = Path.GetExtension(name);
             if (ext.Length > 1) ext = ext.Substring(1).ToUpperInvariant();
             if (ext == "JPEG") ext = "JPG";
+            if (ext == "CBZ") return "Comic Book ZIP (.cbz)";
+            if (ext == "CBR") return "Comic Book RAR (.cbr)";
             return string.IsNullOrEmpty(ext) ? "File" : ext + " File";
         }
 
@@ -1164,8 +1323,8 @@ namespace ModernImageViewer
         {
             try
             {
-                var file = await StorageFile.GetFileFromPathAsync(path).AsTask(token);
-                using var stream = await file.OpenReadAsync().AsTask(token);
+                using var stream = await ViewerEngine.OpenImageStreamAsync(path, token);
+                if (stream == null) return new Size(0, 0);
                 var decoder = await BitmapDecoder.CreateAsync(stream).AsTask(token);
                 return new Size(decoder.OrientedPixelWidth, decoder.OrientedPixelHeight);
             }
@@ -1177,6 +1336,8 @@ namespace ModernImageViewer
         {
             try
             {
+                if (ComicArchive.IsEntryPath(path) || ComicArchive.IsComicArchivePath(path))
+                    return null;
                 var file = await StorageFile.GetFileFromPathAsync(path).AsTask(token);
                 var props = await file.Properties.RetrievePropertiesAsync(new[] { "System.Photo.DateTaken" }).AsTask(token);
                 if (props.TryGetValue("System.Photo.DateTaken", out object? value))
@@ -1194,6 +1355,8 @@ namespace ModernImageViewer
         {
             try
             {
+                if (ComicArchive.IsEntryPath(path) || ComicArchive.IsComicArchivePath(path))
+                    return null;
                 var file = await StorageFile.GetFileFromPathAsync(path).AsTask(token);
                 using var shell = await file.GetThumbnailAsync(Windows.Storage.FileProperties.ThumbnailMode.PicturesView, 400, Windows.Storage.FileProperties.ThumbnailOptions.UseCurrentScale).AsTask(token);
                 if (shell == null) return null;
@@ -1210,8 +1373,8 @@ namespace ModernImageViewer
             SoftwareBitmap? softwareBitmap = null;
             try
             {
-                var file = await StorageFile.GetFileFromPathAsync(path).AsTask(token);
-                using var stream = await file.OpenReadAsync().AsTask(token);
+                using var stream = await ViewerEngine.OpenImageStreamAsync(path, token);
+                if (stream == null) return null;
                 var decoder = await BitmapDecoder.CreateAsync(stream).AsTask(token);
                 uint w = decoder.PixelWidth;
                 uint h = decoder.PixelHeight;
@@ -1577,6 +1740,9 @@ namespace ModernImageViewer
                     case Windows.System.VirtualKey.Left: Navigate(-1); break;
                     case Windows.System.VirtualKey.Home: Navigate(int.MinValue); break;
                     case Windows.System.VirtualKey.End: Navigate(int.MaxValue); break;
+                    case Windows.System.VirtualKey.B:
+                        ViewerControl.SetBookSpreadMode(!ViewerControl.BookSpreadMode, notify: true);
+                        break;
                     case Windows.System.VirtualKey.Escape: ClosePreviewInternal(); break;
                     case Windows.System.VirtualKey.Delete: ViewerControl_DeleteRequested(this, EventArgs.Empty); break;
                 }
@@ -1680,6 +1846,7 @@ namespace ModernImageViewer
             if (HeaderFolderText == null || HeaderCountText == null) return;
             if (AtDriveRoot)
             {
+                if (HeaderFolderIcon != null) HeaderFolderIcon.Glyph = "\uE8B7";
                 HeaderFolderText.Text = DriveRootName;
                 int drives = _childFolders.Count;
                 HeaderCountText.Text = drives == 1 ? "1 drive" : $"{drives} drives";
@@ -1687,11 +1854,18 @@ namespace ModernImageViewer
                 UpdateEmptyFolderState();
                 return;
             }
-            string name = _breadcrumbs.Count > 0 ? _breadcrumbs[^1] : CurrentLocationText();
+            bool inArchive = ComicArchive.IsComicArchivePath(_currentDirectory);
+            if (HeaderFolderIcon != null)
+                HeaderFolderIcon.Glyph = inArchive ? "\uE736" : "\uE8B7";
+            string name = inArchive
+                ? Path.GetFileName(_currentDirectory)
+                : (_breadcrumbs.Count > 0 ? _breadcrumbs[^1] : CurrentLocationText());
             if (string.IsNullOrEmpty(name)) name = "Pictures";
             HeaderFolderText.Text = name;
             int photos = Images.Count;
-            HeaderCountText.Text = photos == 1 ? "1 photo" : $"{photos} photos";
+            HeaderCountText.Text = inArchive
+                ? (photos == 1 ? "1 page" : $"{photos} pages")
+                : (photos == 1 ? "1 photo" : $"{photos} photos");
             if (HeaderPathFlyoutText != null) HeaderPathFlyoutText.Text = CurrentLocationText();
             UpdateEmptyFolderState();
         }
@@ -1802,6 +1976,10 @@ namespace ModernImageViewer
                 if (AtDriveRoot)
                 {
                     Process.Start("explorer.exe", "shell:MyComputerFolder");
+                }
+                else if (!string.IsNullOrEmpty(_currentDirectory) && ComicArchive.IsComicArchivePath(_currentDirectory) && File.Exists(_currentDirectory))
+                {
+                    Process.Start("explorer.exe", $"/select,\"{_currentDirectory}\"");
                 }
                 else if (!string.IsNullOrEmpty(_currentDirectory) && Directory.Exists(_currentDirectory))
                 {
@@ -2233,21 +2411,24 @@ namespace ModernImageViewer
             SyncTileCursor(scroll: false);
 
             bool isPhoto = !item.IsDirectory;
-            Visibility photoVis = isPhoto ? Visibility.Visible : Visibility.Collapsed;
-            if (GridMenuOpenItem != null) GridMenuOpenItem.Text = item.IsDirectory ? "Open Folder" : "Open Photo";
+            bool isEditablePhoto = isPhoto && !item.IsComicEntry && !item.IsComicArchive;
+            Visibility photoVis = isPhoto && !item.IsComicArchive ? Visibility.Visible : Visibility.Collapsed;
+            Visibility fileMutateVis = isPhoto && !item.IsComicEntry ? Visibility.Visible : Visibility.Collapsed;
+            if (GridMenuOpenItem != null)
+                GridMenuOpenItem.Text = item.IsDirectory ? "Open Folder" : (item.IsComicArchive ? "Open Comic Book" : "Open Photo");
             if (GridMenuSelectItem != null)
             {
-                GridMenuSelectItem.Visibility = photoVis;
+                GridMenuSelectItem.Visibility = fileMutateVis;
                 GridMenuSelectItem.Text = item.IsGridSelected ? "Deselect" : "Select";
             }
             if (GridMenuDetachItem != null) GridMenuDetachItem.Visibility = photoVis;
             if (GridMenuPhotoSep1 != null) GridMenuPhotoSep1.Visibility = photoVis;
             if (GridMenuCinematicItem != null) GridMenuCinematicItem.Visibility = photoVis;
-            if (GridMenuCollageItem != null) GridMenuCollageItem.Visibility = photoVis;
-            if (GridMenuPhotoSep2 != null) GridMenuPhotoSep2.Visibility = photoVis;
-            if (GridMenuEditItem != null) GridMenuEditItem.Visibility = photoVis;
-            if (GridMenuRenameItem != null) GridMenuRenameItem.Visibility = photoVis;
-            if (GridMenuDeleteItem != null) GridMenuDeleteItem.Visibility = photoVis;
+            if (GridMenuCollageItem != null) GridMenuCollageItem.Visibility = isEditablePhoto ? Visibility.Visible : Visibility.Collapsed;
+            if (GridMenuPhotoSep2 != null) GridMenuPhotoSep2.Visibility = fileMutateVis;
+            if (GridMenuEditItem != null) GridMenuEditItem.Visibility = isEditablePhoto ? Visibility.Visible : Visibility.Collapsed;
+            if (GridMenuRenameItem != null) GridMenuRenameItem.Visibility = fileMutateVis;
+            if (GridMenuDeleteItem != null) GridMenuDeleteItem.Visibility = fileMutateVis;
         }
 
         private void GridMenuOpen_Click(object sender, RoutedEventArgs e)

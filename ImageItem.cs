@@ -59,6 +59,63 @@ namespace ModernImageViewer
             encode.Source = transform;
             session.DrawImage(encode, new Vector2((float)drawX, (float)drawY));
         }
+
+        public static void DrawDualMappedImages(
+            CanvasDrawingSession session,
+            double viewW, double viewH,
+            double leftLogicalW, double leftLogicalH,
+            double rightLogicalW, double rightLogicalH,
+            double panX, double panY,
+            float zoom, float gamma, float dpiScale,
+            CanvasBitmap leftBitmap,
+            CanvasBitmap rightBitmap,
+            CropEffect crop,
+            GammaTransferEffect decode,
+            GammaTransferEffect userGamma,
+            Transform2DEffect transform,
+            GammaTransferEffect encode)
+        {
+            if (zoom <= 0) zoom = 1.0f;
+            if (leftLogicalW <= 0 || leftLogicalH <= 0 || rightLogicalW <= 0 || rightLogicalH <= 0) return;
+
+            double spreadLogicalH = Math.Max(leftLogicalH, rightLogicalH);
+            double leftNormW = leftLogicalW * (spreadLogicalH / leftLogicalH);
+            double rightNormW = rightLogicalW * (spreadLogicalH / rightLogicalH);
+
+            double leftDrawW = (leftNormW / dpiScale) * zoom;
+            double rightDrawW = (rightNormW / dpiScale) * zoom;
+            double totalW = leftDrawW + rightDrawW;
+            double totalH = (spreadLogicalH / dpiScale) * zoom;
+
+            if (totalW <= 0 || totalH <= 0) return;
+
+            double startX = totalW <= viewW + 1.0 ? (viewW - totalW) / 2.0 : panX;
+            double drawY = totalH <= viewH + 1.0 ? (viewH - totalH) / 2.0 : panY;
+
+            userGamma.RedExponent = gamma / 2.2f;
+            userGamma.GreenExponent = gamma / 2.2f;
+            userGamma.BlueExponent = gamma / 2.2f;
+
+            // Draw Left Page
+            crop.Source = leftBitmap;
+            crop.SourceRectangle = leftBitmap.Bounds;
+            decode.Source = crop;
+            userGamma.Source = decode;
+            transform.Source = userGamma;
+            transform.TransformMatrix = Matrix3x2.CreateScale(
+                (float)(leftDrawW / leftBitmap.SizeInPixels.Width),
+                (float)(totalH / leftBitmap.SizeInPixels.Height));
+            encode.Source = transform;
+            session.DrawImage(encode, new Vector2((float)startX, (float)drawY));
+
+            // Draw Right Page
+            crop.Source = rightBitmap;
+            crop.SourceRectangle = rightBitmap.Bounds;
+            transform.TransformMatrix = Matrix3x2.CreateScale(
+                (float)(rightDrawW / rightBitmap.SizeInPixels.Width),
+                (float)(totalH / rightBitmap.SizeInPixels.Height));
+            session.DrawImage(encode, new Vector2((float)(startX + leftDrawW), (float)drawY));
+        }
     }
 
     public partial class ImageItem : INotifyPropertyChanged
@@ -109,7 +166,12 @@ namespace ModernImageViewer
         public bool IsDirectory { get; private set; }
         public bool IsParentDirectory { get; private set; }
         public string DirectoryGlyph { get; private set; } = "";
-        public Visibility PhotoListIconVisibility => IsDirectory ? Visibility.Collapsed : Visibility.Visible;
+        public bool IsComicArchive => ComicArchive.IsComicArchivePath(Path);
+        public bool IsComicEntry => ComicArchive.IsEntryPath(Path);
+        public Visibility ComicBadgeVisibility => IsComicArchive ? Visibility.Visible : Visibility.Collapsed;
+        public string ComicBadgeText => IsComicArchive ? System.IO.Path.GetExtension(Path).TrimStart('.').ToUpperInvariant() : string.Empty;
+        public Visibility ComicListIconVisibility => IsComicArchive ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility PhotoListIconVisibility => (IsDirectory || IsComicArchive) ? Visibility.Collapsed : Visibility.Visible;
         public Visibility DirectoryListIconVisibility => IsDirectory ? Visibility.Visible : Visibility.Collapsed;
 
         private ImageSource? _directoryIcon;
@@ -221,7 +283,7 @@ namespace ModernImageViewer
         // Soft tint for the tile caption strip and list row pill so text and photos stay vibrant.
         public double SelectionWashOpacity => _isGridSelected ? 0.16 : 0;
         public double TileCaptionSelectionOpacity => _isGridSelected ? 0.16 : 0;
-        public double HoverCheckOpacity => (!_isGridSelected && _isPointerHovered && !IsDirectory) ? 1 : 0;
+        public double HoverCheckOpacity => (!_isGridSelected && _isPointerHovered && !IsDirectory && !IsComicEntry) ? 1 : 0;
         public double ListHoverOpacity => (!_isGridSelected && _isPointerHovered) ? 1 : 0;
 
         private bool _isLoadingThumb = false;
@@ -260,6 +322,11 @@ namespace ModernImageViewer
         private async Task InternalLoadExifAsync(CancellationToken token)
         {
             if (HasExifData || string.IsNullOrEmpty(Path)) return;
+            if (IsComicArchive || IsComicEntry)
+            {
+                HasExifData = true;
+                return;
+            }
             try
             {
                 var file = await StorageFile.GetFileFromPathAsync(Path).AsTask(token);
@@ -338,42 +405,46 @@ namespace ModernImageViewer
                 if (token.IsCancellationRequested) return;
 
                 ImageSource? newThumb = null;
+                bool isArchiveBacked = IsComicArchive || IsComicEntry;
 
-                try
+                if (!isArchiveBacked)
                 {
-                    var file = await StorageFile.GetFileFromPathAsync(Path).AsTask(token);
-                    using StorageItemThumbnail storageThumbnail = await file.GetThumbnailAsync(ThumbnailMode.PicturesView, 250, ThumbnailOptions.UseCurrentScale).AsTask(token);
-
-                    if (storageThumbnail != null && !token.IsCancellationRequested)
+                    try
                     {
-                        TaskCompletionSource<ImageSource?> tcs = new();
-                        using var registration = token.Register(() => tcs.TrySetCanceled());
-                        var clonedStream = storageThumbnail.CloneStream();
+                        var file = await StorageFile.GetFileFromPathAsync(Path).AsTask(token);
+                        using StorageItemThumbnail storageThumbnail = await file.GetThumbnailAsync(ThumbnailMode.PicturesView, 250, ThumbnailOptions.UseCurrentScale).AsTask(token);
 
-                        bool enqueued = Dispatcher.TryEnqueue(() =>
+                        if (storageThumbnail != null && !token.IsCancellationRequested)
                         {
-                            try
+                            TaskCompletionSource<ImageSource?> tcs = new();
+                            using var registration = token.Register(() => tcs.TrySetCanceled());
+                            var clonedStream = storageThumbnail.CloneStream();
+
+                            bool enqueued = Dispatcher.TryEnqueue(() =>
                             {
-                                BitmapImage bmp = new();
-                                var asyncOp = bmp.SetSourceAsync(clonedStream);
-                                asyncOp.Completed = (info, status) =>
+                                try
                                 {
-                                    tcs.TrySetResult(bmp);
-                                    clonedStream.Dispose();
-                                };
-                            }
-                            catch { tcs.TrySetResult(null); clonedStream.Dispose(); }
-                        });
+                                    BitmapImage bmp = new();
+                                    var asyncOp = bmp.SetSourceAsync(clonedStream);
+                                    asyncOp.Completed = (info, status) =>
+                                    {
+                                        tcs.TrySetResult(bmp);
+                                        clonedStream.Dispose();
+                                    };
+                                }
+                                catch { tcs.TrySetResult(null); clonedStream.Dispose(); }
+                            });
 
-                        if (!enqueued)
-                        {
-                            clonedStream.Dispose();
-                            tcs.TrySetResult(null);
+                            if (!enqueued)
+                            {
+                                clonedStream.Dispose();
+                                tcs.TrySetResult(null);
+                            }
+                            newThumb = await tcs.Task;
                         }
-                        newThumb = await tcs.Task;
                     }
+                    catch { }
                 }
-                catch { }
 
                 if (newThumb == null && !token.IsCancellationRequested)
                 {
@@ -384,8 +455,8 @@ namespace ModernImageViewer
                     {
                         try
                         {
-                            var file = await StorageFile.GetFileFromPathAsync(Path).AsTask(token);
-                            using var stream = await file.OpenReadAsync().AsTask(token);
+                            using var stream = await ViewerEngine.OpenImageStreamAsync(Path, token);
+                            if (stream == null) { tcs.TrySetResult(null); return; }
                             var decoder = await BitmapDecoder.CreateAsync(stream).AsTask(token);
                             if (token.IsCancellationRequested) { tcs.TrySetResult(null); return; }
 

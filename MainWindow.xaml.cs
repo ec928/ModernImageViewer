@@ -103,7 +103,7 @@ namespace ModernImageViewer
 
         private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
         {
-            ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".heic", ".heif", ".avif"
+            ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".heic", ".heif", ".avif", ".cbz", ".cbr"
         };
 
         private readonly string _settingsPath = Path.Combine(AppPaths.LocalDirectory, "settings.json");
@@ -207,6 +207,11 @@ namespace ModernImageViewer
                     ViewerControl.SetDetachLimitState((int)CurrentDetachLimit);
                     ViewerControl.GammaChanged += (_, gamma) => ApplyGamma(gamma);
                     ViewerControl.ZoomChanged += (_, _) => QueueSharperDecode();
+                    ViewerControl.BookSpreadChanged += (_, _) =>
+                    {
+                        if (ViewerControl.Visibility == Visibility.Visible && _currentIndex >= 0)
+                            LoadFullImage(_currentIndex);
+                    };
                 }
 
                 if (!string.IsNullOrEmpty(StartupFilePath) && File.Exists(StartupFilePath))
@@ -573,8 +578,9 @@ namespace ModernImageViewer
         }
         private void PlayCinematicFolder_Click(object sender, RoutedEventArgs e)
         {
-            if (Images.Count == 0) return;
-            OpenCinematic(Images.Select(img => img.Path).ToList(), 0);
+            var playable = Images.Where(img => !img.IsDirectory && !img.IsComicArchive && !img.IsComicEntry).Select(img => img.Path).ToList();
+            if (playable.Count == 0) return;
+            OpenCinematic(playable, 0);
         }
 
         private bool _strippingDirectorySelection;
@@ -587,7 +593,7 @@ namespace ModernImageViewer
             var directories = new List<ImageItem>();
             foreach (var item in e.AddedItems.OfType<ImageItem>())
             {
-                if (item.IsDirectory) directories.Add(item);
+                if (item.IsDirectory || item.IsComicEntry) directories.Add(item);
                 else item.IsGridSelected = true;
             }
             if (directories.Count > 0)
@@ -719,7 +725,7 @@ namespace ModernImageViewer
 
         private void ToggleGridItemSelection(ImageItem item)
         {
-            if (item.IsDirectory) return;
+            if (item.IsDirectory || item.IsComicEntry) return;
             if (ImageGrid.SelectedItems.Contains(item))
                 ImageGrid.SelectedItems.Remove(item);
             else
@@ -746,7 +752,7 @@ namespace ModernImageViewer
             var ptr = e.GetCurrentPoint((UIElement)sender);
             if (ptr.Properties.IsMiddleButtonPressed)
             {
-                if (sender is FrameworkElement el && el.DataContext is ImageItem imageItem && !imageItem.IsDirectory)
+                if (sender is FrameworkElement el && el.DataContext is ImageItem imageItem && !imageItem.IsDirectory && !imageItem.IsComicArchive)
                 {
                     LaunchDetachedWindow(imageItem);
                     e.Handled = true;

@@ -210,14 +210,22 @@ namespace ModernImageViewer
         public const uint DisplayMaxEdge = 4096;
         public const uint HighFidelityMaxEdge = 16384;
 
+        public static async Task<Windows.Storage.Streams.IRandomAccessStream?> OpenImageStreamAsync(string path, CancellationToken token = default)
+        {
+            if (ComicArchive.IsEntryPath(path) || ComicArchive.IsComicArchivePath(path))
+                return await ComicArchive.OpenEntryStreamAsync(path, token);
+            var file = await StorageFile.GetFileFromPathAsync(path).AsTask(token);
+            return await file.OpenReadAsync().AsTask(token);
+        }
+
         public static async Task<ImageCacheEntry?> DecodeFastPreviewAsync(string path, CancellationToken token = default)
         {
             return await Task.Run(async () =>
             {
                 try
                 {
-                    var file = await StorageFile.GetFileFromPathAsync(path).AsTask(token);
-                    using var stream = await file.OpenReadAsync().AsTask(token);
+                    using var stream = await OpenImageStreamAsync(path, token);
+                    if (stream == null) return null;
                     var decoder = await BitmapDecoder.CreateAsync(stream).AsTask(token);
 
                     if (token.IsCancellationRequested) return null;
@@ -281,8 +289,8 @@ namespace ModernImageViewer
             {
                 try
                 {
-                    var file = await StorageFile.GetFileFromPathAsync(path).AsTask(token);
-                    using var stream = await file.OpenReadAsync().AsTask(token);
+                    using var stream = await OpenImageStreamAsync(path, token);
+                    if (stream == null) return null;
                     var decoder = await BitmapDecoder.CreateAsync(stream).AsTask(token);
 
                     if (token.IsCancellationRequested) return null;
@@ -595,6 +603,7 @@ namespace ModernImageViewer
 
         public static async Task<bool> RenameImageAsync(ImageItem item, XamlRoot xamlRoot)
         {
+            if (item.IsComicEntry) { await ShowMessageAsync(xamlRoot, "Read-Only Comic Archive", "Pages inside a .cbz / .cbr comic archive are read-only."); return false; }
             var oldPath = item.Path;
             string dir = Path.GetDirectoryName(oldPath) ?? string.Empty;
             string ext = Path.GetExtension(oldPath);
@@ -629,6 +638,7 @@ namespace ModernImageViewer
 
         public static async Task<bool> DeleteImageAsync(ImageItem item, XamlRoot xamlRoot)
         {
+            if (item.IsComicEntry) { await ShowMessageAsync(xamlRoot, "Read-Only Comic Archive", "Pages inside a .cbz / .cbr comic archive are read-only."); return false; }
             var dialog = new ContentDialog { Title = "Delete", Content = "Move to Recycle Bin?", PrimaryButtonText = "Yes", SecondaryButtonText = "No", DefaultButton = ContentDialogButton.Primary, XamlRoot = xamlRoot };
             if (await dialog.ShowAsync() != ContentDialogResult.Primary) return false;
             string path = item.Path;

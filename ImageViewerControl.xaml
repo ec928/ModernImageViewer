@@ -83,6 +83,12 @@
                             <SymbolIcon Symbol="ZoomOut"/>
                         </MenuFlyoutItem.Icon>
                     </MenuFlyoutItem>
+                    <ToggleMenuFlyoutItem x:Name="BookSpreadMenuItem" Text="2-Page Comic Spread (B)" Click="ToggleBookSpread_Click">
+                        <ToggleMenuFlyoutItem.Icon>
+                            <FontIcon Glyph="&#xE736;"/>
+                        </ToggleMenuFlyoutItem.Icon>
+                    </ToggleMenuFlyoutItem>
+                    <ToggleMenuFlyoutItem x:Name="CoverPageSoloMenuItem" Text="Solo Front Cover in Spread" IsChecked="True" Click="ToggleCoverSolo_Click"/>
 
                     <MenuFlyoutSeparator/>
                     <MenuFlyoutItem Text="Fullscreen / Maximize (F11)" Click="ToggleFullscreen_Click">
@@ -114,7 +120,7 @@
                     </MenuFlyoutSubItem>
                     <MenuFlyoutSeparator/>
 
-                    <MenuFlyoutItem Text="Add to Collage" Click="AddToCollage_Click">
+                    <MenuFlyoutItem x:Name="AddToCollageMenuItem" Text="Add to Collage" Click="AddToCollage_Click">
                         <MenuFlyoutItem.Icon>
                             <SymbolIcon Symbol="Pictures"/>
                         </MenuFlyoutItem.Icon>
@@ -126,17 +132,17 @@
                     </MenuFlyoutItem>
                     <MenuFlyoutSeparator/>
 
-                    <MenuFlyoutItem Text="Edit Image" Click="EditImage_Click">
+                    <MenuFlyoutItem x:Name="EditImageMenuItem" Text="Edit Image" Click="EditImage_Click">
                         <MenuFlyoutItem.Icon>
                             <SymbolIcon Symbol="Edit"/>
                         </MenuFlyoutItem.Icon>
                     </MenuFlyoutItem>
-                    <MenuFlyoutItem Text="Rename" Click="RenameImage_Click">
+                    <MenuFlyoutItem x:Name="RenameImageMenuItem" Text="Rename" Click="RenameImage_Click">
                         <MenuFlyoutItem.Icon>
                             <SymbolIcon Symbol="Rename"/>
                         </MenuFlyoutItem.Icon>
                     </MenuFlyoutItem>
-                    <MenuFlyoutItem Text="Delete (Del)" Click="DeleteImage_Click">
+                    <MenuFlyoutItem x:Name="DeleteImageMenuItem" Text="Delete (Del)" Click="DeleteImage_Click">
                         <MenuFlyoutItem.Icon>
                             <SymbolIcon Symbol="Delete"/>
                         </MenuFlyoutItem.Icon>
@@ -211,6 +217,9 @@
                     <StackPanel Orientation="Horizontal" Spacing="2">
                         <Button x:Name="ZoomModeButton" Click="ToggleZoomMode_Click" Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Toggle Zoom Mode (Mouse Thumb Button)" Padding="6">
                             <FontIcon x:Name="ZoomModeIcon" Glyph="&#xE71E;"/>
+                        </Button>
+                        <Button x:Name="BookSpreadButton" Click="ToggleBookSpread_Click" Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Toggle 2-Page Comic Spread (B)" Padding="6">
+                            <FontIcon x:Name="BookSpreadIcon" Glyph="&#xE736;"/>
                         </Button>
                         <Button x:Name="MinimizeButton" Click="Minimize_Click" Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Minimize" Padding="6" Visibility="Collapsed">
                             <FontIcon Glyph="&#xE921;"/>
