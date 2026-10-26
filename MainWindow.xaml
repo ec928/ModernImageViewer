@@ -236,13 +236,16 @@
 
         <Grid x:Name="HoverTriggerZone" Grid.Row="1" Width="15" HorizontalAlignment="Left" Background="#01000000" PointerEntered="HoverZone_PointerEntered" Canvas.ZIndex="2000" />
 
-        <SplitView x:Name="SidebarView" Grid.Row="1" PanePlacement="Left" DisplayMode="Overlay" OpenPaneLength="300" PaneClosed="SidebarView_PaneClosed">
+        <SplitView x:Name="SidebarView" Grid.Row="1" PanePlacement="Left" DisplayMode="Overlay" OpenPaneLength="320" PaneBackground="Transparent" PaneClosed="SidebarView_PaneClosed">
             <SplitView.Pane>
-                <Grid x:Name="SidebarPane" Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}" BorderThickness="0,0,1,0" Translation="0,0,16" PointerExited="Sidebar_PointerExited">
-                    <Grid.Shadow>
-                        <ThemeShadow/>
-                    </Grid.Shadow>
-                    <Grid Padding="0,6,0,0">
+                <Grid x:Name="SidebarPane"
+                      Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}"
+                      BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}"
+                      BorderThickness="0,1,1,1"
+                      CornerRadius="0,10,10,0"
+                      Margin="0,8,0,8"
+                      PointerExited="Sidebar_PointerExited">
+                    <Grid Padding="0,6,0,6">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
@@ -250,7 +253,7 @@
                         </Grid.RowDefinitions>
 
                         <!-- === SINGLE ACTION BAR (Slideshow, Collage, Video Director) === -->
-                        <Grid Grid.Row="0" Margin="8,0,8,4">
+                        <Grid Grid.Row="0" Margin="8,2,8,6">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="42"/>
                                 <ColumnDefinition Width="42"/>
@@ -274,12 +277,12 @@
                             </Button>
                         </Grid>
 
-                        <BreadcrumbBar x:Name="FolderBreadcrumb" Grid.Row="1" Margin="10,0,8,2" ItemClicked="BreadcrumbBar_ItemClicked"/>
+                        <BreadcrumbBar x:Name="FolderBreadcrumb" Grid.Row="1" Margin="12,6,8,6" ItemClicked="BreadcrumbBar_ItemClicked"/>
 
-                        <TreeView Grid.Row="2" x:Name="FolderTreeView" ItemInvoked="FolderTreeView_ItemInvoked" SelectionMode="None" Margin="-8,0,0,4">
+                        <TreeView Grid.Row="2" x:Name="FolderTreeView" ItemInvoked="FolderTreeView_ItemInvoked" SelectionMode="None" Margin="-8,4,0,4">
                             <TreeView.ItemContainerStyle>
                                 <Style TargetType="TreeViewItem">
-                                    <Setter Property="MinHeight" Value="24"/>
+                                    <Setter Property="MinHeight" Value="28"/>
                                     <Setter Property="Padding" Value="0"/>
                                     <Setter Property="Margin" Value="0"/>
                                     <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
@@ -287,9 +290,9 @@
                             </TreeView.ItemContainerStyle>
                             <TreeView.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid Height="24" Margin="-4,0,-6,0" Padding="5,0,2,0" CornerRadius="4" Background="Transparent" Opacity="{Binding Content.NodeOpacity}">
+                                    <Grid Height="28" Margin="-4,0,-6,0" Padding="5,0,2,0" CornerRadius="4" Background="Transparent" Opacity="{Binding Content.NodeOpacity}">
                                         <Border IsHitTestVisible="False" Margin="-5,0,-2,0" CornerRadius="4" Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Visibility="{Binding Content.CurrentHighlightVisibility}"/>
-                                        <Border IsHitTestVisible="False" Width="3" Height="14" CornerRadius="1.5" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="-5,0,0,0" Background="{ThemeResource AccentFillColorDefaultBrush}" Visibility="{Binding Content.CurrentHighlightVisibility}"/>
+                                        <Border IsHitTestVisible="False" Width="3" Height="16" CornerRadius="1.5" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="-5,0,0,0" Background="{ThemeResource AccentFillColorDefaultBrush}" Visibility="{Binding Content.CurrentHighlightVisibility}"/>
                                         <Grid ColumnSpacing="6" VerticalAlignment="Center">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto"/>
@@ -320,7 +323,7 @@
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
-                    <Grid Grid.Row="1" Background="{ThemeResource LayerFillColorDefaultBrush}">
+                    <Grid x:Name="MainContentGrid" Grid.Row="1" Background="{ThemeResource LayerFillColorDefaultBrush}">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="*"/>
                             <RowDefinition Height="Auto"/>
@@ -458,18 +461,18 @@
                                             </Grid>
                                         </Grid>
                                     </Grid>
-                                    <Grid Visibility="{x:Bind ListVisibility, Mode=OneWay}" Height="22" Margin="2,1" Padding="5,0,4,0" CornerRadius="3" VerticalAlignment="Center" Background="Transparent" PointerEntered="ListRow_PointerEntered" PointerExited="ListRow_PointerExited" PointerPressed="Card_PointerPressed">
+                                    <Grid Visibility="{x:Bind ListVisibility, Mode=OneWay}" Height="24" Margin="2,1" Padding="5,0,4,0" CornerRadius="4" VerticalAlignment="Center" Background="Transparent" PointerEntered="ListRow_PointerEntered" PointerExited="ListRow_PointerExited" PointerPressed="Card_PointerPressed">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="20"/>
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
-                                        <Border Grid.ColumnSpan="2" IsHitTestVisible="False" Margin="-5,0,-4,0" CornerRadius="3"
+                                        <Border Grid.ColumnSpan="2" IsHitTestVisible="False" Margin="-5,0,-4,0" CornerRadius="4"
                                                 Background="{ThemeResource SubtleFillColorSecondaryBrush}"
                                                 Opacity="{x:Bind ListHoverOpacity, Mode=OneWay}"/>
-                                        <Border Grid.ColumnSpan="2" IsHitTestVisible="False" Margin="-5,0,-4,0" CornerRadius="3"
+                                        <Border Grid.ColumnSpan="2" IsHitTestVisible="False" Margin="-5,0,-4,0" CornerRadius="4"
                                                 Background="{ThemeResource AccentFillColorDefaultBrush}"
                                                 Opacity="{x:Bind SelectionWashOpacity, Mode=OneWay}"/>
-                                        <Border Grid.ColumnSpan="2" Width="3" Height="14" CornerRadius="1.5" HorizontalAlignment="Left" VerticalAlignment="Center" IsHitTestVisible="False" Margin="-5,0,0,0"
+                                        <Border Grid.ColumnSpan="2" Width="3" Height="15" CornerRadius="1.5" HorizontalAlignment="Left" VerticalAlignment="Center" IsHitTestVisible="False" Margin="-5,0,0,0"
                                                 Background="{ThemeResource AccentFillColorDefaultBrush}"
                                                 Opacity="{x:Bind SelectionOpacity, Mode=OneWay}"/>
                                         <Grid Width="20" Height="20" VerticalAlignment="Center">
@@ -485,7 +488,7 @@
                                             </Grid>
                                         </Grid>
                                         <TextBlock Grid.Column="1" Text="{x:Bind Name}" VerticalAlignment="Center" Margin="5,0,2,0" FontSize="12" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{x:Bind Name}"/>
-                                        <Border Grid.ColumnSpan="2" IsHitTestVisible="False" Margin="-5,0,-4,0" CornerRadius="3" BorderThickness="1.5" BorderBrush="{ThemeResource AccentFillColorDefaultBrush}" Opacity="{x:Bind KeyboardCursorOpacity, Mode=OneWay}"/>
+                                        <Border Grid.ColumnSpan="2" IsHitTestVisible="False" Margin="-5,0,-4,0" CornerRadius="4" BorderThickness="1.5" BorderBrush="{ThemeResource AccentFillColorDefaultBrush}" Opacity="{x:Bind KeyboardCursorOpacity, Mode=OneWay}"/>
                                     </Grid>
                                 </Grid>
                             </DataTemplate>

@@ -2046,7 +2046,7 @@ namespace ModernImageViewer
 
         private bool _listMode;
         private bool _applyingViewMode;
-        private const double ListRowHeight = 24;
+        private const double ListRowHeight = 26;
         private const double ListColumnWidth = 200;
         // Same wrap as the photos. Folders are only the first cells, and only while the list is showing.
         private readonly ObservableRangeCollection<ImageItem> _listEntries = [];
@@ -2637,7 +2637,7 @@ namespace ModernImageViewer
             if (s is FrameworkElement el)
             {
                 var p = e.GetCurrentPoint(el).Position;
-                if (p.X >= el.ActualWidth || p.X <= 0)
+                if (p.X >= el.ActualWidth || p.X <= 0 || p.Y < 0 || p.Y >= el.ActualHeight)
                 {
                     if (SidebarView != null) SidebarView.IsPaneOpen = false;
                 }
