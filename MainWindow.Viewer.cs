@@ -785,6 +785,38 @@ namespace ModernImageViewer
         private void MainWindow_Activated(object sender, WindowActivatedEventArgs args)
         {
             if (args.WindowActivationState == WindowActivationState.Deactivated) EndAltPeek();
+            else FocusGrid();
+        }
+
+        private void FocusGrid()
+        {
+            if (RootGrid == null) return;
+            if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible)
+            {
+                ViewerControl.Focus(FocusState.Programmatic);
+                return;
+            }
+            if (TileKeyFocusStays()) return;
+            if (SidebarView != null && SidebarView.IsPaneOpen && FocusIsInside(SidebarPane)) return;
+            RootGrid.Focus(FocusState.Programmatic);
+            DispatcherQueue?.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+            {
+                if (RootGrid == null) return;
+                if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible) return;
+                if (TileKeyFocusStays()) return;
+                if (SidebarView != null && SidebarView.IsPaneOpen && FocusIsInside(SidebarPane)) return;
+                RootGrid.Focus(FocusState.Programmatic);
+            });
+        }
+
+        private void HeaderFlyout_Closed(object sender, object e)
+        {
+            FocusGrid();
+        }
+
+        private void SidebarView_PaneClosed(SplitView sender, object args)
+        {
+            FocusGrid();
         }
 
         private ImageItem? _tileCursorItem;
@@ -1638,16 +1670,6 @@ namespace ModernImageViewer
         {
             if (TileKeyFocusStays()) return;
 
-            // A focused header button keeps Enter. Arrows stay off the grid so they do not select.
-            if (FocusIsInside(TileHeader))
-            {
-                if (e.Key != Windows.System.VirtualKey.Enter) e.Handled = true;
-                return;
-            }
-
-            // Enter on the location link opens Explorer. Arrows still move the list cursor.
-            if (e.Key == Windows.System.VirtualKey.Enter && FocusIsInside(ListPreviewBar)) return;
-
             if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible)
             {
                 if (e.Key == Windows.System.VirtualKey.Enter)
@@ -1668,6 +1690,11 @@ namespace ModernImageViewer
             {
                 e.Handled = true;
                 return;
+            }
+
+            if (FocusIsInside(TileHeader) || FocusIsInside(ListPreviewBar))
+            {
+                RootGrid.Focus(FocusState.Programmatic);
             }
 
             if (e.Key == Windows.System.VirtualKey.Enter) OpenCursorTile();
@@ -1704,6 +1731,15 @@ namespace ModernImageViewer
             if (e.Key == Windows.System.VirtualKey.F11)
             {
                 ToggleFullscreen();
+                e.Handled = true;
+                return;
+            }
+
+            bool isCtrlDown = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+            if (isCtrlDown && (e.Key == Windows.System.VirtualKey.Number1 || e.Key == Windows.System.VirtualKey.Number2 || e.Key == Windows.System.VirtualKey.Number3))
+            {
+                int slot = (int)e.Key - (int)Windows.System.VirtualKey.Number1;
+                ApplyPresetSlot(slot);
                 e.Handled = true;
                 return;
             }
@@ -1839,6 +1875,7 @@ namespace ModernImageViewer
             if (SidebarView == null) return;
             _altPeekOpenedSidebar = false;
             SidebarView.IsPaneOpen = !SidebarView.IsPaneOpen;
+            if (!SidebarView.IsPaneOpen) FocusGrid();
         }
 
         private void UpdateHeaderFolderInfo()
@@ -1994,6 +2031,7 @@ namespace ModernImageViewer
             {
                 Debug.WriteLine($"[OpenCurrentDirectory] {ex.Message}");
             }
+            FocusGrid();
         }
 
         private void ApplyCaptionInset()
@@ -2055,6 +2093,7 @@ namespace ModernImageViewer
             TilesModeButton.Background = !_listMode ? activeBg : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
             ListModeButton.Background = _listMode ? activeBg : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
             if (TilesModeIcon != null) TilesModeIcon.Foreground = !_listMode ? activeFg : inactiveFg;
+            if (ListModeIcon != null) ListModeIcon.Foreground = _listMode ? activeFg : inactiveFg;
             if (ListModeIcon != null) ListModeIcon.Foreground = _listMode ? activeFg : inactiveFg;
         }
 
@@ -2224,11 +2263,214 @@ namespace ModernImageViewer
             ApplyCaptionInset();
         }
 
+        private bool _presetSaveMode;
+
+        private void HeaderSettingsFlyout_Opening(object sender, object e)
+        {
+            _presetSaveMode = false;
+            SyncPresetButtons();
+        }
+
+        private void PresetSaveMode_Click(object sender, RoutedEventArgs e)
+        {
+            _presetSaveMode = !_presetSaveMode;
+            SyncPresetButtons();
+        }
+
+        private void PresetSlot_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not FrameworkElement el || el.Tag is not string tagStr || !int.TryParse(tagStr, out int slot))
+                return;
+            while (_currentSettings.WindowPresets.Count < 3)
+                _currentSettings.WindowPresets.Add(null);
+
+            bool isCtrl = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+            if (_presetSaveMode || isCtrl || _currentSettings.WindowPresets[slot] == null)
+            {
+                SavePresetSlot(slot);
+            }
+            else
+            {
+                HeaderSettingsFlyout?.Hide();
+                ApplyPresetSlot(slot);
+            }
+        }
+
+        private void PresetSlot_RightTapped(object sender, RightTappedRoutedEventArgs e)
+        {
+            if (sender is not FrameworkElement el || el.Tag is not string tagStr || !int.TryParse(tagStr, out int slot))
+                return;
+            SavePresetSlot(slot);
+            e.Handled = true;
+        }
+
+        private void SavePresetSlot(int slot)
+        {
+            if (_appWindow == null || slot < 0 || slot >= 3) return;
+            while (_currentSettings.WindowPresets.Count < 3)
+                _currentSettings.WindowPresets.Add(null);
+
+            double tileSize = ThumbSizeSlider != null ? Math.Round(ThumbSizeSlider.Value) : _currentSettings.TileSize;
+            _currentSettings.WindowPresets[slot] = new WindowPreset
+            {
+                WindowWidth = _appWindow.Size.Width,
+                WindowHeight = _appWindow.Size.Height,
+                WindowX = _appWindow.Position.X,
+                WindowY = _appWindow.Position.Y,
+                TileSize = tileSize
+            };
+            _presetSaveMode = false;
+            SaveAllSettings();
+            SyncPresetButtons();
+        }
+
+        private void ApplyPresetSlot(int slot)
+        {
+            while (_currentSettings.WindowPresets.Count < 3)
+                _currentSettings.WindowPresets.Add(null);
+            if (slot < 0 || slot >= 3) return;
+            var preset = _currentSettings.WindowPresets[slot];
+            if (preset == null || preset.WindowWidth < 300 || preset.WindowHeight < 300) return;
+
+            if (_isFullscreen)
+                ToggleFullscreen();
+
+            if (_appWindow != null)
+            {
+                if (_appWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter p && p.State == Microsoft.UI.Windowing.OverlappedPresenterState.Maximized)
+                    p.Restore();
+
+                int w = preset.WindowWidth;
+                int h = preset.WindowHeight;
+                int x = preset.WindowX;
+                int y = preset.WindowY;
+
+                try
+                {
+                    var displayArea = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(_appWindow.Id, Microsoft.UI.Windowing.DisplayAreaFallback.Primary);
+                    var work = displayArea.WorkArea;
+                    w = Math.Min(w, work.Width);
+                    h = Math.Min(h, work.Height);
+                    if (x != -1 && y != -1)
+                    {
+                        x = Math.Clamp(x, work.X, Math.Max(work.X, work.X + work.Width - w));
+                        y = Math.Clamp(y, work.Y, Math.Max(work.Y, work.Y + work.Height - h));
+                    }
+                }
+                catch { }
+
+                _appWindow.Resize(new Windows.Graphics.SizeInt32(w, h));
+                if (x != -1 && y != -1)
+                    _appWindow.Move(new Windows.Graphics.PointInt32(x, y));
+            }
+
+            if (preset.TileSize >= 100 && preset.TileSize <= 400)
+            {
+                _currentSettings.TileSize = preset.TileSize;
+                if (ThumbSizeSlider != null) ThumbSizeSlider.Value = preset.TileSize;
+                if (!_listMode && _imageWrapGrid != null)
+                    _imageWrapGrid.ItemWidth = _imageWrapGrid.ItemHeight = preset.TileSize;
+            }
+
+            SaveAllSettings();
+            SyncPresetButtons();
+            FocusGrid();
+        }
+
+        private void SyncPresetButtons()
+        {
+            if (Preset1Button == null || Preset2Button == null || Preset3Button == null) return;
+            while (_currentSettings.WindowPresets.Count < 3)
+                _currentSettings.WindowPresets.Add(null);
+
+            var activeBg = Application.Current.Resources.TryGetValue("CardBackgroundFillColorDefaultBrush", out object cardBg) && cardBg is Brush cb
+                ? cb
+                : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            var activeFg = Application.Current.Resources.TryGetValue("AccentTextFillColorPrimaryBrush", out object accFg) && accFg is Brush af
+                ? af
+                : new SolidColorBrush(Microsoft.UI.Colors.White);
+            var primaryFg = Application.Current.Resources.TryGetValue("TextFillColorPrimaryBrush", out object priFg) && priFg is Brush pf
+                ? pf
+                : new SolidColorBrush(Microsoft.UI.Colors.White);
+            var secondaryFg = Application.Current.Resources.TryGetValue("TextFillColorSecondaryBrush", out object secFg) && secFg is Brush sf
+                ? sf
+                : new SolidColorBrush(Microsoft.UI.Colors.Gray);
+            var tertiaryFg = Application.Current.Resources.TryGetValue("TextFillColorTertiaryBrush", out object terFg) && terFg is Brush tf
+                ? tf
+                : secondaryFg;
+
+            if (PresetSaveModeButton != null && PresetSaveModeIcon != null)
+            {
+                PresetSaveModeButton.Background = _presetSaveMode ? activeBg : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+                PresetSaveModeIcon.Foreground = _presetSaveMode ? activeFg : secondaryFg;
+                ToolTipService.SetToolTip(PresetSaveModeButton, _presetSaveMode
+                    ? "Select slot 1, 2, or 3 to save current window & tile size (Click again to cancel)"
+                    : "Save Current Window & Tile Size to a Preset Slot");
+            }
+
+            Button[] buttons = [Preset1Button, Preset2Button, Preset3Button];
+            TextBlock?[] texts = [Preset1Text, Preset2Text, Preset3Text];
+            Microsoft.UI.Xaml.Shapes.Ellipse?[] dots = [Preset1Dot, Preset2Dot, Preset3Dot];
+
+            int curW = _appWindow?.Size.Width ?? 0;
+            int curH = _appWindow?.Size.Height ?? 0;
+            double curTile = ThumbSizeSlider != null ? ThumbSizeSlider.Value : _currentSettings.TileSize;
+
+            for (int i = 0; i < 3; i++)
+            {
+                var preset = _currentSettings.WindowPresets[i];
+                bool hasPreset = preset != null && preset.WindowWidth >= 300 && preset.WindowHeight >= 300;
+                bool isActive = hasPreset && !_presetSaveMode
+                    && Math.Abs(curW - preset!.WindowWidth) <= 8
+                    && Math.Abs(curH - preset.WindowHeight) <= 8
+                    && Math.Abs(curTile - preset.TileSize) <= 2;
+
+                var btn = buttons[i];
+                var txt = texts[i];
+                var dot = dots[i];
+
+                if (_presetSaveMode)
+                {
+                    btn.Background = activeBg;
+                    if (txt != null)
+                    {
+                        txt.Text = $"💾{i + 1}";
+                        txt.Foreground = activeFg;
+                        txt.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
+                    }
+                    if (dot != null) dot.Visibility = Visibility.Collapsed;
+                    ToolTipService.SetToolTip(btn, hasPreset
+                        ? $"Overwrite Preset {i + 1} (currently {preset!.WindowWidth}×{preset.WindowHeight}, Tile {(int)Math.Round(preset.TileSize)}px)"
+                        : $"Save current window & tile size to Preset {i + 1}");
+                }
+                else
+                {
+                    btn.Background = isActive ? activeBg : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+                    if (txt != null)
+                    {
+                        txt.Text = $"{i + 1}";
+                        txt.Foreground = isActive ? activeFg : (hasPreset ? primaryFg : tertiaryFg);
+                        txt.FontWeight = hasPreset ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal;
+                    }
+                    if (dot != null)
+                    {
+                        dot.Visibility = hasPreset ? Visibility.Visible : Visibility.Collapsed;
+                        dot.Opacity = isActive ? 1.0 : 0.65;
+                    }
+                    ToolTipService.SetToolTip(btn, hasPreset
+                        ? $"Preset {i + 1}: {preset!.WindowWidth}×{preset.WindowHeight}, Tile {(int)Math.Round(preset.TileSize)}px (Ctrl+{i + 1})\nClick to apply • Right-click or Save icon to overwrite"
+                        : $"Preset {i + 1} (Empty)\nClick to save current window & tile size");
+                }
+            }
+        }
+
         private void ResetWindow_Click(object s, RoutedEventArgs e)
         {
+            HeaderSettingsFlyout?.Hide();
             ConfigureWindow(true);
             if (ThumbSizeSlider != null) ThumbSizeSlider.Value = 164;
             SaveAllSettings();
+            FocusGrid();
         }
 
         private void ImageGrid_ItemClick(object s, ItemClickEventArgs e)
@@ -2283,6 +2525,10 @@ namespace ModernImageViewer
         {
             if (!_listMode && _imageWrapGrid != null)
                 _imageWrapGrid.ItemWidth = _imageWrapGrid.ItemHeight = e.NewValue;
+            if (_currentSettings != null)
+                _currentSettings.TileSize = Math.Round(e.NewValue);
+            if (HeaderSettingsFlyout != null && HeaderSettingsFlyout.IsOpen)
+                SyncPresetButtons();
         }
 
         private void HoverZone_PointerEntered(object s, PointerRoutedEventArgs e)
@@ -2296,7 +2542,7 @@ namespace ModernImageViewer
             if (s is FrameworkElement el)
             {
                 var p = e.GetCurrentPoint(el).Position;
-                if (p.X >= el.ActualWidth - 10 || p.X <= 10)
+                if (p.X >= el.ActualWidth || p.X <= 0)
                 {
                     if (SidebarView != null) SidebarView.IsPaneOpen = false;
                 }
@@ -2541,6 +2787,7 @@ namespace ModernImageViewer
                 if (_folderWatcher != null && watcherWasEnabled)
                     _folderWatcher.EnableRaisingEvents = true;
             }
+            FocusGrid();
         }
 
         private async Task DeleteGridItemAsync(ImageItem item)
@@ -2565,6 +2812,7 @@ namespace ModernImageViewer
                 if (_folderWatcher != null && watcherWasEnabled)
                     _folderWatcher.EnableRaisingEvents = true;
             }
+            FocusGrid();
         }
 
         private void ClosePreview_Click(object? s, RoutedEventArgs? e) => ClosePreviewInternal();

@@ -1,3 +1,4 @@
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System;
 using System.Diagnostics;
@@ -32,18 +33,19 @@ namespace ModernImageViewer
             return v == null ? "unknown" : $"{v.Major}.{v.Minor}.{v.Build}";
         }
 
-        // args.Cancel keeps the dialog open: following a link is not a reason to dismiss
-        // the About box, and closing it would hide the version the user may be copying.
-        private void ReportButton_Click(ContentDialog sender, ContentDialogButtonClickEventArgs args)
+        private void ReportButton_Click(object sender, RoutedEventArgs e)
         {
-            args.Cancel = true;
             OpenUrl(NewIssueUrl);
         }
 
-        private void ProjectButton_Click(ContentDialog sender, ContentDialogButtonClickEventArgs args)
+        private void ProjectButton_Click(object sender, RoutedEventArgs e)
         {
-            args.Cancel = true;
             OpenUrl(RepositoryUrl);
+        }
+
+        private void CloseButton_Click(object sender, RoutedEventArgs e)
+        {
+            this.Hide();
         }
 
         private static void OpenUrl(string url)

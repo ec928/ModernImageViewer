@@ -232,6 +232,7 @@ namespace ModernImageViewer
         /// </summary>
         private async void About_Click(object sender, RoutedEventArgs e)
         {
+            HeaderSettingsFlyout?.Hide();
             try
             {
                 var dialog = new AboutDialog
@@ -247,6 +248,7 @@ namespace ModernImageViewer
                 // App_UnhandledException sets Handled = false, so this must not escape.
                 Debug.WriteLine($"[About] Could not show dialog: {ex.Message}");
             }
+            FocusGrid();
         }
 
         public void RegisterDetachedWindow(string path)
@@ -278,6 +280,15 @@ namespace ModernImageViewer
             SaveAllSettings();
         }
 
+        private sealed class WindowPreset
+        {
+            public int WindowWidth { get; set; }
+            public int WindowHeight { get; set; }
+            public int WindowX { get; set; } = -1;
+            public int WindowY { get; set; } = -1;
+            public double TileSize { get; set; } = 164;
+        }
+
         private sealed class AppSettings
         {
             public int Version { get; set; } = 1;
@@ -294,6 +305,8 @@ namespace ModernImageViewer
             public string VideoDirectorPath { get; set; } = string.Empty;
             public string SortOrder { get; set; } = "NameAsc";
             public bool ListMode { get; set; }
+            public double TileSize { get; set; } = 164;
+            public List<WindowPreset?> WindowPresets { get; set; } = new() { null, null, null };
             public List<string> RecentFolders { get; set; } = new();
         }
 
@@ -368,6 +381,11 @@ namespace ModernImageViewer
             }
 
             _currentSettings = settings;
+            while (_currentSettings.WindowPresets.Count < 3)
+                _currentSettings.WindowPresets.Add(null);
+            if (forceReset) _currentSettings.TileSize = 164;
+            else if (_currentSettings.TileSize < 100 || _currentSettings.TileSize > 400) _currentSettings.TileSize = 164;
+            if (ThumbSizeSlider != null) ThumbSizeSlider.Value = _currentSettings.TileSize;
             bool viewChanged = _listMode != settings.ListMode;
             _listMode = settings.ListMode;
             ImageItem.ListRows = _listMode;
@@ -562,6 +580,7 @@ namespace ModernImageViewer
                 _currentSettings.ImageEditorPath = ImageEditorPath;
                 _currentSettings.SortOrder = _currentSettings.SortOrder; // Will be updated when sorting, just to keep it
                 _currentSettings.RecentFolders = new List<string>(_recentFolders);
+                if (ThumbSizeSlider != null) _currentSettings.TileSize = Math.Round(ThumbSizeSlider.Value);
 
                 string json = System.Text.Json.JsonSerializer.Serialize(_currentSettings, new System.Text.Json.JsonSerializerOptions
                 {
@@ -716,11 +735,13 @@ namespace ModernImageViewer
                         _folderWatcher.EnableRaisingEvents = true;
                 }
             }
+            FocusGrid();
         }
 
         private void MultiSelectClear_Click(object sender, RoutedEventArgs e)
         {
             ImageGrid.SelectedItems.Clear();
+            FocusGrid();
         }
 
         private void ToggleGridItemSelection(ImageItem item)

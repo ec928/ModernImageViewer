@@ -6,13 +6,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
-    Title="About Modern Image Viewer"
-    PrimaryButtonText="Report a problem"
-    SecondaryButtonText="View on GitHub"
-    CloseButtonText="Close"
-    DefaultButton="Close"
-    PrimaryButtonClick="ReportButton_Click"
-    SecondaryButtonClick="ProjectButton_Click">
+    Title="About Modern Image Viewer">
 
     <ContentDialog.Resources>
         <Style x:Key="AboutSectionHeader" TargetType="TextBlock">
@@ -29,81 +23,93 @@
         </Style>
     </ContentDialog.Resources>
 
-    <!-- IsTabStop=False and TabNavigation=Once keep the dialog from focusing something
-         deep in this list on open, which scrolled it to the bottom and hid the brand. -->
-    <ScrollViewer x:Name="BodyScroller"
-                  VerticalScrollBarVisibility="Auto"
-                  MaxHeight="400" IsTabStop="False">
-        <StackPanel Width="430" Spacing="0">
+    <Grid Width="440" RowSpacing="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
 
-            <!-- Brand -->
-            <TextBlock Text="Modern Image Viewer"
-                       FontSize="26" FontWeight="SemiBold"
-                       Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+        <!-- IsTabStop=False keeps the dialog from focusing something deep in this list on open. -->
+        <ScrollViewer x:Name="BodyScroller"
+                      Grid.Row="0"
+                      VerticalScrollBarVisibility="Auto"
+                      MaxHeight="380" IsTabStop="False">
+            <StackPanel Spacing="0" Padding="0,0,12,0">
 
-            <!-- Filled at runtime from the assembly version, never hardcoded: a stale
-                 number here would be a lie the moment the version is bumped. -->
-            <TextBlock x:Name="VersionText"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                       Margin="0,2,0,0"/>
+                <!-- Brand -->
+                <TextBlock Text="Modern Image Viewer"
+                           FontSize="26" FontWeight="SemiBold"
+                           Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
 
-            <TextBlock Text="A hardware-accelerated image viewer for large folders of high-resolution images. Tear any image off into its own window, build a collage, or run a cinematic slideshow with Ken Burns moves you can direct."
-                       TextWrapping="Wrap" Margin="0,10,0,0"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                <!-- Filled at runtime from the assembly version, never hardcoded: a stale
+                     number here would be a lie the moment the version is bumped. -->
+                <TextBlock x:Name="VersionText"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           Margin="0,2,0,0"/>
 
-            <TextBlock Text="VIEWING" Style="{StaticResource AboutSectionHeader}"/>
-            <TextBlock Style="{StaticResource AboutBullet}">
-                <Run Text="•  "/><Run Text="Tear-off viewports" FontWeight="SemiBold"/><Run Text=" — detach any image into its own borderless window for a second monitor or as a reference overlay."/>
-            </TextBlock>
-            <TextBlock Style="{StaticResource AboutBullet}">
-                <Run Text="•  GPU rendering through Win2D (Direct2D), with zoom, pan, rotation and gamma applied on the graphics card."/>
-            </TextBlock>
-            <TextBlock Style="{StaticResource AboutBullet}">
-                <Run Text="•  Animated GIFs play with correct frame offsets and disposal, not just the first frame."/>
-            </TextBlock>
+                <TextBlock Text="A fast, hardware-accelerated image and comic book viewer built with WinUI 3 and Win2D. Browse large high-resolution folders in Tile or List mode, read CBR and CBZ comics with automatic two-page spreads, tear images off into floating reference windows, or direct a cinematic Ken Burns slideshow."
+                           TextWrapping="Wrap" Margin="0,10,0,0"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
 
-            <TextBlock Text="CINEMATIC AND COLLAGE (BETA)" Style="{StaticResource AboutSectionHeader}"/>
-            <TextBlock Style="{StaticResource AboutBullet}">
-                <Run Text="•  "/><Run Text="Cinematic slideshow" FontWeight="SemiBold"/><Run Text=" — press Play and the camera picks a Ken Burns move per image, framing on faces and detail, with crossfades between slides."/>
-            </TextBlock>
-            <TextBlock Style="{StaticResource AboutBullet}">
-                <Run Text="•  Direct the show yourself: set the start and end frames of a Ken Burns move, change its curve and how long that slide holds, then reorder, hide or duplicate slides."/>
-            </TextBlock>
-            <TextBlock Style="{StaticResource AboutBullet}">
-                <Run Text="•  Save a show and reload it later. Video Director, the companion app this one can launch, covers multi-track editing and MP4 export."/>
-            </TextBlock>
-            <TextBlock Style="{StaticResource AboutBullet}">
-                <Run Text="•  Collage editor for arranging, rotating and exporting a composition at native resolution."/>
-            </TextBlock>
-            <TextBlock Style="{StaticResource AboutBullet}">
-                <Run Text="•  Both are still being hardened. Save often."/>
-            </TextBlock>
+                <TextBlock Text="VIEWING AND LAYOUT" Style="{StaticResource AboutSectionHeader}"/>
+                <TextBlock Style="{StaticResource AboutBullet}">
+                    <Run Text="•  "/><Run Text="Tile &amp; List View modes" FontWeight="SemiBold"/><Run Text=" — switch between resizable thumbnail grids and high-density multi-column lists with a live metadata and image preview bar."/>
+                </TextBlock>
+                <TextBlock Style="{StaticResource AboutBullet}">
+                    <Run Text="•  "/><Run Text="Window &amp; Tile Size presets" FontWeight="SemiBold"/><Run Text=" — save up to three window and tile size states (Ctrl+1, Ctrl+2, Ctrl+3) to jump between compact browsing and wide two-page layouts."/>
+                </TextBlock>
+                <TextBlock Style="{StaticResource AboutBullet}">
+                    <Run Text="•  "/><Run Text="Tear-off viewports" FontWeight="SemiBold"/><Run Text=" — middle-click or drag any image out into its own borderless floating window for multi-monitor reference overlays."/>
+                </TextBlock>
+                <TextBlock Style="{StaticResource AboutBullet}">
+                    <Run Text="•  "/><Run Text="Direct2D GPU rendering" FontWeight="SemiBold"/><Run Text=" — smooth zoom, pan, rotation, ICC color profiles, real-time gamma adjustment, and full multi-frame animated GIF playback."/>
+                </TextBlock>
 
-            <TextBlock Text="LARGE FOLDERS" Style="{StaticResource AboutSectionHeader}"/>
-            <TextBlock Style="{StaticResource AboutBullet}">
-                <Run Text="•  Tiered decoding — thumbnail, fast preview, display and high fidelity — so thousands of 10 MB+ images browse without stalling or growing without bound."/>
-            </TextBlock>
-            <TextBlock Style="{StaticResource AboutBullet}">
-                <Run Text="•  Images ahead of and behind you are decoded in advance and released once you move away."/>
-            </TextBlock>
-            <TextBlock Style="{StaticResource AboutBullet}">
-                <Run Text="•  The grid follows changes on disk, and rename and delete (to the Recycle Bin) work in place."/>
-            </TextBlock>
+                <TextBlock Text="COMIC BOOK READER (CBR / CBZ)" Style="{StaticResource AboutSectionHeader}"/>
+                <TextBlock Style="{StaticResource AboutBullet}">
+                    <Run Text="•  "/><Run Text="Native archive browsing" FontWeight="SemiBold"/><Run Text=" — open .cbz (ZIP) and .cbr (RAR) comic archives directly like folders without extracting files to disk."/>
+                </TextBlock>
+                <TextBlock Style="{StaticResource AboutBullet}">
+                    <Run Text="•  "/><Run Text="Responsive two-page spread" FontWeight="SemiBold"/><Run Text=" — automatically displays side-by-side double-page spreads when the window is stretched wide enough (toggle anytime with B), while keeping covers and wide landscapes on a single page."/>
+                </TextBlock>
 
-            <TextBlock Text="FORMATS AND STORAGE" Style="{StaticResource AboutSectionHeader}"/>
-            <TextBlock Style="{StaticResource AboutBullet}">
-                <Run Text="•  JPEG, PNG, GIF, BMP, TIFF and WebP out of the box. HEIC/HEIF and AVIF need the matching Windows codecs; without them the viewer says so rather than showing a blank canvas."/>
-            </TextBlock>
-            <TextBlock Style="{StaticResource AboutBullet}">
-                <Run Text="•  Portable: no installer and no registry changes. Settings live in your local app data folder."/>
-            </TextBlock>
+                <TextBlock Text="CINEMATIC AND COLLAGE (BETA)" Style="{StaticResource AboutSectionHeader}"/>
+                <TextBlock Style="{StaticResource AboutBullet}">
+                    <Run Text="•  "/><Run Text="Cinematic slideshow" FontWeight="SemiBold"/><Run Text=" — press Play for automated Ken Burns camera moves with smart subject framing and smooth crossfades between slides."/>
+                </TextBlock>
+                <TextBlock Style="{StaticResource AboutBullet}">
+                    <Run Text="•  "/><Run Text="Custom direction &amp; Video Director" FontWeight="SemiBold"/><Run Text=" — customize start/end frames, easing curves, and slide timing, or launch Video Director for multi-track editing and MP4 export."/>
+                </TextBlock>
+                <TextBlock Style="{StaticResource AboutBullet}">
+                    <Run Text="•  "/><Run Text="Collage editor" FontWeight="SemiBold"/><Run Text=" — arrange, rotate, and export multi-image compositions at native resolution."/>
+                </TextBlock>
 
-            <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,20,0,14"/>
+                <TextBlock Text="PERFORMANCE AND FORMATS" Style="{StaticResource AboutSectionHeader}"/>
+                <TextBlock Style="{StaticResource AboutBullet}">
+                    <Run Text="•  "/><Run Text="Tiered async decoding" FontWeight="SemiBold"/><Run Text=" — thumbnail, fast preview, display, and high-fidelity stages with predictive lookahead caching keep 10 MB+ image libraries responsive and memory-bounded."/>
+                </TextBlock>
+                <TextBlock Style="{StaticResource AboutBullet}">
+                    <Run Text="•  "/><Run Text="Formats &amp; portability" FontWeight="SemiBold"/><Run Text=" — JPEG, PNG, GIF, BMP, TIFF, WebP, CBZ, and CBR out of the box (plus HEIC/HEIF and AVIF via Windows codecs). Portable with no registry changes; settings live in your local app data folder."/>
+                </TextBlock>
 
-            <TextBlock TextWrapping="Wrap" FontSize="12"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}">
-                <Run Text="Free and open source under the MIT licence. Unsigned build, so Windows SmartScreen may warn on first launch."/>
-            </TextBlock>
-        </StackPanel>
-    </ScrollViewer>
+                <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,20,0,14"/>
+
+                <TextBlock TextWrapping="Wrap" FontSize="12"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}">
+                    <Run Text="Free and open source under the MIT licence. Unsigned build, so Windows SmartScreen may warn on first launch."/>
+                </TextBlock>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Grid Grid.Row="1" ColumnSpacing="10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0" Content="Report a problem" HorizontalAlignment="Stretch" Click="ReportButton_Click"/>
+            <Button Grid.Column="1" Content="View on GitHub" HorizontalAlignment="Stretch" Click="ProjectButton_Click"/>
+            <Button Grid.Column="2" Content="Close" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch" Click="CloseButton_Click"/>
+        </Grid>
+    </Grid>
 </ContentDialog>

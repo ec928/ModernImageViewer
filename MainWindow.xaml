@@ -10,140 +10,17 @@
           AllowDrop="True" DragOver="RootGrid_DragOver" Drop="RootGrid_Drop"
           PreviewKeyDown="RootGrid_PreviewKeyDown">
 
-        <Grid x:Name="DragZone" Height="45" VerticalAlignment="Top" HorizontalAlignment="Stretch" Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}" Opacity="0" Canvas.ZIndex="1000">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Grid x:Name="DragZone" Grid.RowSpan="2" Height="45" VerticalAlignment="Top" HorizontalAlignment="Stretch" Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}" Opacity="0" Canvas.ZIndex="1000">
             <Grid.OpacityTransition>
                 <ScalarTransition Duration="0:0:0.25"/>
             </Grid.OpacityTransition>
             <Rectangle Width="40" Height="4" RadiusX="2" RadiusY="2" Fill="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Center" Opacity="0.4" IsHitTestVisible="False"/>
         </Grid>
-
-        <Grid x:Name="HoverTriggerZone" Width="15" HorizontalAlignment="Left" Background="#01000000" PointerEntered="HoverZone_PointerEntered" Canvas.ZIndex="2000" />
-
-        <SplitView x:Name="SidebarView" PanePlacement="Left" DisplayMode="Overlay" OpenPaneLength="360">
-            <SplitView.Pane>
-                <Grid x:Name="SidebarPane" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" PointerExited="Sidebar_PointerExited">
-                    <Grid Padding="10,38,10,0">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
-                        </Grid.RowDefinitions>
-
-                        <!-- === BUTTON ROW (5 buttons) === -->
-                        <Grid Grid.Row="0" Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-
-                            <Button Click="BrowseButton_Click" HorizontalAlignment="Stretch" Margin="3" ToolTipService.ToolTip="Browse Folders">
-                                <SymbolIcon Symbol="Folder"/>
-                            </Button>
-
-                            <Button Grid.Column="1" HorizontalAlignment="Stretch" Margin="3" ToolTipService.ToolTip="Recent Folders">
-                                <SymbolIcon Symbol="Library"/>
-                                <Button.Flyout>
-                                    <MenuFlyout x:Name="RecentFoldersMenu" Opening="RecentFoldersMenu_Opening" />
-                                </Button.Flyout>
-                                <Button.ContextFlyout>
-                                    <MenuFlyout>
-                                        <MenuFlyoutItem Text="Clear Recent Folders" Click="ClearRecentFolders_Click">
-                                            <MenuFlyoutItem.Icon>
-                                                <SymbolIcon Symbol="Delete"/>
-                                            </MenuFlyoutItem.Icon>
-                                        </MenuFlyoutItem>
-                                    </MenuFlyout>
-                                </Button.ContextFlyout>
-                            </Button>
-
-                            <Button Grid.Column="2" HorizontalAlignment="Stretch" Margin="3" ToolTipService.ToolTip="Sort Images">
-                                <SymbolIcon Symbol="Sort"/>
-                                <Button.Flyout>
-                                    <MenuFlyout>
-                                        <RadioMenuFlyoutItem x:Name="SortNameAscItem" Text="Name (A-Z)" Click="Sort_Click" Tag="NameAsc" GroupName="SortGroup"/>
-                                        <RadioMenuFlyoutItem x:Name="SortNameDescItem" Text="Name (Z-A)" Click="Sort_Click" Tag="NameDesc" GroupName="SortGroup"/>
-                                        <MenuFlyoutSeparator/>
-                                        <RadioMenuFlyoutItem x:Name="SortDateDescItem" Text="Date (Newest First)" Click="Sort_Click" Tag="DateDesc" GroupName="SortGroup"/>
-                                        <RadioMenuFlyoutItem x:Name="SortDateAscItem" Text="Date (Oldest First)" Click="Sort_Click" Tag="DateAsc" GroupName="SortGroup"/>
-                                    </MenuFlyout>
-                                </Button.Flyout>
-                            </Button>
-
-                            <Button Grid.Column="3" Click="PlayCinematicFolder_Click" HorizontalAlignment="Stretch" Margin="3" ToolTipService.ToolTip="Play Cinematic Slideshow">
-                                <SymbolIcon Symbol="Play"/>
-                            </Button>
-
-                            <Button Grid.Column="4" Click="TestCollage_Click" HorizontalAlignment="Stretch" Margin="3" ToolTipService.ToolTip="Open Collage Editor">
-                                <SymbolIcon Symbol="Pictures"/>
-                            </Button>
-                        </Grid>
-
-                        <Grid Grid.Row="1" Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <Button Click="OpenDirector_Click" HorizontalAlignment="Stretch" Margin="3" ToolTipService.ToolTip="Open Video Director">
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <SymbolIcon Symbol="Video"/>
-                                    <TextBlock Text="Video Director"/>
-                                </StackPanel>
-                            </Button>
-                            <Button Grid.Column="1" Click="About_Click" Margin="3"
-                                    AutomationProperties.Name="About"
-                                    ToolTipService.ToolTip="About Modern Image Viewer">
-                                <FontIcon Glyph="&#xE946;" FontSize="16"/>
-                            </Button>
-                        </Grid>
-
-                        <Grid Grid.Row="2" Margin="5,0,5,15" VerticalAlignment="Center">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-
-                            <SymbolIcon Grid.Column="0" Symbol="Pictures" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,0,10,0" VerticalAlignment="Center"/>
-
-                            <Slider Grid.Column="1" x:Name="ThumbSizeSlider" Minimum="100" Maximum="400" Value="164" Width="190" VerticalAlignment="Center" ValueChanged="ThumbSizeSlider_ValueChanged" ToolTipService.ToolTip="Adjust Thumbnail Size"/>
-                        </Grid>
-
-                        <BreadcrumbBar x:Name="FolderBreadcrumb" Grid.Row="3" Margin="5,0,0,15" ItemClicked="BreadcrumbBar_ItemClicked"/>
-
-                        <TreeView Grid.Row="4" x:Name="FolderTreeView" ItemInvoked="FolderTreeView_ItemInvoked" SelectionMode="Single" Margin="0,0,0,15">
-                            <TreeView.ItemTemplate>
-                                <DataTemplate>
-                                    <StackPanel Orientation="Horizontal" Spacing="10" Padding="0,5" Background="Transparent" Opacity="{Binding Content.NodeOpacity}">
-                                        <SymbolIcon Symbol="{Binding Content.NodeIcon}" Foreground="{ThemeResource SystemControlForegroundAccentBrush}" VerticalAlignment="Center"/>
-                                        <StackPanel Orientation="Vertical" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding Content.Name}" 
-                               Style="{ThemeResource BodyTextBlockStyle}" 
-                               TextTrimming="CharacterEllipsis" 
-                               FontWeight="{Binding Content.NodeFontWeight}"/>
-
-                                            <TextBlock Text="{Binding Content.Subtitle}" 
-                               Visibility="{Binding Content.SubtitleVisibility}" 
-                               Style="{ThemeResource CaptionTextBlockStyle}" 
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                                        </StackPanel>
-                                    </StackPanel>
-                                </DataTemplate>
-                            </TreeView.ItemTemplate>
-                        </TreeView>
-                    </Grid>
-                </Grid>
-            </SplitView.Pane>
-
-            <SplitView.Content>
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
 
                     <Grid x:Name="TileHeader" Height="36" Background="Transparent">
                         <Grid.Resources>
@@ -154,6 +31,7 @@
                                 <Setter Property="MinHeight" Value="0"/>
                                 <Setter Property="Padding" Value="0"/>
                                 <Setter Property="CornerRadius" Value="4"/>
+                                <Setter Property="IsTabStop" Value="False"/>
                             </Style>
                         </Grid.Resources>
                         <Grid.ColumnDefinitions>
@@ -167,12 +45,31 @@
                             <Button Style="{StaticResource HeaderButtonStyle}" Click="SidebarToggle_Click" ToolTipService.ToolTip="Navigation Sidebar (Hold Alt)">
                                 <FontIcon Glyph="&#xE700;" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             </Button>
-                            <Button x:Name="HeaderFolderButton" Style="{StaticResource SubtleButtonStyle}" Height="28" MinWidth="0" MinHeight="0" Padding="8,0" CornerRadius="4"
+                            <Button Style="{StaticResource HeaderButtonStyle}" Click="BrowseButton_Click" ToolTipService.ToolTip="Browse Folders">
+                                <FontIcon x:Name="HeaderFolderIcon" Glyph="&#xE8B7;" FontFamily="Segoe Fluent Icons" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            </Button>
+                            <Button Style="{StaticResource HeaderButtonStyle}" ToolTipService.ToolTip="Recent Folders">
+                                <FontIcon Glyph="&#xE8F1;" FontFamily="Segoe Fluent Icons" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <Button.Flyout>
+                                    <MenuFlyout x:Name="RecentFoldersMenu" Opening="RecentFoldersMenu_Opening" Closed="HeaderFlyout_Closed" />
+                                </Button.Flyout>
+                                <Button.ContextFlyout>
+                                    <MenuFlyout Closed="HeaderFlyout_Closed">
+                                        <MenuFlyoutItem Text="Clear Recent Folders" Click="ClearRecentFolders_Click">
+                                            <MenuFlyoutItem.Icon>
+                                                <SymbolIcon Symbol="Delete"/>
+                                            </MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
+                                    </MenuFlyout>
+                                </Button.ContextFlyout>
+                            </Button>
+                            <Rectangle Width="1" Height="16" Margin="4,0,2,0" VerticalAlignment="Center" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"/>
+                            <Button x:Name="HeaderFolderButton" Style="{StaticResource SubtleButtonStyle}" Height="28" MinWidth="0" MinHeight="0" Padding="8,0" CornerRadius="4" IsTabStop="False"
                                     Click="OpenCurrentDirectoryInExplorer_Click"
                                     PointerEntered="HeaderFolderButton_PointerEntered"
                                     PointerExited="HeaderFolderButton_PointerExited">
                                 <FlyoutBase.AttachedFlyout>
-                                    <Flyout x:Name="HeaderPathFlyout" Placement="BottomEdgeAlignedLeft" ShowMode="TransientWithDismissOnPointerMoveAway" ShouldConstrainToRootBounds="False">
+                                    <Flyout x:Name="HeaderPathFlyout" Placement="BottomEdgeAlignedLeft" ShowMode="TransientWithDismissOnPointerMoveAway" ShouldConstrainToRootBounds="False" Closed="HeaderFlyout_Closed">
                                         <Flyout.FlyoutPresenterStyle>
                                             <Style TargetType="FlyoutPresenter">
                                                 <Setter Property="Padding" Value="2"/>
@@ -185,7 +82,7 @@
                                                 <Setter Property="BorderThickness" Value="1"/>
                                             </Style>
                                         </Flyout.FlyoutPresenterStyle>
-                                        <Button x:Name="HeaderPathFlyoutButton" Style="{StaticResource SubtleButtonStyle}" Padding="10,5" MinHeight="0" MinWidth="0" CornerRadius="4"
+                                        <Button x:Name="HeaderPathFlyoutButton" Style="{StaticResource SubtleButtonStyle}" Padding="10,5" MinHeight="0" MinWidth="0" CornerRadius="4" IsTabStop="False"
                                                 Click="OpenCurrentDirectoryInExplorer_Click"
                                                 PointerEntered="HeaderPathFlyout_PointerEntered"
                                                 PointerExited="HeaderPathFlyout_PointerExited">
@@ -197,7 +94,6 @@
                                     </Flyout>
                                 </FlyoutBase.AttachedFlyout>
                                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                    <FontIcon x:Name="HeaderFolderIcon" Glyph="&#xE8B7;" FontFamily="Segoe Fluent Icons" FontSize="14" Foreground="#FFF8D348"/>
                                     <TextBlock x:Name="HeaderFolderText" Text="Pictures" FontSize="12.5" FontWeight="SemiBold" VerticalAlignment="Center" MaxWidth="260" TextTrimming="CharacterEllipsis"/>
                                     <Border x:Name="HeaderCountBadge" Background="{ThemeResource SubtleFillColorSecondaryBrush}" CornerRadius="9" Padding="7,1" VerticalAlignment="Center">
                                         <TextBlock x:Name="HeaderCountText" Text="0" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
@@ -212,13 +108,10 @@
                             <Button Style="{StaticResource HeaderButtonStyle}" Click="RefreshFolder_Click" ToolTipService.ToolTip="Refresh Current Folder (F5)">
                                 <FontIcon Glyph="&#xE72C;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             </Button>
-                            <Button Style="{StaticResource HeaderButtonStyle}" Click="ResetWindow_Click" ToolTipService.ToolTip="Reset Window Size">
-                                <FontIcon Glyph="&#xE923;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                            </Button>
                             <Button Style="{StaticResource HeaderButtonStyle}" ToolTipService.ToolTip="Sort Images">
                                 <FontIcon Glyph="&#xE8CB;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 <Button.Flyout>
-                                    <MenuFlyout x:Name="HeaderSortFlyout" Opening="HeaderSortFlyout_Opening">
+                                    <MenuFlyout x:Name="HeaderSortFlyout" Opening="HeaderSortFlyout_Opening" Closed="HeaderFlyout_Closed">
                                         <RadioMenuFlyoutItem x:Name="HeaderSortNameAscItem" Text="Name (A-Z)" Click="Sort_Click" Tag="NameAsc" GroupName="HeaderSortGroup"/>
                                         <RadioMenuFlyoutItem x:Name="HeaderSortNameDescItem" Text="Name (Z-A)" Click="Sort_Click" Tag="NameDesc" GroupName="HeaderSortGroup"/>
                                         <MenuFlyoutSeparator/>
@@ -238,11 +131,168 @@
                                     </Button>
                                 </StackPanel>
                             </Border>
+                            <Rectangle Width="1" Height="16" Margin="6,0,2,0" VerticalAlignment="Center" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"/>
+                            <Button Style="{StaticResource HeaderButtonStyle}" ToolTipService.ToolTip="View &amp; Window Options">
+                                <FontIcon Glyph="&#xE713;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <Button.Flyout>
+                                    <Flyout x:Name="HeaderSettingsFlyout" Placement="BottomEdgeAlignedRight" Opening="HeaderSettingsFlyout_Opening" Closed="HeaderFlyout_Closed">
+                                        <Flyout.FlyoutPresenterStyle>
+                                            <Style TargetType="FlyoutPresenter">
+                                                <Setter Property="Padding" Value="12,8"/>
+                                                <Setter Property="MinWidth" Value="0"/>
+                                                <Setter Property="MinHeight" Value="0"/>
+                                                <Setter Property="CornerRadius" Value="8"/>
+                                                <Setter Property="Background" Value="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}"/>
+                                                <Setter Property="BorderBrush" Value="{ThemeResource SurfaceStrokeColorFlyoutBrush}"/>
+                                                <Setter Property="BorderThickness" Value="1"/>
+                                            </Style>
+                                        </Flyout.FlyoutPresenterStyle>
+                                        <StackPanel Spacing="6">
+                                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                                <TextBlock Text="Tile Size" Width="52" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                                                <Slider x:Name="ThumbSizeSlider" Minimum="100" Maximum="400" Value="164" Width="136" VerticalAlignment="Center" IsTabStop="False" ValueChanged="ThumbSizeSlider_ValueChanged" ToolTipService.ToolTip="Adjust Tile Size"/>
+                                                <Rectangle Width="1" Height="18" Margin="4,0,2,0" VerticalAlignment="Center" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"/>
+                                                <Button Style="{StaticResource HeaderButtonStyle}" Click="ResetWindow_Click" ToolTipService.ToolTip="Reset Window &amp; Tile Size">
+                                                    <FontIcon Glyph="&#xE923;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                </Button>
+                                            </StackPanel>
+                                            <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.5"/>
+                                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                                <TextBlock Text="Presets" Width="52" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                                                <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="5" Padding="2" Width="136" VerticalAlignment="Center">
+                                                    <Grid ColumnSpacing="2">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <Button x:Name="Preset1Button" Grid.Column="0" Style="{StaticResource HeaderButtonStyle}" Width="42" Height="22" CornerRadius="3" Tag="0" Click="PresetSlot_Click" RightTapped="PresetSlot_RightTapped">
+                                                            <Grid Width="36" Height="20">
+                                                                <TextBlock x:Name="Preset1Text" Text="1" FontSize="11.5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                <Ellipse x:Name="Preset1Dot" Width="4" Height="4" Fill="{ThemeResource AccentTextFillColorPrimaryBrush}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,2,0" Visibility="Collapsed"/>
+                                                            </Grid>
+                                                        </Button>
+                                                        <Button x:Name="Preset2Button" Grid.Column="1" Style="{StaticResource HeaderButtonStyle}" Width="42" Height="22" CornerRadius="3" Tag="1" Click="PresetSlot_Click" RightTapped="PresetSlot_RightTapped">
+                                                            <Grid Width="36" Height="20">
+                                                                <TextBlock x:Name="Preset2Text" Text="2" FontSize="11.5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                <Ellipse x:Name="Preset2Dot" Width="4" Height="4" Fill="{ThemeResource AccentTextFillColorPrimaryBrush}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,2,0" Visibility="Collapsed"/>
+                                                            </Grid>
+                                                        </Button>
+                                                        <Button x:Name="Preset3Button" Grid.Column="2" Style="{StaticResource HeaderButtonStyle}" Width="42" Height="22" CornerRadius="3" Tag="2" Click="PresetSlot_Click" RightTapped="PresetSlot_RightTapped">
+                                                            <Grid Width="36" Height="20">
+                                                                <TextBlock x:Name="Preset3Text" Text="3" FontSize="11.5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                <Ellipse x:Name="Preset3Dot" Width="4" Height="4" Fill="{ThemeResource AccentTextFillColorPrimaryBrush}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,2,0" Visibility="Collapsed"/>
+                                                            </Grid>
+                                                        </Button>
+                                                    </Grid>
+                                                </Border>
+                                                <Rectangle Width="1" Height="18" Margin="4,0,2,0" VerticalAlignment="Center" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"/>
+                                                <Button x:Name="PresetSaveModeButton" Style="{StaticResource HeaderButtonStyle}" Click="PresetSaveMode_Click" ToolTipService.ToolTip="Save Current Window &amp; Tile Size to a Preset Slot">
+                                                    <FontIcon x:Name="PresetSaveModeIcon" Glyph="&#xE74E;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                </Button>
+                                            </StackPanel>
+                                            <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.5"/>
+                                            <Button Style="{StaticResource SubtleButtonStyle}" Click="About_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Height="28" Padding="8,0" CornerRadius="4" IsTabStop="False" AutomationProperties.Name="About" ToolTipService.ToolTip="About Modern Image Viewer">
+                                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                                    <FontIcon Glyph="&#xE946;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                    <TextBlock Text="About Modern Image Viewer" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                </StackPanel>
+                                            </Button>
+                                        </StackPanel>
+                                    </Flyout>
+                                </Button.Flyout>
+                            </Button>
                         </StackPanel>
                         <Rectangle Grid.ColumnSpan="4" Height="1" VerticalAlignment="Bottom" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.6" IsHitTestVisible="False"/>
                     </Grid>
 
-                    <Grid Grid.Row="1">
+        <Grid x:Name="HoverTriggerZone" Grid.Row="1" Width="15" HorizontalAlignment="Left" Background="#01000000" PointerEntered="HoverZone_PointerEntered" Canvas.ZIndex="2000" />
+
+        <SplitView x:Name="SidebarView" Grid.Row="1" PanePlacement="Left" DisplayMode="Overlay" OpenPaneLength="300" PaneClosed="SidebarView_PaneClosed">
+            <SplitView.Pane>
+                <Grid x:Name="SidebarPane" Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}" BorderThickness="0,0,1,0" Translation="0,0,16" PointerExited="Sidebar_PointerExited">
+                    <Grid.Shadow>
+                        <ThemeShadow/>
+                    </Grid.Shadow>
+                    <Grid Padding="0,6,0,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- === SINGLE ACTION BAR (Slideshow, Collage, Video Director) === -->
+                        <Grid Grid.Row="0" Margin="8,0,8,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="42"/>
+                                <ColumnDefinition Width="42"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <Button Grid.Column="0" Click="PlayCinematicFolder_Click" HorizontalAlignment="Stretch" Height="30" Padding="0" Margin="2" IsTabStop="False" ToolTipService.ToolTip="Play Cinematic Slideshow">
+                                <SymbolIcon Symbol="Play"/>
+                            </Button>
+
+                            <Button Grid.Column="1" Click="TestCollage_Click" HorizontalAlignment="Stretch" Height="30" Padding="0" Margin="2" IsTabStop="False" ToolTipService.ToolTip="Open Collage Editor">
+                                <SymbolIcon Symbol="Pictures"/>
+                            </Button>
+
+                            <Button Grid.Column="2" Click="OpenDirector_Click" HorizontalAlignment="Stretch" Height="30" Padding="6,0" Margin="2" IsTabStop="False" ToolTipService.ToolTip="Open Video Director">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+
+                                    <SymbolIcon Symbol="Video"/>
+                                    <TextBlock Text="Video Director" FontSize="12.5"/>
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+
+                        <BreadcrumbBar x:Name="FolderBreadcrumb" Grid.Row="1" Margin="10,0,8,2" ItemClicked="BreadcrumbBar_ItemClicked"/>
+
+                        <TreeView Grid.Row="2" x:Name="FolderTreeView" ItemInvoked="FolderTreeView_ItemInvoked" SelectionMode="None" Margin="-8,0,0,4">
+                            <TreeView.ItemContainerStyle>
+                                <Style TargetType="TreeViewItem">
+                                    <Setter Property="MinHeight" Value="24"/>
+                                    <Setter Property="Padding" Value="0"/>
+                                    <Setter Property="Margin" Value="0"/>
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                </Style>
+                            </TreeView.ItemContainerStyle>
+                            <TreeView.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Height="24" Margin="-4,0,-6,0" Padding="5,0,2,0" CornerRadius="4" Background="Transparent" Opacity="{Binding Content.NodeOpacity}">
+                                        <Border IsHitTestVisible="False" Margin="-5,0,-2,0" CornerRadius="4" Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Visibility="{Binding Content.CurrentHighlightVisibility}"/>
+                                        <Border IsHitTestVisible="False" Width="3" Height="14" CornerRadius="1.5" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="-5,0,0,0" Background="{ThemeResource AccentFillColorDefaultBrush}" Visibility="{Binding Content.CurrentHighlightVisibility}"/>
+                                        <Grid ColumnSpacing="6" VerticalAlignment="Center">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Grid Grid.Column="0" Width="16" Height="16" VerticalAlignment="Center">
+                                                <Grid Visibility="{Binding Content.FolderIconVisibility}">
+                                                <FontIcon Glyph="&#xE8B7;" FontFamily="Segoe Fluent Icons" FontSize="14.5" Foreground="{ThemeResource TextFillColorPrimaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding Content.FolderIconVisibility}"/>
+
+                                                </Grid>
+                                                <FontIcon Glyph="&#xE74A;" FontFamily="Segoe Fluent Icons" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding Content.UpIconVisibility}"/>
+                                                <FontIcon Glyph="&#xE736;" FontFamily="Segoe Fluent Icons" FontSize="14" Foreground="#FF1F6FEB" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding Content.ComicIconVisibility}"/>
+                                            </Grid>
+                                            <TextBlock Grid.Column="1" Text="{Binding Content.Name}" FontSize="12.5" TextTrimming="CharacterEllipsis" FontWeight="{Binding Content.NodeFontWeight}" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Grid>
+                                </DataTemplate>
+                            </TreeView.ItemTemplate>
+                        </TreeView>
+                    </Grid>
+                </Grid>
+            </SplitView.Pane>
+
+            <SplitView.Content>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="1" Background="{ThemeResource LayerFillColorDefaultBrush}">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="*"/>
                             <RowDefinition Height="Auto"/>
@@ -259,7 +309,7 @@
                             </Style>
                         </GridView.ItemContainerStyle>
                         <GridView.ContextFlyout>
-                            <MenuFlyout x:Name="GridItemContextFlyout">
+                            <MenuFlyout x:Name="GridItemContextFlyout" Closed="HeaderFlyout_Closed">
                                 <MenuFlyoutItem x:Name="GridMenuOpenItem" Text="Open" Click="GridMenuOpen_Click">
                                     <MenuFlyoutItem.Icon><SymbolIcon Symbol="View"/></MenuFlyoutItem.Icon>
                                 </MenuFlyoutItem>
@@ -396,9 +446,12 @@
                                                 Opacity="{x:Bind SelectionOpacity, Mode=OneWay}"/>
                                         <Grid Width="20" Height="20" VerticalAlignment="Center">
                                             <FontIcon Glyph="&#xEB9F;" FontFamily="Segoe Fluent Icons" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{x:Bind PhotoListIconVisibility, Mode=OneTime}"/>
-                                            <FontIcon Glyph="&#xE736;" FontFamily="Segoe Fluent Icons" FontSize="14" Foreground="#FFF8D348" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{x:Bind ComicListIconVisibility, Mode=OneTime}"/>
+                                            <FontIcon Glyph="&#xE736;" FontFamily="Segoe Fluent Icons" FontSize="14" Foreground="#FF1F6FEB" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{x:Bind ComicListIconVisibility, Mode=OneTime}"/>
                                             <Grid Width="18" Height="18" Visibility="{x:Bind DirectoryListIconVisibility, Mode=OneTime}">
-                                                <FontIcon Glyph="&#xE8B7;" FontFamily="Segoe Fluent Icons" FontSize="16" Foreground="#FFF8D348" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{x:Bind DirectoryFallbackVisibility, Mode=OneWay}"/>
+                                                <Grid Visibility="{x:Bind DirectoryFallbackVisibility, Mode=OneWay}">
+                                                    <FontIcon Glyph="&#xE8D5;" FontFamily="Segoe Fluent Icons" FontSize="15" Foreground="#FFF5B926" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    <FontIcon Glyph="&#xE8B7;" FontFamily="Segoe Fluent Icons" FontSize="15" Foreground="#FF9A6300" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Grid>
                                                 <FontIcon Glyph="&#xE74A;" FontFamily="Segoe Fluent Icons" FontSize="11" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{x:Bind ParentUpBadgeVisibility, Mode=OneWay}"/>
                                                 <Image Source="{x:Bind DirectoryIcon, Mode=OneWay}" Stretch="Uniform"/>
                                             </Grid>
@@ -456,7 +509,7 @@
                     </Grid>
 
                     <Grid x:Name="ListPreviewBar" Grid.Row="1" Visibility="Collapsed"
-                          Background="{ThemeResource LayerFillColorDefaultBrush}"
+                          Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                           BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -523,7 +576,7 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="Location" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
-                                <Button x:Name="PreviewLocationButton" Grid.Column="1" Click="ShowInExplorer_Click" Background="Transparent" BorderThickness="0" Padding="0" MinWidth="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalAlignment="Center">
+                                <Button x:Name="PreviewLocationButton" Grid.Column="1" Click="ShowInExplorer_Click" Background="Transparent" BorderThickness="0" Padding="0" MinWidth="0" IsTabStop="False" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalAlignment="Center">
                                     <TextBlock x:Name="PreviewLocationText" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
                                 </Button>
                             </Grid>

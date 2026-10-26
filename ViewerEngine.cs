@@ -26,6 +26,11 @@ namespace ModernImageViewer
         public double NodeOpacity { get; set; } = 1.0;
         public string NodeFontWeight { get; set; } = "Normal";
         public Microsoft.UI.Xaml.Controls.Symbol NodeIcon { get; set; } = Microsoft.UI.Xaml.Controls.Symbol.Folder;
+        public bool IsCurrent { get; set; }
+        public Visibility CurrentHighlightVisibility => IsCurrent ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility FolderIconVisibility => NodeIcon == Microsoft.UI.Xaml.Controls.Symbol.Folder ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility UpIconVisibility => NodeIcon == Microsoft.UI.Xaml.Controls.Symbol.Up ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility ComicIconVisibility => NodeIcon == Microsoft.UI.Xaml.Controls.Symbol.Library ? Visibility.Visible : Visibility.Collapsed;
 
         private string _subtitle = string.Empty;
         public string Subtitle

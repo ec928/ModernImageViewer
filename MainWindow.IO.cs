@@ -177,6 +177,7 @@ namespace ModernImageViewer
             }
             _listReturnPath = null;
             UpdateHeaderFolderInfo();
+            FocusGrid();
         }
 
         private async Task ScanFolder(string folderPath, bool openFirstPage = false)
@@ -329,6 +330,8 @@ namespace ModernImageViewer
                     RestartFolderWatcher(isComicArchive ? string.Empty : folderPath);
                     if (openFirstPage && Images.Count > 0)
                         LoadFullImage(0);
+                    else
+                        FocusGrid();
                 }
             }
             finally
@@ -555,13 +558,14 @@ namespace ModernImageViewer
                 SyncTileCursor(scroll: false);
             _listReturnPath = null;
             UpdateHeaderFolderInfo();
+            FocusGrid();
         }
 
         private void PopulateDriveRootTree(List<FolderItem> drives, string currentFolderPath, List<FolderItem> subDirs, string countText)
         {
             var parentNode = new TreeViewNode
             {
-                Content = new FolderItem { Name = DriveRootName, Path = DriveRootPath, NodeOpacity = 0.5, NodeIcon = Symbol.Up },
+                Content = new FolderItem { Name = DriveRootName, Path = DriveRootPath, NodeOpacity = 0.75, NodeIcon = Symbol.Up },
                 IsExpanded = true
             };
             TreeViewNode? nodeToSelect = null;
@@ -576,10 +580,11 @@ namespace ModernImageViewer
                     {
                         Name = drive.Name,
                         Path = drive.Path,
-                        NodeOpacity = isCurrent ? 1.0 : 0.5,
-                        NodeFontWeight = isCurrent ? "Bold" : "Normal",
+                        NodeOpacity = 1.0,
+                        NodeFontWeight = isCurrent ? "SemiBold" : "Normal",
+                        IsCurrent = isCurrent,
                         Subtitle = isCurrent ? countText : string.Empty,
-                        SubtitleVisibility = isCurrent ? Visibility.Visible : Visibility.Collapsed
+                        SubtitleVisibility = (isCurrent && !string.IsNullOrEmpty(countText)) ? Visibility.Visible : Visibility.Collapsed
                     }
                 };
                 if (isCurrent)
@@ -595,7 +600,7 @@ namespace ModernImageViewer
             }
             FolderTreeView.RootNodes.Add(parentNode);
             if (nodeToSelect == null) return;
-            FolderTreeView.SelectedNode = nodeToSelect;
+
             _pendingNodeToSelect = nodeToSelect;
             _pendingTargetIndex = targetIndex;
             _ = BringNodeIntoViewAsync(nodeToSelect, targetIndex);
@@ -612,13 +617,13 @@ namespace ModernImageViewer
             FolderTreeView.RootNodes.Clear();
             var root = new TreeViewNode
             {
-                Content = new FolderItem { Name = DriveRootName, Path = DriveRootPath, NodeFontWeight = "Bold" },
+                Content = new FolderItem { Name = DriveRootName, Path = DriveRootPath, NodeFontWeight = "SemiBold", IsCurrent = true },
                 IsExpanded = true
             };
             foreach (var drive in drives)
                 root.Children.Add(new TreeViewNode { Content = new FolderItem { Name = drive.Name, Path = drive.Path } });
             FolderTreeView.RootNodes.Add(root);
-            FolderTreeView.SelectedNode = root;
+
             _pendingNodeToSelect = root;
             _pendingTargetIndex = 0;
             _ = BringNodeIntoViewAsync(root, 0);
@@ -639,10 +644,7 @@ namespace ModernImageViewer
                 _isSidebarHooked = true;
             }
 
-            bool isComic = ComicArchive.IsComicArchivePath(currentFolderPath);
-            string countText = isComic
-                ? (currentImageCount == 1 ? "1 page" : $"{currentImageCount} pages")
-                : (currentImageCount == 1 ? "1 image" : $"{currentImageCount} images");
+            string countText = currentImageCount > 0 ? currentImageCount.ToString() : string.Empty;
 
             if (parentDir == null && IsDriveRoot(currentFolderPath))
             {
@@ -652,7 +654,7 @@ namespace ModernImageViewer
 
             if (parentDir != null)
             {
-                var parentNode = new TreeViewNode { Content = new FolderItem { Name = parentDir.Name, Path = parentDir.FullName, NodeOpacity = 0.5, NodeIcon = Symbol.Up }, IsExpanded = true };
+                var parentNode = new TreeViewNode { Content = new FolderItem { Name = parentDir.Name, Path = parentDir.FullName, NodeOpacity = 0.75, NodeIcon = Symbol.Up }, IsExpanded = true };
                 currentIndex++;
 
                 foreach (var sibling in hopDirs)
@@ -665,10 +667,11 @@ namespace ModernImageViewer
                             Name = sibling.Name,
                             Path = sibling.Path,
                             NodeIcon = sibling.NodeIcon,
-                            NodeOpacity = isCurrent ? 1.0 : 0.5,
-                            NodeFontWeight = isCurrent ? "Bold" : "Normal",
+                            NodeOpacity = 1.0,
+                            NodeFontWeight = isCurrent ? "SemiBold" : "Normal",
+                            IsCurrent = isCurrent,
                             Subtitle = isCurrent ? countText : string.Empty,
-                            SubtitleVisibility = isCurrent ? Visibility.Visible : Visibility.Collapsed
+                            SubtitleVisibility = (isCurrent && !string.IsNullOrEmpty(countText)) ? Visibility.Visible : Visibility.Collapsed
                         }
                     };
 
@@ -692,9 +695,10 @@ namespace ModernImageViewer
                     {
                         Name = currentFolderPath,
                         Path = currentFolderPath,
-                        NodeFontWeight = "Bold",
+                        NodeFontWeight = "SemiBold",
+                        IsCurrent = true,
                         Subtitle = countText,
-                        SubtitleVisibility = Visibility.Visible
+                        SubtitleVisibility = !string.IsNullOrEmpty(countText) ? Visibility.Visible : Visibility.Collapsed
                     },
                     IsExpanded = true
                 };
@@ -709,7 +713,7 @@ namespace ModernImageViewer
 
             if (nodeToSelect != null)
             {
-                FolderTreeView.SelectedNode = nodeToSelect;
+    
                 _pendingNodeToSelect = nodeToSelect;
                 _pendingTargetIndex = targetIndex;
                 _ = BringNodeIntoViewAsync(nodeToSelect, targetIndex);
@@ -728,7 +732,7 @@ namespace ModernImageViewer
         {
             if (FolderTreeView == null || nodeToSelect == null) return;
 
-            FolderTreeView.SelectedNode = nodeToSelect;
+
             _pendingNodeToSelect = nodeToSelect;
             _pendingTargetIndex = targetIndex;
 
@@ -753,7 +757,7 @@ namespace ModernImageViewer
                         var sv = FindScrollViewer(FolderTreeView);
                         if (sv != null)
                         {
-                            double estimatedOffset = targetIndex * 36.0;
+                            double estimatedOffset = targetIndex * 26.0;
                             sv.ChangeView(null, Math.Max(0, estimatedOffset - (sv.ViewportHeight / 2.0)), null, true);
                         }
                     }
@@ -828,6 +832,7 @@ namespace ModernImageViewer
 
             var f = await p.PickSingleFolderAsync();
             if (f != null) await ScanFolder(f.Path);
+            FocusGrid();
         }
 
         private async void GoUp_Click(object s, RoutedEventArgs e)
@@ -861,6 +866,8 @@ namespace ModernImageViewer
         private void ClearRecentFolders_Click(object sender, RoutedEventArgs e)
         {
             _recentFolders.Clear();
+            SaveAllSettings();
+            FocusGrid();
         }
 
         private async void FolderTreeView_ItemInvoked(TreeView s, TreeViewItemInvokedEventArgs a)
@@ -892,6 +899,9 @@ namespace ModernImageViewer
             if (s is MenuFlyoutItem item && item.Tag is string tag)
             {
                 var currentItem = (_currentIndex >= 0 && _currentIndex < Images.Count) ? Images[_currentIndex] : null;
+                string? currentDirCursorPath = (_listMode && _listCursor >= 0 && _listCursor < _listEntries.Count && _listEntries[_listCursor].IsDirectory)
+                    ? _listEntries[_listCursor].Path
+                    : null;
 
                 var sorted = tag.StartsWith("Name") ?
                     (tag.EndsWith("Asc")
@@ -900,20 +910,37 @@ namespace ModernImageViewer
                     (tag.EndsWith("Asc") ? Images.OrderBy(x => x.DateModified) : Images.OrderByDescending(x => x.DateModified));
 
                 var sortedList = sorted.ToList();
-                Images.Clear();
-                Images.AddRange(sortedList);
+                Images.ResetWith(sortedList);
 
                 if (currentItem != null) _currentIndex = Images.IndexOf(currentItem);
                 if (_listMode)
                 {
                     RebuildListEntries();
-                    PlaceListCursorOnCurrentImage();
+                    if (currentDirCursorPath != null)
+                    {
+                        int dirIdx = -1;
+                        for (int i = 0; i < _listEntries.Count; i++)
+                        {
+                            if (_listEntries[i].IsDirectory && string.Equals(_listEntries[i].Path, currentDirCursorPath, StringComparison.OrdinalIgnoreCase))
+                            {
+                                dirIdx = i;
+                                break;
+                            }
+                        }
+                        if (dirIdx >= 0) _listCursor = dirIdx;
+                        else PlaceListCursorOnCurrentImage();
+                    }
+                    else
+                    {
+                        PlaceListCursorOnCurrentImage();
+                    }
                 }
                 SyncTileCursor(scroll: true);
 
                 _currentSettings.SortOrder = tag;
                 SyncSortChecks(tag);
                 SaveAllSettings();
+                FocusGrid();
             }
         }
 
@@ -922,10 +949,6 @@ namespace ModernImageViewer
         private void SyncSortChecks(string tag)
         {
             if (tag != "NameDesc" && tag != "DateDesc" && tag != "DateAsc") tag = "NameAsc";
-            SetSortCheck(SortNameAscItem, tag == "NameAsc");
-            SetSortCheck(SortNameDescItem, tag == "NameDesc");
-            SetSortCheck(SortDateAscItem, tag == "DateAsc");
-            SetSortCheck(SortDateDescItem, tag == "DateDesc");
             SetSortCheck(HeaderSortNameAscItem, tag == "NameAsc");
             SetSortCheck(HeaderSortNameDescItem, tag == "NameDesc");
             SetSortCheck(HeaderSortDateAscItem, tag == "DateAsc");
@@ -942,6 +965,11 @@ namespace ModernImageViewer
             if (RecentFoldersMenu != null)
             {
                 RecentFoldersMenu.Items.Clear();
+                if (_recentFolders.Count == 0)
+                {
+                    RecentFoldersMenu.Items.Add(new MenuFlyoutItem { Text = "No recent folders", IsEnabled = false });
+                    return;
+                }
                 foreach (var p in _recentFolders)
                 {
                     var i = new MenuFlyoutItem { Text = p, Icon = new SymbolIcon(Symbol.Folder) };
@@ -952,6 +980,10 @@ namespace ModernImageViewer
                     };
                     RecentFoldersMenu.Items.Add(i);
                 }
+                RecentFoldersMenu.Items.Add(new MenuFlyoutSeparator());
+                var clearItem = new MenuFlyoutItem { Text = "Clear Recent Folders", Icon = new SymbolIcon(Symbol.Delete) };
+                clearItem.Click += ClearRecentFolders_Click;
+                RecentFoldersMenu.Items.Add(clearItem);
             }
         }
 
@@ -1006,6 +1038,7 @@ namespace ModernImageViewer
                     path = archivePath;
                 Process.Start("explorer.exe", $"/select,\"{path}\"");
             }
+            FocusGrid();
         }
     }
 }
