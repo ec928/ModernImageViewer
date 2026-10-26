@@ -277,7 +277,22 @@
                             </Button>
                         </Grid>
 
-                        <BreadcrumbBar x:Name="FolderBreadcrumb" Grid.Row="1" Margin="12,6,8,6" ItemClicked="BreadcrumbBar_ItemClicked"/>
+                        <BreadcrumbBar x:Name="FolderBreadcrumb" Grid.Row="1" Margin="10,3,6,4" ItemClicked="BreadcrumbBar_ItemClicked">
+                            <BreadcrumbBar.Resources>
+                                <x:Double x:Key="BreadcrumbBarItemThemeFontSize">12.5</x:Double>
+                                <x:Double x:Key="BreadcrumbBarChevronFontSize">9.5</x:Double>
+                                <Thickness x:Key="BreadcrumbBarChevronPadding">2,0,2,0</Thickness>
+                                <Style TargetType="BreadcrumbBarItem">
+                                    <Setter Property="FontSize" Value="12.5"/>
+                                    <Setter Property="Padding" Value="4,2,4,2"/>
+                                </Style>
+                            </BreadcrumbBar.Resources>
+                            <BreadcrumbBar.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}" FontSize="12.5" VerticalAlignment="Center"/>
+                                </DataTemplate>
+                            </BreadcrumbBar.ItemTemplate>
+                        </BreadcrumbBar>
 
                         <TreeView Grid.Row="2" x:Name="FolderTreeView" ItemInvoked="FolderTreeView_ItemInvoked" SelectionMode="None" Margin="-8,4,0,4">
                             <TreeView.ItemContainerStyle>
@@ -290,7 +305,7 @@
                             </TreeView.ItemContainerStyle>
                             <TreeView.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid Height="28" Margin="-4,0,-6,0" Padding="5,0,2,0" CornerRadius="4" Background="Transparent" Opacity="{Binding Content.NodeOpacity}">
+                                    <Grid Height="28" Margin="-8,0,-6,0" Padding="3,0,2,0" CornerRadius="4" Background="Transparent" Opacity="{Binding Content.NodeOpacity}">
                                         <Border IsHitTestVisible="False" Margin="-5,0,-2,0" CornerRadius="4" Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Visibility="{Binding Content.CurrentHighlightVisibility}"/>
                                         <Border IsHitTestVisible="False" Width="3" Height="16" CornerRadius="1.5" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="-5,0,0,0" Background="{ThemeResource AccentFillColorDefaultBrush}" Visibility="{Binding Content.CurrentHighlightVisibility}"/>
                                         <Grid ColumnSpacing="6" VerticalAlignment="Center">
@@ -303,7 +318,7 @@
                                                 <FontIcon Glyph="&#xE8B7;" FontFamily="Segoe Fluent Icons" FontSize="14.5" Foreground="{ThemeResource TextFillColorPrimaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding Content.FolderIconVisibility}"/>
 
                                                 </Grid>
-                                                <FontIcon Glyph="&#xE74A;" FontFamily="Segoe Fluent Icons" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding Content.UpIconVisibility}"/>
+                                                <FontIcon Glyph="&#xE74A;" FontFamily="Segoe Fluent Icons" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="1,0,0,0" Visibility="{Binding Content.UpIconVisibility}"/>
                                                 <FontIcon Glyph="&#xE736;" FontFamily="Segoe Fluent Icons" FontSize="14" Foreground="{ThemeResource ComicIconBrush}" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding Content.ComicIconVisibility}"/>
                                             </Grid>
                                             <TextBlock Grid.Column="1" Text="{Binding Content.Name}" FontSize="12.5" TextTrimming="CharacterEllipsis" FontWeight="{Binding Content.NodeFontWeight}" VerticalAlignment="Center"/>

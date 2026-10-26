@@ -32,17 +32,19 @@ namespace ModernImageViewer
         private int _promoteEdge;
         private bool _closed;
         private float _initialZoom;
+        private bool _shouldFitToWindow;
 
         private bool _isWindowDragging = false;
         private bool _isDragThresholdPassed = false;
         private NativeMethods.POINT _dragStartCursorPos;
         private Windows.Graphics.PointInt32 _dragStartWindowPos;
 
-        public DetachedWindow(ImageItem imageItem, float initialZoom, int targetWidth, int targetHeight, float initialGamma)
+        public DetachedWindow(ImageItem imageItem, float initialZoom, int targetWidth, int targetHeight, float initialGamma, bool shouldFitToWindow = false)
         {
             this.InitializeComponent();
             _imageItem = imageItem;
             _initialZoom = initialZoom;
+            _shouldFitToWindow = shouldFitToWindow;
             this.Title = string.IsNullOrEmpty(_imageItem.Name) ? "Detached Image" : _imageItem.Name;
 
             var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
@@ -86,17 +88,24 @@ namespace ModernImageViewer
                 int chromeW = sender.Size.Width - sender.ClientSize.Width;
                 int chromeH = sender.Size.Height - sender.ClientSize.Height;
 
-                var displayArea = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(sender.Id, Microsoft.UI.Windowing.DisplayAreaFallback.Nearest);
-                int totalW = Math.Min(sender.Size.Width + chromeW, displayArea.WorkArea.Width);
-                int totalH = Math.Min(sender.Size.Height + chromeH, displayArea.WorkArea.Height);
+                if (chromeW > 0 || chromeH > 0)
+                {
+                    var displayArea = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(sender.Id, Microsoft.UI.Windowing.DisplayAreaFallback.Nearest);
+                    int totalW = Math.Min(sender.Size.Width + chromeW, displayArea.WorkArea.Width);
+                    int totalH = Math.Min(sender.Size.Height + chromeH, displayArea.WorkArea.Height);
 
-                sender.Resize(new Windows.Graphics.SizeInt32(totalW, totalH));
+                    sender.Resize(new Windows.Graphics.SizeInt32(totalW, totalH));
+                }
             }
         }
 
         private void RootGrid_Loaded(object sender, RoutedEventArgs e)
         {
             RootGrid.Focus(FocusState.Programmatic);
+            if (_shouldFitToWindow)
+            {
+                ViewerControl.FitToWindow();
+            }
         }
 
         private void RootGrid_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -105,6 +114,10 @@ namespace ModernImageViewer
                                      (_appWindow.Presenter is OverlappedPresenter p && p.State == OverlappedPresenterState.Maximized);
 
             if (isMaxOrFullscreen && !_wasMaximizedOrFullscreen)
+            {
+                ViewerControl.FitToWindow();
+            }
+            else if (_shouldFitToWindow && e.NewSize.Width > 0 && e.NewSize.Height > 0)
             {
                 ViewerControl.FitToWindow();
             }
@@ -240,7 +253,9 @@ namespace ModernImageViewer
             _promoteCts?.Dispose();
             _promoteCts = null;
 
-            ViewerControl.PrepareForNewImage(null);
+            // Do not call ViewerControl.PrepareForNewImage(null) here because scheduling RequestRender() /
+            // PreviewCanvas.Invalidate() during window shutdown causes a WinUI 3 fail-fast crash (0xc000027b).
+            // ImageViewerControl_Unloaded handles canvas and effect cleanup safely.
             _localCacheEntry?.Release();
             _localCacheEntry = null;
 
@@ -261,7 +276,7 @@ namespace ModernImageViewer
             bool isMaxOrFullscreen = (_appWindow.Presenter.Kind == AppWindowPresenterKind.FullScreen) ||
                                      (_appWindow.Presenter is OverlappedPresenter p && p.State == OverlappedPresenterState.Maximized);
 
-            if (isMaxOrFullscreen) ViewerControl.FitToWindow();
+            if (isMaxOrFullscreen || _shouldFitToWindow) ViewerControl.FitToWindow();
             else ViewerControl.SetZoom(_initialZoom);
         }
 

@@ -433,7 +433,7 @@ namespace ModernImageViewer
             }
 
             UpdateGridSize();
-            if (resetView)
+            if (resetView || _isFitToWindow)
             {
                 FitToWindow();
             }
@@ -485,6 +485,7 @@ namespace ModernImageViewer
 
         public void FitToWindow()
         {
+            _isFitToWindow = true;
             double effW = EffectiveLogicalWidth;
             double effH = EffectiveLogicalHeight;
             if (effW > 0 && effH > 0 && PreviewCanvas != null && ImageScroll != null && RootGrid != null)

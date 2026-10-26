@@ -37,47 +37,133 @@ namespace ModernImageViewer
             _rawGpuBitmap = null;
         }
 
-        public void LaunchDetachedWindow(ImageItem targetItem, Point? cursorSpawnPosition = null)
+        public async void LaunchDetachedWindow(ImageItem targetItem, Point? cursorSpawnPosition = null)
         {
+            if (targetItem == null) return;
+
             var displayArea = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(_appWindow.Id, Microsoft.UI.Windowing.DisplayAreaFallback.Nearest);
+            double workAreaW = displayArea.WorkArea.Width;
+            double workAreaH = displayArea.WorkArea.Height;
 
-            double currentLogicalW = ViewerControl.LogicalWidth > 0 ? ViewerControl.LogicalWidth : 1000;
-            double currentLogicalH = ViewerControl.LogicalHeight > 0 ? ViewerControl.LogicalHeight : 1000;
-            float targetZoom = ViewerControl.CurrentZoom > 0 ? ViewerControl.CurrentZoom : 1.0f;
+            double currentLogicalW = 0;
+            double currentLogicalH = 0;
+            float targetZoom = 1.0f;
+            bool shouldFitToWindow = !cursorSpawnPosition.HasValue;
 
-            if (CurrentDetachLimit != DetachLimit.CurrentZoom)
+            if (cursorSpawnPosition.HasValue)
             {
-                double targetBoxH = displayArea.WorkArea.Height;
-
-                if (CurrentDetachLimit == DetachLimit.Target1080p) targetBoxH = 1080;
-                else if (CurrentDetachLimit == DetachLimit.Target1200p) targetBoxH = 1200;
-                else if (CurrentDetachLimit == DetachLimit.Target800p) targetBoxH = 800;
-
-                targetBoxH = Math.Min(targetBoxH, displayArea.WorkArea.Height);
-                targetZoom = (float)(targetBoxH / currentLogicalH);
-
-                if (currentLogicalW * targetZoom > displayArea.WorkArea.Width)
+                currentLogicalW = ViewerControl.LogicalWidth > 0 ? ViewerControl.LogicalWidth : 1000;
+                currentLogicalH = ViewerControl.LogicalHeight > 0 ? ViewerControl.LogicalHeight : 1000;
+                targetZoom = ViewerControl.CurrentZoom > 0 ? ViewerControl.CurrentZoom : 1.0f;
+            }
+            else
+            {
+                if (ViewerControl.TargetImage == targetItem && ViewerControl.LogicalWidth > 0 && ViewerControl.LogicalHeight > 0)
                 {
-                    targetZoom = (float)(displayArea.WorkArea.Width / currentLogicalW);
+                    currentLogicalW = ViewerControl.LogicalWidth;
+                    currentLogicalH = ViewerControl.LogicalHeight;
+                }
+                else if (ImageCache.TryGet(targetItem.Path, out var cachedEntry) && cachedEntry != null && cachedEntry.NativeWidth > 0 && cachedEntry.NativeHeight > 0)
+                {
+                    currentLogicalW = cachedEntry.NativeWidth;
+                    currentLogicalH = cachedEntry.NativeHeight;
+                }
+                else
+                {
+                    try
+                    {
+                        using var stream = await ViewerEngine.OpenImageStreamAsync(targetItem.Path);
+                        if (stream != null)
+                        {
+                            var decoder = await Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(stream);
+                            currentLogicalW = decoder.OrientedPixelWidth;
+                            currentLogicalH = decoder.OrientedPixelHeight;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"[Detach] Failed to read dimensions for {targetItem.Path}: {ex.Message}");
+                    }
+                }
+
+                if (currentLogicalW <= 0 || currentLogicalH <= 0)
+                {
+                    currentLogicalW = 1200;
+                    currentLogicalH = 800;
                 }
             }
 
-            double targetW = currentLogicalW * targetZoom;
-            double targetH = currentLogicalH * targetZoom;
+            double targetW;
+            double targetH;
 
-            if (targetW > displayArea.WorkArea.Width || targetH > displayArea.WorkArea.Height)
+            if (cursorSpawnPosition.HasValue)
             {
-                double scaleX = displayArea.WorkArea.Width / currentLogicalW;
-                double scaleY = displayArea.WorkArea.Height / currentLogicalH;
-                targetZoom = (float)Math.Min(scaleX, scaleY);
+                if (CurrentDetachLimit != DetachLimit.CurrentZoom)
+                {
+                    double targetBoxH = workAreaH;
+
+                    if (CurrentDetachLimit == DetachLimit.Target1080p) targetBoxH = 1080;
+                    else if (CurrentDetachLimit == DetachLimit.Target1200p) targetBoxH = 1200;
+                    else if (CurrentDetachLimit == DetachLimit.Target800p) targetBoxH = 800;
+
+                    targetBoxH = Math.Min(targetBoxH, workAreaH);
+                    targetZoom = (float)(targetBoxH / currentLogicalH);
+
+                    if (currentLogicalW * targetZoom > workAreaW)
+                    {
+                        targetZoom = (float)(workAreaW / currentLogicalW);
+                    }
+                }
+
                 targetW = currentLogicalW * targetZoom;
                 targetH = currentLogicalH * targetZoom;
+
+                if (targetW > workAreaW || targetH > workAreaH)
+                {
+                    double scaleX = workAreaW / currentLogicalW;
+                    double scaleY = workAreaH / currentLogicalH;
+                    targetZoom = (float)Math.Min(scaleX, scaleY);
+                    targetW = currentLogicalW * targetZoom;
+                    targetH = currentLogicalH * targetZoom;
+                }
+            }
+            else
+            {
+                // Sensible default floating window size: comfortable bounds instead of taking over the screen
+                double maxBoxW = Math.Min(1280, workAreaW * 0.60);
+                double maxBoxH = Math.Min(800, workAreaH * 0.65);
+
+                if (CurrentDetachLimit == DetachLimit.Target1080p)
+                {
+                    maxBoxW = Math.Min(1920, maxBoxW);
+                    maxBoxH = Math.Min(1080, maxBoxH);
+                }
+                else if (CurrentDetachLimit == DetachLimit.Target1200p)
+                {
+                    maxBoxW = Math.Min(1920, maxBoxW);
+                    maxBoxH = Math.Min(1200, maxBoxH);
+                }
+                else if (CurrentDetachLimit == DetachLimit.Target800p)
+                {
+                    maxBoxW = Math.Min(1280, maxBoxW);
+                    maxBoxH = Math.Min(800, maxBoxH);
+                }
+
+                double scale = Math.Min(maxBoxW / currentLogicalW, maxBoxH / currentLogicalH);
+                if (currentLogicalW <= maxBoxW && currentLogicalH <= maxBoxH)
+                {
+                    scale = 1.0;
+                }
+
+                targetW = currentLogicalW * scale;
+                targetH = currentLogicalH * scale;
+                targetZoom = (float)scale;
             }
 
-            int finalW = Math.Max(300, (int)Math.Round(targetW));
-            int finalH = Math.Max(300, (int)Math.Round(targetH));
+            int finalW = Math.Clamp((int)Math.Round(targetW), 320, (int)workAreaW);
+            int finalH = Math.Clamp((int)Math.Round(targetH), 240, (int)workAreaH);
 
-            var detachedWindow = new DetachedWindow(targetItem, targetZoom, finalW, finalH, _currentGamma);
+            var detachedWindow = new DetachedWindow(targetItem, targetZoom, finalW, finalH, _currentGamma, shouldFitToWindow);
             var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(detachedWindow);
             var appWindowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
             var appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(appWindowId);
@@ -94,11 +180,12 @@ namespace ModernImageViewer
 
                 _tearingOffWindow = detachedWindow;
                 _tearOffStartPos = cursorSpawnPosition.Value;
+                NativeMethods.ShowWindow(hwnd, NativeMethods.SW_SHOWNOACTIVATE);
             }
             else
             {
-                int spawnX = _appWindow.Position.X + 50;
-                int spawnY = _appWindow.Position.Y + 50;
+                int spawnX = Math.Max(displayArea.WorkArea.X, _appWindow.Position.X + 60);
+                int spawnY = Math.Max(displayArea.WorkArea.Y, _appWindow.Position.Y + 60);
 
                 if (spawnX + finalW > displayArea.WorkArea.X + displayArea.WorkArea.Width)
                     spawnX = Math.Max(displayArea.WorkArea.X, displayArea.WorkArea.X + displayArea.WorkArea.Width - finalW);
@@ -107,12 +194,6 @@ namespace ModernImageViewer
                     spawnY = Math.Max(displayArea.WorkArea.Y, displayArea.WorkArea.Y + displayArea.WorkArea.Height - finalH);
 
                 appWindow.Move(new Windows.Graphics.PointInt32(spawnX, spawnY));
-            }
-
-            NativeMethods.ShowWindow(hwnd, NativeMethods.SW_SHOWNOACTIVATE);
-
-            if (!cursorSpawnPosition.HasValue)
-            {
                 detachedWindow.Activate();
             }
         }
