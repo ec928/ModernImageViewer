@@ -1320,9 +1320,7 @@ namespace ModernImageViewer
             {
                 var sizeTask = ReadPreviewSizeAsync(item.Path, token);
                 var takenTask = ReadDateTakenAsync(item.Path, token);
-                ImageSource? thumb = PreviewThumbnailReady(item.Thumbnail) ? item.Thumbnail : null;
-                if (thumb == null)
-                    thumb = await ReadShellThumbnailAsync(item.Path, token);
+                ImageSource? thumb = await ReadShellThumbnailAsync(item.Path, token);
                 if (thumb == null && !token.IsCancellationRequested)
                     thumb = await ReadScaledPreviewAsync(item.Path, token);
                 Size size = await sizeTask;
@@ -1332,9 +1330,11 @@ namespace ModernImageViewer
                 void Apply()
                 {
                     if (generation != _previewGeneration || token.IsCancellationRequested) return;
+                    if (thumb == null && PreviewThumbnailReady(item.Thumbnail))
+                        thumb = item.Thumbnail;
                     if (thumb != null)
                     {
-                        item.Thumbnail = thumb;
+                    if (item.Thumbnail == null) item.Thumbnail = thumb;
                         PreviewImage.Source = thumb;
                         PreviewImage.Visibility = Visibility.Visible;
                         PreviewPlaceholder.Visibility = Visibility.Collapsed;
@@ -2077,23 +2077,22 @@ namespace ModernImageViewer
             SaveAllSettings();
         }
 
+        private static Brush ResolveThemeBrush(string key, Windows.UI.Color color)
+        {
+            return new SolidColorBrush(color);
+        }
+
         private void SyncViewModeButtons()
         {
             if (TilesModeButton == null || ListModeButton == null) return;
-            var activeBg = Application.Current.Resources.TryGetValue("CardBackgroundFillColorDefaultBrush", out object cardBg) && cardBg is Brush cb
-                ? cb
-                : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-            var activeFg = Application.Current.Resources.TryGetValue("AccentTextFillColorPrimaryBrush", out object accFg) && accFg is Brush af
-                ? af
-                : new SolidColorBrush(Microsoft.UI.Colors.White);
-            var inactiveFg = Application.Current.Resources.TryGetValue("TextFillColorSecondaryBrush", out object secFg) && secFg is Brush sf
-                ? sf
-                : new SolidColorBrush(Microsoft.UI.Colors.Gray);
+            bool isDark = RootGrid?.ActualTheme == ElementTheme.Dark;
+            var activeBg = ResolveThemeBrush("CardBackgroundFillColorDefaultBrush", isDark ? Windows.UI.Color.FromArgb(18, 255, 255, 255) : Windows.UI.Color.FromArgb(179, 255, 255, 255));
+            var activeFg = ResolveThemeBrush("AccentTextFillColorPrimaryBrush", isDark ? Windows.UI.Color.FromArgb(255, 96, 205, 255) : Windows.UI.Color.FromArgb(255, 0, 95, 184));
+            var inactiveFg = ResolveThemeBrush("TextFillColorSecondaryBrush", isDark ? Windows.UI.Color.FromArgb(197, 255, 255, 255) : Windows.UI.Color.FromArgb(158, 0, 0, 0));
 
             TilesModeButton.Background = !_listMode ? activeBg : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
             ListModeButton.Background = _listMode ? activeBg : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
             if (TilesModeIcon != null) TilesModeIcon.Foreground = !_listMode ? activeFg : inactiveFg;
-            if (ListModeIcon != null) ListModeIcon.Foreground = _listMode ? activeFg : inactiveFg;
             if (ListModeIcon != null) ListModeIcon.Foreground = _listMode ? activeFg : inactiveFg;
         }
 
@@ -2269,7 +2268,112 @@ namespace ModernImageViewer
         {
             _presetSaveMode = false;
             SyncPresetButtons();
+            SyncThemeButtons();
         }
+
+        private void ThemeMode_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement el && el.Tag is string mode)
+                ApplyTheme(mode, save: true);
+        }
+
+        public ElementTheme CurrentRequestedTheme => RootGrid?.RequestedTheme ?? ElementTheme.Default;
+
+        private void ApplyTheme(string? mode, bool save)
+        {
+            string normalized = mode switch
+            {
+                "Light" => "Light",
+                "Dark" => "Dark",
+                _ => "System"
+            };
+            _currentSettings.ThemeMode = normalized;
+
+            if (RootGrid != null)
+            {
+                RootGrid.RequestedTheme = normalized switch
+                {
+                    "Light" => ElementTheme.Light,
+                    "Dark" => ElementTheme.Dark,
+                    _ => ElementTheme.Default
+                };
+            }
+
+            SyncTitleBarTheme();
+            SyncViewModeButtons();
+            SyncPresetButtons();
+            SyncThemeButtons();
+            _collageEditorWindow?.ApplyAppTheme(CurrentRequestedTheme);
+
+            if (save)
+                SaveAllSettings();
+        }
+
+        private void SyncTitleBarTheme()
+        {
+            if (_appWindow == null || !Microsoft.UI.Windowing.AppWindowTitleBar.IsCustomizationSupported()) return;
+            var titleBar = _appWindow.TitleBar;
+            bool isDark = (RootGrid?.ActualTheme ?? ElementTheme.Default) == ElementTheme.Dark;
+
+            titleBar.ButtonBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0);
+            titleBar.ButtonInactiveBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0);
+            if (isDark)
+            {
+                titleBar.ButtonForegroundColor = Windows.UI.Color.FromArgb(240, 255, 255, 255);
+                titleBar.ButtonHoverForegroundColor = Windows.UI.Color.FromArgb(255, 255, 255, 255);
+                titleBar.ButtonHoverBackgroundColor = Windows.UI.Color.FromArgb(24, 255, 255, 255);
+                titleBar.ButtonPressedForegroundColor = Windows.UI.Color.FromArgb(200, 255, 255, 255);
+                titleBar.ButtonPressedBackgroundColor = Windows.UI.Color.FromArgb(16, 255, 255, 255);
+                titleBar.ButtonInactiveForegroundColor = Windows.UI.Color.FromArgb(110, 255, 255, 255);
+            }
+            else
+            {
+                titleBar.ButtonForegroundColor = Windows.UI.Color.FromArgb(228, 24, 24, 24);
+                titleBar.ButtonHoverForegroundColor = Windows.UI.Color.FromArgb(255, 0, 0, 0);
+                titleBar.ButtonHoverBackgroundColor = Windows.UI.Color.FromArgb(18, 0, 0, 0);
+                titleBar.ButtonPressedForegroundColor = Windows.UI.Color.FromArgb(180, 24, 24, 24);
+                titleBar.ButtonPressedBackgroundColor = Windows.UI.Color.FromArgb(12, 0, 0, 0);
+                titleBar.ButtonInactiveForegroundColor = Windows.UI.Color.FromArgb(110, 24, 24, 24);
+            }
+        }
+
+        private void SyncThemeButtons()
+        {
+            if (ThemeLightButton == null || ThemeDarkButton == null) return;
+            bool isDark = RootGrid?.ActualTheme == ElementTheme.Dark;
+            var activeBg = ResolveThemeBrush("CardBackgroundFillColorDefaultBrush", isDark ? Windows.UI.Color.FromArgb(18, 255, 255, 255) : Windows.UI.Color.FromArgb(179, 255, 255, 255));
+            var activeFg = ResolveThemeBrush("AccentTextFillColorPrimaryBrush", isDark ? Windows.UI.Color.FromArgb(255, 96, 205, 255) : Windows.UI.Color.FromArgb(255, 0, 95, 184));
+            var inactiveFg = ResolveThemeBrush("TextFillColorSecondaryBrush", isDark ? Windows.UI.Color.FromArgb(197, 255, 255, 255) : Windows.UI.Color.FromArgb(158, 0, 0, 0));
+            var transparent = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+
+            string mode = _currentSettings.ThemeMode ?? "System";
+            bool lightSelected = mode == "Light" || (mode == "System" && !isDark);
+            bool darkSelected = mode == "Dark" || (mode == "System" && isDark);
+            bool systemSelected = mode != "Light" && mode != "Dark";
+
+            ThemeLightButton.Background = lightSelected ? activeBg : transparent;
+            if (ThemeLightIcon != null) ThemeLightIcon.Foreground = lightSelected ? activeFg : inactiveFg;
+            if (ThemeLightText != null)
+            {
+                ThemeLightText.Foreground = lightSelected ? activeFg : inactiveFg;
+                ThemeLightText.FontWeight = lightSelected ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal;
+            }
+
+            ThemeDarkButton.Background = darkSelected ? activeBg : transparent;
+            if (ThemeDarkIcon != null) ThemeDarkIcon.Foreground = darkSelected ? activeFg : inactiveFg;
+            if (ThemeDarkText != null)
+            {
+                ThemeDarkText.Foreground = darkSelected ? activeFg : inactiveFg;
+                ThemeDarkText.FontWeight = darkSelected ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal;
+            }
+
+            if (ThemeSystemButton != null && ThemeSystemIcon != null)
+            {
+                ThemeSystemButton.Background = systemSelected ? activeBg : transparent;
+                ThemeSystemIcon.Foreground = systemSelected ? activeFg : inactiveFg;
+            }
+        }
+
 
         private void PresetSaveMode_Click(object sender, RoutedEventArgs e)
         {
@@ -2383,21 +2487,12 @@ namespace ModernImageViewer
             while (_currentSettings.WindowPresets.Count < 3)
                 _currentSettings.WindowPresets.Add(null);
 
-            var activeBg = Application.Current.Resources.TryGetValue("CardBackgroundFillColorDefaultBrush", out object cardBg) && cardBg is Brush cb
-                ? cb
-                : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-            var activeFg = Application.Current.Resources.TryGetValue("AccentTextFillColorPrimaryBrush", out object accFg) && accFg is Brush af
-                ? af
-                : new SolidColorBrush(Microsoft.UI.Colors.White);
-            var primaryFg = Application.Current.Resources.TryGetValue("TextFillColorPrimaryBrush", out object priFg) && priFg is Brush pf
-                ? pf
-                : new SolidColorBrush(Microsoft.UI.Colors.White);
-            var secondaryFg = Application.Current.Resources.TryGetValue("TextFillColorSecondaryBrush", out object secFg) && secFg is Brush sf
-                ? sf
-                : new SolidColorBrush(Microsoft.UI.Colors.Gray);
-            var tertiaryFg = Application.Current.Resources.TryGetValue("TextFillColorTertiaryBrush", out object terFg) && terFg is Brush tf
-                ? tf
-                : secondaryFg;
+            bool isDark = RootGrid?.ActualTheme == ElementTheme.Dark;
+            var activeBg = ResolveThemeBrush("CardBackgroundFillColorDefaultBrush", isDark ? Windows.UI.Color.FromArgb(18, 255, 255, 255) : Windows.UI.Color.FromArgb(179, 255, 255, 255));
+            var activeFg = ResolveThemeBrush("AccentTextFillColorPrimaryBrush", isDark ? Windows.UI.Color.FromArgb(255, 96, 205, 255) : Windows.UI.Color.FromArgb(255, 0, 95, 184));
+            var primaryFg = ResolveThemeBrush("TextFillColorPrimaryBrush", isDark ? Windows.UI.Color.FromArgb(255, 255, 255, 255) : Windows.UI.Color.FromArgb(228, 0, 0, 0));
+            var secondaryFg = ResolveThemeBrush("TextFillColorSecondaryBrush", isDark ? Windows.UI.Color.FromArgb(197, 255, 255, 255) : Windows.UI.Color.FromArgb(158, 0, 0, 0));
+            var tertiaryFg = ResolveThemeBrush("TextFillColorTertiaryBrush", isDark ? Windows.UI.Color.FromArgb(135, 255, 255, 255) : Windows.UI.Color.FromArgb(114, 0, 0, 0));
 
             if (PresetSaveModeButton != null && PresetSaveModeIcon != null)
             {
@@ -2578,7 +2673,7 @@ namespace ModernImageViewer
                 // List rows do not own a thumbnail. Clearing here would drop pictures the tile view already loaded.
                 if (a.InRecycleQueue)
                 {
-                    if (!_listMode) i.ClearThumbnail();
+                    if (!_listMode && !_applyingViewMode) i.ClearThumbnail();
                 }
                 else if (!_listMode)
                 {

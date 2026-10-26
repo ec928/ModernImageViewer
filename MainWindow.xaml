@@ -149,7 +149,7 @@
                                         </Flyout.FlyoutPresenterStyle>
                                         <StackPanel Spacing="6">
                                             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                                <TextBlock Text="Tile Size" Width="52" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                                                <TextBlock Text="Tile Size" Width="56" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
                                                 <Slider x:Name="ThumbSizeSlider" Minimum="100" Maximum="400" Value="164" Width="136" VerticalAlignment="Center" IsTabStop="False" ValueChanged="ThumbSizeSlider_ValueChanged" ToolTipService.ToolTip="Adjust Tile Size"/>
                                                 <Rectangle Width="1" Height="18" Margin="4,0,2,0" VerticalAlignment="Center" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"/>
                                                 <Button Style="{StaticResource HeaderButtonStyle}" Click="ResetWindow_Click" ToolTipService.ToolTip="Reset Window &amp; Tile Size">
@@ -158,7 +158,7 @@
                                             </StackPanel>
                                             <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.5"/>
                                             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                                <TextBlock Text="Presets" Width="52" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                                                <TextBlock Text="Presets" Width="56" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
                                                 <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="5" Padding="2" Width="136" VerticalAlignment="Center">
                                                     <Grid ColumnSpacing="2">
                                                         <Grid.ColumnDefinitions>
@@ -189,6 +189,34 @@
                                                 <Rectangle Width="1" Height="18" Margin="4,0,2,0" VerticalAlignment="Center" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"/>
                                                 <Button x:Name="PresetSaveModeButton" Style="{StaticResource HeaderButtonStyle}" Click="PresetSaveMode_Click" ToolTipService.ToolTip="Save Current Window &amp; Tile Size to a Preset Slot">
                                                     <FontIcon x:Name="PresetSaveModeIcon" Glyph="&#xE74E;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                </Button>
+                                            </StackPanel>
+                                            <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.5"/>
+                                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                                <TextBlock Text="Theme" Width="56" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                                                <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="5" Padding="2" Width="136" VerticalAlignment="Center">
+                                                    <Grid ColumnSpacing="2">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <Button x:Name="ThemeLightButton" Grid.Column="0" Style="{StaticResource HeaderButtonStyle}" Width="64" Height="22" CornerRadius="3" Tag="Light" Click="ThemeMode_Click" ToolTipService.ToolTip="Light Theme">
+                                                            <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                                                <FontIcon x:Name="ThemeLightIcon" Glyph="&#xE706;" FontFamily="Segoe Fluent Icons" FontSize="11.5"/>
+                                                                <TextBlock x:Name="ThemeLightText" Text="Light" FontSize="11.5"/>
+                                                            </StackPanel>
+                                                        </Button>
+                                                        <Button x:Name="ThemeDarkButton" Grid.Column="1" Style="{StaticResource HeaderButtonStyle}" Width="64" Height="22" CornerRadius="3" Tag="Dark" Click="ThemeMode_Click" ToolTipService.ToolTip="Dark Theme">
+                                                            <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                                                <FontIcon x:Name="ThemeDarkIcon" Glyph="&#xE708;" FontFamily="Segoe Fluent Icons" FontSize="11.5"/>
+                                                                <TextBlock x:Name="ThemeDarkText" Text="Dark" FontSize="11.5"/>
+                                                            </StackPanel>
+                                                        </Button>
+                                                    </Grid>
+                                                </Border>
+                                                <Rectangle Width="1" Height="18" Margin="4,0,2,0" VerticalAlignment="Center" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"/>
+                                                <Button x:Name="ThemeSystemButton" Style="{StaticResource HeaderButtonStyle}" Tag="System" Click="ThemeMode_Click" ToolTipService.ToolTip="Use Windows System Theme">
+                                                    <FontIcon x:Name="ThemeSystemIcon" Glyph="&#xE770;" FontFamily="Segoe Fluent Icons" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                                 </Button>
                                             </StackPanel>
                                             <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.5"/>
@@ -273,7 +301,7 @@
 
                                                 </Grid>
                                                 <FontIcon Glyph="&#xE74A;" FontFamily="Segoe Fluent Icons" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding Content.UpIconVisibility}"/>
-                                                <FontIcon Glyph="&#xE736;" FontFamily="Segoe Fluent Icons" FontSize="14" Foreground="#FF1F6FEB" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding Content.ComicIconVisibility}"/>
+                                                <FontIcon Glyph="&#xE736;" FontFamily="Segoe Fluent Icons" FontSize="14" Foreground="{ThemeResource ComicIconBrush}" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding Content.ComicIconVisibility}"/>
                                             </Grid>
                                             <TextBlock Grid.Column="1" Text="{Binding Content.Name}" FontSize="12.5" TextTrimming="CharacterEllipsis" FontWeight="{Binding Content.NodeFontWeight}" VerticalAlignment="Center"/>
                                         </Grid>
@@ -446,7 +474,7 @@
                                                 Opacity="{x:Bind SelectionOpacity, Mode=OneWay}"/>
                                         <Grid Width="20" Height="20" VerticalAlignment="Center">
                                             <FontIcon Glyph="&#xEB9F;" FontFamily="Segoe Fluent Icons" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{x:Bind PhotoListIconVisibility, Mode=OneTime}"/>
-                                            <FontIcon Glyph="&#xE736;" FontFamily="Segoe Fluent Icons" FontSize="14" Foreground="#FF1F6FEB" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{x:Bind ComicListIconVisibility, Mode=OneTime}"/>
+                                            <FontIcon Glyph="&#xE736;" FontFamily="Segoe Fluent Icons" FontSize="14" Foreground="{ThemeResource ComicIconBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{x:Bind ComicListIconVisibility, Mode=OneTime}"/>
                                             <Grid Width="18" Height="18" Visibility="{x:Bind DirectoryListIconVisibility, Mode=OneTime}">
                                                 <Grid Visibility="{x:Bind DirectoryFallbackVisibility, Mode=OneWay}">
                                                     <FontIcon Glyph="&#xE8D5;" FontFamily="Segoe Fluent Icons" FontSize="15" Foreground="#FFF5B926" HorizontalAlignment="Center" VerticalAlignment="Center"/>

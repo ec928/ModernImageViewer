@@ -123,6 +123,14 @@ namespace ModernImageViewer
             var titleBar = _appWindow.TitleBar;
             titleBar.ButtonBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0);
             titleBar.ButtonInactiveBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0);
+            RootGrid.ActualThemeChanged += (_, _) =>
+            {
+                SyncTitleBarTheme();
+                SyncViewModeButtons();
+                SyncPresetButtons();
+                SyncThemeButtons();
+            };
+            SyncTitleBarTheme();
             ApplyCaptionInset();
             SyncTileChrome();
 
@@ -306,6 +314,7 @@ namespace ModernImageViewer
             public string SortOrder { get; set; } = "NameAsc";
             public bool ListMode { get; set; }
             public double TileSize { get; set; } = 164;
+            public string ThemeMode { get; set; } = "System";
             public List<WindowPreset?> WindowPresets { get; set; } = new() { null, null, null };
             public List<string> RecentFolders { get; set; } = new();
         }
@@ -383,6 +392,7 @@ namespace ModernImageViewer
             _currentSettings = settings;
             while (_currentSettings.WindowPresets.Count < 3)
                 _currentSettings.WindowPresets.Add(null);
+            ApplyTheme(_currentSettings.ThemeMode, save: false);
             if (forceReset) _currentSettings.TileSize = 164;
             else if (_currentSettings.TileSize < 100 || _currentSettings.TileSize > 400) _currentSettings.TileSize = 164;
             if (ThumbSizeSlider != null) ThumbSizeSlider.Value = _currentSettings.TileSize;

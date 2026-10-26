@@ -10,7 +10,9 @@ A high-performance, hardware-accelerated image viewer built for creators, 3D art
 
 **Massive Folder Support** — A tiered-decoding architecture allows seamless browsing of folders containing thousands of high-resolution (10 MB+) images without stuttering or unbounded memory growth. Preview, display, and high-fidelity tiers are capped (see `ARCHITECTURE.md`).
 
-**Native Windows 11 Design** — Built on the Windows App SDK (WinUI 3) for a clean, modern aesthetic with Mica material and native OS performance.
+**Native Windows 11 Design** — Built on the Windows App SDK (WinUI 3) for a clean, modern aesthetic with Mica & Acrylic materials, Light/Dark/System themes, and 3 quick-recall window & tile size presets (`Ctrl+1`, `Ctrl+2`, `Ctrl+3`).
+
+**Comic Book Reader (`.cbz` / `.cbr`) & Dual View Modes** — Browse folders in responsive Tile View or high-density multi-column List View with an instant metadata/thumbnail inspector, and read `.cbz`/`.cbr` comic archives natively with 2-page spread mode (`B`).
 
 **Collage and Cinematic (beta)** — In-app collage editor, and a cinematic slideshow whose show you can edit: reorder, hide and duplicate slides, hold a Ken Burns move on one slide, and save or reload the show. These are still being hardened; save often.
 
@@ -25,7 +27,7 @@ HEIC/HEIF and AVIF need the corresponding Windows codecs installed. If a file wi
 | Graphics | Win2D (Direct2D) |
 | Architecture | Asynchronous tiered decoding with reference-counted GPU resources for VRAM efficiency |
 
-Supported formats: JPEG, PNG, BMP, GIF, WebP, HEIC/HEIF, AVIF.
+Supported formats: JPEG, PNG, BMP, GIF, WebP, HEIC/HEIF, AVIF, CBZ, CBR.
 
 ## 📦 Installation (Portable)
 
@@ -65,6 +67,8 @@ Exit codes: `0` success, `1` publish failed, `2` output looks wrong, `3` app cra
 | | |
 |---|---|
 | **Alt** (hold) | Peek at the sidebar; it closes when you let go |
+| **Ctrl+1 / 2 / 3** | Recall saved window & tile size preset 1, 2, or 3 |
+| **B** | Toggle 2-page comic spread in the viewer |
 | **F11** | Fullscreen |
 | **← / →** | Previous / next image |
 | **Home / End** | First / last image |

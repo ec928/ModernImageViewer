@@ -78,11 +78,19 @@ namespace ModernImageViewer.Collage
 
             this.Closed += CollageEditorWindow_Closed;
             RootGrid.Loaded += Window_Loaded;
+            if (MainWindow.Instance != null)
+                ApplyAppTheme(MainWindow.Instance.CurrentRequestedTheme);
 
             UpdateProjectUI();
         }
 
         public string FormatValue(double value) => value.ToString("0");
+
+        public void ApplyAppTheme(ElementTheme theme)
+        {
+            if (RootGrid != null)
+                RootGrid.RequestedTheme = theme;
+        }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {

@@ -614,7 +614,7 @@ namespace ModernImageViewer
             string ext = Path.GetExtension(oldPath);
 
             var input = new TextBox { Text = Path.GetFileNameWithoutExtension(oldPath), SelectionStart = 0, SelectionLength = 999 };
-            var dialog = new ContentDialog { Title = "Rename", Content = input, PrimaryButtonText = "Rename", CloseButtonText = "Cancel", XamlRoot = xamlRoot };
+            var dialog = new ContentDialog { Title = "Rename", Content = input, PrimaryButtonText = "Rename", CloseButtonText = "Cancel", XamlRoot = xamlRoot, RequestedTheme = MainWindow.Instance?.CurrentRequestedTheme ?? ElementTheme.Default };
 
             if (await dialog.ShowAsync() == ContentDialogResult.Primary)
             {
@@ -644,7 +644,7 @@ namespace ModernImageViewer
         public static async Task<bool> DeleteImageAsync(ImageItem item, XamlRoot xamlRoot)
         {
             if (item.IsComicEntry) { await ShowMessageAsync(xamlRoot, "Read-Only Comic Archive", "Pages inside a .cbz / .cbr comic archive are read-only."); return false; }
-            var dialog = new ContentDialog { Title = "Delete", Content = "Move to Recycle Bin?", PrimaryButtonText = "Yes", SecondaryButtonText = "No", DefaultButton = ContentDialogButton.Primary, XamlRoot = xamlRoot };
+            var dialog = new ContentDialog { Title = "Delete", Content = "Move to Recycle Bin?", PrimaryButtonText = "Yes", SecondaryButtonText = "No", DefaultButton = ContentDialogButton.Primary, XamlRoot = xamlRoot, RequestedTheme = MainWindow.Instance?.CurrentRequestedTheme ?? ElementTheme.Default };
             if (await dialog.ShowAsync() != ContentDialogResult.Primary) return false;
             string path = item.Path;
             if (await Task.Run(() => RecycleFile(path))) return true;
@@ -654,7 +654,7 @@ namespace ModernImageViewer
 
         public static async Task ShowMessageAsync(XamlRoot xamlRoot, string title, string content)
         {
-            var dialog = new ContentDialog { Title = title, Content = content, CloseButtonText = "OK", XamlRoot = xamlRoot };
+            var dialog = new ContentDialog { Title = title, Content = content, CloseButtonText = "OK", XamlRoot = xamlRoot, RequestedTheme = MainWindow.Instance?.CurrentRequestedTheme ?? ElementTheme.Default };
             await dialog.ShowAsync();
         }
     }
