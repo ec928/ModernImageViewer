@@ -860,7 +860,7 @@ namespace ModernImageViewer
             {
                 MultiViewControl.LoadImages(items);
                 MultiViewControl.Visibility = Visibility.Visible;
-                MultiViewControl.Focus(FocusState.Programmatic);
+                MultiViewControl.FocusView();
             }
         }
 

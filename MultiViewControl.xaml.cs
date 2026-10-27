@@ -54,6 +54,13 @@ namespace ModernImageViewer
 
         public bool IsSoloActive => SoloContainer.Visibility == Visibility.Visible;
 
+        /// <summary>Hold keyboard focus on the grid itself, so the first photo's caption button does not draw a focus box.</summary>
+        public void FocusView()
+        {
+            if (!RootGrid.Focus(FocusState.Programmatic))
+                Focus(FocusState.Programmatic);
+        }
+
         public void LoadImages(IEnumerable<ImageItem> items)
         {
             _items.Clear();
@@ -707,6 +714,10 @@ namespace ModernImageViewer
                 Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
                 BorderThickness = new Thickness(0),
                 CornerRadius = new CornerRadius(0),
+                IsTabStop = false,
+                UseSystemFocusVisuals = false,
+                FocusVisualPrimaryThickness = new Thickness(0),
+                FocusVisualSecondaryThickness = new Thickness(0),
                 Content = new FontIcon { FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), Glyph = "\uE922", FontSize = 10, Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(240, 255, 255, 255)) }
             };
             maxBtn.Resources["ButtonBackgroundPointerOver"] = new SolidColorBrush(Windows.UI.Color.FromArgb(24, 255, 255, 255));
@@ -726,6 +737,10 @@ namespace ModernImageViewer
                 Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
                 BorderThickness = new Thickness(0),
                 CornerRadius = new CornerRadius(0),
+                IsTabStop = false,
+                UseSystemFocusVisuals = false,
+                FocusVisualPrimaryThickness = new Thickness(0),
+                FocusVisualSecondaryThickness = new Thickness(0),
                 Content = new FontIcon { FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), Glyph = "\uE8BB", FontSize = 10, Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(240, 255, 255, 255)) }
             };
             closeBtn.Resources["ButtonBackgroundPointerOver"] = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 196, 43, 28));

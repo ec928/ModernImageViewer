@@ -5,9 +5,24 @@
     xmlns:local="using:ModernImageViewer"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    mc:Ignorable="d">
+    mc:Ignorable="d"
+    IsTabStop="True"
+    UseSystemFocusVisuals="False"
+    FocusVisualPrimaryThickness="0"
+    FocusVisualSecondaryThickness="0">
 
-    <Grid x:Name="RootGrid" Background="#FF080808" RequestedTheme="Dark" PointerMoved="RootGrid_PointerMoved">
+    <UserControl.Resources>
+        <!-- Caption and playbar buttons are pointer chrome. A tab stop here draws a white focus box on the first photo when the grid opens. -->
+        <Style x:Key="QuietButtonStyle" TargetType="Button" BasedOn="{StaticResource SubtleButtonStyle}">
+            <Setter Property="IsTabStop" Value="False"/>
+            <Setter Property="UseSystemFocusVisuals" Value="False"/>
+            <Setter Property="FocusVisualPrimaryThickness" Value="0"/>
+            <Setter Property="FocusVisualSecondaryThickness" Value="0"/>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid x:Name="RootGrid" Background="#FF080808" RequestedTheme="Dark" PointerMoved="RootGrid_PointerMoved"
+          IsTabStop="True" UseSystemFocusVisuals="False" FocusVisualPrimaryThickness="0" FocusVisualSecondaryThickness="0">
         <!-- Main Tiled Layout Container (Zero wasted space: edge to edge) -->
         <Grid x:Name="CellsGrid" Margin="0" Canvas.ZIndex="10">
             <!-- Dynamic Columns and Rows generated in C# -->
@@ -37,7 +52,7 @@
                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                     <!-- Back to Grid Button -->
                     <Button Click="CloseButton_Click" 
-                            Style="{StaticResource SubtleButtonStyle}" 
+                            Style="{StaticResource QuietButtonStyle}" 
                             Padding="8,5" 
                             CornerRadius="14" 
                             ToolTipService.ToolTip="Back to Grid (Esc)">
@@ -60,7 +75,7 @@
                     <!-- Fill / Fit Toggle Button (Default: Fill for Zero Wasted Space) -->
                     <Button x:Name="FillFitButton" 
                             Click="FillFitButton_Click" 
-                            Style="{StaticResource SubtleButtonStyle}" 
+                            Style="{StaticResource QuietButtonStyle}" 
                             Padding="8,5" 
                             CornerRadius="14" 
                             ToolTipService.ToolTip="Toggle Fill / Fit (F)">
@@ -73,7 +88,7 @@
                     <!-- Layout Toggle Button (shown when 2+ items) -->
                     <Button x:Name="OrientationToggleButton" 
                             Click="OrientationToggle_Click" 
-                            Style="{StaticResource SubtleButtonStyle}" 
+                            Style="{StaticResource QuietButtonStyle}" 
                             Padding="8,5" 
                             CornerRadius="14" 
                             ToolTipService.ToolTip="Toggle Layout (Tab)">
@@ -90,7 +105,7 @@
                     <!-- Swap Positions Button (shown when 2+ items) -->
                     <Button x:Name="SwapButton" 
                             Click="SwapButton_Click" 
-                            Style="{StaticResource SubtleButtonStyle}" 
+                            Style="{StaticResource QuietButtonStyle}" 
                             Padding="8,5" 
                             CornerRadius="14" 
                             ToolTipService.ToolTip="Swap Image Positions (S)">
@@ -102,7 +117,7 @@
 
                     <!-- Reset Zooms Button -->
                     <Button Click="ResetZoom_Click" 
-                            Style="{StaticResource SubtleButtonStyle}" 
+                            Style="{StaticResource QuietButtonStyle}" 
                             Padding="8,5" 
                             CornerRadius="14" 
                             ToolTipService.ToolTip="Reset Pan &amp; Zoom (Middle-Click)">
@@ -116,7 +131,7 @@
 
                     <!-- Close Button -->
                     <Button Click="CloseButton_Click" 
-                            Style="{StaticResource SubtleButtonStyle}" 
+                            Style="{StaticResource QuietButtonStyle}" 
                             Padding="8,5" 
                             CornerRadius="14" 
                             ToolTipService.ToolTip="Close (Esc)">
@@ -155,22 +170,22 @@
                     <ThemeShadow/>
                 </Border.Shadow>
                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                    <Button Click="ExitSolo_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" ToolTipService.ToolTip="Back to Multi-View (Esc)">
+                    <Button Click="ExitSolo_Click" Style="{StaticResource QuietButtonStyle}" Padding="8,5" CornerRadius="12" ToolTipService.ToolTip="Back to Multi-View (Esc)">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <SymbolIcon Symbol="Back" />
                             <TextBlock Text="All Photos" FontSize="13" />
                         </StackPanel>
                     </Button>
                     <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,4" Opacity="0.4"/>
-                    <Button Click="PrevSolo_Click" Style="{StaticResource SubtleButtonStyle}" Padding="6,4" ToolTipService.ToolTip="Previous (Left Arrow)">
+                    <Button Click="PrevSolo_Click" Style="{StaticResource QuietButtonStyle}" Padding="6,4" ToolTipService.ToolTip="Previous (Left Arrow)">
                         <SymbolIcon Symbol="Previous" />
                     </Button>
                     <TextBlock x:Name="SoloCounterText" Text="1 of 4" VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold" Margin="4,0" />
-                    <Button Click="NextSolo_Click" Style="{StaticResource SubtleButtonStyle}" Padding="6,4" ToolTipService.ToolTip="Next (Right Arrow)">
+                    <Button Click="NextSolo_Click" Style="{StaticResource QuietButtonStyle}" Padding="6,4" ToolTipService.ToolTip="Next (Right Arrow)">
                         <SymbolIcon Symbol="Next" />
                     </Button>
                     <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,4" Opacity="0.4"/>
-                    <Button Click="ResetSoloZoom_Click" Style="{StaticResource SubtleButtonStyle}" Padding="6,4" ToolTipService.ToolTip="Fit to Screen (Middle-Click)">
+                    <Button Click="ResetSoloZoom_Click" Style="{StaticResource QuietButtonStyle}" Padding="6,4" ToolTipService.ToolTip="Fit to Screen (Middle-Click)">
                         <SymbolIcon Symbol="ZoomOut" />
                     </Button>
                 </StackPanel>
@@ -179,7 +194,7 @@
             <Grid x:Name="SoloTopRightControls" HorizontalAlignment="Right" VerticalAlignment="Top" Canvas.ZIndex="60"
                   PointerEntered="Hud_PointerEntered" PointerExited="Hud_PointerExited">
                 <StackPanel Orientation="Horizontal">
-                    <Button Click="ExitSolo_Click" Width="46" Height="32" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="0" ToolTipService.ToolTip="Restore to Multi-View (Esc)">
+                    <Button Click="ExitSolo_Click" Width="46" Height="32" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="0" IsTabStop="False" UseSystemFocusVisuals="False" FocusVisualPrimaryThickness="0" FocusVisualSecondaryThickness="0" ToolTipService.ToolTip="Restore to Multi-View (Esc)">
                         <Button.Resources>
                             <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#18FFFFFF"/>
                             <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#10FFFFFF"/>
@@ -188,7 +203,7 @@
                         </Button.Resources>
                         <FontIcon Glyph="&#xE923;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="10" Foreground="#F0FFFFFF"/>
                     </Button>
-                    <Button Click="CloseButton_Click" Width="46" Height="32" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="0" ToolTipService.ToolTip="Close (Esc)">
+                    <Button Click="CloseButton_Click" Width="46" Height="32" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="0" IsTabStop="False" UseSystemFocusVisuals="False" FocusVisualPrimaryThickness="0" FocusVisualSecondaryThickness="0" ToolTipService.ToolTip="Close (Esc)">
                         <Button.Resources>
                             <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#C42B1C"/>
                             <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#991B10"/>
