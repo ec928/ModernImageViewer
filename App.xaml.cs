@@ -12,10 +12,23 @@ namespace ModernImageViewer
         {
             InitializeComponent();
             this.UnhandledException += App_UnhandledException;
+            AppDomain.CurrentDomain.UnhandledException += (s, a) => LogCrash(a.ExceptionObject?.ToString());
+            System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (s, a) => LogCrash(a.Exception?.ToString());
+        }
+
+        private static void LogCrash(string? msg)
+        {
+            try
+            {
+                string logFile = System.IO.Path.Combine(AppPaths.LocalDirectory, "crash.log");
+                System.IO.File.AppendAllText(logFile, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {msg}\n\n");
+            }
+            catch { }
         }
 
         private void App_UnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
         {
+            LogCrash(e.Exception?.ToString());
             System.Diagnostics.Debug.WriteLine($"[CRITICAL] Unhandled Exception: {e.Exception}");
             try
             {

@@ -411,7 +411,7 @@
                         </GridView.Resources>
                         <GridView.ItemsPanel>
                             <ItemsPanelTemplate>
-                                <ItemsWrapGrid x:Name="ImageWrapGrid" Orientation="Horizontal" CacheLength="10" ItemWidth="164" ItemHeight="164" Loaded="ImageWrapGrid_Loaded" />
+                                <ItemsWrapGrid x:Name="ImageWrapGrid" Orientation="Horizontal" CacheLength="2" ItemWidth="164" ItemHeight="164" Loaded="ImageWrapGrid_Loaded" />
                             </ItemsPanelTemplate>
                         </GridView.ItemsPanel>
                         <GridView.ItemTemplate>

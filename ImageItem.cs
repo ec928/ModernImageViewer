@@ -155,12 +155,11 @@ namespace ModernImageViewer
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(TileVisibility));
                 OnPropertyChanged(nameof(ListVisibility));
-                OnPropertyChanged(nameof(SelectionWashOpacity));
             }
         }
 
-        public Visibility TileVisibility => _isListRow ? Visibility.Collapsed : Visibility.Visible;
-        public Visibility ListVisibility => _isListRow ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility TileVisibility => (IsDirectory || ListRows || _isListRow) ? Visibility.Collapsed : Visibility.Visible;
+        public Visibility ListVisibility => (IsDirectory || ListRows || _isListRow) ? Visibility.Visible : Visibility.Collapsed;
 
         // A list cell that navigates. It is never one of the photos in Images.
         public bool IsDirectory { get; private set; }

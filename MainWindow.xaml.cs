@@ -620,11 +620,19 @@ namespace ModernImageViewer
                     WriteIndented = true
                 });
 
-                string? dir = Path.GetDirectoryName(_settingsPath);
-                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-                    Directory.CreateDirectory(dir);
+                string settingsPath = _settingsPath;
+                Task.Run(() =>
+                {
+                    try
+                    {
+                        string? dir = Path.GetDirectoryName(settingsPath);
+                        if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                            Directory.CreateDirectory(dir);
 
-                File.WriteAllText(_settingsPath, json);
+                        File.WriteAllText(settingsPath, json);
+                    }
+                    catch { }
+                });
             }
             catch { }
         }

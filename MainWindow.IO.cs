@@ -133,6 +133,7 @@ namespace ModernImageViewer
             Images.Clear();
             _childFolders = [];
             if (_listEntries.Count > 0) _listEntries.Clear();
+            _listEntriesValid = false;
             if (LoadingRing != null) LoadingRing.IsActive = false;
             if (LoadingOverlay != null) LoadingOverlay.Visibility = Visibility.Collapsed;
 
@@ -308,6 +309,7 @@ namespace ModernImageViewer
                 if (myScanId == _currentScanId)
                 {
                     if (_listMode) RebuildListEntries();
+                    else _listEntriesValid = false;
                     if (items.Count > 0 && !isComicArchive) AddFolderToRecent(folderPath);
                     bool returnedToItem = TryPlaceTileCursorOnReturnedItem();
                     bool seeded = false;
@@ -934,6 +936,10 @@ namespace ModernImageViewer
                     {
                         PlaceListCursorOnCurrentImage();
                     }
+                }
+                else
+                {
+                    _listEntriesValid = false;
                 }
                 SyncTileCursor(scroll: true);
 

@@ -1145,12 +1145,9 @@ namespace ModernImageViewer
             }
             foreach (var folder in _childFolders)
                 entries.Add(DirectoryCell(folder.Name, folder.Path, false));
-            foreach (var image in Images)
-            {
-                image.IsListRow = true;
-                entries.Add(image);
-            }
+            entries.AddRange(Images);
             _listEntries.ResetWith(entries);
+            _listEntriesValid = true;
         }
 
         private ImageItem DirectoryCell(string name, string path, bool parent)
@@ -1696,7 +1693,7 @@ namespace ModernImageViewer
         {
             if (ImageGrid == null || index < 0 || index >= DisplayCount()) return;
             ImageItem item = _listMode ? _listEntries[index] : Images[index];
-            var sv = FindScrollViewer(ImageGrid);
+            var sv = GetGridScrollViewer();
             if (sv == null)
             {
                 ImageGrid.ScrollIntoView(item);
@@ -2203,6 +2200,14 @@ namespace ModernImageViewer
 
         private bool _listMode;
         private bool _applyingViewMode;
+        private bool _listEntriesValid;
+        private ScrollViewer? _gridScrollViewer;
+        private ScrollViewer? GetGridScrollViewer()
+        {
+            if (_gridScrollViewer != null) return _gridScrollViewer;
+            if (ImageGrid != null) _gridScrollViewer = FindScrollViewer(ImageGrid);
+            return _gridScrollViewer;
+        }
         private const double ListRowHeight = 26;
         private const double ListColumnWidth = 200;
         // Same wrap as the photos. Folders are only the first cells, and only while the list is showing.
@@ -2259,49 +2264,58 @@ namespace ModernImageViewer
             _applyingViewMode = true;
             try
             {
-            ImageItem.ListRows = _listMode;
-            foreach (var item in Images) item.IsListRow = _listMode;
-            SyncViewModeButtons();
-            if (_listMode)
-                ImageGrid.Padding = new Thickness(0, 4, 0, 0);
-            else
-                ImageGrid.Padding = new Thickness(10, 8, 10, 12);
-            if (ListPreviewBar != null)
-                ListPreviewBar.Visibility = _listMode ? Visibility.Visible : Visibility.Collapsed;
-            if (_listMode)
-            {
-                RebuildListEntries();
-                if (!ReferenceEquals(ImageGrid.ItemsSource, _listEntries))
-                    ImageGrid.ItemsSource = _listEntries;
-                if (Images.Count > 0 && (_currentIndex < 0 || _currentIndex >= Images.Count))
-                    _currentIndex = 0;
-                PlaceListCursorOnCurrentImage();
-            }
-            else
-            {
-                if (_listCursor >= 0 && _listCursor < _listEntries.Count && !_listEntries[_listCursor].IsDirectory)
+                ImageItem.ListRows = _listMode;
+                SyncViewModeButtons();
+                if (_listMode)
+                    ImageGrid.Padding = new Thickness(0, 4, 0, 0);
+                else
+                    ImageGrid.Padding = new Thickness(10, 8, 10, 12);
+                if (ListPreviewBar != null)
+                    ListPreviewBar.Visibility = _listMode ? Visibility.Visible : Visibility.Collapsed;
+
+
+
+                if (_listMode)
                 {
-                    int photo = Images.IndexOf(_listEntries[_listCursor]);
-                    if (photo >= 0) _currentIndex = photo;
+                    if (!_listEntriesValid || _listEntries.Count == 0)
+                        RebuildListEntries();
+                    if (!ReferenceEquals(ImageGrid.ItemsSource, _listEntries))
+                        ImageGrid.ItemsSource = _listEntries;
+                    if (Images.Count > 0 && (_currentIndex < 0 || _currentIndex >= Images.Count))
+                        _currentIndex = 0;
+                    PlaceListCursorOnCurrentImage();
                 }
-                if (!ReferenceEquals(ImageGrid.ItemsSource, Images))
-                    ImageGrid.ItemsSource = Images;
-            }
-            ApplyItemSize();
-            UpdateEmptyFolderState();
-            ImageGrid.UpdateLayout();
-            SyncTileCursor(scroll: false);
-            KeepCursorInView();
-            // The click leaves focus on the header button, which then swallows the arrow keys.
-            // The wrap grid also resets its scroll offset while the new cell size is applied.
-            int index = _currentIndex;
-            ImageGrid.DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
-            {
-                if (index != _currentIndex) return;
+                else
+                {
+                    if (_listCursor >= 0 && _listCursor < _listEntries.Count && !_listEntries[_listCursor].IsDirectory)
+                    {
+                        int prefix = _listEntries.Count - Images.Count;
+                        int photo = _listCursor - prefix;
+                        if (photo >= 0 && photo < Images.Count && ReferenceEquals(Images[photo], _listEntries[_listCursor]))
+                            _currentIndex = photo;
+                        else
+                        {
+                            int found = Images.IndexOf(_listEntries[_listCursor]);
+                            if (found >= 0) _currentIndex = found;
+                        }
+                    }
+                    if (!ReferenceEquals(ImageGrid.ItemsSource, Images))
+                        ImageGrid.ItemsSource = Images;
+                }
+                ApplyItemSize();
+                UpdateEmptyFolderState();
                 SyncTileCursor(scroll: false);
                 KeepCursorInView();
-                RootGrid.Focus(FocusState.Programmatic);
-            });
+                // The click leaves focus on the header button, which then swallows the arrow keys.
+                // The wrap grid also resets its scroll offset while the new cell size is applied.
+                int index = _currentIndex;
+                ImageGrid.DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+                {
+                    if (index != _currentIndex) return;
+                    SyncTileCursor(scroll: false);
+                    KeepCursorInView();
+                    RootGrid.Focus(FocusState.Programmatic);
+                });
             }
             finally
             {
@@ -2394,7 +2408,7 @@ namespace ModernImageViewer
         private double ListViewportWidth()
         {
             double pad = ImageGrid != null ? (ImageGrid.Padding.Left + ImageGrid.Padding.Right) : 0;
-            var sv = ImageGrid != null ? FindScrollViewer(ImageGrid) : null;
+            var sv = GetGridScrollViewer();
             if (sv != null && sv.ViewportWidth > 1) return Math.Max(0, sv.ViewportWidth - pad);
             if (_imageWrapGrid != null && _imageWrapGrid.ActualWidth > 1) return _imageWrapGrid.ActualWidth;
             if (ImageGrid == null) return 0;
@@ -2404,7 +2418,7 @@ namespace ModernImageViewer
         // The first list layout can leave the grid scrolled sideways, so the left column is cut off until a photo is opened.
         private void PinListToLeftEdge()
         {
-            var sv = FindScrollViewer(ImageGrid);
+            var sv = GetGridScrollViewer();
             if (sv == null || sv.HorizontalOffset < 0.5) return;
             sv.ChangeView(0, null, null, true);
         }
@@ -2813,14 +2827,22 @@ namespace ModernImageViewer
 
         private void ImageGrid_ContainerContentChanging(ListViewBase s, ContainerContentChangingEventArgs a)
         {
-            if (a.ItemContainer is GridViewItem container && TileCard(container) is Grid card)
+            if (a.ItemContainer is GridViewItem container && container.ContentTemplateRoot is Grid root && root.Children.Count >= 2)
+            {
+                if (root.Children[0] is FrameworkElement tileCard)
+                    tileCard.Visibility = _listMode ? Visibility.Collapsed : Visibility.Visible;
+                if (root.Children[1] is FrameworkElement listRow)
+                    listRow.Visibility = _listMode ? Visibility.Visible : Visibility.Collapsed;
+            }
+
+            if (!_listMode && a.ItemContainer is GridViewItem gvi && TileCard(gvi) is Grid card)
             {
                 if (a.InRecycleQueue)
                 {
                     if (ReferenceEquals(_hoveredCard, card)) _hoveredCard = null;
                     SetTileRaised(card, false);
                 }
-                else if (!_listMode && a.Item is ImageItem shown)
+                else if (a.Item is ImageItem shown)
                     SetTileRaised(card, shown.IsKeyboardCursor || ReferenceEquals(card, _hoveredCard));
             }
             if (a.Item is ImageItem i)
