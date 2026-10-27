@@ -81,6 +81,7 @@ namespace ModernImageViewer
         public event EventHandler<int>? NavigateRequested;
         public event EventHandler? SizeToImageRequested;
         public event EventHandler? ShowInExplorerRequested;
+        public event EventHandler? SwitchToMainRequested;
         public event EventHandler? DeviceLostRestoring;
         public event EventHandler<int>? DetachLimitRequested;
 
@@ -165,6 +166,7 @@ namespace ModernImageViewer
 
                 UnifiedHud.IsHitTestVisible = false;
                 TopLeftInfoOverlay.IsHitTestVisible = false;
+                if (TopRightWindowControls != null) TopRightWindowControls.IsHitTestVisible = false;
                 if (AnimationHud != null) AnimationHud.IsHitTestVisible = false;
                 FadeOutStoryboard.Begin();
                 _hudTimer.Stop();
@@ -179,7 +181,7 @@ namespace ModernImageViewer
             };
 
             this.Unloaded += ImageViewerControl_Unloaded;
-            this.Loaded += (s, e) => SyncContextMenus();
+            this.Loaded += (s, e) => { SyncContextMenus(); UpdateBookSpreadVisibility(); };
         }
 
         private void SyncContextMenus()
@@ -203,7 +205,11 @@ namespace ModernImageViewer
 
         private static void OnTargetImageChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            if (d is ImageViewerControl control) control.ResetPanState();
+            if (d is ImageViewerControl control)
+            {
+                control.ResetPanState();
+                control.UpdateBookSpreadVisibility();
+            }
         }
 
         private static void OnAllowDetachChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -226,7 +232,23 @@ namespace ModernImageViewer
                 var separator = control.FindName("SizeToImageSeparator") as MenuFlyoutSeparator;
                 if (separator != null) separator.Visibility = standalone ? Visibility.Visible : Visibility.Collapsed;
 
-                control.MinimizeButton.Visibility = standalone ? Visibility.Visible : Visibility.Collapsed;
+                if (control.SwitchToMainButton != null) control.SwitchToMainButton.Visibility = standalone ? Visibility.Visible : Visibility.Collapsed;
+                if (control.FullscreenButton != null) control.FullscreenButton.Visibility = standalone ? Visibility.Collapsed : Visibility.Visible;
+                if (control.WindowActionsSeparator != null) control.WindowActionsSeparator.Visibility = Visibility.Visible;
+                if (control.CloseSeparator != null) control.CloseSeparator.Visibility = standalone ? Visibility.Collapsed : Visibility.Visible;
+                if (control.CloseButton != null) control.CloseButton.Visibility = standalone ? Visibility.Collapsed : Visibility.Visible;
+
+                if (control.TopRightWindowControls != null)
+                {
+                    control.TopRightWindowControls.Visibility = standalone ? Visibility.Visible : Visibility.Collapsed;
+                    if (!standalone)
+                    {
+                        control.TopRightWindowControls.Opacity = 0;
+                        control.TopRightWindowControls.IsHitTestVisible = false;
+                    }
+                }
+
+                control.UpdateBookSpreadVisibility();
             }
         }
 
@@ -238,6 +260,27 @@ namespace ModernImageViewer
             _rawGpuBitmap = null;
             _animationFrames = null;
             ClearSecondPage();
+        }
+
+        public void SetIsMaximizedOrFullscreen(bool isMaxOrFullscreen)
+        {
+            if (TopMaxIcon != null)
+            {
+                TopMaxIcon.Glyph = isMaxOrFullscreen ? "\uE923" : "\uE922";
+            }
+            if (TopMaxButton != null)
+            {
+                ToolTipService.SetToolTip(TopMaxButton, isMaxOrFullscreen ? "Restore" : "Maximize");
+            }
+        }
+
+        public void UpdateBookSpreadVisibility()
+        {
+            if (BookSpreadButton == null) return;
+            // In standalone (detached) mode: comic spread is always useless for a single detached image and removed.
+            // In normal preview mode: only show comic spread button if viewing pages inside a comic archive (CBR/CBZ).
+            bool isComic = !IsStandaloneMode && TargetImage != null && TargetImage.IsComicEntry;
+            BookSpreadButton.Visibility = isComic ? Visibility.Visible : Visibility.Collapsed;
         }
 
         public void ClearSecondPage()
@@ -590,8 +633,10 @@ namespace ModernImageViewer
             if (HudZoomInfo != null) HudZoomInfo.Text = TargetImage.GetZoomString(_targetZoom);
             if (HudFidelity != null) HudFidelity.Text = _isHighFidelityActive ? "HF" : "LF";
 
+            UpdateBookSpreadVisibility();
             if (TopLeftInfoOverlay != null) TopLeftInfoOverlay.IsHitTestVisible = false;
             if (UnifiedHud != null) UnifiedHud.IsHitTestVisible = true;
+            if (TopRightWindowControls != null && IsStandaloneMode) TopRightWindowControls.IsHitTestVisible = true;
             if (AnimationHud != null && AnimationHud.Visibility == Visibility.Visible) AnimationHud.IsHitTestVisible = true;
 
             if (FadeInStoryboard != null) FadeInStoryboard.Begin();
@@ -862,6 +907,7 @@ namespace ModernImageViewer
                 {
                     UnifiedHud.IsHitTestVisible = false;
                     TopLeftInfoOverlay.IsHitTestVisible = false;
+                    if (TopRightWindowControls != null) TopRightWindowControls.IsHitTestVisible = false;
                     if (AnimationHud != null) AnimationHud.IsHitTestVisible = false;
                     FadeOutStoryboard.Begin();
                 }
@@ -1027,6 +1073,7 @@ namespace ModernImageViewer
         }
 
         // Broadcast Events to Parent
+        private void SwitchToMain_Click(object sender, RoutedEventArgs e) => SwitchToMainRequested?.Invoke(this, EventArgs.Empty);
         private void ShowInExplorer_Click(object sender, RoutedEventArgs e) => ShowInExplorerRequested?.Invoke(this, EventArgs.Empty);
         private void ClosePreview_Click(object sender, RoutedEventArgs e) => CloseRequested?.Invoke(this, EventArgs.Empty);
         private void DetachImage_Click(object sender, RoutedEventArgs e) => DetachRequested?.Invoke(this, _lastHudTriggerPos);

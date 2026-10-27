@@ -118,6 +118,7 @@ namespace ModernImageViewer
             _hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
             Microsoft.UI.WindowId wndId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(_hWnd);
             _appWindow = AppWindow.GetFromWindowId(wndId);
+            _appWindow.Closing += AppWindow_Closing;
 
             this.ExtendsContentIntoTitleBar = true;
             var titleBar = _appWindow.TitleBar;
@@ -266,6 +267,18 @@ namespace ModernImageViewer
             else DetachedPaths[path] = 1;
         }
 
+        private bool _isMainWindowHidden = false;
+
+        private void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)
+        {
+            if (DetachedPaths.Count > 0)
+            {
+                args.Cancel = true;
+                _isMainWindowHidden = true;
+                sender.Hide();
+            }
+        }
+
         public void UnregisterDetachedWindow(string path)
         {
             if (string.IsNullOrEmpty(path)) return;
@@ -275,6 +288,12 @@ namespace ModernImageViewer
                 else DetachedPaths[path] = count - 1;
             }
             ManageCache(_currentIndex, 0);
+
+            if (_isMainWindowHidden && DetachedPaths.Count == 0)
+            {
+                _isMainWindowHidden = false;
+                this.Close();
+            }
         }
 
         public event Action<float>? GammaApplied;
@@ -430,40 +449,44 @@ namespace ModernImageViewer
             }
         }
 
+        private List<ImageItem>? _draggedGridItems;
+        private NativeMethods.POINT _gridDragStartCursorPos;
+
         private void ImageGrid_DragItemsStarting(object sender, DragItemsStartingEventArgs e)
         {
-            var paths = e.Items.OfType<ImageItem>()
-                .Select(i => i.Path)
-                .Where(p => !string.IsNullOrEmpty(p) && File.Exists(p))
-                .ToArray();
-            if (paths.Length == 0) return;
+            var items = e.Items.OfType<ImageItem>().ToList();
+            if (items.Count == 0) return;
 
-            // The data package is read when this method returns. StorageFile is async, so the
-            // files are supplied when the drop target asks for them.
-            e.Data.RequestedOperation = DataPackageOperation.Copy | DataPackageOperation.Move;
-            e.Data.SetDataProvider(StandardDataFormats.StorageItems, request =>
-            {
-                var deferral = request.GetDeferral();
-                _ = ProvideDraggedFilesAsync(request, deferral, paths);
-            });
+            _draggedGridItems = items;
+            NativeMethods.GetCursorPos(out _gridDragStartCursorPos);
+
+            // Safe drag-to-detach: do not provide StorageItems with Move/Copy, which would allow
+            // Windows Explorer to delete/move the real image file off disk.
+            e.Data.RequestedOperation = DataPackageOperation.None;
+            e.Data.SetText(items[0].Path ?? string.Empty);
         }
 
-        private static async Task ProvideDraggedFilesAsync(DataProviderRequest request, DataProviderDeferral deferral, string[] paths)
+        private void ImageGrid_DragItemsCompleted(ListViewBase sender, DragItemsCompletedEventArgs e)
         {
-            try
+            var items = _draggedGridItems;
+            _draggedGridItems = null;
+
+            if (items == null || items.Count == 0) return;
+
+            NativeMethods.GetCursorPos(out var dropCursorPos);
+            int dx = dropCursorPos.X - _gridDragStartCursorPos.X;
+            int dy = dropCursorPos.Y - _gridDragStartCursorPos.Y;
+
+            // If mouse moved far enough (user dragged away from tile), detach window at drop location
+            if (Math.Sqrt(dx * dx + dy * dy) >= 20)
             {
-                var items = new List<IStorageItem>(paths.Length);
-                foreach (var path in paths)
+                int offset = 0;
+                foreach (var item in items)
                 {
-                    try { items.Add(await StorageFile.GetFileFromPathAsync(path)); }
-                    catch (Exception ex) { Debug.WriteLine($"[Drag] {path}: {ex.Message}"); }
+                    var spawn = new Windows.Graphics.PointInt32(dropCursorPos.X + offset, dropCursorPos.Y + offset);
+                    LaunchDetachedWindow(item, cursorSpawnPosition: null, screenSpawnPosition: spawn);
+                    offset += 24;
                 }
-                if (items.Count > 0)
-                    request.SetData(items);
-            }
-            finally
-            {
-                deferral.Complete();
             }
         }
 

@@ -1,5 +1,6 @@
 using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Effects;
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -37,11 +38,13 @@ namespace ModernImageViewer
             _rawGpuBitmap = null;
         }
 
-        public async void LaunchDetachedWindow(ImageItem targetItem, Point? cursorSpawnPosition = null)
+        public async void LaunchDetachedWindow(ImageItem targetItem, Point? cursorSpawnPosition = null, Windows.Graphics.PointInt32? screenSpawnPosition = null)
         {
             if (targetItem == null) return;
 
-            var displayArea = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(_appWindow.Id, Microsoft.UI.Windowing.DisplayAreaFallback.Nearest);
+            var displayArea = screenSpawnPosition.HasValue
+                ? Microsoft.UI.Windowing.DisplayArea.GetFromPoint(screenSpawnPosition.Value, Microsoft.UI.Windowing.DisplayAreaFallback.Nearest)
+                : Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(_appWindow.Id, Microsoft.UI.Windowing.DisplayAreaFallback.Nearest);
             double workAreaW = displayArea.WorkArea.Width;
             double workAreaH = displayArea.WorkArea.Height;
 
@@ -181,6 +184,17 @@ namespace ModernImageViewer
                 _tearingOffWindow = detachedWindow;
                 _tearOffStartPos = cursorSpawnPosition.Value;
                 NativeMethods.ShowWindow(hwnd, NativeMethods.SW_SHOWNOACTIVATE);
+            }
+            else if (screenSpawnPosition.HasValue)
+            {
+                int spawnX = screenSpawnPosition.Value.X - (finalW / 2);
+                int spawnY = screenSpawnPosition.Value.Y - (finalH / 2);
+
+                spawnX = Math.Clamp(spawnX, displayArea.WorkArea.X, Math.Max(displayArea.WorkArea.X, displayArea.WorkArea.X + displayArea.WorkArea.Width - finalW));
+                spawnY = Math.Clamp(spawnY, displayArea.WorkArea.Y, Math.Max(displayArea.WorkArea.Y, displayArea.WorkArea.Y + displayArea.WorkArea.Height - finalH));
+
+                appWindow.Move(new Windows.Graphics.PointInt32(spawnX, spawnY));
+                detachedWindow.Activate();
             }
             else
             {
@@ -772,6 +786,65 @@ namespace ModernImageViewer
                 if (result != null) return result;
             }
             return null;
+        }
+
+        public async void SummonMainPreview(string targetPath)
+        {
+            if (_isMainWindowHidden)
+            {
+                _isMainWindowHidden = false;
+                _appWindow.Show();
+            }
+
+            if (_appWindow.Presenter is OverlappedPresenter presenter)
+            {
+                if (presenter.State == OverlappedPresenterState.Minimized)
+                {
+                    presenter.Restore();
+                }
+            }
+
+            this.Activate();
+
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            NativeMethods.ShowWindow(hwnd, 9); // SW_RESTORE
+            NativeMethods.SetForegroundWindow(hwnd);
+
+            if (string.IsNullOrEmpty(targetPath)) return;
+
+            // 1. If already loaded in current Images collection
+            var existingItem = Images.FirstOrDefault(x => x.Path.Equals(targetPath, StringComparison.OrdinalIgnoreCase));
+            if (existingItem != null)
+            {
+                int idx = Images.IndexOf(existingItem);
+                LoadFullImage(idx);
+                return;
+            }
+
+            // 2. If it's a comic archive entry (e.g. archive.cbz|page.jpg)
+            if (ComicArchive.TrySplitEntryPath(targetPath, out string archivePath, out _))
+            {
+                if (File.Exists(archivePath))
+                {
+                    await ScanFolder(archivePath, openFirstPage: false);
+                    var comicItem = Images.FirstOrDefault(x => x.Path.Equals(targetPath, StringComparison.OrdinalIgnoreCase));
+                    if (comicItem != null)
+                    {
+                        LoadFullImage(Images.IndexOf(comicItem));
+                    }
+                    else if (Images.Count > 0)
+                    {
+                        LoadFullImage(0);
+                    }
+                }
+                return;
+            }
+
+            // 3. Regular file on disk
+            if (File.Exists(targetPath))
+            {
+                HandleFileActivation(targetPath);
+            }
         }
 
         private void ClosePreviewInternal(bool isTearOff = false)
@@ -1858,7 +1931,10 @@ namespace ModernImageViewer
                     case Windows.System.VirtualKey.Home: Navigate(int.MinValue); break;
                     case Windows.System.VirtualKey.End: Navigate(int.MaxValue); break;
                     case Windows.System.VirtualKey.B:
-                        ViewerControl.SetBookSpreadMode(!ViewerControl.BookSpreadMode, notify: true);
+                        if (_currentIndex >= 0 && _currentIndex < Images.Count && Images[_currentIndex].IsComicEntry)
+                        {
+                            ViewerControl.SetBookSpreadMode(!ViewerControl.BookSpreadMode, notify: true);
+                        }
                         break;
                     case Windows.System.VirtualKey.Escape: ClosePreviewInternal(); break;
                     case Windows.System.VirtualKey.Delete: ViewerControl_DeleteRequested(this, EventArgs.Empty); break;

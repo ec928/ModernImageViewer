@@ -122,6 +122,7 @@ namespace ModernImageViewer
                 ViewerControl.FitToWindow();
             }
             _wasMaximizedOrFullscreen = isMaxOrFullscreen;
+            ViewerControl.SetIsMaximizedOrFullscreen(isMaxOrFullscreen);
         }
 
         private void RootGrid_PointerPressed(object sender, PointerRoutedEventArgs e)
@@ -269,6 +270,7 @@ namespace ModernImageViewer
             ViewerControl.DeleteRequested -= ViewerControl_DeleteRequested;
             ViewerControl.AddToCollageRequested -= ViewerControl_AddToCollageRequested;
             ViewerControl.ShowInExplorerRequested -= ViewerControl_ShowInExplorerRequested;
+            ViewerControl.SwitchToMainRequested -= ViewerControl_SwitchToMainRequested;
         }
 
         private void ApplyInitialZoomOrFit()
@@ -428,7 +430,26 @@ namespace ModernImageViewer
 
         // Nullable signatures updated for CS8622
         private void ViewerControl_CloseRequested(object? sender, EventArgs e) => this.Close();
-        private void ViewerControl_ToggleFullscreenRequested(object? sender, EventArgs e) => ToggleFullscreen();
+        private void ViewerControl_ToggleFullscreenRequested(object? sender, EventArgs e)
+        {
+            if (_isFullscreen)
+            {
+                ToggleFullscreen();
+                return;
+            }
+
+            if (_appWindow.Presenter is OverlappedPresenter presenter)
+            {
+                if (presenter.State == OverlappedPresenterState.Maximized)
+                {
+                    presenter.Restore();
+                }
+                else
+                {
+                    presenter.Maximize();
+                }
+            }
+        }
         private void ViewerControl_DeviceLostRestoring(object? sender, EventArgs e) => LoadImageAsync();
 
         private void ViewerControl_ShowInExplorerRequested(object? sender, EventArgs e)
@@ -442,8 +463,15 @@ namespace ModernImageViewer
 
         private void ViewerControl_MinimizeRequested(object? sender, EventArgs e)
         {
-            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-            NativeMethods.ShowWindow(hwnd, 6);
+            if (_appWindow.Presenter is OverlappedPresenter presenter)
+            {
+                presenter.Minimize();
+            }
+            else
+            {
+                var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+                NativeMethods.ShowWindow(hwnd, 6);
+            }
         }
 
         private async void ViewerControl_SizeToImageRequested(object? sender, EventArgs e)
@@ -520,6 +548,20 @@ namespace ModernImageViewer
         private void ViewerControl_AddToCollageRequested(object? sender, EventArgs e)
         {
             MainWindow.Instance?.AddImageToCollage(_imageItem.Path);
+        }
+
+        private void ViewerControl_SwitchToMainRequested(object? sender, EventArgs e)
+        {
+            if (MainWindow.Instance != null && !string.IsNullOrEmpty(_imageItem.Path))
+            {
+                MainWindow.Instance.SummonMainPreview(_imageItem.Path);
+            }
+            else if (!string.IsNullOrEmpty(_imageItem.Path))
+            {
+                var newMain = new MainWindow();
+                newMain.Activate();
+                newMain.SummonMainPreview(_imageItem.Path);
+            }
         }
     }
 }
