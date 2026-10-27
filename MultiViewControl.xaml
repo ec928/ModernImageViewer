@@ -1,0 +1,204 @@
+<UserControl
+    x:Class="ModernImageViewer.MultiViewControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:ModernImageViewer"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Grid x:Name="RootGrid" Background="#FF080808" RequestedTheme="Dark" PointerMoved="RootGrid_PointerMoved">
+        <!-- Main Tiled Layout Container (Zero wasted space: edge to edge) -->
+        <Grid x:Name="CellsGrid" Margin="0" Canvas.ZIndex="10">
+            <!-- Dynamic Columns and Rows generated in C# -->
+        </Grid>
+
+        <!-- Unified Bottom Playbar / HUD (Auto-Hiding Floating Pill) -->
+        <Grid x:Name="UnifiedHud" 
+              VerticalAlignment="Bottom" 
+              HorizontalAlignment="Center" 
+              Margin="0,0,0,28" 
+              Canvas.ZIndex="100"
+              Opacity="1.0"
+              PointerEntered="Hud_PointerEntered" 
+              PointerExited="Hud_PointerExited">
+            <Grid.RenderTransform>
+                <TranslateTransform x:Name="HudTranslate" Y="0" />
+            </Grid.RenderTransform>
+            <Border Background="{ThemeResource LayerFillColorDefaultBrush}" 
+                    BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" 
+                    BorderThickness="1" 
+                    CornerRadius="24" 
+                    Padding="14,6"
+                    Translation="0,0,32">
+                <Border.Shadow>
+                    <ThemeShadow/>
+                </Border.Shadow>
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <!-- Back to Grid Button -->
+                    <Button Click="CloseButton_Click" 
+                            Style="{StaticResource SubtleButtonStyle}" 
+                            Padding="8,5" 
+                            CornerRadius="14" 
+                            ToolTipService.ToolTip="Back to Grid (Esc)">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <SymbolIcon Symbol="Back" />
+                            <TextBlock Text="Grid" VerticalAlignment="Center" FontSize="13" />
+                        </StackPanel>
+                    </Button>
+
+                    <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,4" Opacity="0.4"/>
+
+                    <!-- Title & Count -->
+                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="2,0">
+                        <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE748;" FontSize="14" Foreground="#FF00A2ED" VerticalAlignment="Center" />
+                        <TextBlock x:Name="TitleTextBlock" Text="Multi-View" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="13" />
+                    </StackPanel>
+
+                    <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,4" Opacity="0.4"/>
+
+                    <!-- Fill / Fit Toggle Button (Default: Fill for Zero Wasted Space) -->
+                    <Button x:Name="FillFitButton" 
+                            Click="FillFitButton_Click" 
+                            Style="{StaticResource SubtleButtonStyle}" 
+                            Padding="8,5" 
+                            CornerRadius="14" 
+                            ToolTipService.ToolTip="Toggle Fill / Fit (F)">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon x:Name="FillFitIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE740;" FontSize="14" />
+                            <TextBlock x:Name="FillFitText" Text="Fill" VerticalAlignment="Center" FontSize="13" />
+                        </StackPanel>
+                    </Button>
+
+                    <!-- Layout Toggle Button (shown when 2+ items) -->
+                    <Button x:Name="OrientationToggleButton" 
+                            Click="OrientationToggle_Click" 
+                            Style="{StaticResource SubtleButtonStyle}" 
+                            Padding="8,5" 
+                            CornerRadius="14" 
+                            ToolTipService.ToolTip="Toggle Layout (Tab)">
+                        <Button.ContextFlyout>
+                            <MenuFlyout x:Name="OrientationMenuFlyout" />
+                        </Button.ContextFlyout>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon x:Name="OrientationIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE748;" FontSize="14" />
+                            <TextBlock x:Name="OrientationText" Text="Layout" VerticalAlignment="Center" FontSize="13" />
+                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE70D;" FontSize="9" Opacity="0.5" VerticalAlignment="Center" Margin="1,1,0,0"/>
+                        </StackPanel>
+                    </Button>
+
+                    <!-- Swap Positions Button (shown when 2+ items) -->
+                    <Button x:Name="SwapButton" 
+                            Click="SwapButton_Click" 
+                            Style="{StaticResource SubtleButtonStyle}" 
+                            Padding="8,5" 
+                            CornerRadius="14" 
+                            ToolTipService.ToolTip="Swap Image Positions (S)">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8AB;" FontSize="14" />
+                            <TextBlock Text="Swap" VerticalAlignment="Center" FontSize="13" />
+                        </StackPanel>
+                    </Button>
+
+                    <!-- Reset Zooms Button -->
+                    <Button Click="ResetZoom_Click" 
+                            Style="{StaticResource SubtleButtonStyle}" 
+                            Padding="8,5" 
+                            CornerRadius="14" 
+                            ToolTipService.ToolTip="Reset Pan &amp; Zoom (Middle-Click)">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <SymbolIcon Symbol="ZoomOut" />
+                            <TextBlock Text="Reset" VerticalAlignment="Center" FontSize="13" />
+                        </StackPanel>
+                    </Button>
+
+                    <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,4" Opacity="0.4"/>
+
+                    <!-- Close Button -->
+                    <Button Click="CloseButton_Click" 
+                            Style="{StaticResource SubtleButtonStyle}" 
+                            Padding="8,5" 
+                            CornerRadius="14" 
+                            ToolTipService.ToolTip="Close (Esc)">
+                        <SymbolIcon Symbol="Cancel" />
+                    </Button>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- Solo View Container (shown when user double-clicks or clicks Solo on a photo) -->
+        <Grid x:Name="SoloContainer" Visibility="Collapsed" Canvas.ZIndex="150" Background="#FF080808">
+            <Grid x:Name="SoloImageContainer" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                <Image x:Name="SoloImage" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Image.RenderTransform>
+                        <CompositeTransform x:Name="SoloTransform" ScaleX="1" ScaleY="1" TranslateX="0" TranslateY="0"/>
+                    </Image.RenderTransform>
+                </Image>
+            </Grid>
+
+            <!-- Solo Top-Left Info Overlay (auto-hides with HUD) -->
+            <Border x:Name="SoloInfoOverlay" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="16,16,0,0"
+                    Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="10" Padding="12,8" Translation="0,0,24">
+                <Border.Shadow>
+                    <ThemeShadow/>
+                </Border.Shadow>
+                <StackPanel Spacing="3">
+                    <TextBlock x:Name="SoloTitleText" Text="Photo 1 of 4" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                    <TextBlock x:Name="SoloSecondaryText" Text="" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+            </Border>
+
+            <!-- Solo Bottom Playbar (auto-hides with HUD) -->
+            <Border x:Name="SoloBottomBar" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,32"
+                    Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="22" Padding="12,6" Translation="0,0,32">
+                <Border.Shadow>
+                    <ThemeShadow/>
+                </Border.Shadow>
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Button Click="ExitSolo_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" ToolTipService.ToolTip="Back to Multi-View (Esc)">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <SymbolIcon Symbol="Back" />
+                            <TextBlock Text="All Photos" FontSize="13" />
+                        </StackPanel>
+                    </Button>
+                    <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,4" Opacity="0.4"/>
+                    <Button Click="PrevSolo_Click" Style="{StaticResource SubtleButtonStyle}" Padding="6,4" ToolTipService.ToolTip="Previous (Left Arrow)">
+                        <SymbolIcon Symbol="Previous" />
+                    </Button>
+                    <TextBlock x:Name="SoloCounterText" Text="1 of 4" VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold" Margin="4,0" />
+                    <Button Click="NextSolo_Click" Style="{StaticResource SubtleButtonStyle}" Padding="6,4" ToolTipService.ToolTip="Next (Right Arrow)">
+                        <SymbolIcon Symbol="Next" />
+                    </Button>
+                    <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,4" Opacity="0.4"/>
+                    <Button Click="ResetSoloZoom_Click" Style="{StaticResource SubtleButtonStyle}" Padding="6,4" ToolTipService.ToolTip="Fit to Screen (Middle-Click)">
+                        <SymbolIcon Symbol="ZoomOut" />
+                    </Button>
+                </StackPanel>
+            </Border>
+            <!-- Solo Top-Right Caption Controls (Restore to Multi-View, Close) -->
+            <Grid x:Name="SoloTopRightControls" HorizontalAlignment="Right" VerticalAlignment="Top" Canvas.ZIndex="60"
+                  PointerEntered="Hud_PointerEntered" PointerExited="Hud_PointerExited">
+                <StackPanel Orientation="Horizontal">
+                    <Button Click="ExitSolo_Click" Width="46" Height="32" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="0" ToolTipService.ToolTip="Restore to Multi-View (Esc)">
+                        <Button.Resources>
+                            <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#18FFFFFF"/>
+                            <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#10FFFFFF"/>
+                            <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="White"/>
+                            <SolidColorBrush x:Key="ButtonForegroundPressed" Color="#C8FFFFFF"/>
+                        </Button.Resources>
+                        <FontIcon Glyph="&#xE923;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="10" Foreground="#F0FFFFFF"/>
+                    </Button>
+                    <Button Click="CloseButton_Click" Width="46" Height="32" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="0" ToolTipService.ToolTip="Close (Esc)">
+                        <Button.Resources>
+                            <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#C42B1C"/>
+                            <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#991B10"/>
+                            <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="White"/>
+                            <SolidColorBrush x:Key="ButtonForegroundPressed" Color="White"/>
+                        </Button.Resources>
+                        <FontIcon Glyph="&#xE8BB;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="10" Foreground="#F0FFFFFF"/>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

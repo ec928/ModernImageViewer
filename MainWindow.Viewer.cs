@@ -847,6 +847,33 @@ namespace ModernImageViewer
             }
         }
 
+        public void OpenMultiView(IList<ImageItem> items)
+        {
+            if (items == null || items.Count == 0) return;
+
+            if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible)
+            {
+                ClosePreviewInternal();
+            }
+
+            if (MultiViewControl != null)
+            {
+                MultiViewControl.LoadImages(items);
+                MultiViewControl.Visibility = Visibility.Visible;
+                MultiViewControl.Focus(FocusState.Programmatic);
+            }
+        }
+
+        public void CloseMultiView()
+        {
+            if (MultiViewControl != null && MultiViewControl.Visibility == Visibility.Visible)
+            {
+                MultiViewControl.Visibility = Visibility.Collapsed;
+                MultiViewControl.Clear();
+                FocusGrid();
+            }
+        }
+
         private void ClosePreviewInternal(bool isTearOff = false)
         {
             _hfPromotionTimer?.Stop();
@@ -1732,9 +1759,36 @@ namespace ModernImageViewer
             SyncTileCursor(scroll: true);
         }
 
+        private void ImageGrid_PreviewKeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            if (e.Key == Windows.System.VirtualKey.Enter)
+            {
+                var selected = Images.Where(img => img.IsGridSelected && !img.IsDirectory).ToList();
+                if (selected.Count < 2)
+                {
+                    selected = ImageGrid.SelectedItems.OfType<ImageItem>().Where(img => !img.IsDirectory).ToList();
+                }
+                if (selected.Count > 1)
+                {
+                    OpenMultiView(selected);
+                    e.Handled = true;
+                }
+            }
+        }
+
         private void OpenCursorTile()
         {
             if (_isScanning) return;
+            var selected = Images.Where(img => img.IsGridSelected && !img.IsDirectory).ToList();
+            if (selected.Count < 2)
+            {
+                selected = ImageGrid.SelectedItems.OfType<ImageItem>().Where(img => !img.IsDirectory).ToList();
+            }
+            if (selected.Count > 1)
+            {
+                OpenMultiView(selected);
+                return;
+            }
             if (_listMode)
             {
                 if (_listEntries.Count == 0) return;
@@ -1821,6 +1875,15 @@ namespace ModernImageViewer
         {
             if (TileKeyFocusStays()) return;
 
+            if (MultiViewControl != null && MultiViewControl.Visibility == Visibility.Visible)
+            {
+                if (MultiViewControl.HandleKeyDown(e.Key))
+                {
+                    e.Handled = true;
+                    return;
+                }
+            }
+
             if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible)
             {
                 if (e.Key == Windows.System.VirtualKey.Enter)
@@ -1856,7 +1919,23 @@ namespace ModernImageViewer
                 RootGrid.Focus(FocusState.Programmatic);
             }
 
-            if (e.Key == Windows.System.VirtualKey.Enter) OpenCursorTile();
+            if (e.Key == Windows.System.VirtualKey.Enter)
+            {
+                var selected = Images.Where(img => img.IsGridSelected && !img.IsDirectory).ToList();
+                if (selected.Count < 2)
+                {
+                    selected = ImageGrid.SelectedItems.OfType<ImageItem>().Where(img => !img.IsDirectory).ToList();
+                }
+                if (selected.Count > 1)
+                {
+                    OpenMultiView(selected);
+                    e.Handled = true;
+                    return;
+                }
+                OpenCursorTile();
+                e.Handled = true;
+                return;
+            }
             else if (e.Key == Windows.System.VirtualKey.Space)
             {
                 var item = CursorItem();
@@ -1916,6 +1995,15 @@ namespace ModernImageViewer
                     return;
             }
 
+            if (MultiViewControl != null && MultiViewControl.Visibility == Visibility.Visible)
+            {
+                if (MultiViewControl.HandleKeyDown(e.Key))
+                {
+                    e.Handled = true;
+                    return;
+                }
+            }
+
             if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible)
             {
                 if (_isStartupIndexing)
@@ -1955,6 +2043,25 @@ namespace ModernImageViewer
             {
                 switch (e.Key)
                 {
+                    case Windows.System.VirtualKey.Enter:
+                        if (SidebarView != null && SidebarView.IsPaneOpen && FocusIsInside(SidebarPane))
+                        {
+                            break;
+                        }
+                        {
+                            var selectedNonDirs = ImageGrid.SelectedItems.OfType<ImageItem>().Where(i => !i.IsDirectory).ToList();
+                            if (selectedNonDirs.Count > 1)
+                            {
+                                OpenMultiView(selectedNonDirs);
+                                e.Handled = true;
+                            }
+                            else
+                            {
+                                OpenCursorTile();
+                                e.Handled = true;
+                            }
+                        }
+                        break;
                     case Windows.System.VirtualKey.F5:
                         RefreshFolder_Click(this, new RoutedEventArgs());
                         e.Handled = true;
@@ -2780,6 +2887,17 @@ namespace ModernImageViewer
             
             if (isCtrl || isShift) return;
 
+            var selected = Images.Where(img => img.IsGridSelected && !img.IsDirectory).ToList();
+            if (selected.Count < 2)
+            {
+                selected = ImageGrid.SelectedItems.OfType<ImageItem>().Where(img => !img.IsDirectory).ToList();
+            }
+            if (selected.Count > 1)
+            {
+                OpenMultiView(selected);
+                return;
+            }
+
             if (e.ClickedItem is ImageItem i)
             {
                 if (i.IsDirectory)
@@ -2983,6 +3101,12 @@ namespace ModernImageViewer
             if (GridMenuEditItem != null) GridMenuEditItem.Visibility = isEditablePhoto ? Visibility.Visible : Visibility.Collapsed;
             if (GridMenuRenameItem != null) GridMenuRenameItem.Visibility = fileMutateVis;
             if (GridMenuDeleteItem != null) GridMenuDeleteItem.Visibility = fileMutateVis;
+
+            int multiSelectCount = ImageGrid.SelectedItems.OfType<ImageItem>().Count(img => !img.IsDirectory);
+            if (GridMenuMultiViewItem != null)
+            {
+                GridMenuMultiViewItem.Visibility = multiSelectCount > 1 ? Visibility.Visible : Visibility.Collapsed;
+            }
         }
 
         private void GridMenuOpen_Click(object sender, RoutedEventArgs e)

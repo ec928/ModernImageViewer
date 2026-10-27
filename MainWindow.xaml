@@ -346,7 +346,7 @@
                             <RowDefinition Height="*"/>
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
-                    <GridView x:Name="ImageGrid" IsTabStop="False" Padding="10,12,10,0" SizeChanged="ImageGrid_SizeChanged" ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionMode="Extended" SelectionChanged="ImageGrid_SelectionChanged" IsItemClickEnabled="True" ItemClick="ImageGrid_ItemClick" RightTapped="ImageGrid_RightTapped" CanDragItems="True" DragItemsStarting="ImageGrid_DragItemsStarting" DragItemsCompleted="ImageGrid_DragItemsCompleted" ItemsSource="{x:Bind Images, Mode=OneWay}" ContainerContentChanging="ImageGrid_ContainerContentChanging" FocusVisualPrimaryThickness="0" FocusVisualSecondaryThickness="0">
+                    <GridView x:Name="ImageGrid" IsTabStop="False" Padding="10,12,10,0" PreviewKeyDown="ImageGrid_PreviewKeyDown" SizeChanged="ImageGrid_SizeChanged" ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionMode="Extended" SelectionChanged="ImageGrid_SelectionChanged" IsItemClickEnabled="True" ItemClick="ImageGrid_ItemClick" RightTapped="ImageGrid_RightTapped" CanDragItems="True" DragItemsStarting="ImageGrid_DragItemsStarting" DragItemsCompleted="ImageGrid_DragItemsCompleted" ItemsSource="{x:Bind Images, Mode=OneWay}" ContainerContentChanging="ImageGrid_ContainerContentChanging" FocusVisualPrimaryThickness="0" FocusVisualSecondaryThickness="0">
                         <GridView.ItemContainerStyle>
                             <Style TargetType="GridViewItem" BasedOn="{StaticResource DefaultGridViewItemStyle}">
                                 <Setter Property="MinWidth" Value="0"/>
@@ -364,6 +364,9 @@
                             <MenuFlyout x:Name="GridItemContextFlyout" Closed="HeaderFlyout_Closed">
                                 <MenuFlyoutItem x:Name="GridMenuOpenItem" Text="Open" Click="GridMenuOpen_Click">
                                     <MenuFlyoutItem.Icon><SymbolIcon Symbol="View"/></MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutItem x:Name="GridMenuMultiViewItem" Text="View Together (Enter)" Click="GridMenuMultiView_Click">
+                                    <MenuFlyoutItem.Icon><FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE748;"/></MenuFlyoutItem.Icon>
                                 </MenuFlyoutItem>
                                 <MenuFlyoutItem x:Name="GridMenuSelectItem" Text="Select" Click="GridMenuSelect_Click">
                                     <MenuFlyoutItem.Icon><SymbolIcon Symbol="Accept"/></MenuFlyoutItem.Icon>
@@ -537,6 +540,9 @@
                             <StackPanel Orientation="Horizontal" Spacing="10">
                                 <TextBlock x:Name="MultiSelectCountText" Text="0 selected" VerticalAlignment="Center" Style="{ThemeResource BodyStrongTextBlockStyle}" Margin="0,0,6,0" />
 
+                                <Button Click="MultiSelectViewTogether_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,6" CornerRadius="6" ToolTipService.ToolTip="View Together (Enter)">
+                                    <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE748;" FontSize="16" />
+                                </Button>
                                 <Button Click="MultiSelectCinematic_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,6" CornerRadius="6" ToolTipService.ToolTip="Play Cinematic Slideshow">
                                     <SymbolIcon Symbol="Play" />
                                 </Button>
@@ -661,6 +667,12 @@
                                               RenameRequested="ViewerControl_RenameRequested"
                                               DeleteRequested="ViewerControl_DeleteRequested"
                                               AddToCollageRequested="ViewerControl_AddToCollageRequested" />
+
+                    <local:MultiViewControl x:Name="MultiViewControl"
+                                            Grid.RowSpan="2"
+                                            Visibility="Collapsed"
+                                            Canvas.ZIndex="1000"
+                                            CloseRequested="MultiViewControl_CloseRequested" />
                 </Grid>
             </SplitView.Content>
         </SplitView>

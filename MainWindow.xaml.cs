@@ -686,6 +686,29 @@ namespace ModernImageViewer
             }
         }
 
+        private void MultiSelectViewTogether_Click(object sender, RoutedEventArgs e)
+        {
+            var selectedItems = ImageGrid.SelectedItems.OfType<ImageItem>().Where(i => !i.IsDirectory).ToList();
+            if (selectedItems.Count > 1)
+            {
+                OpenMultiView(selectedItems);
+            }
+        }
+
+        private void GridMenuMultiView_Click(object sender, RoutedEventArgs e)
+        {
+            var selectedItems = ImageGrid.SelectedItems.OfType<ImageItem>().Where(i => !i.IsDirectory).ToList();
+            if (selectedItems.Count > 1)
+            {
+                OpenMultiView(selectedItems);
+            }
+        }
+
+        private void MultiViewControl_CloseRequested(object? sender, EventArgs e)
+        {
+            CloseMultiView();
+        }
+
         private void MultiSelectCinematic_Click(object sender, RoutedEventArgs e)
         {
             var selectedItems = ImageGrid.SelectedItems.OfType<ImageItem>().Where(i => !i.IsDirectory).ToList();
