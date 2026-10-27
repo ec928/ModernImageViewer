@@ -203,6 +203,30 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
+        public void Letterbox_click_above_a_wide_photo_is_outside_the_picture()
+        {
+            // A wide photo in a tall view leaves empty bars above and below, as in the solo view.
+            Assert.True(ViewerMath.IsPointerOverLetterbox(400, 40, viewW: 1000, viewH: 800, displayedW: 1000, displayedH: 400));
+            Assert.False(ViewerMath.IsPointerOverLetterbox(400, 400, viewW: 1000, viewH: 800, displayedW: 1000, displayedH: 400));
+            Assert.False(ViewerMath.IsPointerOverLetterbox(10, 10, viewW: 1000, viewH: 800, displayedW: 2000, displayedH: 1200));
+        }
+
+        [Fact]
+        public void ResizePair_keeps_the_total_and_a_minimum()
+        {
+            var (a, b) = ViewerMath.ResizePair(500, 500, 40);
+            Assert.Equal(1000, a + b);
+            Assert.Equal(540, a);
+
+            var (small, rest) = ViewerMath.ResizePair(500, 500, -10000);
+            Assert.Equal(1000, small + rest);
+            Assert.Equal(150, small);
+
+            var (sameA, sameB) = ViewerMath.ResizePair(10, 10, 5);
+            Assert.Equal(20, sameA + sameB);
+        }
+
+        [Fact]
         public void DragPan_clamps_to_scrollable_range()
         {
             var (x, y) = ViewerMath.CalculateDragPan(

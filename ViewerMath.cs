@@ -195,6 +195,42 @@ namespace ModernImageViewer
             return origin;
         }
 
+        /// <summary>Pointer within this distance of the cross still drags the whole through-line.</summary>
+        public const double ThroughLineJunctionSlop = 22;
+
+        /// <summary>Perpendicular cuts closer than this count as one shared edge.</summary>
+        public const double ThroughLineAlignTolerance = 8;
+
+        /// <summary>Movement along the resize axis that commits a one-pair drag.</summary>
+        public const double ThroughLineUnlockSlop = 2;
+
+        /// <summary>
+        /// True when the pointer is in the empty margin around a centered picture.
+        /// A picture larger than the view covers the view, so the pointer is on it.
+        /// </summary>
+        public static bool IsPointerOverLetterbox(double pointerX, double pointerY, double viewW, double viewH, double displayedW, double displayedH)
+        {
+            if (double.IsNaN(pointerX) || double.IsNaN(pointerY) || viewW <= 0 || viewH <= 0) return true;
+            if (double.IsNaN(displayedW) || double.IsNaN(displayedH) || displayedW <= 0 || displayedH <= 0) return true;
+
+            double startX = displayedW < viewW ? (viewW - displayedW) / 2.0 : 0;
+            double endX = displayedW < viewW ? startX + displayedW : viewW;
+            double startY = displayedH < viewH ? (viewH - displayedH) / 2.0 : 0;
+            double endY = displayedH < viewH ? startY + displayedH : viewH;
+            return pointerX < startX || pointerX > endX || pointerY < startY || pointerY > endY;
+        }
+
+        /// <summary>Resize a pair of star tracks. The two results always add up to the start total.</summary>
+        public static (double A, double B) ResizePair(double startA, double startB, double delta)
+        {
+            double total = startA + startB;
+            if (total <= 0 || double.IsNaN(total) || double.IsNaN(delta)) return (startA, startB);
+            double min = Math.Max(80.0, total * 0.15);
+            if (min > total - min) min = total / 2.0;
+            double a = Math.Clamp(startA + delta, min, total - min);
+            return (a, total - a);
+        }
+
         /// <summary>Scroll offset that brings the tile on screen and does not move when it is already fully visible.</summary>
         public static double ScrollOffsetToReveal(double offset, double viewport, double itemStart, double itemSize)
         {

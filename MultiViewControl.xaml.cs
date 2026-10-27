@@ -31,9 +31,11 @@ namespace ModernImageViewer
         private int _soloIndex = -1;
         private int _layoutMode = 0;
 
-        // Solo drag tracking
+        // Solo drag tracking. A click on the black around the photo is not a drag.
         private bool _isSoloDragging = false;
+        private bool _soloBackgroundClick = false;
         private Point _lastSoloPoint = default;
+        private Point _soloBackgroundStart = default;
         private uint _soloPointerId = 0;
 
         public MultiViewControl()
@@ -42,6 +44,10 @@ namespace ModernImageViewer
 
             _hudTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2.5) };
             _hudTimer.Tick += HudTimer_Tick;
+
+            RootGrid.PointerMoved += SegmentGesture_PointerMoved;
+            RootGrid.PointerReleased += SegmentGesture_PointerReleased;
+            RootGrid.PointerCaptureLost += SegmentGesture_PointerReleased;
 
             SetupSoloInteractions();
         }
@@ -70,6 +76,8 @@ namespace ModernImageViewer
             _layoutUpdaters.Clear();
             _cellTopControls.Clear();
             _cellElements.Clear();
+            ResetMosaicFields();
+            _hudTimer.Stop();
             CellsGrid.Children.Clear();
             CellsGrid.RowDefinitions.Clear();
             CellsGrid.ColumnDefinitions.Clear();
@@ -85,18 +93,18 @@ namespace ModernImageViewer
                 // Otherwise for landscape, Top+2Bottom is vastly superior.
                 if (_items.Count > 0 && _items[0].Thumbnail is BitmapSource bs && bs.PixelHeight > bs.PixelWidth)
                 {
-                    return 1; // Left + 2 Right (Columns-First)
+                    return 1; // Left + 2 Right
                 }
-                return 0; // Top + 2 Bottom (Rows-First)
+                return 0; // Top + 2 Bottom
             }
-            return 0; // Default to Columns-First (0)
+            return 0;
         }
 
         private int GetMaxModesForCount(int count)
         {
             if (count == 2) return 2; // Side-by-Side (0), Top-and-Bottom (1)
             if (count == 3) return 4; // Top+2Bottom (0), Left+2Right (1), 3 Rows (2), 3 Cols (3)
-            if (count == 4) return 5; // Columns-First (0), Rows-First (1), 2x2 Grid (2), 4 Rows (3), 4 Cols (4)
+            if (count == 4) return 3; // 2x2 (0), 4 Rows (1), 4 Cols (2)
             if (count <= 6) return 2; // 2 Rows, Split (0), 3 Rows, Split (1)
             return 1;
         }
@@ -111,8 +119,8 @@ namespace ModernImageViewer
             {
                 return mode switch
                 {
-                    0 => "Top + 2 Bottom (Rows-First)",
-                    1 => "Left + 2 Right (Columns-First)",
+                    0 => "Top + 2 Bottom",
+                    1 => "Left + 2 Right",
                     2 => "3 Rows",
                     _ => "3 Columns"
                 };
@@ -121,10 +129,8 @@ namespace ModernImageViewer
             {
                 return mode switch
                 {
-                    0 => "Columns-First (Vertical Master, Split Rows)",
-                    1 => "Rows-First (Horizontal Master, Split Columns)",
-                    2 => "2×2 Grid (Synchronized Crosshair)",
-                    3 => "4 Rows",
+                    0 => "2×2",
+                    1 => "4 Rows",
                     _ => "4 Columns"
                 };
             }
@@ -146,7 +152,7 @@ namespace ModernImageViewer
                 string title = GetLayoutModeTitle(count, m);
                 var item = new MenuFlyoutItem
                 {
-                    Text = (modeIndex == _layoutMode ? "✓  " : "    ") + title
+                    Text = (!_mosaicCustom && modeIndex == _layoutMode ? "✓  " : "    ") + title
                 };
                 item.Click += (s, e) =>
                 {
@@ -160,13 +166,14 @@ namespace ModernImageViewer
 
         public void ToggleOrientation()
         {
-            int maxModes = GetMaxModesForCount(_items.Count);
-            if (maxModes > 1)
+            if (!_mosaicCustom)
             {
+                int maxModes = GetMaxModesForCount(_items.Count);
+                if (maxModes <= 1) return;
                 _layoutMode = (_layoutMode + 1) % maxModes;
-                BuildLayout();
-                ShowHudAndOverlays();
             }
+            BuildLayout();
+            ShowHudAndOverlays();
         }
 
         public bool HandleKeyDown(VirtualKey key)
@@ -305,643 +312,6 @@ namespace ModernImageViewer
 
         #region Layout & Cell Construction
 
-        private void BuildLayout()
-        {
-            CellsGrid.Children.Clear();
-            CellsGrid.RowDefinitions.Clear();
-            CellsGrid.ColumnDefinitions.Clear();
-            _cellTransforms.Clear();
-            _layoutUpdaters.Clear();
-            _cellTopControls.Clear();
-            _cellElements.Clear();
-
-            int count = _items.Count;
-            if (count == 0)
-            {
-                CloseRequested?.Invoke(this, EventArgs.Empty);
-                return;
-            }
-
-            TitleTextBlock.Text = $"{count} {(count == 1 ? "Photo" : "Photos")}";
-            OrientationToggleButton.Visibility = GetMaxModesForCount(count) > 1 ? Visibility.Visible : Visibility.Collapsed;
-            SwapButton.Visibility = count > 1 ? Visibility.Visible : Visibility.Collapsed;
-            UpdateFillFitButton();
-
-            if (count == 1)
-            {
-                CellsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                CellsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                AddCell(_items[0], 0, 0, 1, 1, 0);
-            }
-            else if (count == 2)
-            {
-                if (_layoutMode == 0)
-                {
-                    OrientationText.Text = "Side-by-Side";
-                    OrientationIcon.Glyph = "\uE749";
-                    ToolTipService.SetToolTip(OrientationToggleButton, "Layout: Side-by-Side (Columns) — Click or Tab to switch to Top-and-Bottom. Right-click for menu.");
-                    CellsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                    CellsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                    CellsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                    AddCell(_items[0], 0, 0, 1, 1, 0);
-                    AddCell(_items[1], 0, 1, 1, 1, 1);
-                    AddColumnSplitter(CellsGrid, 0, 1, 0, 1);
-                }
-                else
-                {
-                    OrientationText.Text = "Top-and-Bottom";
-                    OrientationIcon.Glyph = "\uE748";
-                    ToolTipService.SetToolTip(OrientationToggleButton, "Layout: Top-and-Bottom (Rows) — Click or Tab to switch to Side-by-Side. Right-click for menu.");
-                    CellsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                    CellsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                    CellsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                    AddCell(_items[0], 0, 0, 1, 1, 0);
-                    AddCell(_items[1], 1, 0, 1, 1, 1);
-                    AddRowSplitter(CellsGrid, 0, 1, 0, 1);
-                }
-            }
-            else if (count == 3)
-            {
-                if (_layoutMode == 0)
-                {
-                    // Top (full width) + 2 Bottom (side by side with independent vertical divider)
-                    OrientationText.Text = "Top + 2 Bottom";
-                    OrientationIcon.Glyph = "\uE748";
-                    ToolTipService.SetToolTip(OrientationToggleButton, "Layout: Top + 2 Bottom (Rows-First) — Click or Tab to switch layout. Right-click for menu.");
-
-                    CellsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1.1, GridUnitType.Star) });
-                    CellsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1.0, GridUnitType.Star) });
-                    CellsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.0, GridUnitType.Star) });
-
-                    AddCell(CellsGrid, _items[0], 0, 0, 1, 1, 0);
-
-                    var bottomGrid = new Grid();
-                    bottomGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.0, GridUnitType.Star) });
-                    bottomGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.0, GridUnitType.Star) });
-                    bottomGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1.0, GridUnitType.Star) });
-                    AddCell(bottomGrid, _items[1], 0, 0, 1, 1, 1);
-                    AddCell(bottomGrid, _items[2], 0, 1, 1, 1, 2);
-                    AddColumnSplitter(bottomGrid, 0, 1, 0, 1);
-
-                    Grid.SetRow(bottomGrid, 1);
-                    CellsGrid.Children.Add(bottomGrid);
-
-                    AddRowSplitter(CellsGrid, 0, 1, 0, 1);
-                }
-                else if (_layoutMode == 1)
-                {
-                    // 1 Left (full height) + 2 Right (stacked with independent horizontal divider)
-                    OrientationText.Text = "Left + 2 Right";
-                    OrientationIcon.Glyph = "\uE749";
-                    ToolTipService.SetToolTip(OrientationToggleButton, "Layout: Left + 2 Right (Columns-First) — Click or Tab to switch layout. Right-click for menu.");
-
-                    CellsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.2, GridUnitType.Star) });
-                    CellsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.0, GridUnitType.Star) });
-                    CellsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1.0, GridUnitType.Star) });
-
-                    AddCell(CellsGrid, _items[0], 0, 0, 1, 1, 0);
-
-                    var rightGrid = new Grid();
-                    rightGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1.0, GridUnitType.Star) });
-                    rightGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1.0, GridUnitType.Star) });
-                    rightGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.0, GridUnitType.Star) });
-                    AddCell(rightGrid, _items[1], 0, 0, 1, 1, 1);
-                    AddCell(rightGrid, _items[2], 1, 0, 1, 1, 2);
-                    AddRowSplitter(rightGrid, 0, 1, 0, 1);
-
-                    Grid.SetColumn(rightGrid, 1);
-                    CellsGrid.Children.Add(rightGrid);
-
-                    AddColumnSplitter(CellsGrid, 0, 1, 0, 1);
-                }
-                else if (_layoutMode == 2)
-                {
-                    // 3 Horizontal Rows
-                    OrientationText.Text = "3 Rows";
-                    OrientationIcon.Glyph = "\uE748";
-                    ToolTipService.SetToolTip(OrientationToggleButton, "Layout: 3 Rows — Click or Tab to switch layout. Right-click for menu.");
-
-                    CellsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                    CellsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                    CellsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                    CellsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-                    AddCell(_items[0], 0, 0, 1, 1, 0);
-                    AddCell(_items[1], 1, 0, 1, 1, 1);
-                    AddCell(_items[2], 2, 0, 1, 1, 2);
-
-                    AddRowSplitter(CellsGrid, 0, 1, 0, 1);
-                    AddRowSplitter(CellsGrid, 1, 2, 0, 1);
-                }
-                else
-                {
-                    // 3 Columns side-by-side
-                    OrientationText.Text = "3 Columns";
-                    OrientationIcon.Glyph = "\uE749";
-                    ToolTipService.SetToolTip(OrientationToggleButton, "Layout: 3 Columns — Click or Tab to switch layout. Right-click for menu.");
-
-                    CellsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                    CellsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                    CellsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                    CellsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-                    AddCell(_items[0], 0, 0, 1, 1, 0);
-                    AddCell(_items[1], 0, 1, 1, 1, 1);
-                    AddCell(_items[2], 0, 2, 1, 1, 2);
-
-                    AddColumnSplitter(CellsGrid, 0, 1, 0, 1);
-                    AddColumnSplitter(CellsGrid, 1, 2, 0, 1);
-                }
-            }
-            else if (count == 4)
-            {
-                if (_layoutMode == 0)
-                {
-                    // Columns-First: Master vertical divider, independent horizontal divider per column!
-                    OrientationText.Text = "Columns-First";
-                    OrientationIcon.Glyph = "\uE749";
-                    ToolTipService.SetToolTip(OrientationToggleButton, "Layout: Columns-First (Vertical master divider, independent horizontal cuts) — Click or Tab to switch to Rows-First. Right-click for menu.");
-
-                    CellsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                    CellsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                    CellsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-
-                    var leftGrid = new Grid();
-                    leftGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                    leftGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                    leftGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                    AddCell(leftGrid, _items[0], 0, 0, 1, 1, 0); // Top-Left
-                    AddCell(leftGrid, _items[2], 1, 0, 1, 1, 2); // Bottom-Left
-                    AddRowSplitter(leftGrid, 0, 1, 0, 1);
-
-                    var rightGrid = new Grid();
-                    rightGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                    rightGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                    rightGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                    AddCell(rightGrid, _items[1], 0, 0, 1, 1, 1); // Top-Right
-                    AddCell(rightGrid, _items[3], 1, 0, 1, 1, 3); // Bottom-Right
-                    AddRowSplitter(rightGrid, 0, 1, 0, 1);
-
-                    Grid.SetColumn(leftGrid, 0);
-                    CellsGrid.Children.Add(leftGrid);
-                    Grid.SetColumn(rightGrid, 1);
-                    CellsGrid.Children.Add(rightGrid);
-
-                    AddColumnSplitter(CellsGrid, 0, 1, 0, 1);
-                }
-                else if (_layoutMode == 1)
-                {
-                    // Rows-First: Master horizontal divider, independent vertical divider per row!
-                    OrientationText.Text = "Rows-First";
-                    OrientationIcon.Glyph = "\uE748";
-                    ToolTipService.SetToolTip(OrientationToggleButton, "Layout: Rows-First (Horizontal master divider, independent vertical cuts) — Click or Tab to switch to Columns-First. Right-click for menu.");
-
-                    CellsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                    CellsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                    CellsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-                    var topGrid = new Grid();
-                    topGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                    topGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                    topGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                    AddCell(topGrid, _items[0], 0, 0, 1, 1, 0); // Top-Left
-                    AddCell(topGrid, _items[1], 0, 1, 1, 1, 1); // Top-Right
-                    AddColumnSplitter(topGrid, 0, 1, 0, 1);
-
-                    var bottomGrid = new Grid();
-                    bottomGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                    bottomGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                    bottomGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                    AddCell(bottomGrid, _items[2], 0, 0, 1, 1, 2); // Bottom-Left
-                    AddCell(bottomGrid, _items[3], 0, 1, 1, 1, 3); // Bottom-Right
-                    AddColumnSplitter(bottomGrid, 0, 1, 0, 1);
-
-                    Grid.SetRow(topGrid, 0);
-                    CellsGrid.Children.Add(topGrid);
-                    Grid.SetRow(bottomGrid, 1);
-                    CellsGrid.Children.Add(bottomGrid);
-
-                    AddRowSplitter(CellsGrid, 0, 1, 0, 1);
-                }
-                else if (_layoutMode == 2)
-                {
-                    // Synchronized 2x2 Grid (unified crosshair)
-                    OrientationText.Text = "2×2 Grid";
-                    OrientationIcon.Glyph = "\uE748";
-                    ToolTipService.SetToolTip(OrientationToggleButton, "Layout: 2×2 Grid (Synchronized crosshair) — Click or Tab to switch layout. Right-click for menu.");
-
-                    CellsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                    CellsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                    CellsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                    CellsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-                    AddCell(_items[0], 0, 0, 1, 1, 0);
-                    AddCell(_items[1], 0, 1, 1, 1, 1);
-                    AddCell(_items[2], 1, 0, 1, 1, 2);
-                    AddCell(_items[3], 1, 1, 1, 1, 3);
-
-                    AddColumnSplitter(CellsGrid, 0, 1, 0, 2);
-                    AddRowSplitter(CellsGrid, 0, 1, 0, 2);
-                }
-                else if (_layoutMode == 3)
-                {
-                    OrientationText.Text = "4 Rows";
-                    OrientationIcon.Glyph = "\uE748";
-                    ToolTipService.SetToolTip(OrientationToggleButton, "Layout: 4 Rows — Click or Tab to switch layout. Right-click for menu.");
-
-                    for (int i = 0; i < 4; i++)
-                        CellsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                    CellsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                    for (int i = 0; i < 4; i++)
-                        AddCell(_items[i], i, 0, 1, 1, i);
-
-                    AddRowSplitter(CellsGrid, 0, 1, 0, 1);
-                    AddRowSplitter(CellsGrid, 1, 2, 0, 1);
-                    AddRowSplitter(CellsGrid, 2, 3, 0, 1);
-                }
-                else
-                {
-                    OrientationText.Text = "4 Columns";
-                    OrientationIcon.Glyph = "\uE749";
-                    ToolTipService.SetToolTip(OrientationToggleButton, "Layout: 4 Columns — Click or Tab to switch layout. Right-click for menu.");
-
-                    CellsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                    for (int i = 0; i < 4; i++)
-                        CellsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                    for (int i = 0; i < 4; i++)
-                        AddCell(_items[i], 0, i, 1, 1, i);
-
-                    AddColumnSplitter(CellsGrid, 0, 1, 0, 1);
-                    AddColumnSplitter(CellsGrid, 1, 2, 0, 1);
-                    AddColumnSplitter(CellsGrid, 2, 3, 0, 1);
-                }
-            }
-            else if (count <= 6)
-            {
-                if (_layoutMode == 0)
-                {
-                    OrientationText.Text = "2 Rows, Split";
-                    OrientationIcon.Glyph = "\uE748";
-                    ToolTipService.SetToolTip(OrientationToggleButton, "Layout: 2 Rows, Split — Click or Tab to switch to 3 Rows. Right-click for menu.");
-
-                    CellsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                    CellsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                    CellsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-                    int colsTop = (count + 1) / 2;
-                    int colsBottom = count - colsTop;
-
-                    var topGrid = new Grid();
-                    topGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                    for (int c = 0; c < colsTop; c++)
-                        topGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                    for (int c = 0; c < colsTop; c++)
-                        AddCell(topGrid, _items[c], 0, c, 1, 1, c);
-                    for (int c = 0; c < colsTop - 1; c++)
-                        AddColumnSplitter(topGrid, c, c + 1, 0, 1);
-
-                    var bottomGrid = new Grid();
-                    bottomGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                    for (int c = 0; c < colsBottom; c++)
-                        bottomGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                    for (int c = 0; c < colsBottom; c++)
-                        AddCell(bottomGrid, _items[colsTop + c], 0, c, 1, 1, colsTop + c);
-                    for (int c = 0; c < colsBottom - 1; c++)
-                        AddColumnSplitter(bottomGrid, c, c + 1, 0, 1);
-
-                    Grid.SetRow(topGrid, 0);
-                    CellsGrid.Children.Add(topGrid);
-                    Grid.SetRow(bottomGrid, 1);
-                    CellsGrid.Children.Add(bottomGrid);
-
-                    AddRowSplitter(CellsGrid, 0, 1, 0, 1);
-                }
-                else
-                {
-                    OrientationText.Text = "3 Rows, Split";
-                    OrientationIcon.Glyph = "\uE748";
-                    ToolTipService.SetToolTip(OrientationToggleButton, "Layout: 3 Rows, Split — Click or Tab to switch to 2 Rows. Right-click for menu.");
-
-                    CellsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                    CellsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                    CellsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                    CellsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-                    int perRow = (count + 2) / 3;
-                    int itemIdx = 0;
-                    for (int r = 0; r < 3; r++)
-                    {
-                        int rowCols = Math.Min(perRow, count - itemIdx);
-                        if (rowCols <= 0) break;
-
-                        var rowGrid = new Grid();
-                        rowGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                        for (int c = 0; c < rowCols; c++)
-                            rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                        for (int c = 0; c < rowCols; c++)
-                        {
-                            AddCell(rowGrid, _items[itemIdx], 0, c, 1, 1, itemIdx);
-                            itemIdx++;
-                        }
-                        for (int c = 0; c < rowCols - 1; c++)
-                            AddColumnSplitter(rowGrid, c, c + 1, 0, 1);
-
-                        Grid.SetRow(rowGrid, r);
-                        CellsGrid.Children.Add(rowGrid);
-                    }
-
-                    AddRowSplitter(CellsGrid, 0, 1, 0, 1);
-                    AddRowSplitter(CellsGrid, 1, 2, 0, 1);
-                }
-            }
-            else
-            {
-                OrientationText.Text = "3×3 Grid";
-                OrientationIcon.Glyph = "\uE748";
-                ToolTipService.SetToolTip(OrientationToggleButton, "Layout: 3×3 Grid");
-
-                int max = Math.Min(count, 9);
-                CellsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                CellsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                CellsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                CellsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                CellsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                CellsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-                for (int i = 0; i < max; i++)
-                {
-                    int r = i / 3;
-                    int c = i % 3;
-                    AddCell(_items[i], r, c, 1, 1, i);
-                }
-
-                AddColumnSplitter(CellsGrid, 0, 1, 0, 3);
-                AddColumnSplitter(CellsGrid, 1, 2, 0, 3);
-                AddRowSplitter(CellsGrid, 0, 1, 0, 3);
-                AddRowSplitter(CellsGrid, 1, 2, 0, 3);
-            }
-
-            UpdateOrientationFlyout(count);
-        }
-
-        private sealed class SplitterElement : Grid
-        {
-            public void SetCursor(InputSystemCursorShape shape)
-            {
-                try
-                {
-                    ProtectedCursor = InputSystemCursor.Create(shape);
-                }
-                catch { }
-            }
-        }
-
-        private void AddColumnSplitter(Grid targetGrid, int leftCol, int rightCol, int startRow = 0, int rowSpan = 1)
-        {
-            var splitter = new SplitterElement
-            {
-                HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Stretch,
-                Width = 14,
-                Margin = new Thickness(0, 0, -7, 0),
-                Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent)
-            };
-            Canvas.SetZIndex(splitter, 40);
-            Grid.SetColumn(splitter, leftCol);
-            Grid.SetRow(splitter, startRow);
-            if (rowSpan > 1) Grid.SetRowSpan(splitter, rowSpan);
-
-            splitter.SetCursor(InputSystemCursorShape.SizeWestEast);
-
-            var line = new Rectangle
-            {
-                Width = 2,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Stretch,
-                Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(220, 0, 162, 237)), // Modern Accent Blue
-                Opacity = 0.0
-            };
-            splitter.Children.Add(line);
-
-            bool isDragging = false;
-            double startX = 0;
-            double startW0 = 0;
-            double startW1 = 0;
-            DateTime lastClickTime = DateTime.MinValue;
-
-            splitter.PointerEntered += (s, e) =>
-            {
-                ShowHudAndOverlays();
-                line.Opacity = 0.85;
-            };
-
-            splitter.PointerExited += (s, e) =>
-            {
-                if (!isDragging) line.Opacity = 0.0;
-            };
-
-            splitter.PointerPressed += (s, e) =>
-            {
-                var ptr = e.GetCurrentPoint(splitter);
-                if (!ptr.Properties.IsLeftButtonPressed) return;
-
-                var now = DateTime.Now;
-                if ((now - lastClickTime).TotalMilliseconds < 350)
-                {
-                    // Double-click resets columns in this grid to equal 1.0 Star
-                    if (leftCol >= 0 && leftCol < targetGrid.ColumnDefinitions.Count)
-                        targetGrid.ColumnDefinitions[leftCol].Width = new GridLength(1.0, GridUnitType.Star);
-                    if (rightCol >= 0 && rightCol < targetGrid.ColumnDefinitions.Count)
-                        targetGrid.ColumnDefinitions[rightCol].Width = new GridLength(1.0, GridUnitType.Star);
-
-                    line.Opacity = 0.0;
-                    e.Handled = true;
-                    return;
-                }
-                lastClickTime = now;
-
-                // Normalize all columns in targetGrid to current actual pixel widths as Star values
-                foreach (var col in targetGrid.ColumnDefinitions)
-                {
-                    double w = col.ActualWidth > 0 ? col.ActualWidth : 100.0;
-                    col.Width = new GridLength(w, GridUnitType.Star);
-                }
-
-                if (leftCol >= 0 && leftCol < targetGrid.ColumnDefinitions.Count)
-                    startW0 = targetGrid.ColumnDefinitions[leftCol].Width.Value;
-                if (rightCol >= 0 && rightCol < targetGrid.ColumnDefinitions.Count)
-                    startW1 = targetGrid.ColumnDefinitions[rightCol].Width.Value;
-
-                startX = e.GetCurrentPoint(targetGrid).Position.X;
-                isDragging = true;
-                _hudTimer.Stop();
-                line.Opacity = 1.0;
-                splitter.CapturePointer(e.Pointer);
-                e.Handled = true;
-            };
-
-            splitter.PointerMoved += (s, e) =>
-            {
-                ShowHudAndOverlays();
-                if (!isDragging) return;
-
-                double currentX = e.GetCurrentPoint(targetGrid).Position.X;
-                double dx = currentX - startX;
-                double totalW = startW0 + startW1;
-                if (totalW <= 0) return;
-
-                double minW = Math.Max(80.0, totalW * 0.15);
-                double newW0 = Math.Clamp(startW0 + dx, minW, totalW - minW);
-                double newW1 = totalW - newW0;
-
-                if (leftCol >= 0 && leftCol < targetGrid.ColumnDefinitions.Count)
-                    targetGrid.ColumnDefinitions[leftCol].Width = new GridLength(newW0, GridUnitType.Star);
-                if (rightCol >= 0 && rightCol < targetGrid.ColumnDefinitions.Count)
-                    targetGrid.ColumnDefinitions[rightCol].Width = new GridLength(newW1, GridUnitType.Star);
-
-                e.Handled = true;
-            };
-
-            void EndDrag(PointerRoutedEventArgs e)
-            {
-                if (!isDragging) return;
-                isDragging = false;
-                splitter.ReleasePointerCapture(e.Pointer);
-                line.Opacity = 0.0;
-                _hudTimer.Start();
-                e.Handled = true;
-            }
-
-            splitter.PointerReleased += (s, e) => EndDrag(e);
-            splitter.PointerCaptureLost += (s, e) => EndDrag(e);
-
-            targetGrid.Children.Add(splitter);
-        }
-
-        private void AddRowSplitter(Grid targetGrid, int topRow, int bottomRow, int startCol = 0, int colSpan = 1)
-        {
-            var splitter = new SplitterElement
-            {
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                VerticalAlignment = VerticalAlignment.Bottom,
-                Height = 14,
-                Margin = new Thickness(0, 0, 0, -7),
-                Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent)
-            };
-            Canvas.SetZIndex(splitter, 40);
-            Grid.SetRow(splitter, topRow);
-            Grid.SetColumn(splitter, startCol);
-            if (colSpan > 1) Grid.SetColumnSpan(splitter, colSpan);
-
-            splitter.SetCursor(InputSystemCursorShape.SizeNorthSouth);
-
-            var line = new Rectangle
-            {
-                Height = 2,
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                VerticalAlignment = VerticalAlignment.Center,
-                Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(220, 0, 162, 237)), // Modern Accent Blue
-                Opacity = 0.0
-            };
-            splitter.Children.Add(line);
-
-            bool isDragging = false;
-            double startY = 0;
-            double startH0 = 0;
-            double startH1 = 0;
-            DateTime lastClickTime = DateTime.MinValue;
-
-            splitter.PointerEntered += (s, e) =>
-            {
-                ShowHudAndOverlays();
-                line.Opacity = 0.85;
-            };
-
-            splitter.PointerExited += (s, e) =>
-            {
-                if (!isDragging) line.Opacity = 0.0;
-            };
-
-            splitter.PointerPressed += (s, e) =>
-            {
-                var ptr = e.GetCurrentPoint(splitter);
-                if (!ptr.Properties.IsLeftButtonPressed) return;
-
-                var now = DateTime.Now;
-                if ((now - lastClickTime).TotalMilliseconds < 350)
-                {
-                    // Double-click resets rows in this grid to equal 1.0 Star
-                    if (topRow >= 0 && topRow < targetGrid.RowDefinitions.Count)
-                        targetGrid.RowDefinitions[topRow].Height = new GridLength(1.0, GridUnitType.Star);
-                    if (bottomRow >= 0 && bottomRow < targetGrid.RowDefinitions.Count)
-                        targetGrid.RowDefinitions[bottomRow].Height = new GridLength(1.0, GridUnitType.Star);
-
-                    line.Opacity = 0.0;
-                    e.Handled = true;
-                    return;
-                }
-                lastClickTime = now;
-
-                // Normalize all rows in targetGrid to current actual pixel heights as Star values
-                foreach (var row in targetGrid.RowDefinitions)
-                {
-                    double h = row.ActualHeight > 0 ? row.ActualHeight : 100.0;
-                    row.Height = new GridLength(h, GridUnitType.Star);
-                }
-
-                if (topRow >= 0 && topRow < targetGrid.RowDefinitions.Count)
-                    startH0 = targetGrid.RowDefinitions[topRow].Height.Value;
-                if (bottomRow >= 0 && bottomRow < targetGrid.RowDefinitions.Count)
-                    startH1 = targetGrid.RowDefinitions[bottomRow].Height.Value;
-
-                startY = e.GetCurrentPoint(targetGrid).Position.Y;
-                isDragging = true;
-                _hudTimer.Stop();
-                line.Opacity = 1.0;
-                splitter.CapturePointer(e.Pointer);
-                e.Handled = true;
-            };
-
-            splitter.PointerMoved += (s, e) =>
-            {
-                ShowHudAndOverlays();
-                if (!isDragging) return;
-
-                double currentY = e.GetCurrentPoint(targetGrid).Position.Y;
-                double dy = currentY - startY;
-                double totalH = startH0 + startH1;
-                if (totalH <= 0) return;
-
-                double minH = Math.Max(80.0, totalH * 0.15);
-                double newH0 = Math.Clamp(startH0 + dy, minH, totalH - minH);
-                double newH1 = totalH - newH0;
-
-                if (topRow >= 0 && topRow < targetGrid.RowDefinitions.Count)
-                    targetGrid.RowDefinitions[topRow].Height = new GridLength(newH0, GridUnitType.Star);
-                if (bottomRow >= 0 && bottomRow < targetGrid.RowDefinitions.Count)
-                    targetGrid.RowDefinitions[bottomRow].Height = new GridLength(newH1, GridUnitType.Star);
-
-                e.Handled = true;
-            };
-
-            void EndDrag(PointerRoutedEventArgs e)
-            {
-                if (!isDragging) return;
-                isDragging = false;
-                splitter.ReleasePointerCapture(e.Pointer);
-                line.Opacity = 0.0;
-                _hudTimer.Start();
-                e.Handled = true;
-            }
-
-            splitter.PointerReleased += (s, e) => EndDrag(e);
-            splitter.PointerCaptureLost += (s, e) => EndDrag(e);
-
-            targetGrid.Children.Add(splitter);
-        }
-
-
-
         private void AddCell(ImageItem item, int row, int col, int rowSpan, int colSpan, int index)
         {
             AddCell(CellsGrid, item, row, col, rowSpan, colSpan, index);
@@ -955,6 +325,8 @@ namespace ModernImageViewer
             if (rowSpan > 1) Grid.SetRowSpan(cell, rowSpan);
             if (colSpan > 1) Grid.SetColumnSpan(cell, colSpan);
             targetGrid.Children.Add(cell);
+            if ((uint)index < (uint)_cellRoots.Length)
+                _cellRoots[index] = cell;
         }
 
         private FrameworkElement CreateCell(ImageItem item, int index)
@@ -1459,9 +831,18 @@ namespace ModernImageViewer
 
                 if (prop.IsLeftButtonPressed)
                 {
-                    _isSoloDragging = true;
-                    _lastSoloPoint = e.GetCurrentPoint(SoloImageContainer).Position;
+                    var point = e.GetCurrentPoint(SoloImageContainer).Position;
                     _soloPointerId = e.Pointer.PointerId;
+                    _lastSoloPoint = point;
+                    if (IsSoloBackground(point))
+                    {
+                        _soloBackgroundClick = true;
+                        _soloBackgroundStart = point;
+                    }
+                    else
+                    {
+                        _isSoloDragging = true;
+                    }
                     SoloImageContainer.CapturePointer(e.Pointer);
                     e.Handled = true;
                 }
@@ -1470,10 +851,21 @@ namespace ModernImageViewer
             SoloImageContainer.PointerMoved += (s, e) =>
             {
                 ShowHudAndOverlays();
+                if (e.Pointer.PointerId != _soloPointerId) return;
 
-                if (_isSoloDragging && e.Pointer.PointerId == _soloPointerId)
+                var currentPoint = e.GetCurrentPoint(SoloImageContainer).Position;
+                if (_soloBackgroundClick)
                 {
-                    var currentPoint = e.GetCurrentPoint(SoloImageContainer).Position;
+                    double dx = currentPoint.X - _soloBackgroundStart.X;
+                    double dy = currentPoint.Y - _soloBackgroundStart.Y;
+                    if (dx * dx + dy * dy > 15 * 15)
+                        _soloBackgroundClick = false;
+                    e.Handled = true;
+                    return;
+                }
+
+                if (_isSoloDragging)
+                {
                     double dx = currentPoint.X - _lastSoloPoint.X;
                     double dy = currentPoint.Y - _lastSoloPoint.Y;
                     SoloTransform.TranslateX += dx;
@@ -1485,20 +877,28 @@ namespace ModernImageViewer
 
             SoloImageContainer.PointerReleased += (s, e) =>
             {
-                if (_isSoloDragging && e.Pointer.PointerId == _soloPointerId)
+                if (e.Pointer.PointerId != _soloPointerId) return;
+                bool close = _soloBackgroundClick;
+                _soloBackgroundClick = false;
+                if (_isSoloDragging)
                 {
                     _isSoloDragging = false;
-                    SoloImageContainer.ReleasePointerCapture(e.Pointer);
-                    e.Handled = true;
                 }
+                try { SoloImageContainer.ReleasePointerCapture(e.Pointer); }
+                catch { }
+                e.Handled = true;
+                if (close)
+                    ExitSolo();
             };
 
             SoloImageContainer.PointerCanceled += (s, e) =>
             {
-                if (_isSoloDragging)
+                _soloBackgroundClick = false;
+                if (_isSoloDragging || e.Pointer.PointerId == _soloPointerId)
                 {
                     _isSoloDragging = false;
-                    SoloImageContainer.ReleasePointerCapture(e.Pointer);
+                    try { SoloImageContainer.ReleasePointerCapture(e.Pointer); }
+                    catch { }
                 }
             };
 
@@ -1532,6 +932,11 @@ namespace ModernImageViewer
             {
                 ShowHudAndOverlays();
                 e.Handled = true;
+                if (IsSoloBackground(e.GetPosition(SoloImageContainer)))
+                {
+                    ExitSolo();
+                    return;
+                }
 
                 if (SoloTransform.ScaleX > 1.05)
                 {
@@ -1548,6 +953,44 @@ namespace ModernImageViewer
                     SoloTransform.ScaleY = newScale;
                 }
             };
+        }
+
+        private bool IsSoloBackground(Point point)
+        {
+            double viewW = SoloImageContainer.ActualWidth;
+            double viewH = SoloImageContainer.ActualHeight;
+            if (viewW <= 1 || viewH <= 1) return false;
+
+            // The photo element is only as large as the picture. The black around it
+            // is this container, so a point outside the element's box is the margin.
+            if (SoloImage.ActualWidth > 1 && SoloImage.ActualHeight > 1
+                && (SoloImage.ActualWidth < viewW - 2 || SoloImage.ActualHeight < viewH - 2))
+            {
+                try
+                {
+                    var bounds = SoloImage.TransformToVisual(SoloImageContainer)
+                        .TransformBounds(new Rect(0, 0, SoloImage.ActualWidth, SoloImage.ActualHeight));
+                    return point.X < bounds.X || point.X > bounds.Right || point.Y < bounds.Y || point.Y > bounds.Bottom;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+
+            if (SoloImage.Source is not BitmapSource bitmap || bitmap.PixelWidth <= 0 || bitmap.PixelHeight <= 0)
+                return false;
+
+            double fit = Math.Min(viewW / bitmap.PixelWidth, viewH / bitmap.PixelHeight);
+            double displayedW = bitmap.PixelWidth * fit * SoloTransform.ScaleX;
+            double displayedH = bitmap.PixelHeight * fit * SoloTransform.ScaleY;
+            return ViewerMath.IsPointerOverLetterbox(
+                point.X - SoloTransform.TranslateX,
+                point.Y - SoloTransform.TranslateY,
+                viewW,
+                viewH,
+                displayedW,
+                displayedH);
         }
 
         private void EnterSolo(int index)

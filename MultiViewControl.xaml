@@ -128,7 +128,7 @@
 
         <!-- Solo View Container (shown when user double-clicks or clicks Solo on a photo) -->
         <Grid x:Name="SoloContainer" Visibility="Collapsed" Canvas.ZIndex="150" Background="#FF080808">
-            <Grid x:Name="SoloImageContainer" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="SoloImageContainer" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#01000000">
                 <Image x:Name="SoloImage" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center">
                     <Image.RenderTransform>
                         <CompositeTransform x:Name="SoloTransform" ScaleX="1" ScaleY="1" TranslateX="0" TranslateY="0"/>

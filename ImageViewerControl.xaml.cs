@@ -744,13 +744,7 @@ namespace ModernImageViewer
             double viewW = ImageScroll.ActualWidth;
             double viewH = ImageScroll.ActualHeight;
 
-            double startX = displayedImgW < viewW ? (viewW - displayedImgW) / 2.0 : 0;
-            double endX = displayedImgW < viewW ? startX + displayedImgW : viewW;
-
-            double startY = displayedImgH < viewH ? (viewH - displayedImgH) / 2.0 : 0;
-            double endY = displayedImgH < viewH ? startY + displayedImgH : viewH;
-
-            return ptr.X < startX || ptr.X > endX || ptr.Y < startY || ptr.Y > endY;
+            return ViewerMath.IsPointerOverLetterbox(ptr.X, ptr.Y, viewW, viewH, displayedImgW, displayedImgH);
         }
 
         private void InputOverlay_PointerPressed(object sender, PointerRoutedEventArgs e)
