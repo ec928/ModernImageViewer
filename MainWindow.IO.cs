@@ -18,7 +18,6 @@ namespace ModernImageViewer
 {
     public sealed partial class MainWindow
     {
-        private bool _isSidebarHooked = false;
         private TreeViewNode? _pendingNodeToSelect;
         private TreeViewNode? _currentNodeToSelect;
         private int _pendingTargetIndex = 0;
@@ -377,13 +376,13 @@ namespace ModernImageViewer
                 }
 
                 var enumOptions = new EnumerationOptions { IgnoreInaccessible = true };
-                var allFiles = new DirectoryInfo(folderPath).GetFiles("*.*", enumOptions);
-                var filtered = new List<FileInfo>(allFiles.Length);
-                foreach (var fi in allFiles)
+                var filtered = new List<FileInfo>();
+                foreach (var filePath in Directory.EnumerateFiles(folderPath, "*", enumOptions))
                 {
                     if (scanId != _currentScanId) return new List<ImageItem>();
-                    if (SupportedExtensions.Contains(fi.Extension))
-                        filtered.Add(fi);
+                    string ext = Path.GetExtension(filePath);
+                    if (SupportedExtensions.Contains(ext))
+                        filtered.Add(new FileInfo(filePath));
                 }
 
                 string sortOrder = _currentSettings.SortOrder;
@@ -614,11 +613,7 @@ namespace ModernImageViewer
         private void PopulateDriveTree(List<FolderItem> drives)
         {
             if (FolderTreeView == null) return;
-            if (!_isSidebarHooked && SidebarView != null)
-            {
-                SidebarView.PaneOpened += SidebarView_PaneOpened;
-                _isSidebarHooked = true;
-            }
+
             FolderTreeView.RootNodes.Clear();
             var root = new TreeViewNode
             {
@@ -644,11 +639,7 @@ namespace ModernImageViewer
             int targetIndex = 0;
             int currentIndex = 0;
 
-            if (!_isSidebarHooked && SidebarView != null)
-            {
-                SidebarView.PaneOpened += SidebarView_PaneOpened;
-                _isSidebarHooked = true;
-            }
+
 
             string countText = currentImageCount > 0 ? currentImageCount.ToString() : string.Empty;
 
@@ -740,9 +731,10 @@ namespace ModernImageViewer
         {
             if (FolderTreeView == null || nodeToSelect == null) return;
 
-
             _pendingNodeToSelect = nodeToSelect;
             _pendingTargetIndex = targetIndex;
+
+            if (SidebarView != null && !SidebarView.IsPaneOpen) return;
 
             // Improved multi-attempt scroll
             for (int attempt = 0; attempt < 15; attempt++)

@@ -398,9 +398,11 @@ namespace ModernImageViewer
 
             try
             {
+                await Task.Delay(20, token);
+                if (token.IsCancellationRequested) return;
+
                 await _thumbSemaphore.WaitAsync(token);
                 enteredSemaphore = true;
-                await Task.Delay(50, token);
                 if (token.IsCancellationRequested) return;
 
                 ImageSource? newThumb = null;

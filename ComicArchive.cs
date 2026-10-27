@@ -125,7 +125,7 @@ namespace ModernImageViewer
                 }
                 else
                 {
-                    using var archive = ArchiveFactory.Open(fs);
+                    using var archive = ArchiveFactory.OpenArchive(fs);
                     foreach (var entry in archive.Entries)
                     {
                         if (entry.IsDirectory || !IsValidImageEntry(entry.Key) || entry.Size <= 0) continue;
@@ -208,7 +208,7 @@ namespace ModernImageViewer
                 }
                 else
                 {
-                    using var archive = ArchiveFactory.Open(fs);
+                    using var archive = ArchiveFactory.OpenArchive(fs);
                     var entry = archive.Entries.FirstOrDefault(e => !e.IsDirectory && string.Equals(e.Key, entryKey, StringComparison.OrdinalIgnoreCase));
                     if (entry == null) return null;
                     using var entryStream = entry.OpenEntryStream();
