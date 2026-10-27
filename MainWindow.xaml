@@ -42,7 +42,7 @@
                         </Grid.ColumnDefinitions>
 
                         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center" Margin="6,0,0,0">
-                            <Button Style="{StaticResource HeaderButtonStyle}" Click="SidebarToggle_Click" ToolTipService.ToolTip="Navigation Sidebar (Hold Alt)">
+                            <Button Style="{StaticResource HeaderButtonStyle}" Click="SidebarToggle_Click" ToolTipService.ToolTip="Navigation Sidebar (Ctrl+B or Tab)">
                                 <FontIcon Glyph="&#xE700;" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             </Button>
                             <Button Style="{StaticResource HeaderButtonStyle}" Click="BrowseButton_Click" ToolTipService.ToolTip="Browse Folders">
@@ -236,7 +236,7 @@
 
         <Grid x:Name="HoverTriggerZone" Grid.Row="1" Width="15" HorizontalAlignment="Left" Background="#01000000" PointerEntered="HoverZone_PointerEntered" Canvas.ZIndex="2000" />
 
-        <SplitView x:Name="SidebarView" Grid.Row="1" PanePlacement="Left" DisplayMode="Overlay" OpenPaneLength="320" PaneBackground="Transparent" PaneClosed="SidebarView_PaneClosed">
+        <SplitView x:Name="SidebarView" Grid.Row="1" PanePlacement="Left" DisplayMode="Overlay" OpenPaneLength="320" PaneBackground="Transparent" PaneClosed="SidebarView_PaneClosed" PaneOpened="SidebarView_PaneOpened">
             <SplitView.Pane>
                 <Grid x:Name="SidebarPane"
                       Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}"
@@ -277,7 +277,7 @@
                             </Button>
                         </Grid>
 
-                        <BreadcrumbBar x:Name="FolderBreadcrumb" Grid.Row="1" Margin="10,3,6,4" ItemClicked="BreadcrumbBar_ItemClicked">
+                        <BreadcrumbBar x:Name="FolderBreadcrumb" Grid.Row="1" Margin="10,3,6,4" ItemClicked="BreadcrumbBar_ItemClicked" IsTabStop="False">
                             <BreadcrumbBar.Resources>
                                 <x:Double x:Key="BreadcrumbBarItemThemeFontSize">12.5</x:Double>
                                 <x:Double x:Key="BreadcrumbBarChevronFontSize">9.5</x:Double>
@@ -285,6 +285,8 @@
                                 <Style TargetType="BreadcrumbBarItem">
                                     <Setter Property="FontSize" Value="12.5"/>
                                     <Setter Property="Padding" Value="4,2,4,2"/>
+                                    <Setter Property="IsTabStop" Value="False"/>
+                                    <Setter Property="AllowFocusOnInteraction" Value="False"/>
                                 </Style>
                             </BreadcrumbBar.Resources>
                             <BreadcrumbBar.ItemTemplate>
@@ -294,12 +296,13 @@
                             </BreadcrumbBar.ItemTemplate>
                         </BreadcrumbBar>
 
-                        <TreeView Grid.Row="2" x:Name="FolderTreeView" ItemInvoked="FolderTreeView_ItemInvoked" SelectionMode="None" Margin="-8,4,0,4">
+                        <TreeView Grid.Row="2" x:Name="FolderTreeView" ItemInvoked="FolderTreeView_ItemInvoked" PreviewKeyDown="FolderTreeView_PreviewKeyDown" SelectionMode="None" Margin="-8,4,0,4">
                             <TreeView.ItemContainerStyle>
                                 <Style TargetType="TreeViewItem">
                                     <Setter Property="MinHeight" Value="28"/>
                                     <Setter Property="Padding" Value="0"/>
                                     <Setter Property="Margin" Value="0"/>
+                                    <Setter Property="CornerRadius" Value="4"/>
                                     <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                                 </Style>
                             </TreeView.ItemContainerStyle>
@@ -343,7 +346,7 @@
                             <RowDefinition Height="*"/>
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
-                    <GridView x:Name="ImageGrid" Padding="10,12,10,0" SizeChanged="ImageGrid_SizeChanged" ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionMode="Extended" SelectionChanged="ImageGrid_SelectionChanged" IsItemClickEnabled="True" ItemClick="ImageGrid_ItemClick" RightTapped="ImageGrid_RightTapped" CanDragItems="True" DragItemsStarting="ImageGrid_DragItemsStarting" DragItemsCompleted="ImageGrid_DragItemsCompleted" ItemsSource="{x:Bind Images, Mode=OneWay}" ContainerContentChanging="ImageGrid_ContainerContentChanging" FocusVisualPrimaryThickness="0" FocusVisualSecondaryThickness="0">
+                    <GridView x:Name="ImageGrid" IsTabStop="False" Padding="10,12,10,0" SizeChanged="ImageGrid_SizeChanged" ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionMode="Extended" SelectionChanged="ImageGrid_SelectionChanged" IsItemClickEnabled="True" ItemClick="ImageGrid_ItemClick" RightTapped="ImageGrid_RightTapped" CanDragItems="True" DragItemsStarting="ImageGrid_DragItemsStarting" DragItemsCompleted="ImageGrid_DragItemsCompleted" ItemsSource="{x:Bind Images, Mode=OneWay}" ContainerContentChanging="ImageGrid_ContainerContentChanging" FocusVisualPrimaryThickness="0" FocusVisualSecondaryThickness="0">
                         <GridView.ItemContainerStyle>
                             <Style TargetType="GridViewItem" BasedOn="{StaticResource DefaultGridViewItemStyle}">
                                 <Setter Property="MinWidth" Value="0"/>
@@ -352,6 +355,9 @@
                                 <Setter Property="Padding" Value="0"/>
                                 <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                                 <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+                                <Setter Property="UseSystemFocusVisuals" Value="False"/>
+                                <Setter Property="FocusVisualPrimaryBrush" Value="Transparent"/>
+                                <Setter Property="FocusVisualSecondaryBrush" Value="Transparent"/>
                             </Style>
                         </GridView.ItemContainerStyle>
                         <GridView.ContextFlyout>
@@ -396,6 +402,9 @@
                                 <Setter Property="Padding" Value="0"/>
                                 <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                                 <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+                                <Setter Property="UseSystemFocusVisuals" Value="False"/>
+                                <Setter Property="FocusVisualPrimaryBrush" Value="Transparent"/>
+                                <Setter Property="FocusVisualSecondaryBrush" Value="Transparent"/>
                             </Style>
                             <SolidColorBrush x:Key="GridViewItemBackgroundPointerOver" Color="Transparent"/>
                             <SolidColorBrush x:Key="GridViewItemBackgroundPressed" Color="Transparent"/>
@@ -408,6 +417,8 @@
                             <SolidColorBrush x:Key="GridViewItemSelectedDisabledBorderBrush" Color="Transparent"/>
                             <SolidColorBrush x:Key="GridViewItemSelectedInnerBorderBrush" Color="Transparent"/>
                             <Thickness x:Key="GridViewItemSelectedBorderThickness">0</Thickness>
+                            <SolidColorBrush x:Key="GridViewItemFocusVisualPrimaryBrush" Color="Transparent"/>
+                            <SolidColorBrush x:Key="GridViewItemFocusVisualSecondaryBrush" Color="Transparent"/>
                         </GridView.Resources>
                         <GridView.ItemsPanel>
                             <ItemsPanelTemplate>

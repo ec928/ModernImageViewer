@@ -1378,8 +1378,8 @@ namespace ModernImageViewer
             PreviewTypeText.Text = FileTypeLabel(item.Name);
             PreviewSizeText.Text = item.SizeString;
             PreviewModifiedText.Text = item.DateModified.ToString("yyyy-MM-dd HH:mm");
-            PreviewDimensionsText.Text = "—";
-            PreviewTakenText.Text = "—";
+            PreviewDimensionsText.Text = "â€”";
+            PreviewTakenText.Text = "â€”";
             string folder = ComicArchive.TrySplitEntryPath(item.Path, out string archivePath, out _)
                 ? archivePath
                 : (Path.GetDirectoryName(item.Path) ?? "");
@@ -1491,8 +1491,8 @@ namespace ModernImageViewer
                         PreviewPlaceholder.Visibility = Visibility.Collapsed;
                     }
                     if (size.Width >= 1 && size.Height >= 1)
-                        PreviewDimensionsText.Text = $"{(int)size.Width} × {(int)size.Height}";
-                    PreviewTakenText.Text = taken.HasValue ? taken.Value.ToString("yyyy-MM-dd HH:mm") : "—";
+                        PreviewDimensionsText.Text = $"{(int)size.Width} Ã— {(int)size.Height}";
+                    PreviewTakenText.Text = taken.HasValue ? taken.Value.ToString("yyyy-MM-dd HH:mm") : "â€”";
                 }
 
                 if (DispatcherQueue.HasThreadAccess) Apply();
@@ -1831,6 +1831,13 @@ namespace ModernImageViewer
                 return;
             }
 
+            if (e.Key == Windows.System.VirtualKey.Tab)
+            {
+                ToggleSidebar();
+                e.Handled = true;
+                return;
+            }
+
             bool isCursorKey = e.Key == Windows.System.VirtualKey.Enter || e.Key == Windows.System.VirtualKey.Space || TryTileCursorKey(e.Key, out _);
             if (!isCursorKey) return;
 
@@ -1839,6 +1846,7 @@ namespace ModernImageViewer
 
             if (sidebarOpen && e.Key != Windows.System.VirtualKey.Enter)
             {
+                FocusSidebarTree();
                 e.Handled = true;
                 return;
             }
@@ -1887,6 +1895,12 @@ namespace ModernImageViewer
             }
 
             bool isCtrlDown = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+            if (isCtrlDown && e.Key == Windows.System.VirtualKey.B)
+            {
+                ToggleSidebar();
+                e.Handled = true;
+                return;
+            }
             if (isCtrlDown && (e.Key == Windows.System.VirtualKey.Number1 || e.Key == Windows.System.VirtualKey.Number2 || e.Key == Windows.System.VirtualKey.Number3))
             {
                 int slot = (int)e.Key - (int)Windows.System.VirtualKey.Number1;
@@ -1946,6 +1960,13 @@ namespace ModernImageViewer
                         e.Handled = true;
                         break;
                     case Windows.System.VirtualKey.Escape:
+                        if (SidebarView != null && SidebarView.IsPaneOpen)
+                        {
+                            SidebarView.IsPaneOpen = false;
+                            FocusGrid();
+                            e.Handled = true;
+                            break;
+                        }
                         if (ImageGrid != null && ImageGrid.SelectedItems.Count > 0)
                         {
                             ImageGrid.SelectedItems.Clear();
@@ -2024,12 +2045,25 @@ namespace ModernImageViewer
             if (bar != null) this.SetTitleBar(bar);
         }
 
-        private void SidebarToggle_Click(object sender, RoutedEventArgs e)
+        public void ToggleSidebar()
         {
             if (SidebarView == null) return;
             _altPeekOpenedSidebar = false;
-            SidebarView.IsPaneOpen = !SidebarView.IsPaneOpen;
-            if (!SidebarView.IsPaneOpen) FocusGrid();
+            if (SidebarView.IsPaneOpen)
+            {
+                SidebarView.IsPaneOpen = false;
+                FocusGrid();
+            }
+            else
+            {
+                SidebarView.IsPaneOpen = true;
+                FocusSidebarTree();
+            }
+        }
+
+        private void SidebarToggle_Click(object sender, RoutedEventArgs e)
+        {
+            ToggleSidebar();
         }
 
         private void UpdateHeaderFolderInfo()
@@ -2700,13 +2734,13 @@ namespace ModernImageViewer
                     btn.Background = activeBg;
                     if (txt != null)
                     {
-                        txt.Text = $"💾{i + 1}";
+                        txt.Text = $"ðŸ’¾{i + 1}";
                         txt.Foreground = activeFg;
                         txt.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
                     }
                     if (dot != null) dot.Visibility = Visibility.Collapsed;
                     ToolTipService.SetToolTip(btn, hasPreset
-                        ? $"Overwrite Preset {i + 1} (currently {preset!.WindowWidth}×{preset.WindowHeight}, Tile {(int)Math.Round(preset.TileSize)}px)"
+                        ? $"Overwrite Preset {i + 1} (currently {preset!.WindowWidth}Ã—{preset.WindowHeight}, Tile {(int)Math.Round(preset.TileSize)}px)"
                         : $"Save current window & tile size to Preset {i + 1}");
                 }
                 else
@@ -2724,7 +2758,7 @@ namespace ModernImageViewer
                         dot.Opacity = isActive ? 1.0 : 0.65;
                     }
                     ToolTipService.SetToolTip(btn, hasPreset
-                        ? $"Preset {i + 1}: {preset!.WindowWidth}×{preset.WindowHeight}, Tile {(int)Math.Round(preset.TileSize)}px (Ctrl+{i + 1})\nClick to apply • Right-click or Save icon to overwrite"
+                        ? $"Preset {i + 1}: {preset!.WindowWidth}Ã—{preset.WindowHeight}, Tile {(int)Math.Round(preset.TileSize)}px (Ctrl+{i + 1})\nClick to apply â€¢ Right-click or Save icon to overwrite"
                         : $"Preset {i + 1} (Empty)\nClick to save current window & tile size");
                 }
             }

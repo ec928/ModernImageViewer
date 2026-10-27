@@ -1,5 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -18,6 +20,7 @@ namespace ModernImageViewer
     {
         private bool _isSidebarHooked = false;
         private TreeViewNode? _pendingNodeToSelect;
+        private TreeViewNode? _currentNodeToSelect;
         private int _pendingTargetIndex = 0;
         private FileSystemWatcher? _folderWatcher;
         private Microsoft.UI.Dispatching.DispatcherQueueTimer? _folderWatchTimer;
@@ -626,6 +629,7 @@ namespace ModernImageViewer
                 root.Children.Add(new TreeViewNode { Content = new FolderItem { Name = drive.Name, Path = drive.Path } });
             FolderTreeView.RootNodes.Add(root);
 
+            _currentNodeToSelect = root;
             _pendingNodeToSelect = root;
             _pendingTargetIndex = 0;
             _ = BringNodeIntoViewAsync(root, 0);
@@ -716,6 +720,7 @@ namespace ModernImageViewer
             if (nodeToSelect != null)
             {
     
+                _currentNodeToSelect = nodeToSelect;
                 _pendingNodeToSelect = nodeToSelect;
                 _pendingTargetIndex = targetIndex;
                 _ = BringNodeIntoViewAsync(nodeToSelect, targetIndex);
@@ -724,6 +729,7 @@ namespace ModernImageViewer
 
         private void SidebarView_PaneOpened(SplitView sender, object args)
         {
+            FocusSidebarTree();
             if (_pendingNodeToSelect != null)
             {
                 _ = BringNodeIntoViewAsync(_pendingNodeToSelect, _pendingTargetIndex);
@@ -752,6 +758,7 @@ namespace ModernImageViewer
                     if (container != null)
                     {
                         container.StartBringIntoView(new BringIntoViewOptions { VerticalAlignmentRatio = 0.5 });
+                        if (SidebarView != null && SidebarView.IsPaneOpen && container is Control c) c.Focus(FocusState.Programmatic);
                         success = true;
                     }
                     else
@@ -872,18 +879,58 @@ namespace ModernImageViewer
             FocusGrid();
         }
 
-        private async void FolderTreeView_ItemInvoked(TreeView s, TreeViewItemInvokedEventArgs a)
+        public void FocusSidebarTree()
         {
-            string path = (a.InvokedItem is TreeViewNode n && n.Content is FolderItem fi) ? fi.Path : "";
+            if (FolderTreeView == null) return;
+            TreeViewNode? targetNode = _currentNodeToSelect ?? (FolderTreeView.RootNodes.Count > 0 ? (FindCurrentTreeNode(FolderTreeView.RootNodes) ?? FolderTreeView.RootNodes[0]) : null);
+            if (targetNode != null)
+            {
+                if (FolderTreeView.ContainerFromNode(targetNode) is Control c)
+                {
+                    c.Focus(FocusState.Programmatic);
+                    return;
+                }
+                else
+                {
+                    _ = BringNodeIntoViewAsync(targetNode, _pendingTargetIndex);
+                }
+            }
+
+            FolderTreeView.Focus(FocusState.Programmatic);
+            DispatcherQueue?.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+            {
+                if (SidebarView == null || !SidebarView.IsPaneOpen || FolderTreeView == null) return;
+                TreeViewNode? node = _currentNodeToSelect ?? (FolderTreeView.RootNodes.Count > 0 ? (FindCurrentTreeNode(FolderTreeView.RootNodes) ?? FolderTreeView.RootNodes[0]) : null);
+                if (node != null && FolderTreeView.ContainerFromNode(node) is Control ctrl)
+                {
+                    ctrl.Focus(FocusState.Programmatic);
+                }
+            });
+        }
+
+        private static TreeViewNode? FindCurrentTreeNode(IList<TreeViewNode> nodes)
+        {
+            foreach (var n in nodes)
+            {
+                if (n.Content is FolderItem fi && fi.IsCurrent) return n;
+                var child = FindCurrentTreeNode(n.Children);
+                if (child != null) return child;
+            }
+            return null;
+        }
+
+        private async Task ActivateFolderNodeAsync(TreeViewNode n)
+        {
+            string path = (n.Content is FolderItem fi) ? fi.Path : "";
             if (path == DriveRootPath)
             {
+                if (SidebarView != null) SidebarView.IsPaneOpen = false;
                 ShowDriveList();
                 return;
             }
             if (!string.IsNullOrEmpty(path))
             {
                 bool hasImages = await Task.Run(() => HasSupportedImages(path));
-
                 if (hasImages)
                 {
                     if (SidebarView != null) SidebarView.IsPaneOpen = false;
@@ -893,6 +940,56 @@ namespace ModernImageViewer
                 {
                     await UpdateNavigationTreeOnlyAsync(path);
                 }
+            }
+        }
+
+        private async void FolderTreeView_PreviewKeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            if (e.Key == Windows.System.VirtualKey.Enter || e.Key == Windows.System.VirtualKey.Space)
+            {
+                var focused = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(this.Content.XamlRoot);
+                TreeViewNode? targetNode = null;
+                if (focused is TreeViewItem tvi)
+                {
+                    targetNode = FolderTreeView.NodeFromContainer(tvi);
+                }
+                else if (focused is DependencyObject dep)
+                {
+                    var parentTvi = FindVisualParent<TreeViewItem>(dep);
+                    if (parentTvi != null) targetNode = FolderTreeView.NodeFromContainer(parentTvi);
+                }
+
+                if (targetNode != null)
+                {
+                    e.Handled = true;
+                    await ActivateFolderNodeAsync(targetNode);
+                    return;
+                }
+            }
+            else if (e.Key == Windows.System.VirtualKey.Escape || e.Key == Windows.System.VirtualKey.Tab)
+            {
+                if (SidebarView != null) SidebarView.IsPaneOpen = false;
+                FocusGrid();
+                e.Handled = true;
+                return;
+            }
+        }
+
+        private static T? FindVisualParent<T>(DependencyObject? element) where T : DependencyObject
+        {
+            while (element != null)
+            {
+                if (element is T match) return match;
+                element = VisualTreeHelper.GetParent(element);
+            }
+            return null;
+        }
+
+        private async void FolderTreeView_ItemInvoked(TreeView s, TreeViewItemInvokedEventArgs a)
+        {
+            if (a.InvokedItem is TreeViewNode n)
+            {
+                await ActivateFolderNodeAsync(n);
             }
         }
 
