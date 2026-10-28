@@ -70,7 +70,6 @@ namespace ModernImageViewer
                 return;
             }
 
-            TitleTextBlock.Text = $"{count} {(count == 1 ? "Photo" : "Photos")}";
             SwapButton.Visibility = count > 1 ? Visibility.Visible : Visibility.Collapsed;
             UpdateFillFitButton();
 

@@ -64,14 +64,6 @@
 
                     <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,4" Opacity="0.4"/>
 
-                    <!-- Title & Count -->
-                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="2,0">
-                        <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE748;" FontSize="14" Foreground="#FF00A2ED" VerticalAlignment="Center" />
-                        <TextBlock x:Name="TitleTextBlock" Text="Multi-View" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="13" />
-                    </StackPanel>
-
-                    <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,4" Opacity="0.4"/>
-
                     <!-- Fill / Fit Toggle Button (Default: Fill for Zero Wasted Space) -->
                     <Button x:Name="FillFitButton" 
                             Click="FillFitButton_Click" 
