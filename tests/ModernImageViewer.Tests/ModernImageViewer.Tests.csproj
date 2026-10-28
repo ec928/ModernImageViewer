@@ -16,6 +16,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\..\ViewerMath.cs" Link="ViewerMath.cs" />
+    <Compile Include="..\..\GridCanvasMath.cs" Link="GridCanvasMath.cs" />
     <Compile Include="..\..\MosaicLayout.cs" Link="MosaicLayout.cs" />
     <Compile Include="..\..\NaturalSort.cs" Link="NaturalSort.cs" />
   </ItemGroup>

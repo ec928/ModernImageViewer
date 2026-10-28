@@ -121,6 +121,36 @@
 
                     <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,4" Opacity="0.4"/>
 
+                    <Button x:Name="AspectButton"
+                            Style="{StaticResource QuietButtonStyle}"
+                            Padding="8,5"
+                            CornerRadius="14"
+                            ToolTipService.ToolTip="Canvas shape. Drag the window for a custom shape.">
+                        <Button.Flyout>
+                            <MenuFlyout x:Name="AspectMenuFlyout" Opening="AspectFlyout_Opening" />
+                        </Button.Flyout>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock x:Name="AspectText" Text="16:9" VerticalAlignment="Center" FontSize="13" />
+                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE70D;" FontSize="9" Opacity="0.5" VerticalAlignment="Center" Margin="1,1,0,0"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Button x:Name="SaveButton"
+                            Style="{StaticResource QuietButtonStyle}"
+                            Padding="8,5"
+                            CornerRadius="14"
+                            ToolTipService.ToolTip="Save this grid as a JPEG">
+                        <Button.Flyout>
+                            <MenuFlyout x:Name="SaveMenuFlyout" Opening="SaveFlyout_Opening" />
+                        </Button.Flyout>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE74E;" FontSize="14" />
+                            <TextBlock x:Name="SaveText" Text="Save" VerticalAlignment="Center" FontSize="13" />
+                        </StackPanel>
+                    </Button>
+
+                    <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,4" Opacity="0.4"/>
+
                     <!-- Close Button -->
                     <Button Click="CloseButton_Click" 
                             Style="{StaticResource QuietButtonStyle}" 

@@ -53,6 +53,9 @@ namespace ModernImageViewer
         private readonly AppWindow _appWindow;
         public new AppWindow AppWindow => _appWindow;
         private AppSettings _currentSettings = new AppSettings();
+        private bool _multiViewCanvasActive;
+        private int _stashedGridWidth;
+        private int _stashedGridHeight;
         private readonly IntPtr _hWnd;
         private readonly KeyEventHandler _globalKeyDownHandler;
         private readonly KeyEventHandler _globalKeyUpHandler;
@@ -113,6 +116,7 @@ namespace ModernImageViewer
         {
             Instance = this;
             this.InitializeComponent();
+            MultiViewControl.CanvasAspectChosen += ApplyMultiViewAspect;
             this.SystemBackdrop = new MicaBackdrop();
 
             _hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
@@ -327,6 +331,8 @@ namespace ModernImageViewer
             public int DirectorWindowHeight { get; set; } = -1;
             public int DirectorWindowX { get; set; } = -1;
             public int DirectorWindowY { get; set; } = -1;
+            public int MultiViewWindowWidth { get; set; } = -1;
+            public int MultiViewWindowHeight { get; set; } = -1;
             public float Gamma { get; set; } = 2.2f;
             public string ImageEditorPath { get; set; } = "mspaint.exe";
             public string VideoDirectorPath { get; set; } = string.Empty;
@@ -366,6 +372,8 @@ namespace ModernImageViewer
                 settings.DirectorWindowHeight = -1;
                 settings.DirectorWindowX = -1;
                 settings.DirectorWindowY = -1;
+                settings.MultiViewWindowWidth = -1;
+                settings.MultiViewWindowHeight = -1;
 
                 try
                 {
@@ -604,8 +612,21 @@ namespace ModernImageViewer
 
                 if (_appWindow.Presenter is OverlappedPresenter p && p.State == OverlappedPresenterState.Minimized) return;
 
-                _currentSettings.WindowWidth = _appWindow.Size.Width;
-                _currentSettings.WindowHeight = _appWindow.Size.Height;
+                if (_multiViewCanvasActive)
+                {
+                    _currentSettings.MultiViewWindowWidth = _appWindow.Size.Width;
+                    _currentSettings.MultiViewWindowHeight = _appWindow.Size.Height;
+                    if (_stashedGridWidth >= 300 && _stashedGridHeight >= 300)
+                    {
+                        _currentSettings.WindowWidth = _stashedGridWidth;
+                        _currentSettings.WindowHeight = _stashedGridHeight;
+                    }
+                }
+                else
+                {
+                    _currentSettings.WindowWidth = _appWindow.Size.Width;
+                    _currentSettings.WindowHeight = _appWindow.Size.Height;
+                }
                 _currentSettings.WindowX = _appWindow.Position.X;
                 _currentSettings.WindowY = _appWindow.Position.Y;
 

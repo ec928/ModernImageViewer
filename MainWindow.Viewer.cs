@@ -858,9 +858,20 @@ namespace ModernImageViewer
 
             if (MultiViewControl != null)
             {
+                bool firstCanvas = BeginMultiViewCanvas();
                 MultiViewControl.LoadImages(items);
                 MultiViewControl.Visibility = Visibility.Visible;
                 MultiViewControl.FocusView();
+                if (firstCanvas)
+                {
+                    void SnapToWide(object sender, SizeChangedEventArgs args)
+                    {
+                        if (args.NewSize.Width < 50 || args.NewSize.Height < 50) return;
+                        MultiViewControl.SizeChanged -= SnapToWide;
+                        ApplyMultiViewAspect(16.0 / 9.0);
+                    }
+                    MultiViewControl.SizeChanged += SnapToWide;
+                }
             }
         }
 
@@ -868,9 +879,109 @@ namespace ModernImageViewer
         {
             if (MultiViewControl != null && MultiViewControl.Visibility == Visibility.Visible)
             {
+                EndMultiViewCanvas();
                 MultiViewControl.Visibility = Visibility.Collapsed;
                 MultiViewControl.Clear();
                 FocusGrid();
+            }
+        }
+
+        private bool BeginMultiViewCanvas()
+        {
+            if (_multiViewCanvasActive || _appWindow == null) return false;
+            _stashedGridWidth = _appWindow.Size.Width;
+            _stashedGridHeight = _appWindow.Size.Height;
+            _multiViewCanvasActive = true;
+
+            int width = _currentSettings.MultiViewWindowWidth;
+            int height = _currentSettings.MultiViewWindowHeight;
+            bool first = width < 300 || height < 300;
+            if (first)
+                (width, height) = DefaultMultiViewSize();
+            else if (TryGetWorkArea(out var work))
+                (width, height) = GridCanvasMath.Fit(width, height, work.Width, work.Height);
+
+            _appWindow.Resize(new Windows.Graphics.SizeInt32(width, height));
+            return first;
+        }
+
+        private void EndMultiViewCanvas()
+        {
+            if (!_multiViewCanvasActive || _appWindow == null) return;
+            _currentSettings.MultiViewWindowWidth = _appWindow.Size.Width;
+            _currentSettings.MultiViewWindowHeight = _appWindow.Size.Height;
+            _multiViewCanvasActive = false;
+            if (_stashedGridWidth >= 300 && _stashedGridHeight >= 300)
+                _appWindow.Resize(new Windows.Graphics.SizeInt32(_stashedGridWidth, _stashedGridHeight));
+            SaveAllSettings();
+        }
+
+        private void ApplyMultiViewAspect(double widthOverHeight)
+        {
+            if (!_multiViewCanvasActive || _appWindow == null || widthOverHeight <= 0) return;
+            if (_appWindow.Presenter is OverlappedPresenter presenter && presenter.State == OverlappedPresenterState.Maximized)
+                presenter.Restore();
+
+            double scale = MultiViewControl.XamlRoot?.RasterizationScale ?? 1;
+            if (scale <= 0) scale = 1;
+            int clientW = (int)Math.Round(MultiViewControl.ActualWidth * scale);
+            int clientH = (int)Math.Round(MultiViewControl.ActualHeight * scale);
+            if (clientW < 50 || clientH < 50)
+            {
+                clientW = _appWindow.Size.Width;
+                clientH = _appWindow.Size.Height;
+            }
+            int frameW = Math.Max(0, _appWindow.Size.Width - clientW);
+            int frameH = Math.Max(0, _appWindow.Size.Height - clientH);
+            int newH = Math.Max(300, clientH);
+            int newW = Math.Max(1, (int)Math.Round(newH * widthOverHeight));
+            int maxW = newW;
+            int maxH = newH;
+            Windows.Graphics.RectInt32 work = default;
+            bool haveWork = TryGetWorkArea(out work);
+            if (haveWork)
+            {
+                maxW = Math.Max(1, work.Width - frameW);
+                maxH = Math.Max(1, work.Height - frameH);
+            }
+            var fitted = GridCanvasMath.Fit(newW, newH, maxW, maxH);
+            int outerW = fitted.Width + frameW;
+            int outerH = fitted.Height + frameH;
+            int x = _appWindow.Position.X;
+            int y = _appWindow.Position.Y;
+            if (haveWork)
+            {
+                if (x + outerW > work.X + work.Width) x = work.X + work.Width - outerW;
+                if (y + outerH > work.Y + work.Height) y = work.Y + work.Height - outerH;
+                if (x < work.X) x = work.X;
+                if (y < work.Y) y = work.Y;
+            }
+            _appWindow.MoveAndResize(new Windows.Graphics.RectInt32(x, y, outerW, outerH));
+        }
+
+        private (int Width, int Height) DefaultMultiViewSize()
+        {
+            if (TryGetWorkArea(out var work))
+            {
+                int height = (int)(work.Height * 0.9375);
+                int width = (int)Math.Round(height * (16.0 / 9.0));
+                return GridCanvasMath.Fit(width, height, work.Width, work.Height);
+            }
+            return (1920, 1080);
+        }
+
+        private bool TryGetWorkArea(out Windows.Graphics.RectInt32 work)
+        {
+            work = default;
+            try
+            {
+                var area = DisplayArea.GetFromWindowId(_appWindow.Id, DisplayAreaFallback.Primary);
+                work = area.WorkArea;
+                return work.Width > 0 && work.Height > 0;
+            }
+            catch
+            {
+                return false;
             }
         }
 

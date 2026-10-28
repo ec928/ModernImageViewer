@@ -17,6 +17,9 @@ namespace ModernImageViewer
     {
         public event EventHandler? CloseRequested;
 
+        /// <summary>The window should become this width/height ratio. Dragging the window is the custom shape.</summary>
+        public event Action<double>? CanvasAspectChosen;
+
         private readonly List<ImageItem> _items = new();
         private readonly List<CompositeTransform> _cellTransforms = new();
         private readonly List<Action> _layoutUpdaters = new();
@@ -48,6 +51,7 @@ namespace ModernImageViewer
             RootGrid.PointerMoved += SegmentGesture_PointerMoved;
             RootGrid.PointerReleased += SegmentGesture_PointerReleased;
             RootGrid.PointerCaptureLost += SegmentGesture_PointerReleased;
+            SizeChanged += (_, _) => RefreshCanvasLabel();
 
             SetupSoloInteractions();
         }
