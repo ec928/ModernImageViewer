@@ -205,15 +205,14 @@
                         </Button>
 
                         <!-- Reset Zooms Button -->
-                        <Button x:Name="ResetZoomButton"
-                                Click="ResetZoom_Click" 
+                        <Button Click="ResetZoom_Click" 
                                 Style="{StaticResource QuietButtonStyle}" 
                                 Padding="8,5" 
                                 CornerRadius="14" 
                                 ToolTipService.ToolTip="Reset Pan &amp; Zoom (Middle-Click)">
                             <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                <SymbolIcon x:Name="ResetZoomIcon" Symbol="ZoomOut" />
-                                <TextBlock x:Name="ResetZoomText" Text="Reset" VerticalAlignment="Center" FontSize="13" />
+                                <SymbolIcon Symbol="ZoomOut" />
+                                <TextBlock Text="Reset" VerticalAlignment="Center" FontSize="13" />
                             </StackPanel>
                         </Button>
 

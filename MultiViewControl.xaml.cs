@@ -738,7 +738,6 @@ namespace ModernImageViewer
                     transform.TranslateX = 0;
                     transform.TranslateY = 0;
                     ClampTranslation();
-                    UpdateResetZoomState();
                     e.Handled = true;
                     return;
                 }
@@ -774,7 +773,6 @@ namespace ModernImageViewer
                     transform.TranslateX += dx;
                     transform.TranslateY += dy;
                     ClampTranslation();
-                    UpdateResetZoomState();
 
                     lastPoint = currentPoint;
                     e.Handled = true;
@@ -838,7 +836,6 @@ namespace ModernImageViewer
                 transform.ScaleY = newScale;
 
                 ClampTranslation();
-                UpdateResetZoomState();
                 e.Handled = true;
             };
 
@@ -871,7 +868,6 @@ namespace ModernImageViewer
                 }
 
                 ClampTranslation();
-                UpdateResetZoomState();
             };
 
             // Top-Right Auto-Hiding Caption Controls (Matches app's window caption style: Maximize and Close)
@@ -1552,39 +1548,6 @@ namespace ModernImageViewer
                 tr.TranslateX = 0;
                 tr.TranslateY = 0;
             }
-            UpdateResetZoomState();
-        }
-
-        private void UpdateResetZoomState()
-        {
-            if (ResetZoomButton == null || ResetZoomText == null || ResetZoomIcon == null) return;
-            bool isZoomed = false;
-            foreach (var tr in _cellTransforms)
-            {
-                if (Math.Abs(tr.ScaleX - 1.0) > 0.02 || Math.Abs(tr.TranslateX) > 1 || Math.Abs(tr.TranslateY) > 1)
-                {
-                    isZoomed = true;
-                    break;
-                }
-            }
-
-            if (isZoomed)
-            {
-                var accent = Application.Current.Resources["AccentFillColorDefaultBrush"] as Brush
-                    ?? new SolidColorBrush(Windows.UI.Color.FromArgb(255, 96, 205, 255));
-                ResetZoomText.Foreground = accent;
-                ResetZoomIcon.Foreground = accent;
-                ResetZoomText.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
-                ToolTipService.SetToolTip(ResetZoomButton, "Reset Pan & Zoom (Photos are zoomed)");
-            }
-            else
-            {
-                ResetZoomText.ClearValue(TextBlock.ForegroundProperty);
-                ResetZoomIcon.ClearValue(IconElement.ForegroundProperty);
-                ResetZoomText.FontWeight = Microsoft.UI.Text.FontWeights.Normal;
-                ToolTipService.SetToolTip(ResetZoomButton, "Reset Pan & Zoom (Middle-Click)");
-            }
-            ResetZoomButton.Opacity = 1.0;
         }
 
         private void ResetZoom_Click(object sender, RoutedEventArgs e)
