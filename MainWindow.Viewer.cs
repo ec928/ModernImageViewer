@@ -2067,6 +2067,10 @@ namespace ModernImageViewer
 
         private void Global_KeyDown(object sender, KeyRoutedEventArgs e)
         {
+            // This handler also receives keys PreviewKeyDown already handled.
+            // A second pass would close the grid after Esc has returned from solo.
+            if (e.Handled) return;
+
             if (e.Key == Windows.System.VirtualKey.Menu)
             {
                 // WasKeyDown filters the auto-repeat that follows a held key.

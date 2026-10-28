@@ -231,29 +231,18 @@
                     </Button>
                 </StackPanel>
             </Border>
-            <!-- Solo Top-Right Caption Controls (Restore to Multi-View, Close) -->
+            <!-- Solo top-right: back to the grid. Close stays on the grid playbar. -->
             <Grid x:Name="SoloTopRightControls" HorizontalAlignment="Right" VerticalAlignment="Top" Canvas.ZIndex="60"
                   PointerEntered="Hud_PointerEntered" PointerExited="Hud_PointerExited">
-                <StackPanel Orientation="Horizontal">
-                    <Button Click="ExitSolo_Click" Width="46" Height="32" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="0" IsTabStop="False" UseSystemFocusVisuals="False" FocusVisualPrimaryThickness="0" FocusVisualSecondaryThickness="0" ToolTipService.ToolTip="Restore to Multi-View (Esc)">
-                        <Button.Resources>
-                            <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#18FFFFFF"/>
-                            <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#10FFFFFF"/>
-                            <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="White"/>
-                            <SolidColorBrush x:Key="ButtonForegroundPressed" Color="#C8FFFFFF"/>
-                        </Button.Resources>
-                        <FontIcon Glyph="&#xE923;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="10" Foreground="#F0FFFFFF"/>
-                    </Button>
-                    <Button Click="CloseButton_Click" Width="46" Height="32" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="0" IsTabStop="False" UseSystemFocusVisuals="False" FocusVisualPrimaryThickness="0" FocusVisualSecondaryThickness="0" ToolTipService.ToolTip="Close (Esc)">
-                        <Button.Resources>
-                            <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#C42B1C"/>
-                            <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#991B10"/>
-                            <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="White"/>
-                            <SolidColorBrush x:Key="ButtonForegroundPressed" Color="White"/>
-                        </Button.Resources>
-                        <FontIcon Glyph="&#xE8BB;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="10" Foreground="#F0FFFFFF"/>
-                    </Button>
-                </StackPanel>
+                <Button Click="ExitSolo_Click" Width="46" Height="32" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="0" IsTabStop="False" UseSystemFocusVisuals="False" FocusVisualPrimaryThickness="0" FocusVisualSecondaryThickness="0" ToolTipService.ToolTip="Restore to Multi-View (Esc)">
+                    <Button.Resources>
+                        <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#18FFFFFF"/>
+                        <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#10FFFFFF"/>
+                        <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="White"/>
+                        <SolidColorBrush x:Key="ButtonForegroundPressed" Color="#C8FFFFFF"/>
+                    </Button.Resources>
+                    <FontIcon Glyph="&#xE923;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="10" Foreground="#F0FFFFFF"/>
+                </Button>
             </Grid>
         </Grid>
     </Grid>
