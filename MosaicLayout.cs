@@ -49,11 +49,12 @@ namespace ModernImageViewer
             return copy;
         }
 
-        /// <summary>Photos actually placed. Seven or more stop at nine.</summary>
+        /// <summary>Photos actually placed. More than sixteen stop at sixteen.</summary>
+        public const int MaxShown = 16;
+
         public static int ShownCount(int count)
         {
-            if (count >= 7) return Math.Min(count, 9);
-            return count;
+            return Math.Min(count, MaxShown);
         }
 
         public static int ModeCount(int count)
@@ -169,22 +170,15 @@ namespace ModernImageViewer
             return Math.Max(1, (int)Math.Round(Math.Sqrt(shown)));
         }
 
-        /// <summary>Ways to place the longer lines when the photos do not divide evenly.</summary>
-        public static int Arrangements(int count, int lines)
-        {
-            return LongLineMasks(ShownCount(count), lines).Count;
-        }
-
-        /// <summary>Photos in each line, first line first.</summary>
+        /// <summary>Photos in each line, first line first. The longer lines come first.</summary>
         public static int[] LineCounts(int count, int lines, int arrangement)
         {
             int shown = ShownCount(count);
             lines = Math.Clamp(lines, 1, Math.Max(1, shown));
-            var masks = LongLineMasks(shown, lines);
-            int mask = masks[((arrangement % masks.Count) + masks.Count) % masks.Count];
+            int extra = shown % lines;
             var counts = new int[lines];
             for (int i = 0; i < lines; i++)
-                counts[i] = shown / lines + ((mask >> i & 1) != 0 ? 1 : 0);
+                counts[i] = shown / lines + (i < extra ? 1 : 0);
             return counts;
         }
 
@@ -248,25 +242,13 @@ namespace ModernImageViewer
             return copy;
         }
 
-        private static List<int> LongLineMasks(int shown, int lines)
-        {
-            lines = Math.Clamp(lines, 1, Math.Max(1, shown));
-            int extra = shown % lines;
-            var masks = new List<int>();
-            for (int mask = 0; mask < 1 << lines; mask++)
-            {
-                if (System.Numerics.BitOperations.PopCount((uint)mask) == extra)
-                    masks.Add(mask);
-            }
-            return masks;
-        }
-
         public static HeroKind[] HeroKinds(int count)
         {
             int shown = ShownCount(count);
             if (shown < 2) return Array.Empty<HeroKind>();
             if (shown < 3) return new[] { HeroKind.Banner };
-            if (shown == 4 || shown == 5 || shown == 6 || shown == 7 || shown >= 9)
+            // Rectangle is drawn by hand for each count up to nine.
+            if (shown == 4 || shown == 5 || shown == 6 || shown == 7 || shown == 9)
                 return new[] { HeroKind.Banner, HeroKind.Rectangle, HeroKind.Pair };
             return new[] { HeroKind.Banner, HeroKind.Pair };
         }

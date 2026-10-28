@@ -114,8 +114,7 @@ namespace ModernImageViewer
         private static int VisibleCount(int count)
         {
             if (count <= 0) return 0;
-            if (count <= 6) return count;
-            return Math.Min(count, 9);
+            return MosaicLayout.ShownCount(count);
         }
 
         private bool CellRootsReady()
@@ -203,6 +202,8 @@ namespace ModernImageViewer
         private void RefreshLinesChrome(int count)
         {
             int shown = MosaicLayout.ShownCount(count);
+            ShownText.Visibility = count > shown ? Visibility.Visible : Visibility.Collapsed;
+            ShownText.Text = shown + " of " + count + " shown";
             bool show = shown > 1;
             LinesGroup.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
             if (!show) return;

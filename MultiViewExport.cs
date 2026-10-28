@@ -150,7 +150,7 @@ namespace ModernImageViewer
                 await ShowExportMessageAsync("Nothing to save.");
                 return;
             }
-            if (shots.Count < _cellElements.Count)
+            if (shots.Count < Math.Min(_items.Count, _cellRoots.Length))
             {
                 await ShowExportMessageAsync("A photo is still loading.");
                 return;
@@ -199,14 +199,14 @@ namespace ModernImageViewer
         private List<CellShot> CaptureCells()
         {
             var shots = new List<CellShot>();
-            int count = Math.Min(_items.Count, Math.Min(_cellElements.Count, _cellTransforms.Count));
+            int count = Math.Min(_items.Count, _cellRoots.Length);
             double canvasW = CellsGrid.ActualWidth;
             double canvasH = CellsGrid.ActualHeight;
             if (canvasW < 1 || canvasH < 1) return shots;
 
             for (int i = 0; i < count; i++)
             {
-                if (_cellElements[i] is not Grid cell || cell.ActualWidth < 1 || cell.ActualHeight < 1)
+                if (_cellRoots[i] is not Border root || root.Child is not Grid cell || cell.ActualWidth < 1 || cell.ActualHeight < 1)
                     continue;
                 Grid? container = null;
                 foreach (var child in cell.Children)
@@ -233,7 +233,7 @@ namespace ModernImageViewer
                 if (nativeW < 1 || nativeH < 1) continue;
 
                 Rect bounds = cell.TransformToVisual(CellsGrid).TransformBounds(new Rect(0, 0, cell.ActualWidth, cell.ActualHeight));
-                var transform = _cellTransforms[i];
+                if (container.RenderTransform is not CompositeTransform transform) continue;
                 shots.Add(new CellShot
                 {
                     Path = _items[i].Path,

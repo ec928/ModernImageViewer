@@ -64,6 +64,13 @@
 
                     <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,4" Opacity="0.4"/>
 
+                    <TextBlock x:Name="ShownText"
+                               Visibility="Collapsed"
+                               VerticalAlignment="Center"
+                               FontSize="13"
+                               Opacity="0.7"
+                               ToolTipService.ToolTip="Multi-view shows up to 16 photos. The rest of the selection is not shown." />
+
                     <!-- Fill / Fit Toggle Button (Default: Fill for Zero Wasted Space) -->
                     <Button x:Name="FillFitButton" 
                             Click="FillFitButton_Click" 

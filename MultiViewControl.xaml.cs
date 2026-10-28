@@ -334,22 +334,6 @@ namespace ModernImageViewer
                 case VirtualKey.F:
                     ToggleFillMode();
                     return true;
-                case VirtualKey.Number1:
-                case VirtualKey.Number2:
-                case VirtualKey.Number3:
-                case VirtualKey.Number4:
-                case VirtualKey.Number5:
-                case VirtualKey.Number6:
-                case VirtualKey.Number7:
-                case VirtualKey.Number8:
-                case VirtualKey.Number9:
-                    int idx = (int)key - (int)VirtualKey.Number1;
-                    if (idx >= 0 && idx < _items.Count)
-                    {
-                        EnterSolo(idx);
-                        return true;
-                    }
-                    break;
             }
 
             return false;
@@ -656,7 +640,7 @@ namespace ModernImageViewer
                     if (isAlt)
                     {
                         e.Handled = true;
-                        _ = StartSwapDragAsync(cellGrid, e.GetCurrentPoint(cellGrid), index);
+                        _ = StartSwapDragAsync(cellGrid, e.GetCurrentPoint(cellGrid), Slot(item));
                         return;
                     }
                     isDragging = true;
@@ -796,14 +780,12 @@ namespace ModernImageViewer
 
             if (_items.Count > 1)
             {
-                int slot = index;
-                int visible = VisibleCount(_items.Count);
                 topStack.Children.Add(CreateNudgeButton("\uE76B",
-                    (slot == 0 ? "Move to last position" : "Move to previous position") + " (or Alt+drag onto another photo to swap)",
-                    () => MovePhoto(slot, -1)));
+                    () => (Slot(item) == 0 ? "Move to last position" : "Move to previous position") + " (or Alt+drag onto another photo to swap)",
+                    () => MovePhoto(Slot(item), -1)));
                 topStack.Children.Add(CreateNudgeButton("\uE76C",
-                    (slot == visible - 1 ? "Move to first position" : "Move to next position") + " (or Alt+drag onto another photo to swap)",
-                    () => MovePhoto(slot, 1)));
+                    () => (Slot(item) == VisibleCount(_items.Count) - 1 ? "Move to first position" : "Move to next position") + " (or Alt+drag onto another photo to swap)",
+                    () => MovePhoto(Slot(item), 1)));
             }
 
             // Maximize / Solo Button (Matches app's TopMaxButton style)
@@ -825,8 +807,8 @@ namespace ModernImageViewer
             maxBtn.Resources["ButtonBackgroundPressed"] = new SolidColorBrush(Windows.UI.Color.FromArgb(16, 255, 255, 255));
             maxBtn.Resources["ButtonForegroundPointerOver"] = new SolidColorBrush(Microsoft.UI.Colors.White);
             maxBtn.Resources["ButtonForegroundPressed"] = new SolidColorBrush(Windows.UI.Color.FromArgb(200, 255, 255, 255));
-            ToolTipService.SetToolTip(maxBtn, $"Solo / Maximize (Key {index + 1})");
-            maxBtn.Click += (s, e) => EnterSolo(index);
+            ToolTipService.SetToolTip(maxBtn, "Solo / Maximize");
+            maxBtn.Click += (s, e) => EnterSolo(Slot(item));
             topStack.Children.Add(maxBtn);
 
             // Close / Remove Button (Matches app's TopCloseButton style with red hover)
@@ -855,64 +837,20 @@ namespace ModernImageViewer
             topControls.Children.Add(topStack);
             cellGrid.Children.Add(topControls);
 
-            // Right-Click Context Menu
+            // Right-Click Context Menu, filled when it opens so it names the photo's current place
             var menu = new MenuFlyout();
-
-            if (_items.Count > 1)
-            {
-                int slot = index;
-                var moveLeftItem = new MenuFlyoutItem { Text = "Move Left / Up", Icon = new FontIcon { Glyph = "\uE76B" } };
-                moveLeftItem.Click += (s, e) => MovePhoto(slot, -1);
-                menu.Items.Add(moveLeftItem);
-
-                var moveRightItem = new MenuFlyoutItem { Text = "Move Right / Down", Icon = new FontIcon { Glyph = "\uE76C" } };
-                moveRightItem.Click += (s, e) => MovePhoto(slot, 1);
-                menu.Items.Add(moveRightItem);
-
-                if (_items.Count == 2)
-                {
-                    var swapItem = new MenuFlyoutItem { Text = "Swap with Other Photo", Icon = new FontIcon { Glyph = "\uE8AB" } };
-                    swapItem.Click += (s, e) => SwapItems(index, 1 - index);
-                    menu.Items.Add(swapItem);
-                }
-                else
-                {
-                    var swapSub = new MenuFlyoutSubItem { Text = "Swap with...", Icon = new FontIcon { Glyph = "\uE8AB" } };
-                    for (int i = 0; i < _items.Count; i++)
-                    {
-                        if (i != index)
-                        {
-                            int targetIdx = i;
-                            var targetItem = new MenuFlyoutItem { Text = $"Position {i + 1} ({_items[i].Name})" };
-                            targetItem.Click += (s, e) => SwapItems(index, targetIdx);
-                            swapSub.Items.Add(targetItem);
-                        }
-                    }
-                    menu.Items.Add(swapSub);
-                }
-
-                menu.Items.Add(new MenuFlyoutItem { Text = "Tip: Alt+drag a photo onto another to swap", IsEnabled = false });
-
-                menu.Items.Add(new MenuFlyoutSeparator());
-            }
-
-            var soloItem = new MenuFlyoutItem { Text = $"Solo / Maximize (Key {index + 1})", Icon = new FontIcon { Glyph = "\uE922" } };
-            soloItem.Click += (s, e) => EnterSolo(index);
-            menu.Items.Add(soloItem);
-
-            var removeItem = new MenuFlyoutItem { Text = "Remove from View", Icon = new FontIcon { Glyph = "\uE8BB" } };
-            removeItem.Click += (s, e) => RemoveItem(item);
-            menu.Items.Add(removeItem);
+            FillCellMenu(menu, item);
+            menu.Opening += (_, _) => FillCellMenu(menu, item);
 
             cellGrid.ContextFlyout = menu;
 
-            AttachSwapDrop(cellBorder, cellGrid, index);
+            AttachSwapDrop(cellBorder, cellGrid, item);
 
             cellBorder.Child = cellGrid;
             return cellBorder;
         }
 
-        private Button CreateNudgeButton(string glyph, string tip, Action move)
+        private Button CreateNudgeButton(string glyph, Func<string> tip, Action move)
         {
             var btn = new Button
             {
@@ -938,9 +876,62 @@ namespace ModernImageViewer
             btn.Resources["ButtonBackgroundPressed"] = new SolidColorBrush(Windows.UI.Color.FromArgb(16, 255, 255, 255));
             btn.Resources["ButtonForegroundPointerOver"] = new SolidColorBrush(Microsoft.UI.Colors.White);
             btn.Resources["ButtonForegroundPressed"] = new SolidColorBrush(Windows.UI.Color.FromArgb(200, 255, 255, 255));
-            ToolTipService.SetToolTip(btn, tip);
+            var toolTip = new ToolTip { Content = tip() };
+            toolTip.Opened += (_, _) => toolTip.Content = tip();
+            ToolTipService.SetToolTip(btn, toolTip);
             btn.Click += (s, e) => move();
             return btn;
+        }
+
+        private int Slot(ImageItem item) => _items.IndexOf(item);
+
+        private void FillCellMenu(MenuFlyout menu, ImageItem item)
+        {
+            menu.Items.Clear();
+            int index = Slot(item);
+            if (index < 0) return;
+
+            if (_items.Count > 1)
+            {
+                var moveLeftItem = new MenuFlyoutItem { Text = "Move Left / Up", Icon = new FontIcon { Glyph = "\uE76B" } };
+                moveLeftItem.Click += (s, e) => MovePhoto(Slot(item), -1);
+                menu.Items.Add(moveLeftItem);
+
+                var moveRightItem = new MenuFlyoutItem { Text = "Move Right / Down", Icon = new FontIcon { Glyph = "\uE76C" } };
+                moveRightItem.Click += (s, e) => MovePhoto(Slot(item), 1);
+                menu.Items.Add(moveRightItem);
+
+                if (_items.Count == 2)
+                {
+                    var swapItem = new MenuFlyoutItem { Text = "Swap with Other Photo", Icon = new FontIcon { Glyph = "\uE8AB" } };
+                    swapItem.Click += (s, e) => SwapItems(Slot(item), 1 - Slot(item));
+                    menu.Items.Add(swapItem);
+                }
+                else
+                {
+                    var swapSub = new MenuFlyoutSubItem { Text = "Swap with...", Icon = new FontIcon { Glyph = "\uE8AB" } };
+                    for (int i = 0; i < _items.Count; i++)
+                    {
+                        if (i == index) continue;
+                        var target = _items[i];
+                        var targetItem = new MenuFlyoutItem { Text = $"Position {i + 1} ({target.Name})" };
+                        targetItem.Click += (s, e) => SwapItems(Slot(item), Slot(target));
+                        swapSub.Items.Add(targetItem);
+                    }
+                    menu.Items.Add(swapSub);
+                }
+
+                menu.Items.Add(new MenuFlyoutItem { Text = "Tip: Alt+drag a photo onto another to swap", IsEnabled = false });
+                menu.Items.Add(new MenuFlyoutSeparator());
+            }
+
+            var soloItem = new MenuFlyoutItem { Text = "Solo / Maximize", Icon = new FontIcon { Glyph = "\uE922" } };
+            soloItem.Click += (s, e) => EnterSolo(Slot(item));
+            menu.Items.Add(soloItem);
+
+            var removeItem = new MenuFlyoutItem { Text = "Remove from View", Icon = new FontIcon { Glyph = "\uE8BB" } };
+            removeItem.Click += (s, e) => RemoveItem(item);
+            menu.Items.Add(removeItem);
         }
 
         /// <summary>Swap this photo with the neighbor in the layout order, wrapping around the photos on screen.</summary>
@@ -1230,7 +1221,7 @@ namespace ModernImageViewer
             finally { _swapSource = -1; }
         }
 
-        private void AttachSwapDrop(Border cellBorder, Grid cellGrid, int index)
+        private void AttachSwapDrop(Border cellBorder, Grid cellGrid, ImageItem item)
         {
             Windows.UI.Color accent = Windows.UI.Color.FromArgb(255, 96, 205, 255);
             try { if (Application.Current.Resources["SystemAccentColorLight2"] is Windows.UI.Color c) accent = c; }
@@ -1251,7 +1242,7 @@ namespace ModernImageViewer
             {
                 e.AllowedOperations = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
                 e.Data.RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
-                if ((uint)index < (uint)_items.Count) e.Data.SetText(_items[index].Name);
+                e.Data.SetText(item.Name);
                 cellBorder.Opacity = 0.4;
                 var deferral = e.GetDeferral();
                 try { await SetDragPictureAsync(cellGrid, e.DragUI, e.GetPosition(cellGrid)); }
@@ -1262,7 +1253,7 @@ namespace ModernImageViewer
 
             void Over(object s, DragEventArgs e)
             {
-                if (_swapSource < 0 || _swapSource == index)
+                if (_swapSource < 0 || _swapSource == Slot(item))
                 {
                     e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.None;
                     return;
@@ -1281,7 +1272,8 @@ namespace ModernImageViewer
             {
                 ring.Visibility = Visibility.Collapsed;
                 int from = _swapSource;
-                if (from < 0 || from == index) return;
+                int index = Slot(item);
+                if (from < 0 || index < 0 || from == index) return;
                 e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
                 e.Handled = true;
                 // Swap after the drag has finished with these elements.
@@ -1312,7 +1304,22 @@ namespace ModernImageViewer
         {
             if (idxA < 0 || idxA >= _items.Count || idxB < 0 || idxB >= _items.Count || idxA == idxB) return;
             (_items[idxA], _items[idxB]) = (_items[idxB], _items[idxA]);
-            BuildLayout();
+
+            int visible = VisibleCount(_items.Count);
+            if (idxA < visible && idxB < visible && _mosaic != null && CellRootsReady())
+            {
+                (_cellRoots[idxA], _cellRoots[idxB]) = (_cellRoots[idxB], _cellRoots[idxA]);
+                // The dragged photo is dimmed while it travels; it is the same element afterwards.
+                _cellRoots[idxA]!.Opacity = 1;
+                _cellRoots[idxB]!.Opacity = 1;
+                _keepMosaic = true;
+                try { BuildLayout(); }
+                finally { _keepMosaic = false; }
+            }
+            else
+            {
+                BuildLayout();
+            }
             ShowHudAndOverlays();
         }
 
