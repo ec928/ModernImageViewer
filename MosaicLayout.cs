@@ -162,6 +162,105 @@ namespace ModernImageViewer
             return Cut(false, Row(0, 3), Row(3, 3), Row(6, 3));
         }
 
+        /// <summary>Lines that look closest to an even grid for this many photos.</summary>
+        public static int DefaultLines(int count)
+        {
+            int shown = ShownCount(count);
+            return Math.Max(1, (int)Math.Round(Math.Sqrt(shown)));
+        }
+
+        /// <summary>Ways to place the longer lines when the photos do not divide evenly.</summary>
+        public static int Arrangements(int count, int lines)
+        {
+            return LongLineMasks(ShownCount(count), lines).Count;
+        }
+
+        /// <summary>Photos in each line, first line first.</summary>
+        public static int[] LineCounts(int count, int lines, int arrangement)
+        {
+            int shown = ShownCount(count);
+            lines = Math.Clamp(lines, 1, Math.Max(1, shown));
+            var masks = LongLineMasks(shown, lines);
+            int mask = masks[((arrangement % masks.Count) + masks.Count) % masks.Count];
+            var counts = new int[lines];
+            for (int i = 0; i < lines; i++)
+                counts[i] = shown / lines + ((mask >> i & 1) != 0 ? 1 : 0);
+            return counts;
+        }
+
+        /// <summary>Photos in rows (each row side by side), or in columns when <paramref name="rows"/> is false.</summary>
+        public static MosaicLayout Lines(int count, int lines, bool rows, int arrangement)
+        {
+            int shown = ShownCount(count);
+            if (shown <= 1) return Cell(0);
+            return FromCounts(LineCounts(shown, lines, arrangement), rows);
+        }
+
+        /// <summary>One line per entry, holding that many photos, in photo order.</summary>
+        public static MosaicLayout FromCounts(IReadOnlyList<int> counts, bool rows, int start = 0)
+        {
+            var parts = new MosaicLayout[counts.Count];
+            int index = start;
+            for (int i = 0; i < counts.Count; i++)
+            {
+                parts[i] = rows ? Row(index, counts[i]) : Stack(index, counts[i]);
+                index += counts[i];
+            }
+            if (parts.Length == 1) return parts[0];
+            return Cut(!rows, parts);
+        }
+
+        /// <summary>
+        /// One more (or one fewer) photo in <paramref name="line"/>. The photo comes from, or goes to,
+        /// the last line that can spare it. Null when no line can.
+        /// </summary>
+        public static int[]? MovePhoto(IReadOnlyList<int> counts, int line, int delta)
+        {
+            if ((uint)line >= (uint)counts.Count || counts.Count < 2 || delta == 0) return null;
+            var next = counts.ToArray();
+            if (delta > 0)
+            {
+                for (int i = next.Length - 1; i >= 0; i--)
+                {
+                    if (i == line || next[i] <= 1) continue;
+                    next[i]--;
+                    next[line]++;
+                    return next;
+                }
+                return null;
+            }
+            if (next[line] <= 1) return null;
+            int receiver = line == next.Length - 1 ? line - 1 : next.Length - 1;
+            next[line]--;
+            next[receiver]++;
+            return next;
+        }
+
+        /// <summary>The same layout turned a quarter: rows become columns.</summary>
+        public static MosaicLayout Transpose(MosaicLayout node)
+        {
+            var copy = new MosaicLayout { Vertical = !node.Vertical, Leaf = node.Leaf };
+            for (int i = 0; i < node.Children.Count; i++)
+            {
+                copy.Children.Add(Transpose(node.Children[i]));
+                copy.Weights.Add(node.Weights[i]);
+            }
+            return copy;
+        }
+
+        private static List<int> LongLineMasks(int shown, int lines)
+        {
+            lines = Math.Clamp(lines, 1, Math.Max(1, shown));
+            int extra = shown % lines;
+            var masks = new List<int>();
+            for (int mask = 0; mask < 1 << lines; mask++)
+            {
+                if (System.Numerics.BitOperations.PopCount((uint)mask) == extra)
+                    masks.Add(mask);
+            }
+            return masks;
+        }
+
         public static HeroKind[] HeroKinds(int count)
         {
             int shown = ShownCount(count);
@@ -213,6 +312,29 @@ namespace ModernImageViewer
             if (kind == HeroKind.Pair) return PairHero(shown, position);
             bool vertical = position == 1 || position == 3;
             return BandHero(shown, vertical, atStart: position == 0 || position == 3, pair: false);
+        }
+
+        /// <summary>Photos beside the hero: 1 for a banner, 2 for a pair.</summary>
+        public static int HeroFeatured(HeroKind kind) => kind == HeroKind.Pair ? 2 : 1;
+
+        /// <summary>
+        /// A banner or pair at <paramref name="position"/>, with the other photos in the given lines.
+        /// Rows lay each line side by side; columns stack it.
+        /// </summary>
+        public static MosaicLayout CreateHeroLines(int count, HeroKind kind, int position, IReadOnlyList<int> restCounts, bool rows)
+        {
+            int shown = ShownCount(count);
+            if (shown < 2) return Cell(0);
+            bool pair = kind == HeroKind.Pair && shown >= 3;
+            int featured = pair ? 2 : 1;
+            position = ((position % 4) + 4) % 4;
+            bool vertical = position == 1 || position == 3;
+            bool atStart = position == 0 || position == 3;
+            BandShare(shown - featured, pair, out double heroW, out double restW);
+            MosaicLayout feature = pair ? (vertical ? Stack(0, 2) : Row(0, 2)) : Cell(0);
+            MosaicLayout rest = FromCounts(restCounts, rows, featured);
+            if (atStart) return Split(vertical, heroW, restW, feature, rest);
+            return Split(vertical, restW, heroW, rest, feature);
         }
 
         private static MosaicLayout Split(bool vertical, double w0, double w1, MosaicLayout a, MosaicLayout b)

@@ -73,9 +73,9 @@ Product proposal (not implemented): `CINEMATIC_PROPOSAL.md`. Bar is **excellent 
 
 A new Play from the grid or viewer starts from the launch list. `CinematicAutoSave.json` is a crash restore only: written atomically while a show is open, deleted on clean close of the last cinematic window, offered once on the next Play if the file is still there.
 
-## Sidebar peek
+## Bare Alt
 
-Holding Alt opens the sidebar and releasing closes it. `_altPeekOpenedSidebar` records whether Alt was what opened it, so a release never closes a pane the user opened by hover or by clicking. Alt+Tab leaves the window without ever delivering the key-up, so `Activated` (`WindowActivationState.Deactivated`) ends the peek as well. The bare Alt key-down is marked handled so it does not move focus to the window's system menu; Alt+key combinations are unaffected because the system tracks the modifier itself.
+There is no Alt peek at the sidebar; it was removed because it fired whenever Alt was held for an Alt-drag. The bare Alt key-down and key-up are still marked handled so Alt does not move focus to the window's system menu; Alt+key combinations are unaffected because the system tracks the modifier itself.
 
 ## Name ordering
 

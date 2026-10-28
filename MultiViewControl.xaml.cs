@@ -32,7 +32,9 @@ namespace ModernImageViewer
         private bool _isPointerOverHud = false;
 
         private int _soloIndex = -1;
-        private int _layoutMode = 0;
+        private int _lines = 1;
+        private int[]? _lineCounts;
+        private bool _flipped;
         private bool _heroActive;
         private HeroKind _heroKind = HeroKind.Banner;
         private int _heroPosition;
@@ -74,7 +76,9 @@ namespace ModernImageViewer
             _items.AddRange(items.Where(i => i != null && !i.IsDirectory));
             
             _isFillMode = true; // Always default to Fill (crop to fill) to eliminate black bars
-            _layoutMode = 0;
+            _lines = MosaicLayout.DefaultLines(_items.Count);
+            _lineCounts = null;
+            _flipped = false;
             _heroActive = false;
             _heroKind = HeroKind.Banner;
             _heroPosition = 0;
@@ -102,55 +106,122 @@ namespace ModernImageViewer
             _soloIndex = -1;
         }
 
-        private int GetMaxModesForCount(int count) => MosaicLayout.ModeCount(count);
-
-        private string GetLayoutModeTitle(int count, int mode) => MosaicLayout.ModeTitle(count, mode);
-
-        private void UpdateOrientationFlyout(int count)
+        /// <summary>More or fewer rows (or columns). Leaves the hero and any dragged sizes.</summary>
+        public void ChangeLines(int delta)
         {
-            if (OrientationMenuFlyout == null) return;
-            OrientationMenuFlyout.Items.Clear();
-            int maxModes = GetMaxModesForCount(count);
-            for (int m = 0; m < maxModes; m++)
-            {
-                int modeIndex = m;
-                string title = GetLayoutModeTitle(count, m);
-                var item = new MenuFlyoutItem
-                {
-                    Text = (!_heroActive && !_mosaicCustom && modeIndex == _layoutMode ? "✓  " : "    ") + title
-                };
-                item.Click += (s, e) =>
-                {
-                    _heroActive = false;
-                    _layoutMode = modeIndex;
-                    BuildLayout();
-                    ShowHudAndOverlays();
-                };
-                OrientationMenuFlyout.Items.Add(item);
-            }
-        }
-
-        public void ToggleOrientation()
-        {
-            if (_mosaicCustom)
-            {
-                BuildLayout();
-                ShowHudAndOverlays();
-                return;
-            }
-            if (_heroActive)
-            {
-                _heroActive = false;
-                BuildLayout();
-                ShowHudAndOverlays();
-                return;
-            }
-            int maxModes = GetMaxModesForCount(_items.Count);
-            if (maxModes <= 1) return;
-            _layoutMode = (_layoutMode + 1) % maxModes;
+            int total = LineTotal();
+            if (MosaicLayout.ShownCount(_items.Count) < 2 || total < 1) return;
+            int current = Math.Clamp(_lines, 1, total);
+            int next = Math.Clamp(current + delta, 1, total);
+            bool linesInUse = !_heroActive || HeroUsesLines;
+            if (next == current && linesInUse && !_mosaicCustom) return;
+            _lines = next;
+            _lineCounts = null;
+            if (!HeroUsesLines) _heroActive = false;
             BuildLayout();
             ShowHudAndOverlays();
         }
+
+        /// <summary>A banner or pair keeps the line controls for the other photos. Rectangle does not.</summary>
+        private bool HeroUsesLines => _heroActive && _heroKind != HeroKind.Rectangle;
+
+        /// <summary>Photos the line controls arrange: all of them, or the ones beside a banner or pair.</summary>
+        private int LineTotal()
+        {
+            int shown = MosaicLayout.ShownCount(_items.Count);
+            if (HeroUsesLines) return Math.Max(1, shown - MosaicLayout.HeroFeatured(_heroKind));
+            return shown;
+        }
+
+        private int EffectiveLines() => Math.Clamp(_lines, 1, Math.Max(1, LineTotal()));
+
+        /// <summary>Photos in each line. Even until the user changes one line.</summary>
+        private int[] CurrentLineCounts()
+        {
+            int total = LineTotal();
+            int lines = EffectiveLines();
+            if (_lineCounts != null && _lineCounts.Length == lines && _lineCounts.Sum() == total && _lineCounts.All(n => n >= 1))
+                return _lineCounts;
+            return MosaicLayout.LineCounts(total, lines, 0);
+        }
+
+        private void AdjustLine(int line, int delta)
+        {
+            var next = MosaicLayout.MovePhoto(CurrentLineCounts(), line, delta);
+            if (next == null) return;
+            _lineCounts = next;
+            if (!HeroUsesLines) _heroActive = false;
+            BuildLayout();
+            FillCountsPanel();
+            ShowHudAndOverlays();
+        }
+
+        private void CountsFlyout_Opening(object sender, object e) => FillCountsPanel();
+
+        private void FillCountsPanel()
+        {
+            CountsPanel.Children.Clear();
+            var counts = CurrentLineCounts();
+            bool rows = !_flipped;
+            CountsPanel.Children.Add(new TextBlock
+            {
+                Text = rows ? "Photos in each row, top to bottom" : "Photos in each column, left to right",
+                FontSize = 12,
+                Opacity = 0.7,
+                Margin = new Thickness(0, 0, 0, 6)
+            });
+            for (int i = 0; i < counts.Length; i++)
+            {
+                int line = i;
+                var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+                row.Children.Add(new TextBlock
+                {
+                    Text = (rows ? "Row " : "Column ") + (i + 1),
+                    Width = 72,
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+                var less = new Button { Content = new FontIcon { Glyph = "\uE738", FontSize = 11 }, Padding = new Thickness(8, 4, 8, 4) };
+                less.IsEnabled = MosaicLayout.MovePhoto(counts, line, -1) != null;
+                less.Click += (_, _) => AdjustLine(line, -1);
+                var more = new Button { Content = new FontIcon { Glyph = "\uE710", FontSize = 11 }, Padding = new Thickness(8, 4, 8, 4) };
+                more.IsEnabled = MosaicLayout.MovePhoto(counts, line, 1) != null;
+                more.Click += (_, _) => AdjustLine(line, 1);
+                row.Children.Add(less);
+                row.Children.Add(new TextBlock
+                {
+                    Text = counts[i].ToString(),
+                    Width = 28,
+                    TextAlignment = TextAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+                });
+                row.Children.Add(more);
+                CountsPanel.Children.Add(row);
+            }
+        }
+
+        /// <summary>Turn whatever is on screen a quarter: rows become columns, a top banner a left one, dragged sizes kept.</summary>
+        public void Flip()
+        {
+            if (MosaicLayout.ShownCount(_items.Count) < 2) return;
+            _flipped = !_flipped;
+            if (_mosaicCustom && _mosaic != null && CellRootsReady())
+            {
+                _mosaic = MosaicLayout.Transpose(_mosaic);
+                _keepMosaic = true;
+                try { BuildLayout(); }
+                finally { _keepMosaic = false; }
+            }
+            else
+            {
+                BuildLayout();
+            }
+            ShowHudAndOverlays();
+        }
+
+        private void LinesLess_Click(object sender, RoutedEventArgs e) => ChangeLines(-1);
+        private void LinesMore_Click(object sender, RoutedEventArgs e) => ChangeLines(1);
+        private void Flip_Click(object sender, RoutedEventArgs e) => Flip();
 
         private void HeroButton_Click(object sender, RoutedEventArgs e)
         {
@@ -252,14 +323,16 @@ namespace ModernImageViewer
                 case VirtualKey.Escape:
                     CloseRequested?.Invoke(this, EventArgs.Empty);
                     return true;
-                case VirtualKey.Tab:
-                    ToggleOrientation();
+                case VirtualKey.Add:
+                case (VirtualKey)187: // = / +
+                    ChangeLines(1);
+                    return true;
+                case VirtualKey.Subtract:
+                case (VirtualKey)189: // - / _
+                    ChangeLines(-1);
                     return true;
                 case VirtualKey.F:
                     ToggleFillMode();
-                    return true;
-                case VirtualKey.S:
-                    SwapOrRotateItems();
                     return true;
                 case VirtualKey.Number1:
                 case VirtualKey.Number2:
@@ -557,7 +630,6 @@ namespace ModernImageViewer
 
             // Per-cell Pan & Zoom handling
             bool isDragging = false;
-            bool isAltSwapDragging = false;
             Point lastPoint = default;
             uint dragPointerId = 0;
 
@@ -583,12 +655,11 @@ namespace ModernImageViewer
                     bool isAlt = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Menu).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
                     if (isAlt)
                     {
-                        isAltSwapDragging = true;
+                        e.Handled = true;
+                        _ = StartSwapDragAsync(cellGrid, e.GetCurrentPoint(cellGrid), index);
+                        return;
                     }
-                    else
-                    {
-                        isDragging = true;
-                    }
+                    isDragging = true;
 
                     lastPoint = e.GetCurrentPoint(cellGrid).Position;
                     dragPointerId = e.Pointer.PointerId;
@@ -620,28 +691,6 @@ namespace ModernImageViewer
             {
                 if (e.Pointer.PointerId == dragPointerId)
                 {
-                    if (isAltSwapDragging)
-                    {
-                        isAltSwapDragging = false;
-                        cellGrid.ReleasePointerCapture(e.Pointer);
-                        e.Handled = true;
-
-                        Point releaseInGrid = e.GetCurrentPoint(CellsGrid).Position;
-                        for (int i = 0; i < _cellElements.Count; i++)
-                        {
-                            var elem = _cellElements[i];
-                            var t = elem.TransformToVisual(CellsGrid);
-                            Point topLeft = t.TransformPoint(new Point(0, 0));
-                            Rect cellRect = new Rect(topLeft.X, topLeft.Y, elem.ActualWidth, elem.ActualHeight);
-                            if (cellRect.Contains(releaseInGrid) && i != index)
-                            {
-                                SwapItems(index, i);
-                                break;
-                            }
-                        }
-                        return;
-                    }
-
                     if (isDragging)
                     {
                         isDragging = false;
@@ -653,10 +702,9 @@ namespace ModernImageViewer
 
             cellGrid.PointerCanceled += (s, e) =>
             {
-                if (isDragging || isAltSwapDragging)
+                if (isDragging)
                 {
                     isDragging = false;
-                    isAltSwapDragging = false;
                     cellGrid.ReleasePointerCapture(e.Pointer);
                 }
             };
@@ -751,10 +799,10 @@ namespace ModernImageViewer
                 int slot = index;
                 int visible = VisibleCount(_items.Count);
                 topStack.Children.Add(CreateNudgeButton("\uE76B",
-                    slot == 0 ? "Move to last position" : "Move to previous position",
+                    (slot == 0 ? "Move to last position" : "Move to previous position") + " (or Alt+drag onto another photo to swap)",
                     () => MovePhoto(slot, -1)));
                 topStack.Children.Add(CreateNudgeButton("\uE76C",
-                    slot == visible - 1 ? "Move to first position" : "Move to next position",
+                    (slot == visible - 1 ? "Move to first position" : "Move to next position") + " (or Alt+drag onto another photo to swap)",
                     () => MovePhoto(slot, 1)));
             }
 
@@ -823,8 +871,8 @@ namespace ModernImageViewer
 
                 if (_items.Count == 2)
                 {
-                    var swapItem = new MenuFlyoutItem { Text = "Swap with Other Photo (S)", Icon = new FontIcon { Glyph = "\uE8AB" } };
-                    swapItem.Click += (s, e) => SwapOrRotateItems();
+                    var swapItem = new MenuFlyoutItem { Text = "Swap with Other Photo", Icon = new FontIcon { Glyph = "\uE8AB" } };
+                    swapItem.Click += (s, e) => SwapItems(index, 1 - index);
                     menu.Items.Add(swapItem);
                 }
                 else
@@ -843,6 +891,8 @@ namespace ModernImageViewer
                     menu.Items.Add(swapSub);
                 }
 
+                menu.Items.Add(new MenuFlyoutItem { Text = "Tip: Alt+drag a photo onto another to swap", IsEnabled = false });
+
                 menu.Items.Add(new MenuFlyoutSeparator());
             }
 
@@ -855,6 +905,8 @@ namespace ModernImageViewer
             menu.Items.Add(removeItem);
 
             cellGrid.ContextFlyout = menu;
+
+            AttachSwapDrop(cellBorder, cellGrid, index);
 
             cellBorder.Child = cellGrid;
             return cellBorder;
@@ -1167,32 +1219,93 @@ namespace ModernImageViewer
             CloseRequested?.Invoke(this, EventArgs.Empty);
         }
 
-        private void OrientationToggle_Click(object sender, RoutedEventArgs e)
+        private int _swapSource = -1;
+
+        /// <summary>Alt-drag: a Windows drag of this photo. Dropping on another photo swaps the two.</summary>
+        private async System.Threading.Tasks.Task StartSwapDragAsync(UIElement source, Microsoft.UI.Input.PointerPoint point, int index)
         {
-            ToggleOrientation();
+            _swapSource = index;
+            try { await source.StartDragAsync(point); }
+            catch { }
+            finally { _swapSource = -1; }
         }
 
-        private void SwapButton_Click(object sender, RoutedEventArgs e)
+        private void AttachSwapDrop(Border cellBorder, Grid cellGrid, int index)
         {
-            SwapOrRotateItems();
+            Windows.UI.Color accent = Windows.UI.Color.FromArgb(255, 96, 205, 255);
+            try { if (Application.Current.Resources["SystemAccentColorLight2"] is Windows.UI.Color c) accent = c; }
+            catch { }
+            var ring = new Rectangle
+            {
+                Stroke = new SolidColorBrush(accent),
+                StrokeThickness = 4,
+                Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(40, accent.R, accent.G, accent.B)),
+                IsHitTestVisible = false,
+                Visibility = Visibility.Collapsed
+            };
+            Canvas.SetZIndex(ring, 100);
+            cellGrid.Children.Add(ring);
+            cellGrid.AllowDrop = true;
+
+            cellGrid.DragStarting += async (s, e) =>
+            {
+                e.AllowedOperations = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
+                e.Data.RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
+                if ((uint)index < (uint)_items.Count) e.Data.SetText(_items[index].Name);
+                cellBorder.Opacity = 0.4;
+                var deferral = e.GetDeferral();
+                try { await SetDragPictureAsync(cellGrid, e.DragUI, e.GetPosition(cellGrid)); }
+                catch { }
+                finally { deferral.Complete(); }
+            };
+            cellGrid.DropCompleted += (s, e) => cellBorder.Opacity = 1;
+
+            void Over(object s, DragEventArgs e)
+            {
+                if (_swapSource < 0 || _swapSource == index)
+                {
+                    e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.None;
+                    return;
+                }
+                e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
+                e.DragUIOverride.Caption = "Swap";
+                e.DragUIOverride.IsCaptionVisible = true;
+                e.DragUIOverride.IsGlyphVisible = true;
+                ring.Visibility = Visibility.Visible;
+                e.Handled = true;
+            }
+            cellGrid.DragEnter += Over;
+            cellGrid.DragOver += Over;
+            cellGrid.DragLeave += (s, e) => ring.Visibility = Visibility.Collapsed;
+            cellGrid.Drop += (s, e) =>
+            {
+                ring.Visibility = Visibility.Collapsed;
+                int from = _swapSource;
+                if (from < 0 || from == index) return;
+                e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
+                e.Handled = true;
+                // Swap after the drag has finished with these elements.
+                DispatcherQueue.TryEnqueue(() => SwapItems(from, index));
+            };
         }
 
-        public void SwapOrRotateItems()
+        /// <summary>A small picture of the photo under the pointer, held where it was grabbed.</summary>
+        private static async System.Threading.Tasks.Task SetDragPictureAsync(FrameworkElement element, DragUI ui, Point grab)
         {
-            if (_items.Count < 2) return;
-            if (_items.Count == 2)
-            {
-                (_items[0], _items[1]) = (_items[1], _items[0]);
-            }
-            else
-            {
-                // Rotate: 0 -> 1 -> 2 -> ... -> 0
-                var first = _items[0];
-                _items.RemoveAt(0);
-                _items.Add(first);
-            }
-            BuildLayout();
-            ShowHudAndOverlays();
+            double w = element.ActualWidth, h = element.ActualHeight;
+            if (w < 1 || h < 1) return;
+            double scale = Math.Min(1.0, 240.0 / Math.Max(w, h));
+            var rtb = new RenderTargetBitmap();
+            await rtb.RenderAsync(element, (int)Math.Max(1, w * scale), (int)Math.Max(1, h * scale));
+            if (rtb.PixelWidth < 1 || rtb.PixelHeight < 1) return;
+            var pixels = await rtb.GetPixelsAsync();
+            var bitmap = Windows.Graphics.Imaging.SoftwareBitmap.CreateCopyFromBuffer(
+                pixels,
+                Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8,
+                rtb.PixelWidth,
+                rtb.PixelHeight,
+                Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied);
+            ui.SetContentFromSoftwareBitmap(bitmap, new Point(grab.X * rtb.PixelWidth / w, grab.Y * rtb.PixelHeight / h));
         }
 
         public void SwapItems(int idxA, int idxB)

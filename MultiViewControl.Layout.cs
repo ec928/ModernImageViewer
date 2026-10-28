@@ -71,7 +71,6 @@ namespace ModernImageViewer
                 return;
             }
 
-            SwapButton.Visibility = count > 1 ? Visibility.Visible : Visibility.Collapsed;
             UpdateFillFitButton();
 
             if (count == 1)
@@ -87,17 +86,28 @@ namespace ModernImageViewer
                 if (!keepCells)
                     _cellRoots = new FrameworkElement?[visible];
 
-                var mosaic = _mosaic ?? (_heroActive
-                    ? MosaicLayout.CreateHero(count, _heroKind, _heroPosition)
-                    : MosaicLayout.Create(count, _layoutMode));
+                var mosaic = _mosaic;
+                if (mosaic == null)
+                {
+                    if (HeroUsesLines)
+                    {
+                        mosaic = MosaicLayout.CreateHeroLines(count, _heroKind, _heroPosition, CurrentLineCounts(), !_flipped);
+                    }
+                    else if (_heroActive)
+                    {
+                        mosaic = MosaicLayout.CreateHero(count, _heroKind, _heroPosition);
+                        if (_flipped) mosaic = MosaicLayout.Transpose(mosaic);
+                    }
+                    else
+                    {
+                        mosaic = MosaicLayout.FromCounts(CurrentLineCounts(), !_flipped);
+                    }
+                }
                 _mosaic = mosaic;
                 RenderSplit(mosaic, CellsGrid, Array.Empty<int>());
-                ApplyOrientationChrome(count);
             }
 
-            bool canOrient = count > 1 && (GetMaxModesForCount(count) > 1 || _mosaicCustom || _heroActive);
-            OrientationToggleButton.Visibility = canOrient ? Visibility.Visible : Visibility.Collapsed;
-            UpdateOrientationFlyout(count);
+            RefreshLinesChrome(count);
             RefreshHeroChrome(count);
         }
 
@@ -190,61 +200,33 @@ namespace ModernImageViewer
             AddCell(host, _items[index], row, col, 1, 1, index);
         }
 
-        private void ApplyOrientationChrome(int count)
+        private void RefreshLinesChrome(int count)
         {
-            if (_mosaicCustom)
-            {
-                OrientationText.Text = "Custom";
-                OrientationIcon.Glyph = _mosaic != null && _mosaic.Vertical ? "\uE749" : "\uE748";
-                ToolTipService.SetToolTip(OrientationToggleButton, "Layout: Custom — Click or Tab to restore this layout. Right-click for menu.");
-                return;
-            }
+            int shown = MosaicLayout.ShownCount(count);
+            bool show = shown > 1;
+            LinesGroup.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            if (!show) return;
 
-            string text;
-            string glyph;
-            string tip;
-            if (count == 2)
-            {
-                if (_layoutMode == 0)
-                {
-                    text = "Side-by-Side";
-                    glyph = "\uE749";
-                    tip = "Layout: Side-by-Side (Columns) — Click or Tab to switch to Top-and-Bottom. Right-click for menu.";
-                }
-                else
-                {
-                    text = "Top-and-Bottom";
-                    glyph = "\uE748";
-                    tip = "Layout: Top-and-Bottom (Rows) — Click or Tab to switch to Side-by-Side. Right-click for menu.";
-                }
-            }
-            else if (count == 3)
-            {
-                if (_layoutMode == 0)
-                {
-                    text = "3 Rows";
-                    glyph = "\uE748";
-                }
-                else
-                {
-                    text = "3 Columns";
-                    glyph = "\uE749";
-                }
-                tip = "Layout: " + text + " — Click or Tab to switch layout. Right-click for menu.";
-            }
-            else
-            {
-                text = GetLayoutModeTitle(count, _layoutMode);
-                glyph = text.Contains("Column") ? "\uE749" : "\uE748";
-                tip = "Layout: " + text + " — Click or Tab to switch layout. Right-click for menu.";
-            }
+            int total = LineTotal();
+            int lines = EffectiveLines();
+            bool rows = !_flipped;
+            string noun = rows ? (lines == 1 ? "row" : "rows") : (lines == 1 ? "column" : "columns");
+            LinesText.Text = lines + " " + noun;
+            bool onGrid = (!_heroActive || HeroUsesLines) && !_mosaicCustom;
+            LinesText.Opacity = onGrid ? 1.0 : 0.5;
+            LinesLessButton.IsEnabled = lines > 1 || !onGrid;
+            LinesMoreButton.IsEnabled = lines < total || !onGrid;
 
-            if (_heroActive)
-                tip = "Layout: " + text + " — Click or Tab to leave the hero.";
-
-            OrientationText.Text = text;
-            OrientationIcon.Glyph = glyph;
-            ToolTipService.SetToolTip(OrientationToggleButton, tip);
+            bool editable = lines >= 2 && lines < total;
+            ArrangementButton.Visibility = editable ? Visibility.Visible : Visibility.Collapsed;
+            if (editable)
+            {
+                ArrangementText.Text = string.Join(" · ", CurrentLineCounts());
+                ArrangementText.Opacity = onGrid ? 1.0 : 0.5;
+                ToolTipService.SetToolTip(ArrangementButton, rows
+                    ? "Photos in each row, top to bottom. Click to change."
+                    : "Photos in each column, left to right. Click to change.");
+            }
         }
 
         private static double WeightAt(MosaicLayout node, int index)

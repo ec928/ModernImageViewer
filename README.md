@@ -66,7 +66,6 @@ Exit codes: `0` success, `1` publish failed, `2` output looks wrong, `3` app cra
 
 | | |
 |---|---|
-| **Alt** (hold) | Peek at the sidebar; it closes when you let go |
 | **Ctrl+1 / 2 / 3** | Recall saved window & tile size preset 1, 2, or 3 |
 | **B** | Toggle 2-page comic spread in the viewer |
 | **F11** | Fullscreen |

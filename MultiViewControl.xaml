@@ -77,21 +77,44 @@
                         </StackPanel>
                     </Button>
 
-                    <!-- Layout Toggle Button (shown when 2+ items) -->
-                    <Button x:Name="OrientationToggleButton" 
-                            Click="OrientationToggle_Click" 
-                            Style="{StaticResource QuietButtonStyle}" 
-                            Padding="8,5" 
-                            CornerRadius="14" 
-                            ToolTipService.ToolTip="Toggle Layout (Tab)">
-                        <Button.ContextFlyout>
-                            <MenuFlyout x:Name="OrientationMenuFlyout" />
-                        </Button.ContextFlyout>
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon x:Name="OrientationIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE748;" FontSize="14" />
-                            <TextBlock x:Name="OrientationText" Text="Layout" VerticalAlignment="Center" FontSize="13" />
-                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE70D;" FontSize="9" Opacity="0.5" VerticalAlignment="Center" Margin="1,1,0,0"/>
-                        </StackPanel>
+                    <!-- Rows or columns: fewer, count, more -->
+                    <StackPanel x:Name="LinesGroup" Orientation="Horizontal" Spacing="0" VerticalAlignment="Center">
+                        <Button x:Name="LinesLessButton"
+                                Click="LinesLess_Click"
+                                Style="{StaticResource QuietButtonStyle}"
+                                Padding="6,5"
+                                CornerRadius="14"
+                                ToolTipService.ToolTip="Fewer (-)">
+                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE738;" FontSize="12" />
+                        </Button>
+                        <Button x:Name="LinesDirectionButton"
+                                Click="Flip_Click"
+                                Style="{StaticResource QuietButtonStyle}"
+                                Padding="6,5"
+                                CornerRadius="14"
+                                ToolTipService.ToolTip="Switch between rows and columns">
+                            <TextBlock x:Name="LinesText" Text="2 rows" VerticalAlignment="Center" FontSize="13" MinWidth="62" TextAlignment="Center" />
+                        </Button>
+                        <Button x:Name="LinesMoreButton"
+                                Click="LinesMore_Click"
+                                Style="{StaticResource QuietButtonStyle}"
+                                Padding="6,5"
+                                CornerRadius="14"
+                                ToolTipService.ToolTip="More (+)">
+                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE710;" FontSize="12" />
+                        </Button>
+                    </StackPanel>
+
+                    <Button x:Name="ArrangementButton"
+                            Style="{StaticResource QuietButtonStyle}"
+                            Padding="8,5"
+                            CornerRadius="14">
+                        <Button.Flyout>
+                            <Flyout Opening="CountsFlyout_Opening" Placement="Top">
+                                <StackPanel x:Name="CountsPanel" Spacing="4" />
+                            </Flyout>
+                        </Button.Flyout>
+                        <TextBlock x:Name="ArrangementText" Text="3 · 2" VerticalAlignment="Center" FontSize="13" />
                     </Button>
 
                     <Button x:Name="HeroButton"
@@ -111,19 +134,6 @@
                             IsEnabled="False"
                             ToolTipService.ToolTip="Next position">
                         <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE7AD;" FontSize="14" />
-                    </Button>
-
-                    <!-- Swap Positions Button (shown when 2+ items) -->
-                    <Button x:Name="SwapButton" 
-                            Click="SwapButton_Click" 
-                            Style="{StaticResource QuietButtonStyle}" 
-                            Padding="8,5" 
-                            CornerRadius="14" 
-                            ToolTipService.ToolTip="Swap Image Positions (S)">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8AB;" FontSize="14" />
-                            <TextBlock Text="Swap" VerticalAlignment="Center" FontSize="13" />
-                        </StackPanel>
                     </Button>
 
                     <!-- Reset Zooms Button -->
