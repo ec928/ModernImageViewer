@@ -14,6 +14,8 @@ A high-performance, hardware-accelerated image viewer built for creators, 3D art
 
 **Comic Book Reader (`.cbz` / `.cbr`) & Dual View Modes** — Browse folders in responsive Tile View or high-density multi-column List View with an instant metadata/thumbnail inspector, and read `.cbz`/`.cbr` comic archives natively with 2-page spread mode (`B`).
 
+**Multi-View** — Compare up to 16 photos in one window. Set how many rows or columns and how many photos sit in each, give one or two photos a hero spot, drag the edges between photos, swap photos with Alt+drag, and save the result as a JPEG. See [Multi-View](#-multi-view) below.
+
 **Collage and Cinematic (beta)** — In-app collage editor, and a cinematic slideshow whose show you can edit: reorder, hide and duplicate slides, hold a Ken Burns move on one slide, and save or reload the show. These are still being hardened; save often.
 
 HEIC/HEIF and AVIF need the corresponding Windows codecs installed. If a file will not open, the viewer shows a short HUD message rather than a blank canvas.
@@ -62,6 +64,35 @@ Exit codes: `0` success, `1` publish failed, `2` output looks wrong, `3` app cra
 
 > Deliberately **not** published as a single file. Single-file self-extracts ~277 MB to `%TEMP%` on the first launch after every publish, measured at ~2.8 s to first window versus ~1.5 s for loose files.
 
+## 🖼 Multi-View
+
+Select two or more photos in the tile grid (Ctrl+click or Shift+click), then click one of them or press **Enter**. Multi-view shows up to 16 photos; with more selected, the bar says how many are shown, for example "16 of 23 shown". The multi-view window keeps its own size, separate from the normal window.
+
+The bar appears when you move the mouse:
+
+| Control | What it does |
+|---|---|
+| **Grid** / **✕** / **Esc** | Back to the tile grid |
+| **Fill / Fit** (**F**) | Fill crops each photo to its frame; Fit shows the whole photo |
+| **− 3 rows +** | Fewer or more rows. Click the label to switch between rows and columns |
+| **3 · 2 · 2** | How many photos are in each row (top to bottom) or column (left to right). Click it to change any one: **+** takes a photo from the last line that can spare one, **−** gives it to the last line. Shown when there is more than one line and fewer lines than photos |
+| **Hero** | Make the first photo large. Click again for the next kind: **Banner** (one large photo along a side), **Rectangle** (one large photo in a corner block, with 4, 5, 6, 7 or 9 photos) and **Pair** (the first two photos large, with 3 or more) |
+| **↻** (next position) | Move the hero: a banner or pair goes round the top, right, bottom and left sides |
+| **Reset** | Undo the zoom and pan of every photo |
+| **16:9** | Canvas shape: 16:9, 16:10, 21:9, 4:3, 1:1 or 3:4. Resize the window for any other shape |
+| **Save** | Save the grid as a JPEG at 720p to 4320p, at the window's size, or at a custom size |
+
+With a Banner or Pair, the rows, columns and per-line counts arrange the other photos. A Rectangle has a fixed shape, so those controls are dimmed while it is on.
+
+On the photos themselves:
+
+- Drag the edge between two photos to resize them. Changing the number of rows or columns puts the sizes back to even.
+- Scroll to zoom, drag to pan, middle-click to reset, double-click to zoom in or back out.
+- The move arrows at the top right of each photo move it one place earlier or later.
+- **Alt+drag** a photo onto another to swap the two.
+- Right-click a photo to move it, swap it with any other, view it on its own, or remove it from the view.
+- The maximise button at the top right shows one photo on its own. **←** / **→** step through the photos; **Esc** returns to the grid.
+
 ## ⌨️ Shortcuts
 
 | | |
@@ -73,8 +104,9 @@ Exit codes: `0` success, `1` publish failed, `2` output looks wrong, `3` app cra
 | **Home / End** | First / last image |
 | **Delete** | Send to the Recycle Bin |
 | **Esc** | Close the preview |
+| **Tab** | Show or hide the sidebar (tile grid and multi-view) |
 
-The sidebar also opens when the pointer reaches the left edge. Alt works whether or not an image is open, so you can jump folders without leaving the viewer.
+The sidebar also opens when the pointer reaches the left edge.
 
 ## 💬 Feedback
 

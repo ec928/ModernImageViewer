@@ -57,112 +57,6 @@ namespace ModernImageViewer
             return Math.Min(count, MaxShown);
         }
 
-        public static int ModeCount(int count)
-        {
-            return ShownCount(count) switch
-            {
-                <= 1 => 1,
-                2 => 2,
-                3 => 2,
-                4 => 3,
-                5 => 3,
-                6 => 2,
-                7 => 3,
-                8 => 2,
-                _ => 3
-            };
-        }
-
-        public static string ModeTitle(int count, int mode)
-        {
-            int shown = ShownCount(count);
-            if (mode < 0 || mode >= ModeCount(shown)) mode = 0;
-            if (shown == 2)
-                return mode == 0 ? "Side-by-Side (Columns)" : "Top-and-Bottom (Rows)";
-            if (shown == 3)
-                return mode == 0 ? "3 Rows" : "3 Columns";
-            if (shown == 4)
-            {
-                return mode switch
-                {
-                    0 => "2×2",
-                    1 => "4 Rows",
-                    _ => "4 Columns"
-                };
-            }
-            if (shown == 5)
-            {
-                return mode switch
-                {
-                    0 => "3 over 2",
-                    1 => "2 over 3",
-                    _ => "2 / 2 / 1"
-                };
-            }
-            if (shown == 6)
-                return mode == 0 ? "3 over 3" : "2 / 2 / 2";
-            if (shown == 7)
-            {
-                return mode switch
-                {
-                    0 => "2 / 3 / 2",
-                    1 => "4 over 3",
-                    _ => "3 over 4"
-                };
-            }
-            if (shown == 8)
-                return mode == 0 ? "4 + 4" : "3 + 3 + 2";
-            return mode switch
-            {
-                0 => "3×3",
-                1 => "5 over 4",
-                _ => "4 over 5"
-            };
-        }
-
-        public static MosaicLayout Create(int count, int mode)
-        {
-            if (count <= 1) return Cell(0);
-            int shown = ShownCount(count);
-            if (mode < 0 || mode >= ModeCount(shown)) mode = 0;
-
-            if (shown == 2)
-                return mode == 0 ? Cut(true, Cell(0), Cell(1)) : Cut(false, Cell(0), Cell(1));
-            if (shown == 3)
-                return mode == 0
-                    ? Cut(false, Cell(0), Cell(1), Cell(2))
-                    : Cut(true, Cell(0), Cell(1), Cell(2));
-            if (shown == 4)
-            {
-                if (mode == 1) return Cut(false, Cell(0), Cell(1), Cell(2), Cell(3));
-                if (mode == 2) return Cut(true, Cell(0), Cell(1), Cell(2), Cell(3));
-                return Cut(true, Cut(false, Cell(0), Cell(2)), Cut(false, Cell(1), Cell(3)));
-            }
-            if (shown == 5)
-            {
-                if (mode == 0) return Cut(false, Row(0, 3), Row(3, 2));
-                if (mode == 1) return Cut(false, Row(0, 2), Row(2, 3));
-                return Cut(false, Row(0, 2), Row(2, 2), Cell(4));
-            }
-            if (shown == 6)
-                return mode == 0
-                    ? Cut(false, Row(0, 3), Row(3, 3))
-                    : Cut(false, Row(0, 2), Row(2, 2), Row(4, 2));
-            if (shown == 7)
-            {
-                if (mode == 1) return Cut(false, Row(0, 4), Row(4, 3));
-                if (mode == 2) return Cut(false, Row(0, 3), Row(3, 4));
-                return Split(false, 1, 1.5, 1, Row(0, 2), Row(2, 3), Row(5, 2));
-            }
-            if (shown == 8)
-                return mode == 0
-                    ? Cut(false, Row(0, 4), Row(4, 4))
-                    : Cut(false, Row(0, 3), Row(3, 3), Row(6, 2));
-            if (mode == 1) return Cut(false, Row(0, 5), Row(5, 4));
-            if (mode == 2) return Cut(false, Row(0, 4), Row(4, 5));
-            return Cut(false, Row(0, 3), Row(3, 3), Row(6, 3));
-        }
-
         /// <summary>Lines that look closest to an even grid for this many photos.</summary>
         public static int DefaultLines(int count)
         {
@@ -171,7 +65,7 @@ namespace ModernImageViewer
         }
 
         /// <summary>Photos in each line, first line first. The longer lines come first.</summary>
-        public static int[] LineCounts(int count, int lines, int arrangement)
+        public static int[] LineCounts(int count, int lines)
         {
             int shown = ShownCount(count);
             lines = Math.Clamp(lines, 1, Math.Max(1, shown));
@@ -180,14 +74,6 @@ namespace ModernImageViewer
             for (int i = 0; i < lines; i++)
                 counts[i] = shown / lines + (i < extra ? 1 : 0);
             return counts;
-        }
-
-        /// <summary>Photos in rows (each row side by side), or in columns when <paramref name="rows"/> is false.</summary>
-        public static MosaicLayout Lines(int count, int lines, bool rows, int arrangement)
-        {
-            int shown = ShownCount(count);
-            if (shown <= 1) return Cell(0);
-            return FromCounts(LineCounts(shown, lines, arrangement), rows);
         }
 
         /// <summary>One line per entry, holding that many photos, in photo order.</summary>
@@ -277,23 +163,17 @@ namespace ModernImageViewer
         }
 
         /// <summary>
-        /// Photo 0 stays the large one. A pair keeps photos 0 and 1 large.
-        /// A banner walks clockwise: top, right, bottom, left.
+        /// Photo 0 large in a corner block, drawn by hand for each count that offers it.
+        /// A count without a Rectangle gets the even grid.
         /// </summary>
-        public static MosaicLayout CreateHero(int count, HeroKind kind, int position)
+        public static MosaicLayout CreateRectangleHero(int count, int position)
         {
             int shown = ShownCount(count);
-            if (shown < 2) return Cell(0);
-            var kinds = HeroKinds(shown);
-            if (Array.IndexOf(kinds, kind) < 0) kind = kinds[0];
-            int positions = HeroPositions(shown, kind);
-            if (position < 0) position = 0;
-            position %= positions;
-
-            if (kind == HeroKind.Rectangle) return RectangleHero(shown, position);
-            if (kind == HeroKind.Pair) return PairHero(shown, position);
-            bool vertical = position == 1 || position == 3;
-            return BandHero(shown, vertical, atStart: position == 0 || position == 3, pair: false);
+            if (Array.IndexOf(HeroKinds(shown), HeroKind.Rectangle) < 0)
+                return FromCounts(LineCounts(shown, DefaultLines(shown)), rows: true);
+            int positions = HeroPositions(shown, HeroKind.Rectangle);
+            position = ((position % positions) + positions) % positions;
+            return RectangleHero(shown, position);
         }
 
         /// <summary>Photos beside the hero: 1 for a banner, 2 for a pair.</summary>
@@ -354,24 +234,6 @@ namespace ModernImageViewer
             return Cut(false, cells);
         }
 
-        private static MosaicLayout BandHero(int shown, bool vertical, bool atStart, bool pair)
-        {
-            int featured = pair ? 2 : 1;
-            int smalls = shown - featured;
-            BandShare(smalls, pair, out double heroW, out double restW);
-            MosaicLayout feature = pair ? (vertical ? Stack(0, 2) : Row(0, 2)) : Cell(0);
-            MosaicLayout rest = Pack(featured, smalls, rows: !vertical);
-            if (atStart) return Split(vertical, heroW, restW, feature, rest);
-            return Split(vertical, restW, heroW, rest, feature);
-        }
-
-        private static MosaicLayout PairHero(int shown, int position)
-        {
-            bool vertical = position == 1 || position == 3;
-            bool atStart = position == 0 || position == 3;
-            return BandHero(shown, vertical, atStart, pair: true);
-        }
-
         private static void BandShare(int smalls, bool pair, out double heroW, out double restW)
         {
             if (!pair)
@@ -383,26 +245,6 @@ namespace ModernImageViewer
             if (smalls <= 1) { heroW = 3; restW = 1; }
             else if (smalls <= 3) { heroW = 3; restW = 2; }
             else { heroW = 1; restW = 1; }
-        }
-
-        /// <summary>One strip until five photos, then several lines with at most four photos each.</summary>
-        private static MosaicLayout Pack(int start, int count, bool rows)
-        {
-            if (count <= 1) return Cell(start);
-            if (count <= 4) return rows ? Row(start, count) : Stack(start, count);
-
-            int lines = (count + 3) / 4;
-            int baseCount = count / lines;
-            int extra = count % lines;
-            var parts = new MosaicLayout[lines];
-            int index = start;
-            for (int i = 0; i < lines; i++)
-            {
-                int n = baseCount + (i < extra ? 1 : 0);
-                parts[i] = rows ? Row(index, n) : Stack(index, n);
-                index += n;
-            }
-            return rows ? Cut(false, parts) : Cut(true, parts);
         }
 
         private static MosaicLayout RectangleHero(int shown, int position)

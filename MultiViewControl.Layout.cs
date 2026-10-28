@@ -57,7 +57,6 @@ namespace ModernImageViewer
                 _cellTransforms.Clear();
                 _layoutUpdaters.Clear();
                 _cellTopControls.Clear();
-                _cellElements.Clear();
                 _cellRoots = Array.Empty<FrameworkElement?>();
                 _mosaic = null;
                 _mosaicCustom = false;
@@ -95,7 +94,7 @@ namespace ModernImageViewer
                     }
                     else if (_heroActive)
                     {
-                        mosaic = MosaicLayout.CreateHero(count, _heroKind, _heroPosition);
+                        mosaic = MosaicLayout.CreateRectangleHero(count, _heroPosition);
                         if (_flipped) mosaic = MosaicLayout.Transpose(mosaic);
                     }
                     else
@@ -617,8 +616,6 @@ namespace ModernImageViewer
             if (!gesture.Committed)
             {
                 gesture.Committed = true;
-                gesture.ResizePath = resizePath;
-                gesture.ResizeBoundary = resizeBoundary;
                 _mosaicCustom = true;
                 _keepMosaic = true;
                 _applyingSegmentUnlock = true;
@@ -720,8 +717,6 @@ namespace ModernImageViewer
             public double StartAlong;
             public MosaicLayout? Origin;
             public bool Committed;
-            public int[] ResizePath = Array.Empty<int>();
-            public int ResizeBoundary;
         }
 
         private sealed class SplitterElement : Grid

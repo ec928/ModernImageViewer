@@ -56,6 +56,9 @@
                     <Run Text="•  "/><Run Text="Tile &amp; List View modes" FontWeight="SemiBold"/><Run Text=" — switch between resizable thumbnail grids and high-density multi-column lists with a live metadata and image preview bar."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
+                    <Run Text="•  "/><Run Text="Multi-View" FontWeight="SemiBold"/><Run Text=" — compare up to 16 photos in rows or columns of your choosing, with hero layouts, draggable edges, Alt+drag to swap, and JPEG export."/>
+                </TextBlock>
+                <TextBlock Style="{StaticResource AboutBullet}">
                     <Run Text="•  "/><Run Text="Window &amp; Tile Size presets" FontWeight="SemiBold"/><Run Text=" — save up to three window and tile size states (Ctrl+1, Ctrl+2, Ctrl+3) to jump between compact browsing and wide two-page layouts."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">

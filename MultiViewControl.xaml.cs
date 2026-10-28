@@ -24,7 +24,6 @@ namespace ModernImageViewer
         private readonly List<CompositeTransform> _cellTransforms = new();
         private readonly List<Action> _layoutUpdaters = new();
         private readonly List<UIElement> _cellTopControls = new();
-        private readonly List<FrameworkElement> _cellElements = new();
         private bool _isFillMode = true; // Default to Fill for zero wasted space
 
         private readonly DispatcherTimer _hudTimer;
@@ -96,7 +95,6 @@ namespace ModernImageViewer
             _cellTransforms.Clear();
             _layoutUpdaters.Clear();
             _cellTopControls.Clear();
-            _cellElements.Clear();
             ResetMosaicFields();
             _hudTimer.Stop();
             CellsGrid.Children.Clear();
@@ -142,7 +140,7 @@ namespace ModernImageViewer
             int lines = EffectiveLines();
             if (_lineCounts != null && _lineCounts.Length == lines && _lineCounts.Sum() == total && _lineCounts.All(n => n >= 1))
                 return _lineCounts;
-            return MosaicLayout.LineCounts(total, lines, 0);
+            return MosaicLayout.LineCounts(total, lines);
         }
 
         private void AdjustLine(int line, int delta)
@@ -450,7 +448,6 @@ namespace ModernImageViewer
                 Background = new SolidColorBrush(Windows.UI.Color.FromArgb(1, 0, 0, 0)), // Hit-testable
                 ManipulationMode = ManipulationModes.None
             };
-            _cellElements.Add(cellGrid);
 
             var transform = new CompositeTransform();
             _cellTransforms.Add(transform);
