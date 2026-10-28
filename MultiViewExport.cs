@@ -219,18 +219,12 @@ namespace ModernImageViewer
                 }
                 if (container == null || container.Width < 1 || container.Height < 1) continue;
 
-                int nativeW = 0;
-                int nativeH = 0;
-                foreach (var child in container.Children)
-                {
-                    if (child is Image image && image.Source is BitmapSource bitmap && bitmap.PixelWidth > 0 && bitmap.PixelHeight > 0)
-                    {
-                        nativeW = bitmap.PixelWidth;
-                        nativeH = bitmap.PixelHeight;
-                        break;
-                    }
-                }
-                if (nativeW < 1 || nativeH < 1) continue;
+                if (root.Tag is not CellParts parts
+                    || parts.Photo.Source is not BitmapSource bitmap
+                    || bitmap.PixelWidth < 1 || bitmap.PixelHeight < 1)
+                    continue;
+                int nativeW = bitmap.PixelWidth;
+                int nativeH = bitmap.PixelHeight;
 
                 Rect bounds = cell.TransformToVisual(CellsGrid).TransformBounds(new Rect(0, 0, cell.ActualWidth, cell.ActualHeight));
                 if (container.RenderTransform is not CompositeTransform transform) continue;

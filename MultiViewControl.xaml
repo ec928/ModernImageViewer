@@ -122,7 +122,7 @@
                                     Style="{StaticResource QuietButtonStyle}"
                                     Padding="8,5"
                                     CornerRadius="14"
-                                    ToolTipService.ToolTip="Click to toggle between rows and columns">
+                                    ToolTipService.ToolTip="Click to toggle between rows and columns (R)">
                                 <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
                                     <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8AB;" FontSize="11" Opacity="0.8" />
                                     <TextBlock x:Name="LinesText" Text="2 rows" VerticalAlignment="Center" FontSize="13" MinWidth="48" TextAlignment="Center" />
@@ -238,7 +238,7 @@
                                 Style="{StaticResource QuietButtonStyle}"
                                 Padding="8,5"
                                 CornerRadius="14"
-                                ToolTipService.ToolTip="Save this grid as a JPEG">
+                                ToolTipService.ToolTip="Save this grid as a JPEG (Ctrl+S)">
                             <Button.Flyout>
                                 <MenuFlyout x:Name="SaveMenuFlyout" Opening="SaveFlyout_Opening" Opened="HudMenu_Opened" Closed="HudMenu_Closed" />
                             </Button.Flyout>

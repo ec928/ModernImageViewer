@@ -79,7 +79,9 @@ The layout is a `MosaicLayout` tree of row and column splits; a leaf is a photo'
 
 Cells are owned by slot: `_cellRoots[i]` is the cell showing `_items[i]`. A swap exchanges the two roots and rebuilds with `_keepMosaic`, so no photo decodes again and dragged sizes stay. Removing a photo also keeps the other cells: its root is dropped, its entries leave the shared lists through the `CellParts` on its `Tag`, and the layout is rebuilt for the new count with `_relayoutKeepingCells`; only a photo past the limit that moves into view decodes. Because a cell outlives a swap, its controls (move arrows, menu, maximise, drag) look up `Slot(item)` when used; never capture the index at creation. Save JPEG reads cell `i` from `_cellRoots[i]` for the same reason: the order cells are built in follows the tree, not the photo order, and differs for a hero on the right or bottom.
 
-Changing the line count, a line's count or the hero rebuilds every cell and resets dragged sizes. The rows/columns switch keeps dragged sizes on a plain grid by turning the tree a quarter (`Transpose`).
+Changing the line count, a line's count or the hero builds a new layout and resets dragged sizes, but keeps the cells (`RelayoutKeepingCells`), so nothing decodes again. The rows/columns switch turns a plain grid or a Rectangle a quarter (`Transpose`) and keeps dragged sizes; beside a Banner or Pair it relays the other photos.
+
+A cell's grid thumbnail is only a placeholder: it is removed when the photo loads, and `CellParts.Photo` names the photo's `Image`. Save JPEG takes each photo's native size from that `Image`; reading the first `Image` in the cell found the ~250 px thumbnail and capped the export at thumbnail resolution.
 
 ## Bare Alt
 

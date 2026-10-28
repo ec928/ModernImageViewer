@@ -115,7 +115,7 @@ namespace ModernImageViewer
             _lines = next;
             _lineCounts = null;
             if (!HeroUsesLines) _heroActive = false;
-            BuildLayout();
+            RelayoutKeepingCells();
             ShowHudAndOverlays();
         }
 
@@ -148,7 +148,7 @@ namespace ModernImageViewer
             if (next == null) return;
             _lineCounts = next;
             if (!HeroUsesLines) _heroActive = false;
-            BuildLayout();
+            RelayoutKeepingCells();
             FillCountsPanel();
             ShowHudAndOverlays();
         }
@@ -243,7 +243,7 @@ namespace ModernImageViewer
                 resetBtn.Click += (_, _) =>
                 {
                     _lineCounts = null;
-                    BuildLayout();
+                    RelayoutKeepingCells();
                     FillCountsPanel();
                     ShowHudAndOverlays();
                 };
@@ -252,15 +252,15 @@ namespace ModernImageViewer
         }
 
         /// <summary>
-        /// Rows become columns and back. A plain grid keeps its dragged sizes, turned a quarter.
+        /// Rows become columns and back. A plain grid or a Rectangle turns a quarter, dragged sizes kept.
         /// Beside a banner or pair only the other photos turn, so their sizes go back to even like
-        /// any other line change. A Rectangle turns whole.
+        /// any other line change.
         /// </summary>
         public void ToggleRowsColumns()
         {
             if (MosaicLayout.ShownCount(_items.Count) < 2) return;
             _flipped = !_flipped;
-            if (_mosaicCustom && !HeroUsesLines && _mosaic != null && CellRootsReady())
+            if (!HeroUsesLines && _mosaic != null && CellRootsReady())
             {
                 _mosaic = MosaicLayout.Transpose(_mosaic);
                 _keepMosaic = true;
@@ -269,9 +269,22 @@ namespace ModernImageViewer
             }
             else
             {
-                BuildLayout();
+                RelayoutKeepingCells();
             }
             ShowHudAndOverlays();
+        }
+
+        /// <summary>A new layout for the same photos. The cells move into it; no photo decodes again.</summary>
+        private void RelayoutKeepingCells()
+        {
+            if (!CellRootsReady())
+            {
+                BuildLayout();
+                return;
+            }
+            _relayoutKeepingCells = true;
+            try { BuildLayout(); }
+            finally { _relayoutKeepingCells = false; }
         }
 
         private void LinesLess_Click(object sender, RoutedEventArgs e) => ChangeLines(-1);
@@ -305,7 +318,7 @@ namespace ModernImageViewer
                     _heroPosition = 0;
                 }
             }
-            BuildLayout();
+            RelayoutKeepingCells();
             ShowHudAndOverlays();
         }
 
@@ -314,7 +327,7 @@ namespace ModernImageViewer
             if (!_heroActive) return;
             int positions = MosaicLayout.HeroPositions(_items.Count, _heroKind);
             _heroPosition = (_heroPosition + 1) % positions;
-            BuildLayout();
+            RelayoutKeepingCells();
             ShowHudAndOverlays();
         }
 
@@ -580,9 +593,10 @@ namespace ModernImageViewer
                 naturalHeight = bs.PixelHeight;
             }
 
+            Image? thumb = null;
             if (item.Thumbnail != null)
             {
-                var thumb = new Image
+                thumb = new Image
                 {
                     Source = item.Thumbnail,
                     Stretch = Stretch.Uniform,
@@ -690,16 +704,6 @@ namespace ModernImageViewer
                 }
             };
 
-            fullImg.ImageOpened += (s, e) =>
-            {
-                if (fullImg.Source is BitmapSource bs && bs.PixelWidth > 0 && bs.PixelHeight > 0)
-                {
-                    naturalWidth = bs.PixelWidth;
-                    naturalHeight = bs.PixelHeight;
-                    UpdateImageLayout();
-                }
-            };
-
             try
             {
                 var bmp = new BitmapImage();
@@ -711,6 +715,12 @@ namespace ModernImageViewer
                         naturalWidth = bmp.PixelWidth;
                         naturalHeight = bmp.PixelHeight;
                         UpdateImageLayout();
+                    }
+                    // The thumbnail would show through a transparent photo, and is no longer needed.
+                    if (thumb != null)
+                    {
+                        imgContainer.Children.Remove(thumb);
+                        thumb = null;
                     }
                 };
                 fullImg.Source = bmp;
@@ -896,7 +906,7 @@ namespace ModernImageViewer
             cellGrid.PointerExited += (s, e) => SetCellHover(false);
             cellGrid.PointerMoved += (s, e) =>
             {
-                if (_isHudVisible && !isCellHovered)
+                if (_isHudVisible && !topControls.IsHitTestVisible)
                     SetCellHover(true);
             };
 
@@ -981,7 +991,7 @@ namespace ModernImageViewer
             cellGrid.ContextFlyout = menu;
 
             AttachSwapDrop(cellBorder, cellGrid, item);
-            cellBorder.Tag = new CellParts(transform, updateLayout, topControls);
+            cellBorder.Tag = new CellParts(transform, updateLayout, topControls, fullImg);
 
             cellBorder.Child = cellGrid;
             return cellBorder;
@@ -1082,7 +1092,7 @@ namespace ModernImageViewer
         }
 
         /// <summary>What a cell registered in the shared lists, so removing the cell can take it back out.</summary>
-        private sealed record CellParts(CompositeTransform Transform, Action UpdateLayout, UIElement TopControls);
+        private sealed record CellParts(CompositeTransform Transform, Action UpdateLayout, UIElement TopControls, Image Photo);
 
         /// <summary>
         /// Remove a photo and keep the other cells, so none of them decodes again. The layout is rebuilt

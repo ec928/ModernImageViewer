@@ -72,23 +72,23 @@ The bar appears when you move the mouse:
 
 | Control | What it does |
 |---|---|
-| **Grid** / **✕** / **Esc** | Back to the tile grid |
+| **Grid** / **Esc** | Back to the tile grid |
 | **Fill / Fit** (**F**) | Fill crops each photo to its frame; Fit shows the whole photo |
-| **− 3 rows +** | Fewer or more rows (or the **−** and **+** keys). Click the label to switch between rows and columns |
-| **3 · 2 · 2** | How many photos are in each row (top to bottom) or column (left to right). Click it to change any one: **+** takes a photo from the last line that can spare one, **−** gives it to the last line. Shown when there is more than one line and fewer lines than photos |
-| **Hero** | Make the first photo large. Click again for the next kind: **Banner** (one large photo along a side), **Rectangle** (one large photo in a corner block, with 4, 5, 6, 7 or 9 photos) and **Pair** (the first two photos large, with 3 or more) |
+| **− 3 rows +** | Fewer or more rows (or the **−** and **+** keys). Click the label, or press **R**, to switch between rows and columns |
+| **3 · 2 · 2** | How many photos are in each row (top to bottom) or column (left to right). Click it to change any one: **+** takes a photo from the last line that can spare one, **−** gives it to the last line, and **Distribute Evenly** puts them back. Shown when there is more than one line and fewer lines than photos |
+| **Hero** (**H**) | Make the first photo large. Click again for the next kind, and again after the last to turn the hero off: **Banner** (one large photo along a side), **Rectangle** (one large photo in a corner block, with 4, 5, 6, 7 or 9 photos) and **Pair** (the first two photos large, with 3 or more) |
 | **↻** (next position) | Move the hero: a banner or pair goes round the top, right, bottom and left sides |
 | **Reset** | Undo the zoom and pan of every photo |
 | **16:9** | Canvas shape: 16:9, 16:10, 21:9, 4:3, 1:1 or 3:4. Resize the window for any other shape |
-| **Save** | Save the grid as a JPEG at 720p to 4320p, at the window's size, or at a custom size |
+| **Save** (**Ctrl+S**) | Save the grid as a JPEG at 720p to 4320p, at the window's size, or at a custom size |
 
 With a Banner or Pair, the rows, columns and per-line counts arrange the other photos. A Rectangle has a fixed shape, so those controls are dimmed while it is on.
 
 On the photos themselves:
 
-- Drag the edge between two photos to resize them. Changing the number of rows or columns puts the sizes back to even.
+- Drag the edge between two photos to resize them; double-click an edge to make the photos on either side equal. Changing the number of rows or columns puts the sizes back to even.
 - Scroll to zoom, drag to pan, middle-click to reset, double-click to zoom in or back out.
-- The move arrows at the top right of each photo move it one place earlier or later.
+- Hover over a photo to show its buttons at the top right. The move arrows move it one place earlier or later; they are left out on a very small photo.
 - **Alt+drag** a photo onto another to swap the two.
 - Right-click a photo to move it, swap it with any other, view it on its own, or remove it from the view.
 - The maximise button at the top right shows one photo on its own. **←** / **→** step through the photos; **Esc** returns to the grid.

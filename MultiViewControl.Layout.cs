@@ -209,17 +209,8 @@ namespace ModernImageViewer
         private void RefreshLinesChrome(int count)
         {
             int shown = MosaicLayout.ShownCount(count);
-            bool excess = count > shown;
-            if (ShownBadge != null)
-            {
-                ShownBadge.Visibility = excess ? Visibility.Visible : Visibility.Collapsed;
-                ShownText.Text = shown + " / " + count;
-            }
-            else
-            {
-                ShownText.Visibility = excess ? Visibility.Visible : Visibility.Collapsed;
-                ShownText.Text = shown + " of " + count + " shown";
-            }
+            ShownBadge.Visibility = count > shown ? Visibility.Visible : Visibility.Collapsed;
+            ShownText.Text = shown + " / " + count;
             bool show = shown > 1;
             LinesGroup.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
             if (!show) return;
