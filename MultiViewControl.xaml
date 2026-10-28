@@ -210,10 +210,11 @@
                                 Style="{StaticResource QuietButtonStyle}" 
                                 Padding="8,5" 
                                 CornerRadius="14" 
-                                Opacity="0.45"
-                                IsEnabled="False"
                                 ToolTipService.ToolTip="Reset Pan &amp; Zoom (Middle-Click)">
-                            <FontIcon x:Name="ResetZoomIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE71F;" FontSize="13" />
+                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <SymbolIcon x:Name="ResetZoomIcon" Symbol="ZoomOut" />
+                                <TextBlock x:Name="ResetZoomText" Text="Reset" VerticalAlignment="Center" FontSize="13" />
+                            </StackPanel>
                         </Button>
 
                         <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,4" Opacity="0.4"/>

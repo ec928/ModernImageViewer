@@ -342,13 +342,35 @@ namespace ModernImageViewer
             RotateHeroButton.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
             RotateHeroButton.IsEnabled = _heroActive;
             HeroText.Text = _heroActive ? MosaicLayout.HeroTitle(_heroKind) : "Hero";
-            if (HeroIcon != null)
+
+            if (_heroActive)
             {
-                HeroIcon.Glyph = _heroActive ? "\uE735" : "\uE734";
-                HeroIcon.Foreground = _heroActive
-                    ? Application.Current.Resources["AccentFillColorDefaultBrush"] as Brush ?? new SolidColorBrush(Windows.UI.Color.FromArgb(255, 96, 205, 255))
-                    : Application.Current.Resources["TextFillColorPrimaryBrush"] as Brush ?? new SolidColorBrush(Microsoft.UI.Colors.White);
+                HeroButton.Background = Application.Current.Resources["AccentFillColorDefaultBrush"] as Brush
+                    ?? new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 120, 215));
+                HeroText.Foreground = new SolidColorBrush(Microsoft.UI.Colors.White);
+                HeroText.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
+                if (HeroIcon != null)
+                {
+                    HeroIcon.Glyph = "\uE735";
+                    HeroIcon.Foreground = new SolidColorBrush(Microsoft.UI.Colors.White);
+                    HeroIcon.Opacity = 1.0;
+                }
             }
+            else
+            {
+                HeroButton.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+                HeroText.Foreground = Application.Current.Resources["TextFillColorPrimaryBrush"] as Brush
+                    ?? new SolidColorBrush(Microsoft.UI.Colors.White);
+                HeroText.FontWeight = Microsoft.UI.Text.FontWeights.Normal;
+                if (HeroIcon != null)
+                {
+                    HeroIcon.Glyph = "\uE734";
+                    HeroIcon.Foreground = Application.Current.Resources["TextFillColorPrimaryBrush"] as Brush
+                        ?? new SolidColorBrush(Microsoft.UI.Colors.White);
+                    HeroIcon.Opacity = 0.8;
+                }
+            }
+
             bool moreHeroes = MosaicLayout.HeroKinds(count).Length > 1;
             ToolTipService.SetToolTip(HeroButton, _heroActive
                 ? (moreHeroes ? "Hero: " + HeroText.Text + " (H to cycle)" : "Hero: " + HeroText.Text + ".")
@@ -1534,7 +1556,7 @@ namespace ModernImageViewer
 
         private void UpdateResetZoomState()
         {
-            if (ResetZoomButton == null) return;
+            if (ResetZoomButton == null || ResetZoomText == null || ResetZoomIcon == null) return;
             bool isZoomed = false;
             foreach (var tr in _cellTransforms)
             {
@@ -1544,14 +1566,19 @@ namespace ModernImageViewer
                     break;
                 }
             }
-            ResetZoomButton.IsEnabled = isZoomed;
-            ResetZoomButton.Opacity = isZoomed ? 1.0 : 0.45;
-            if (ResetZoomIcon != null)
-            {
-                ResetZoomIcon.Foreground = isZoomed
-                    ? Application.Current.Resources["AccentFillColorDefaultBrush"] as Brush ?? new SolidColorBrush(Windows.UI.Color.FromArgb(255, 96, 205, 255))
-                    : Application.Current.Resources["TextFillColorPrimaryBrush"] as Brush ?? new SolidColorBrush(Microsoft.UI.Colors.White);
-            }
+
+            var accent = Application.Current.Resources["AccentFillColorDefaultBrush"] as Brush
+                ?? new SolidColorBrush(Windows.UI.Color.FromArgb(255, 96, 205, 255));
+            var primary = Application.Current.Resources["TextFillColorPrimaryBrush"] as Brush
+                ?? new SolidColorBrush(Microsoft.UI.Colors.White);
+
+            ResetZoomButton.Opacity = isZoomed ? 1.0 : 0.75;
+            ResetZoomText.Foreground = isZoomed ? accent : primary;
+            ResetZoomIcon.Foreground = isZoomed ? accent : primary;
+            ResetZoomText.FontWeight = isZoomed ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal;
+            ToolTipService.SetToolTip(ResetZoomButton, isZoomed
+                ? "Reset Pan & Zoom (Photos are zoomed)"
+                : "Reset Pan & Zoom (Middle-Click)");
         }
 
         private void ResetZoom_Click(object sender, RoutedEventArgs e)
