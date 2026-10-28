@@ -94,6 +94,25 @@
                         </StackPanel>
                     </Button>
 
+                    <Button x:Name="HeroButton"
+                            Click="HeroButton_Click"
+                            Style="{StaticResource QuietButtonStyle}"
+                            Padding="8,5"
+                            CornerRadius="14"
+                            ToolTipService.ToolTip="Hero. Click for a large photo.">
+                        <TextBlock x:Name="HeroText" Text="Hero" VerticalAlignment="Center" FontSize="13" />
+                    </Button>
+
+                    <Button x:Name="RotateHeroButton"
+                            Click="RotateHero_Click"
+                            Style="{StaticResource QuietButtonStyle}"
+                            Padding="8,5"
+                            CornerRadius="14"
+                            IsEnabled="False"
+                            ToolTipService.ToolTip="Next position">
+                        <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE7AD;" FontSize="14" />
+                    </Button>
+
                     <!-- Swap Positions Button (shown when 2+ items) -->
                     <Button x:Name="SwapButton" 
                             Click="SwapButton_Click" 

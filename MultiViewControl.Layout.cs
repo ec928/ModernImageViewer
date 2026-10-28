@@ -63,6 +63,7 @@ namespace ModernImageViewer
                 _mosaicCustom = false;
             }
 
+            NormalizeHero();
             int count = _items.Count;
             if (count == 0)
             {
@@ -86,15 +87,18 @@ namespace ModernImageViewer
                 if (!keepCells)
                     _cellRoots = new FrameworkElement?[visible];
 
-                var mosaic = _mosaic ?? MosaicLayout.Create(count, _layoutMode);
+                var mosaic = _mosaic ?? (_heroActive
+                    ? MosaicLayout.CreateHero(count, _heroKind, _heroPosition)
+                    : MosaicLayout.Create(count, _layoutMode));
                 _mosaic = mosaic;
                 RenderSplit(mosaic, CellsGrid, Array.Empty<int>());
                 ApplyOrientationChrome(count);
             }
 
-            bool canOrient = count > 1 && (GetMaxModesForCount(count) > 1 || _mosaicCustom);
+            bool canOrient = count > 1 && (GetMaxModesForCount(count) > 1 || _mosaicCustom || _heroActive);
             OrientationToggleButton.Visibility = canOrient ? Visibility.Visible : Visibility.Collapsed;
             UpdateOrientationFlyout(count);
+            RefreshHeroChrome(count);
         }
 
         private static int VisibleCount(int count)
@@ -216,36 +220,27 @@ namespace ModernImageViewer
             }
             else if (count == 3)
             {
-                switch (_layoutMode)
+                if (_layoutMode == 0)
                 {
-                    case 0:
-                        text = "Top + 2 Bottom";
-                        glyph = "\uE748";
-                        tip = "Layout: Top + 2 Bottom — Click or Tab to switch layout. Right-click for menu.";
-                        break;
-                    case 1:
-                        text = "Left + 2 Right";
-                        glyph = "\uE749";
-                        tip = "Layout: Left + 2 Right — Click or Tab to switch layout. Right-click for menu.";
-                        break;
-                    case 2:
-                        text = "3 Rows";
-                        glyph = "\uE748";
-                        tip = "Layout: 3 Rows — Click or Tab to switch layout. Right-click for menu.";
-                        break;
-                    default:
-                        text = "3 Columns";
-                        glyph = "\uE749";
-                        tip = "Layout: 3 Columns — Click or Tab to switch layout. Right-click for menu.";
-                        break;
+                    text = "3 Rows";
+                    glyph = "\uE748";
                 }
+                else
+                {
+                    text = "3 Columns";
+                    glyph = "\uE749";
+                }
+                tip = "Layout: " + text + " — Click or Tab to switch layout. Right-click for menu.";
             }
             else
             {
                 text = GetLayoutModeTitle(count, _layoutMode);
-                glyph = text.Contains("Left") || text.Contains("Column") ? "\uE749" : "\uE748";
+                glyph = text.Contains("Column") ? "\uE749" : "\uE748";
                 tip = "Layout: " + text + " — Click or Tab to switch layout. Right-click for menu.";
             }
+
+            if (_heroActive)
+                tip = "Layout: " + text + " — Click or Tab to leave the hero.";
 
             OrientationText.Text = text;
             OrientationIcon.Glyph = glyph;

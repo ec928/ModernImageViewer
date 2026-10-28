@@ -137,7 +137,7 @@ namespace ModernImageViewer.Tests
         [Fact]
         public void Three_photos_edge_under_the_wide_photo_stays_whole()
         {
-            var origin = MosaicLayout.Create(3, mode: 0);
+            var origin = MosaicLayout.CreateHero(3, HeroKind.Banner, 0);
             var hit = MosaicMath.ClassifyBoundary(origin, boundary: 0, cutLength: 800, pointerAlong: 100);
             Assert.False(hit.NeedsFlip);
             Assert.True(hit.Whole);
@@ -146,13 +146,13 @@ namespace ModernImageViewer.Tests
         [Fact]
         public void Four_photo_heroes_put_the_first_photo_at_sixty_percent()
         {
-            var top = Placed(4, 1, 300, 100);
+            var top = Hero(4, HeroKind.Banner, 0, 300, 100);
             Near(top[0], 0, 0, 300, 60);
             Near(top[1], 0, 60, 100, 40);
             Near(top[2], 100, 60, 100, 40);
             Near(top[3], 200, 60, 100, 40);
 
-            var left = Placed(4, 2, 100, 300);
+            var left = Hero(4, HeroKind.Banner, 3, 100, 300);
             Near(left[0], 0, 0, 60, 300);
             Near(left[1], 60, 0, 40, 100);
             Near(left[2], 60, 100, 40, 100);
@@ -174,23 +174,26 @@ namespace ModernImageViewer.Tests
             Near(twoOverThree[2], 0, 100, 200, 100);
             Near(twoOverThree[4], 400, 100, 200, 100);
 
-            var heroLeft = Placed(5, 3, 400, 200);
+            var heroLeft = Hero(5, HeroKind.Rectangle, 0, 400, 200);
             Near(heroLeft[0], 0, 0, 200, 200);
             Near(heroLeft[1], 200, 0, 100, 100);
             Near(heroLeft[2], 300, 0, 100, 100);
             Near(heroLeft[3], 200, 100, 100, 100);
             Near(heroLeft[4], 300, 100, 100, 100);
 
-            var heroTop = Placed(5, 4, 400, 200);
-            Near(heroTop[0], 0, 0, 400, 100);
-            Near(heroTop[1], 0, 100, 100, 100);
-            Near(heroTop[4], 300, 100, 100, 100);
+            var heroRight = Hero(5, HeroKind.Rectangle, 1, 400, 200);
+            Near(heroRight[0], 200, 0, 200, 200);
+
+            var heroTop = Hero(5, HeroKind.Banner, 0, 400, 200);
+            Near(heroTop[0], 0, 0, 400, 120);
+            Near(heroTop[1], 0, 120, 100, 80);
+            Near(heroTop[4], 300, 120, 100, 80);
         }
 
         [Fact]
         public void Six_photo_hero_is_the_top_left_block()
         {
-            var boxes = Placed(6, 2, 300, 300);
+            var boxes = Hero(6, HeroKind.Rectangle, 0, 300, 300);
             Near(boxes[0], 0, 0, 200, 200);
             Near(boxes[1], 200, 0, 100, 100);
             Near(boxes[2], 200, 100, 100, 100);
@@ -211,7 +214,23 @@ namespace ModernImageViewer.Tests
             Near(even[6], 105, 250, 105, 100);
             Assert.Equal(even[0].W * even[0].H, even[2].W * even[2].H, 0);
 
-            var hero = Placed(7, 1, 500, 200);
+            Assert.Equal("4 over 3", MosaicLayout.ModeTitle(7, 1));
+            Assert.Equal("3 over 4", MosaicLayout.ModeTitle(7, 2));
+            var fourOverThree = Placed(7, 1, 840, 200);
+            Near(fourOverThree[0], 0, 0, 210, 100);
+            Near(fourOverThree[3], 630, 0, 210, 100);
+            Near(fourOverThree[4], 0, 100, 280, 100);
+            Near(fourOverThree[6], 560, 100, 280, 100);
+            var between = MosaicMath.ClassifyBoundary(MosaicLayout.Create(7, 1), boundary: 0, cutLength: 840, pointerAlong: 100);
+            Assert.True(between.Whole);
+
+            var threeOverFour = Placed(7, 2, 840, 200);
+            Near(threeOverFour[0], 0, 0, 280, 100);
+            Near(threeOverFour[2], 560, 0, 280, 100);
+            Near(threeOverFour[3], 0, 100, 210, 100);
+            Near(threeOverFour[6], 630, 100, 210, 100);
+
+            var hero = Hero(7, HeroKind.Rectangle, 0, 500, 200);
             Near(hero[0], 0, 0, 200, 200);
             Near(hero[1], 200, 0, 100, 100);
             Near(hero[3], 400, 0, 100, 100);
@@ -234,7 +253,7 @@ namespace ModernImageViewer.Tests
             Near(grid[6], 0, 200, 300, 100);
             Near(grid[7], 300, 200, 300, 100);
 
-            var hero = Placed(8, 2, 840, 400);
+            var hero = Hero(8, HeroKind.Banner, 0, 840, 400);
             Near(hero[0], 0, 0, 840, 200);
             Near(hero[1], 0, 200, 210, 100);
             Near(hero[4], 630, 200, 210, 100);
@@ -245,7 +264,7 @@ namespace ModernImageViewer.Tests
         [Fact]
         public void Nine_photo_heroes()
         {
-            var corner = Placed(9, 1, 400, 300);
+            var corner = Hero(9, HeroKind.Rectangle, 0, 400, 300);
             Near(corner[0], 0, 0, 200, 200);
             Near(corner[1], 200, 0, 100, 100);
             Near(corner[2], 300, 0, 100, 100);
@@ -254,7 +273,21 @@ namespace ModernImageViewer.Tests
             Near(corner[5], 0, 200, 100, 100);
             Near(corner[8], 300, 200, 100, 100);
 
-            var top = Placed(9, 2, 400, 400);
+            Assert.Equal("5 over 4", MosaicLayout.ModeTitle(9, 1));
+            Assert.Equal("4 over 5", MosaicLayout.ModeTitle(9, 2));
+            var fiveOverFour = Placed(9, 1, 800, 200);
+            Near(fiveOverFour[0], 0, 0, 160, 100);
+            Near(fiveOverFour[4], 640, 0, 160, 100);
+            Near(fiveOverFour[5], 0, 100, 200, 100);
+            Near(fiveOverFour[8], 600, 100, 200, 100);
+
+            var fourOverFive = Placed(9, 2, 800, 200);
+            Near(fourOverFive[0], 0, 0, 200, 100);
+            Near(fourOverFive[3], 600, 0, 200, 100);
+            Near(fourOverFive[4], 0, 100, 160, 100);
+            Near(fourOverFive[8], 640, 100, 160, 100);
+
+            var top = Hero(9, HeroKind.Banner, 0, 400, 400);
             Near(top[0], 0, 0, 400, 200);
             Near(top[1], 0, 200, 100, 100);
             Near(top[4], 300, 200, 100, 100);
@@ -272,8 +305,96 @@ namespace ModernImageViewer.Tests
             Near(twelve[8], nine[8].X, nine[8].Y, nine[8].W, nine[8].H);
             Assert.Equal(3, MosaicLayout.ModeCount(12));
             Assert.Equal("3×3", MosaicLayout.ModeTitle(12, 0));
-            Assert.Equal("Hero", MosaicLayout.ModeTitle(9, 1));
-            Assert.Equal("Hero Top", MosaicLayout.ModeTitle(4, 1));
+            Assert.Equal("5 over 4", MosaicLayout.ModeTitle(9, 1));
+            Assert.Equal("5 over 4", MosaicLayout.ModeTitle(12, 1));
+            Assert.Equal("4 Rows", MosaicLayout.ModeTitle(4, 1));
+            Assert.Equal("3 Rows", MosaicLayout.ModeTitle(3, 0));
+            Assert.Equal("3 Columns", MosaicLayout.ModeTitle(3, 1));
+        }
+
+        [Fact]
+        public void Hero_kinds_follow_the_photo_count()
+        {
+            Assert.Equal(new[] { HeroKind.Banner }, MosaicLayout.HeroKinds(2));
+            Assert.Equal(new[] { HeroKind.Banner, HeroKind.Pair }, MosaicLayout.HeroKinds(3));
+            Assert.DoesNotContain(HeroKind.Rectangle, MosaicLayout.HeroKinds(3));
+            Assert.Equal(new[] { HeroKind.Banner, HeroKind.Rectangle, HeroKind.Pair }, MosaicLayout.HeroKinds(4));
+            Assert.DoesNotContain(HeroKind.Rectangle, MosaicLayout.HeroKinds(8));
+            Assert.Contains(HeroKind.Rectangle, MosaicLayout.HeroKinds(9));
+            Assert.Equal("Banner", MosaicLayout.HeroTitle(HeroKind.Banner));
+            Assert.Equal(0, MosaicLayout.DefaultBannerPosition(1920, 1080));
+            Assert.Equal(3, MosaicLayout.DefaultBannerPosition(1080, 1920));
+            Assert.Equal(4, MosaicLayout.HeroPositions(2, HeroKind.Banner));
+            Assert.Equal(2, MosaicLayout.HeroPositions(5, HeroKind.Rectangle));
+            Assert.Equal(2, MosaicLayout.HeroPositions(7, HeroKind.Rectangle));
+            Assert.Equal(4, MosaicLayout.HeroPositions(6, HeroKind.Rectangle));
+            Assert.Equal(4, MosaicLayout.HeroPositions(3, HeroKind.Pair));
+        }
+
+        [Fact]
+        public void Rotate_moves_the_large_area_and_keeps_the_same_photos_large()
+        {
+            var right = Hero(2, HeroKind.Banner, 1, 100, 100);
+            Near(right[0], 40, 0, 60, 100);
+            Near(right[1], 0, 0, 40, 100);
+
+            var bottom = Hero(2, HeroKind.Banner, 2, 100, 100);
+            Near(bottom[0], 0, 40, 100, 60);
+            Near(bottom[1], 0, 0, 100, 40);
+
+            var left = Hero(2, HeroKind.Banner, 3, 100, 100);
+            Near(left[0], 0, 0, 60, 100);
+            Near(left[1], 60, 0, 40, 100);
+
+            var pairTop = Hero(3, HeroKind.Pair, 0, 400, 400);
+            Near(pairTop[0], 0, 0, 200, 300);
+            Near(pairTop[1], 200, 0, 200, 300);
+            Near(pairTop[2], 0, 300, 400, 100);
+
+            var pairRight = Hero(3, HeroKind.Pair, 1, 400, 400);
+            Near(pairRight[0], 100, 0, 300, 200);
+            Near(pairRight[1], 100, 200, 300, 200);
+            Near(pairRight[2], 0, 0, 100, 400);
+
+            var corner = Hero(4, HeroKind.Rectangle, 2, 300, 300);
+            Near(corner[0], 100, 100, 200, 200);
+            var opposite = Hero(4, HeroKind.Rectangle, 3, 300, 300);
+            Near(opposite[0], 0, 100, 200, 200);
+
+            var asked = MosaicMath.Boxes(MosaicLayout.CreateHero(3, HeroKind.Rectangle, 2), 300, 100);
+            var banner = Hero(3, HeroKind.Banner, 2, 300, 100);
+            Near(asked[0], banner[0].X, banner[0].Y, banner[0].W, banner[0].H);
+        }
+
+        [Theory]
+        [InlineData(2)]
+        [InlineData(3)]
+        [InlineData(4)]
+        [InlineData(5)]
+        [InlineData(6)]
+        [InlineData(7)]
+        [InlineData(8)]
+        [InlineData(9)]
+        public void Every_hero_covers_the_canvas_once(int count)
+        {
+            foreach (var kind in MosaicLayout.HeroKinds(count))
+            {
+                int positions = MosaicLayout.HeroPositions(count, kind);
+                for (int position = 0; position < positions; position++)
+                {
+                    var boxes = Hero(count, kind, position, 1600, 900);
+                    Assert.Equal(count, boxes.Count);
+                    double area = 0;
+                    string name = kind + " " + position;
+                    for (int i = 0; i < count; i++)
+                    {
+                        Assert.True(boxes[i].W > 1, name);
+                        Assert.True(boxes[i].H > 1, name);
+                        area += boxes[i].W * boxes[i].H;
+                    }
+                    Assert.Equal(1600d * 900d, area, 0);
+                }
+            }
         }
 
         [Theory]
@@ -309,6 +430,11 @@ namespace ModernImageViewer.Tests
         private static Dictionary<int, MosaicBox> Placed(int count, int mode, double width, double height)
         {
             return MosaicMath.Boxes(MosaicLayout.Create(count, mode), width, height);
+        }
+
+        private static Dictionary<int, MosaicBox> Hero(int count, HeroKind kind, int position, double width, double height)
+        {
+            return MosaicMath.Boxes(MosaicLayout.CreateHero(count, kind, position), width, height);
         }
 
         private static void Near(MosaicBox box, double x, double y, double w, double h)

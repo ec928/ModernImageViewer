@@ -33,6 +33,9 @@ namespace ModernImageViewer
 
         private int _soloIndex = -1;
         private int _layoutMode = 0;
+        private bool _heroActive;
+        private HeroKind _heroKind = HeroKind.Banner;
+        private int _heroPosition;
 
         // Solo drag tracking. A click on the black around the photo is not a drag.
         private bool _isSoloDragging = false;
@@ -71,7 +74,10 @@ namespace ModernImageViewer
             _items.AddRange(items.Where(i => i != null && !i.IsDirectory));
             
             _isFillMode = true; // Always default to Fill (crop to fill) to eliminate black bars
-            _layoutMode = ChooseDefaultLayoutMode();
+            _layoutMode = 0;
+            _heroActive = false;
+            _heroKind = HeroKind.Banner;
+            _heroPosition = 0;
 
             ExitSolo();
             BuildLayout();
@@ -96,21 +102,6 @@ namespace ModernImageViewer
             _soloIndex = -1;
         }
 
-        private int ChooseDefaultLayoutMode()
-        {
-            if (_items.Count == 3)
-            {
-                // If the first image is a portrait (taller than wide), Left+2Right is great.
-                // Otherwise for landscape, Top+2Bottom is vastly superior.
-                if (_items.Count > 0 && _items[0].Thumbnail is BitmapSource bs && bs.PixelHeight > bs.PixelWidth)
-                {
-                    return 1; // Left + 2 Right
-                }
-                return 0; // Top + 2 Bottom
-            }
-            return 0;
-        }
-
         private int GetMaxModesForCount(int count) => MosaicLayout.ModeCount(count);
 
         private string GetLayoutModeTitle(int count, int mode) => MosaicLayout.ModeTitle(count, mode);
@@ -126,10 +117,11 @@ namespace ModernImageViewer
                 string title = GetLayoutModeTitle(count, m);
                 var item = new MenuFlyoutItem
                 {
-                    Text = (!_mosaicCustom && modeIndex == _layoutMode ? "✓  " : "    ") + title
+                    Text = (!_heroActive && !_mosaicCustom && modeIndex == _layoutMode ? "✓  " : "    ") + title
                 };
                 item.Click += (s, e) =>
                 {
+                    _heroActive = false;
                     _layoutMode = modeIndex;
                     BuildLayout();
                     ShowHudAndOverlays();
@@ -140,14 +132,97 @@ namespace ModernImageViewer
 
         public void ToggleOrientation()
         {
-            if (!_mosaicCustom)
+            if (_mosaicCustom)
             {
-                int maxModes = GetMaxModesForCount(_items.Count);
-                if (maxModes <= 1) return;
-                _layoutMode = (_layoutMode + 1) % maxModes;
+                BuildLayout();
+                ShowHudAndOverlays();
+                return;
+            }
+            if (_heroActive)
+            {
+                _heroActive = false;
+                BuildLayout();
+                ShowHudAndOverlays();
+                return;
+            }
+            int maxModes = GetMaxModesForCount(_items.Count);
+            if (maxModes <= 1) return;
+            _layoutMode = (_layoutMode + 1) % maxModes;
+            BuildLayout();
+            ShowHudAndOverlays();
+        }
+
+        private void HeroButton_Click(object sender, RoutedEventArgs e)
+        {
+            var kinds = MosaicLayout.HeroKinds(_items.Count);
+            if (kinds.Length == 0) return;
+            if (!_heroActive)
+            {
+                _heroActive = true;
+                _heroKind = kinds[0];
+                _heroPosition = _heroKind == HeroKind.Banner
+                    ? MosaicLayout.DefaultBannerPosition(CellsGrid.ActualWidth, CellsGrid.ActualHeight)
+                    : 0;
+            }
+            else if (kinds.Length > 1)
+            {
+                int index = Array.IndexOf(kinds, _heroKind);
+                if (index < 0) index = 0;
+                _heroKind = kinds[(index + 1) % kinds.Length];
+                _heroPosition = 0;
+            }
+            else
+            {
+                return;
             }
             BuildLayout();
             ShowHudAndOverlays();
+        }
+
+        private void RotateHero_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_heroActive) return;
+            int positions = MosaicLayout.HeroPositions(_items.Count, _heroKind);
+            _heroPosition = (_heroPosition + 1) % positions;
+            BuildLayout();
+            ShowHudAndOverlays();
+        }
+
+        private void NormalizeHero()
+        {
+            var kinds = MosaicLayout.HeroKinds(_items.Count);
+            if (kinds.Length == 0)
+            {
+                _heroActive = false;
+                return;
+            }
+            if (Array.IndexOf(kinds, _heroKind) < 0)
+            {
+                _heroKind = kinds[0];
+                _heroPosition = 0;
+            }
+            else
+            {
+                int positions = MosaicLayout.HeroPositions(_items.Count, _heroKind);
+                if (_heroPosition >= positions) _heroPosition = 0;
+            }
+        }
+
+        private void RefreshHeroChrome(int count)
+        {
+            if (HeroButton == null || RotateHeroButton == null || HeroText == null) return;
+            bool show = count > 1;
+            HeroButton.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            RotateHeroButton.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            RotateHeroButton.IsEnabled = _heroActive;
+            HeroText.Text = _heroActive ? MosaicLayout.HeroTitle(_heroKind) : "Hero";
+            bool moreHeroes = MosaicLayout.HeroKinds(count).Length > 1;
+            ToolTipService.SetToolTip(HeroButton, _heroActive
+                ? (moreHeroes ? "Hero: " + HeroText.Text + ". Click for the next hero." : "Hero: " + HeroText.Text + ".")
+                : "Hero. Click for a large photo.");
+            ToolTipService.SetToolTip(RotateHeroButton, _heroActive
+                ? "Next position"
+                : "Turn the hero on first");
         }
 
         public bool HandleKeyDown(VirtualKey key)
