@@ -496,7 +496,6 @@ namespace ModernImageViewer
             try
             {
                 var bmp = new BitmapImage();
-                bmp.DecodePixelWidth = 2560;
                 bmp.UriSource = new Uri(item.Path, UriKind.Absolute);
                 bmp.ImageOpened += (s, e) =>
                 {
