@@ -95,7 +95,7 @@
                             <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE738;" FontSize="12" />
                         </Button>
                         <Button x:Name="LinesDirectionButton"
-                                Click="Flip_Click"
+                                Click="RowsColumns_Click"
                                 Style="{StaticResource QuietButtonStyle}"
                                 Padding="6,5"
                                 CornerRadius="14"
@@ -112,16 +112,16 @@
                         </Button>
                     </StackPanel>
 
-                    <Button x:Name="ArrangementButton"
+                    <Button x:Name="CountsButton"
                             Style="{StaticResource QuietButtonStyle}"
                             Padding="8,5"
                             CornerRadius="14">
                         <Button.Flyout>
-                            <Flyout Opening="CountsFlyout_Opening" Placement="Top">
+                            <Flyout Opening="CountsFlyout_Opening" Opened="HudMenu_Opened" Closed="HudMenu_Closed" Placement="Top">
                                 <StackPanel x:Name="CountsPanel" Spacing="4" />
                             </Flyout>
                         </Button.Flyout>
-                        <TextBlock x:Name="ArrangementText" Text="3 · 2" VerticalAlignment="Center" FontSize="13" />
+                        <TextBlock x:Name="CountsText" Text="3 · 2" VerticalAlignment="Center" FontSize="13" />
                     </Button>
 
                     <Button x:Name="HeroButton"
@@ -163,7 +163,7 @@
                             CornerRadius="14"
                             ToolTipService.ToolTip="Canvas shape. Drag the window for a custom shape.">
                         <Button.Flyout>
-                            <MenuFlyout x:Name="AspectMenuFlyout" Opening="AspectFlyout_Opening" />
+                            <MenuFlyout x:Name="AspectMenuFlyout" Opening="AspectFlyout_Opening" Opened="HudMenu_Opened" Closed="HudMenu_Closed" />
                         </Button.Flyout>
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <TextBlock x:Name="AspectText" Text="16:9" VerticalAlignment="Center" FontSize="13" />
@@ -177,7 +177,7 @@
                             CornerRadius="14"
                             ToolTipService.ToolTip="Save this grid as a JPEG">
                         <Button.Flyout>
-                            <MenuFlyout x:Name="SaveMenuFlyout" Opening="SaveFlyout_Opening" />
+                            <MenuFlyout x:Name="SaveMenuFlyout" Opening="SaveFlyout_Opening" Opened="HudMenu_Opened" Closed="HudMenu_Closed" />
                         </Button.Flyout>
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE74E;" FontSize="14" />

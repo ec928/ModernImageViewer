@@ -96,7 +96,6 @@ namespace ModernImageViewer
             _layoutUpdaters.Clear();
             _cellTopControls.Clear();
             ResetMosaicFields();
-            _hudTimer.Stop();
             CellsGrid.Children.Clear();
             CellsGrid.RowDefinitions.Clear();
             CellsGrid.ColumnDefinitions.Clear();
@@ -198,12 +197,16 @@ namespace ModernImageViewer
             }
         }
 
-        /// <summary>Turn whatever is on screen a quarter: rows become columns, a top banner a left one, dragged sizes kept.</summary>
-        public void Flip()
+        /// <summary>
+        /// Rows become columns and back. A plain grid keeps its dragged sizes, turned a quarter.
+        /// Beside a banner or pair only the other photos turn, so their sizes go back to even like
+        /// any other line change. A Rectangle turns whole.
+        /// </summary>
+        public void ToggleRowsColumns()
         {
             if (MosaicLayout.ShownCount(_items.Count) < 2) return;
             _flipped = !_flipped;
-            if (_mosaicCustom && _mosaic != null && CellRootsReady())
+            if (_mosaicCustom && !HeroUsesLines && _mosaic != null && CellRootsReady())
             {
                 _mosaic = MosaicLayout.Transpose(_mosaic);
                 _keepMosaic = true;
@@ -219,7 +222,7 @@ namespace ModernImageViewer
 
         private void LinesLess_Click(object sender, RoutedEventArgs e) => ChangeLines(-1);
         private void LinesMore_Click(object sender, RoutedEventArgs e) => ChangeLines(1);
-        private void Flip_Click(object sender, RoutedEventArgs e) => Flip();
+        private void RowsColumns_Click(object sender, RoutedEventArgs e) => ToggleRowsColumns();
 
         private void HeroButton_Click(object sender, RoutedEventArgs e)
         {
@@ -383,9 +386,23 @@ namespace ModernImageViewer
             }
         }
 
+        private int _hudMenusOpen;
+
+        private void HudMenu_Opened(object? sender, object e)
+        {
+            _hudMenusOpen++;
+            ShowHudAndOverlays();
+        }
+
+        private void HudMenu_Closed(object? sender, object e)
+        {
+            _hudMenusOpen = Math.Max(0, _hudMenusOpen - 1);
+            ShowHudAndOverlays();
+        }
+
         private void HideHudAndOverlays()
         {
-            if (_isPointerOverHud) return;
+            if (_isPointerOverHud || _hudMenusOpen > 0) return;
 
             _hudTimer.Stop();
             _isHudVisible = false;
@@ -569,7 +586,8 @@ namespace ModernImageViewer
                 ClampTranslation();
             }
 
-            _layoutUpdaters.Add(UpdateImageLayout);
+            Action updateLayout = UpdateImageLayout;
+            _layoutUpdaters.Add(updateLayout);
 
             cellGrid.SizeChanged += (s, e) =>
             {
@@ -842,6 +860,7 @@ namespace ModernImageViewer
             cellGrid.ContextFlyout = menu;
 
             AttachSwapDrop(cellBorder, cellGrid, item);
+            cellBorder.Tag = new CellParts(transform, updateLayout, topControls);
 
             cellBorder.Child = cellGrid;
             return cellBorder;
@@ -941,18 +960,62 @@ namespace ModernImageViewer
             SwapItems(index, target);
         }
 
+        /// <summary>What a cell registered in the shared lists, so removing the cell can take it back out.</summary>
+        private sealed record CellParts(CompositeTransform Transform, Action UpdateLayout, UIElement TopControls);
+
+        /// <summary>
+        /// Remove a photo and keep the other cells, so none of them decodes again. The layout is rebuilt
+        /// for the new count, and a photo past the limit that moves into view gets a new cell.
+        /// </summary>
         private void RemoveItem(ImageItem item)
         {
-            _items.Remove(item);
+            int index = _items.IndexOf(item);
+            if (index < 0) return;
+            int visibleBefore = VisibleCount(_items.Count);
+            bool cellsReady = CellRootsReady();
+            _items.RemoveAt(index);
             if (_items.Count == 0)
             {
                 CloseRequested?.Invoke(this, EventArgs.Empty);
+                return;
+            }
+
+            if (cellsReady && index >= visibleBefore && _mosaic != null)
+            {
+                // A photo that was not on screen: only the count changes.
+                _keepMosaic = true;
+                try { BuildLayout(); }
+                finally { _keepMosaic = false; }
+            }
+            else if (cellsReady && _items.Count > 1)
+            {
+                var roots = new List<FrameworkElement?>(_cellRoots);
+                ForgetCell(roots[index]);
+                roots.RemoveAt(index);
+                int visible = VisibleCount(_items.Count);
+                while (roots.Count < visible) roots.Add(null);
+                _cellRoots = roots.ToArray();
+                _relayoutKeepingCells = true;
+                try { BuildLayout(); }
+                finally { _relayoutKeepingCells = false; }
             }
             else
             {
                 BuildLayout();
-                ShowHudAndOverlays();
             }
+            ShowHudAndOverlays();
+        }
+
+        private void ForgetCell(FrameworkElement? cell)
+        {
+            if (cell == null) return;
+            if (cell.Tag is CellParts parts)
+            {
+                _cellTransforms.Remove(parts.Transform);
+                _layoutUpdaters.Remove(parts.UpdateLayout);
+                _cellTopControls.Remove(parts.TopControls);
+            }
+            if (cell.Parent is Panel parent) parent.Children.Remove(cell);
         }
 
         #endregion

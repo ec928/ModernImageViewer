@@ -73,6 +73,14 @@ Product proposal (not implemented): `CINEMATIC_PROPOSAL.md`. Bar is **excellent 
 
 A new Play from the grid or viewer starts from the launch list. `CinematicAutoSave.json` is a crash restore only: written atomically while a show is open, deleted on clean close of the last cinematic window, offered once on the next Play if the file is still there.
 
+## Multi-view
+
+The layout is a `MosaicLayout` tree of row and column splits; a leaf is a photo's index in `_items`. `MosaicLayout.ShownCount` is the one place the 16-photo limit lives. Grids come from `FromCounts` (photos per line), Banner and Pair from `CreateHeroLines` (the hero plus the other photos in lines), and Rectangle from `CreateRectangleHero`, which is drawn by hand for 4, 5, 6, 7 and 9 photos only.
+
+Cells are owned by slot: `_cellRoots[i]` is the cell showing `_items[i]`. A swap exchanges the two roots and rebuilds with `_keepMosaic`, so no photo decodes again and dragged sizes stay. Removing a photo also keeps the other cells: its root is dropped, its entries leave the shared lists through the `CellParts` on its `Tag`, and the layout is rebuilt for the new count with `_relayoutKeepingCells`; only a photo past the limit that moves into view decodes. Because a cell outlives a swap, its controls (move arrows, menu, maximise, drag) look up `Slot(item)` when used; never capture the index at creation. Save JPEG reads cell `i` from `_cellRoots[i]` for the same reason: the order cells are built in follows the tree, not the photo order, and differs for a hero on the right or bottom.
+
+Changing the line count, a line's count or the hero rebuilds every cell and resets dragged sizes. The rows/columns switch keeps dragged sizes on a plain grid by turning the tree a quarter (`Transpose`).
+
 ## Bare Alt
 
 There is no Alt peek at the sidebar; it was removed because it fired whenever Alt was held for an Alt-drag. The bare Alt key-down and key-up are still marked handled so Alt does not move focus to the window's system menu; Alt+key combinations are unaffected because the system tracks the modifier itself.

@@ -207,15 +207,6 @@ namespace ModernImageViewer
             return node;
         }
 
-        private static MosaicLayout Split(bool vertical, double w0, double w1, double w2, MosaicLayout a, MosaicLayout b, MosaicLayout c)
-        {
-            var node = Cut(vertical, a, b, c);
-            node.Weights[0] = w0;
-            node.Weights[1] = w1;
-            node.Weights[2] = w2;
-            return node;
-        }
-
         private static MosaicLayout Row(int start, int count)
         {
             if (count <= 1) return Cell(start);

@@ -18,6 +18,8 @@ namespace ModernImageViewer
         private MosaicLayout? _mosaic;
         private bool _mosaicCustom;
         private bool _keepMosaic;
+        // Keep the photo cells but build a new layout, for a change in the number of photos.
+        private bool _relayoutKeepingCells;
         private SegmentGesture? _segmentGesture;
         private bool _applyingSegmentUnlock;
 
@@ -36,7 +38,8 @@ namespace ModernImageViewer
             if (!_applyingSegmentUnlock)
                 EndSegmentGesture();
 
-            bool keepCells = _keepMosaic && CellRootsReady();
+            bool keepCells = (_keepMosaic && CellRootsReady())
+                || (_relayoutKeepingCells && _cellRoots.Length == VisibleCount(_items.Count));
             if (keepCells)
             {
                 for (int i = 0; i < _cellRoots.Length; i++)
@@ -58,6 +61,11 @@ namespace ModernImageViewer
                 _layoutUpdaters.Clear();
                 _cellTopControls.Clear();
                 _cellRoots = Array.Empty<FrameworkElement?>();
+                _mosaic = null;
+                _mosaicCustom = false;
+            }
+            else if (_relayoutKeepingCells)
+            {
                 _mosaic = null;
                 _mosaicCustom = false;
             }
@@ -218,12 +226,12 @@ namespace ModernImageViewer
             LinesMoreButton.IsEnabled = lines < total || !onGrid;
 
             bool editable = lines >= 2 && lines < total;
-            ArrangementButton.Visibility = editable ? Visibility.Visible : Visibility.Collapsed;
+            CountsButton.Visibility = editable ? Visibility.Visible : Visibility.Collapsed;
             if (editable)
             {
-                ArrangementText.Text = string.Join(" · ", CurrentLineCounts());
-                ArrangementText.Opacity = onGrid ? 1.0 : 0.5;
-                ToolTipService.SetToolTip(ArrangementButton, rows
+                CountsText.Text = string.Join(" · ", CurrentLineCounts());
+                CountsText.Opacity = onGrid ? 1.0 : 0.5;
+                ToolTipService.SetToolTip(CountsButton, rows
                     ? "Photos in each row, top to bottom. Click to change."
                     : "Photos in each column, left to right. Click to change.");
             }
