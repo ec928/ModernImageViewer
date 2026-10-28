@@ -209,8 +209,17 @@ namespace ModernImageViewer
         private void RefreshLinesChrome(int count)
         {
             int shown = MosaicLayout.ShownCount(count);
-            ShownText.Visibility = count > shown ? Visibility.Visible : Visibility.Collapsed;
-            ShownText.Text = shown + " of " + count + " shown";
+            bool excess = count > shown;
+            if (ShownBadge != null)
+            {
+                ShownBadge.Visibility = excess ? Visibility.Visible : Visibility.Collapsed;
+                ShownText.Text = shown + " / " + count;
+            }
+            else
+            {
+                ShownText.Visibility = excess ? Visibility.Visible : Visibility.Collapsed;
+                ShownText.Text = shown + " of " + count + " shown";
+            }
             bool show = shown > 1;
             LinesGroup.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
             if (!show) return;
@@ -265,6 +274,7 @@ namespace ModernImageViewer
                 Boundary = binding?.Boundary ?? index,
                 VerticalCut = verticalCut
             };
+            ToolTipService.SetToolTip(splitter, "Drag to resize · Double-click to equalize");
             Canvas.SetZIndex(splitter, 40);
 
             var line = new Rectangle

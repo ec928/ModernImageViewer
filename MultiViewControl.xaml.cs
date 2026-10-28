@@ -342,10 +342,17 @@ namespace ModernImageViewer
             RotateHeroButton.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
             RotateHeroButton.IsEnabled = _heroActive;
             HeroText.Text = _heroActive ? MosaicLayout.HeroTitle(_heroKind) : "Hero";
+            if (HeroIcon != null)
+            {
+                HeroIcon.Glyph = _heroActive ? "\uE735" : "\uE734";
+                HeroIcon.Foreground = _heroActive
+                    ? Application.Current.Resources["AccentFillColorDefaultBrush"] as Brush ?? new SolidColorBrush(Windows.UI.Color.FromArgb(255, 96, 205, 255))
+                    : Application.Current.Resources["TextFillColorPrimaryBrush"] as Brush ?? new SolidColorBrush(Microsoft.UI.Colors.White);
+            }
             bool moreHeroes = MosaicLayout.HeroKinds(count).Length > 1;
             ToolTipService.SetToolTip(HeroButton, _heroActive
-                ? (moreHeroes ? "Hero: " + HeroText.Text + ". Click for the next hero." : "Hero: " + HeroText.Text + ".")
-                : "Hero. Click for a large photo.");
+                ? (moreHeroes ? "Hero: " + HeroText.Text + " (H to cycle)" : "Hero: " + HeroText.Text + ".")
+                : "Hero (H). Click for a large photo.");
             ToolTipService.SetToolTip(RotateHeroButton, _heroActive
                 ? "Next position"
                 : "Turn the hero on first");
@@ -389,6 +396,19 @@ namespace ModernImageViewer
                 case VirtualKey.F:
                     ToggleFillMode();
                     return true;
+                case VirtualKey.R:
+                    ToggleRowsColumns();
+                    return true;
+                case VirtualKey.H:
+                    HeroButton_Click(this, new RoutedEventArgs());
+                    return true;
+                case VirtualKey.S:
+                    if (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
+                    {
+                        SaveButton?.Flyout?.ShowAt(SaveButton);
+                        return true;
+                    }
+                    break;
             }
 
             return false;
@@ -695,6 +715,7 @@ namespace ModernImageViewer
                     transform.TranslateX = 0;
                     transform.TranslateY = 0;
                     ClampTranslation();
+                    UpdateResetZoomState();
                     e.Handled = true;
                     return;
                 }
@@ -730,6 +751,7 @@ namespace ModernImageViewer
                     transform.TranslateX += dx;
                     transform.TranslateY += dy;
                     ClampTranslation();
+                    UpdateResetZoomState();
 
                     lastPoint = currentPoint;
                     e.Handled = true;
@@ -793,6 +815,7 @@ namespace ModernImageViewer
                 transform.ScaleY = newScale;
 
                 ClampTranslation();
+                UpdateResetZoomState();
                 e.Handled = true;
             };
 
@@ -825,6 +848,7 @@ namespace ModernImageViewer
                 }
 
                 ClampTranslation();
+                UpdateResetZoomState();
             };
 
             // Top-Right Auto-Hiding Caption Controls (Matches app's window caption style: Maximize and Close)
@@ -1504,6 +1528,29 @@ namespace ModernImageViewer
                 tr.ScaleY = 1.0;
                 tr.TranslateX = 0;
                 tr.TranslateY = 0;
+            }
+            UpdateResetZoomState();
+        }
+
+        private void UpdateResetZoomState()
+        {
+            if (ResetZoomButton == null) return;
+            bool isZoomed = false;
+            foreach (var tr in _cellTransforms)
+            {
+                if (Math.Abs(tr.ScaleX - 1.0) > 0.02 || Math.Abs(tr.TranslateX) > 1 || Math.Abs(tr.TranslateY) > 1)
+                {
+                    isZoomed = true;
+                    break;
+                }
+            }
+            ResetZoomButton.IsEnabled = isZoomed;
+            ResetZoomButton.Opacity = isZoomed ? 1.0 : 0.45;
+            if (ResetZoomIcon != null)
+            {
+                ResetZoomIcon.Foreground = isZoomed
+                    ? Application.Current.Resources["AccentFillColorDefaultBrush"] as Brush ?? new SolidColorBrush(Windows.UI.Color.FromArgb(255, 96, 205, 255))
+                    : Application.Current.Resources["TextFillColorPrimaryBrush"] as Brush ?? new SolidColorBrush(Microsoft.UI.Colors.White);
             }
         }
 

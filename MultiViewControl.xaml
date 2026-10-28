@@ -80,13 +80,19 @@
                                 <TextBlock Text="Grid" VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold" />
                             </StackPanel>
                         </Button>
-                        <TextBlock x:Name="ShownText"
-                                   Visibility="Collapsed"
-                                   VerticalAlignment="Center"
-                                   FontSize="12"
-                                   Opacity="0.75"
-                                   Margin="2,0,4,0"
-                                   ToolTipService.ToolTip="Multi-view shows up to 16 photos. The rest of the selection is not shown." />
+                        <Border x:Name="ShownBadge"
+                                Visibility="Collapsed"
+                                Background="#1FFFFFFF"
+                                CornerRadius="10"
+                                Padding="8,3"
+                                VerticalAlignment="Center"
+                                ToolTipService.ToolTip="Multi-view shows up to 16 photos. The rest of the selection is not shown.">
+                            <TextBlock x:Name="ShownText"
+                                       VerticalAlignment="Center"
+                                       FontSize="11.5"
+                                       FontWeight="SemiBold"
+                                       Opacity="0.85" />
+                        </Border>
                     </StackPanel>
                 </Border>
 
@@ -155,8 +161,11 @@
                                 Style="{StaticResource QuietButtonStyle}"
                                 Padding="8,5"
                                 CornerRadius="14"
-                                ToolTipService.ToolTip="Hero. Click for a large photo.">
-                            <TextBlock x:Name="HeroText" Text="Hero" VerticalAlignment="Center" FontSize="13" />
+                                ToolTipService.ToolTip="Hero (H). Click for a large photo.">
+                            <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                                <FontIcon x:Name="HeroIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE734;" FontSize="12" Opacity="0.8" />
+                                <TextBlock x:Name="HeroText" Text="Hero" VerticalAlignment="Center" FontSize="13" />
+                            </StackPanel>
                         </Button>
 
                         <Button x:Name="RotateHeroButton"
@@ -196,12 +205,15 @@
                         </Button>
 
                         <!-- Reset Zooms Button -->
-                        <Button Click="ResetZoom_Click" 
+                        <Button x:Name="ResetZoomButton"
+                                Click="ResetZoom_Click" 
                                 Style="{StaticResource QuietButtonStyle}" 
                                 Padding="8,5" 
                                 CornerRadius="14" 
+                                Opacity="0.45"
+                                IsEnabled="False"
                                 ToolTipService.ToolTip="Reset Pan &amp; Zoom (Middle-Click)">
-                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE71F;" FontSize="13" />
+                            <FontIcon x:Name="ResetZoomIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE71F;" FontSize="13" />
                         </Button>
 
                         <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,4" Opacity="0.4"/>
