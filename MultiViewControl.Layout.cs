@@ -240,47 +240,11 @@ namespace ModernImageViewer
                         break;
                 }
             }
-            else if (count == 4)
-            {
-                switch (_layoutMode)
-                {
-                    case 1:
-                        text = "4 Rows";
-                        glyph = "\uE748";
-                        tip = "Layout: 4 Rows — Click or Tab to switch layout. Right-click for menu.";
-                        break;
-                    case 2:
-                        text = "4 Columns";
-                        glyph = "\uE749";
-                        tip = "Layout: 4 Columns — Click or Tab to switch layout. Right-click for menu.";
-                        break;
-                    default:
-                        text = "2×2";
-                        glyph = "\uE748";
-                        tip = "Layout: 2×2 — Click or Tab to switch layout. Right-click for menu.";
-                        break;
-                }
-            }
-            else if (count <= 6)
-            {
-                if (_layoutMode == 0)
-                {
-                    text = "2 Rows, Split";
-                    glyph = "\uE748";
-                    tip = "Layout: 2 Rows, Split — Click or Tab to switch to 3 Rows. Right-click for menu.";
-                }
-                else
-                {
-                    text = "3 Rows, Split";
-                    glyph = "\uE748";
-                    tip = "Layout: 3 Rows, Split — Click or Tab to switch to 2 Rows. Right-click for menu.";
-                }
-            }
             else
             {
-                text = "3×3 Grid";
-                glyph = "\uE748";
-                tip = "Layout: 3×3 Grid";
+                text = GetLayoutModeTitle(count, _layoutMode);
+                glyph = text.Contains("Left") || text.Contains("Column") ? "\uE749" : "\uE748";
+                tip = "Layout: " + text + " — Click or Tab to switch layout. Right-click for menu.";
             }
 
             OrientationText.Text = text;

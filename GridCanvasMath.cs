@@ -13,6 +13,7 @@ namespace ModernImageViewer
         public static readonly (string Label, double WidthOverHeight)[] Aspects =
         {
             ("16:9", 16.0 / 9.0),
+            ("16:10", 16.0 / 10.0),
             ("21:9", 21.0 / 9.0),
             ("4:3", 4.0 / 3.0),
             ("1:1", 1.0),

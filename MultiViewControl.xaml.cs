@@ -111,46 +111,9 @@ namespace ModernImageViewer
             return 0;
         }
 
-        private int GetMaxModesForCount(int count)
-        {
-            if (count == 2) return 2; // Side-by-Side (0), Top-and-Bottom (1)
-            if (count == 3) return 4; // Top+2Bottom (0), Left+2Right (1), 3 Rows (2), 3 Cols (3)
-            if (count == 4) return 3; // 2x2 (0), 4 Rows (1), 4 Cols (2)
-            if (count <= 6) return 2; // 2 Rows, Split (0), 3 Rows, Split (1)
-            return 1;
-        }
+        private int GetMaxModesForCount(int count) => MosaicLayout.ModeCount(count);
 
-        private string GetLayoutModeTitle(int count, int mode)
-        {
-            if (count == 2)
-            {
-                return mode == 0 ? "Side-by-Side (Columns)" : "Top-and-Bottom (Rows)";
-            }
-            if (count == 3)
-            {
-                return mode switch
-                {
-                    0 => "Top + 2 Bottom",
-                    1 => "Left + 2 Right",
-                    2 => "3 Rows",
-                    _ => "3 Columns"
-                };
-            }
-            if (count == 4)
-            {
-                return mode switch
-                {
-                    0 => "2×2",
-                    1 => "4 Rows",
-                    _ => "4 Columns"
-                };
-            }
-            if (count <= 6)
-            {
-                return mode == 0 ? "2 Rows, Split" : "3 Rows, Split";
-            }
-            return "Grid";
-        }
+        private string GetLayoutModeTitle(int count, int mode) => MosaicLayout.ModeTitle(count, mode);
 
         private void UpdateOrientationFlyout(int count)
         {
@@ -708,6 +671,18 @@ namespace ModernImageViewer
 
             var topStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 0 };
 
+            if (_items.Count > 1)
+            {
+                int slot = index;
+                int visible = VisibleCount(_items.Count);
+                topStack.Children.Add(CreateNudgeButton("\uE76B",
+                    slot == 0 ? "Move to last position" : "Move to previous position",
+                    () => MovePhoto(slot, -1)));
+                topStack.Children.Add(CreateNudgeButton("\uE76C",
+                    slot == visible - 1 ? "Move to first position" : "Move to next position",
+                    () => MovePhoto(slot, 1)));
+            }
+
             // Maximize / Solo Button (Matches app's TopMaxButton style)
             var maxBtn = new Button
             {
@@ -762,19 +737,14 @@ namespace ModernImageViewer
 
             if (_items.Count > 1)
             {
-                if (index > 0)
-                {
-                    var moveLeftItem = new MenuFlyoutItem { Text = "Move Left / Up", Icon = new FontIcon { Glyph = "\uE76B" } };
-                    moveLeftItem.Click += (s, e) => SwapItems(index, index - 1);
-                    menu.Items.Add(moveLeftItem);
-                }
+                int slot = index;
+                var moveLeftItem = new MenuFlyoutItem { Text = "Move Left / Up", Icon = new FontIcon { Glyph = "\uE76B" } };
+                moveLeftItem.Click += (s, e) => MovePhoto(slot, -1);
+                menu.Items.Add(moveLeftItem);
 
-                if (index < _items.Count - 1)
-                {
-                    var moveRightItem = new MenuFlyoutItem { Text = "Move Right / Down", Icon = new FontIcon { Glyph = "\uE76C" } };
-                    moveRightItem.Click += (s, e) => SwapItems(index, index + 1);
-                    menu.Items.Add(moveRightItem);
-                }
+                var moveRightItem = new MenuFlyoutItem { Text = "Move Right / Down", Icon = new FontIcon { Glyph = "\uE76C" } };
+                moveRightItem.Click += (s, e) => MovePhoto(slot, 1);
+                menu.Items.Add(moveRightItem);
 
                 if (_items.Count == 2)
                 {
@@ -813,6 +783,47 @@ namespace ModernImageViewer
 
             cellBorder.Child = cellGrid;
             return cellBorder;
+        }
+
+        private Button CreateNudgeButton(string glyph, string tip, Action move)
+        {
+            var btn = new Button
+            {
+                Width = 32,
+                Height = 32,
+                Padding = new Thickness(0),
+                Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                BorderThickness = new Thickness(0),
+                CornerRadius = new CornerRadius(0),
+                IsTabStop = false,
+                UseSystemFocusVisuals = false,
+                FocusVisualPrimaryThickness = new Thickness(0),
+                FocusVisualSecondaryThickness = new Thickness(0),
+                Content = new FontIcon
+                {
+                    FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
+                    Glyph = glyph,
+                    FontSize = 12,
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(240, 255, 255, 255))
+                }
+            };
+            btn.Resources["ButtonBackgroundPointerOver"] = new SolidColorBrush(Windows.UI.Color.FromArgb(24, 255, 255, 255));
+            btn.Resources["ButtonBackgroundPressed"] = new SolidColorBrush(Windows.UI.Color.FromArgb(16, 255, 255, 255));
+            btn.Resources["ButtonForegroundPointerOver"] = new SolidColorBrush(Microsoft.UI.Colors.White);
+            btn.Resources["ButtonForegroundPressed"] = new SolidColorBrush(Windows.UI.Color.FromArgb(200, 255, 255, 255));
+            ToolTipService.SetToolTip(btn, tip);
+            btn.Click += (s, e) => move();
+            return btn;
+        }
+
+        /// <summary>Swap this photo with the neighbor in the layout order, wrapping around the photos on screen.</summary>
+        private void MovePhoto(int index, int delta)
+        {
+            int visible = VisibleCount(_items.Count);
+            if (visible < 2 || (uint)index >= (uint)visible) return;
+            int target = index + delta;
+            target = ((target % visible) + visible) % visible;
+            SwapItems(index, target);
         }
 
         private void RemoveItem(ImageItem item)

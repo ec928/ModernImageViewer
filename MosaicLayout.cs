@@ -42,12 +42,104 @@ namespace ModernImageViewer
             return copy;
         }
 
+        /// <summary>Photos actually placed. Seven or more stop at nine.</summary>
+        public static int ShownCount(int count)
+        {
+            if (count >= 7) return Math.Min(count, 9);
+            return count;
+        }
+
+        public static int ModeCount(int count)
+        {
+            return ShownCount(count) switch
+            {
+                <= 1 => 1,
+                2 => 2,
+                3 => 4,
+                4 => 5,
+                5 => 5,
+                6 => 3,
+                7 => 2,
+                8 => 3,
+                _ => 3
+            };
+        }
+
+        public static string ModeTitle(int count, int mode)
+        {
+            int shown = ShownCount(count);
+            if (mode < 0 || mode >= ModeCount(shown)) mode = 0;
+            if (shown == 2)
+                return mode == 0 ? "Side-by-Side (Columns)" : "Top-and-Bottom (Rows)";
+            if (shown == 3)
+            {
+                return mode switch
+                {
+                    0 => "Top + 2 Bottom",
+                    1 => "Left + 2 Right",
+                    2 => "3 Rows",
+                    _ => "3 Columns"
+                };
+            }
+            if (shown == 4)
+            {
+                return mode switch
+                {
+                    0 => "2×2",
+                    1 => "Hero Top",
+                    2 => "Hero Left",
+                    3 => "4 Rows",
+                    _ => "4 Columns"
+                };
+            }
+            if (shown == 5)
+            {
+                return mode switch
+                {
+                    0 => "3 over 2",
+                    1 => "2 over 3",
+                    2 => "2 / 2 / 1",
+                    3 => "Hero Left",
+                    _ => "Hero Top"
+                };
+            }
+            if (shown == 6)
+            {
+                return mode switch
+                {
+                    0 => "3 over 3",
+                    1 => "2 / 2 / 2",
+                    _ => "Hero"
+                };
+            }
+            if (shown == 7)
+                return mode == 0 ? "2 / 3 / 2" : "Hero Left";
+            if (shown == 8)
+            {
+                return mode switch
+                {
+                    0 => "4 + 4",
+                    1 => "3 + 3 + 2",
+                    _ => "Hero Top"
+                };
+            }
+            return mode switch
+            {
+                0 => "3×3",
+                1 => "Hero",
+                _ => "Hero Top"
+            };
+        }
+
         public static MosaicLayout Create(int count, int mode)
         {
             if (count <= 1) return Cell(0);
-            if (count == 2)
+            int shown = ShownCount(count);
+            if (mode < 0 || mode >= ModeCount(shown)) mode = 0;
+
+            if (shown == 2)
                 return mode == 0 ? Cut(true, Cell(0), Cell(1)) : Cut(false, Cell(0), Cell(1));
-            if (count == 3)
+            if (shown == 3)
             {
                 if (mode == 0)
                 {
@@ -66,41 +158,68 @@ namespace ModernImageViewer
                 if (mode == 2) return Cut(false, Cell(0), Cell(1), Cell(2));
                 return Cut(true, Cell(0), Cell(1), Cell(2));
             }
-            if (count == 4)
+            if (shown == 4)
             {
-                if (mode == 1)
-                    return Cut(false, Cell(0), Cell(1), Cell(2), Cell(3));
-                if (mode == 2)
-                    return Cut(true, Cell(0), Cell(1), Cell(2), Cell(3));
+                // 1.5 : 1 starts the hero at 60% of the canvas.
+                if (mode == 1) return Split(false, 1.5, 1, Cell(0), Row(1, 3));
+                if (mode == 2) return Split(true, 1.5, 1, Cell(0), Stack(1, 3));
+                if (mode == 3) return Cut(false, Cell(0), Cell(1), Cell(2), Cell(3));
+                if (mode == 4) return Cut(true, Cell(0), Cell(1), Cell(2), Cell(3));
                 return Cut(true, Cut(false, Cell(0), Cell(2)), Cut(false, Cell(1), Cell(3)));
             }
-            if (count <= 6)
+            if (shown == 5)
             {
-                if (mode == 0)
-                {
-                    int colsTop = (count + 1) / 2;
-                    return Cut(false, Row(0, colsTop), Row(colsTop, count - colsTop));
-                }
-                int perRow = (count + 2) / 3;
-                var rows = new List<MosaicLayout>();
-                for (int index = 0; index < count;)
-                {
-                    int n = Math.Min(perRow, count - index);
-                    rows.Add(Row(index, n));
-                    index += n;
-                }
-                return Cut(false, rows.ToArray());
+                if (mode == 0) return Cut(false, Row(0, 3), Row(3, 2));
+                if (mode == 1) return Cut(false, Row(0, 2), Row(2, 3));
+                if (mode == 2) return Cut(false, Row(0, 2), Row(2, 2), Cell(4));
+                if (mode == 3) return Cut(true, Cell(0), Cut(false, Row(1, 2), Row(3, 2)));
+                return Cut(false, Cell(0), Row(1, 4));
+            }
+            if (shown == 6)
+            {
+                if (mode == 0) return Cut(false, Row(0, 3), Row(3, 3));
+                if (mode == 1) return Cut(false, Row(0, 2), Row(2, 2), Row(4, 2));
+                // Hero is the top-left 2×2 of a 3×3, four times one small photo.
+                return Split(false, 2, 1, Split(true, 2, 1, Cell(0), Stack(1, 2)), Row(3, 3));
+            }
+            if (shown == 7)
+            {
+                // 1 : 1.5 : 1 gives the seven photos the same area.
+                if (mode == 0) return Split(false, 1, 1.5, 1, Row(0, 2), Row(2, 3), Row(5, 2));
+                // Hero is the left 2 of 5 columns, full height.
+                return Split(true, 2, 3, Cell(0), Cut(false, Row(1, 3), Row(4, 3)));
+            }
+            if (shown == 8)
+            {
+                if (mode == 0) return Cut(false, Row(0, 4), Row(4, 4));
+                if (mode == 1) return Cut(false, Row(0, 3), Row(3, 3), Row(6, 2));
+                return Split(false, 2, 1, 1, Cell(0), Row(1, 4), Row(5, 3));
             }
 
-            int max = Math.Min(count, 9);
-            var gridRows = new List<MosaicLayout>();
-            for (int index = 0; index < max;)
+            if (mode == 1)
             {
-                int n = Math.Min(3, max - index);
-                gridRows.Add(Row(index, n));
-                index += n;
+                // Hero is the top-left 2×2 of a 4×3.
+                return Split(false, 2, 1, Cut(true, Cell(0), Cut(false, Row(1, 2), Row(3, 2))), Row(5, 4));
             }
-            return Cut(false, gridRows.ToArray());
+            if (mode == 2) return Split(false, 2, 1, 1, Cell(0), Row(1, 4), Row(5, 4));
+            return Cut(false, Row(0, 3), Row(3, 3), Row(6, 3));
+        }
+
+        private static MosaicLayout Split(bool vertical, double w0, double w1, MosaicLayout a, MosaicLayout b)
+        {
+            var node = Cut(vertical, a, b);
+            node.Weights[0] = w0;
+            node.Weights[1] = w1;
+            return node;
+        }
+
+        private static MosaicLayout Split(bool vertical, double w0, double w1, double w2, MosaicLayout a, MosaicLayout b, MosaicLayout c)
+        {
+            var node = Cut(vertical, a, b, c);
+            node.Weights[0] = w0;
+            node.Weights[1] = w1;
+            node.Weights[2] = w2;
+            return node;
         }
 
         private static MosaicLayout Row(int start, int count)
@@ -110,6 +229,15 @@ namespace ModernImageViewer
             for (int i = 0; i < count; i++)
                 cells[i] = Cell(start + i);
             return Cut(true, cells);
+        }
+
+        private static MosaicLayout Stack(int start, int count)
+        {
+            if (count <= 1) return Cell(start);
+            var cells = new MosaicLayout[count];
+            for (int i = 0; i < count; i++)
+                cells[i] = Cell(start + i);
+            return Cut(false, cells);
         }
     }
 

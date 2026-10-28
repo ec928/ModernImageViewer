@@ -6,6 +6,8 @@ public class GridCanvasMathTests
 {
     [Theory]
     [InlineData(1080, 16.0 / 9.0, 1920)]
+    [InlineData(1200, 16.0 / 10.0, 1920)]
+    [InlineData(1080, 16.0 / 10.0, 1728)]
     [InlineData(1080, 21.0 / 9.0, 2520)]
     [InlineData(1080, 4.0 / 3.0, 1440)]
     [InlineData(1080, 1.0, 1080)]
@@ -33,6 +35,7 @@ public class GridCanvasMathTests
         Assert.Equal("16:9", GridCanvasMath.MatchAspect(1922, 1080));
         Assert.Equal("Custom", GridCanvasMath.MatchAspect(1923, 1080));
         Assert.Equal("3:4", GridCanvasMath.MatchAspect(810, 1080));
+        Assert.Equal("16:10", GridCanvasMath.MatchAspect(1920, 1200));
     }
 
     [Fact]
