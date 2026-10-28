@@ -28,7 +28,24 @@
             <!-- Dynamic Columns and Rows generated in C# -->
         </Grid>
 
-        <!-- Unified Bottom Playbar / HUD (Auto-Hiding Floating Pill) -->
+        <!-- Bottom gradient scrim to guarantee HUD contrast over any image -->
+        <Border x:Name="HudScrim"
+                VerticalAlignment="Bottom"
+                HorizontalAlignment="Stretch"
+                Height="140"
+                IsHitTestVisible="False"
+                Canvas.ZIndex="70"
+                Opacity="1.0">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                    <GradientStop Color="#00000000" Offset="0.0"/>
+                    <GradientStop Color="#44000000" Offset="0.5"/>
+                    <GradientStop Color="#99000000" Offset="1.0"/>
+                </LinearGradientBrush>
+            </Border.Background>
+        </Border>
+
+        <!-- Unified Bottom Playbar / HUD (Auto-Hiding Floating Islands) -->
         <Grid x:Name="UnifiedHud" 
               VerticalAlignment="Bottom" 
               HorizontalAlignment="Center" 
@@ -40,163 +57,187 @@
             <Grid.RenderTransform>
                 <TranslateTransform x:Name="HudTranslate" Y="0" />
             </Grid.RenderTransform>
-            <Border Background="{ThemeResource LayerFillColorDefaultBrush}" 
-                    BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" 
-                    BorderThickness="1" 
-                    CornerRadius="24" 
-                    Padding="14,6"
-                    Translation="0,0,32">
-                <Border.Shadow>
-                    <ThemeShadow/>
-                </Border.Shadow>
-                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                    <!-- Back to Grid Button -->
-                    <Button Click="CloseButton_Click" 
-                            Style="{StaticResource QuietButtonStyle}" 
-                            Padding="8,5" 
-                            CornerRadius="14" 
-                            ToolTipService.ToolTip="Back to Grid (Esc)">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <SymbolIcon Symbol="Back" />
-                            <TextBlock Text="Grid" VerticalAlignment="Center" FontSize="13" />
-                        </StackPanel>
-                    </Button>
 
-                    <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,4" Opacity="0.4"/>
-
-                    <TextBlock x:Name="ShownText"
-                               Visibility="Collapsed"
-                               VerticalAlignment="Center"
-                               FontSize="13"
-                               Opacity="0.7"
-                               ToolTipService.ToolTip="Multi-view shows up to 16 photos. The rest of the selection is not shown." />
-
-                    <!-- Fill / Fit Toggle Button (Default: Fill for Zero Wasted Space) -->
-                    <Button x:Name="FillFitButton" 
-                            Click="FillFitButton_Click" 
-                            Style="{StaticResource QuietButtonStyle}" 
-                            Padding="8,5" 
-                            CornerRadius="14" 
-                            ToolTipService.ToolTip="Toggle Fill / Fit (F)">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon x:Name="FillFitIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE740;" FontSize="14" />
-                            <TextBlock x:Name="FillFitText" Text="Fill" VerticalAlignment="Center" FontSize="13" />
-                        </StackPanel>
-                    </Button>
-
-                    <!-- Rows or columns: fewer, count, more -->
-                    <StackPanel x:Name="LinesGroup" Orientation="Horizontal" Spacing="0" VerticalAlignment="Center">
-                        <Button x:Name="LinesLessButton"
-                                Click="LinesLess_Click"
-                                Style="{StaticResource QuietButtonStyle}"
-                                Padding="6,5"
-                                CornerRadius="14"
-                                ToolTipService.ToolTip="Fewer (-)">
-                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE738;" FontSize="12" />
+            <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                <!-- Island 1: Session Navigation -->
+                <Border Background="{ThemeResource LayerFillColorDefaultBrush}" 
+                        BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" 
+                        BorderThickness="1" 
+                        CornerRadius="24" 
+                        Padding="10,6"
+                        Translation="0,0,32">
+                    <Border.Shadow>
+                        <ThemeShadow/>
+                    </Border.Shadow>
+                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <Button Click="CloseButton_Click" 
+                                Style="{StaticResource QuietButtonStyle}" 
+                                Padding="8,5" 
+                                CornerRadius="14" 
+                                ToolTipService.ToolTip="Back to Grid (Esc)">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <SymbolIcon Symbol="Back" />
+                                <TextBlock Text="Grid" VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold" />
+                            </StackPanel>
                         </Button>
-                        <Button x:Name="LinesDirectionButton"
-                                Click="RowsColumns_Click"
+                        <TextBlock x:Name="ShownText"
+                                   Visibility="Collapsed"
+                                   VerticalAlignment="Center"
+                                   FontSize="12"
+                                   Opacity="0.75"
+                                   Margin="2,0,4,0"
+                                   ToolTipService.ToolTip="Multi-view shows up to 16 photos. The rest of the selection is not shown." />
+                    </StackPanel>
+                </Border>
+
+                <!-- Island 2: Layout & Composition -->
+                <Border Background="{ThemeResource LayerFillColorDefaultBrush}" 
+                        BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" 
+                        BorderThickness="1" 
+                        CornerRadius="24" 
+                        Padding="10,6"
+                        Translation="0,0,32">
+                    <Border.Shadow>
+                        <ThemeShadow/>
+                    </Border.Shadow>
+                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <!-- Rows or columns: fewer, count/flip, more -->
+                        <StackPanel x:Name="LinesGroup" Orientation="Horizontal" Spacing="0" VerticalAlignment="Center">
+                            <Button x:Name="LinesLessButton"
+                                    Click="LinesLess_Click"
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    Padding="6,5"
+                                    CornerRadius="14"
+                                    ToolTipService.ToolTip="Fewer (-)">
+                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE738;" FontSize="12" />
+                            </Button>
+                            <Button x:Name="LinesDirectionButton"
+                                    Click="RowsColumns_Click"
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    Padding="8,5"
+                                    CornerRadius="14"
+                                    ToolTipService.ToolTip="Click to toggle between rows and columns">
+                                <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                                    <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8AB;" FontSize="11" Opacity="0.8" />
+                                    <TextBlock x:Name="LinesText" Text="2 rows" VerticalAlignment="Center" FontSize="13" MinWidth="48" TextAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="LinesMoreButton"
+                                    Click="LinesMore_Click"
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    Padding="6,5"
+                                    CornerRadius="14"
+                                    ToolTipService.ToolTip="More (+)">
+                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE710;" FontSize="12" />
+                            </Button>
+                        </StackPanel>
+
+                        <Button x:Name="CountsButton"
                                 Style="{StaticResource QuietButtonStyle}"
-                                Padding="6,5"
+                                Padding="8,5"
                                 CornerRadius="14"
-                                ToolTipService.ToolTip="Switch between rows and columns">
-                            <TextBlock x:Name="LinesText" Text="2 rows" VerticalAlignment="Center" FontSize="13" MinWidth="62" TextAlignment="Center" />
+                                ToolTipService.ToolTip="Photos per line (Click to customize)">
+                            <Button.Flyout>
+                                <Flyout Opening="CountsFlyout_Opening" Opened="HudMenu_Opened" Closed="HudMenu_Closed" Placement="Top">
+                                    <StackPanel x:Name="CountsPanel" Spacing="4" MinWidth="220" />
+                                </Flyout>
+                            </Button.Flyout>
+                            <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xECA5;" FontSize="12" Opacity="0.8" />
+                                <TextBlock x:Name="CountsText" Text="3 · 2" VerticalAlignment="Center" FontSize="13" />
+                            </StackPanel>
                         </Button>
-                        <Button x:Name="LinesMoreButton"
-                                Click="LinesMore_Click"
+
+                        <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,4" Opacity="0.4"/>
+
+                        <Button x:Name="HeroButton"
+                                Click="HeroButton_Click"
                                 Style="{StaticResource QuietButtonStyle}"
-                                Padding="6,5"
+                                Padding="8,5"
                                 CornerRadius="14"
-                                ToolTipService.ToolTip="More (+)">
-                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE710;" FontSize="12" />
+                                ToolTipService.ToolTip="Hero. Click for a large photo.">
+                            <TextBlock x:Name="HeroText" Text="Hero" VerticalAlignment="Center" FontSize="13" />
+                        </Button>
+
+                        <Button x:Name="RotateHeroButton"
+                                Click="RotateHero_Click"
+                                Style="{StaticResource QuietButtonStyle}"
+                                Padding="8,5"
+                                CornerRadius="14"
+                                IsEnabled="False"
+                                ToolTipService.ToolTip="Next position">
+                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE7AD;" FontSize="14" />
                         </Button>
                     </StackPanel>
+                </Border>
 
-                    <Button x:Name="CountsButton"
-                            Style="{StaticResource QuietButtonStyle}"
-                            Padding="8,5"
-                            CornerRadius="14">
-                        <Button.Flyout>
-                            <Flyout Opening="CountsFlyout_Opening" Opened="HudMenu_Opened" Closed="HudMenu_Closed" Placement="Top">
-                                <StackPanel x:Name="CountsPanel" Spacing="4" />
-                            </Flyout>
-                        </Button.Flyout>
-                        <TextBlock x:Name="CountsText" Text="3 · 2" VerticalAlignment="Center" FontSize="13" />
-                    </Button>
+                <!-- Island 3: View & Output -->
+                <Border Background="{ThemeResource LayerFillColorDefaultBrush}" 
+                        BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" 
+                        BorderThickness="1" 
+                        CornerRadius="24" 
+                        Padding="10,6"
+                        Translation="0,0,32">
+                    <Border.Shadow>
+                        <ThemeShadow/>
+                    </Border.Shadow>
+                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <!-- Fill / Fit Toggle Button -->
+                        <Button x:Name="FillFitButton" 
+                                Click="FillFitButton_Click" 
+                                Style="{StaticResource QuietButtonStyle}" 
+                                Padding="8,5" 
+                                CornerRadius="14" 
+                                ToolTipService.ToolTip="Toggle Fill / Fit (F)">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon x:Name="FillFitIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE740;" FontSize="14" />
+                                <TextBlock x:Name="FillFitText" Text="Fill" VerticalAlignment="Center" FontSize="13" />
+                            </StackPanel>
+                        </Button>
 
-                    <Button x:Name="HeroButton"
-                            Click="HeroButton_Click"
-                            Style="{StaticResource QuietButtonStyle}"
-                            Padding="8,5"
-                            CornerRadius="14"
-                            ToolTipService.ToolTip="Hero. Click for a large photo.">
-                        <TextBlock x:Name="HeroText" Text="Hero" VerticalAlignment="Center" FontSize="13" />
-                    </Button>
+                        <!-- Reset Zooms Button -->
+                        <Button Click="ResetZoom_Click" 
+                                Style="{StaticResource QuietButtonStyle}" 
+                                Padding="8,5" 
+                                CornerRadius="14" 
+                                ToolTipService.ToolTip="Reset Pan &amp; Zoom (Middle-Click)">
+                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE71F;" FontSize="13" />
+                        </Button>
 
-                    <Button x:Name="RotateHeroButton"
-                            Click="RotateHero_Click"
-                            Style="{StaticResource QuietButtonStyle}"
-                            Padding="8,5"
-                            CornerRadius="14"
-                            IsEnabled="False"
-                            ToolTipService.ToolTip="Next position">
-                        <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE7AD;" FontSize="14" />
-                    </Button>
+                        <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,4" Opacity="0.4"/>
 
-                    <!-- Reset Zooms Button -->
-                    <Button Click="ResetZoom_Click" 
-                            Style="{StaticResource QuietButtonStyle}" 
-                            Padding="8,5" 
-                            CornerRadius="14" 
-                            ToolTipService.ToolTip="Reset Pan &amp; Zoom (Middle-Click)">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <SymbolIcon Symbol="ZoomOut" />
-                            <TextBlock Text="Reset" VerticalAlignment="Center" FontSize="13" />
-                        </StackPanel>
-                    </Button>
+                        <!-- Canvas Shape -->
+                        <Button x:Name="AspectButton"
+                                Style="{StaticResource QuietButtonStyle}"
+                                Padding="8,5"
+                                CornerRadius="14"
+                                ToolTipService.ToolTip="Canvas shape. Drag the window for a custom shape.">
+                            <Button.Flyout>
+                                <MenuFlyout x:Name="AspectMenuFlyout" Opening="AspectFlyout_Opening" Opened="HudMenu_Opened" Closed="HudMenu_Closed" />
+                            </Button.Flyout>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock x:Name="AspectText" Text="16:9" VerticalAlignment="Center" FontSize="13" />
+                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE70D;" FontSize="9" Opacity="0.5" VerticalAlignment="Center" Margin="1,1,0,0"/>
+                            </StackPanel>
+                        </Button>
 
-                    <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,4" Opacity="0.4"/>
-
-                    <Button x:Name="AspectButton"
-                            Style="{StaticResource QuietButtonStyle}"
-                            Padding="8,5"
-                            CornerRadius="14"
-                            ToolTipService.ToolTip="Canvas shape. Drag the window for a custom shape.">
-                        <Button.Flyout>
-                            <MenuFlyout x:Name="AspectMenuFlyout" Opening="AspectFlyout_Opening" Opened="HudMenu_Opened" Closed="HudMenu_Closed" />
-                        </Button.Flyout>
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBlock x:Name="AspectText" Text="16:9" VerticalAlignment="Center" FontSize="13" />
-                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE70D;" FontSize="9" Opacity="0.5" VerticalAlignment="Center" Margin="1,1,0,0"/>
-                        </StackPanel>
-                    </Button>
-
-                    <Button x:Name="SaveButton"
-                            Style="{StaticResource QuietButtonStyle}"
-                            Padding="8,5"
-                            CornerRadius="14"
-                            ToolTipService.ToolTip="Save this grid as a JPEG">
-                        <Button.Flyout>
-                            <MenuFlyout x:Name="SaveMenuFlyout" Opening="SaveFlyout_Opening" Opened="HudMenu_Opened" Closed="HudMenu_Closed" />
-                        </Button.Flyout>
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE74E;" FontSize="14" />
-                            <TextBlock x:Name="SaveText" Text="Save" VerticalAlignment="Center" FontSize="13" />
-                        </StackPanel>
-                    </Button>
-
-                    <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,4" Opacity="0.4"/>
-
-                    <!-- Close Button -->
-                    <Button Click="CloseButton_Click" 
-                            Style="{StaticResource QuietButtonStyle}" 
-                            Padding="8,5" 
-                            CornerRadius="14" 
-                            ToolTipService.ToolTip="Close (Esc)">
-                        <SymbolIcon Symbol="Cancel" />
-                    </Button>
-                </StackPanel>
-            </Border>
+                        <!-- Save JPEG -->
+                        <Button x:Name="SaveButton"
+                                Style="{StaticResource QuietButtonStyle}"
+                                Padding="8,5"
+                                CornerRadius="14"
+                                ToolTipService.ToolTip="Save this grid as a JPEG">
+                            <Button.Flyout>
+                                <MenuFlyout x:Name="SaveMenuFlyout" Opening="SaveFlyout_Opening" Opened="HudMenu_Opened" Closed="HudMenu_Closed" />
+                            </Button.Flyout>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE74E;" FontSize="14" />
+                                <TextBlock x:Name="SaveText" Text="Save" VerticalAlignment="Center" FontSize="13" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
         </Grid>
 
         <!-- Solo View Container (shown when user double-clicks or clicks Solo on a photo) -->

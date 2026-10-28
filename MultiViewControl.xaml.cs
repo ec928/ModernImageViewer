@@ -165,16 +165,19 @@ namespace ModernImageViewer
                 Text = rows ? "Photos in each row, top to bottom" : "Photos in each column, left to right",
                 FontSize = 12,
                 Opacity = 0.7,
-                Margin = new Thickness(0, 0, 0, 6)
+                Margin = new Thickness(0, 0, 0, 8)
             });
+
+            int maxCount = counts.Length > 0 ? counts.Max() : 1;
+
             for (int i = 0; i < counts.Length; i++)
             {
                 int line = i;
-                var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+                var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Margin = new Thickness(0, 2, 0, 2) };
                 row.Children.Add(new TextBlock
                 {
-                    Text = (rows ? "Row " : "Column ") + (i + 1),
-                    Width = 72,
+                    Text = (rows ? "Row " : "Col ") + (i + 1),
+                    Width = 56,
                     VerticalAlignment = VerticalAlignment.Center
                 });
                 var less = new Button { Content = new FontIcon { Glyph = "\uE738", FontSize = 11 }, Padding = new Thickness(8, 4, 8, 4) };
@@ -187,13 +190,64 @@ namespace ModernImageViewer
                 row.Children.Add(new TextBlock
                 {
                     Text = counts[i].ToString(),
-                    Width = 28,
+                    Width = 26,
                     TextAlignment = TextAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
                     FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
                 });
                 row.Children.Add(more);
+
+                // Proportional bar
+                double barWidth = Math.Max(6, (counts[i] / (double)Math.Max(1, maxCount)) * 48);
+                var bar = new Border
+                {
+                    Height = 6,
+                    Width = barWidth,
+                    CornerRadius = new CornerRadius(3),
+                    Background = Application.Current.Resources["AccentFillColorDefaultBrush"] as Brush
+                        ?? new SolidColorBrush(Windows.UI.Color.FromArgb(255, 96, 205, 255)),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(6, 0, 0, 0),
+                    Opacity = 0.85
+                };
+                row.Children.Add(bar);
+
                 CountsPanel.Children.Add(row);
+            }
+
+            int total = LineTotal();
+            int lines = EffectiveLines();
+            var evenCounts = MosaicLayout.LineCounts(total, lines);
+            bool isCustom = !counts.SequenceEqual(evenCounts);
+            if (isCustom)
+            {
+                CountsPanel.Children.Add(new Rectangle
+                {
+                    Height = 1,
+                    Fill = Application.Current.Resources["DividerStrokeColorDefaultBrush"] as Brush
+                        ?? new SolidColorBrush(Windows.UI.Color.FromArgb(60, 255, 255, 255)),
+                    Margin = new Thickness(0, 8, 0, 8),
+                    Opacity = 0.4
+                });
+
+                var resetBtn = new Button
+                {
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    Padding = new Thickness(8, 5, 8, 5),
+                    CornerRadius = new CornerRadius(6)
+                };
+                var btnContent = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
+                btnContent.Children.Add(new FontIcon { Glyph = "\uE8A9", FontSize = 12 });
+                btnContent.Children.Add(new TextBlock { Text = "Distribute Evenly", FontSize = 12 });
+                resetBtn.Content = btnContent;
+                resetBtn.Click += (_, _) =>
+                {
+                    _lineCounts = null;
+                    BuildLayout();
+                    FillCountsPanel();
+                    ShowHudAndOverlays();
+                };
+                CountsPanel.Children.Add(resetBtn);
             }
         }
 
@@ -371,18 +425,13 @@ namespace ModernImageViewer
                 UnifiedHud.Opacity = 1.0;
                 UnifiedHud.IsHitTestVisible = true;
                 HudTranslate.Y = 0;
+                if (HudScrim != null) HudScrim.Opacity = 1.0;
 
                 SoloInfoOverlay.Opacity = 1.0;
                 SoloBottomBar.Opacity = 1.0;
                 SoloBottomBar.IsHitTestVisible = true;
                 SoloTopRightControls.Opacity = 1.0;
                 SoloTopRightControls.IsHitTestVisible = true;
-
-                foreach (var ctrl in _cellTopControls)
-                {
-                    ctrl.Opacity = 1.0;
-                    ctrl.IsHitTestVisible = true;
-                }
             }
         }
 
@@ -410,6 +459,7 @@ namespace ModernImageViewer
             UnifiedHud.Opacity = 0.0;
             UnifiedHud.IsHitTestVisible = false;
             HudTranslate.Y = 15;
+            if (HudScrim != null) HudScrim.Opacity = 0.0;
 
             SoloInfoOverlay.Opacity = 0.0;
             SoloBottomBar.Opacity = 0.0;
@@ -783,25 +833,53 @@ namespace ModernImageViewer
                 HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Top,
                 Margin = new Thickness(0),
-                Opacity = _isHudVisible ? 1.0 : 0.0,
-                IsHitTestVisible = _isHudVisible
+                Opacity = 0.0,
+                IsHitTestVisible = false
             };
             Canvas.SetZIndex(topControls, 60);
             topControls.PointerEntered += Hud_PointerEntered;
             topControls.PointerExited += Hud_PointerExited;
             _cellTopControls.Add(topControls);
 
+            bool isCellHovered = false;
+            void SetCellHover(bool hovered)
+            {
+                isCellHovered = hovered;
+                bool show = _isHudVisible && isCellHovered;
+                topControls.Opacity = show ? 1.0 : 0.0;
+                topControls.IsHitTestVisible = show;
+            }
+            cellGrid.PointerEntered += (s, e) => SetCellHover(true);
+            cellGrid.PointerExited += (s, e) => SetCellHover(false);
+            cellGrid.PointerMoved += (s, e) =>
+            {
+                if (_isHudVisible && !isCellHovered)
+                    SetCellHover(true);
+            };
+
             var topStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 0 };
 
+            Button? moveLeftBtn = null;
+            Button? moveRightBtn = null;
             if (_items.Count > 1)
             {
-                topStack.Children.Add(CreateNudgeButton("\uE76B",
+                moveLeftBtn = CreateNudgeButton("\uE76B",
                     () => (Slot(item) == 0 ? "Move to last position" : "Move to previous position") + " (or Alt+drag onto another photo to swap)",
-                    () => MovePhoto(Slot(item), -1)));
-                topStack.Children.Add(CreateNudgeButton("\uE76C",
+                    () => MovePhoto(Slot(item), -1));
+                moveRightBtn = CreateNudgeButton("\uE76C",
                     () => (Slot(item) == VisibleCount(_items.Count) - 1 ? "Move to first position" : "Move to next position") + " (or Alt+drag onto another photo to swap)",
-                    () => MovePhoto(Slot(item), 1)));
+                    () => MovePhoto(Slot(item), 1));
+                topStack.Children.Add(moveLeftBtn);
+                topStack.Children.Add(moveRightBtn);
             }
+
+            void UpdateTopControlsDensity()
+            {
+                bool compact = cellGrid.ActualHeight < 80 || cellGrid.ActualWidth < 150;
+                if (moveLeftBtn != null) moveLeftBtn.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+                if (moveRightBtn != null) moveRightBtn.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+            }
+            cellGrid.SizeChanged += (s, e) => UpdateTopControlsDensity();
 
             // Maximize / Solo Button (Matches app's TopMaxButton style)
             var maxBtn = new Button
