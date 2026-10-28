@@ -358,16 +358,14 @@ namespace ModernImageViewer
             }
             else
             {
-                HeroButton.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-                HeroText.Foreground = Application.Current.Resources["TextFillColorPrimaryBrush"] as Brush
-                    ?? new SolidColorBrush(Microsoft.UI.Colors.White);
+                HeroButton.ClearValue(Button.BackgroundProperty);
+                HeroText.ClearValue(TextBlock.ForegroundProperty);
                 HeroText.FontWeight = Microsoft.UI.Text.FontWeights.Normal;
                 if (HeroIcon != null)
                 {
                     HeroIcon.Glyph = "\uE734";
-                    HeroIcon.Foreground = Application.Current.Resources["TextFillColorPrimaryBrush"] as Brush
-                        ?? new SolidColorBrush(Microsoft.UI.Colors.White);
-                    HeroIcon.Opacity = 0.8;
+                    HeroIcon.ClearValue(FontIcon.ForegroundProperty);
+                    HeroIcon.Opacity = 0.85;
                 }
             }
 
@@ -1567,18 +1565,23 @@ namespace ModernImageViewer
                 }
             }
 
-            var accent = Application.Current.Resources["AccentFillColorDefaultBrush"] as Brush
-                ?? new SolidColorBrush(Windows.UI.Color.FromArgb(255, 96, 205, 255));
-            var primary = Application.Current.Resources["TextFillColorPrimaryBrush"] as Brush
-                ?? new SolidColorBrush(Microsoft.UI.Colors.White);
-
-            ResetZoomButton.Opacity = isZoomed ? 1.0 : 0.75;
-            ResetZoomText.Foreground = isZoomed ? accent : primary;
-            ResetZoomIcon.Foreground = isZoomed ? accent : primary;
-            ResetZoomText.FontWeight = isZoomed ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal;
-            ToolTipService.SetToolTip(ResetZoomButton, isZoomed
-                ? "Reset Pan & Zoom (Photos are zoomed)"
-                : "Reset Pan & Zoom (Middle-Click)");
+            if (isZoomed)
+            {
+                var accent = Application.Current.Resources["AccentFillColorDefaultBrush"] as Brush
+                    ?? new SolidColorBrush(Windows.UI.Color.FromArgb(255, 96, 205, 255));
+                ResetZoomText.Foreground = accent;
+                ResetZoomIcon.Foreground = accent;
+                ResetZoomText.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
+                ToolTipService.SetToolTip(ResetZoomButton, "Reset Pan & Zoom (Photos are zoomed)");
+            }
+            else
+            {
+                ResetZoomText.ClearValue(TextBlock.ForegroundProperty);
+                ResetZoomIcon.ClearValue(IconElement.ForegroundProperty);
+                ResetZoomText.FontWeight = Microsoft.UI.Text.FontWeights.Normal;
+                ToolTipService.SetToolTip(ResetZoomButton, "Reset Pan & Zoom (Middle-Click)");
+            }
+            ResetZoomButton.Opacity = 1.0;
         }
 
         private void ResetZoom_Click(object sender, RoutedEventArgs e)
