@@ -290,16 +290,20 @@ namespace ModernImageViewer
                     ? MosaicLayout.DefaultBannerPosition(CellsGrid.ActualWidth, CellsGrid.ActualHeight)
                     : 0;
             }
-            else if (kinds.Length > 1)
+            else
             {
                 int index = Array.IndexOf(kinds, _heroKind);
                 if (index < 0) index = 0;
-                _heroKind = kinds[(index + 1) % kinds.Length];
-                _heroPosition = 0;
-            }
-            else
-            {
-                return;
+                int nextIndex = index + 1;
+                if (nextIndex >= kinds.Length)
+                {
+                    _heroActive = false;
+                }
+                else
+                {
+                    _heroKind = kinds[nextIndex];
+                    _heroPosition = 0;
+                }
             }
             BuildLayout();
             ShowHudAndOverlays();
@@ -369,9 +373,8 @@ namespace ModernImageViewer
                 }
             }
 
-            bool moreHeroes = MosaicLayout.HeroKinds(count).Length > 1;
             ToolTipService.SetToolTip(HeroButton, _heroActive
-                ? (moreHeroes ? "Hero: " + HeroText.Text + " (H to cycle)" : "Hero: " + HeroText.Text + ".")
+                ? "Hero: " + HeroText.Text + ". Click to advance or turn off (H)"
                 : "Hero (H). Click for a large photo.");
             ToolTipService.SetToolTip(RotateHeroButton, _heroActive
                 ? "Next position"
