@@ -169,8 +169,8 @@ namespace ModernImageViewer
             try { if (Application.Current.Resources["SystemAccentColor"] is Windows.UI.Color c) accent = c; }
             catch { }
 
-            // 1. Clean Header: Title on left, Quiet "Even" reset button on right
-            var header = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+            // 1. Clean Header: Title on left, Quiet "Reset" button on right
+            var header = new Grid { Margin = new Thickness(0, 0, 0, 10) };
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
@@ -214,7 +214,7 @@ namespace ModernImageViewer
             var resetContent = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center };
             resetContent.Children.Add(new FontIcon
             {
-                Glyph = "\uE8A9", // Segoe Fluent Icons: Grid distribute
+                Glyph = "\uE777", // Segoe Fluent Icons: Undo / Reset
                 FontFamily = new FontFamily("Segoe Fluent Icons"),
                 FontSize = 11,
                 Foreground = isCustom
@@ -223,7 +223,7 @@ namespace ModernImageViewer
             });
             resetContent.Children.Add(new TextBlock
             {
-                Text = "Even",
+                Text = "Reset",
                 FontSize = 11.5,
                 FontWeight = Microsoft.UI.Text.FontWeights.Medium,
                 Foreground = isCustom
@@ -246,37 +246,36 @@ namespace ModernImageViewer
 
             CountsPanel.Children.Add(header);
 
-            // 2. Minimalist, quiet distribution rows with sleek proportional bars and circular steppers
+            // 2. Proportional Line Distribution (Rows = horizontal rails, Columns = vertical rails)
             CountsPanel.Children.Add(BuildCountsList(counts, rows, accent));
         }
 
         /// <summary>
         /// Clean, whisper-quiet proportional line list with smooth accent bars and circular quiet steppers.
-        /// Zero visual noise, zero cluttered nested boxes, zero camera icons.
+        /// When rows is true: horizontal rails stacked top to bottom.
+        /// When rows is false (columns): vertical rails standing side-by-side.
         /// </summary>
         private FrameworkElement BuildCountsList(int[] counts, bool rows, Windows.UI.Color accent)
         {
-            var panel = new StackPanel { Spacing = 4 };
             int maxCount = counts.Max();
-            const double trackWidth = 120;
             var accentBrush = new SolidColorBrush(accent);
             var railBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(28, 255, 255, 255));
             var labelBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(200, 255, 255, 255));
 
-            Button CreateStepButton(string glyph, string tip, bool enabled, Action onClick)
+            Button CreateStepButton(string glyph, string tip, bool enabled, double size, Action onClick)
             {
                 var btn = new Button
                 {
                     Content = new FontIcon
                     {
                         Glyph = glyph,
-                        FontSize = 10,
+                        FontSize = Math.Max(8, size * 0.45),
                         FontFamily = new FontFamily("Segoe Fluent Icons")
                     },
-                    Width = 24,
-                    Height = 24,
+                    Width = size,
+                    Height = size,
                     Padding = new Thickness(0),
-                    CornerRadius = new CornerRadius(12),
+                    CornerRadius = new CornerRadius(size / 2.0),
                     Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
                     BorderThickness = new Thickness(0),
                     IsEnabled = enabled,
@@ -289,81 +288,180 @@ namespace ModernImageViewer
                 return btn;
             }
 
-            for (int i = 0; i < counts.Length; i++)
+            if (rows)
             {
-                int line = i;
-                int count = counts[i];
-                bool canLess = MosaicLayout.MovePhoto(counts, line, -1) != null;
-                bool canMore = MosaicLayout.MovePhoto(counts, line, 1) != null;
+                // Rows mode: Horizontal rows stacked top to bottom
+                const double trackWidth = 120;
+                var panel = new StackPanel { Spacing = 4 };
 
-                var row = new StackPanel
+                for (int i = 0; i < counts.Length; i++)
+                {
+                    int line = i;
+                    int count = counts[i];
+                    bool canLess = MosaicLayout.MovePhoto(counts, line, -1) != null;
+                    bool canMore = MosaicLayout.MovePhoto(counts, line, 1) != null;
+
+                    var row = new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        Spacing = 8,
+                        VerticalAlignment = VerticalAlignment.Center
+                    };
+
+                    // Label
+                    row.Children.Add(new TextBlock
+                    {
+                        Text = $"Row {i + 1}",
+                        Width = 44,
+                        FontSize = 12,
+                        FontWeight = Microsoft.UI.Text.FontWeights.Medium,
+                        Foreground = labelBrush,
+                        VerticalAlignment = VerticalAlignment.Center
+                    });
+
+                    // Horizontal proportional rail
+                    double fillWidth = Math.Max(6, (count / (double)Math.Max(maxCount, 1)) * trackWidth);
+                    var barTrack = new Grid
+                    {
+                        Width = trackWidth,
+                        Height = 6,
+                        VerticalAlignment = VerticalAlignment.Center
+                    };
+                    barTrack.Children.Add(new Border
+                    {
+                        Height = 6,
+                        Background = railBrush,
+                        CornerRadius = new CornerRadius(3),
+                        HorizontalAlignment = HorizontalAlignment.Stretch
+                    });
+                    barTrack.Children.Add(new Border
+                    {
+                        Height = 6,
+                        Width = fillWidth,
+                        Background = accentBrush,
+                        CornerRadius = new CornerRadius(3),
+                        HorizontalAlignment = HorizontalAlignment.Left
+                    });
+                    ToolTipService.SetToolTip(barTrack, $"Row {i + 1}: {count} {(count == 1 ? "photo" : "photos")}");
+                    row.Children.Add(barTrack);
+
+                    // Stepper: Minus, Count, Plus
+                    string lessTip = canLess ? $"One fewer in row {line + 1}" : "Cannot reduce further";
+                    row.Children.Add(CreateStepButton("\uE738", lessTip, canLess, 24, () => AdjustLine(line, -1)));
+
+                    row.Children.Add(new TextBlock
+                    {
+                        Text = count.ToString(),
+                        FontSize = 12.5,
+                        FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                        Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
+                        Width = 20,
+                        TextAlignment = TextAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center
+                    });
+
+                    string moreTip = canMore ? $"One more in row {line + 1}" : "Cannot increase further";
+                    row.Children.Add(CreateStepButton("\uE710", moreTip, canMore, 24, () => AdjustLine(line, 1)));
+
+                    panel.Children.Add(row);
+                }
+                return panel;
+            }
+            else
+            {
+                // Columns mode: Vertical columns side-by-side
+                const double trackHeight = 85;
+                int nCols = counts.Length;
+                double colWidth = Math.Clamp((260.0 - (nCols - 1) * 8) / nCols, 48.0, 68.0);
+                double btnSize = Math.Min(22.0, (colWidth - 18.0) / 2.0);
+
+                var panel = new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
                     Spacing = 8,
-                    VerticalAlignment = VerticalAlignment.Center
+                    HorizontalAlignment = HorizontalAlignment.Center
                 };
 
-                // Label
-                row.Children.Add(new TextBlock
+                for (int i = 0; i < counts.Length; i++)
                 {
-                    Text = (rows ? "Row " : "Col ") + (i + 1),
-                    Width = 44,
-                    FontSize = 12,
-                    FontWeight = Microsoft.UI.Text.FontWeights.Medium,
-                    Foreground = labelBrush,
-                    VerticalAlignment = VerticalAlignment.Center
-                });
+                    int line = i;
+                    int count = counts[i];
+                    bool canLess = MosaicLayout.MovePhoto(counts, line, -1) != null;
+                    bool canMore = MosaicLayout.MovePhoto(counts, line, 1) != null;
 
-                // Proportional bar: quiet rail + smooth accent pill
-                double fillWidth = Math.Max(6, (count / (double)Math.Max(maxCount, 1)) * trackWidth);
-                var barTrack = new Grid
-                {
-                    Width = trackWidth,
-                    Height = 6,
-                    VerticalAlignment = VerticalAlignment.Center
-                };
-                barTrack.Children.Add(new Border
-                {
-                    Height = 6,
-                    Background = railBrush,
-                    CornerRadius = new CornerRadius(3),
-                    HorizontalAlignment = HorizontalAlignment.Stretch
-                });
-                barTrack.Children.Add(new Border
-                {
-                    Height = 6,
-                    Width = fillWidth,
-                    Background = accentBrush,
-                    CornerRadius = new CornerRadius(3),
-                    HorizontalAlignment = HorizontalAlignment.Left
-                });
-                ToolTipService.SetToolTip(barTrack, $"{(rows ? "Row" : "Column")} {i + 1}: {count} {(count == 1 ? "photo" : "photos")}");
-                row.Children.Add(barTrack);
+                    var col = new StackPanel
+                    {
+                        Width = colWidth,
+                        Spacing = 6,
+                        HorizontalAlignment = HorizontalAlignment.Center
+                    };
 
-                // Minus button
-                string lessTip = canLess ? $"One fewer in {(rows ? "row" : "column")} {line + 1}" : "Cannot reduce further";
-                row.Children.Add(CreateStepButton("\uE738", lessTip, canLess, () => AdjustLine(line, -1)));
+                    // Label
+                    col.Children.Add(new TextBlock
+                    {
+                        Text = $"Col {i + 1}",
+                        FontSize = 11.5,
+                        FontWeight = Microsoft.UI.Text.FontWeights.Medium,
+                        Foreground = labelBrush,
+                        HorizontalAlignment = HorizontalAlignment.Center
+                    });
 
-                // Count text
-                row.Children.Add(new TextBlock
-                {
-                    Text = count.ToString(),
-                    FontSize = 12.5,
-                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
-                    Width = 20,
-                    TextAlignment = TextAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center
-                });
+                    // Vertical proportional rail
+                    double fillHeight = Math.Max(6, (count / (double)Math.Max(maxCount, 1)) * trackHeight);
+                    var barTrack = new Grid
+                    {
+                        Width = 6,
+                        Height = trackHeight,
+                        HorizontalAlignment = HorizontalAlignment.Center
+                    };
+                    barTrack.Children.Add(new Border
+                    {
+                        Width = 6,
+                        Background = railBrush,
+                        CornerRadius = new CornerRadius(3),
+                        VerticalAlignment = VerticalAlignment.Stretch
+                    });
+                    barTrack.Children.Add(new Border
+                    {
+                        Width = 6,
+                        Height = fillHeight,
+                        Background = accentBrush,
+                        CornerRadius = new CornerRadius(3),
+                        VerticalAlignment = VerticalAlignment.Bottom
+                    });
+                    ToolTipService.SetToolTip(barTrack, $"Column {i + 1}: {count} {(count == 1 ? "photo" : "photos")}");
+                    col.Children.Add(barTrack);
 
-                // Plus button
-                string moreTip = canMore ? $"One more in {(rows ? "row" : "column")} {line + 1}" : "Cannot increase further";
-                row.Children.Add(CreateStepButton("\uE710", moreTip, canMore, () => AdjustLine(line, 1)));
+                    // Stepper: Minus, Count, Plus centered beneath the vertical rail
+                    var stepper = new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        Spacing = 2,
+                        HorizontalAlignment = HorizontalAlignment.Center
+                    };
 
-                panel.Children.Add(row);
+                    string lessTip = canLess ? $"One fewer in column {line + 1}" : "Cannot reduce further";
+                    stepper.Children.Add(CreateStepButton("\uE738", lessTip, canLess, btnSize, () => AdjustLine(line, -1)));
+
+                    stepper.Children.Add(new TextBlock
+                    {
+                        Text = count.ToString(),
+                        FontSize = 12,
+                        FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                        Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
+                        Width = 16,
+                        TextAlignment = TextAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center
+                    });
+
+                    string moreTip = canMore ? $"One more in column {line + 1}" : "Cannot increase further";
+                    stepper.Children.Add(CreateStepButton("\uE710", moreTip, canMore, btnSize, () => AdjustLine(line, 1)));
+
+                    col.Children.Add(stepper);
+                    panel.Children.Add(col);
+                }
+                return panel;
             }
-
-            return panel;
         }
 
         /// <summary>
