@@ -62,10 +62,21 @@
                             <Button Style="{StaticResource HeaderButtonStyle}" ToolTipService.ToolTip="Recent Folders">
                                 <FontIcon Glyph="&#xE8F1;" FontFamily="Segoe Fluent Icons" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 <Button.Flyout>
-                                    <MenuFlyout x:Name="RecentFoldersMenu" Opening="RecentFoldersMenu_Opening" Closed="HeaderFlyout_Closed" />
+                                    <MenuFlyout x:Name="RecentFoldersMenu" Opening="RecentFoldersMenu_Opening" Closed="HeaderFlyout_Closed">
+                                        <MenuFlyout.MenuFlyoutPresenterStyle>
+                                            <Style TargetType="MenuFlyoutPresenter">
+                                                <Setter Property="CornerRadius" Value="10"/>
+                                            </Style>
+                                        </MenuFlyout.MenuFlyoutPresenterStyle>
+                                    </MenuFlyout>
                                 </Button.Flyout>
                                 <Button.ContextFlyout>
                                     <MenuFlyout Closed="HeaderFlyout_Closed">
+                                        <MenuFlyout.MenuFlyoutPresenterStyle>
+                                            <Style TargetType="MenuFlyoutPresenter">
+                                                <Setter Property="CornerRadius" Value="10"/>
+                                            </Style>
+                                        </MenuFlyout.MenuFlyoutPresenterStyle>
                                         <MenuFlyoutItem Text="Clear Recent Folders" Click="ClearRecentFolders_Click">
                                             <MenuFlyoutItem.Icon>
                                                 <SymbolIcon Symbol="Delete"/>
@@ -87,8 +98,8 @@
                                                 <Setter Property="MinWidth" Value="0"/>
                                                 <Setter Property="MaxWidth" Value="960"/>
                                                 <Setter Property="MinHeight" Value="0"/>
-                                                <Setter Property="CornerRadius" Value="6"/>
-                                                <Setter Property="Background" Value="{ThemeResource SolidBackgroundFillColorTertiaryBrush}"/>
+                                                <Setter Property="CornerRadius" Value="8"/>
+                                                <Setter Property="Background" Value="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}"/>
                                                 <Setter Property="BorderBrush" Value="{ThemeResource SurfaceStrokeColorFlyoutBrush}"/>
                                                 <Setter Property="BorderThickness" Value="1"/>
                                             </Style>
@@ -182,19 +193,19 @@
                                                             <ColumnDefinition Width="*"/>
                                                             <ColumnDefinition Width="*"/>
                                                         </Grid.ColumnDefinitions>
-                                                        <Button x:Name="Preset1Button" Grid.Column="0" Style="{StaticResource HeaderButtonStyle}" Width="42" Height="22" CornerRadius="3" Tag="0" Click="PresetSlot_Click" RightTapped="PresetSlot_RightTapped">
+                                                        <Button x:Name="Preset1Button" Grid.Column="0" Style="{StaticResource HeaderButtonStyle}" Width="42" Height="22" CornerRadius="4" Tag="0" Click="PresetSlot_Click" RightTapped="PresetSlot_RightTapped">
                                                             <Grid Width="36" Height="20">
                                                                 <TextBlock x:Name="Preset1Text" Text="1" FontSize="11.5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                                 <Ellipse x:Name="Preset1Dot" Width="4" Height="4" Fill="{ThemeResource AccentTextFillColorPrimaryBrush}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,2,0" Visibility="Collapsed"/>
                                                             </Grid>
                                                         </Button>
-                                                        <Button x:Name="Preset2Button" Grid.Column="1" Style="{StaticResource HeaderButtonStyle}" Width="42" Height="22" CornerRadius="3" Tag="1" Click="PresetSlot_Click" RightTapped="PresetSlot_RightTapped">
+                                                        <Button x:Name="Preset2Button" Grid.Column="1" Style="{StaticResource HeaderButtonStyle}" Width="42" Height="22" CornerRadius="4" Tag="1" Click="PresetSlot_Click" RightTapped="PresetSlot_RightTapped">
                                                             <Grid Width="36" Height="20">
                                                                 <TextBlock x:Name="Preset2Text" Text="2" FontSize="11.5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                                 <Ellipse x:Name="Preset2Dot" Width="4" Height="4" Fill="{ThemeResource AccentTextFillColorPrimaryBrush}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,2,0" Visibility="Collapsed"/>
                                                             </Grid>
                                                         </Button>
-                                                        <Button x:Name="Preset3Button" Grid.Column="2" Style="{StaticResource HeaderButtonStyle}" Width="42" Height="22" CornerRadius="3" Tag="2" Click="PresetSlot_Click" RightTapped="PresetSlot_RightTapped">
+                                                        <Button x:Name="Preset3Button" Grid.Column="2" Style="{StaticResource HeaderButtonStyle}" Width="42" Height="22" CornerRadius="4" Tag="2" Click="PresetSlot_Click" RightTapped="PresetSlot_RightTapped">
                                                             <Grid Width="36" Height="20">
                                                                 <TextBlock x:Name="Preset3Text" Text="3" FontSize="11.5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                                 <Ellipse x:Name="Preset3Dot" Width="4" Height="4" Fill="{ThemeResource AccentTextFillColorPrimaryBrush}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,2,0" Visibility="Collapsed"/>
@@ -216,13 +227,13 @@
                                                             <ColumnDefinition Width="*"/>
                                                             <ColumnDefinition Width="*"/>
                                                         </Grid.ColumnDefinitions>
-                                                        <Button x:Name="ThemeLightButton" Grid.Column="0" Style="{StaticResource HeaderButtonStyle}" Width="64" Height="22" CornerRadius="3" Tag="Light" Click="ThemeMode_Click" ToolTipService.ToolTip="Light Theme">
+                                                        <Button x:Name="ThemeLightButton" Grid.Column="0" Style="{StaticResource HeaderButtonStyle}" Width="64" Height="22" CornerRadius="4" Tag="Light" Click="ThemeMode_Click" ToolTipService.ToolTip="Light Theme">
                                                             <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" HorizontalAlignment="Center">
                                                                 <FontIcon x:Name="ThemeLightIcon" Glyph="&#xE706;" FontFamily="Segoe Fluent Icons" FontSize="11.5"/>
                                                                 <TextBlock x:Name="ThemeLightText" Text="Light" FontSize="11.5"/>
                                                             </StackPanel>
                                                         </Button>
-                                                        <Button x:Name="ThemeDarkButton" Grid.Column="1" Style="{StaticResource HeaderButtonStyle}" Width="64" Height="22" CornerRadius="3" Tag="Dark" Click="ThemeMode_Click" ToolTipService.ToolTip="Dark Theme">
+                                                        <Button x:Name="ThemeDarkButton" Grid.Column="1" Style="{StaticResource HeaderButtonStyle}" Width="64" Height="22" CornerRadius="4" Tag="Dark" Click="ThemeMode_Click" ToolTipService.ToolTip="Dark Theme">
                                                             <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" HorizontalAlignment="Center">
                                                                 <FontIcon x:Name="ThemeDarkIcon" Glyph="&#xE708;" FontFamily="Segoe Fluent Icons" FontSize="11.5"/>
                                                                 <TextBlock x:Name="ThemeDarkText" Text="Dark" FontSize="11.5"/>
@@ -623,8 +634,8 @@
                     </Grid>
 
                     <Grid x:Name="ListPreviewBar" Grid.Row="1" Height="180" Visibility="Collapsed"
-                          Background="Transparent"
-                          BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
+                          Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
+                          BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}" BorderThickness="0,1,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
