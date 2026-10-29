@@ -18,6 +18,10 @@ namespace ModernImageViewer
     public sealed partial class MultiViewControl : UserControl
     {
         public event EventHandler? CloseRequested;
+        public event EventHandler? ChangePhotosRequested;
+
+        // When set, this many frames stay on screen and later photos wait off screen.
+        private int _framedSlots;
 
         /// <summary>The window should become this width/height ratio. Dragging the window is the custom shape.</summary>
         public event Action<double>? CanvasAspectChosen;
@@ -97,7 +101,8 @@ namespace ModernImageViewer
         {
             _items.Clear();
             _items.AddRange(items.Where(i => i != null && !i.IsDirectory));
-            
+            _framedSlots = 0;
+
             _isFillMode = true; // Always default to Fill (crop to fill) to eliminate black bars
             _lines = MosaicLayout.DefaultLines(_items.Count);
             _lineCounts = null;
@@ -131,7 +136,7 @@ namespace ModernImageViewer
         public void ChangeLines(int delta)
         {
             int total = LineTotal();
-            if (MosaicLayout.ShownCount(_items.Count) < 2 || total < 1) return;
+            if (VisibleCount(_items.Count) < 2 || total < 1) return;
             int current = Math.Clamp(_lines, 1, total);
             int next = Math.Clamp(current + delta, 1, total);
             bool linesInUse = !_heroActive || HeroUsesLines;
@@ -150,7 +155,7 @@ namespace ModernImageViewer
         /// <summary>Photos the line controls arrange: all of them, or the ones beside a banner or pair.</summary>
         private int LineTotal()
         {
-            int shown = MosaicLayout.ShownCount(_items.Count);
+            int shown = VisibleCount(_items.Count);
             if (HeroUsesLines) return Math.Max(1, shown - MosaicLayout.HeroFeatured(_heroKind));
             return shown;
         }
@@ -338,7 +343,7 @@ namespace ModernImageViewer
         private string LayoutSubtitle(int lines, bool rows)
         {
             int selected = _items.Count;
-            int shown = MosaicLayout.ShownCount(selected);
+            int shown = VisibleCount(selected);
             int arranged = LineTotal();
             string noun = rows
                 ? (lines == 1 ? "row" : "rows")
@@ -836,7 +841,7 @@ namespace ModernImageViewer
         /// </summary>
         public void ToggleRowsColumns()
         {
-            if (MosaicLayout.ShownCount(_items.Count) < 2) return;
+            if (VisibleCount(_items.Count) < 2) return;
             _flipped = !_flipped;
             if (!HeroUsesLines && _mosaic != null && CellRootsReady())
             {
@@ -868,7 +873,7 @@ namespace ModernImageViewer
 
         private void HeroButton_Click(object sender, RoutedEventArgs e)
         {
-            var kinds = MosaicLayout.HeroKinds(_items.Count);
+            var kinds = MosaicLayout.HeroKinds(VisibleCount(_items.Count));
             if (kinds.Length == 0) return;
             if (!_heroActive)
             {
@@ -901,7 +906,7 @@ namespace ModernImageViewer
         private void RotateHero_Click(object sender, RoutedEventArgs e)
         {
             if (!_heroActive) return;
-            int positions = MosaicLayout.HeroPositions(_items.Count, _heroKind);
+            int positions = MosaicLayout.HeroPositions(VisibleCount(_items.Count), _heroKind);
             _heroPosition = (_heroPosition + 1) % positions;
             RelayoutKeepingCells();
             ShowHudAndOverlays();
@@ -909,7 +914,7 @@ namespace ModernImageViewer
 
         private void NormalizeHero()
         {
-            var kinds = MosaicLayout.HeroKinds(_items.Count);
+            var kinds = MosaicLayout.HeroKinds(VisibleCount(_items.Count));
             if (kinds.Length == 0)
             {
                 _heroActive = false;
@@ -922,7 +927,7 @@ namespace ModernImageViewer
             }
             else
             {
-                int positions = MosaicLayout.HeroPositions(_items.Count, _heroKind);
+                int positions = MosaicLayout.HeroPositions(VisibleCount(_items.Count), _heroKind);
                 if (_heroPosition >= positions) _heroPosition = 0;
             }
         }
@@ -1280,28 +1285,42 @@ namespace ModernImageViewer
                 }
             };
 
-            try
+            var photo = new CellPhoto(item);
+            void LoadPhoto()
             {
-                var bmp = new BitmapImage();
-                bmp.UriSource = new Uri(item.Path, UriKind.Absolute);
-                bmp.ImageOpened += (s, e) =>
+                var current = photo.Item;
+                if (current.Thumbnail is BitmapSource bs && bs.PixelWidth > 0 && bs.PixelHeight > 0)
                 {
-                    if (bmp.PixelWidth > 0 && bmp.PixelHeight > 0)
+                    naturalWidth = bs.PixelWidth;
+                    naturalHeight = bs.PixelHeight;
+                    UpdateImageLayout();
+                }
+                try
+                {
+                    var bmp = new BitmapImage();
+                    bmp.UriSource = new Uri(current.Path, UriKind.Absolute);
+                    bmp.ImageOpened += (_, _) =>
                     {
-                        naturalWidth = bmp.PixelWidth;
-                        naturalHeight = bmp.PixelHeight;
-                        UpdateImageLayout();
-                    }
-                    // The thumbnail would show through a transparent photo, and is no longer needed.
-                    if (thumb != null)
-                    {
-                        imgContainer.Children.Remove(thumb);
-                        thumb = null;
-                    }
-                };
-                fullImg.Source = bmp;
+                        if (!ReferenceEquals(photo.Item, current)) return;
+                        if (bmp.PixelWidth > 0 && bmp.PixelHeight > 0)
+                        {
+                            naturalWidth = bmp.PixelWidth;
+                            naturalHeight = bmp.PixelHeight;
+                            UpdateImageLayout();
+                        }
+                        // The thumbnail would show through a transparent photo, and is no longer needed.
+                        if (thumb != null && imgContainer.Children.Contains(thumb))
+                        {
+                            imgContainer.Children.Remove(thumb);
+                            thumb = null;
+                        }
+                    };
+                    fullImg.Source = bmp;
+                }
+                catch { }
             }
-            catch { }
+            photo.Reload = LoadPhoto;
+            LoadPhoto();
 
             imgContainer.Children.Add(fullImg);
             cellGrid.Children.Add(imgContainer);
@@ -1334,7 +1353,7 @@ namespace ModernImageViewer
                     if (isAlt)
                     {
                         e.Handled = true;
-                        _ = StartSwapDragAsync(cellGrid, e.GetCurrentPoint(cellGrid), Slot(item));
+                        _ = StartSwapDragAsync(cellGrid, e.GetCurrentPoint(cellGrid), Slot(photo.Item));
                         return;
                     }
                     isDragging = true;
@@ -1493,11 +1512,11 @@ namespace ModernImageViewer
             if (_items.Count > 1)
             {
                 moveLeftBtn = CreateNudgeButton("\uE76B",
-                    () => (Slot(item) == 0 ? "Move to last position" : "Move to previous position") + " (or Alt+drag onto another photo to swap)",
-                    () => MovePhoto(Slot(item), -1));
+                    () => (Slot(photo.Item) == 0 ? "Move to last position" : "Move to previous position") + " (or Alt+drag onto another photo to swap)",
+                    () => MovePhoto(Slot(photo.Item), -1));
                 moveRightBtn = CreateNudgeButton("\uE76C",
-                    () => (Slot(item) == VisibleCount(_items.Count) - 1 ? "Move to first position" : "Move to next position") + " (or Alt+drag onto another photo to swap)",
-                    () => MovePhoto(Slot(item), 1));
+                    () => (Slot(photo.Item) == VisibleCount(_items.Count) - 1 ? "Move to first position" : "Move to next position") + " (or Alt+drag onto another photo to swap)",
+                    () => MovePhoto(Slot(photo.Item), 1));
                 topStack.Children.Add(moveLeftBtn);
                 topStack.Children.Add(moveRightBtn);
             }
@@ -1530,7 +1549,7 @@ namespace ModernImageViewer
             maxBtn.Resources["ButtonForegroundPointerOver"] = new SolidColorBrush(Microsoft.UI.Colors.White);
             maxBtn.Resources["ButtonForegroundPressed"] = new SolidColorBrush(Windows.UI.Color.FromArgb(200, 255, 255, 255));
             ToolTipService.SetToolTip(maxBtn, "Solo / Maximize");
-            maxBtn.Click += (s, e) => EnterSolo(Slot(item));
+            maxBtn.Click += (s, e) => EnterSolo(Slot(photo.Item));
             topStack.Children.Add(maxBtn);
 
             // Close / Remove Button (Matches app's TopCloseButton style with red hover)
@@ -1553,7 +1572,7 @@ namespace ModernImageViewer
             closeBtn.Resources["ButtonForegroundPointerOver"] = new SolidColorBrush(Microsoft.UI.Colors.White);
             closeBtn.Resources["ButtonForegroundPressed"] = new SolidColorBrush(Microsoft.UI.Colors.White);
             ToolTipService.SetToolTip(closeBtn, "Remove Photo");
-            closeBtn.Click += (s, e) => RemoveItem(item);
+            closeBtn.Click += (s, e) => RemoveItem(photo.Item);
             topStack.Children.Add(closeBtn);
 
             topControls.Children.Add(topStack);
@@ -1561,13 +1580,13 @@ namespace ModernImageViewer
 
             // Right-Click Context Menu, filled when it opens so it names the photo's current place
             var menu = new MenuFlyout();
-            FillCellMenu(menu, item);
-            menu.Opening += (_, _) => FillCellMenu(menu, item);
+            FillCellMenu(menu, photo.Item);
+            menu.Opening += (_, _) => FillCellMenu(menu, photo.Item);
 
             cellGrid.ContextFlyout = menu;
 
-            AttachSwapDrop(cellBorder, cellGrid, item);
-            cellBorder.Tag = new CellParts(transform, updateLayout, topControls, fullImg);
+            AttachSwapDrop(cellBorder, cellGrid, photo);
+            cellBorder.Tag = new CellParts(transform, updateLayout, topControls, fullImg, photo);
 
             cellBorder.Child = cellGrid;
             return cellBorder;
@@ -1668,7 +1687,14 @@ namespace ModernImageViewer
         }
 
         /// <summary>What a cell registered in the shared lists, so removing the cell can take it back out.</summary>
-        private sealed record CellParts(CompositeTransform Transform, Action UpdateLayout, UIElement TopControls, Image Photo);
+        private sealed class CellPhoto
+        {
+            public ImageItem Item;
+            public Action? Reload;
+            public CellPhoto(ImageItem item) => Item = item;
+        }
+
+        private sealed record CellParts(CompositeTransform Transform, Action UpdateLayout, UIElement TopControls, Image Photo, CellPhoto Bound);
 
         /// <summary>
         /// Remove a photo and keep the other cells, so none of them decodes again. The layout is rebuilt
@@ -1977,6 +2003,58 @@ namespace ModernImageViewer
             CloseRequested?.Invoke(this, EventArgs.Empty);
         }
 
+        private void ChangePhotosButton_Click(object sender, RoutedEventArgs e)
+        {
+            ChangePhotosRequested?.Invoke(this, EventArgs.Empty);
+        }
+
+        public int ShownSlots => _items.Count == 0 ? 0 : VisibleCount(_items.Count);
+
+        public IReadOnlyList<string> SessionPaths()
+        {
+            var paths = new List<string>(_items.Count);
+            foreach (var item in _items)
+            {
+                if (!string.IsNullOrEmpty(item.Path))
+                    paths.Add(item.Path);
+            }
+            return paths;
+        }
+
+        /// <summary>
+        /// Put these photos into the frames already on screen. The first frames keep
+        /// their edges, hero, and zoom. Later photos wait off screen.
+        /// </summary>
+        public bool TryReplacePhotos(IReadOnlyList<ImageItem> incoming)
+        {
+            int slots = ShownSlots;
+            if (slots < 2 || !CellRootsReady()) return false;
+            var photos = new List<ImageItem>(incoming.Count);
+            foreach (var item in incoming)
+            {
+                if (item != null && !item.IsDirectory)
+                    photos.Add(item);
+            }
+            if (photos.Count < slots) return false;
+
+            ExitSolo();
+            _framedSlots = slots;
+            _items.Clear();
+            _items.AddRange(photos);
+            for (int i = 0; i < slots; i++)
+            {
+                if (_cellRoots[i]?.Tag is CellParts parts)
+                {
+                    parts.Bound.Item = _items[i];
+                    parts.Bound.Reload?.Invoke();
+                }
+            }
+            RefreshLinesChrome(_items.Count);
+            RefreshHeroChrome(_items.Count);
+            ShowHudAndOverlays();
+            return true;
+        }
+
         private int _swapSource = -1;
 
         /// <summary>Alt-drag: a Windows drag of this photo. Dropping on another photo swaps the two.</summary>
@@ -1988,7 +2066,7 @@ namespace ModernImageViewer
             finally { _swapSource = -1; }
         }
 
-        private void AttachSwapDrop(Border cellBorder, Grid cellGrid, ImageItem item)
+        private void AttachSwapDrop(Border cellBorder, Grid cellGrid, CellPhoto photo)
         {
             Windows.UI.Color accent = Windows.UI.Color.FromArgb(255, 96, 205, 255);
             try { if (Application.Current.Resources["SystemAccentColorLight2"] is Windows.UI.Color c) accent = c; }
@@ -2009,7 +2087,7 @@ namespace ModernImageViewer
             {
                 e.AllowedOperations = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
                 e.Data.RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
-                e.Data.SetText(item.Name);
+                e.Data.SetText(photo.Item.Name);
                 cellBorder.Opacity = 0.4;
                 var deferral = e.GetDeferral();
                 try { await SetDragPictureAsync(cellGrid, e.DragUI, e.GetPosition(cellGrid)); }
@@ -2020,7 +2098,7 @@ namespace ModernImageViewer
 
             void Over(object s, DragEventArgs e)
             {
-                if (_swapSource < 0 || _swapSource == Slot(item))
+                if (_swapSource < 0 || _swapSource == Slot(photo.Item))
                 {
                     e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.None;
                     return;
@@ -2039,7 +2117,7 @@ namespace ModernImageViewer
             {
                 ring.Visibility = Visibility.Collapsed;
                 int from = _swapSource;
-                int index = Slot(item);
+                int index = Slot(photo.Item);
                 if (from < 0 || index < 0 || from == index) return;
                 e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
                 e.Handled = true;
@@ -2093,6 +2171,12 @@ namespace ModernImageViewer
         private void FillFitButton_Click(object sender, RoutedEventArgs e)
         {
             ToggleFillMode();
+        }
+
+        public void ReflowFrames()
+        {
+            foreach (var update in _layoutUpdaters)
+                update();
         }
 
         public void ToggleFillMode()

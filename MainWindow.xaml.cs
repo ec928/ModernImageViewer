@@ -54,6 +54,7 @@ namespace ModernImageViewer
         public new AppWindow AppWindow => _appWindow;
         private AppSettings _currentSettings = new AppSettings();
         private bool _multiViewCanvasActive;
+        private bool _multiViewParked;
         private int _stashedGridWidth;
         private int _stashedGridHeight;
         private readonly IntPtr _hWnd;
@@ -702,6 +703,7 @@ namespace ModernImageViewer
             {
                 MultiSelectActionBar.Visibility = Visibility.Collapsed;
             }
+            NoteParkedSelection();
         }
 
         private void MultiSelectViewTogether_Click(object sender, RoutedEventArgs e)

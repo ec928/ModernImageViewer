@@ -32,6 +32,7 @@ namespace ModernImageViewer
             _mosaic = null;
             _mosaicCustom = false;
             _keepMosaic = false;
+            _framedSlots = 0;
         }
 
         private void BuildLayout()
@@ -72,14 +73,15 @@ namespace ModernImageViewer
             }
 
             NormalizeHero();
-            int count = _items.Count;
-            if (count == 0)
+            int stored = _items.Count;
+            if (stored == 0)
             {
                 CloseRequested?.Invoke(this, EventArgs.Empty);
                 return;
             }
 
             UpdateFillFitButton();
+            int count = VisibleCount(stored);
 
             if (count == 1)
             {
@@ -115,14 +117,17 @@ namespace ModernImageViewer
                 RenderSplit(mosaic, CellsGrid, Array.Empty<int>());
             }
 
-            RefreshLinesChrome(count);
-            RefreshHeroChrome(count);
+            RefreshLinesChrome(stored);
+            RefreshHeroChrome(stored);
         }
 
-        private static int VisibleCount(int count)
+        private int VisibleCount(int count)
         {
             if (count <= 0) return 0;
-            return MosaicLayout.ShownCount(count);
+            int cap = MosaicLayout.ShownCount(count);
+            if (_framedSlots > 0)
+                return Math.Min(_framedSlots, cap);
+            return cap;
         }
 
         private bool CellRootsReady()
@@ -209,7 +214,7 @@ namespace ModernImageViewer
 
         private void RefreshLinesChrome(int count)
         {
-            int shown = MosaicLayout.ShownCount(count);
+            int shown = VisibleCount(count);
             ShownBadge.Visibility = count > shown ? Visibility.Visible : Visibility.Collapsed;
             ShownText.Text = shown + " / " + count;
             bool show = shown > 1;

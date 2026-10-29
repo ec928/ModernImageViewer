@@ -849,6 +849,11 @@ namespace ModernImageViewer
 
         public void OpenMultiView(IList<ImageItem> items)
         {
+            if (_multiViewParked)
+            {
+                ApplyParkedPhotos();
+                return;
+            }
             if (items == null || items.Count == 0) return;
 
             if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible)
@@ -877,6 +882,18 @@ namespace ModernImageViewer
 
         public void CloseMultiView()
         {
+            if (_multiViewParked)
+            {
+                _multiViewParked = false;
+                if (MultiViewControl != null)
+                {
+                    MultiViewControl.Visibility = Visibility.Collapsed;
+                    MultiViewControl.Clear();
+                }
+                RestoreViewTogetherTip();
+                FocusGrid();
+                return;
+            }
             if (MultiViewControl != null && MultiViewControl.Visibility == Visibility.Visible)
             {
                 EndMultiViewCanvas();
@@ -884,6 +901,71 @@ namespace ModernImageViewer
                 MultiViewControl.Clear();
                 FocusGrid();
             }
+        }
+
+        private void MultiViewControl_ChangePhotosRequested(object? sender, EventArgs e)
+        {
+            if (MultiViewControl == null || !_multiViewCanvasActive || MultiViewControl.ShownSlots < 2) return;
+            MultiViewControl.Visibility = Visibility.Collapsed;
+            EndMultiViewCanvas();
+            _multiViewParked = true;
+            ToolTipService.SetToolTip(ViewTogetherButton, "Use these photos in the layout (Enter)");
+            SelectSessionPhotos();
+            NoteParkedSelection();
+            FocusGrid();
+        }
+
+        private void ApplyParkedPhotos()
+        {
+            if (MultiViewControl == null) return;
+            var picked = Images.Where(img => img.IsGridSelected && !img.IsDirectory).ToList();
+            if (picked.Count < MultiViewControl.ShownSlots || !MultiViewControl.TryReplacePhotos(picked))
+            {
+                NoteParkedSelection();
+                return;
+            }
+            ResumeParkedMultiView();
+        }
+
+        private void ResumeParkedMultiView()
+        {
+            if (!_multiViewParked || MultiViewControl == null) return;
+            _multiViewParked = false;
+            RestoreViewTogetherTip();
+            BeginMultiViewCanvas();
+            MultiViewControl.Visibility = Visibility.Visible;
+            MultiViewControl.FocusView();
+            MultiViewControl.DispatcherQueue.TryEnqueue(
+                Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
+                MultiViewControl.ReflowFrames);
+        }
+
+        private void SelectSessionPhotos()
+        {
+            if (ImageGrid == null || MultiViewControl == null) return;
+            var wanted = new HashSet<string>(MultiViewControl.SessionPaths(), StringComparer.OrdinalIgnoreCase);
+            ImageGrid.SelectedItems.Clear();
+            foreach (var img in Images)
+            {
+                if (!img.IsDirectory && !string.IsNullOrEmpty(img.Path) && wanted.Contains(img.Path))
+                    ImageGrid.SelectedItems.Add(img);
+            }
+        }
+
+        private void NoteParkedSelection()
+        {
+            if (!_multiViewParked || MultiViewControl == null || MultiSelectCountText == null) return;
+            int slots = MultiViewControl.ShownSlots;
+            int count = Images.Count(img => img.IsGridSelected && !img.IsDirectory);
+            if (count <= 0) return;
+            string frames = slots == 1 ? "1 photo" : slots + " photos";
+            MultiSelectCountText.Text = count + " selected. The layout has " + frames + " on screen.";
+        }
+
+        private void RestoreViewTogetherTip()
+        {
+            if (ViewTogetherButton != null)
+                ToolTipService.SetToolTip(ViewTogetherButton, "View Together (Enter)");
         }
 
         private bool BeginMultiViewCanvas()
@@ -2156,6 +2238,12 @@ namespace ModernImageViewer
                         {
                             SidebarView.IsPaneOpen = false;
                             FocusGrid();
+                            e.Handled = true;
+                            break;
+                        }
+                        if (_multiViewParked)
+                        {
+                            ResumeParkedMultiView();
                             e.Handled = true;
                             break;
                         }
