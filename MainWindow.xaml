@@ -274,7 +274,7 @@
                       Translation="0,0,32"
                       PointerExited="Sidebar_PointerExited">
                     <Grid.Shadow>
-                        <ThemeShadow/>
+                        <ThemeShadow x:Name="SidebarThemeShadow"/>
                     </Grid.Shadow>
                     <Grid Padding="0,6,0,6">
                         <Grid.RowDefinitions>

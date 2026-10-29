@@ -116,6 +116,7 @@ namespace ModernImageViewer
         {
             Instance = this;
             this.InitializeComponent();
+            SidebarThemeShadow.Receivers.Add(MainContentGrid);
             MultiViewControl.CanvasAspectChosen += ApplyMultiViewAspect;
             this.SystemBackdrop = new MicaBackdrop();
 
