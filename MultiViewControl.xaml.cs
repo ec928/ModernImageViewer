@@ -229,7 +229,9 @@ namespace ModernImageViewer
         /// </summary>
         private void ApplyGridLayoutTheme()
         {
-            ElementTheme theme = WindowTheme();
+            // Premium HUD: The photo canvas and floating controls are an immersive dark glass surface.
+            // Pin the layout inspector to Dark to prevent glare over media and match the playbar.
+            ElementTheme theme = ElementTheme.Dark;
             if (CountsCard != null)
                 CountsCard.RequestedTheme = theme;
             if (CountsPanel != null)

@@ -219,7 +219,7 @@
             </Border.Background>
         </Border>
 
-        <!-- Unified Bottom Playbar / HUD (Auto-Hiding Floating Islands) -->
+        <!-- Unified Bottom Playbar / HUD (Single Continuous Glass Capsule Deck) -->
         <Grid x:Name="UnifiedHud" 
               VerticalAlignment="Bottom" 
               HorizontalAlignment="Center" 
@@ -232,195 +232,183 @@
                 <TranslateTransform x:Name="HudTranslate" Y="0" />
             </Grid.RenderTransform>
 
-            <StackPanel Orientation="Horizontal" Spacing="20" VerticalAlignment="Center">
-                <!-- Island 1: Session Navigation -->
-                <Border Background="{ThemeResource LayerFillColorDefaultBrush}" 
-                        BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" 
-                        BorderThickness="1" 
-                        CornerRadius="24" 
-                        Padding="10,6"
-                        Translation="0,0,32">
-                    <Border.Shadow>
-                        <ThemeShadow/>
-                    </Border.Shadow>
-                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                        <Button Click="CloseButton_Click" 
-                                Style="{StaticResource QuietButtonStyle}" 
-                                Padding="8,5" 
-                                CornerRadius="14" 
-                                ToolTipService.ToolTip="Back to Grid (Esc)">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE72B;" FontSize="14" />
-                                <TextBlock Text="Grid" VerticalAlignment="Center" FontSize="13" />
-                            </StackPanel>
-                        </Button>
-                        <Button Click="ChangePhotosButton_Click"
-                                Style="{StaticResource QuietButtonStyle}"
-                                Padding="8,5"
-                                CornerRadius="14"
-                                ToolTipService.ToolTip="Pick different photos. The layout stays.">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8B9;" FontSize="14" />
-                                <TextBlock Text="Photos" VerticalAlignment="Center" FontSize="13" />
-                            </StackPanel>
-                        </Button>
-                        <Border x:Name="ShownBadge"
-                                Visibility="Collapsed"
-                                Background="Transparent"
-                                Padding="4,0"
-                                VerticalAlignment="Center"
-                                ToolTipService.ToolTip="Multi-view shows up to 16 photos. The rest of the selection is not shown.">
-                            <TextBlock x:Name="ShownText"
-                                       VerticalAlignment="Center"
-                                       FontSize="13"
-                                       Typography.NumeralAlignment="Tabular"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        </Border>
-                    </StackPanel>
-                </Border>
+            <Border Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}" 
+                    BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}" 
+                    BorderThickness="1" 
+                    CornerRadius="22" 
+                    Padding="6,4"
+                    Translation="0,0,32">
+                <Border.Shadow>
+                    <ThemeShadow/>
+                </Border.Shadow>
+                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                    <!-- Group 1: Session Navigation -->
+                    <Button Click="CloseButton_Click" 
+                            Style="{StaticResource QuietButtonStyle}" 
+                            Padding="8,5" 
+                            CornerRadius="12" 
+                            ToolTipService.ToolTip="Back to Grid (Esc)">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE72B;" FontSize="14" />
+                            <TextBlock Text="Grid" VerticalAlignment="Center" FontSize="13" />
+                        </StackPanel>
+                    </Button>
+                    <Button Click="ChangePhotosButton_Click"
+                            Style="{StaticResource QuietButtonStyle}"
+                            Padding="8,5"
+                            CornerRadius="12"
+                            ToolTipService.ToolTip="Pick different photos. The layout stays.">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8B9;" FontSize="14" />
+                            <TextBlock Text="Photos" VerticalAlignment="Center" FontSize="13" />
+                        </StackPanel>
+                    </Button>
+                    <Border x:Name="ShownBadge"
+                            Visibility="Collapsed"
+                            Background="Transparent"
+                            Padding="4,0"
+                            VerticalAlignment="Center"
+                            ToolTipService.ToolTip="Multi-view shows up to 16 photos. The rest of the selection is not shown.">
+                        <TextBlock x:Name="ShownText"
+                                   VerticalAlignment="Center"
+                                   FontSize="13"
+                                   Typography.NumeralAlignment="Tabular"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </Border>
 
-                <!-- Island 2: Layout & Composition -->
-                <Border Background="{ThemeResource LayerFillColorDefaultBrush}" 
-                        BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" 
-                        BorderThickness="1" 
-                        CornerRadius="24" 
-                        Padding="10,6"
-                        Translation="0,0,32">
-                    <Border.Shadow>
-                        <ThemeShadow/>
-                    </Border.Shadow>
-                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                        <!-- Single consolidated Grid Layout button -->
-                        <Button x:Name="CountsButton"
-                                Style="{StaticResource QuietButtonStyle}"
-                                Padding="8,5"
-                                CornerRadius="14"
-                                ToolTipService.ToolTip="Edit the lines. Choose rows or columns, or press R. Plus and minus change how many.">
-                            <Button.Flyout>
-                                <Flyout Opening="CountsFlyout_Opening" Opened="CountsFlyout_Opened" Closed="CountsFlyout_Closed" Placement="Top">
-                                    <Flyout.FlyoutPresenterStyle>
-                                        <Style TargetType="FlyoutPresenter">
-                                            <Setter Property="MinWidth" Value="0" />
-                                            <Setter Property="MaxWidth" Value="640" />
-                                            <Setter Property="MaxHeight" Value="760" />
-                                            <Setter Property="Padding" Value="0" />
-                                            <Setter Property="CornerRadius" Value="24" />
-                                            <Setter Property="Background" Value="{ThemeResource SolidBackgroundFillColorBaseBrush}" />
-                                            <Setter Property="BorderThickness" Value="0" />
-                                        </Style>
-                                    </Flyout.FlyoutPresenterStyle>
-                                    <Border x:Name="CountsCard"
-                                            Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                                            BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}"
-                                            BorderThickness="1"
-                                            CornerRadius="24"
-                                            Padding="16,14">
-                                        <StackPanel x:Name="CountsPanel" Spacing="0" MinWidth="320" />
-                                    </Border>
-                                </Flyout>
-                            </Button.Flyout>
-                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xECA5;" FontSize="14" />
-                                <TextBlock x:Name="CountsText" Text="2 Rows" VerticalAlignment="Center" FontSize="13" />
-                            </StackPanel>
-                        </Button>
+                    <!-- Subtle Section Divider 1 -->
+                    <Rectangle Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,0" Opacity="0.5"/>
 
-                        <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,4" Opacity="0.4"/>
+                    <!-- Group 2: Layout & Composition -->
+                    <Button x:Name="CountsButton"
+                            Style="{StaticResource QuietButtonStyle}"
+                            Padding="8,5"
+                            CornerRadius="12"
+                            ToolTipService.ToolTip="Edit the lines. Choose rows or columns, or press R. Plus and minus change how many.">
+                        <Button.Flyout>
+                            <Flyout Opening="CountsFlyout_Opening" Opened="CountsFlyout_Opened" Closed="CountsFlyout_Closed" Placement="Top">
+                                <Flyout.FlyoutPresenterStyle>
+                                    <Style TargetType="FlyoutPresenter">
+                                        <Setter Property="MinWidth" Value="0" />
+                                        <Setter Property="MaxWidth" Value="640" />
+                                        <Setter Property="MaxHeight" Value="760" />
+                                        <Setter Property="Padding" Value="0" />
+                                        <Setter Property="CornerRadius" Value="12" />
+                                        <Setter Property="Background" Value="Transparent" />
+                                        <Setter Property="BorderThickness" Value="0" />
+                                    </Style>
+                                </Flyout.FlyoutPresenterStyle>
+                                <Border x:Name="CountsCard"
+                                        Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}"
+                                        BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="12"
+                                        Padding="16,14">
+                                    <Border.Shadow>
+                                        <ThemeShadow/>
+                                    </Border.Shadow>
+                                    <StackPanel x:Name="CountsPanel" Spacing="0" MinWidth="320" />
+                                </Border>
+                            </Flyout>
+                        </Button.Flyout>
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xECA5;" FontSize="14" />
+                            <TextBlock x:Name="CountsText" Text="2 Rows" VerticalAlignment="Center" FontSize="13" />
+                        </StackPanel>
+                    </Button>
 
-                        <Button x:Name="HeroButton"
-                                Click="HeroButton_Click"
-                                Style="{StaticResource QuietButtonStyle}"
-                                Padding="8,5"
-                                CornerRadius="14"
-                                ToolTipService.ToolTip="Hero (H). Click for a large photo.">
-                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                <FontIcon x:Name="HeroIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xEE4E;" FontSize="14" />
-                                <TextBlock x:Name="HeroText" Text="Hero" VerticalAlignment="Center" FontSize="13" />
-                            </StackPanel>
-                        </Button>
+                    <Button x:Name="HeroButton"
+                            Click="HeroButton_Click"
+                            Style="{StaticResource QuietButtonStyle}"
+                            Padding="8,5"
+                            CornerRadius="12"
+                            ToolTipService.ToolTip="Hero (H). Click for a large photo.">
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <FontIcon x:Name="HeroIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xEE4E;" FontSize="14" />
+                            <TextBlock x:Name="HeroText" Text="Hero" VerticalAlignment="Center" FontSize="13" />
+                        </StackPanel>
+                    </Button>
 
-                        <Button x:Name="RotateHeroButton"
-                                Click="RotateHero_Click"
-                                Style="{StaticResource QuietButtonStyle}"
-                                Padding="8,5"
-                                CornerRadius="14"
-                                IsEnabled="False"
-                                ToolTipService.ToolTip="Next position">
-                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE7AD;" FontSize="14" />
-                        </Button>
-                    </StackPanel>
-                </Border>
+                    <Button x:Name="RotateHeroButton"
+                            Click="RotateHero_Click"
+                            Style="{StaticResource QuietButtonStyle}"
+                            Padding="8,5"
+                            CornerRadius="12"
+                            IsEnabled="False"
+                            ToolTipService.ToolTip="Next position">
+                        <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE7AD;" FontSize="14" />
+                    </Button>
 
-                <!-- Island 3: View & Output -->
-                <Border Background="{ThemeResource LayerFillColorDefaultBrush}" 
-                        BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" 
-                        BorderThickness="1" 
-                        CornerRadius="24" 
-                        Padding="10,6"
-                        Translation="0,0,32">
-                    <Border.Shadow>
-                        <ThemeShadow/>
-                    </Border.Shadow>
-                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                        <!-- Fill / Fit Toggle Button -->
-                        <Button x:Name="FillFitButton" 
-                                Click="FillFitButton_Click" 
-                                Style="{StaticResource QuietButtonStyle}" 
-                                Padding="8,5" 
-                                CornerRadius="14" 
-                                ToolTipService.ToolTip="Toggle Fill / Fit (F)">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <FontIcon x:Name="FillFitIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE740;" FontSize="14" />
-                                <TextBlock x:Name="FillFitText" Text="Fill" VerticalAlignment="Center" FontSize="13" />
-                            </StackPanel>
-                        </Button>
+                    <!-- Subtle Section Divider 2 -->
+                    <Rectangle Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,0" Opacity="0.5"/>
 
-                        <!-- Reset Zooms Button -->
-                        <Button Click="ResetZoom_Click" 
-                                Style="{StaticResource QuietButtonStyle}" 
-                                Padding="8,5" 
-                                CornerRadius="14" 
-                                ToolTipService.ToolTip="Reset Pan &amp; Zoom (Middle-Click)">
-                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE71F;" FontSize="14" />
-                                <TextBlock Text="Reset" VerticalAlignment="Center" FontSize="13" />
-                            </StackPanel>
-                        </Button>
+                    <!-- Group 3: View & Output -->
+                    <Button x:Name="FillFitButton" 
+                            Click="FillFitButton_Click" 
+                            Style="{StaticResource QuietButtonStyle}" 
+                            Padding="8,5" 
+                            CornerRadius="12" 
+                            ToolTipService.ToolTip="Toggle Fill / Fit (F)">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon x:Name="FillFitIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE740;" FontSize="14" />
+                            <TextBlock x:Name="FillFitText" Text="Fill" VerticalAlignment="Center" FontSize="13" />
+                        </StackPanel>
+                    </Button>
 
-                        <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,4" Opacity="0.4"/>
+                    <Button Click="ResetZoom_Click" 
+                            Style="{StaticResource QuietButtonStyle}" 
+                            Padding="8,5" 
+                            CornerRadius="12" 
+                            ToolTipService.ToolTip="Reset Pan &amp; Zoom (Middle-Click)">
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE71F;" FontSize="14" />
+                            <TextBlock Text="Reset" VerticalAlignment="Center" FontSize="13" />
+                        </StackPanel>
+                    </Button>
 
-                        <!-- Canvas Shape -->
-                        <Button x:Name="AspectButton"
-                                Style="{StaticResource QuietButtonStyle}"
-                                Padding="8,5"
-                                CornerRadius="14"
-                                ToolTipService.ToolTip="Canvas shape. Drag the window for a custom shape.">
-                            <Button.Flyout>
-                                <MenuFlyout x:Name="AspectMenuFlyout" Opening="AspectFlyout_Opening" Opened="HudMenu_Opened" Closed="HudMenu_Closed" />
-                            </Button.Flyout>
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <TextBlock x:Name="AspectText" Text="16:9" VerticalAlignment="Center" FontSize="13" />
-                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE70D;" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </Button>
+                    <Button x:Name="AspectButton"
+                            Style="{StaticResource QuietButtonStyle}"
+                            Padding="8,5"
+                            CornerRadius="12"
+                            ToolTipService.ToolTip="Canvas shape. Drag the window for a custom shape.">
+                        <Button.Flyout>
+                            <MenuFlyout x:Name="AspectMenuFlyout" Opening="AspectFlyout_Opening" Opened="HudMenu_Opened" Closed="HudMenu_Closed">
+                                <MenuFlyout.MenuFlyoutPresenterStyle>
+                                    <Style TargetType="MenuFlyoutPresenter">
+                                        <Setter Property="CornerRadius" Value="10" />
+                                        <Setter Property="RequestedTheme" Value="Dark" />
+                                    </Style>
+                                </MenuFlyout.MenuFlyoutPresenterStyle>
+                            </MenuFlyout>
+                        </Button.Flyout>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock x:Name="AspectText" Text="16:9" VerticalAlignment="Center" FontSize="13" />
+                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE70D;" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
 
-                        <!-- Save JPEG -->
-                        <Button x:Name="SaveButton"
-                                Style="{StaticResource QuietButtonStyle}"
-                                Padding="8,5"
-                                CornerRadius="14"
-                                ToolTipService.ToolTip="Save this grid as a JPEG (Ctrl+S)">
-                            <Button.Flyout>
-                                <MenuFlyout x:Name="SaveMenuFlyout" Opening="SaveFlyout_Opening" Opened="HudMenu_Opened" Closed="HudMenu_Closed" />
-                            </Button.Flyout>
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE74E;" FontSize="14" />
-                                <TextBlock x:Name="SaveText" Text="Save" VerticalAlignment="Center" FontSize="13" />
-                            </StackPanel>
-                        </Button>
-                    </StackPanel>
-                </Border>
-            </StackPanel>
+                    <Button x:Name="SaveButton"
+                            Style="{StaticResource QuietButtonStyle}"
+                            Padding="8,5"
+                            CornerRadius="12"
+                            ToolTipService.ToolTip="Save this grid as a JPEG (Ctrl+S)">
+                        <Button.Flyout>
+                            <MenuFlyout x:Name="SaveMenuFlyout" Opening="SaveFlyout_Opening" Opened="HudMenu_Opened" Closed="HudMenu_Closed">
+                                <MenuFlyout.MenuFlyoutPresenterStyle>
+                                    <Style TargetType="MenuFlyoutPresenter">
+                                        <Setter Property="CornerRadius" Value="10" />
+                                        <Setter Property="RequestedTheme" Value="Dark" />
+                                    </Style>
+                                </MenuFlyout.MenuFlyoutPresenterStyle>
+                            </MenuFlyout>
+                        </Button.Flyout>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE74E;" FontSize="14" />
+                            <TextBlock x:Name="SaveText" Text="Save" VerticalAlignment="Center" FontSize="13" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Border>
         </Grid>
 
         <!-- Solo View Container (shown when user double-clicks or clicks Solo on a photo) -->
@@ -447,7 +435,7 @@
 
             <!-- Solo Bottom Playbar (auto-hides with HUD) -->
             <Border x:Name="SoloBottomBar" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,32"
-                    Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="22" Padding="12,6" Translation="0,0,32">
+                    Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}" BorderThickness="1" CornerRadius="22" Padding="12,6" Translation="0,0,32">
                 <Border.Shadow>
                     <ThemeShadow/>
                 </Border.Shadow>
