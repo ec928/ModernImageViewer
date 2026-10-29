@@ -66,7 +66,7 @@ Exit codes: `0` success, `1` publish failed, `2` output looks wrong, `3` app cra
 
 ## 🖼 Multi-View
 
-Select two or more photos in the tile grid (Ctrl+click or Shift+click), then click one of them or press **Enter**. Multi-view shows up to 16 photos; with more selected, the bar says how many are shown, for example "16 of 23 shown". The multi-view window keeps its own size, separate from the normal window.
+Select two or more photos in the tile grid (Ctrl+click or Shift+click), then click one of them or press **Enter**. Multi-view shows up to 16 photos. When more are selected, the bar shows how many are on screen, for example **16 / 23**. The multi-view window keeps its own size, separate from the normal window.
 
 The bar appears when you move the mouse:
 
@@ -74,18 +74,18 @@ The bar appears when you move the mouse:
 |---|---|
 | **Grid** / **Esc** | Back to the tile grid |
 | **Fill / Fit** (**F**) | Fill crops each photo to its frame; Fit shows the whole photo |
-| **Grid Layout** (**3 Rows** / **Custom**) | Click to open the Grid Layout panel to switch between rows/columns, adjust line count, and customize per-line photo distribution with **+** / **−** steppers and **Reset**. Press **R** to flip orientation, or **−** / **+** keys to adjust lines directly. |
+| **Grid Layout** (**3 Rows**) | Opens the layout card. **Rows** and **Columns** turn the grid, and the stepper beside them sets how many lines. Each line is drawn as that many photos: rows are bands, columns are stacks from the left. A line's stepper moves one photo. **+** takes it from the last other line that has more than one, and **−** moves it to the last line, or to the line before when that line is already the last. **Even out** puts the lines back to an even split when they differ. **R** flips rows and columns. The **−** and **+** keys change how many lines. |
 | **Hero** (**H**) | Make the first photo large. Click again for the next kind, and again after the last to turn the hero off: **Banner** (one large photo along a side), **Rectangle** (one large photo in a corner block, with 4, 5, 6, 7 or 9 photos) and **Pair** (the first two photos large, with 3 or more) |
 | **↻** (next position) | Move the hero: a banner or pair goes round the top, right, bottom and left sides |
 | **Reset** | Undo the zoom and pan of every photo |
 | **16:9** | Canvas shape: 16:9, 16:10, 21:9, 4:3, 1:1 or 3:4. Resize the window for any other shape |
 | **Save** (**Ctrl+S**) | Save the grid as a JPEG at 720p to 4320p, at the window's size, or at a custom size |
 
-With a Banner or Pair, the rows, columns and per-line counts arrange the other photos. A Rectangle has a fixed shape, so those controls are dimmed while it is on.
+With a Banner or Pair, the rows, columns and per-line counts arrange the other photos. A Rectangle does not follow those lines. Changing the line count or a line's count turns that hero off.
 
 On the photos themselves:
 
-- Drag the edge between two photos to resize them; double-click an edge to make the photos on either side equal. Changing the number of rows or columns puts the sizes back to even.
+- Drag the edge between two photos to resize them; double-click an edge to make the photos on either side equal. Changing how many lines there are, or how many photos are in a line, puts those sizes back to even. Switching between rows and columns keeps them, except beside a banner or pair, where the other photos are laid out again.
 - Scroll to zoom, drag to pan, middle-click to reset, double-click to zoom in or back out.
 - Hover over a photo to show its buttons at the top right. The move arrows move it one place earlier or later; they are left out on a very small photo.
 - **Alt+drag** a photo onto another to swap the two.

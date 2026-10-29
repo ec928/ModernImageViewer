@@ -219,22 +219,15 @@ namespace ModernImageViewer
                 return;
             }
 
-            int total = LineTotal();
             int lines = EffectiveLines();
             bool rows = !_flipped;
             string noun = rows ? (lines == 1 ? "Row" : "Rows") : (lines == 1 ? "Column" : "Columns");
-            bool onGrid = (!_heroActive || HeroUsesLines) && !_mosaicCustom;
-
-            var counts = CurrentLineCounts();
-            var evenCounts = MosaicLayout.LineCounts(total, lines);
-            bool isCustom = !counts.SequenceEqual(evenCounts);
 
             CountsButton.Visibility = Visibility.Visible;
-            CountsText.Text = isCustom ? $"{lines} {noun} (Custom)" : $"{lines} {noun}";
-            CountsText.Opacity = onGrid ? 1.0 : 0.5;
+            CountsText.Text = $"{lines} {noun}";
 
             ToolTipService.SetToolTip(CountsButton,
-                $"{lines} {noun}{(isCustom ? " (Custom)" : "")}: Click to customize grid layout and distribution (R to flip, +/- for lines)");
+                "Edit the lines. R flips rows and columns. Plus and minus change how many.");
         }
 
         private static double WeightAt(MosaicLayout node, int index)
