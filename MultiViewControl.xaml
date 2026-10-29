@@ -107,48 +107,18 @@
                         <ThemeShadow/>
                     </Border.Shadow>
                     <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                        <!-- Rows or columns: fewer, count/flip, more -->
-                        <StackPanel x:Name="LinesGroup" Orientation="Horizontal" Spacing="0" VerticalAlignment="Center">
-                            <Button x:Name="LinesLessButton"
-                                    Click="LinesLess_Click"
-                                    Style="{StaticResource QuietButtonStyle}"
-                                    Padding="6,5"
-                                    CornerRadius="14"
-                                    ToolTipService.ToolTip="Fewer (-)">
-                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE738;" FontSize="12" />
-                            </Button>
-                            <Button x:Name="LinesDirectionButton"
-                                    Click="RowsColumns_Click"
-                                    Style="{StaticResource QuietButtonStyle}"
-                                    Padding="8,5"
-                                    CornerRadius="14"
-                                    ToolTipService.ToolTip="Click to toggle between rows and columns (R)">
-                                <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-                                    <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8AB;" FontSize="11" Opacity="0.8" />
-                                    <TextBlock x:Name="LinesText" Text="2 rows" VerticalAlignment="Center" FontSize="13" MinWidth="48" TextAlignment="Center" />
-                                </StackPanel>
-                            </Button>
-                            <Button x:Name="LinesMoreButton"
-                                    Click="LinesMore_Click"
-                                    Style="{StaticResource QuietButtonStyle}"
-                                    Padding="6,5"
-                                    CornerRadius="14"
-                                    ToolTipService.ToolTip="More (+)">
-                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE710;" FontSize="12" />
-                            </Button>
-                        </StackPanel>
-
+                        <!-- Single consolidated Grid Layout button -->
                         <Button x:Name="CountsButton"
                                 Style="{StaticResource QuietButtonStyle}"
                                 Padding="8,5"
                                 CornerRadius="14"
-                                ToolTipService.ToolTip="Photos per line (Click to customize)">
+                                ToolTipService.ToolTip="Grid layout (Click to customize, R to flip, +/- for lines)">
                             <Button.Flyout>
                                 <Flyout Opening="CountsFlyout_Opening" Opened="HudMenu_Opened" Closed="HudMenu_Closed" Placement="Top">
                                     <Flyout.FlyoutPresenterStyle>
                                         <Style TargetType="FlyoutPresenter">
-                                            <Setter Property="MaxWidth" Value="750" />
-                                            <Setter Property="MaxHeight" Value="650" />
+                                            <Setter Property="MaxWidth" Value="580" />
+                                            <Setter Property="MaxHeight" Value="520" />
                                             <Setter Property="Padding" Value="14,12" />
                                             <Setter Property="CornerRadius" Value="10" />
                                             <Setter Property="Background" Value="#F21E1E22" />
@@ -159,9 +129,9 @@
                                     <StackPanel x:Name="CountsPanel" Spacing="0" />
                                 </Flyout>
                             </Button.Flyout>
-                            <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xECA5;" FontSize="12" Opacity="0.8" />
-                                <TextBlock x:Name="CountsText" Text="Even" VerticalAlignment="Center" FontSize="13" />
+                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xECA5;" FontSize="12" Opacity="0.85" />
+                                <TextBlock x:Name="CountsText" Text="2 Rows" VerticalAlignment="Center" FontSize="13" />
                             </StackPanel>
                         </Button>
 

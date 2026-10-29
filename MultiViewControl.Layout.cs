@@ -1,4 +1,4 @@
-﻿using Microsoft.UI.Input;
+using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -213,34 +213,28 @@ namespace ModernImageViewer
             ShownBadge.Visibility = count > shown ? Visibility.Visible : Visibility.Collapsed;
             ShownText.Text = shown + " / " + count;
             bool show = shown > 1;
-            LinesGroup.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-            if (!show) return;
+            if (!show)
+            {
+                CountsButton.Visibility = Visibility.Collapsed;
+                return;
+            }
 
             int total = LineTotal();
             int lines = EffectiveLines();
             bool rows = !_flipped;
-            string noun = rows ? (lines == 1 ? "row" : "rows") : (lines == 1 ? "column" : "columns");
-            LinesText.Text = lines + " " + noun;
+            string noun = rows ? (lines == 1 ? "Row" : "Rows") : (lines == 1 ? "Column" : "Columns");
             bool onGrid = (!_heroActive || HeroUsesLines) && !_mosaicCustom;
-            LinesText.Opacity = onGrid ? 1.0 : 0.5;
-            LinesLessButton.IsEnabled = lines > 1 || !onGrid;
-            LinesMoreButton.IsEnabled = lines < total || !onGrid;
 
-            bool editable = lines >= 2 && lines < total;
-            CountsButton.Visibility = editable ? Visibility.Visible : Visibility.Collapsed;
-            if (editable)
-            {
-                var counts = CurrentLineCounts();
-                var evenCounts = MosaicLayout.LineCounts(total, lines);
-                bool isCustom = !counts.SequenceEqual(evenCounts);
-                CountsText.Text = isCustom
-                    ? string.Join(" · ", counts)
-                    : (counts.All(c => c == counts[0]) ? $"{counts[0]} each" : "Balanced");
-                CountsText.Opacity = onGrid ? 1.0 : 0.5;
-                ToolTipService.SetToolTip(CountsButton, rows
-                    ? $"Photos in each row: {string.Join(" · ", counts)} (Click to customize)"
-                    : $"Photos in each column: {string.Join(" · ", counts)} (Click to customize)");
-            }
+            var counts = CurrentLineCounts();
+            var evenCounts = MosaicLayout.LineCounts(total, lines);
+            bool isCustom = !counts.SequenceEqual(evenCounts);
+
+            CountsButton.Visibility = Visibility.Visible;
+            CountsText.Text = isCustom ? $"{lines} {noun} (Custom)" : $"{lines} {noun}";
+            CountsText.Opacity = onGrid ? 1.0 : 0.5;
+
+            ToolTipService.SetToolTip(CountsButton,
+                $"{lines} {noun}{(isCustom ? " (Custom)" : "")}: Click to customize grid layout and distribution (R to flip, +/- for lines)");
         }
 
         private static double WeightAt(MosaicLayout node, int index)

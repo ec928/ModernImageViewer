@@ -165,11 +165,11 @@ namespace ModernImageViewer
             var evenCounts = MosaicLayout.LineCounts(total, lines);
             bool isCustom = !counts.SequenceEqual(evenCounts);
 
-            // Dynamic panel width: Rows mode is a stable comfortable 300px;
-            // Columns mode expands to accommodate more columns seamlessly
+            // Dynamic panel width: Rows mode is a stable comfortable 310px;
+            // Columns mode expands to accommodate more columns seamlessly, bounded so it stays inside viewport
             if (rows)
             {
-                CountsPanel.Width = 300.0;
+                CountsPanel.Width = 310.0;
             }
             else
             {
@@ -177,7 +177,7 @@ namespace ModernImageViewer
                 double colWidth = nCols <= 4 ? 42.0 : (nCols <= 7 ? 36.0 : (nCols <= 10 ? 30.0 : 26.0));
                 double colSpacing = nCols <= 4 ? 10.0 : (nCols <= 7 ? 8.0 : (nCols <= 10 ? 6.0 : 4.0));
                 double totalColsWidth = nCols * colWidth + (nCols - 1) * colSpacing;
-                CountsPanel.Width = Math.Max(300.0, Math.Min(700.0, totalColsWidth + 24.0));
+                CountsPanel.Width = Math.Max(310.0, Math.Min(540.0, totalColsWidth + 24.0));
             }
 
             var accent = Windows.UI.Color.FromArgb(255, 0, 120, 212);
@@ -417,9 +417,28 @@ namespace ModernImageViewer
             });
 
             // 4. Proportional Line Distribution (Rows = horizontal rails, Columns = vertical rails)
+            // Wrapped in a bounded ScrollViewer so 15+ lines never break viewport bounds
             var countsList = BuildCountsList(counts, rows, accent);
-            countsList.Margin = new Thickness(0, 0, 0, 6);
-            CountsPanel.Children.Add(countsList);
+            var scroll = new ScrollViewer
+            {
+                Margin = new Thickness(0, 0, 0, 4)
+            };
+
+            if (rows)
+            {
+                scroll.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
+                scroll.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
+                scroll.MaxHeight = 360.0;
+            }
+            else
+            {
+                scroll.HorizontalScrollBarVisibility = ScrollBarVisibility.Auto;
+                scroll.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
+                scroll.MaxWidth = 540.0;
+            }
+
+            scroll.Content = countsList;
+            CountsPanel.Children.Add(scroll);
         }
 
         /// <summary>
