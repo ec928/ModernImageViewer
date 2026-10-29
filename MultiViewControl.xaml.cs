@@ -259,7 +259,6 @@ namespace ModernImageViewer
         {
             int maxCount = counts.Max();
             var accentBrush = new SolidColorBrush(accent);
-            var railBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(28, 255, 255, 255));
             var labelBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(200, 255, 255, 255));
 
             Button CreateStepButton(string glyph, string tip, bool enabled, double size, Action onClick)
@@ -319,7 +318,7 @@ namespace ModernImageViewer
                         VerticalAlignment = VerticalAlignment.Center
                     });
 
-                    // Horizontal proportional rail
+                    // Horizontal proportional bar
                     double fillWidth = Math.Max(6, (count / (double)Math.Max(maxCount, 1)) * trackWidth);
                     var barTrack = new Grid
                     {
@@ -327,13 +326,6 @@ namespace ModernImageViewer
                         Height = 6,
                         VerticalAlignment = VerticalAlignment.Center
                     };
-                    barTrack.Children.Add(new Border
-                    {
-                        Height = 6,
-                        Background = railBrush,
-                        CornerRadius = new CornerRadius(3),
-                        HorizontalAlignment = HorizontalAlignment.Stretch
-                    });
                     barTrack.Children.Add(new Border
                     {
                         Height = 6,
@@ -406,7 +398,7 @@ namespace ModernImageViewer
                         HorizontalAlignment = HorizontalAlignment.Center
                     });
 
-                    // Vertical proportional rail
+                    // Vertical proportional bar
                     double fillHeight = Math.Max(6, (count / (double)Math.Max(maxCount, 1)) * trackHeight);
                     var barTrack = new Grid
                     {
@@ -414,13 +406,6 @@ namespace ModernImageViewer
                         Height = trackHeight,
                         HorizontalAlignment = HorizontalAlignment.Center
                     };
-                    barTrack.Children.Add(new Border
-                    {
-                        Width = 6,
-                        Background = railBrush,
-                        CornerRadius = new CornerRadius(3),
-                        VerticalAlignment = VerticalAlignment.Stretch
-                    });
                     barTrack.Children.Add(new Border
                     {
                         Width = 6,
