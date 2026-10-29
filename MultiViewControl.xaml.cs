@@ -553,13 +553,13 @@ namespace ModernImageViewer
         }
 
         /// <summary>
-        /// The photo count sits inside the bar. The bar clips it, and a flat patch of
-        /// the bar color opens the divider for the digits.
+        /// The photo count sits on the bar, only as tall as the digits, so the
+        /// segment gaps stay visible above and below it.
         /// </summary>
         private (Grid Host, Border Strip, TextBlock Badge) MakeStripHost(int count, bool vertical, string name)
         {
             var strip = MakeCellStrip(count, vertical);
-            strip.Height = vertical ? 96 : 24;
+            strip.Height = vertical ? 96 : 30;
             var badge = new TextBlock
             {
                 Text = count.ToString(),
@@ -570,8 +570,8 @@ namespace ModernImageViewer
             {
                 Style = LayoutStyle("LayoutCountChipStyle"),
                 Child = badge,
-                Padding = vertical ? new Thickness(2, 3, 2, 3) : new Thickness(6, 0, 6, 0),
-                VerticalAlignment = vertical ? VerticalAlignment.Center : VerticalAlignment.Stretch
+                Padding = vertical ? new Thickness(2, 3, 2, 3) : new Thickness(4, 0, 4, 0),
+                VerticalAlignment = VerticalAlignment.Center
             };
             var layers = (Grid)strip.Child;
             layers.Children.Add(chip);
@@ -713,14 +713,18 @@ namespace ModernImageViewer
                 int line = i;
                 string name = $"Row {i + 1}";
                 var row = new Grid { Height = 36 };
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(56) });
+                // Two digits, held against the bar. The word stays in the spoken name.
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(36) });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                row.Children.Add(new TextBlock
+                var label = new TextBlock
                 {
-                    Text = name,
+                    Text = (i + 1).ToString(),
                     Style = LayoutStyle("LayoutLineLabelStyle")
-                });
+                };
+                AutomationProperties.SetName(label, name);
+                ToolTipService.SetToolTip(label, name);
+                row.Children.Add(label);
 
                 var visual = MakeStripHost(counts[i], vertical: false, name);
                 visual.Host.Margin = new Thickness(0, 0, 8, 0);
