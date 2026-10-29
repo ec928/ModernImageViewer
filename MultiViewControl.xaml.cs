@@ -165,6 +165,21 @@ namespace ModernImageViewer
             var evenCounts = MosaicLayout.LineCounts(total, lines);
             bool isCustom = !counts.SequenceEqual(evenCounts);
 
+            // Dynamic panel width: Rows mode is a stable comfortable 300px;
+            // Columns mode expands to accommodate more columns seamlessly
+            if (rows)
+            {
+                CountsPanel.Width = 300.0;
+            }
+            else
+            {
+                int nCols = counts.Length;
+                double colWidth = nCols <= 4 ? 42.0 : (nCols <= 7 ? 36.0 : (nCols <= 10 ? 30.0 : 26.0));
+                double colSpacing = nCols <= 4 ? 10.0 : (nCols <= 7 ? 8.0 : (nCols <= 10 ? 6.0 : 4.0));
+                double totalColsWidth = nCols * colWidth + (nCols - 1) * colSpacing;
+                CountsPanel.Width = Math.Max(300.0, Math.Min(700.0, totalColsWidth + 24.0));
+            }
+
             var accent = Windows.UI.Color.FromArgb(255, 0, 120, 212);
             try { if (Application.Current.Resources["SystemAccentColor"] is Windows.UI.Color c) accent = c; }
             catch { }
@@ -416,20 +431,20 @@ namespace ModernImageViewer
             var accentBrush = new SolidColorBrush(accent);
             var labelBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(200, 255, 255, 255));
 
-            Button CreateStepButton(string glyph, string tip, bool enabled, double size, Action onClick)
+            Button CreateStepButton(string glyph, string tip, bool enabled, double width, double height, Action onClick)
             {
                 var btn = new Button
                 {
                     Content = new FontIcon
                     {
                         Glyph = glyph,
-                        FontSize = Math.Max(8, size * 0.45),
+                        FontSize = Math.Max(7, Math.Min(height * 0.45, 9.5)),
                         FontFamily = new FontFamily("Segoe Fluent Icons")
                     },
-                    Width = size,
-                    Height = size,
+                    Width = width,
+                    Height = height,
                     Padding = new Thickness(0),
-                    CornerRadius = new CornerRadius(size / 2.0),
+                    CornerRadius = new CornerRadius(Math.Min(width, height) / 2.0),
                     Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
                     BorderThickness = new Thickness(0),
                     IsEnabled = enabled,
@@ -445,8 +460,13 @@ namespace ModernImageViewer
             if (rows)
             {
                 // Rows mode: Horizontal rows stacked top to bottom
-                const double trackWidth = 120;
-                var panel = new StackPanel { Spacing = 4 };
+                int nRows = counts.Length;
+                double trackWidth = nRows > 8 ? 100 : 120;
+                double btnSize = nRows > 8 ? 22 : 24;
+                double labelWidth = nRows > 8 ? 38 : 44;
+                double spacing = nRows > 8 ? 2 : 4;
+
+                var panel = new StackPanel { Spacing = spacing };
 
                 for (int i = 0; i < counts.Length; i++)
                 {
@@ -463,10 +483,11 @@ namespace ModernImageViewer
                     };
 
                     // Label
+                    string rowLabel = nRows > 8 ? $"R{i + 1}" : $"Row {i + 1}";
                     row.Children.Add(new TextBlock
                     {
-                        Text = $"Row {i + 1}",
-                        Width = 44,
+                        Text = rowLabel,
+                        Width = labelWidth,
                         FontSize = 12,
                         FontWeight = Microsoft.UI.Text.FontWeights.Medium,
                         Foreground = labelBrush,
@@ -494,7 +515,7 @@ namespace ModernImageViewer
 
                     // Stepper: Minus, Count, Plus
                     string lessTip = canLess ? $"One fewer in row {line + 1}" : "Cannot reduce further";
-                    row.Children.Add(CreateStepButton("\uE738", lessTip, canLess, 24, () => AdjustLine(line, -1)));
+                    row.Children.Add(CreateStepButton("\uE738", lessTip, canLess, btnSize, btnSize, () => AdjustLine(line, -1)));
 
                     row.Children.Add(new TextBlock
                     {
@@ -508,7 +529,7 @@ namespace ModernImageViewer
                     });
 
                     string moreTip = canMore ? $"One more in row {line + 1}" : "Cannot increase further";
-                    row.Children.Add(CreateStepButton("\uE710", moreTip, canMore, 24, () => AdjustLine(line, 1)));
+                    row.Children.Add(CreateStepButton("\uE710", moreTip, canMore, btnSize, btnSize, () => AdjustLine(line, 1)));
 
                     panel.Children.Add(row);
                 }
@@ -517,15 +538,18 @@ namespace ModernImageViewer
             else
             {
                 // Columns mode: Vertical columns side-by-side
-                const double trackHeight = 85;
+                const double trackHeight = 72;
                 int nCols = counts.Length;
-                double colWidth = Math.Clamp((260.0 - (nCols - 1) * 8) / nCols, 48.0, 68.0);
-                double btnSize = Math.Min(22.0, (colWidth - 18.0) / 2.0);
+                double colWidth = nCols <= 4 ? 42.0 : (nCols <= 7 ? 36.0 : (nCols <= 10 ? 30.0 : 26.0));
+                double colSpacing = nCols <= 4 ? 10.0 : (nCols <= 7 ? 8.0 : (nCols <= 10 ? 6.0 : 4.0));
+                bool compactLabels = nCols > 6;
+                double btnW = Math.Clamp(colWidth - 4.0, 18.0, 24.0);
+                double btnH = 18.0;
 
                 var panel = new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
-                    Spacing = 8,
+                    Spacing = colSpacing,
                     HorizontalAlignment = HorizontalAlignment.Center
                 };
 
@@ -539,18 +563,20 @@ namespace ModernImageViewer
                     var col = new StackPanel
                     {
                         Width = colWidth,
-                        Spacing = 6,
+                        Spacing = 4,
                         HorizontalAlignment = HorizontalAlignment.Center
                     };
 
                     // Label
+                    string colLabel = compactLabels ? $"C{i + 1}" : $"Col {i + 1}";
                     col.Children.Add(new TextBlock
                     {
-                        Text = $"Col {i + 1}",
-                        FontSize = 11.5,
+                        Text = colLabel,
+                        FontSize = compactLabels ? 11 : 11.5,
                         FontWeight = Microsoft.UI.Text.FontWeights.Medium,
                         Foreground = labelBrush,
-                        HorizontalAlignment = HorizontalAlignment.Center
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        TextAlignment = TextAlignment.Center
                     });
 
                     // Vertical proportional bar
@@ -572,16 +598,16 @@ namespace ModernImageViewer
                     ToolTipService.SetToolTip(barTrack, $"Column {i + 1}: {count} {(count == 1 ? "photo" : "photos")}");
                     col.Children.Add(barTrack);
 
-                    // Stepper: Minus, Count, Plus centered beneath the vertical rail
+                    // Stepper: [+] on top, count in middle, [-] on bottom
                     var stepper = new StackPanel
                     {
-                        Orientation = Orientation.Horizontal,
-                        Spacing = 2,
+                        Orientation = Orientation.Vertical,
+                        Spacing = 1,
                         HorizontalAlignment = HorizontalAlignment.Center
                     };
 
-                    string lessTip = canLess ? $"One fewer in column {line + 1}" : "Cannot reduce further";
-                    stepper.Children.Add(CreateStepButton("\uE738", lessTip, canLess, btnSize, () => AdjustLine(line, -1)));
+                    string moreTip = canMore ? $"One more in column {line + 1}" : "Cannot increase further";
+                    stepper.Children.Add(CreateStepButton("\uE710", moreTip, canMore, btnW, btnH, () => AdjustLine(line, 1)));
 
                     stepper.Children.Add(new TextBlock
                     {
@@ -589,15 +615,17 @@ namespace ModernImageViewer
                         FontSize = 12,
                         FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                         Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
-                        Width = 16,
+                        HorizontalAlignment = HorizontalAlignment.Center,
                         TextAlignment = TextAlignment.Center,
+                        Height = 16,
                         VerticalAlignment = VerticalAlignment.Center
                     });
 
-                    string moreTip = canMore ? $"One more in column {line + 1}" : "Cannot increase further";
-                    stepper.Children.Add(CreateStepButton("\uE710", moreTip, canMore, btnSize, () => AdjustLine(line, 1)));
+                    string lessTip = canLess ? $"One fewer in column {line + 1}" : "Cannot reduce further";
+                    stepper.Children.Add(CreateStepButton("\uE738", lessTip, canLess, btnW, btnH, () => AdjustLine(line, -1)));
 
                     col.Children.Add(stepper);
+                    ToolTipService.SetToolTip(col, $"Column {i + 1}: {count} {(count == 1 ? "photo" : "photos")}");
                     panel.Children.Add(col);
                 }
                 return panel;
