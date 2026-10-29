@@ -32,32 +32,46 @@
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
 
-                            <!-- Top Icon Bar -->
-                            <Grid Grid.Row="0" Margin="0,0,0,16" ColumnSpacing="4">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
+                            <!-- Top Icon Toolstrip -->
+                            <Border Grid.Row="0" Margin="0,0,0,16" Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="6" Padding="2">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="1"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="1"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="1"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="1"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
 
-                                <Button Grid.Column="0" Click="LoadProject_Click" HorizontalAlignment="Stretch" Padding="8,6" CornerRadius="4" ToolTipService.ToolTip="Open Project">
-                                    <SymbolIcon Symbol="OpenFile"/>
-                                </Button>
-                                <Button Grid.Column="1" Click="SaveProject_Click" HorizontalAlignment="Stretch" Padding="8,6" CornerRadius="4" ToolTipService.ToolTip="Save Project">
-                                    <SymbolIcon Symbol="Save"/>
-                                </Button>
-                                <Button Grid.Column="2" Click="SaveCollageImage_Click" HorizontalAlignment="Stretch" Padding="8,6" CornerRadius="4" ToolTipService.ToolTip="Export Collage">
-                                    <SymbolIcon Symbol="Pictures"/>
-                                </Button>
-                                <Button Grid.Column="3" Click="CanvasSize_Click" HorizontalAlignment="Stretch" Padding="8,6" CornerRadius="4" ToolTipService.ToolTip="Canvas Size">
-                                    <SymbolIcon Symbol="View"/>
-                                </Button>
-                                <Button Grid.Column="4" Click="ResetWindow_Click" HorizontalAlignment="Stretch" Padding="8,6" CornerRadius="4" ToolTipService.ToolTip="Reset View">
-                                    <SymbolIcon Symbol="Refresh"/>
-                                </Button>
-                            </Grid>
+                                    <Button Grid.Column="0" Click="LoadProject_Click" Style="{StaticResource SubtleButtonStyle}" HorizontalAlignment="Stretch" Height="28" Padding="0" CornerRadius="4" ToolTipService.ToolTip="Open Project">
+                                        <SymbolIcon Symbol="OpenFile"/>
+                                    </Button>
+                                    <Rectangle Grid.Column="1" Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,4" Opacity="0.5"/>
+
+                                    <Button Grid.Column="2" Click="SaveProject_Click" Style="{StaticResource SubtleButtonStyle}" HorizontalAlignment="Stretch" Height="28" Padding="0" CornerRadius="4" ToolTipService.ToolTip="Save Project">
+                                        <SymbolIcon Symbol="Save"/>
+                                    </Button>
+                                    <Rectangle Grid.Column="3" Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,4" Opacity="0.5"/>
+
+                                    <Button Grid.Column="4" Click="SaveCollageImage_Click" Style="{StaticResource SubtleButtonStyle}" HorizontalAlignment="Stretch" Height="28" Padding="0" CornerRadius="4" ToolTipService.ToolTip="Export Collage">
+                                        <SymbolIcon Symbol="Pictures"/>
+                                    </Button>
+                                    <Rectangle Grid.Column="5" Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,4" Opacity="0.5"/>
+
+                                    <Button Grid.Column="6" Click="CanvasSize_Click" Style="{StaticResource SubtleButtonStyle}" HorizontalAlignment="Stretch" Height="28" Padding="0" CornerRadius="4" ToolTipService.ToolTip="Canvas Size">
+                                        <SymbolIcon Symbol="View"/>
+                                    </Button>
+                                    <Rectangle Grid.Column="7" Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,4" Opacity="0.5"/>
+
+                                    <Button Grid.Column="8" Click="ResetWindow_Click" Style="{StaticResource SubtleButtonStyle}" HorizontalAlignment="Stretch" Height="28" Padding="0" CornerRadius="4" ToolTipService.ToolTip="Reset View">
+                                        <SymbolIcon Symbol="Refresh"/>
+                                    </Button>
+                                </Grid>
+                            </Border>
 
                             <!-- Toggles -->
                             <StackPanel Grid.Row="1" Spacing="12" Margin="0,0,0,20">

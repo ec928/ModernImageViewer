@@ -99,11 +99,15 @@
             </ListView>
         </Grid>
 
-        <Border x:Name="ActionBar" Canvas.ZIndex="1000" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,40" Padding="4" 
-                Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" 
-                BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" 
+        <Border x:Name="ActionBar" Canvas.ZIndex="1000" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,40" Padding="6,4" 
+                Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}" 
+                BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}" 
                 BorderThickness="1" CornerRadius="26" RequestedTheme="Dark"
+                Translation="0,0,32"
                 PointerEntered="Chrome_PointerEntered" PointerExited="Chrome_PointerExited">
+            <Border.Shadow>
+                <ThemeShadow/>
+            </Border.Shadow>
 
             <Border.OpacityTransition>
                 <ScalarTransition Duration="0:0:0.3"/>
