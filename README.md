@@ -1,4 +1,4 @@
-# 🚀 Modern Image Viewer (Public Beta)
+﻿# 🚀 Modern Image Viewer (Public Beta)
 
 A high-performance, hardware-accelerated image viewer built for creators, 3D artists, and power users. Designed specifically to handle massive directories of high-resolution images with zero UI lag and unique windowing capabilities.
 
@@ -75,7 +75,7 @@ The bar appears when you move the mouse:
 | **Grid** / **Esc** | Back to the tile grid |
 | **Fill / Fit** (**F**) | Fill crops each photo to its frame; Fit shows the whole photo |
 | **− 3 rows +** | Fewer or more rows (or the **−** and **+** keys). Click the label, or press **R**, to switch between rows and columns |
-| **3 · 2 · 2** | How many photos are in each row (top to bottom) or column (left to right). Click it to change any one: **+** takes a photo from the last line that can spare one, **−** gives it to the last line, and **Distribute Evenly** puts them back. Shown when there is more than one line and fewer lines than photos |
+| **3 · 2 · 2** | How many photos are in each row (top to bottom) or column (left to right). Click it to change any one: **+** takes a photo from the last line that can spare one, **−** gives it to the last line, and **Reset** puts them back. Shown when there is more than one line and fewer lines than photos |
 | **Hero** (**H**) | Make the first photo large. Click again for the next kind, and again after the last to turn the hero off: **Banner** (one large photo along a side), **Rectangle** (one large photo in a corner block, with 4, 5, 6, 7 or 9 photos) and **Pair** (the first two photos large, with 3 or more) |
 | **↻** (next position) | Move the hero: a banner or pair goes round the top, right, bottom and left sides |
 | **Reset** | Undo the zoom and pan of every photo |
