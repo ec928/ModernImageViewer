@@ -216,7 +216,7 @@ namespace ModernImageViewer
         {
             int shown = VisibleCount(count);
             ShownBadge.Visibility = count > shown ? Visibility.Visible : Visibility.Collapsed;
-            ShownText.Text = shown + " / " + count;
+            ShownText.Text = shown + " of " + count + " shown";
             bool show = shown > 1;
             if (!show)
             {

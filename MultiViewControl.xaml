@@ -297,20 +297,26 @@
                                 CornerRadius="14"
                                 ToolTipService.ToolTip="Edit the lines. Choose rows or columns, or press R. Plus and minus change how many.">
                             <Button.Flyout>
-                                <Flyout Opening="CountsFlyout_Opening" Opened="CountsFlyout_Opened" Closed="HudMenu_Closed" Placement="Top">
+                                <Flyout Opening="CountsFlyout_Opening" Opened="CountsFlyout_Opened" Closed="CountsFlyout_Closed" Placement="Top">
                                     <Flyout.FlyoutPresenterStyle>
                                         <Style TargetType="FlyoutPresenter">
                                             <Setter Property="MinWidth" Value="0" />
                                             <Setter Property="MaxWidth" Value="640" />
                                             <Setter Property="MaxHeight" Value="760" />
-                                            <Setter Property="Padding" Value="16,14" />
-                                            <Setter Property="CornerRadius" Value="8" />
+                                            <Setter Property="Padding" Value="0" />
+                                            <Setter Property="CornerRadius" Value="24" />
                                             <Setter Property="Background" Value="{ThemeResource SolidBackgroundFillColorBaseBrush}" />
-                                            <Setter Property="BorderBrush" Value="{ThemeResource SurfaceStrokeColorFlyoutBrush}" />
-                                            <Setter Property="BorderThickness" Value="1" />
+                                            <Setter Property="BorderThickness" Value="0" />
                                         </Style>
                                     </Flyout.FlyoutPresenterStyle>
-                                    <StackPanel x:Name="CountsPanel" Spacing="0" MinWidth="320" />
+                                    <Border x:Name="CountsCard"
+                                            Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                                            BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="24"
+                                            Padding="16,14">
+                                        <StackPanel x:Name="CountsPanel" Spacing="0" MinWidth="320" />
+                                    </Border>
                                 </Flyout>
                             </Button.Flyout>
                             <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
@@ -328,7 +334,7 @@
                                 CornerRadius="14"
                                 ToolTipService.ToolTip="Hero (H). Click for a large photo.">
                             <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                <FontIcon x:Name="HeroIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE734;" FontSize="14" />
+                                <FontIcon x:Name="HeroIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xEE4E;" FontSize="14" />
                                 <TextBlock x:Name="HeroText" Text="Hero" VerticalAlignment="Center" FontSize="13" />
                             </StackPanel>
                         </Button>

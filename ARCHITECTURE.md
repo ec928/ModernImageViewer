@@ -75,7 +75,9 @@ A new Play from the grid or viewer starts from the launch list. `CinematicAutoSa
 
 ## Multi-view
 
-The layout is a `MosaicLayout` tree of row and column splits; a leaf is a photo's index in `_items`. `MosaicLayout.ShownCount` is the one place the 16-photo limit lives. Grids come from `FromCounts` (photos per line), Banner and Pair from `CreateHeroLines` (the hero plus the other photos in lines), and Rectangle from `CreateRectangleHero`, which is drawn by hand for 4, 5, 6, 7 and 9 photos only.
+The layout is a `MosaicLayout` tree of row and column splits; a leaf is a photo's index in `_items`. `MosaicLayout.ShownCount` is the one place the 16-photo limit lives. When the selection is larger, the playbar reads `16 of 23 shown`. Grids come from `FromCounts` (photos per line), Banner and Pair from `CreateHeroLines` (the hero plus the other photos in lines), and Rectangle from `CreateRectangleHero`, which is drawn by hand for 4, 5, 6, 7 and 9 photos only.
+
+The multi-view root forces Dark, so the photo canvas and playbar stay dark in a light window. The grid-layout card does not inherit that. `WindowTheme` reads the window theme from an ancestor above this control and sets it on the card and its flyout presenter.
 
 Cells are owned by slot: `_cellRoots[i]` is the cell showing `_items[i]`. A swap exchanges the two roots and rebuilds with `_keepMosaic`, so no photo decodes again and dragged sizes stay. Removing a photo also keeps the other cells: its root is dropped, its entries leave the shared lists through the `CellParts` on its `Tag`, and the layout is rebuilt for the new count with `_relayoutKeepingCells`; only a photo past the limit that moves into view decodes. Because a cell outlives a swap, its controls (move arrows, menu, maximise, drag) look up `Slot(item)` when used; never capture the index at creation. Save JPEG reads cell `i` from `_cellRoots[i]` for the same reason: the order cells are built in follows the tree, not the photo order, and differs for a hero on the right or bottom.
 

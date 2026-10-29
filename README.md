@@ -66,16 +66,17 @@ Exit codes: `0` success, `1` publish failed, `2` output looks wrong, `3` app cra
 
 ## 🖼 Multi-View
 
-Select two or more photos in the tile grid (Ctrl+click or Shift+click), then click one of them or press **Enter**. Multi-view shows up to 16 photos. When more are selected, the bar shows how many are on screen, for example **16 / 23**. The multi-view window keeps its own size, separate from the normal window.
+Select two or more photos in the tile grid (Ctrl+click or Shift+click), then click one of them or press **Enter**. Multi-view shows up to 16 photos. When more are selected, the bar shows how many are on screen, for example **16 of 23 shown**. The multi-view window keeps its own size, separate from the normal window.
 
 The bar appears when you move the mouse:
 
 | Control | What it does |
 |---|---|
-| **Grid** / **Esc** | Back to the tile grid |
+| **Grid** / **Esc** | Back to the tile grid. From the comparison this drops the layout. **Esc** in the folder, after **Photos**, returns the photos you left |
+| **Photos** | Pick different photos. The layout stays, including dragged edges, the hero, the line counts, Fill or Fit, and each frame's zoom and pan. **Enter** or **View Together** fills the frames when the selection has at least as many photos as are on screen. A larger selection keeps those frames. Fewer leaves you in the folder |
 | **Fill / Fit** (**F**) | Fill crops each photo to its frame; Fit shows the whole photo |
-| **Grid Layout** (**3 Rows**) | Opens the layout card. **Rows** and **Columns** turn the grid, and **−** and **+** on that same control set how many lines. Each line is drawn as that many photos, with the count on the bar: rows are bands, columns are stacks from the left. A line's **−** and **+** move one photo. **+** takes it from the last other line that has more than one, and **−** moves it to the last line, or to the line before when that line is already the last. **Even out** puts the lines back to an even split when they differ. **R** flips rows and columns. The **−** and **+** keys change how many lines. |
-| **Hero** (**H**) | Make the first photo large. Click again for the next kind, and again after the last to turn the hero off: **Banner** (one large photo along a side), **Rectangle** (one large photo in a corner block, with 4, 5, 6, 7 or 9 photos) and **Pair** (the first two photos large, with 3 or more) |
+| **Grid Layout** (**3 Rows**) | Opens the layout card, and the button stays marked until the card closes. The card follows the window's light or dark theme. The bar over the photos stays dark. **Rows** and **Columns** turn the grid, and **−** and **+** on that same control set how many lines. Each line is drawn as that many photos, with the count on the bar: rows are bands, columns are stacks from the left. A line's **−** and **+** move one photo. **+** takes it from the last other line that has more than one, and **−** moves it to the last line, or to the line before when that line is already the last. **Even out** puts the lines back to an even split when they differ. **R** flips rows and columns. The **−** and **+** keys change how many lines. |
+| **Hero** (**H**) | The button reads **Hero** when it is off, and **Hero: Banner**, **Hero: Rectangle**, or **Hero: Pair** while that kind is on. Click for the next kind, and again after the last to turn it off. **Banner** is one large photo along a side. **Rectangle** is one large photo in a corner block, with 4, 5, 6, 7 or 9 photos. **Pair** is the first two photos large, with 3 or more |
 | **↻** (next position) | Move the hero: a banner or pair goes round the top, right, bottom and left sides |
 | **Reset** | Undo the zoom and pan of every photo |
 | **16:9** | Canvas shape: 16:9, 16:10, 21:9, 4:3, 1:1 or 3:4. Resize the window for any other shape |

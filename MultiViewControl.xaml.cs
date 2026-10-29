@@ -183,27 +183,76 @@ namespace ModernImageViewer
             ShowHudAndOverlays();
         }
 
-        private void CountsFlyout_Opening(object sender, object e) => FillCountsPanel();
+        private void CountsFlyout_Opening(object sender, object e)
+        {
+            ApplyGridLayoutTheme();
+            FillCountsPanel();
+        }
 
         private void CountsFlyout_Opened(object sender, object e)
         {
             HudMenu_Opened(sender, e);
+            HoldFlyoutSource(CountsButton, true);
             DispatcherQueue.TryEnqueue(ApplyGridLayoutTheme);
         }
 
+        private void CountsFlyout_Closed(object sender, object e)
+        {
+            HoldFlyoutSource(CountsButton, false);
+            HudMenu_Closed(sender, e);
+        }
+
         /// <summary>
-        /// The photo canvas stays dark. The flyout follows the app theme, so a light window
-        /// gets a light card and a dark window gets a dark card.
+        /// WinUI drops a button back to Normal once its flyout is up. Hold a pressed
+        /// plate until the card closes. The platform wash is a few percent of white
+        /// and does not read on this glass.
+        /// </summary>
+        private static void HoldFlyoutSource(Button? button, bool open)
+        {
+            if (button == null) return;
+            if (!open)
+            {
+                button.ClearValue(Control.BackgroundProperty);
+                button.ClearValue(Control.BorderBrushProperty);
+                button.ClearValue(Control.BorderThicknessProperty);
+                return;
+            }
+
+            button.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0x55, 0xFF, 0xFF, 0xFF));
+            button.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF));
+            button.BorderThickness = new Thickness(1);
+        }
+
+        /// <summary>
+        /// The photo canvas forces Dark, and this card lives under that grid, so an
+        /// unset theme comes out dark. The card follows the window instead.
         /// </summary>
         private void ApplyGridLayoutTheme()
         {
-            if (CountsPanel == null) return;
-            ElementTheme theme = ActualTheme;
-            if (theme == ElementTheme.Default) return;
-            CountsPanel.RequestedTheme = theme;
-            FlyoutPresenter? presenter = FindFlyoutPresenter(CountsPanel);
+            ElementTheme theme = WindowTheme();
+            if (CountsCard != null)
+                CountsCard.RequestedTheme = theme;
+            if (CountsPanel != null)
+                CountsPanel.RequestedTheme = theme;
+
+            FlyoutPresenter? presenter = FindFlyoutPresenter(CountsCard);
             if (presenter != null)
                 presenter.RequestedTheme = theme;
+        }
+
+        private ElementTheme WindowTheme()
+        {
+            DependencyObject? node = VisualTreeHelper.GetParent(this);
+            while (node != null)
+            {
+                if (node is FrameworkElement el && el.RequestedTheme != ElementTheme.Default)
+                    return el.RequestedTheme;
+                node = VisualTreeHelper.GetParent(node);
+            }
+
+            return Application.Current.RequestedTheme == ApplicationTheme.Dark
+                ? ElementTheme.Dark
+                : ElementTheme.Light;
         }
 
         private static FlyoutPresenter? FindFlyoutPresenter(DependencyObject? start)
@@ -939,7 +988,8 @@ namespace ModernImageViewer
             HeroButton.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
             RotateHeroButton.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
             RotateHeroButton.IsEnabled = _heroActive;
-            HeroText.Text = _heroActive ? MosaicLayout.HeroTitle(_heroKind) : "Hero";
+            string kind = MosaicLayout.HeroTitle(_heroKind);
+            HeroText.Text = _heroActive ? "Hero: " + kind : "Hero";
 
             if (_heroActive)
             {
@@ -949,7 +999,6 @@ namespace ModernImageViewer
                 HeroText.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
                 if (HeroIcon != null)
                 {
-                    HeroIcon.Glyph = "\uE735";
                     HeroIcon.Foreground = new SolidColorBrush(Microsoft.UI.Colors.White);
                     HeroIcon.Opacity = 1.0;
                 }
@@ -961,14 +1010,13 @@ namespace ModernImageViewer
                 HeroText.FontWeight = Microsoft.UI.Text.FontWeights.Normal;
                 if (HeroIcon != null)
                 {
-                    HeroIcon.Glyph = "\uE734";
                     HeroIcon.ClearValue(FontIcon.ForegroundProperty);
                     HeroIcon.Opacity = 0.85;
                 }
             }
 
             ToolTipService.SetToolTip(HeroButton, _heroActive
-                ? "Hero: " + HeroText.Text + ". Click to advance or turn off (H)"
+                ? "Hero: " + kind + ". Click for the next kind, or off (H)"
                 : "Hero (H). Click for a large photo.");
             ToolTipService.SetToolTip(RotateHeroButton, _heroActive
                 ? "Next position"
