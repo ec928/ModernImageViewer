@@ -21,29 +21,6 @@
             <Setter Property="FocusVisualSecondaryThickness" Value="0"/>
         </Style>
         <!-- Grid-layout flyout. Theme brushes so the card follows light and dark. -->
-        <Style x:Key="LayoutChoiceHostStyle" TargetType="Border">
-            <Setter Property="Background" Value="{ThemeResource ControlFillColorSecondaryBrush}"/>
-            <Setter Property="BorderBrush" Value="{ThemeResource ControlStrokeColorDefaultBrush}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="6"/>
-            <Setter Property="Padding" Value="2"/>
-        </Style>
-        <Style x:Key="LayoutChoiceSelectedStyle" TargetType="Border">
-            <Setter Property="Background" Value="{ThemeResource LayerFillColorDefaultBrush}"/>
-            <Setter Property="BorderBrush" Value="{ThemeResource ControlStrokeColorDefaultBrush}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="4"/>
-        </Style>
-        <Style x:Key="LayoutChoiceButtonStyle" TargetType="Button" BasedOn="{StaticResource SubtleButtonStyle}">
-            <Setter Property="MinWidth" Value="0"/>
-            <Setter Property="MinHeight" Value="32"/>
-            <Setter Property="Height" Value="32"/>
-            <Setter Property="Padding" Value="8,0"/>
-            <Setter Property="CornerRadius" Value="4"/>
-            <Setter Property="HorizontalAlignment" Value="Stretch"/>
-            <Setter Property="HorizontalContentAlignment" Value="Center"/>
-            <Setter Property="Background" Value="Transparent"/>
-        </Style>
         <Style x:Key="LayoutStepperWellStyle" TargetType="Border">
             <Setter Property="Background" Value="{ThemeResource ControlFillColorSecondaryBrush}"/>
             <Setter Property="BorderBrush" Value="{ThemeResource ControlStrokeColorDefaultBrush}"/>
@@ -53,14 +30,6 @@
         </Style>
         <Style x:Key="LayoutStepperDividerStyle" TargetType="Rectangle">
             <Setter Property="Fill" Value="{ThemeResource DividerStrokeColorDefaultBrush}"/>
-        </Style>
-        <Style x:Key="LayoutStepperValueStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyStrongTextBlockStyle}">
-            <Setter Property="FontSize" Value="14"/>
-            <Setter Property="TextAlignment" Value="Center"/>
-            <Setter Property="HorizontalAlignment" Value="Center"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="Typography.NumeralAlignment" Value="Tabular"/>
-            <Setter Property="IsHitTestVisible" Value="False"/>
         </Style>
         <Style x:Key="LayoutStepperButtonStyle" TargetType="primitives:RepeatButton">
             <Setter Property="Background" Value="Transparent"/>
@@ -129,6 +98,37 @@
             <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
+        <Style x:Key="LayoutChoiceHostStyle" TargetType="Border">
+            <Setter Property="Background" Value="{ThemeResource ControlFillColorSecondaryBrush}"/>
+            <Setter Property="BorderBrush" Value="{ThemeResource ControlStrokeColorDefaultBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="2"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+        </Style>
+        <!-- The choice pair sits in its own inset so the selected half is a closed box, the way the standalone switch was. -->
+        <Style x:Key="LayoutChoiceTrackStyle" TargetType="Border">
+            <Setter Property="Padding" Value="2"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <!-- LayerFillColorDefault is a 30% wash and reads as the track once minus and plus share the bar. A solid control fill stays visible in light and dark. -->
+        <Style x:Key="LayoutChoiceSelectedStyle" TargetType="Border">
+            <Setter Property="Background" Value="{ThemeResource ControlSolidFillColorDefaultBrush}"/>
+            <Setter Property="BorderBrush" Value="{ThemeResource ControlStrokeColorSecondaryBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="4"/>
+        </Style>
+        <Style x:Key="LayoutChoiceButtonStyle" TargetType="Button" BasedOn="{StaticResource SubtleButtonStyle}">
+            <Setter Property="MinWidth" Value="108"/>
+            <Setter Property="MinHeight" Value="32"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Padding" Value="10,0"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
         <Style x:Key="LayoutChoiceTextStyle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
@@ -165,6 +165,24 @@
         <Style x:Key="LayoutCellStyle" TargetType="Border">
             <Setter Property="Background" Value="{ThemeResource AccentFillColorDefaultBrush}"/>
             <Setter Property="CornerRadius" Value="1"/>
+            <Setter Property="IsHitTestVisible" Value="False"/>
+        </Style>
+        <Style x:Key="LayoutCountChipStyle" TargetType="Border">
+            <Setter Property="Background" Value="{ThemeResource AccentFillColorDefaultBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="0"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="IsHitTestVisible" Value="False"/>
+        </Style>
+        <Style x:Key="LayoutCountChipTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="TextAlignment" Value="Center"/>
+            <Setter Property="Typography.NumeralAlignment" Value="Tabular"/>
+            <Setter Property="Foreground" Value="{ThemeResource TextOnAccentFillColorPrimaryBrush}"/>
             <Setter Property="IsHitTestVisible" Value="False"/>
         </Style>
         <Style x:Key="LayoutColumnLabelStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
@@ -265,7 +283,7 @@
                                 Style="{StaticResource QuietButtonStyle}"
                                 Padding="8,5"
                                 CornerRadius="14"
-                                ToolTipService.ToolTip="Edit the lines. R flips rows and columns. Plus and minus change how many.">
+                                ToolTipService.ToolTip="Edit the lines. Choose rows or columns, or press R. Plus and minus change how many.">
                             <Button.Flyout>
                                 <Flyout Opening="CountsFlyout_Opening" Opened="CountsFlyout_Opened" Closed="HudMenu_Closed" Placement="Top">
                                     <Flyout.FlyoutPresenterStyle>

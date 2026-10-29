@@ -227,7 +227,7 @@ namespace ModernImageViewer
             CountsText.Text = $"{lines} {noun}";
 
             ToolTipService.SetToolTip(CountsButton,
-                "Edit the lines. R flips rows and columns. Plus and minus change how many.");
+                "Edit the lines. Choose rows or columns, or press R. Plus and minus change how many.");
         }
 
         private static double WeightAt(MosaicLayout node, int index)

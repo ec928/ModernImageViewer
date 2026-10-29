@@ -40,7 +40,6 @@ namespace ModernImageViewer
         private double _countsScrollAcross;
         private readonly List<LayoutLineSlot> _lineSlots = new();
         private TextBlock? _layoutSubtitle;
-        private TextBlock? _lineCountText;
         private RepeatButton? _lineLess;
         private RepeatButton? _lineMore;
         private Button? _evenButton;
@@ -225,7 +224,7 @@ namespace ModernImageViewer
             if (!IsLayoutFlyoutOpen)
                 return;
             bool rows = !_flipped;
-            if (_layoutSubtitle == null || _countsScroll == null || _lineCountText == null || rows != _openLayoutIsRows)
+            if (_layoutSubtitle == null || _countsScroll == null || _lineLess == null || rows != _openLayoutIsRows)
             {
                 FillCountsPanel();
                 return;
@@ -271,6 +270,7 @@ namespace ModernImageViewer
                 var slot = _lineSlots[i];
                 FillStrip(slot.Strip, counts[i], slot.Vertical);
                 slot.Value.Text = counts[i].ToString();
+                AutomationProperties.SetName(slot.Value, counts[i] + " photos in " + slot.Name.ToLowerInvariant());
                 string spoken = slot.Name.ToLowerInvariant();
                 bool canLess = MosaicLayout.MovePhoto(counts, i, -1) != null;
                 bool canMore = MosaicLayout.MovePhoto(counts, i, 1) != null;
@@ -290,11 +290,9 @@ namespace ModernImageViewer
 
         private void SyncLineCountStepper(int lines, bool rows)
         {
-            if (_lineCountText == null || _lineLess == null || _lineMore == null) return;
+            if (_lineLess == null || _lineMore == null) return;
             int total = LineTotal();
             string noun = rows ? "rows" : "columns";
-            string one = rows ? "row" : "column";
-            _lineCountText.Text = lines + " " + (lines == 1 ? one : noun);
             bool canLess = lines > 1;
             bool canMore = lines < total;
             ApplyStepState(_lineLess, canLess, canLess ? "Fewer " + noun : "Minimum reached");
@@ -411,53 +409,76 @@ namespace ModernImageViewer
 
         private FrameworkElement BuildLayoutToolbar(int lines, bool rows)
         {
-            var bar = new Grid { Margin = new Thickness(0, 8, 0, 0) };
-            bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-            var choiceHost = new Border { Style = LayoutStyle("LayoutChoiceHostStyle"), MinWidth = 196 };
-            var choiceGrid = new Grid();
-            choiceGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            choiceGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            var selected = new Border { Style = LayoutStyle("LayoutChoiceSelectedStyle") };
-            Grid.SetColumn(selected, rows ? 0 : 1);
-            choiceGrid.Children.Add(selected);
-            choiceGrid.Children.Add(MakeChoiceButton("Rows", "\uEA37", rows, 0, () =>
-            {
-                if (!rows)
-                    ToggleRowsColumns();
-            }));
-            choiceGrid.Children.Add(MakeChoiceButton("Columns", "\uE8C0", !rows, 1, () =>
-            {
-                if (rows)
-                    ToggleRowsColumns();
-            }));
-            choiceHost.Child = choiceGrid;
-            bar.Children.Add(choiceHost);
-
             int total = LineTotal();
             bool canLess = lines > 1;
             bool canMore = lines < total;
             string noun = rows ? "rows" : "columns";
-            string one = rows ? "row" : "column";
-            var step = MakeStepperWell(
-                $"{lines} {(lines == 1 ? one : noun)}",
-                canLess ? $"Fewer {noun}" : "Minimum reached",
-                canMore ? $"More {noun}" : "Maximum reached",
-                canLess,
-                canMore,
-                () => ChangeLines(-1),
-                () => ChangeLines(1),
-                vertical: false);
-            step.Value.MinWidth = 96;
-            _lineCountText = step.Value;
-            _lineLess = step.Less;
-            _lineMore = step.More;
-            step.Well.Margin = new Thickness(8, 0, 0, 0);
-            Grid.SetColumn(step.Well, 2);
-            bar.Children.Add(step.Well);
-            return bar;
+            var host = new Border
+            {
+                Style = LayoutStyle("LayoutChoiceHostStyle"),
+                Margin = new Thickness(0, 10, 0, 2)
+            };
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var less = MakeStepperButton("\uE738", canLess ? "Fewer " + noun : "Minimum reached", canLess, () => ChangeLines(-1), new CornerRadius(4));
+            var more = MakeStepperButton("\uE710", canMore ? "More " + noun : "Maximum reached", canMore, () => ChangeLines(1), new CornerRadius(4));
+            Grid.SetColumn(less, 0);
+            Grid.SetColumn(more, 4);
+            grid.Children.Add(less);
+            grid.Children.Add(more);
+
+            var leftRule = StepperRule(vertical: true);
+            var rightRule = StepperRule(vertical: true);
+            leftRule.Margin = new Thickness(0, 8, 0, 8);
+            rightRule.Margin = new Thickness(0, 8, 0, 8);
+            Grid.SetColumn(leftRule, 1);
+            Grid.SetColumn(rightRule, 3);
+            grid.Children.Add(leftRule);
+            grid.Children.Add(rightRule);
+
+            var choice = BuildOrientationChoice(rows);
+            Grid.SetColumn(choice, 2);
+            grid.Children.Add(choice);
+
+            _lineLess = less;
+            _lineMore = more;
+            host.Child = grid;
+            return host;
+        }
+
+        /// <summary>
+        /// The Rows | Columns switch, inset between the steppers. The selected half is its own
+        /// rounded box. Minus and plus stay outside this track so they do not eat that box.
+        /// </summary>
+        private FrameworkElement BuildOrientationChoice(bool rows)
+        {
+            var track = new Border { Style = LayoutStyle("LayoutChoiceTrackStyle") };
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var selected = new Border { Style = LayoutStyle("LayoutChoiceSelectedStyle") };
+            Grid.SetColumn(selected, rows ? 0 : 1);
+            grid.Children.Add(selected);
+
+            grid.Children.Add(MakeChoiceButton("Rows", "\uEA37", rows, 0, () =>
+            {
+                if (!rows)
+                    ToggleRowsColumns();
+            }));
+            grid.Children.Add(MakeChoiceButton("Columns", "\uE8C0", !rows, 1, () =>
+            {
+                if (rows)
+                    ToggleRowsColumns();
+            }));
+
+            track.Child = grid;
+            return track;
         }
 
         /// <summary>
@@ -474,13 +495,32 @@ namespace ModernImageViewer
         private void FillStrip(Border strip, int count, bool vertical)
         {
             count = Math.Max(count, 1);
-            var host = new Grid();
+            if (strip.Child is not Grid layers)
+            {
+                layers = new Grid();
+                strip.Child = layers;
+            }
+
+            Grid cells;
+            if (layers.Children.Count == 0 || layers.Children[0] is not Grid existing)
+            {
+                cells = new Grid();
+                layers.Children.Insert(0, cells);
+            }
+            else
+            {
+                cells = existing;
+                cells.Children.Clear();
+                cells.RowDefinitions.Clear();
+                cells.ColumnDefinitions.Clear();
+            }
+
             for (int i = 0; i < count; i++)
             {
                 if (vertical)
-                    host.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+                    cells.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
                 else
-                    host.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                    cells.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
                 var cell = new Border
                 {
@@ -493,19 +533,16 @@ namespace ModernImageViewer
                     Grid.SetRow(cell, i);
                 else
                     Grid.SetColumn(cell, i);
-                host.Children.Add(cell);
+                cells.Children.Add(cell);
             }
-
-            strip.Child = host;
         }
 
-        private (Border Well, TextBlock Value, RepeatButton Less, RepeatButton More) MakeLineStepper(int line, int count, string name, bool vertical)
+        private (Border Well, RepeatButton Less, RepeatButton More) MakeLineStepper(int line, string name, bool vertical)
         {
             bool canLess = MosaicLayout.MovePhoto(CurrentLineCounts(), line, -1) != null;
             bool canMore = MosaicLayout.MovePhoto(CurrentLineCounts(), line, 1) != null;
             string spoken = name.ToLowerInvariant();
             return MakeStepperWell(
-                count.ToString(),
                 canLess ? $"One fewer in {spoken}" : $"{name} already has one photo",
                 canMore ? $"One more in {spoken}" : "No photo left to move",
                 canLess,
@@ -515,8 +552,42 @@ namespace ModernImageViewer
                 vertical);
         }
 
-        private (Border Well, TextBlock Value, RepeatButton Less, RepeatButton More) MakeStepperWell(
-            string value,
+        /// <summary>
+        /// The photo count sits inside the bar. The bar clips it, and a flat patch of
+        /// the bar color opens the divider for the digits.
+        /// </summary>
+        private (Grid Host, Border Strip, TextBlock Badge) MakeStripHost(int count, bool vertical, string name)
+        {
+            var strip = MakeCellStrip(count, vertical);
+            strip.Height = vertical ? 96 : 24;
+            var badge = new TextBlock
+            {
+                Text = count.ToString(),
+                Style = LayoutStyle("LayoutCountChipTextStyle")
+            };
+            AutomationProperties.SetName(badge, count + " photos in " + name.ToLowerInvariant());
+            var chip = new Border
+            {
+                Style = LayoutStyle("LayoutCountChipStyle"),
+                Child = badge,
+                Padding = vertical ? new Thickness(2, 3, 2, 3) : new Thickness(6, 0, 6, 0),
+                VerticalAlignment = vertical ? VerticalAlignment.Center : VerticalAlignment.Stretch
+            };
+            var layers = (Grid)strip.Child;
+            layers.Children.Add(chip);
+            layers.SizeChanged += (_, e) =>
+            {
+                layers.Clip = new RectangleGeometry
+                {
+                    Rect = new Rect(0, 0, e.NewSize.Width, e.NewSize.Height)
+                };
+            };
+            var host = new Grid { Height = strip.Height };
+            host.Children.Add(strip);
+            return (host, strip, badge);
+        }
+
+        private (Border Well, RepeatButton Less, RepeatButton More) MakeStepperWell(
             string lessTip,
             string moreTip,
             bool canLess,
@@ -528,32 +599,18 @@ namespace ModernImageViewer
             // Segoe Fluent Icons Remove and Add. A text minus stays a hairline at this size.
             var lessButton = MakeStepperButton("\uE738", lessTip, canLess, less, vertical ? new CornerRadius(0, 0, 4, 4) : new CornerRadius(4, 0, 0, 4));
             var moreButton = MakeStepperButton("\uE710", moreTip, canMore, more, vertical ? new CornerRadius(4, 4, 0, 0) : new CornerRadius(0, 4, 4, 0));
-            var figure = new TextBlock
-            {
-                Text = value,
-                Style = LayoutStyle("LayoutStepperValueStyle"),
-                MinWidth = vertical ? 0 : 28,
-                Margin = vertical ? new Thickness(0, 2, 0, 2) : new Thickness(4, 0, 4, 0)
-            };
             var grid = new Grid();
             if (vertical)
             {
                 grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
                 grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1) });
                 grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1) });
-                grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
                 Grid.SetRow(moreButton, 0);
-                Grid.SetRow(figure, 2);
-                Grid.SetRow(lessButton, 4);
+                Grid.SetRow(lessButton, 2);
                 var topRule = StepperRule(vertical: false);
-                var bottomRule = StepperRule(vertical: false);
                 Grid.SetRow(topRule, 1);
-                Grid.SetRow(bottomRule, 3);
                 grid.Children.Add(moreButton);
                 grid.Children.Add(topRule);
-                grid.Children.Add(figure);
-                grid.Children.Add(bottomRule);
                 grid.Children.Add(lessButton);
             }
             else
@@ -561,19 +618,12 @@ namespace ModernImageViewer
                 grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1) });
                 grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1) });
-                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 Grid.SetColumn(lessButton, 0);
-                Grid.SetColumn(figure, 2);
-                Grid.SetColumn(moreButton, 4);
+                Grid.SetColumn(moreButton, 2);
                 var leftRule = StepperRule(vertical: true);
-                var rightRule = StepperRule(vertical: true);
                 Grid.SetColumn(leftRule, 1);
-                Grid.SetColumn(rightRule, 3);
                 grid.Children.Add(lessButton);
                 grid.Children.Add(leftRule);
-                grid.Children.Add(figure);
-                grid.Children.Add(rightRule);
                 grid.Children.Add(moreButton);
             }
 
@@ -583,7 +633,7 @@ namespace ModernImageViewer
                 HorizontalAlignment = vertical ? HorizontalAlignment.Stretch : HorizontalAlignment.Center,
                 Child = grid
             };
-            return (well, figure, lessButton, moreButton);
+            return (well, lessButton, moreButton);
         }
 
         private Rectangle StepperRule(bool vertical)
@@ -615,12 +665,12 @@ namespace ModernImageViewer
             return button;
         }
 
-        private void RememberLine(Border strip, (Border Well, TextBlock Value, RepeatButton Less, RepeatButton More) steps, string name, bool vertical)
+        private void RememberLine(Border strip, (Border Well, RepeatButton Less, RepeatButton More) steps, TextBlock badge, string name, bool vertical)
         {
             _lineSlots.Add(new LayoutLineSlot
             {
                 Strip = strip,
-                Value = steps.Value,
+                Value = badge,
                 Less = steps.Less,
                 More = steps.More,
                 Name = name,
@@ -672,15 +722,14 @@ namespace ModernImageViewer
                     Style = LayoutStyle("LayoutLineLabelStyle")
                 });
 
-                var strip = MakeCellStrip(counts[i], vertical: false);
-                strip.Height = 18;
-                strip.Margin = new Thickness(0, 0, 8, 0);
-                strip.VerticalAlignment = VerticalAlignment.Center;
-                Grid.SetColumn(strip, 1);
-                row.Children.Add(strip);
+                var visual = MakeStripHost(counts[i], vertical: false, name);
+                visual.Host.Margin = new Thickness(0, 0, 8, 0);
+                visual.Host.VerticalAlignment = VerticalAlignment.Center;
+                Grid.SetColumn(visual.Host, 1);
+                row.Children.Add(visual.Host);
 
-                var steps = MakeLineStepper(line, counts[i], name, vertical: false);
-                RememberLine(strip, steps, name, vertical: false);
+                var steps = MakeLineStepper(line, name, vertical: false);
+                RememberLine(visual.Strip, steps, visual.Badge, name, vertical: false);
                 Grid.SetColumn(steps.Well, 2);
                 row.Children.Add(steps.Well);
                 panel.Children.Add(row);
@@ -715,12 +764,11 @@ namespace ModernImageViewer
                     Style = LayoutStyle("LayoutColumnLabelStyle")
                 });
 
-                var strip = MakeCellStrip(counts[i], vertical: true);
-                strip.Height = 96;
-                strip.Margin = new Thickness(0, 2, 0, 4);
-                column.Children.Add(strip);
-                var steps = MakeLineStepper(line, counts[i], name, vertical: true);
-                RememberLine(strip, steps, name, vertical: true);
+                var visual = MakeStripHost(counts[i], vertical: true, name);
+                visual.Host.Margin = new Thickness(0, 2, 0, 4);
+                column.Children.Add(visual.Host);
+                var steps = MakeLineStepper(line, name, vertical: true);
+                RememberLine(visual.Strip, steps, visual.Badge, name, vertical: true);
                 column.Children.Add(steps.Well);
                 panel.Children.Add(column);
             }
