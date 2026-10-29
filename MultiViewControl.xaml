@@ -147,8 +147,8 @@
                                 <Flyout Opening="CountsFlyout_Opening" Opened="HudMenu_Opened" Closed="HudMenu_Closed" Placement="Top">
                                     <Flyout.FlyoutPresenterStyle>
                                         <Style TargetType="FlyoutPresenter">
-                                            <Setter Property="MaxWidth" Value="400" />
-                                            <Setter Property="MaxHeight" Value="400" />
+                                            <Setter Property="MaxWidth" Value="450" />
+                                            <Setter Property="MaxHeight" Value="500" />
                                             <Setter Property="Padding" Value="14,12" />
                                             <Setter Property="CornerRadius" Value="10" />
                                             <Setter Property="Background" Value="#F21E1E22" />
@@ -156,7 +156,7 @@
                                             <Setter Property="BorderThickness" Value="1" />
                                         </Style>
                                     </Flyout.FlyoutPresenterStyle>
-                                    <StackPanel x:Name="CountsPanel" Spacing="4" Width="265" />
+                                    <StackPanel x:Name="CountsPanel" Spacing="0" Width="280" />
                                 </Flyout>
                             </Button.Flyout>
                             <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">

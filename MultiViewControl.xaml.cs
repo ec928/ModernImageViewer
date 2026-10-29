@@ -170,14 +170,14 @@ namespace ModernImageViewer
             catch { }
 
             // 1. Clean Header: Title on left, Quiet "Reset" button on right
-            var header = new Grid { Margin = new Thickness(0, 0, 0, 10) };
+            var header = new Grid { Margin = new Thickness(0, 0, 0, 8) };
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             var titleStack = new StackPanel { Spacing = 1 };
             titleStack.Children.Add(new TextBlock
             {
-                Text = rows ? "Row Distribution" : "Column Distribution",
+                Text = "Grid Layout",
                 FontSize = 13,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                 Foreground = new SolidColorBrush(Microsoft.UI.Colors.White)
@@ -246,7 +246,162 @@ namespace ModernImageViewer
 
             CountsPanel.Children.Add(header);
 
-            // 2. Proportional Line Distribution (Rows = horizontal rails, Columns = vertical rails)
+            // 2. Control Toolbar: Orientation Switcher (Rows | Columns) + Line Count Stepper
+            var toolbarRow = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+            toolbarRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            toolbarRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            toolbarRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            // Orientation segmented pill
+            var segContainer = new Border
+            {
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(18, 255, 255, 255)),
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(32, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(2)
+            };
+            var segPanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+
+            Button CreateSegButton(string label, string glyph, bool isSelected, Action onClick)
+            {
+                var btn = new Button
+                {
+                    Padding = new Thickness(7, 3, 7, 3),
+                    CornerRadius = new CornerRadius(4),
+                    Background = isSelected
+                        ? new SolidColorBrush(Windows.UI.Color.FromArgb(45, accent.R, accent.G, accent.B))
+                        : new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                    BorderBrush = isSelected
+                        ? new SolidColorBrush(Windows.UI.Color.FromArgb(120, accent.R, accent.G, accent.B))
+                        : new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                    BorderThickness = new Thickness(isSelected ? 1 : 0)
+                };
+                var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
+                content.Children.Add(new FontIcon
+                {
+                    Glyph = glyph,
+                    FontFamily = new FontFamily("Segoe Fluent Icons"),
+                    FontSize = 10,
+                    Foreground = isSelected
+                        ? new SolidColorBrush(accent)
+                        : new SolidColorBrush(Windows.UI.Color.FromArgb(160, 255, 255, 255))
+                });
+                content.Children.Add(new TextBlock
+                {
+                    Text = label,
+                    FontSize = 11,
+                    FontWeight = isSelected ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal,
+                    Foreground = isSelected
+                        ? new SolidColorBrush(Microsoft.UI.Colors.White)
+                        : new SolidColorBrush(Windows.UI.Color.FromArgb(170, 255, 255, 255))
+                });
+                btn.Content = content;
+                btn.Click += (_, _) => onClick();
+                return btn;
+            }
+
+            segPanel.Children.Add(CreateSegButton("Rows", "\uE8AB", rows, () =>
+            {
+                if (!rows)
+                {
+                    ToggleRowsColumns();
+                    FillCountsPanel();
+                }
+            }));
+            segPanel.Children.Add(CreateSegButton("Columns", "\uE8AC", !rows, () =>
+            {
+                if (rows)
+                {
+                    ToggleRowsColumns();
+                    FillCountsPanel();
+                }
+            }));
+            segContainer.Child = segPanel;
+            Grid.SetColumn(segContainer, 0);
+            toolbarRow.Children.Add(segContainer);
+
+            // Line count stepper: [-] 4 rows [+]
+            var linesStepper = new Border
+            {
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(18, 255, 255, 255)),
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(32, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(2)
+            };
+            var linesPanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
+
+            bool canLessLines = lines > 1;
+            bool canMoreLines = lines < total;
+
+            var lineLessBtn = new Button
+            {
+                Content = new FontIcon { Glyph = "\uE738", FontSize = 9, FontFamily = new FontFamily("Segoe Fluent Icons") },
+                Width = 22,
+                Height = 22,
+                Padding = new Thickness(0),
+                CornerRadius = new CornerRadius(4),
+                Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                BorderThickness = new Thickness(0),
+                IsEnabled = canLessLines,
+                Opacity = canLessLines ? 0.9 : 0.25
+            };
+            ToolTipService.SetToolTip(lineLessBtn, canLessLines ? $"Fewer {(rows ? "rows" : "columns")}" : "Minimum reached");
+            lineLessBtn.Click += (_, _) =>
+            {
+                ChangeLines(-1);
+                FillCountsPanel();
+            };
+            linesPanel.Children.Add(lineLessBtn);
+
+            var lineText = new TextBlock
+            {
+                Text = $"{lines} {(rows ? (lines == 1 ? "row" : "rows") : (lines == 1 ? "col" : "cols"))}",
+                FontSize = 11.5,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
+                MinWidth = 44,
+                TextAlignment = TextAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            linesPanel.Children.Add(lineText);
+
+            var lineMoreBtn = new Button
+            {
+                Content = new FontIcon { Glyph = "\uE710", FontSize = 9, FontFamily = new FontFamily("Segoe Fluent Icons") },
+                Width = 22,
+                Height = 22,
+                Padding = new Thickness(0),
+                CornerRadius = new CornerRadius(4),
+                Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                BorderThickness = new Thickness(0),
+                IsEnabled = canMoreLines,
+                Opacity = canMoreLines ? 0.9 : 0.25
+            };
+            ToolTipService.SetToolTip(lineMoreBtn, canMoreLines ? $"More {(rows ? "rows" : "columns")}" : "Maximum reached");
+            lineMoreBtn.Click += (_, _) =>
+            {
+                ChangeLines(1);
+                FillCountsPanel();
+            };
+            linesPanel.Children.Add(lineMoreBtn);
+
+            linesStepper.Child = linesPanel;
+            Grid.SetColumn(linesStepper, 2);
+            toolbarRow.Children.Add(linesStepper);
+
+            CountsPanel.Children.Add(toolbarRow);
+
+            // 3. Subtle divider
+            CountsPanel.Children.Add(new Rectangle
+            {
+                Height = 1,
+                Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(20, 255, 255, 255)),
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+
+            // 4. Proportional Line Distribution (Rows = horizontal rails, Columns = vertical rails)
             CountsPanel.Children.Add(BuildCountsList(counts, rows, accent));
         }
 
