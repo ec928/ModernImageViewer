@@ -1115,18 +1115,7 @@ namespace ModernImageViewer
                         scrollViewer.ChangeView(null, centerOffsetY, null, false);
                     }
 
-                    if (container.ContentTemplateRoot is Grid rootElement)
-                    {
-                        if (!isTearOff) RootGrid.Focus(FocusState.Programmatic);
-
-                        rootElement.Scale = new Vector3(1.15f, 1.15f, 1.0f);
-                        rootElement.Opacity = 0.5;
-
-                        await Task.Delay(350);
-
-                        rootElement.Scale = new Vector3(1.0f, 1.0f, 1.0f);
-                        rootElement.Opacity = 1.0;
-                    }
+                    if (!isTearOff) RootGrid.Focus(FocusState.Programmatic);
                 }
             }
             catch { }

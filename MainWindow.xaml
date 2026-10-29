@@ -319,30 +319,34 @@
                             </BreadcrumbBar.ItemTemplate>
                         </BreadcrumbBar>
 
-                        <TreeView Grid.Row="2" x:Name="FolderTreeView" ItemInvoked="FolderTreeView_ItemInvoked" PreviewKeyDown="FolderTreeView_PreviewKeyDown" SelectionMode="None" Margin="-8,4,0,4">
+                        <TreeView Grid.Row="2" x:Name="FolderTreeView" ItemInvoked="FolderTreeView_ItemInvoked" PreviewKeyDown="FolderTreeView_PreviewKeyDown" SelectionMode="None" Margin="4,4,6,4">
                             <TreeView.ItemContainerStyle>
                                 <Style TargetType="TreeViewItem">
                                     <Setter Property="MinHeight" Value="28"/>
                                     <Setter Property="Padding" Value="0"/>
-                                    <Setter Property="Margin" Value="0"/>
-                                    <Setter Property="CornerRadius" Value="4"/>
+                                    <Setter Property="Margin" Value="4,1,4,1"/>
+                                    <Setter Property="CornerRadius" Value="6"/>
                                     <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                    <Setter Property="FocusVisualPrimaryBrush" Value="{ThemeResource AccentFillColorDefaultBrush}"/>
+                                    <Setter Property="FocusVisualSecondaryBrush" Value="Transparent"/>
+                                    <Setter Property="FocusVisualPrimaryThickness" Value="1.5"/>
+                                    <Setter Property="FocusVisualSecondaryThickness" Value="0"/>
+                                    <Setter Property="FocusVisualMargin" Value="-1"/>
                                 </Style>
                             </TreeView.ItemContainerStyle>
                             <TreeView.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid Height="28" Margin="-8,0,-6,0" Padding="3,0,2,0" CornerRadius="4" Background="Transparent" Opacity="{Binding Content.NodeOpacity}">
-                                        <Border IsHitTestVisible="False" Margin="-5,0,-2,0" CornerRadius="4" Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Visibility="{Binding Content.CurrentHighlightVisibility}"/>
-                                        <Border IsHitTestVisible="False" Width="3" Height="16" CornerRadius="1.5" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="-5,0,0,0" Background="{ThemeResource AccentFillColorDefaultBrush}" Visibility="{Binding Content.CurrentHighlightVisibility}"/>
-                                        <Grid ColumnSpacing="6" VerticalAlignment="Center">
+                                    <Grid Height="28" Padding="4,0,6,0" CornerRadius="6" Background="Transparent" Opacity="{Binding Content.NodeOpacity}">
+                                        <Border IsHitTestVisible="False" CornerRadius="6" Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Visibility="{Binding Content.CurrentHighlightVisibility}"/>
+                                        <Border IsHitTestVisible="False" Width="3" Height="16" CornerRadius="1.5" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="2,0,0,0" Background="{ThemeResource AccentFillColorDefaultBrush}" Visibility="{Binding Content.CurrentHighlightVisibility}"/>
+                                        <Grid ColumnSpacing="8" VerticalAlignment="Center" Margin="6,0,0,0">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="*"/>
                                             </Grid.ColumnDefinitions>
-                                            <Grid Grid.Column="0" Width="16" Height="16" VerticalAlignment="Center">
+                                            <Grid Grid.Column="0" Width="18" Height="18" VerticalAlignment="Center">
                                                 <Grid Visibility="{Binding Content.FolderIconVisibility}">
-                                                <FontIcon Glyph="&#xE8B7;" FontFamily="Segoe Fluent Icons" FontSize="14.5" Foreground="{ThemeResource TextFillColorPrimaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding Content.FolderIconVisibility}"/>
-
+                                                    <FontIcon Glyph="&#xE8B7;" FontFamily="Segoe Fluent Icons" FontSize="14.5" Foreground="{ThemeResource TextFillColorPrimaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding Content.FolderIconVisibility}"/>
                                                 </Grid>
                                                 <FontIcon Glyph="&#xE74A;" FontFamily="Segoe Fluent Icons" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="1,0,0,0" Visibility="{Binding Content.UpIconVisibility}"/>
                                                 <FontIcon Glyph="&#xE736;" FontFamily="Segoe Fluent Icons" FontSize="14" Foreground="{ThemeResource ComicIconBrush}" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding Content.ComicIconVisibility}"/>
@@ -484,8 +488,7 @@
                                                 BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
                                                 Opacity="{x:Bind SelectionOpacity, Mode=OneWay}"/>
                                         <Grid Grid.RowSpan="2" IsHitTestVisible="False" Opacity="{x:Bind KeyboardCursorOpacity, Mode=OneWay}">
-                                            <Border CornerRadius="6" BorderThickness="2" BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"/>
-                                            <Border Margin="2" CornerRadius="4" BorderThickness="1.2" BorderBrush="#E6FFFFFF"/>
+                                            <Border Margin="-1" CornerRadius="7" BorderThickness="2" BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"/>
                                         </Grid>
                                         <Grid Grid.Row="0" Width="32" Height="32" Margin="10" HorizontalAlignment="Left" VerticalAlignment="Top"
                                               Background="Transparent" PointerPressed="TileCheck_PointerPressed" Tapped="TileCheck_Tapped" ToolTipService.ToolTip="Select (Space or Ctrl+Click)">
@@ -534,7 +537,11 @@
                                             </Grid>
                                         </Grid>
                                         <TextBlock Grid.Column="1" Text="{x:Bind Name}" VerticalAlignment="Center" Margin="5,0,2,0" FontSize="12" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{x:Bind Name}"/>
-                                        <Border Grid.ColumnSpan="2" IsHitTestVisible="False" Margin="-5,0,-4,0" CornerRadius="4" BorderThickness="1.5" BorderBrush="{ThemeResource AccentFillColorDefaultBrush}" Opacity="{x:Bind KeyboardCursorOpacity, Mode=OneWay}"/>
+                                        <Border Grid.ColumnSpan="2" IsHitTestVisible="False" Margin="-5,0,-4,0" CornerRadius="5"
+                                                Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                                BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+                                                BorderThickness="1"
+                                                Opacity="{x:Bind KeyboardCursorOpacity, Mode=OneWay}"/>
                                     </Grid>
                                 </Grid>
                             </DataTemplate>
