@@ -1,4 +1,4 @@
-using Microsoft.UI.Input;
+﻿using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Windows.Foundation;
 
 namespace ModernImageViewer
@@ -229,11 +230,16 @@ namespace ModernImageViewer
             CountsButton.Visibility = editable ? Visibility.Visible : Visibility.Collapsed;
             if (editable)
             {
-                CountsText.Text = string.Join(" · ", CurrentLineCounts());
+                var counts = CurrentLineCounts();
+                var evenCounts = MosaicLayout.LineCounts(total, lines);
+                bool isCustom = !counts.SequenceEqual(evenCounts);
+                CountsText.Text = isCustom
+                    ? string.Join(" · ", counts)
+                    : (counts.All(c => c == counts[0]) ? $"{counts[0]} each" : "Balanced");
                 CountsText.Opacity = onGrid ? 1.0 : 0.5;
                 ToolTipService.SetToolTip(CountsButton, rows
-                    ? "Photos in each row, top to bottom. Click to change."
-                    : "Photos in each column, left to right. Click to change.");
+                    ? $"Photos in each row: {string.Join(" · ", counts)} (Click to customize)"
+                    : $"Photos in each column: {string.Join(" · ", counts)} (Click to customize)");
             }
         }
 

@@ -160,85 +160,108 @@ namespace ModernImageViewer
             CountsPanel.Children.Clear();
             var counts = CurrentLineCounts();
             bool rows = !_flipped;
-            CountsPanel.Children.Add(new TextBlock
-            {
-                Text = rows ? "Photos in each row, top to bottom" : "Photos in each column, left to right",
-                FontSize = 12,
-                Opacity = 0.7,
-                Margin = new Thickness(0, 0, 0, 8)
-            });
-
-            int maxCount = counts.Length > 0 ? counts.Max() : 1;
-
-            for (int i = 0; i < counts.Length; i++)
-            {
-                int line = i;
-                var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Margin = new Thickness(0, 2, 0, 2) };
-                row.Children.Add(new TextBlock
-                {
-                    Text = (rows ? "Row " : "Col ") + (i + 1),
-                    Width = 56,
-                    VerticalAlignment = VerticalAlignment.Center
-                });
-                var less = new Button { Content = new FontIcon { Glyph = "\uE738", FontSize = 11 }, Padding = new Thickness(8, 4, 8, 4) };
-                less.IsEnabled = MosaicLayout.MovePhoto(counts, line, -1) != null;
-                less.Click += (_, _) => AdjustLine(line, -1);
-                var more = new Button { Content = new FontIcon { Glyph = "\uE710", FontSize = 11 }, Padding = new Thickness(8, 4, 8, 4) };
-                more.IsEnabled = MosaicLayout.MovePhoto(counts, line, 1) != null;
-                more.Click += (_, _) => AdjustLine(line, 1);
-                row.Children.Add(less);
-                row.Children.Add(new TextBlock
-                {
-                    Text = counts[i].ToString(),
-                    Width = 26,
-                    TextAlignment = TextAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
-                });
-                row.Children.Add(more);
-
-                // Proportional bar
-                double barWidth = Math.Max(6, (counts[i] / (double)Math.Max(1, maxCount)) * 48);
-                var bar = new Border
-                {
-                    Height = 6,
-                    Width = barWidth,
-                    CornerRadius = new CornerRadius(3),
-                    Background = Application.Current.Resources["AccentFillColorDefaultBrush"] as Brush
-                        ?? new SolidColorBrush(Windows.UI.Color.FromArgb(255, 96, 205, 255)),
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Margin = new Thickness(6, 0, 0, 0),
-                    Opacity = 0.85
-                };
-                row.Children.Add(bar);
-
-                CountsPanel.Children.Add(row);
-            }
-
             int total = LineTotal();
             int lines = EffectiveLines();
             var evenCounts = MosaicLayout.LineCounts(total, lines);
             bool isCustom = !counts.SequenceEqual(evenCounts);
+
+            var accent = Windows.UI.Color.FromArgb(255, 0, 120, 212);
+            try { if (Application.Current.Resources["SystemAccentColor"] is Windows.UI.Color c) accent = c; }
+            catch { }
+
+            // 1. Header: Title, subtitle and status badge
+            var header = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var titleStack = new StackPanel { Spacing = 1 };
+            titleStack.Children.Add(new TextBlock
+            {
+                Text = rows ? "Row Distribution" : "Column Distribution",
+                FontSize = 13,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Microsoft.UI.Colors.White)
+            });
+            string lineNoun = rows ? (counts.Length == 1 ? "row" : "rows") : (counts.Length == 1 ? "column" : "columns");
+            titleStack.Children.Add(new TextBlock
+            {
+                Text = $"{total} photos across {counts.Length} {lineNoun}",
+                FontSize = 11,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(170, 255, 255, 255))
+            });
+            Grid.SetColumn(titleStack, 0);
+            header.Children.Add(titleStack);
+
+            var statusBadge = new Border
+            {
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(8, 2, 8, 2),
+                VerticalAlignment = VerticalAlignment.Center,
+                Background = isCustom
+                    ? new SolidColorBrush(Windows.UI.Color.FromArgb(45, accent.R, accent.G, accent.B))
+                    : new SolidColorBrush(Windows.UI.Color.FromArgb(25, 255, 255, 255)),
+                BorderBrush = isCustom
+                    ? new SolidColorBrush(Windows.UI.Color.FromArgb(160, accent.R, accent.G, accent.B))
+                    : new SolidColorBrush(Windows.UI.Color.FromArgb(40, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
+                Child = new TextBlock
+                {
+                    Text = isCustom ? "Custom" : "Balanced",
+                    FontSize = 10.5,
+                    FontWeight = Microsoft.UI.Text.FontWeights.Medium,
+                    Foreground = isCustom
+                        ? new SolidColorBrush(accent)
+                        : new SolidColorBrush(Windows.UI.Color.FromArgb(180, 255, 255, 255))
+                }
+            };
+            Grid.SetColumn(statusBadge, 1);
+            header.Children.Add(statusBadge);
+
+            CountsPanel.Children.Add(header);
+
+            // 2. Interactive Visual Canvas & Steppers
+            CountsPanel.Children.Add(BuildCountsCanvas(counts, rows, accent));
+
+            // 3. Footer: Distribute Evenly (only if custom)
             if (isCustom)
             {
                 CountsPanel.Children.Add(new Rectangle
                 {
                     Height = 1,
-                    Fill = Application.Current.Resources["DividerStrokeColorDefaultBrush"] as Brush
-                        ?? new SolidColorBrush(Windows.UI.Color.FromArgb(60, 255, 255, 255)),
-                    Margin = new Thickness(0, 8, 0, 8),
-                    Opacity = 0.4
+                    Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(35, 255, 255, 255)),
+                    Margin = new Thickness(0, 6, 0, 4)
                 });
 
                 var resetBtn = new Button
                 {
                     HorizontalAlignment = HorizontalAlignment.Stretch,
-                    Padding = new Thickness(8, 5, 8, 5),
-                    CornerRadius = new CornerRadius(6)
+                    Padding = new Thickness(10, 6, 10, 6),
+                    CornerRadius = new CornerRadius(6),
+                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(20, 255, 255, 255)),
+                    BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(45, 255, 255, 255)),
+                    BorderThickness = new Thickness(1)
                 };
-                var btnContent = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
-                btnContent.Children.Add(new FontIcon { Glyph = "\uE8A9", FontSize = 12 });
-                btnContent.Children.Add(new TextBlock { Text = "Distribute Evenly", FontSize = 12 });
+                var btnContent = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 7,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                btnContent.Children.Add(new FontIcon
+                {
+                    Glyph = "\uE8A9",
+                    FontFamily = new FontFamily("Segoe Fluent Icons"),
+                    FontSize = 12,
+                    Foreground = new SolidColorBrush(accent)
+                });
+                btnContent.Children.Add(new TextBlock
+                {
+                    Text = "Distribute Evenly",
+                    FontSize = 12,
+                    FontWeight = Microsoft.UI.Text.FontWeights.Medium,
+                    Foreground = new SolidColorBrush(Microsoft.UI.Colors.White)
+                });
                 resetBtn.Content = btnContent;
                 resetBtn.Click += (_, _) =>
                 {
@@ -248,6 +271,255 @@ namespace ModernImageViewer
                     ShowHudAndOverlays();
                 };
                 CountsPanel.Children.Add(resetBtn);
+            }
+        }
+
+        /// <summary>
+        /// Renders an interactive miniature layout preview showing photos in rows or columns,
+        /// with integrated stepper capsules for shifting photos between lines.
+        /// </summary>
+        private FrameworkElement BuildCountsCanvas(int[] counts, bool rows, Windows.UI.Color accent)
+        {
+            var cellFill = new SolidColorBrush(Windows.UI.Color.FromArgb(170, accent.R, accent.G, accent.B));
+            var cellStroke = new SolidColorBrush(Windows.UI.Color.FromArgb(90, 255, 255, 255));
+            var trayFill = new SolidColorBrush(Windows.UI.Color.FromArgb(25, 255, 255, 255));
+            var trayStroke = new SolidColorBrush(Windows.UI.Color.FromArgb(35, 255, 255, 255));
+            var iconBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(180, 255, 255, 255));
+
+            Border CreateStepper(int line, int count)
+            {
+                bool canLess = MosaicLayout.MovePhoto(counts, line, -1) != null;
+                bool canMore = MosaicLayout.MovePhoto(counts, line, 1) != null;
+
+                var capsule = new Border
+                {
+                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(28, 255, 255, 255)),
+                    BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(45, 255, 255, 255)),
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(6),
+                    Height = 26
+                };
+
+                var pillGrid = new Grid();
+                pillGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(20) });
+                pillGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(22) });
+                pillGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(20) });
+
+                var minusBtn = new Button
+                {
+                    Content = new FontIcon { Glyph = "\uE738", FontSize = 9, FontFamily = new FontFamily("Segoe Fluent Icons") },
+                    Width = 20,
+                    Height = 24,
+                    Padding = new Thickness(0),
+                    CornerRadius = new CornerRadius(5, 0, 0, 5),
+                    Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                    BorderThickness = new Thickness(0),
+                    IsEnabled = canLess,
+                    Opacity = canLess ? 1.0 : 0.3
+                };
+                ToolTipService.SetToolTip(minusBtn, canLess ? $"One fewer in {(rows ? "row" : "column")} {line + 1}" : "Cannot reduce further");
+                minusBtn.Click += (_, _) => AdjustLine(line, -1);
+                Grid.SetColumn(minusBtn, 0);
+                pillGrid.Children.Add(minusBtn);
+
+                var countText = new TextBlock
+                {
+                    Text = count.ToString(),
+                    FontSize = 11.5,
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                Grid.SetColumn(countText, 1);
+                pillGrid.Children.Add(countText);
+
+                var plusBtn = new Button
+                {
+                    Content = new FontIcon { Glyph = "\uE710", FontSize = 9, FontFamily = new FontFamily("Segoe Fluent Icons") },
+                    Width = 20,
+                    Height = 24,
+                    Padding = new Thickness(0),
+                    CornerRadius = new CornerRadius(0, 5, 5, 0),
+                    Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                    BorderThickness = new Thickness(0),
+                    IsEnabled = canMore,
+                    Opacity = canMore ? 1.0 : 0.3
+                };
+                ToolTipService.SetToolTip(plusBtn, canMore ? $"One more in {(rows ? "row" : "column")} {line + 1}" : "Cannot increase further");
+                plusBtn.Click += (_, _) => AdjustLine(line, 1);
+                Grid.SetColumn(plusBtn, 2);
+                pillGrid.Children.Add(plusBtn);
+
+                capsule.Child = pillGrid;
+                return capsule;
+            }
+
+            Border CreatePhotoCell(double width, double height)
+            {
+                var cell = new Border
+                {
+                    Width = Math.Max(4, width),
+                    Height = Math.Max(4, height),
+                    Background = cellFill,
+                    BorderBrush = cellStroke,
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(3)
+                };
+                if (width >= 22 && height >= 16)
+                {
+                    cell.Child = new FontIcon
+                    {
+                        Glyph = "\uEB9F",
+                        FontFamily = new FontFamily("Segoe Fluent Icons"),
+                        FontSize = Math.Clamp(Math.Min(width, height) * 0.45, 8, 11),
+                        Foreground = iconBrush,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center
+                    };
+                }
+                return cell;
+            }
+
+            if (rows)
+            {
+                // Rows mode: stacked horizontal lanes with labels on left, tracks in center, steppers on right
+                const double trackWidth = 175;
+                double trackHeight = Math.Clamp((140.0 - (counts.Length - 1) * 6) / counts.Length, 24.0, 32.0);
+
+                var panel = new StackPanel { Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
+                for (int i = 0; i < counts.Length; i++)
+                {
+                    int line = i;
+                    int count = counts[i];
+
+                    var rowLane = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
+
+                    // Line label
+                    rowLane.Children.Add(new TextBlock
+                    {
+                        Text = $"Row {i + 1}",
+                        Width = 42,
+                        FontSize = 11,
+                        FontWeight = Microsoft.UI.Text.FontWeights.Medium,
+                        Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(190, 255, 255, 255)),
+                        VerticalAlignment = VerticalAlignment.Center
+                    });
+
+                    // Track containing photo cells
+                    var track = new Border
+                    {
+                        Width = trackWidth,
+                        Height = trackHeight,
+                        Background = trayFill,
+                        BorderBrush = trayStroke,
+                        BorderThickness = new Thickness(1),
+                        CornerRadius = new CornerRadius(5),
+                        Padding = new Thickness(2)
+                    };
+                    ToolTipService.SetToolTip(track, $"Row {i + 1}: {count} {(count == 1 ? "photo" : "photos")}");
+
+                    var cellContainer = new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        Spacing = 2,
+                        HorizontalAlignment = HorizontalAlignment.Stretch,
+                        VerticalAlignment = VerticalAlignment.Stretch
+                    };
+                    double usableWidth = trackWidth - 4 - (count - 1) * 2;
+                    double cellW = Math.Max(4, usableWidth / count);
+                    double cellH = trackHeight - 4;
+
+                    for (int c = 0; c < count; c++)
+                    {
+                        cellContainer.Children.Add(CreatePhotoCell(cellW, cellH));
+                    }
+                    track.Child = cellContainer;
+                    rowLane.Children.Add(track);
+
+                    // Stepper
+                    rowLane.Children.Add(CreateStepper(line, count));
+
+                    panel.Children.Add(rowLane);
+                }
+                return panel;
+            }
+            else
+            {
+                // Columns mode: vertical lanes side-by-side with labels on top, tracks in center, steppers on bottom
+                const double trackHeight = 130;
+                int nCols = counts.Length;
+                double colWidth = Math.Clamp((270.0 - (nCols - 1) * 8) / nCols, 46.0, 68.0);
+
+                var columnsPanel = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 8,
+                    HorizontalAlignment = HorizontalAlignment.Center
+                };
+
+                for (int i = 0; i < counts.Length; i++)
+                {
+                    int line = i;
+                    int count = counts[i];
+
+                    var colLane = new StackPanel
+                    {
+                        Width = Math.Max(colWidth, 62),
+                        Spacing = 5,
+                        HorizontalAlignment = HorizontalAlignment.Center
+                    };
+
+                    // Label
+                    colLane.Children.Add(new TextBlock
+                    {
+                        Text = $"Col {i + 1}",
+                        FontSize = 11,
+                        FontWeight = Microsoft.UI.Text.FontWeights.Medium,
+                        Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(190, 255, 255, 255)),
+                        HorizontalAlignment = HorizontalAlignment.Center
+                    });
+
+                    // Track
+                    var track = new Border
+                    {
+                        Width = colWidth,
+                        Height = trackHeight,
+                        Background = trayFill,
+                        BorderBrush = trayStroke,
+                        BorderThickness = new Thickness(1),
+                        CornerRadius = new CornerRadius(5),
+                        Padding = new Thickness(2),
+                        HorizontalAlignment = HorizontalAlignment.Center
+                    };
+                    ToolTipService.SetToolTip(track, $"Column {i + 1}: {count} {(count == 1 ? "photo" : "photos")}");
+
+                    var cellContainer = new StackPanel
+                    {
+                        Orientation = Orientation.Vertical,
+                        Spacing = 2,
+                        HorizontalAlignment = HorizontalAlignment.Stretch,
+                        VerticalAlignment = VerticalAlignment.Stretch
+                    };
+                    double usableHeight = trackHeight - 4 - (count - 1) * 2;
+                    double cellH = Math.Max(4, usableHeight / count);
+                    double cellW = colWidth - 4;
+
+                    for (int c = 0; c < count; c++)
+                    {
+                        cellContainer.Children.Add(CreatePhotoCell(cellW, cellH));
+                    }
+                    track.Child = cellContainer;
+                    colLane.Children.Add(track);
+
+                    // Stepper
+                    var stepper = CreateStepper(line, count);
+                    stepper.HorizontalAlignment = HorizontalAlignment.Center;
+                    colLane.Children.Add(stepper);
+
+                    columnsPanel.Children.Add(colLane);
+                }
+                return columnsPanel;
             }
         }
 

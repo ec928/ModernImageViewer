@@ -145,12 +145,23 @@
                                 ToolTipService.ToolTip="Photos per line (Click to customize)">
                             <Button.Flyout>
                                 <Flyout Opening="CountsFlyout_Opening" Opened="HudMenu_Opened" Closed="HudMenu_Closed" Placement="Top">
-                                    <StackPanel x:Name="CountsPanel" Spacing="4" MinWidth="220" />
+                                    <Flyout.FlyoutPresenterStyle>
+                                        <Style TargetType="FlyoutPresenter">
+                                            <Setter Property="MaxWidth" Value="600" />
+                                            <Setter Property="MaxHeight" Value="600" />
+                                            <Setter Property="Padding" Value="14,12" />
+                                            <Setter Property="CornerRadius" Value="12" />
+                                            <Setter Property="Background" Value="#EB1E1E22" />
+                                            <Setter Property="BorderBrush" Value="#35FFFFFF" />
+                                            <Setter Property="BorderThickness" Value="1" />
+                                        </Style>
+                                    </Flyout.FlyoutPresenterStyle>
+                                    <StackPanel x:Name="CountsPanel" Spacing="8" MinWidth="260" />
                                 </Flyout>
                             </Button.Flyout>
                             <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
                                 <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xECA5;" FontSize="12" Opacity="0.8" />
-                                <TextBlock x:Name="CountsText" Text="3 · 2" VerticalAlignment="Center" FontSize="13" />
+                                <TextBlock x:Name="CountsText" Text="Even" VerticalAlignment="Center" FontSize="13" />
                             </StackPanel>
                         </Button>
 
