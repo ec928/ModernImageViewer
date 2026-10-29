@@ -45,6 +45,8 @@ namespace ModernImageViewer
         private RepeatButton? _lineMore;
         private Button? _evenButton;
         private bool _openLayoutIsRows;
+        private FrameworkElement? _columnChartHost;
+        private double _columnChartWidth;
 
         private sealed class LayoutLineSlot
         {
@@ -258,6 +260,7 @@ namespace ModernImageViewer
             double down = _countsScroll.VerticalOffset;
             _countsScroll.Content = rows ? BuildRowDiagram(counts) : BuildColumnDiagram(counts);
             _countsScroll.UpdateLayout();
+            CenterColumnChart();
             _countsScroll.ChangeView(across, down, null, true);
         }
 
@@ -420,12 +423,12 @@ namespace ModernImageViewer
             var selected = new Border { Style = LayoutStyle("LayoutChoiceSelectedStyle") };
             Grid.SetColumn(selected, rows ? 0 : 1);
             choiceGrid.Children.Add(selected);
-            choiceGrid.Children.Add(MakeChoiceButton("Rows", "\uE8AB", rows, 0, () =>
+            choiceGrid.Children.Add(MakeChoiceButton("Rows", "\uEA37", rows, 0, () =>
             {
                 if (!rows)
                     ToggleRowsColumns();
             }));
-            choiceGrid.Children.Add(MakeChoiceButton("Columns", "\uE8AC", !rows, 1, () =>
+            choiceGrid.Children.Add(MakeChoiceButton("Columns", "\uE8C0", !rows, 1, () =>
             {
                 if (rows)
                     ToggleRowsColumns();
@@ -637,6 +640,11 @@ namespace ModernImageViewer
                 HorizontalScrollBarVisibility = rows ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto
             };
             _countsScroll = scroll;
+            if (!rows)
+            {
+                scroll.SizeChanged += (_, _) => CenterColumnChart();
+                scroll.Loaded += (_, _) => CenterColumnChart();
+            }
             if (_countsScrollOffset > 0 || _countsScrollAcross > 0)
             {
                 scroll.Loaded += (_, _) => scroll.ChangeView(_countsScrollAcross, _countsScrollOffset, null, true);
@@ -648,6 +656,7 @@ namespace ModernImageViewer
         {
             _lineSlots.Clear();
             _openLayoutIsRows = true;
+            _columnChartHost = null;
             var panel = new StackPanel();
             for (int i = 0; i < counts.Length; i++)
             {
@@ -686,10 +695,12 @@ namespace ModernImageViewer
             int n = Math.Max(counts.Length, 1);
             int slot = n >= 12 ? 34 : n >= 8 ? 42 : 52;
             int gap = n >= 12 ? 2 : 4;
+            _columnChartWidth = counts.Length * slot + Math.Max(0, counts.Length - 1) * gap;
             var panel = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                Spacing = gap
+                Spacing = gap,
+                HorizontalAlignment = HorizontalAlignment.Center
             };
             for (int i = 0; i < counts.Length; i++)
             {
@@ -713,7 +724,28 @@ namespace ModernImageViewer
                 column.Children.Add(steps.Well);
                 panel.Children.Add(column);
             }
-            return panel;
+            var host = new Grid();
+            host.Children.Add(panel);
+            _columnChartHost = host;
+            return host;
+        }
+
+        /// <summary>
+        /// The column chart is only as wide as its stacks. Stretch a host to the
+        /// card and center the chart in it. A chart wider than the card scrolls.
+        /// </summary>
+        private void CenterColumnChart()
+        {
+            if (_countsScroll == null || _columnChartHost == null) return;
+            double view = _countsScroll.ViewportWidth;
+            if (view <= 0) return;
+            bool fits = _columnChartWidth <= view;
+            _countsScroll.HorizontalScrollBarVisibility = fits
+                ? ScrollBarVisibility.Disabled
+                : ScrollBarVisibility.Auto;
+            double target = fits ? view : 0;
+            if (Math.Abs(_columnChartHost.MinWidth - target) > 0.5)
+                _columnChartHost.MinWidth = target;
         }
 
         private Button MakeChoiceButton(string label, string glyph, bool selected, int column, Action onClick)
