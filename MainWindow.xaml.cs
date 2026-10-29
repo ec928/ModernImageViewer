@@ -589,7 +589,7 @@ namespace ModernImageViewer
                 }
                 catch
                 {
-                    // Window is in bad state → recreate it
+                    // Window is in bad state -> recreate it
                     _collageEditorWindow.Close();
                     _collageEditorWindow = null;
                 }

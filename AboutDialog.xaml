@@ -53,46 +53,46 @@
 
                 <TextBlock Text="Viewing and layout" Style="{StaticResource AboutSectionHeader}"/>
                 <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="•  "/><Run Text="Tile &amp; List View modes" FontWeight="SemiBold"/><Run Text=" — switch between resizable thumbnail grids and high-density multi-column lists with a live metadata and image preview bar."/>
+                    <Run Text="&#x2022;  "/><Run Text="Tile &amp; List View modes" FontWeight="SemiBold"/><Run Text=" &#x2014; switch between resizable thumbnail grids and high-density multi-column lists with a live metadata and image preview bar."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="•  "/><Run Text="Multi-View" FontWeight="SemiBold"/><Run Text=" — compare up to 16 photos in rows or columns of your choosing, with hero layouts, draggable edges, Alt+drag to swap, and JPEG export."/>
+                    <Run Text="&#x2022;  "/><Run Text="Multi-View" FontWeight="SemiBold"/><Run Text=" &#x2014; compare up to 16 photos in rows or columns of your choosing, with hero layouts, draggable edges, Alt+drag to swap, and JPEG export."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="•  "/><Run Text="Window &amp; Tile Size presets" FontWeight="SemiBold"/><Run Text=" — save up to three window and tile size states (Ctrl+1, Ctrl+2, Ctrl+3) to jump between compact browsing and wide two-page layouts."/>
+                    <Run Text="&#x2022;  "/><Run Text="Window &amp; Tile Size presets" FontWeight="SemiBold"/><Run Text=" &#x2014; save up to three window and tile size states (Ctrl+1, Ctrl+2, Ctrl+3) to jump between compact browsing and wide two-page layouts."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="•  "/><Run Text="Tear-off viewports" FontWeight="SemiBold"/><Run Text=" — middle-click or drag any image out into its own borderless floating window for multi-monitor reference overlays."/>
+                    <Run Text="&#x2022;  "/><Run Text="Tear-off viewports" FontWeight="SemiBold"/><Run Text=" &#x2014; middle-click or drag any image out into its own borderless floating window for multi-monitor reference overlays."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="•  "/><Run Text="Direct2D GPU rendering" FontWeight="SemiBold"/><Run Text=" — smooth zoom, pan, rotation, ICC color profiles, real-time gamma adjustment, and full multi-frame animated GIF playback."/>
+                    <Run Text="&#x2022;  "/><Run Text="Direct2D GPU rendering" FontWeight="SemiBold"/><Run Text=" &#x2014; smooth zoom, pan, rotation, ICC color profiles, real-time gamma adjustment, and full multi-frame animated GIF playback."/>
                 </TextBlock>
 
                 <TextBlock Text="Comic book reader (CBR / CBZ)" Style="{StaticResource AboutSectionHeader}"/>
                 <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="•  "/><Run Text="Native archive browsing" FontWeight="SemiBold"/><Run Text=" — open .cbz (ZIP) and .cbr (RAR) comic archives directly like folders without extracting files to disk."/>
+                    <Run Text="&#x2022;  "/><Run Text="Native archive browsing" FontWeight="SemiBold"/><Run Text=" &#x2014; open .cbz (ZIP) and .cbr (RAR) comic archives directly like folders without extracting files to disk."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="•  "/><Run Text="Responsive two-page spread" FontWeight="SemiBold"/><Run Text=" — automatically displays side-by-side double-page spreads when the window is stretched wide enough (toggle anytime with B), while keeping covers and wide landscapes on a single page."/>
+                    <Run Text="&#x2022;  "/><Run Text="Responsive two-page spread" FontWeight="SemiBold"/><Run Text=" &#x2014; automatically displays side-by-side double-page spreads when the window is stretched wide enough (toggle anytime with B), while keeping covers and wide landscapes on a single page."/>
                 </TextBlock>
 
                 <TextBlock Text="Cinematic and collage (Beta)" Style="{StaticResource AboutSectionHeader}"/>
                 <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="•  "/><Run Text="Cinematic slideshow" FontWeight="SemiBold"/><Run Text=" — press Play for automated Ken Burns camera moves with smart subject framing and smooth crossfades between slides."/>
+                    <Run Text="&#x2022;  "/><Run Text="Cinematic slideshow" FontWeight="SemiBold"/><Run Text=" &#x2014; press Play for automated Ken Burns camera moves with smart subject framing and smooth crossfades between slides."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="•  "/><Run Text="Custom direction &amp; Video Director" FontWeight="SemiBold"/><Run Text=" — customize start/end frames, easing curves, and slide timing, or launch Video Director for multi-track editing and MP4 export."/>
+                    <Run Text="&#x2022;  "/><Run Text="Custom direction &amp; Video Director" FontWeight="SemiBold"/><Run Text=" &#x2014; customize start/end frames, easing curves, and slide timing, or launch Video Director for multi-track editing and MP4 export."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="•  "/><Run Text="Collage editor" FontWeight="SemiBold"/><Run Text=" — arrange, rotate, and export multi-image compositions at native resolution."/>
+                    <Run Text="&#x2022;  "/><Run Text="Collage editor" FontWeight="SemiBold"/><Run Text=" &#x2014; arrange, rotate, and export multi-image compositions at native resolution."/>
                 </TextBlock>
 
                 <TextBlock Text="Performance and formats" Style="{StaticResource AboutSectionHeader}"/>
                 <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="•  "/><Run Text="Tiered async decoding" FontWeight="SemiBold"/><Run Text=" — thumbnail, fast preview, display, and high-fidelity stages with predictive lookahead caching keep 10 MB+ image libraries responsive and memory-bounded."/>
+                    <Run Text="&#x2022;  "/><Run Text="Tiered async decoding" FontWeight="SemiBold"/><Run Text=" &#x2014; thumbnail, fast preview, display, and high-fidelity stages with predictive lookahead caching keep 10 MB+ image libraries responsive and memory-bounded."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="•  "/><Run Text="Formats &amp; portability" FontWeight="SemiBold"/><Run Text=" — JPEG, PNG, GIF, BMP, TIFF, WebP, CBZ, and CBR out of the box (plus HEIC/HEIF and AVIF via Windows codecs). Portable with no registry changes; settings live in your local app data folder."/>
+                    <Run Text="&#x2022;  "/><Run Text="Formats &amp; portability" FontWeight="SemiBold"/><Run Text=" &#x2014; JPEG, PNG, GIF, BMP, TIFF, WebP, CBZ, and CBR out of the box (plus HEIC/HEIF and AVIF via Windows codecs). Portable with no registry changes; settings live in your local app data folder."/>
                 </TextBlock>
 
                 <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,20,0,14"/>

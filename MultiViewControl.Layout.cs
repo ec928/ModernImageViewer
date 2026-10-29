@@ -263,7 +263,7 @@ namespace ModernImageViewer
                 Boundary = binding?.Boundary ?? index,
                 VerticalCut = verticalCut
             };
-            ToolTipService.SetToolTip(splitter, "Drag to resize · Double-click to equalize");
+            ToolTipService.SetToolTip(splitter, "Drag to resize \u00B7 Double-click to equalize");
             Canvas.SetZIndex(splitter, 40);
 
             var line = new Rectangle

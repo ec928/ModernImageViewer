@@ -311,15 +311,15 @@ namespace ModernImageViewer.Collage
 
             var quickPresets = new (string name, string detail, int w, int h)[]
             {
-                ("Square", "1:1  •  1080×1080", 1080, 1080),
-                ("Instagram Post", "4:5  •  1080×1350", 1080, 1350),
-                ("Instagram Story", "9:16  •  1080×1920", 1080, 1920),
-                ("YouTube HD", "16:9  •  1920×1080", 1920, 1080),
-                ("2K / QHD", "16:9  •  2560×1440", 2560, 1440),
-                ("4K", "16:9  •  3840×2160", 3840, 2160),
-                ("Ultrawide", "21:9  •  3440×1440", 3440, 1440),
-                ("Portrait", "3:4  •  1080×1440", 1080, 1440),
-                ("A4 Print", "A4  •  2480×3508", 2480, 3508)
+                ("Square", "1:1  \u2022  1080\u00D71080", 1080, 1080),
+                ("Instagram Post", "4:5  \u2022  1080\u00D71350", 1080, 1350),
+                ("Instagram Story", "9:16  \u2022  1080\u00D71920", 1080, 1920),
+                ("YouTube HD", "16:9  \u2022  1920\u00D71080", 1920, 1080),
+                ("2K / QHD", "16:9  \u2022  2560\u00D71440", 2560, 1440),
+                ("4K", "16:9  \u2022  3840\u00D72160", 3840, 2160),
+                ("Ultrawide", "21:9  \u2022  3440\u00D71440", 3440, 1440),
+                ("Portrait", "3:4  \u2022  1080\u00D71440", 1080, 1440),
+                ("A4 Print", "A4  \u2022  2480\u00D73508", 2480, 3508)
             };
 
             int col = 0, row = 0;
@@ -374,7 +374,7 @@ namespace ModernImageViewer.Collage
 
             var fitBtn = new Button
             {
-                Content = "📐  Fit to Images + Margin",
+                Content = "\U0001F4D0  Fit to Images + Margin",
                 HorizontalAlignment = HorizontalAlignment.Center,
                 Margin = new Thickness(0, 2, 0, 6)
             };
@@ -480,7 +480,7 @@ namespace ModernImageViewer.Collage
 
                     previewShape.Width = Math.Max(20, pW);
                     previewShape.Height = Math.Max(20, pH);
-                    sizeText.Text = $"{w:0} × {h:0} px   •   {aspect:0.00} : 1";
+                    sizeText.Text = $"{w:0} \u00D7 {h:0} px   \u2022   {aspect:0.00} : 1";
                 }
             }
 

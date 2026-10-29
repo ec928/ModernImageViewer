@@ -365,7 +365,7 @@ namespace ModernImageViewer
 
         public string GetHudDisplayString(double logicalW, double logicalH)
         {
-            return $"{(int)logicalW} × {(int)logicalH} • {SizeString} • {DateModified:yyyy-MM-dd HH:mm}";
+            return $"{(int)logicalW} \u00D7 {(int)logicalH} \u2022 {SizeString} \u2022 {DateModified:yyyy-MM-dd HH:mm}";
         }
 
         public string GetZoomString(float zoom)

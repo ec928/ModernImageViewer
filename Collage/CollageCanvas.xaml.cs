@@ -420,7 +420,7 @@ namespace ModernImageViewer.Collage
             bool isAnyAnchored = SelectedElements.Any(e => e.IsAnchored);
             bool isAnyContentLocked = SelectedElements.Any(e => e.IsContentLocked);
 
-            var rotateItem = new MenuFlyoutItem { Text = "Rotate 45° Clockwise", IsEnabled = !isAnyLocked && !isAnyContentLocked };
+            var rotateItem = new MenuFlyoutItem { Text = "Rotate 45\u00B0 Clockwise", IsEnabled = !isAnyLocked && !isAnyContentLocked };
             rotateItem.Click += RotateSelected_Click;
             flyout.Items.Add(rotateItem);
 
@@ -1666,7 +1666,7 @@ namespace ModernImageViewer.Collage
 
             if (_canvasResizeEdge > 0 && _project != null)
             {
-                string sizeText = $"{_project.CanvasWidth:0} × {_project.CanvasHeight:0}";
+                string sizeText = $"{_project.CanvasWidth:0} \u00D7 {_project.CanvasHeight:0}";
 
                 using var textFormat = new Microsoft.Graphics.Canvas.Text.CanvasTextFormat
                 {

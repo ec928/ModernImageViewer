@@ -37,7 +37,7 @@ namespace ModernImageViewer
                 double ratio = aspect.WidthOverHeight;
                 var item = new MenuFlyoutItem
                 {
-                    Text = (aspect.Label == current ? "✓  " : "    ") + aspect.Label
+                    Text = (aspect.Label == current ? "\u2713  " : "    ") + aspect.Label
                 };
                 item.Click += (_, _) => CanvasAspectChosen?.Invoke(ratio);
                 AspectMenuFlyout.Items.Add(item);
@@ -54,7 +54,7 @@ namespace ModernImageViewer
                 if (!GridCanvasMath.TryOutputSize(height, canvasW, canvasH, out int width, out int outputH))
                     continue;
                 int chosen = height;
-                var item = new MenuFlyoutItem { Text = $"{chosen}p    {width}×{outputH}" };
+                var item = new MenuFlyoutItem { Text = $"{chosen}p    {width}\u00D7{outputH}" };
                 item.Click += async (_, _) => await SaveAtHeightAsync(chosen);
                 SaveMenuFlyout.Items.Add(item);
             }
@@ -63,12 +63,12 @@ namespace ModernImageViewer
             if (pixels.Width > 0 && pixels.Height > 0
                 && pixels.Width <= GridCanvasMath.MaxEdge && pixels.Height <= GridCanvasMath.MaxEdge)
             {
-                var windowItem = new MenuFlyoutItem { Text = $"This window    {pixels.Width}×{pixels.Height}" };
+                var windowItem = new MenuFlyoutItem { Text = $"This window    {pixels.Width}\u00D7{pixels.Height}" };
                 windowItem.Click += async (_, _) => await SavePixelsAsync(pixels.Width, pixels.Height);
                 SaveMenuFlyout.Items.Add(windowItem);
             }
 
-            var custom = new MenuFlyoutItem { Text = "Custom…" };
+            var custom = new MenuFlyoutItem { Text = "Custom\u2026" };
             custom.Click += async (_, _) =>
             {
                 int? height = await AskHeightAsync(canvasW, canvasH);
@@ -111,7 +111,7 @@ namespace ModernImageViewer
                     && GridCanvasMath.TryOutputSize(h, canvasW, canvasH, out _, out _);
                 if (ok && int.TryParse(box.Text.Trim(), out int height)
                     && GridCanvasMath.TryOutputSize(height, canvasW, canvasH, out int width, out int outputH))
-                    preview.Text = $"{width}×{outputH}";
+                    preview.Text = $"{width}\u00D7{outputH}";
                 else if (int.TryParse(box.Text.Trim(), out _))
                     preview.Text = "An edge would pass 16384 pixels.";
                 else
@@ -170,7 +170,7 @@ namespace ModernImageViewer
 
             _savingGrid = true;
             SaveButton.IsEnabled = false;
-            SaveText.Text = "Saving…";
+            SaveText.Text = "Saving\u2026";
             try
             {
                 await RenderJpegAsync(file, shots, width, height);

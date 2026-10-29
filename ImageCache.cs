@@ -32,7 +32,7 @@ namespace ModernImageViewer
         /// <summary>
         /// Inserts <paramref name="entry"/> as the cache-owned instance (its initial refcount).
         /// Releases any different previous occupant. Will not replace a longer decode
-        /// with a shorter one — the incoming entry is Released instead.
+        /// with a shorter one - the incoming entry is Released instead.
         /// </summary>
         public static bool HasUsableDecode(string path) =>
             TryGet(path, out var existing) && existing != null && existing.HasDecodableContent;

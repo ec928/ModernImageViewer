@@ -385,6 +385,11 @@
                         </GridView.ItemContainerStyle>
                         <GridView.ContextFlyout>
                             <MenuFlyout x:Name="GridItemContextFlyout" Closed="HeaderFlyout_Closed">
+                                <MenuFlyout.MenuFlyoutPresenterStyle>
+                                    <Style TargetType="MenuFlyoutPresenter">
+                                        <Setter Property="CornerRadius" Value="10"/>
+                                    </Style>
+                                </MenuFlyout.MenuFlyoutPresenterStyle>
                                 <MenuFlyoutItem x:Name="GridMenuOpenItem" Text="Open" Click="GridMenuOpen_Click">
                                     <MenuFlyoutItem.Icon><SymbolIcon Symbol="View"/></MenuFlyoutItem.Icon>
                                 </MenuFlyoutItem>
@@ -537,22 +542,39 @@
                     </GridView>
 
                     <Grid x:Name="EmptyFolderOverlay" Grid.Row="0" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" Canvas.ZIndex="100">
-                        <StackPanel Spacing="10" HorizontalAlignment="Center">
-                            <FontIcon Glyph="&#xEB9F;" FontFamily="Segoe Fluent Icons" FontSize="36" Foreground="{ThemeResource TextFillColorTertiaryBrush}" HorizontalAlignment="Center"/>
-                            <TextBlock x:Name="EmptyFolderTitle" Text="No photos in this folder" FontSize="14" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center"/>
-                            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,4,0,0">
-                                <Button x:Name="EmptyFolderSubfoldersButton" Click="ListMode_Click" Visibility="Collapsed" Padding="12,6" CornerRadius="4">
-                                    <TextBlock x:Name="EmptyFolderSubfoldersText" Text="View Subfolders in List Mode" FontSize="12"/>
-                                </Button>
-                                <Button Click="BrowseButton_Click" Padding="12,6" CornerRadius="4">
-                                    <TextBlock Text="Browse Folders…" FontSize="12"/>
-                                </Button>
+                        <Border Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}" BorderThickness="1" CornerRadius="16" Padding="28,24" MaxWidth="520" Margin="24" Translation="0,0,24">
+                            <Border.Shadow>
+                                <ThemeShadow/>
+                            </Border.Shadow>
+                            <StackPanel Spacing="12" HorizontalAlignment="Center">
+                                <FontIcon Glyph="&#xEB9F;" FontFamily="Segoe Fluent Icons" FontSize="44" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center"/>
+                                <TextBlock x:Name="EmptyFolderTitle" Text="No photos in this folder" FontSize="16" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center"/>
+                                <TextBlock Text="Drag and drop image files or comic archives here to browse, or choose another folder." TextWrapping="Wrap" TextAlignment="Center" MaxWidth="400" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" Margin="0,-4,0,6"/>
+                                <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Center">
+                                    <Button x:Name="EmptyFolderSubfoldersButton" Click="ListMode_Click" Visibility="Collapsed" Style="{StaticResource SubtleButtonStyle}" Padding="12,6" CornerRadius="6">
+                                        <TextBlock x:Name="EmptyFolderSubfoldersText" Text="View Subfolders in List Mode" FontSize="12"/>
+                                    </Button>
+                                    <Button Click="BrowseButton_Click" Style="{StaticResource AccentButtonStyle}" Padding="14,6" CornerRadius="6">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8B7;" FontSize="13"/>
+                                            <TextBlock Text="Browse Folders&#x2026;" FontSize="12" FontWeight="SemiBold"/>
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
                             </StackPanel>
-                        </StackPanel>
+                        </Border>
                     </Grid>
 
-                    <Grid x:Name="LoadingOverlay" Visibility="Collapsed" Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}" Canvas.ZIndex="500">
-                        <ProgressRing x:Name="LoadingRing" Width="50" Height="50" HorizontalAlignment="Center" VerticalAlignment="Center" IsActive="False" />
+                    <Grid x:Name="LoadingOverlay" Visibility="Collapsed" Background="#40000000" Canvas.ZIndex="500">
+                        <Border Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}" BorderThickness="1" CornerRadius="20" Padding="20,12" HorizontalAlignment="Center" VerticalAlignment="Center" Translation="0,0,32">
+                            <Border.Shadow>
+                                <ThemeShadow/>
+                            </Border.Shadow>
+                            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                                <ProgressRing x:Name="LoadingRing" Width="20" Height="20" IsActive="False" />
+                                <TextBlock Text="Loading photos&#x2026;" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
+                            </StackPanel>
+                        </Border>
                     </Grid>
 
                     <Grid x:Name="MultiSelectActionBar" Grid.Row="0" Visibility="Collapsed" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,24" Canvas.ZIndex="300" RequestedTheme="Dark">
@@ -669,15 +691,25 @@
                         <Border Grid.Column="1"
                                 Background="Transparent"
                                 BorderThickness="0"
-                                Margin="0,4,16,4"
+                                Margin="0,8,20,8"
                                 HorizontalAlignment="Right" VerticalAlignment="Stretch"
                                 Tapped="PreviewThumbnail_Tapped" ToolTipService.ToolTip="Click to open (Enter)">
-                            <Grid>
-                                <FontIcon x:Name="PreviewPlaceholder" FontFamily="Segoe Fluent Icons" Glyph="&#xEB9F;" FontSize="36" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                <FontIcon x:Name="PreviewFolderIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE8B7;" FontSize="64" Foreground="#FFF8D348" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                <Image x:Name="PreviewFolderImage" Stretch="Uniform" MaxWidth="120" MaxHeight="120" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                <Image x:Name="PreviewImage" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Grid>
+                            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
+                                    Padding="2"
+                                    Translation="0,0,16">
+                                <Border.Shadow>
+                                    <ThemeShadow/>
+                                </Border.Shadow>
+                                <Grid>
+                                    <FontIcon x:Name="PreviewPlaceholder" FontFamily="Segoe Fluent Icons" Glyph="&#xEB9F;" FontSize="36" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    <FontIcon x:Name="PreviewFolderIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE8B7;" FontSize="64" Foreground="#FFF8D348" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    <Image x:Name="PreviewFolderImage" Stretch="Uniform" MaxWidth="120" MaxHeight="120" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    <Image x:Name="PreviewImage" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Grid>
+                            </Border>
                         </Border>
                     </Grid>
                     </Grid>

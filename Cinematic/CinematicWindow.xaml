@@ -320,7 +320,7 @@
                     <Border x:Name="PreviewBanner" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Top"
                             Margin="0,16,0,0" Background="#EE8B0000" Padding="16,10" CornerRadius="8"
                             IsHitTestVisible="False">
-                        <TextBlock Text="PREVIEWING THIS SHOT — playback, not the still editor" FontWeight="Bold" Foreground="White" />
+                        <TextBlock Text="PREVIEWING THIS SHOT &#x2014; playback, not the still editor" FontWeight="Bold" Foreground="White" />
                     </Border>
                 </Grid>
             </SplitView.Content>

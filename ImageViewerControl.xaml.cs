@@ -620,14 +620,14 @@ namespace ModernImageViewer
             {
                 if (HudFileName != null) HudFileName.Text = $"{TargetImage.Name}  |  {_secondTargetImage.Name}";
                 string spreadPrefix = "2-Page Spread";
-                if (!IsStandaloneMode && MainWindow.Instance != null) { int idx1 = MainWindow.Instance.Images.IndexOf(TargetImage); int total = MainWindow.Instance.Images.Count; if (idx1 >= 0 && total > 0) spreadPrefix = $"Pages {idx1 + 1}–{Math.Min(total, idx1 + 2)} of {total}"; }
-                if (HudSecondaryInfo != null) HudSecondaryInfo.Text = $"{spreadPrefix} • {(int)EffectiveLogicalWidth} × {(int)EffectiveLogicalHeight} • {TargetImage.SizeString} + {_secondTargetImage.SizeString}";
+                if (!IsStandaloneMode && MainWindow.Instance != null) { int idx1 = MainWindow.Instance.Images.IndexOf(TargetImage); int total = MainWindow.Instance.Images.Count; if (idx1 >= 0 && total > 0) spreadPrefix = $"Pages {idx1 + 1}\u2013{Math.Min(total, idx1 + 2)} of {total}"; }
+                if (HudSecondaryInfo != null) HudSecondaryInfo.Text = $"{spreadPrefix} \u2022 {(int)EffectiveLogicalWidth} \u00D7 {(int)EffectiveLogicalHeight} \u2022 {TargetImage.SizeString} + {_secondTargetImage.SizeString}";
             }
             else
             {
                 if (HudFileName != null) HudFileName.Text = !string.IsNullOrWhiteSpace(TargetImage.Name) ? TargetImage.Name : " ";
                 string baseInfo = TargetImage.GetHudDisplayString(_logicalImageWidth, _logicalImageHeight);
-                if (!IsStandaloneMode && TargetImage.IsComicEntry && MainWindow.Instance != null) { int idx = MainWindow.Instance.Images.IndexOf(TargetImage); int total = MainWindow.Instance.Images.Count; if (idx >= 0 && total > 0) baseInfo = $"Page {idx + 1} of {total} • {(int)_logicalImageWidth} × {(int)_logicalImageHeight} • {TargetImage.SizeString}"; }
+                if (!IsStandaloneMode && TargetImage.IsComicEntry && MainWindow.Instance != null) { int idx = MainWindow.Instance.Images.IndexOf(TargetImage); int total = MainWindow.Instance.Images.Count; if (idx >= 0 && total > 0) baseInfo = $"Page {idx + 1} of {total} \u2022 {(int)_logicalImageWidth} \u00D7 {(int)_logicalImageHeight} \u2022 {TargetImage.SizeString}"; }
                 if (HudSecondaryInfo != null) HudSecondaryInfo.Text = baseInfo;
             }
             if (HudZoomInfo != null) HudZoomInfo.Text = TargetImage.GetZoomString(_targetZoom);

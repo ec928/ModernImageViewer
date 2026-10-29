@@ -1573,8 +1573,8 @@ namespace ModernImageViewer
             PreviewTypeText.Text = FileTypeLabel(item.Name);
             PreviewSizeText.Text = item.SizeString;
             PreviewModifiedText.Text = item.DateModified.ToString("yyyy-MM-dd HH:mm");
-            PreviewDimensionsText.Text = "â€”";
-            PreviewTakenText.Text = "â€”";
+            PreviewDimensionsText.Text = "\u2014";
+            PreviewTakenText.Text = "\u2014";
             string folder = ComicArchive.TrySplitEntryPath(item.Path, out string archivePath, out _)
                 ? archivePath
                 : (Path.GetDirectoryName(item.Path) ?? "");
@@ -1686,8 +1686,8 @@ namespace ModernImageViewer
                         PreviewPlaceholder.Visibility = Visibility.Collapsed;
                     }
                     if (size.Width >= 1 && size.Height >= 1)
-                        PreviewDimensionsText.Text = $"{(int)size.Width} Ã— {(int)size.Height}";
-                    PreviewTakenText.Text = taken.HasValue ? taken.Value.ToString("yyyy-MM-dd HH:mm") : "â€”";
+                        PreviewDimensionsText.Text = $"{(int)size.Width} \u00D7 {(int)size.Height}";
+                    PreviewTakenText.Text = taken.HasValue ? taken.Value.ToString("yyyy-MM-dd HH:mm") : "\u2014";
                 }
 
                 if (DispatcherQueue.HasThreadAccess) Apply();
@@ -3013,13 +3013,13 @@ namespace ModernImageViewer
                     btn.Background = activeBg;
                     if (txt != null)
                     {
-                        txt.Text = $"ðŸ’¾{i + 1}";
+                        txt.Text = $"\U0001F4BE{i + 1}";
                         txt.Foreground = activeFg;
                         txt.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
                     }
                     if (dot != null) dot.Visibility = Visibility.Collapsed;
                     ToolTipService.SetToolTip(btn, hasPreset
-                        ? $"Overwrite Preset {i + 1} (currently {preset!.WindowWidth}Ã—{preset.WindowHeight}, Tile {(int)Math.Round(preset.TileSize)}px)"
+                        ? $"Overwrite Preset {i + 1} (currently {preset!.WindowWidth}\u00D7{preset.WindowHeight}, Tile {(int)Math.Round(preset.TileSize)}px)"
                         : $"Save current window & tile size to Preset {i + 1}");
                 }
                 else
@@ -3037,7 +3037,7 @@ namespace ModernImageViewer
                         dot.Opacity = isActive ? 1.0 : 0.65;
                     }
                     ToolTipService.SetToolTip(btn, hasPreset
-                        ? $"Preset {i + 1}: {preset!.WindowWidth}Ã—{preset.WindowHeight}, Tile {(int)Math.Round(preset.TileSize)}px (Ctrl+{i + 1})\nClick to apply â€¢ Right-click or Save icon to overwrite"
+                        ? $"Preset {i + 1}: {preset!.WindowWidth}\u00D7{preset.WindowHeight}, Tile {(int)Math.Round(preset.TileSize)}px (Ctrl+{i + 1})\nClick to apply \u2022 Right-click or Save icon to overwrite"
                         : $"Preset {i + 1} (Empty)\nClick to save current window & tile size");
                 }
             }

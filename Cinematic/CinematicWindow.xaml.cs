@@ -966,37 +966,37 @@ namespace ModernImageViewer.Cinematic
 
             if (draft)
             {
-                StateText.Text = "DRAFT — not saved";
+                StateText.Text = "DRAFT \u2014 not saved";
                 StateText.Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 210, 70));
                 StateBadge.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(60, 255, 200, 0));
             }
             else if (custom)
             {
-                StateText.Text = "CUSTOM — you saved this zoom/pan";
+                StateText.Text = "CUSTOM \u2014 you saved this zoom/pan";
                 StateText.Foreground = _telemetryOverrideText;
                 StateBadge.Background = _telemetryOverrideBg;
             }
             else
             {
-                StateText.Text = "AUTO — engine zoom/pan, not customized";
+                StateText.Text = "AUTO \u2014 engine zoom/pan, not customized";
                 StateText.Foreground = _telemetryAutoText;
                 StateBadge.Background = _telemetryAutoBg;
             }
 
-            string zoom = $"Zoom/pan {traj.StartScale:F2}× → {traj.EndScale:F2}×";
+            string zoom = $"Zoom/pan {traj.StartScale:F2}\u00D7 \u2192 {traj.EndScale:F2}\u00D7";
             string who = draft
                 ? "Show still uses the last saved state until you Save."
                 : custom
                     ? "This slide uses your saved rectangles, not the engine."
-                    : "These rectangles are the engine's. Different start/end is normal Auto Ken Burns — not your edit.";
+                    : "These rectangles are the engine's. Different start/end is normal Auto Ken Burns \u2014 not your edit.";
             if (StatusDetailText != null) StatusDetailText.Text = who;
             if (ZoomPanReadout != null) ZoomPanReadout.Text = zoom;
             if (TelemetryText != null)
             {
                 TelemetryText.Text =
                     $"{zoom}\n" +
-                    $"Slide {ViewModel.CurrentIndex + 1} / {ViewModel.Track.Count}  ·  {ViewModel.CurrentFileName}\n" +
-                    $"Saved: {(custom ? "Custom zoom/pan" : "Auto (engine)")}  ·  Unsaved draft: {(draft ? "yes" : "no")}";
+                    $"Slide {ViewModel.CurrentIndex + 1} / {ViewModel.Track.Count}  \u00B7  {ViewModel.CurrentFileName}\n" +
+                    $"Saved: {(custom ? "Custom zoom/pan" : "Auto (engine)")}  \u00B7  Unsaved draft: {(draft ? "yes" : "no")}";
             }
         }
 

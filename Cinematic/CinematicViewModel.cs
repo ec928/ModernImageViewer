@@ -223,11 +223,11 @@ namespace ModernImageViewer.Cinematic.ViewModels
 
         public string PanelHeader => HasUnsavedZoomPan
             ? (IsOverrideMode
-                ? "DRAFT — custom zoom/pan changed, not saved"
-                : "DRAFT — you moved zoom/pan, not saved")
+                ? "DRAFT \u2014 custom zoom/pan changed, not saved"
+                : "DRAFT \u2014 you moved zoom/pan, not saved")
             : (IsOverrideMode
-                ? "CUSTOM — you saved zoom/pan for this slide"
-                : "AUTO — engine zoom/pan, not customized");
+                ? "CUSTOM \u2014 you saved zoom/pan for this slide"
+                : "AUTO \u2014 engine zoom/pan, not customized");
         public string OverrideButtonText => IsOverrideMode ? "Revert to Auto" : "Using Auto";
         public Visibility RevertButtonVisibility => Visibility.Visible;
         public bool CanSaveZoomPan => HasUnsavedZoomPan;
@@ -236,7 +236,7 @@ namespace ModernImageViewer.Cinematic.ViewModels
             ? "Not saved. The show still uses the last saved state (Auto or previous Custom) until you Save."
             : IsOverrideMode
                 ? "Saved. This slide uses your zoom/pan, not the engine."
-                : "Not customized. The rectangles are the engine's zoom/pan. Dragging them makes a draft — Save to keep it.";
+                : "Not customized. The rectangles are the engine's zoom/pan. Dragging them makes a draft \u2014 Save to keep it.";
 
         // TwoWay Bound Slider Properties
         public double DurationSeconds
