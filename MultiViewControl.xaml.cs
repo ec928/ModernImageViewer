@@ -397,9 +397,14 @@ namespace ModernImageViewer
 
             if (rows)
             {
-                // Rows mode: stacked horizontal lanes with labels on left, tracks in center, steppers on right
+                // Rows mode: stacked horizontal lanes with labels on left, tracks in center, steppers on right.
+                // Rows with more photos are visibly longer; rows with fewer photos are shorter.
                 const double trackWidth = 175;
                 double trackHeight = Math.Clamp((140.0 - (counts.Length - 1) * 6) / counts.Length, 24.0, 32.0);
+                int maxCount = counts.Max();
+                double cellUnit = (trackWidth - 4.0) / Math.Max(maxCount, 8);
+                double cellW = Math.Max(6, cellUnit - 2);
+                double cellH = trackHeight - 4;
 
                 var panel = new StackPanel { Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
                 for (int i = 0; i < counts.Length; i++)
@@ -420,7 +425,7 @@ namespace ModernImageViewer
                         VerticalAlignment = VerticalAlignment.Center
                     });
 
-                    // Track containing photo cells
+                    // Track containing photo cells (fixed width groove; photo blocks fill proportionally)
                     var track = new Border
                     {
                         Width = trackWidth,
@@ -437,12 +442,9 @@ namespace ModernImageViewer
                     {
                         Orientation = Orientation.Horizontal,
                         Spacing = 2,
-                        HorizontalAlignment = HorizontalAlignment.Stretch,
-                        VerticalAlignment = VerticalAlignment.Stretch
+                        HorizontalAlignment = HorizontalAlignment.Left,
+                        VerticalAlignment = VerticalAlignment.Center
                     };
-                    double usableWidth = trackWidth - 4 - (count - 1) * 2;
-                    double cellW = Math.Max(4, usableWidth / count);
-                    double cellH = trackHeight - 4;
 
                     for (int c = 0; c < count; c++)
                     {
@@ -460,10 +462,15 @@ namespace ModernImageViewer
             }
             else
             {
-                // Columns mode: vertical lanes side-by-side with labels on top, tracks in center, steppers on bottom
+                // Columns mode: vertical lanes side-by-side with labels on top, tracks in center, steppers on bottom.
+                // Columns with more photos are visibly taller; columns with fewer photos are shorter.
                 const double trackHeight = 130;
                 int nCols = counts.Length;
                 double colWidth = Math.Clamp((270.0 - (nCols - 1) * 8) / nCols, 46.0, 68.0);
+                int maxCount = counts.Max();
+                double cellUnit = (trackHeight - 4.0) / Math.Max(maxCount, 8);
+                double cellH = Math.Max(6, cellUnit - 2);
+                double cellW = colWidth - 4;
 
                 var columnsPanel = new StackPanel
                 {
@@ -494,7 +501,7 @@ namespace ModernImageViewer
                         HorizontalAlignment = HorizontalAlignment.Center
                     });
 
-                    // Track
+                    // Track (fixed height groove; photo blocks stack from bottom up)
                     var track = new Border
                     {
                         Width = colWidth,
@@ -512,12 +519,9 @@ namespace ModernImageViewer
                     {
                         Orientation = Orientation.Vertical,
                         Spacing = 2,
-                        HorizontalAlignment = HorizontalAlignment.Stretch,
-                        VerticalAlignment = VerticalAlignment.Stretch
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Bottom
                     };
-                    double usableHeight = trackHeight - 4 - (count - 1) * 2;
-                    double cellH = Math.Max(4, usableHeight / count);
-                    double cellW = colWidth - 4;
 
                     for (int c = 0; c < count; c++)
                     {
