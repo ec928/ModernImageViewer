@@ -222,47 +222,61 @@ namespace ModernImageViewer
             // 2. Interactive Visual Canvas & Steppers
             CountsPanel.Children.Add(BuildCountsCanvas(counts, rows, accent));
 
-            // 3. Footer: Distribute Evenly (only if custom)
+            // 3. Footer: Distribute Evenly (always present in fixed spot to keep box size completely stable)
+            CountsPanel.Children.Add(new Rectangle
+            {
+                Height = 1,
+                Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(35, 255, 255, 255)),
+                Margin = new Thickness(0, 6, 0, 4)
+            });
+
+            var resetBtn = new Button
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Padding = new Thickness(10, 6, 10, 6),
+                CornerRadius = new CornerRadius(6),
+                Background = new SolidColorBrush(isCustom
+                    ? Windows.UI.Color.FromArgb(30, 255, 255, 255)
+                    : Windows.UI.Color.FromArgb(15, 255, 255, 255)),
+                BorderBrush = new SolidColorBrush(isCustom
+                    ? Windows.UI.Color.FromArgb(60, 255, 255, 255)
+                    : Windows.UI.Color.FromArgb(30, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
+                IsEnabled = isCustom,
+                Opacity = isCustom ? 1.0 : 0.38
+            };
+            ToolTipService.SetToolTip(resetBtn, isCustom
+                ? "Reset photos to an even distribution across lines"
+                : "Photos are currently evenly distributed");
+
+            var btnContent = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 7,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            btnContent.Children.Add(new FontIcon
+            {
+                Glyph = "\uE8A9",
+                FontFamily = new FontFamily("Segoe Fluent Icons"),
+                FontSize = 12,
+                Foreground = isCustom
+                    ? new SolidColorBrush(accent)
+                    : new SolidColorBrush(Windows.UI.Color.FromArgb(160, 255, 255, 255))
+            });
+            btnContent.Children.Add(new TextBlock
+            {
+                Text = "Distribute Evenly",
+                FontSize = 12,
+                FontWeight = Microsoft.UI.Text.FontWeights.Medium,
+                Foreground = isCustom
+                    ? new SolidColorBrush(Microsoft.UI.Colors.White)
+                    : new SolidColorBrush(Windows.UI.Color.FromArgb(160, 255, 255, 255))
+            });
+            resetBtn.Content = btnContent;
             if (isCustom)
             {
-                CountsPanel.Children.Add(new Rectangle
-                {
-                    Height = 1,
-                    Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(35, 255, 255, 255)),
-                    Margin = new Thickness(0, 6, 0, 4)
-                });
-
-                var resetBtn = new Button
-                {
-                    HorizontalAlignment = HorizontalAlignment.Stretch,
-                    Padding = new Thickness(10, 6, 10, 6),
-                    CornerRadius = new CornerRadius(6),
-                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(20, 255, 255, 255)),
-                    BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(45, 255, 255, 255)),
-                    BorderThickness = new Thickness(1)
-                };
-                var btnContent = new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 7,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center
-                };
-                btnContent.Children.Add(new FontIcon
-                {
-                    Glyph = "\uE8A9",
-                    FontFamily = new FontFamily("Segoe Fluent Icons"),
-                    FontSize = 12,
-                    Foreground = new SolidColorBrush(accent)
-                });
-                btnContent.Children.Add(new TextBlock
-                {
-                    Text = "Distribute Evenly",
-                    FontSize = 12,
-                    FontWeight = Microsoft.UI.Text.FontWeights.Medium,
-                    Foreground = new SolidColorBrush(Microsoft.UI.Colors.White)
-                });
-                resetBtn.Content = btnContent;
                 resetBtn.Click += (_, _) =>
                 {
                     _lineCounts = null;
@@ -270,8 +284,8 @@ namespace ModernImageViewer
                     FillCountsPanel();
                     ShowHudAndOverlays();
                 };
-                CountsPanel.Children.Add(resetBtn);
             }
+            CountsPanel.Children.Add(resetBtn);
         }
 
         /// <summary>

@@ -156,7 +156,7 @@
                                             <Setter Property="BorderThickness" Value="1" />
                                         </Style>
                                     </Flyout.FlyoutPresenterStyle>
-                                    <StackPanel x:Name="CountsPanel" Spacing="8" MinWidth="260" />
+                                    <StackPanel x:Name="CountsPanel" Spacing="8" Width="295" />
                                 </Flyout>
                             </Button.Flyout>
                             <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
