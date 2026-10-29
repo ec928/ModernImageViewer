@@ -258,7 +258,7 @@
                                 </Button.Flyout>
                             </Button>
                         </StackPanel>
-                        <Rectangle Grid.ColumnSpan="4" Height="1" VerticalAlignment="Bottom" Fill="{ThemeResource CardStrokeColorDefaultBrush}" IsHitTestVisible="False"/>
+                        <Rectangle Grid.ColumnSpan="4" Height="1" VerticalAlignment="Bottom" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" IsHitTestVisible="False"/>
                     </Grid>
 
         <Grid x:Name="HoverTriggerZone" Grid.Row="1" Width="15" HorizontalAlignment="Left" Background="#01000000" PointerEntered="HoverZone_PointerEntered" Canvas.ZIndex="2000" />
@@ -266,12 +266,16 @@
         <SplitView x:Name="SidebarView" Grid.Row="1" PanePlacement="Left" DisplayMode="Overlay" OpenPaneLength="320" PaneBackground="Transparent" PaneClosed="SidebarView_PaneClosed" PaneOpened="SidebarView_PaneOpened">
             <SplitView.Pane>
                 <Grid x:Name="SidebarPane"
-                      Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}"
+                      Background="{ThemeResource AcrylicBackgroundFillColorBaseBrush}"
                       BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}"
                       BorderThickness="0,1,1,1"
-                      CornerRadius="0,10,10,0"
+                      CornerRadius="0,12,12,0"
                       Margin="0,8,0,8"
+                      Translation="0,0,32"
                       PointerExited="Sidebar_PointerExited">
+                    <Grid.Shadow>
+                        <ThemeShadow/>
+                    </Grid.Shadow>
                     <Grid Padding="0,6,0,6">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
@@ -634,8 +638,8 @@
                     </Grid>
 
                     <Grid x:Name="ListPreviewBar" Grid.Row="1" Height="180" Visibility="Collapsed"
-                          Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
-                          BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}" BorderThickness="0,1,0,0">
+                          Background="{ThemeResource SolidBackgroundFillColorSecondaryBrush}"
+                          BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
