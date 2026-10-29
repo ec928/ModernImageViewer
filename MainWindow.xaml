@@ -440,9 +440,6 @@
                                                 <TextBlock Text="{x:Bind ComicBadgeText, Mode=OneTime}" FontSize="10" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center"/>
                                             </StackPanel>
                                         </Border>
-                                        <Border Grid.Row="1" CornerRadius="0,0,5,5" IsHitTestVisible="False"
-                                                Background="{ThemeResource AccentFillColorDefaultBrush}"
-                                                Opacity="{x:Bind TileCaptionSelectionOpacity, Mode=OneWay}"/>
                                         <TextBlock Text="{x:Bind Name}"
                                                    x:Phase="1"
                                                    Grid.Row="1"
@@ -455,26 +452,29 @@
                                                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"
                                                    FontSize="11.5"
                                                    ToolTipService.ToolTip="{x:Bind Name}"/>
-                                        <Border Grid.RowSpan="2" IsHitTestVisible="False" BorderThickness="2" CornerRadius="6"
+                                        <Border Grid.Row="0" Margin="3" IsHitTestVisible="False" Background="Transparent" BorderThickness="2" CornerRadius="4"
                                                 BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
                                                 Opacity="{x:Bind SelectionOpacity, Mode=OneWay}"/>
                                         <Grid Grid.RowSpan="2" IsHitTestVisible="False" Opacity="{x:Bind KeyboardCursorOpacity, Mode=OneWay}">
                                             <Border CornerRadius="6" BorderThickness="2" BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"/>
                                             <Border Margin="2" CornerRadius="4" BorderThickness="1.2" BorderBrush="#E6FFFFFF"/>
                                         </Grid>
-                                        <Grid Grid.Row="0" Width="28" Height="28" Margin="4" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                        <Grid Grid.Row="0" Width="32" Height="32" Margin="10" HorizontalAlignment="Left" VerticalAlignment="Top"
                                               Background="Transparent" PointerPressed="TileCheck_PointerPressed" Tapped="TileCheck_Tapped" ToolTipService.ToolTip="Select (Space or Ctrl+Click)">
-                                            <Grid Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                            <Grid Width="22" Height="22" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                   IsHitTestVisible="False" Opacity="{x:Bind HoverCheckOpacity, Mode=OneWay}">
                                                 <Ellipse Fill="#78000000" Stroke="#E6FFFFFF" StrokeThickness="1.5"/>
-                                                <FontIcon Glyph="&#xE73E;" FontFamily="Segoe MDL2 Assets" FontSize="9.5" Foreground="#D9FFFFFF"
+                                                <FontIcon Glyph="&#xE73E;" FontFamily="Segoe Fluent Icons" FontSize="12" Foreground="#D9FFFFFF"
                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Grid>
-                                            <Grid Width="22" Height="22" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                            <Grid Width="26" Height="26" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                   IsHitTestVisible="False" Opacity="{x:Bind SelectionOpacity, Mode=OneWay}">
-                                                <Ellipse Fill="White"/>
-                                                <Ellipse Margin="1.5" Fill="{ThemeResource AccentFillColorDefaultBrush}"/>
-                                                <FontIcon Glyph="&#xE73E;" FontFamily="Segoe MDL2 Assets" FontSize="11" Foreground="White"
+                                                <Ellipse Stroke="White" StrokeThickness="2">
+                                                    <Ellipse.Fill>
+                                                        <SolidColorBrush Color="{ThemeResource SystemAccentColor}"/>
+                                                    </Ellipse.Fill>
+                                                </Ellipse>
+                                                <FontIcon Glyph="&#xE73E;" FontFamily="Segoe Fluent Icons" FontSize="16" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Grid>
                                         </Grid>

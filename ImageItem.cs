@@ -257,7 +257,6 @@ namespace ModernImageViewer
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(SelectionOpacity));
                 OnPropertyChanged(nameof(SelectionWashOpacity));
-                OnPropertyChanged(nameof(TileCaptionSelectionOpacity));
                 OnPropertyChanged(nameof(HoverCheckOpacity));
                 OnPropertyChanged(nameof(ListHoverOpacity));
             }
@@ -279,9 +278,8 @@ namespace ModernImageViewer
             }
         }
 
-        // Soft tint for the tile caption strip and list row pill so text and photos stay vibrant.
+        // Soft tint on a selected list row. The tile filename stays as it is.
         public double SelectionWashOpacity => _isGridSelected ? 0.16 : 0;
-        public double TileCaptionSelectionOpacity => _isGridSelected ? 0.16 : 0;
         public double HoverCheckOpacity => (!_isGridSelected && _isPointerHovered && !IsDirectory && !IsComicEntry) ? 1 : 0;
         public double ListHoverOpacity => (!_isGridSelected && _isPointerHovered) ? 1 : 0;
 
