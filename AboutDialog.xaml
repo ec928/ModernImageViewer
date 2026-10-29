@@ -51,7 +51,7 @@
                            TextWrapping="Wrap" Margin="0,10,0,0"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
 
-                <TextBlock Text="VIEWING AND LAYOUT" Style="{StaticResource AboutSectionHeader}"/>
+                <TextBlock Text="Viewing and layout" Style="{StaticResource AboutSectionHeader}"/>
                 <TextBlock Style="{StaticResource AboutBullet}">
                     <Run Text="•  "/><Run Text="Tile &amp; List View modes" FontWeight="SemiBold"/><Run Text=" — switch between resizable thumbnail grids and high-density multi-column lists with a live metadata and image preview bar."/>
                 </TextBlock>
@@ -68,7 +68,7 @@
                     <Run Text="•  "/><Run Text="Direct2D GPU rendering" FontWeight="SemiBold"/><Run Text=" — smooth zoom, pan, rotation, ICC color profiles, real-time gamma adjustment, and full multi-frame animated GIF playback."/>
                 </TextBlock>
 
-                <TextBlock Text="COMIC BOOK READER (CBR / CBZ)" Style="{StaticResource AboutSectionHeader}"/>
+                <TextBlock Text="Comic book reader (CBR / CBZ)" Style="{StaticResource AboutSectionHeader}"/>
                 <TextBlock Style="{StaticResource AboutBullet}">
                     <Run Text="•  "/><Run Text="Native archive browsing" FontWeight="SemiBold"/><Run Text=" — open .cbz (ZIP) and .cbr (RAR) comic archives directly like folders without extracting files to disk."/>
                 </TextBlock>
@@ -76,7 +76,7 @@
                     <Run Text="•  "/><Run Text="Responsive two-page spread" FontWeight="SemiBold"/><Run Text=" — automatically displays side-by-side double-page spreads when the window is stretched wide enough (toggle anytime with B), while keeping covers and wide landscapes on a single page."/>
                 </TextBlock>
 
-                <TextBlock Text="CINEMATIC AND COLLAGE (BETA)" Style="{StaticResource AboutSectionHeader}"/>
+                <TextBlock Text="Cinematic and collage (Beta)" Style="{StaticResource AboutSectionHeader}"/>
                 <TextBlock Style="{StaticResource AboutBullet}">
                     <Run Text="•  "/><Run Text="Cinematic slideshow" FontWeight="SemiBold"/><Run Text=" — press Play for automated Ken Burns camera moves with smart subject framing and smooth crossfades between slides."/>
                 </TextBlock>
@@ -87,7 +87,7 @@
                     <Run Text="•  "/><Run Text="Collage editor" FontWeight="SemiBold"/><Run Text=" — arrange, rotate, and export multi-image compositions at native resolution."/>
                 </TextBlock>
 
-                <TextBlock Text="PERFORMANCE AND FORMATS" Style="{StaticResource AboutSectionHeader}"/>
+                <TextBlock Text="Performance and formats" Style="{StaticResource AboutSectionHeader}"/>
                 <TextBlock Style="{StaticResource AboutBullet}">
                     <Run Text="•  "/><Run Text="Tiered async decoding" FontWeight="SemiBold"/><Run Text=" — thumbnail, fast preview, display, and high-fidelity stages with predictive lookahead caching keep 10 MB+ image libraries responsive and memory-bounded."/>
                 </TextBlock>

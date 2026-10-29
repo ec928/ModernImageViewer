@@ -10,6 +10,26 @@
           AllowDrop="True" DragOver="RootGrid_DragOver" Drop="RootGrid_Drop"
           PreviewKeyDown="RootGrid_PreviewKeyDown">
 
+        <Grid.Resources>
+            <Style x:Key="HeaderButtonStyle" TargetType="Button" BasedOn="{StaticResource SubtleButtonStyle}">
+                <Setter Property="Width" Value="30"/>
+                <Setter Property="Height" Value="28"/>
+                <Setter Property="MinWidth" Value="0"/>
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="CornerRadius" Value="4"/>
+                <Setter Property="IsTabStop" Value="False"/>
+            </Style>
+            <Style x:Key="SidebarToolButtonStyle" TargetType="Button" BasedOn="{StaticResource SubtleButtonStyle}">
+                <Setter Property="Height" Value="26"/>
+                <Setter Property="MinWidth" Value="0"/>
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="CornerRadius" Value="4"/>
+                <Setter Property="IsTabStop" Value="False"/>
+            </Style>
+        </Grid.Resources>
+
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -22,18 +42,9 @@
             <Rectangle Width="40" Height="4" RadiusX="2" RadiusY="2" Fill="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Center" Opacity="0.4" IsHitTestVisible="False"/>
         </Grid>
 
+
+
                     <Grid x:Name="TileHeader" Height="36" Background="Transparent">
-                        <Grid.Resources>
-                            <Style x:Key="HeaderButtonStyle" TargetType="Button" BasedOn="{StaticResource SubtleButtonStyle}">
-                                <Setter Property="Width" Value="30"/>
-                                <Setter Property="Height" Value="28"/>
-                                <Setter Property="MinWidth" Value="0"/>
-                                <Setter Property="MinHeight" Value="0"/>
-                                <Setter Property="Padding" Value="0"/>
-                                <Setter Property="CornerRadius" Value="4"/>
-                                <Setter Property="IsTabStop" Value="False"/>
-                            </Style>
-                        </Grid.Resources>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
@@ -252,30 +263,37 @@
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
 
-                        <!-- === SINGLE ACTION BAR (Slideshow, Collage, Video Director) === -->
-                        <Grid Grid.Row="0" Margin="8,2,8,6">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="42"/>
-                                <ColumnDefinition Width="42"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
+                        <!-- === UNIFIED ACTION TOOLSTRIP (Slideshow, Collage, Video Director) === -->
+                        <Border Grid.Row="0" Margin="10,4,10,8" Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="6" Padding="2">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="36"/>
+                                    <ColumnDefinition Width="1"/>
+                                    <ColumnDefinition Width="36"/>
+                                    <ColumnDefinition Width="1"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
 
-                            <Button Grid.Column="0" Click="PlayCinematicFolder_Click" HorizontalAlignment="Stretch" Height="30" Padding="0" Margin="2" IsTabStop="False" ToolTipService.ToolTip="Play Cinematic Slideshow">
-                                <SymbolIcon Symbol="Play"/>
-                            </Button>
+                                <Button Grid.Column="0" Style="{StaticResource SidebarToolButtonStyle}" Click="PlayCinematicFolder_Click" HorizontalAlignment="Stretch" Height="26" Padding="0" CornerRadius="4" IsTabStop="False" ToolTipService.ToolTip="Play Cinematic Slideshow">
+                                    <SymbolIcon Symbol="Play"/>
+                                </Button>
 
-                            <Button Grid.Column="1" Click="TestCollage_Click" HorizontalAlignment="Stretch" Height="30" Padding="0" Margin="2" IsTabStop="False" ToolTipService.ToolTip="Open Collage Editor">
-                                <SymbolIcon Symbol="Pictures"/>
-                            </Button>
+                                <Rectangle Grid.Column="1" Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,3" Opacity="0.5"/>
 
-                            <Button Grid.Column="2" Click="OpenDirector_Click" HorizontalAlignment="Stretch" Height="30" Padding="6,0" Margin="2" IsTabStop="False" ToolTipService.ToolTip="Open Video Director">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Button Grid.Column="2" Style="{StaticResource SidebarToolButtonStyle}" Click="TestCollage_Click" HorizontalAlignment="Stretch" Height="26" Padding="0" CornerRadius="4" IsTabStop="False" ToolTipService.ToolTip="Open Collage Editor">
+                                    <SymbolIcon Symbol="Pictures"/>
+                                </Button>
 
-                                    <SymbolIcon Symbol="Video"/>
-                                    <TextBlock Text="Video Director" FontSize="12.5"/>
-                                </StackPanel>
-                            </Button>
-                        </Grid>
+                                <Rectangle Grid.Column="3" Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,3" Opacity="0.5"/>
+
+                                <Button Grid.Column="4" Style="{StaticResource SidebarToolButtonStyle}" Click="OpenDirector_Click" HorizontalAlignment="Stretch" Height="26" Padding="8,0" CornerRadius="4" IsTabStop="False" ToolTipService.ToolTip="Open Video Director">
+                                    <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+                                        <SymbolIcon Symbol="Video"/>
+                                        <TextBlock Text="Video Director" FontSize="12"/>
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+                        </Border>
 
                         <BreadcrumbBar x:Name="FolderBreadcrumb" Grid.Row="1" Margin="10,3,6,4" ItemClicked="BreadcrumbBar_ItemClicked" IsTabStop="False">
                             <BreadcrumbBar.Resources>
