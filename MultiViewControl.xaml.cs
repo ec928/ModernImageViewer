@@ -417,7 +417,9 @@ namespace ModernImageViewer
             });
 
             // 4. Proportional Line Distribution (Rows = horizontal rails, Columns = vertical rails)
-            CountsPanel.Children.Add(BuildCountsList(counts, rows, accent));
+            var countsList = BuildCountsList(counts, rows, accent);
+            countsList.Margin = new Thickness(0, 0, 0, 6);
+            CountsPanel.Children.Add(countsList);
         }
 
         /// <summary>
@@ -438,17 +440,22 @@ namespace ModernImageViewer
                     Content = new FontIcon
                     {
                         Glyph = glyph,
-                        FontSize = Math.Max(7, Math.Min(height * 0.45, 9.5)),
-                        FontFamily = new FontFamily("Segoe Fluent Icons")
+                        FontSize = Math.Max(9.5, Math.Min(height * 0.55, 11)),
+                        FontFamily = new FontFamily("Segoe Fluent Icons"),
+                        Foreground = enabled
+                            ? new SolidColorBrush(Windows.UI.Color.FromArgb(240, 255, 255, 255))
+                            : new SolidColorBrush(Windows.UI.Color.FromArgb(90, 255, 255, 255))
                     },
                     Width = width,
                     Height = height,
+                    MinWidth = 0,
+                    MinHeight = 0,
                     Padding = new Thickness(0),
                     CornerRadius = new CornerRadius(Math.Min(width, height) / 2.0),
                     Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
                     BorderThickness = new Thickness(0),
                     IsEnabled = enabled,
-                    Opacity = enabled ? 0.9 : 0.25,
+                    Opacity = 1.0,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center
                 };
@@ -514,7 +521,7 @@ namespace ModernImageViewer
                     row.Children.Add(barTrack);
 
                     // Stepper: Minus, Count, Plus
-                    string lessTip = canLess ? $"One fewer in row {line + 1}" : "Cannot reduce further";
+                    string lessTip = canLess ? $"One fewer in row {line + 1}" : $"Row {line + 1} has minimum (1 photo)";
                     row.Children.Add(CreateStepButton("\uE738", lessTip, canLess, btnSize, btnSize, () => AdjustLine(line, -1)));
 
                     row.Children.Add(new TextBlock
@@ -528,7 +535,7 @@ namespace ModernImageViewer
                         VerticalAlignment = VerticalAlignment.Center
                     });
 
-                    string moreTip = canMore ? $"One more in row {line + 1}" : "Cannot increase further";
+                    string moreTip = canMore ? $"One more in row {line + 1}" : "No photo available to move";
                     row.Children.Add(CreateStepButton("\uE710", moreTip, canMore, btnSize, btnSize, () => AdjustLine(line, 1)));
 
                     panel.Children.Add(row);
@@ -538,7 +545,7 @@ namespace ModernImageViewer
             else
             {
                 // Columns mode: Vertical columns side-by-side
-                const double trackHeight = 72;
+                const double trackHeight = 65;
                 int nCols = counts.Length;
                 double colWidth = nCols <= 4 ? 42.0 : (nCols <= 7 ? 36.0 : (nCols <= 10 ? 30.0 : 26.0));
                 double colSpacing = nCols <= 4 ? 10.0 : (nCols <= 7 ? 8.0 : (nCols <= 10 ? 6.0 : 4.0));
@@ -606,7 +613,7 @@ namespace ModernImageViewer
                         HorizontalAlignment = HorizontalAlignment.Center
                     };
 
-                    string moreTip = canMore ? $"One more in column {line + 1}" : "Cannot increase further";
+                    string moreTip = canMore ? $"One more in column {line + 1}" : "No photo available to move";
                     stepper.Children.Add(CreateStepButton("\uE710", moreTip, canMore, btnW, btnH, () => AdjustLine(line, 1)));
 
                     stepper.Children.Add(new TextBlock
@@ -621,7 +628,7 @@ namespace ModernImageViewer
                         VerticalAlignment = VerticalAlignment.Center
                     });
 
-                    string lessTip = canLess ? $"One fewer in column {line + 1}" : "Cannot reduce further";
+                    string lessTip = canLess ? $"One fewer in column {line + 1}" : $"Column {line + 1} has minimum (1 photo)";
                     stepper.Children.Add(CreateStepButton("\uE738", lessTip, canLess, btnW, btnH, () => AdjustLine(line, -1)));
 
                     col.Children.Add(stepper);
