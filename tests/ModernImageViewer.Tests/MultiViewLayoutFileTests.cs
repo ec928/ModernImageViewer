@@ -42,7 +42,7 @@ namespace ModernImageViewer.Tests
                 Mosaic = MosaicNodeDto.FromMosaicLayout(root),
                 Photos = new List<PhotoSlotDto>
                 {
-                    new() { Slot = 0, Path = @"C:\Photos\PhotoA.jpg", Name = "PhotoA.jpg", Zoom = 1.5, PanX = 10.0, PanY = -5.0 },
+                    new() { Slot = 0, Path = @"C:\Photos\PhotoA.jpg", Name = "PhotoA.jpg", Zoom = 1.5, PanX = 10.0, PanY = -5.0, Hidden = true },
                     new() { Slot = 1, Path = @"C:\Photos\PhotoB.jpg", Name = "PhotoB.jpg" },
                     new() { Slot = 2, Path = @"C:\Photos\PhotoC.jpg", Name = "PhotoC.jpg" }
                 }
@@ -68,6 +68,8 @@ namespace ModernImageViewer.Tests
             Assert.Equal(1.5, loaded.Photos[0].Zoom);
             Assert.Equal(10.0, loaded.Photos[0].PanX);
             Assert.Equal(-5.0, loaded.Photos[0].PanY);
+            Assert.True(loaded.Photos[0].Hidden);
+            Assert.False(loaded.Photos[1].Hidden);
 
             // Verify MosaicLayout deserialization
             Assert.NotNull(loaded.Mosaic);

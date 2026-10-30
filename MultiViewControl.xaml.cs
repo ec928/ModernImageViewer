@@ -27,6 +27,9 @@ namespace ModernImageViewer
         public event Action<double>? CanvasAspectChosen;
 
         private readonly List<ImageItem> _items = new();
+        private readonly HashSet<ImageItem> _hiddenItems = new();
+
+        public bool IsImageHidden(ImageItem item) => _hiddenItems.Contains(item);
         private readonly List<CompositeTransform> _cellTransforms = new();
         private readonly List<Action> _layoutUpdaters = new();
         private readonly List<UIElement> _cellTopControls = new();
@@ -1748,7 +1751,43 @@ namespace ModernImageViewer
             slotGrid.Children.Add(gutterBorder);
             slotGrid.Children.Add(cellBorder);
 
-            var parts = new CellParts(transform, updateLayout, topControls, fullImg, photo, positionBadge, badgeText, dashedStroke, rimGlowStroke, gutterBorder);
+            // Hidden image placeholder
+            var placeholder = new StackPanel
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Spacing = 6,
+                IsHitTestVisible = false,
+                Visibility = _hiddenItems.Contains(photo.Item) ? Visibility.Visible : Visibility.Collapsed
+            };
+            placeholder.Children.Add(new FontIcon
+            {
+                Glyph = "\uED1A",
+                FontSize = 26,
+                FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(120, 255, 255, 255)),
+                HorizontalAlignment = HorizontalAlignment.Center
+            });
+            placeholder.Children.Add(new TextBlock
+            {
+                Text = "Image hidden",
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(120, 255, 255, 255)),
+                HorizontalAlignment = HorizontalAlignment.Center
+            });
+            placeholder.Children.Add(new TextBlock
+            {
+                Text = "Right-click to show",
+                FontSize = 10.5,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(70, 255, 255, 255)),
+                HorizontalAlignment = HorizontalAlignment.Center
+            });
+            Canvas.SetZIndex(placeholder, 5);
+            cellGrid.Children.Add(placeholder);
+
+            imgContainer.Visibility = _hiddenItems.Contains(photo.Item) ? Visibility.Collapsed : Visibility.Visible;
+
+            var parts = new CellParts(transform, updateLayout, topControls, fullImg, photo, positionBadge, badgeText, dashedStroke, rimGlowStroke, gutterBorder, imgContainer, placeholder);
             cellBorder.Tag = parts;
             slotGrid.Tag = parts;
 
@@ -1831,25 +1870,43 @@ namespace ModernImageViewer
                     swapItem.PointerEntered += (s, e) => HighlightPositionBadge(otherSlot);
                     swapItem.PointerExited += (s, e) => ClearHighlightPositionBadge(otherSlot, curSlot);
                     menu.Items.Add(swapItem);
+
+                    var copyItem = new MenuFlyoutItem { Text = "Copy to Other Photo", Icon = new FontIcon { Glyph = "\uE8C8" } };
+                    copyItem.Click += (s, e) => CopyItemTo(Slot(item), otherSlot);
+                    copyItem.PointerEntered += (s, e) => HighlightPositionBadge(otherSlot, "Copy to");
+                    copyItem.PointerExited += (s, e) => ClearHighlightPositionBadge(otherSlot, curSlot);
+                    menu.Items.Add(copyItem);
                 }
                 else
                 {
                     var swapSub = new MenuFlyoutSubItem { Text = "Swap with...", Icon = new FontIcon { Glyph = "\uE8AB" } };
+                    var copySub = new MenuFlyoutSubItem { Text = "Copy to...", Icon = new FontIcon { Glyph = "\uE8C8" } };
                     for (int i = 0; i < _items.Count; i++)
                     {
                         if (i == index) continue;
                         var target = _items[i];
                         int targetSlot = i;
-                        var targetItem = new MenuFlyoutItem { Text = $"Position {i + 1} ({target.Name})" };
-                        targetItem.Click += (s, e) => SwapItems(Slot(item), Slot(target));
+
+                        var targetSwap = new MenuFlyoutItem { Text = $"Position {i + 1} ({target.Name})" };
+                        targetSwap.Click += (s, e) => SwapItems(Slot(item), Slot(target));
                         if (targetSlot < visible)
                         {
-                            targetItem.PointerEntered += (s, e) => HighlightPositionBadge(targetSlot);
-                            targetItem.PointerExited += (s, e) => ClearHighlightPositionBadge(targetSlot, curSlot);
+                            targetSwap.PointerEntered += (s, e) => HighlightPositionBadge(targetSlot);
+                            targetSwap.PointerExited += (s, e) => ClearHighlightPositionBadge(targetSlot, curSlot);
                         }
-                        swapSub.Items.Add(targetItem);
+                        swapSub.Items.Add(targetSwap);
+
+                        var targetCopy = new MenuFlyoutItem { Text = $"Position {i + 1} ({target.Name})" };
+                        targetCopy.Click += (s, e) => CopyItemTo(Slot(item), targetSlot);
+                        if (targetSlot < visible)
+                        {
+                            targetCopy.PointerEntered += (s, e) => HighlightPositionBadge(targetSlot, "Copy to");
+                            targetCopy.PointerExited += (s, e) => ClearHighlightPositionBadge(targetSlot, curSlot);
+                        }
+                        copySub.Items.Add(targetCopy);
                     }
                     menu.Items.Add(swapSub);
+                    menu.Items.Add(copySub);
                 }
 
                 menu.Items.Add(new MenuFlyoutItem { Text = "Tip: Alt+drag a photo onto another to swap", IsEnabled = false });
@@ -1859,6 +1916,15 @@ namespace ModernImageViewer
             var soloItem = new MenuFlyoutItem { Text = "Solo / Maximize", Icon = new FontIcon { Glyph = "\uE922" } };
             soloItem.Click += (s, e) => EnterSolo(Slot(item));
             menu.Items.Add(soloItem);
+
+            bool isHidden = _hiddenItems.Contains(item);
+            var hideItem = new MenuFlyoutItem
+            {
+                Text = isHidden ? "Show image" : "Hide image",
+                Icon = new FontIcon { Glyph = isHidden ? "\uE7B3" : "\uED1A" }
+            };
+            hideItem.Click += (s, e) => ToggleHideImage(item);
+            menu.Items.Add(hideItem);
 
             var borderItem = new MenuFlyoutItem { Text = "Frame & Border\u2026", Icon = new FontIcon { Glyph = "\uE790" } };
             borderItem.Click += (s, e) => OpenCellBorderFlyout(item);
@@ -1879,6 +1945,65 @@ namespace ModernImageViewer
             SwapItems(index, target);
         }
 
+        private void CopyItemTo(int fromIndex, int toIndex)
+        {
+            if (fromIndex < 0 || fromIndex >= _items.Count || toIndex < 0 || toIndex >= _items.Count || fromIndex == toIndex) return;
+            var source = _items[fromIndex];
+            if (source == null) return;
+
+            var copy = new ImageItem
+            {
+                Path = source.Path,
+                Name = source.Name,
+                Dispatcher = source.Dispatcher
+            };
+            _items[toIndex] = copy;
+
+            if (!string.IsNullOrEmpty(source.Path))
+            {
+                var border = GetBorderForItem(source);
+                _itemBorders[copy.Path] = border.Clone();
+            }
+
+            if (_hiddenItems.Contains(source))
+                _hiddenItems.Add(copy);
+            else
+                _hiddenItems.Remove(copy);
+
+            int visible = VisibleCount(_items.Count);
+            if (CellRootsReady() && toIndex < visible && _mosaic != null)
+            {
+                ForgetCell(_cellRoots[toIndex]);
+                _cellRoots[toIndex] = null;
+                _keepMosaic = true;
+                try { BuildLayout(); }
+                finally { _keepMosaic = false; }
+            }
+            else
+            {
+                BuildLayout();
+            }
+            ShowHudAndOverlays();
+        }
+
+        private void ToggleHideImage(ImageItem item)
+        {
+            if (_hiddenItems.Contains(item))
+                _hiddenItems.Remove(item);
+            else
+                _hiddenItems.Add(item);
+
+            int slot = Slot(item);
+            if (slot >= 0 && slot < _cellRoots.Length && _cellRoots[slot]?.Tag is CellParts parts)
+            {
+                bool hidden = _hiddenItems.Contains(item);
+                if (parts.ImageContainer != null)
+                    parts.ImageContainer.Visibility = hidden ? Visibility.Collapsed : Visibility.Visible;
+                if (parts.HiddenPlaceholder != null)
+                    parts.HiddenPlaceholder.Visibility = hidden ? Visibility.Visible : Visibility.Collapsed;
+            }
+        }
+
         /// <summary>What a cell registered in the shared lists, so removing the cell can take it back out.</summary>
         private sealed class CellPhoto
         {
@@ -1887,7 +2012,7 @@ namespace ModernImageViewer
             public CellPhoto(ImageItem item) => Item = item;
         }
 
-        private sealed record CellParts(CompositeTransform Transform, Action UpdateLayout, UIElement TopControls, Image Photo, CellPhoto Bound, Border PositionBadge, TextBlock BadgeText, Microsoft.UI.Xaml.Shapes.Rectangle DashedStroke, Microsoft.UI.Xaml.Shapes.Rectangle? RimGlowStroke = null, Border? GutterHost = null);
+        private sealed record CellParts(CompositeTransform Transform, Action UpdateLayout, UIElement TopControls, Image Photo, CellPhoto Bound, Border PositionBadge, TextBlock BadgeText, Microsoft.UI.Xaml.Shapes.Rectangle DashedStroke, Microsoft.UI.Xaml.Shapes.Rectangle? RimGlowStroke = null, Border? GutterHost = null, FrameworkElement? ImageContainer = null, FrameworkElement? HiddenPlaceholder = null);
 
         /// <summary>
         /// Remove a photo and keep the other cells, so none of them decodes again. The layout is rebuilt
@@ -1897,6 +2022,7 @@ namespace ModernImageViewer
         {
             int index = _items.IndexOf(item);
             if (index < 0) return;
+            _hiddenItems.Remove(item);
             int visibleBefore = VisibleCount(_items.Count);
             bool cellsReady = CellRootsReady();
             _items.RemoveAt(index);
@@ -1992,7 +2118,7 @@ namespace ModernImageViewer
             }
         }
 
-        private void HighlightPositionBadge(int targetIndex)
+        private void HighlightPositionBadge(int targetIndex, string action = "Swap with")
         {
             int visible = VisibleCount(_items.Count);
             if (targetIndex < 0 || targetIndex >= visible || targetIndex >= _cellRoots.Length) return;
@@ -2000,7 +2126,8 @@ namespace ModernImageViewer
             {
                 var accent = GetMultiViewAccentColor();
                 bool compact = (_cellRoots[targetIndex] is FrameworkElement fe && fe.ActualWidth < 140);
-                parts.BadgeText.Text = compact ? $"➜ #{targetIndex + 1}" : $"➜ Swap with Position {targetIndex + 1}";
+                string symbol = action == "Copy to" ? "\u2398" : "\u279C";
+                parts.BadgeText.Text = compact ? $"{symbol} #{targetIndex + 1}" : $"{symbol} {action} Position {targetIndex + 1}";
                 parts.PositionBadge.Background = new SolidColorBrush(accent);
                 parts.PositionBadge.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.White);
                 parts.PositionBadge.BorderThickness = new Thickness(2);

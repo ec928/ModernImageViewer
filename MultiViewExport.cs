@@ -729,7 +729,8 @@ namespace ModernImageViewer
                     NativeH = nativeH,
                     CanvasW = canvasW,
                     CanvasH = canvasH,
-                    Border = GetBorderForItem(_items[i]).Clone()
+                    Border = GetBorderForItem(_items[i]).Clone(),
+                    IsHidden = _hiddenItems.Contains(_items[i])
                 });
             }
             return shots;
@@ -786,6 +787,11 @@ namespace ModernImageViewer
                     float slotW = (float)(shot.Cell.Width * scaleX);
                     float slotH = (float)(shot.Cell.Height * scaleY);
                     matSession.FillRectangle(slotX, slotY, slotW, slotH, Color.FromArgb(mat.A, mat.R, mat.G, mat.B));
+                }
+
+                if (shot.IsHidden)
+                {
+                    continue;
                 }
 
                 // 1. Draw Drop Shadow or Ambient Rim Glow
@@ -1059,6 +1065,7 @@ namespace ModernImageViewer
                     Slot = i,
                     Path = item.Path ?? string.Empty,
                     Name = item.Name,
+                    Hidden = _hiddenItems.Contains(item),
                     Border = GetBorderForItem(item).Clone()
                 };
 
@@ -1196,6 +1203,16 @@ namespace ModernImageViewer
                 _layoutFromTemplate = false;
             }
 
+            _hiddenItems.Clear();
+            if (layoutFile.Photos != null)
+            {
+                for (int i = 0; i < layoutFile.Photos.Count && i < _items.Count; i++)
+                {
+                    if (layoutFile.Photos[i].Hidden)
+                        _hiddenItems.Add(_items[i]);
+                }
+            }
+
             ApplyBorderToAllCells();
 
             // Restore zoom and pan
@@ -1252,6 +1269,7 @@ namespace ModernImageViewer
             public Rect Cell;
             public Rect Card;
             public Rect Photo;
+            public bool IsHidden;
             public double ImageW;
             public double ImageH;
             public double Scale;
