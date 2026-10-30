@@ -82,8 +82,8 @@ namespace ModernImageViewer
 
         private string _currentDirectory = string.Empty;
         public string CurrentDirectory => _currentDirectory;
-        public IReadOnlyList<string> FavouriteFolders => _favouriteFolders;
-        public IReadOnlyList<string> RecentFolders => _recentFolders;
+
+
         // Not a filesystem path. The list and sidebar use it as the level above the drives.
         private const string DriveRootPath = "::{Drives}";
         private const string DriveRootName = "This PC";
@@ -107,6 +107,51 @@ namespace ModernImageViewer
         private ItemsWrapGrid? _imageWrapGrid;
         private readonly List<string> _recentFolders = [];
         private readonly List<string> _favouriteFolders = [];
+        private readonly List<string> _multiViewRecentSaveLocations = [];
+        private readonly List<string> _multiViewFavouriteSaveLocations = [];
+
+        public IReadOnlyList<string> MultiViewRecentSaveLocations => _multiViewRecentSaveLocations;
+        public IReadOnlyList<string> MultiViewFavouriteSaveLocations => _multiViewFavouriteSaveLocations;
+
+        public bool IsMultiViewFavourite(string path) =>
+            _multiViewFavouriteSaveLocations.Exists(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+
+        public void ToggleMultiViewFavourite(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return;
+            int i = _multiViewFavouriteSaveLocations.FindIndex(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+            if (i >= 0)
+            {
+                _multiViewFavouriteSaveLocations.RemoveAt(i);
+                if (!_multiViewRecentSaveLocations.Exists(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase)))
+                    _multiViewRecentSaveLocations.Insert(0, path);
+                while (_multiViewRecentSaveLocations.Count > 3)
+                    _multiViewRecentSaveLocations.RemoveAt(_multiViewRecentSaveLocations.Count - 1);
+            }
+            else if (_multiViewFavouriteSaveLocations.Count < 3)
+            {
+                _multiViewFavouriteSaveLocations.Add(path);
+                _multiViewRecentSaveLocations.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+            }
+            SaveAllSettings();
+        }
+
+        public void AddMultiViewSaveLocation(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path)) return;
+            if (IsMultiViewFavourite(path)) return;
+            _multiViewRecentSaveLocations.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+            _multiViewRecentSaveLocations.Insert(0, path);
+            while (_multiViewRecentSaveLocations.Count > 3)
+                _multiViewRecentSaveLocations.RemoveAt(_multiViewRecentSaveLocations.Count - 1);
+            SaveAllSettings();
+        }
+
+        public void ClearMultiViewRecentLocations()
+        {
+            _multiViewRecentSaveLocations.Clear();
+            SaveAllSettings();
+        }
         // Activated and flyout Closed can still fire after the window closes; touching Content then throws and kills the app.
         private bool _windowClosed;
 
@@ -349,6 +394,8 @@ namespace ModernImageViewer
             public List<WindowPreset?> WindowPresets { get; set; } = new() { null, null, null };
             public List<string> RecentFolders { get; set; } = new();
             public List<string> FavouriteFolders { get; set; } = new();
+            public List<string> MultiViewRecentSaveLocations { get; set; } = new();
+            public List<string> MultiViewFavouriteSaveLocations { get; set; } = new();
         }
 
         private void ConfigureWindow(bool forceReset)
@@ -463,6 +510,20 @@ namespace ModernImageViewer
             {
                 if (!string.IsNullOrWhiteSpace(folder) && !IsFavouriteFolder(folder) && _favouriteFolders.Count < MaxFavouriteFolders)
                     _favouriteFolders.Add(folder);
+            }
+
+            _multiViewRecentSaveLocations.Clear();
+            foreach (var folder in settings.MultiViewRecentSaveLocations)
+            {
+                if (Directory.Exists(folder) && !_multiViewRecentSaveLocations.Contains(folder) && _multiViewRecentSaveLocations.Count < 3)
+                    _multiViewRecentSaveLocations.Add(folder);
+            }
+
+            _multiViewFavouriteSaveLocations.Clear();
+            foreach (var folder in settings.MultiViewFavouriteSaveLocations)
+            {
+                if (!string.IsNullOrWhiteSpace(folder) && !_multiViewFavouriteSaveLocations.Contains(folder) && _multiViewFavouriteSaveLocations.Count < 3)
+                    _multiViewFavouriteSaveLocations.Add(folder);
             }
 
             if (ViewerControl != null)
@@ -650,6 +711,8 @@ namespace ModernImageViewer
                 _currentSettings.SortOrder = _currentSettings.SortOrder; // Will be updated when sorting, just to keep it
                 _currentSettings.RecentFolders = new List<string>(_recentFolders);
                 _currentSettings.FavouriteFolders = new List<string>(_favouriteFolders);
+                _currentSettings.MultiViewRecentSaveLocations = new List<string>(_multiViewRecentSaveLocations);
+                _currentSettings.MultiViewFavouriteSaveLocations = new List<string>(_multiViewFavouriteSaveLocations);
                 if (ThumbSizeSlider != null) _currentSettings.TileSize = Math.Round(ThumbSizeSlider.Value);
 
                 string json = System.Text.Json.JsonSerializer.Serialize(_currentSettings, new System.Text.Json.JsonSerializerOptions

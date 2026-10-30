@@ -855,6 +855,8 @@ namespace ModernImageViewer
                 string json = File.ReadAllText(path);
                 var layoutFile = MultiViewLayoutFile.FromJson(json);
                 if (layoutFile == null) return;
+                string? openedDir = Path.GetDirectoryName(path);
+                if (!string.IsNullOrEmpty(openedDir)) AddMultiViewSaveLocation(openedDir);
 
                 if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible)
                 {

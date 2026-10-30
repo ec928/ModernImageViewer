@@ -46,6 +46,12 @@ namespace ModernImageViewer
             }
         }
 
+        private static readonly SolidColorBrush _menuWhitePrimary = new(Windows.UI.Color.FromArgb(245, 255, 255, 255));
+        private static readonly SolidColorBrush _menuWhiteSecondary = new(Windows.UI.Color.FromArgb(170, 255, 255, 255));
+        private static readonly SolidColorBrush _menuWhiteTertiary = new(Windows.UI.Color.FromArgb(115, 255, 255, 255));
+        private static readonly SolidColorBrush _menuGoldStar = new(Windows.UI.Color.FromArgb(255, 255, 200, 59));
+        private static readonly SolidColorBrush _menuDividerBrush = new(Windows.UI.Color.FromArgb(35, 255, 255, 255));
+
         private void SaveFlyout_Opening(object sender, object e)
         {
             BuildSaveFlyoutMenu();
@@ -55,7 +61,7 @@ namespace ModernImageViewer
         {
             var panel = new StackPanel
             {
-                MinWidth = 290,
+                MinWidth = 295,
                 Spacing = 1,
                 XYFocusKeyboardNavigation = Microsoft.UI.Xaml.Input.XYFocusKeyboardNavigationMode.Enabled
             };
@@ -103,7 +109,7 @@ namespace ModernImageViewer
             // Layout Save & Load
             panel.Children.Add(CreateMenuDivider());
 
-            var saveLayoutItem = CreateMenuItemButton("Save Layout as\u2026", icon: new FontIcon { Glyph = "\uE74E", FontSize = 13 });
+            var saveLayoutItem = CreateMenuItemButton("Save Layout as\u2026", icon: new FontIcon { Glyph = "\uE74E", FontSize = 13, Foreground = _menuWhiteSecondary });
             saveLayoutItem.Click += async (_, _) =>
             {
                 SaveFlyout.Hide();
@@ -111,7 +117,7 @@ namespace ModernImageViewer
             };
             panel.Children.Add(saveLayoutItem);
 
-            var openLayoutItem = CreateMenuItemButton("Open Layout\u2026", icon: new FontIcon { Glyph = "\uE8E5", FontSize = 13 });
+            var openLayoutItem = CreateMenuItemButton("Open Layout\u2026", icon: new FontIcon { Glyph = "\uE8E5", FontSize = 13, Foreground = _menuWhiteSecondary });
             openLayoutItem.Click += async (_, _) =>
             {
                 SaveFlyout.Hide();
@@ -119,12 +125,12 @@ namespace ModernImageViewer
             };
             panel.Children.Add(openLayoutItem);
 
-            // Favourites & Recent directories (top 3 each)
+            // Favourites & Recent save locations (last 3 recent, 3 favourites)
             if (MainWindow.Instance != null)
             {
-                var favs = MainWindow.Instance.FavouriteFolders.Take(3).ToList();
-                var recents = MainWindow.Instance.RecentFolders
-                    .Where(p => !MainWindow.Instance.IsFavouriteFolder(p))
+                var favs = MainWindow.Instance.MultiViewFavouriteSaveLocations.Take(3).ToList();
+                var recents = MainWindow.Instance.MultiViewRecentSaveLocations
+                    .Where(p => !MainWindow.Instance.IsMultiViewFavourite(p))
                     .Take(3)
                     .ToList();
 
@@ -135,7 +141,7 @@ namespace ModernImageViewer
 
                 if (favs.Count > 0)
                 {
-                    panel.Children.Add(CreateSectionHeader(favs.Count >= 3 ? "Favourites (3 of 3)" : "Favourites"));
+                    panel.Children.Add(CreateSectionHeader(favs.Count >= 3 ? "FAVOURITES (3 of 3)" : "FAVOURITES"));
                     foreach (var p in favs)
                     {
                         panel.Children.Add(CreateFolderRow(p, isFavourite: true));
@@ -144,11 +150,19 @@ namespace ModernImageViewer
 
                 if (recents.Count > 0)
                 {
-                    panel.Children.Add(CreateSectionHeader("Recent"));
+                    panel.Children.Add(CreateSectionHeader("RECENT LOCATIONS"));
                     foreach (var p in recents)
                     {
                         panel.Children.Add(CreateFolderRow(p, isFavourite: false));
                     }
+
+                    var clearBtn = CreateMenuItemButton("Clear Recent Locations", icon: new FontIcon { Glyph = "\uE74D", FontSize = 13, Foreground = _menuWhiteSecondary });
+                    clearBtn.Click += (_, _) =>
+                    {
+                        MainWindow.Instance?.ClearMultiViewRecentLocations();
+                        BuildSaveFlyoutMenu();
+                    };
+                    panel.Children.Add(clearBtn);
                 }
             }
 
@@ -180,7 +194,8 @@ namespace ModernImageViewer
             {
                 Text = text,
                 VerticalAlignment = VerticalAlignment.Center,
-                FontSize = 13
+                FontSize = 13,
+                Foreground = _menuWhitePrimary
             };
             Grid.SetColumn(label, icon != null ? 1 : 0);
             grid.Children.Add(label);
@@ -192,7 +207,7 @@ namespace ModernImageViewer
                     Text = rightText,
                     VerticalAlignment = VerticalAlignment.Center,
                     FontSize = 12,
-                    Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
+                    Foreground = _menuWhiteSecondary
                 };
                 Grid.SetColumn(rightLabel, 2);
                 grid.Children.Add(rightLabel);
@@ -216,7 +231,7 @@ namespace ModernImageViewer
             {
                 Height = 1,
                 Margin = new Thickness(4, 4, 4, 4),
-                Fill = (Brush)Application.Current.Resources["DividerStrokeColorDefaultBrush"]
+                Fill = _menuDividerBrush
             };
         }
 
@@ -225,10 +240,11 @@ namespace ModernImageViewer
             return new TextBlock
             {
                 Text = text,
-                FontSize = 12,
+                FontSize = 11,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-                Margin = new Thickness(10, 6, 10, 4)
+                CharacterSpacing = 40,
+                Foreground = _menuWhiteSecondary,
+                Margin = new Thickness(10, 8, 10, 4)
             };
         }
 
@@ -238,8 +254,7 @@ namespace ModernImageViewer
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-            bool current = string.Equals(path, MainWindow.Instance?.CurrentDirectory, StringComparison.OrdinalIgnoreCase);
-            bool available = Directory.Exists(path) || (ComicArchive.IsComicArchivePath(path) && File.Exists(path));
+            bool available = Directory.Exists(path);
 
             var content = new Grid { ColumnSpacing = 10 };
             content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -249,7 +264,7 @@ namespace ModernImageViewer
             {
                 Glyph = "\uE8B7",
                 FontSize = 13.5,
-                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                Foreground = _menuWhiteSecondary,
                 VerticalAlignment = VerticalAlignment.Center
             };
             Grid.SetColumn(icon, 0);
@@ -262,9 +277,8 @@ namespace ModernImageViewer
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 VerticalAlignment = VerticalAlignment.Center,
                 FontSize = 13,
-                FontWeight = current ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal
+                Foreground = available ? _menuWhitePrimary : _menuWhiteTertiary
             };
-            ToolTipService.SetToolTip(label, path);
             Grid.SetColumn(label, 1);
             content.Children.Add(label);
 
@@ -279,29 +293,34 @@ namespace ModernImageViewer
                 MinHeight = 32,
                 IsEnabled = available
             };
-            openBtn.Click += async (_, _) =>
+            ToolTipService.SetToolTip(openBtn, $"{path}\nClick to open location in Explorer");
+            openBtn.Click += (_, _) =>
             {
                 SaveFlyout.Hide();
-                if (MainWindow.Instance != null)
+                if (Directory.Exists(path))
                 {
-                    await MainWindow.Instance.ScanFolder(path);
-                    var items = MainWindow.Instance.Images.Where(i => !i.IsDirectory).ToList();
-                    LoadImages(items);
+                    try
+                    {
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = path,
+                            UseShellExecute = true
+                        });
+                    }
+                    catch { }
                 }
             };
             Grid.SetColumn(openBtn, 0);
             row.Children.Add(openBtn);
 
             // Star button
-            bool full = !isFavourite && (MainWindow.Instance?.FavouriteFolders.Count ?? 0) >= 3;
+            bool full = !isFavourite && (MainWindow.Instance?.MultiViewFavouriteSaveLocations.Count ?? 0) >= 3;
             var starIcon = new FontIcon
             {
                 Glyph = isFavourite ? "\uE735" : "\uE734",
                 FontSize = 14,
                 FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
-                Foreground = isFavourite
-                    ? (Brush)Application.Current.Resources["FavouriteStarBrush"]
-                    : (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
+                Foreground = isFavourite ? _menuGoldStar : _menuWhiteTertiary
             };
 
             var starBtn = new Button
@@ -316,11 +335,11 @@ namespace ModernImageViewer
                 Margin = new Thickness(2, 0, 4, 0),
                 IsEnabled = !full || isFavourite
             };
-            string tip = isFavourite ? "Remove from favourites" : (full ? "Favourites limit reached (3 of 3)" : "Add to favourites");
+            string tip = isFavourite ? "Remove from favourites" : (full ? "Favourites limit reached (3 of 3)" : "Add to favourites (up to 3)");
             ToolTipService.SetToolTip(starBtn, tip);
             starBtn.Click += (_, _) =>
             {
-                MainWindow.Instance?.ToggleFavouriteFolder(path, maxLimit: 3);
+                MainWindow.Instance?.ToggleMultiViewFavourite(path);
                 BuildSaveFlyoutMenu();
             };
             Grid.SetColumn(starBtn, 1);
@@ -426,6 +445,8 @@ namespace ModernImageViewer
             try
             {
                 await RenderJpegAsync(file, shots, width, height);
+                string? savedDir = Path.GetDirectoryName(file.Path);
+                if (!string.IsNullOrEmpty(savedDir)) MainWindow.Instance?.AddMultiViewSaveLocation(savedDir);
             }
             catch (Exception ex)
             {
@@ -641,6 +662,8 @@ namespace ModernImageViewer
             {
                 string json = layoutFile.ToJson();
                 await FileIO.WriteTextAsync(file, json);
+                string? savedDir = Path.GetDirectoryName(file.Path);
+                if (!string.IsNullOrEmpty(savedDir)) MainWindow.Instance?.AddMultiViewSaveLocation(savedDir);
                 await ShowExportMessageAsync("Layout saved.");
             }
             catch (Exception ex)
@@ -672,6 +695,8 @@ namespace ModernImageViewer
                     await ShowExportMessageAsync("Could not read layout file.");
                     return;
                 }
+                string? openedDir = Path.GetDirectoryName(file.Path);
+                if (!string.IsNullOrEmpty(openedDir)) MainWindow.Instance?.AddMultiViewSaveLocation(openedDir);
                 ApplyLayoutFile(layoutFile);
             }
             catch (Exception ex)
