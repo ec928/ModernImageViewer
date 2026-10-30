@@ -33,7 +33,30 @@
                 <Setter Property="MinHeight" Value="0"/>
                 <Setter Property="CornerRadius" Value="4"/>
             </Style>
+            <Style x:Key="FolderMenuStarButtonStyle" TargetType="Button" BasedOn="{StaticResource SubtleButtonStyle}">
+                <Setter Property="Width" Value="32"/>
+                <Setter Property="Height" Value="32"/>
+                <Setter Property="MinWidth" Value="0"/>
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="Margin" Value="2,0,4,0"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="CornerRadius" Value="4"/>
+            </Style>
+            <Style x:Key="FolderMenuStarFilledIconStyle" TargetType="FontIcon">
+                <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets"/>
+                <Setter Property="Glyph" Value="&#xE735;"/>
+                <Setter Property="FontSize" Value="14"/>
+                <Setter Property="Foreground" Value="{ThemeResource FavouriteStarBrush}"/>
+            </Style>
+            <Style x:Key="FolderMenuStarEmptyIconStyle" TargetType="FontIcon">
+                <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets"/>
+                <Setter Property="Glyph" Value="&#xE734;"/>
+                <Setter Property="FontSize" Value="14"/>
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}"/>
+            </Style>
             <Style x:Key="FolderMenuHeaderTextStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
+                <Setter Property="FontWeight" Value="SemiBold"/>
                 <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}"/>
                 <Setter Property="Margin" Value="11,8,11,4"/>
             </Style>

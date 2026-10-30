@@ -12,12 +12,15 @@
             <ResourceDictionary.ThemeDictionaries>
                 <ResourceDictionary x:Key="Light">
                     <SolidColorBrush x:Key="ComicIconBrush" Color="#FF1F6FEB"/>
+                    <SolidColorBrush x:Key="FavouriteStarBrush" Color="#D97706"/>
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Dark">
                     <SolidColorBrush x:Key="ComicIconBrush" Color="#FF58A6FF"/>
+                    <SolidColorBrush x:Key="FavouriteStarBrush" Color="#FFC83B"/>
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="HighContrast">
                     <SolidColorBrush x:Key="ComicIconBrush" Color="#FF58A6FF"/>
+                    <SolidColorBrush x:Key="FavouriteStarBrush" Color="#FFD700"/>
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
         </ResourceDictionary>

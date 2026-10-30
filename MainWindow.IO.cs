@@ -1121,9 +1121,11 @@ namespace ModernImageViewer
         private Grid FolderMenuRow(string path, bool favourite, string? focusStarFor, ref Button? focusTarget)
         {
             bool available = Directory.Exists(path) || (ComicArchive.IsComicArchivePath(path) && File.Exists(path));
+            bool isComic = ComicArchive.IsComicArchivePath(path);
             bool current = string.Equals(path, _currentDirectory, StringComparison.OrdinalIgnoreCase);
 
-            var open = FolderMenuButton(new SymbolIcon(Symbol.Folder), available ? path : path + "  (not available)", bold: current);
+            IconElement rowIcon = isComic ? new SymbolIcon(Symbol.Library) : new SymbolIcon(Symbol.Folder);
+            var open = FolderMenuButton(rowIcon, available ? path : path + "  (not available)", bold: current);
             open.IsEnabled = available;
             open.Click += async (s2, ev) =>
             {
@@ -1132,18 +1134,20 @@ namespace ModernImageViewer
             };
 
             bool full = !favourite && _favouriteFolders.Count >= MaxFavouriteFolders;
+            var starIcon = new FontIcon
+            {
+                Style = (Style)RootGrid.Resources[favourite ? "FolderMenuStarFilledIconStyle" : "FolderMenuStarEmptyIconStyle"]
+            };
+
             var star = new Button
             {
-                Style = (Style)RootGrid.Resources["FolderMenuRowButtonStyle"],
-                Content = new FontIcon { Glyph = favourite ? "" : "", FontSize = 14 },
-                Width = 32,
-                Height = 32,
-                Padding = new Thickness(0),
-                Margin = new Thickness(2, 0, 0, 0),
-                VerticalAlignment = VerticalAlignment.Center,
+                Style = (Style)RootGrid.Resources["FolderMenuStarButtonStyle"],
+                Content = starIcon,
                 IsEnabled = !full,
             };
-            ToolTipService.SetToolTip(star, favourite ? "Remove from favourites" : "Add to favourites");
+            string starTip = favourite
+                ? "Remove from favourites"
+                : (full ? $"Favourites limit reached ({MaxFavouriteFolders} of {MaxFavouriteFolders})" : "Add to favourites");
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(star, (favourite ? "Remove from favourites: " : "Add to favourites: ") + path);
             star.Click += (s2, ev) =>
             {
@@ -1153,12 +1157,20 @@ namespace ModernImageViewer
                 BuildRecentFoldersMenu(path, how);
             };
 
+            var starContainer = new Grid
+            {
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0)),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            starContainer.Children.Add(star);
+            ToolTipService.SetToolTip(starContainer, starTip);
+
             var row = new Grid();
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            Grid.SetColumn(star, 1);
+            Grid.SetColumn(starContainer, 1);
             row.Children.Add(open);
-            row.Children.Add(star);
+            row.Children.Add(starContainer);
 
             // One hovered row at a time for the whole menu, so a missed PointerExited cannot leave a second star lit.
             row.PointerEntered += (s2, ev) => SetFolderMenuHover(row);
@@ -1206,12 +1218,11 @@ namespace ModernImageViewer
                 HorizontalContentAlignment = HorizontalAlignment.Stretch,
                 Padding = new Thickness(11, 8, 11, 8),
             };
+            ToolTipService.SetToolTip(button, text);
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, text);
             return button;
         }
 
-        // Colours come from styles in MainWindow.xaml: a ThemeResource there follows the menu's theme,
-        // while Application.Current.Resources hands back the app-level (light) brush.
         private TextBlock FolderMenuHeader(string text) => new()
         {
             Text = text,
