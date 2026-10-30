@@ -883,7 +883,7 @@ namespace ModernImageViewer
                 ApplyParkedPhotos();
                 return;
             }
-            if (items == null || items.Count == 0) return;
+            items ??= Array.Empty<ImageItem>();
 
             if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible)
             {
@@ -1003,6 +1003,7 @@ namespace ModernImageViewer
             _stashedGridWidth = _appWindow.Size.Width;
             _stashedGridHeight = _appWindow.Size.Height;
             _multiViewCanvasActive = true;
+            SyncViewModeButtons();
 
             int width = _currentSettings.MultiViewWindowWidth;
             int height = _currentSettings.MultiViewWindowHeight;
@@ -1022,6 +1023,7 @@ namespace ModernImageViewer
             _currentSettings.MultiViewWindowWidth = _appWindow.Size.Width;
             _currentSettings.MultiViewWindowHeight = _appWindow.Size.Height;
             _multiViewCanvasActive = false;
+            SyncViewModeButtons();
             if (_stashedGridWidth >= 300 && _stashedGridHeight >= 300)
                 _appWindow.Resize(new Windows.Graphics.SizeInt32(_stashedGridWidth, _stashedGridHeight));
             SaveAllSettings();
@@ -2555,20 +2557,77 @@ namespace ModernImageViewer
 
         private void TilesMode_Click(object sender, RoutedEventArgs e)
         {
-            if (!_listMode) return;
-            _listMode = false;
-            _currentSettings.ListMode = false;
-            ApplyViewMode();
-            SaveAllSettings();
+            if (_multiViewCanvasActive)
+            {
+                CloseMultiView();
+            }
+            if (_listMode)
+            {
+                _listMode = false;
+                _currentSettings.ListMode = false;
+                ApplyViewMode();
+                SaveAllSettings();
+            }
+            else
+            {
+                SyncViewModeButtons();
+            }
         }
 
         private void ListMode_Click(object sender, RoutedEventArgs e)
         {
-            if (_listMode) return;
-            _listMode = true;
-            _currentSettings.ListMode = true;
-            ApplyViewMode();
-            SaveAllSettings();
+            if (_multiViewCanvasActive)
+            {
+                CloseMultiView();
+            }
+            if (!_listMode)
+            {
+                _listMode = true;
+                _currentSettings.ListMode = true;
+                ApplyViewMode();
+                SaveAllSettings();
+            }
+            else
+            {
+                SyncViewModeButtons();
+            }
+        }
+
+        private void MultiMode_Click(object sender, RoutedEventArgs e)
+        {
+            if (_multiViewCanvasActive) return;
+
+            if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible)
+            {
+                ClosePreviewInternal();
+            }
+
+            if (_multiViewParked)
+            {
+                ApplyParkedPhotos();
+                return;
+            }
+
+            var selected = ImageGrid.SelectedItems.OfType<ImageItem>().Where(i => !i.IsDirectory).ToList();
+            if (selected.Count > 0)
+            {
+                OpenMultiView(selected);
+                return;
+            }
+
+            var candidates = Images.Where(i => !i.IsDirectory).ToList();
+            if (candidates.Count > 0)
+            {
+                int start = (_currentIndex >= 0 && _currentIndex < candidates.Count) ? _currentIndex : 0;
+                var slice = candidates.Skip(start).Take(4).ToList();
+                if (slice.Count < 2 && candidates.Count >= 2)
+                    slice = candidates.Take(4).ToList();
+                OpenMultiView(slice);
+            }
+            else
+            {
+                OpenMultiView(Array.Empty<ImageItem>());
+            }
         }
 
         private static Brush ResolveThemeBrush(string key, Windows.UI.Color color)
@@ -2578,16 +2637,24 @@ namespace ModernImageViewer
 
         private void SyncViewModeButtons()
         {
-            if (TilesModeButton == null || ListModeButton == null) return;
+            if (TilesModeButton == null || ListModeButton == null || MultiModeButton == null) return;
             bool isDark = RootGrid?.ActualTheme == ElementTheme.Dark;
             var activeBg = ResolveThemeBrush("CardBackgroundFillColorDefaultBrush", isDark ? Windows.UI.Color.FromArgb(18, 255, 255, 255) : Windows.UI.Color.FromArgb(179, 255, 255, 255));
             var activeFg = ResolveThemeBrush("AccentTextFillColorPrimaryBrush", isDark ? Windows.UI.Color.FromArgb(255, 96, 205, 255) : Windows.UI.Color.FromArgb(255, 0, 95, 184));
             var inactiveFg = ResolveThemeBrush("TextFillColorSecondaryBrush", isDark ? Windows.UI.Color.FromArgb(197, 255, 255, 255) : Windows.UI.Color.FromArgb(158, 0, 0, 0));
+            var transparent = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
 
-            TilesModeButton.Background = !_listMode ? activeBg : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-            ListModeButton.Background = _listMode ? activeBg : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-            if (TilesModeIcon != null) TilesModeIcon.Foreground = !_listMode ? activeFg : inactiveFg;
-            if (ListModeIcon != null) ListModeIcon.Foreground = _listMode ? activeFg : inactiveFg;
+            bool isMulti = _multiViewCanvasActive;
+            bool isList = !_multiViewCanvasActive && _listMode;
+            bool isTiles = !_multiViewCanvasActive && !_listMode;
+
+            TilesModeButton.Background = isTiles ? activeBg : transparent;
+            ListModeButton.Background = isList ? activeBg : transparent;
+            MultiModeButton.Background = isMulti ? activeBg : transparent;
+
+            if (TilesModeIcon != null) TilesModeIcon.Foreground = isTiles ? activeFg : inactiveFg;
+            if (ListModeIcon != null) ListModeIcon.Foreground = isList ? activeFg : inactiveFg;
+            if (MultiModeIcon != null) MultiModeIcon.Foreground = isMulti ? activeFg : inactiveFg;
         }
 
         private void ApplyViewMode()

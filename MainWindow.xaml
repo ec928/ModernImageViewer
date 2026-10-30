@@ -199,6 +199,9 @@
                                     <Button x:Name="ListModeButton" Style="{StaticResource HeaderButtonStyle}" Width="28" Height="22" CornerRadius="4" Click="ListMode_Click" ToolTipService.ToolTip="List View">
                                         <FontIcon x:Name="ListModeIcon" Glyph="&#xE8FD;" FontSize="13"/>
                                     </Button>
+                                    <Button x:Name="MultiModeButton" Style="{StaticResource HeaderButtonStyle}" Width="28" Height="22" CornerRadius="4" Click="MultiMode_Click" ToolTipService.ToolTip="Multi-View / Layout (Enter)">
+                                        <FontIcon x:Name="MultiModeIcon" Glyph="&#xE748;" FontSize="13"/>
+                                    </Button>
                                 </StackPanel>
                             </Border>
                             <Rectangle Width="1" Height="16" Margin="6,0,2,0" VerticalAlignment="Center" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"/>

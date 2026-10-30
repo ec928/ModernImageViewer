@@ -81,7 +81,48 @@ namespace ModernImageViewer
             int stored = _items.Count;
             if (stored == 0)
             {
-                CloseRequested?.Invoke(this, EventArgs.Empty);
+                CellsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+                CellsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                var emptyPanel = new StackPanel
+                {
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Spacing = 12
+                };
+                emptyPanel.Children.Add(new FontIcon
+                {
+                    Glyph = "",
+                    FontSize = 40,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
+                });
+                emptyPanel.Children.Add(new TextBlock
+                {
+                    Text = "No photos in layout",
+                    FontSize = 16,
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Foreground = (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"]
+                });
+                emptyPanel.Children.Add(new TextBlock
+                {
+                    Text = "Open a saved layout (.mivlayout) or drag photos here",
+                    FontSize = 13,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
+                });
+                var openBtn = new Button
+                {
+                    Content = "Open Layout…",
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Margin = new Thickness(0, 6, 0, 0)
+                };
+                openBtn.Click += async (_, _) => await OpenLayoutFileAsync();
+                emptyPanel.Children.Add(openBtn);
+                CellsGrid.Children.Add(emptyPanel);
+
+                RefreshLinesChrome(0);
+                RefreshHeroChrome(0);
                 return;
             }
 

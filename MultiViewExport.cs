@@ -194,7 +194,7 @@ namespace ModernImageViewer
             {
                 _savingGrid = false;
                 SaveButton.IsEnabled = true;
-                SaveText.Text = "Save";
+                SaveText.Text = "Save/Load";
             }
         }
 

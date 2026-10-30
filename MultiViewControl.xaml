@@ -395,7 +395,7 @@
                             Style="{StaticResource QuietButtonStyle}"
                             Padding="8,5"
                             CornerRadius="12"
-                            ToolTipService.ToolTip="Save this grid as a JPEG (Ctrl+S)">
+                            ToolTipService.ToolTip="Save image or Save/Load layout (Ctrl+S)">
                         <Button.Flyout>
                             <MenuFlyout x:Name="SaveMenuFlyout" 
                                         MenuFlyoutPresenterStyle="{StaticResource MultiViewMenuFlyoutPresenterStyle}"
@@ -403,7 +403,7 @@
                         </Button.Flyout>
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE74E;" FontSize="14" />
-                            <TextBlock x:Name="SaveText" Text="Save" VerticalAlignment="Center" FontSize="13" />
+                            <TextBlock x:Name="SaveText" Text="Save/Load" VerticalAlignment="Center" FontSize="13" />
                         </StackPanel>
                     </Button>
                 </StackPanel>
