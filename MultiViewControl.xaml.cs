@@ -147,7 +147,7 @@ namespace ModernImageViewer
         public void ChangeLines(int delta)
         {
             int total = LineTotal();
-            if (VisibleCount(_items.Count) < 2 || total < 1) return;
+            if (VisibleCount(GridCellCount) < 2 || total < 1) return;
             int current = Math.Clamp(_lines, 1, total);
             int next = Math.Clamp(current + delta, 1, total);
             bool linesInUse = !_heroActive || HeroUsesLines;
@@ -166,7 +166,7 @@ namespace ModernImageViewer
         /// <summary>Photos the line controls arrange: all of them, or the ones beside a banner or pair.</summary>
         private int LineTotal()
         {
-            int shown = VisibleCount(_items.Count);
+            int shown = VisibleCount(GridCellCount);
             if (HeroUsesLines) return Math.Max(1, shown - MosaicLayout.HeroFeatured(_heroKind));
             return shown;
         }
@@ -903,7 +903,7 @@ namespace ModernImageViewer
         /// </summary>
         public void ToggleRowsColumns()
         {
-            if (VisibleCount(_items.Count) < 2) return;
+            if (VisibleCount(GridCellCount) < 2) return;
             _flipped = !_flipped;
             if (!HeroUsesLines && _mosaic != null && CellRootsReady())
             {
@@ -935,7 +935,7 @@ namespace ModernImageViewer
 
         private void HeroButton_Click(object sender, RoutedEventArgs e)
         {
-            var kinds = MosaicLayout.HeroKinds(VisibleCount(_items.Count));
+            var kinds = MosaicLayout.HeroKinds(VisibleCount(GridCellCount));
             if (kinds.Length == 0) return;
             if (!_heroActive)
             {
@@ -968,7 +968,7 @@ namespace ModernImageViewer
         private void RotateHero_Click(object sender, RoutedEventArgs e)
         {
             if (!_heroActive) return;
-            int positions = MosaicLayout.HeroPositions(VisibleCount(_items.Count), _heroKind);
+            int positions = MosaicLayout.HeroPositions(VisibleCount(GridCellCount), _heroKind);
             _heroPosition = (_heroPosition + 1) % positions;
             RelayoutKeepingCells();
             ShowHudAndOverlays();
@@ -976,7 +976,7 @@ namespace ModernImageViewer
 
         private void NormalizeHero()
         {
-            var kinds = MosaicLayout.HeroKinds(VisibleCount(_items.Count));
+            var kinds = MosaicLayout.HeroKinds(VisibleCount(GridCellCount));
             if (kinds.Length == 0)
             {
                 _heroActive = false;
@@ -989,7 +989,7 @@ namespace ModernImageViewer
             }
             else
             {
-                int positions = MosaicLayout.HeroPositions(VisibleCount(_items.Count), _heroKind);
+                int positions = MosaicLayout.HeroPositions(VisibleCount(GridCellCount), _heroKind);
                 if (_heroPosition >= positions) _heroPosition = 0;
             }
         }
@@ -1220,8 +1220,14 @@ namespace ModernImageViewer
                 _cellRoots[index] = cell;
         }
 
-        private FrameworkElement CreateCell(ImageItem item, int index)
+        private FrameworkElement CreateCell(ImageItem item, int index, bool isFreeform = false)
         {
+            var slotGrid = new Grid
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch
+            };
+
             var cellBorder = new Border
             {
                 Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 10, 10, 10)),
@@ -1413,6 +1419,12 @@ namespace ModernImageViewer
             Point lastPoint = default;
             uint dragPointerId = 0;
 
+            bool isMovingCard = false;
+            Point dragStartInRoot = default;
+            double startLeft = 0;
+            double startTop = 0;
+            uint movePointerId = 0;
+
             cellGrid.PointerPressed += (s, e) =>
             {
                 ShowHudAndOverlays();
@@ -1439,8 +1451,25 @@ namespace ModernImageViewer
                         _ = StartSwapDragAsync(cellGrid, e.GetCurrentPoint(cellGrid), Slot(photo.Item));
                         return;
                     }
-                    isDragging = true;
 
+                    if (isFreeform)
+                    {
+                        var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Container, slotGrid));
+                        if (card != null) BringFreeformCardToFront(card);
+
+                        isMovingCard = true;
+                        movePointerId = e.Pointer.PointerId;
+                        dragStartInRoot = e.GetCurrentPoint(RootGrid).Position;
+                        startLeft = Canvas.GetLeft(slotGrid);
+                        if (double.IsNaN(startLeft)) startLeft = 0;
+                        startTop = Canvas.GetTop(slotGrid);
+                        if (double.IsNaN(startTop)) startTop = 0;
+                        cellGrid.CapturePointer(e.Pointer);
+                        e.Handled = true;
+                        return;
+                    }
+
+                    isDragging = true;
                     lastPoint = e.GetCurrentPoint(cellGrid).Position;
                     dragPointerId = e.Pointer.PointerId;
                     cellGrid.CapturePointer(e.Pointer);
@@ -1451,6 +1480,29 @@ namespace ModernImageViewer
             cellGrid.PointerMoved += (s, e) =>
             {
                 ShowHudAndOverlays();
+
+                if (isFreeform && isMovingCard && e.Pointer.PointerId == movePointerId)
+                {
+                    Point cur = e.GetCurrentPoint(RootGrid).Position;
+                    double dx = cur.X - dragStartInRoot.X;
+                    double dy = cur.Y - dragStartInRoot.Y;
+
+                    double boundW = Math.Max(200, RootGrid.ActualWidth > 0 ? RootGrid.ActualWidth : 1280);
+                    double boundH = Math.Max(150, RootGrid.ActualHeight > 0 ? RootGrid.ActualHeight : 720);
+
+                    double cardW = slotGrid.ActualWidth > 0 ? slotGrid.ActualWidth : slotGrid.Width;
+                    double cardH = slotGrid.ActualHeight > 0 ? slotGrid.ActualHeight : slotGrid.Height;
+
+                    double newX = Math.Clamp(startLeft + dx, 0, Math.Max(0, boundW - cardW));
+                    double newY = Math.Clamp(startTop + dy, 0, Math.Max(0, boundH - cardH));
+
+                    Canvas.SetLeft(slotGrid, newX);
+                    Canvas.SetTop(slotGrid, newY);
+                    var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Container, slotGrid));
+                    if (card != null) { card.X = newX; card.Y = newY; }
+                    e.Handled = true;
+                    return;
+                }
 
                 if (isDragging && e.Pointer.PointerId == dragPointerId)
                 {
@@ -1469,6 +1521,14 @@ namespace ModernImageViewer
 
             cellGrid.PointerReleased += (s, e) =>
             {
+                if (isFreeform && isMovingCard && e.Pointer.PointerId == movePointerId)
+                {
+                    isMovingCard = false;
+                    try { cellGrid.ReleasePointerCapture(e.Pointer); } catch { }
+                    e.Handled = true;
+                    return;
+                }
+
                 if (e.Pointer.PointerId == dragPointerId)
                 {
                     if (isDragging)
@@ -1482,6 +1542,7 @@ namespace ModernImageViewer
 
             cellGrid.PointerCanceled += (s, e) =>
             {
+                if (isMovingCard) isMovingCard = false;
                 if (isDragging)
                 {
                     isDragging = false;
@@ -1727,12 +1788,6 @@ namespace ModernImageViewer
 
             AttachSwapDrop(cellBorder, cellGrid, photo);
 
-            var slotGrid = new Grid
-            {
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                VerticalAlignment = VerticalAlignment.Stretch
-            };
-
             var gutterBorder = new Border
             {
                 HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -1799,6 +1854,87 @@ namespace ModernImageViewer
             cellBorder.Tag = parts;
             slotGrid.Tag = parts;
 
+                        if (isFreeform)
+            {
+                var resizeGrip = new Border
+                {
+                    Width = 24,
+                    Height = 24,
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    VerticalAlignment = VerticalAlignment.Bottom,
+                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(1, 0, 0, 0)),
+                    Child = new FontIcon
+                    {
+                        Glyph = "\uE7C5",
+                        FontSize = 10,
+                        FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
+                        Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(140, 255, 255, 255)),
+                        HorizontalAlignment = HorizontalAlignment.Right,
+                        VerticalAlignment = VerticalAlignment.Bottom,
+                        Margin = new Thickness(0, 0, 4, 4)
+                    }
+                };
+                Canvas.SetZIndex(resizeGrip, 80);
+
+                bool isResizing = false;
+                Point resizeStart = default;
+                double initialW = 0, initialH = 0;
+                uint resizePointerId = 0;
+
+                resizeGrip.PointerPressed += (s, e) =>
+                {
+                    var prop = e.GetCurrentPoint(resizeGrip).Properties;
+                    if (prop.IsLeftButtonPressed)
+                    {
+                        var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Container, slotGrid));
+                        if (card != null) BringFreeformCardToFront(card);
+
+                        isResizing = true;
+                        resizePointerId = e.Pointer.PointerId;
+                        resizeStart = e.GetCurrentPoint(RootGrid).Position;
+                        initialW = slotGrid.ActualWidth > 0 ? slotGrid.ActualWidth : slotGrid.Width;
+                        initialH = slotGrid.ActualHeight > 0 ? slotGrid.ActualHeight : slotGrid.Height;
+                        resizeGrip.CapturePointer(e.Pointer);
+                        e.Handled = true;
+                    }
+                };
+
+                resizeGrip.PointerMoved += (s, e) =>
+                {
+                    if (isResizing && e.Pointer.PointerId == resizePointerId)
+                    {
+                        Point cur = e.GetCurrentPoint(RootGrid).Position;
+                        double dx = cur.X - resizeStart.X;
+                        double dy = cur.Y - resizeStart.Y;
+
+                        double maxW = Math.Max(200, RootGrid.ActualWidth - Canvas.GetLeft(slotGrid));
+                        double maxH = Math.Max(150, RootGrid.ActualHeight - Canvas.GetTop(slotGrid));
+
+                        double newW = Math.Clamp(initialW + dx, 200, maxW);
+                        double newH = Math.Clamp(initialH + dy, 140, maxH);
+
+                        slotGrid.Width = newW;
+                        slotGrid.Height = newH;
+                        var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Container, slotGrid));
+                        if (card != null) { card.Width = newW; card.Height = newH; }
+                        updateLayout();
+                        e.Handled = true;
+                    }
+                };
+
+                resizeGrip.PointerReleased += (s, e) =>
+                {
+                    if (isResizing && e.Pointer.PointerId == resizePointerId)
+                    {
+                        isResizing = false;
+                        try { resizeGrip.ReleasePointerCapture(e.Pointer); } catch { }
+                        e.Handled = true;
+                    }
+                };
+
+                cellGrid.Children.Add(resizeGrip);
+            }
+
             cellBorder.Child = cellGrid;
             ApplyBorderToCellBorder(cellBorder, cellGrid, photo.Item);
             return slotGrid;
@@ -1852,9 +1988,9 @@ namespace ModernImageViewer
 
                 var moveLeftItem = new MenuFlyoutItem { Text = "Move Left / Up", Icon = new FontIcon { Glyph = "\uE76B" } };
                 moveLeftItem.Click += (s, e) => MovePhoto(Slot(item), -1);
-                if (visible > 1)
+                if (_items.Count > 1)
                 {
-                    int prevSlot = ((curSlot - 1) % visible + visible) % visible;
+                    int prevSlot = ((curSlot - 1) % _items.Count + _items.Count) % _items.Count;
                     moveLeftItem.PointerEntered += (s, e) => HighlightPositionBadge(prevSlot);
                     moveLeftItem.PointerExited += (s, e) => ClearHighlightPositionBadge(prevSlot, curSlot);
                 }
@@ -1862,9 +1998,9 @@ namespace ModernImageViewer
 
                 var moveRightItem = new MenuFlyoutItem { Text = "Move Right / Down", Icon = new FontIcon { Glyph = "\uE76C" } };
                 moveRightItem.Click += (s, e) => MovePhoto(Slot(item), 1);
-                if (visible > 1)
+                if (_items.Count > 1)
                 {
-                    int nextSlot = ((curSlot + 1) % visible + visible) % visible;
+                    int nextSlot = ((curSlot + 1) % _items.Count + _items.Count) % _items.Count;
                     moveRightItem.PointerEntered += (s, e) => HighlightPositionBadge(nextSlot);
                     moveRightItem.PointerExited += (s, e) => ClearHighlightPositionBadge(nextSlot, curSlot);
                 }
@@ -1897,7 +2033,7 @@ namespace ModernImageViewer
 
                         var targetSwap = new MenuFlyoutItem { Text = $"Position {i + 1} ({target.Name})" };
                         targetSwap.Click += (s, e) => SwapItems(Slot(item), Slot(target));
-                        if (targetSlot < visible)
+                        if (targetSlot < _cellRoots.Length && _cellRoots[targetSlot] != null)
                         {
                             targetSwap.PointerEntered += (s, e) => HighlightPositionBadge(targetSlot);
                             targetSwap.PointerExited += (s, e) => ClearHighlightPositionBadge(targetSlot, curSlot);
@@ -1906,7 +2042,7 @@ namespace ModernImageViewer
 
                         var targetCopy = new MenuFlyoutItem { Text = $"Position {i + 1} ({target.Name})" };
                         targetCopy.Click += (s, e) => CopyItemTo(Slot(item), targetSlot);
-                        if (targetSlot < visible)
+                        if (targetSlot < _cellRoots.Length && _cellRoots[targetSlot] != null)
                         {
                             targetCopy.PointerEntered += (s, e) => HighlightPositionBadge(targetSlot, "Copy to");
                             targetCopy.PointerExited += (s, e) => ClearHighlightPositionBadge(targetSlot, curSlot);
@@ -1925,16 +2061,8 @@ namespace ModernImageViewer
             soloItem.Click += (s, e) => EnterSolo(Slot(item));
             menu.Items.Add(soloItem);
 
-            bool inFreeform = _freeformCards.Any(c => string.Equals(c.Item.Path, item.Path, StringComparison.OrdinalIgnoreCase));
-            var freeformItem = new MenuFlyoutItem
-            {
-                Text = inFreeform ? "Bring Freeform to Front" : "Freeform",
-                Icon = new FontIcon { Glyph = "\uEE49" }
-            };
-            freeformItem.Click += (s, e) => SpawnFreeformCell(item);
-            menu.Items.Add(freeformItem);
-
-            if (inFreeform)
+            bool isCurrentCellFreeform = _freeformCards.Any(c => ReferenceEquals(c.Item, item));
+            if (isCurrentCellFreeform)
             {
                 var dockItem = new MenuFlyoutItem
                 {
@@ -1943,10 +2071,20 @@ namespace ModernImageViewer
                 };
                 dockItem.Click += (s, e) =>
                 {
-                    var cardToDock = _freeformCards.FirstOrDefault(c => string.Equals(c.Item.Path, item.Path, StringComparison.OrdinalIgnoreCase));
+                    var cardToDock = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, item));
                     if (cardToDock != null) DockFreeformCard(cardToDock);
                 };
                 menu.Items.Add(dockItem);
+            }
+            else
+            {
+                var freeformItem = new MenuFlyoutItem
+                {
+                    Text = "Freeform",
+                    Icon = new FontIcon { Glyph = "\uEE49" }
+                };
+                freeformItem.Click += (s, e) => SpawnFreeformCell(item);
+                menu.Items.Add(freeformItem);
             }
 
             bool isHidden = _hiddenItems.Contains(item);
@@ -1970,10 +2108,10 @@ namespace ModernImageViewer
         /// <summary>Swap this photo with the neighbor in the layout order, wrapping around the photos on screen.</summary>
         private void MovePhoto(int index, int delta)
         {
-            int visible = VisibleCount(_items.Count);
-            if (visible < 2 || (uint)index >= (uint)visible) return;
+            int total = _items.Count;
+            if (total < 2 || (uint)index >= (uint)total) return;
             int target = index + delta;
-            target = ((target % visible) + visible) % visible;
+            target = ((target % total) + total) % total;
             SwapItems(index, target);
         }
 
@@ -2002,18 +2140,38 @@ namespace ModernImageViewer
             else
                 _hiddenItems.Remove(copy);
 
-            int visible = VisibleCount(_items.Count);
-            if (CellRootsReady() && toIndex < visible && _mosaic != null)
+            int gridCount = GridCellCount;
+            if (toIndex >= gridCount)
             {
-                ForgetCell(_cellRoots[toIndex]);
-                _cellRoots[toIndex] = null;
-                _keepMosaic = true;
-                try { BuildLayout(); }
-                finally { _keepMosaic = false; }
+                // Target is a freeform cell: update cell bindings smoothly without altering grid
+                if (toIndex < _cellRoots.Length && _cellRoots[toIndex]?.Tag is CellParts parts)
+                {
+                    parts.Bound.Item = copy;
+                    parts.Bound.Reload?.Invoke();
+                    parts.UpdateLayout?.Invoke();
+                    if (parts.ImageContainer != null)
+                        parts.ImageContainer.Visibility = _hiddenItems.Contains(copy) ? Visibility.Collapsed : Visibility.Visible;
+                    if (parts.HiddenPlaceholder != null)
+                        parts.HiddenPlaceholder.Visibility = _hiddenItems.Contains(copy) ? Visibility.Visible : Visibility.Collapsed;
+                }
+                var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(_cellRoots[toIndex], c.Container));
+                if (card != null) card.Item = copy;
             }
             else
             {
-                BuildLayout();
+                int visible = VisibleCount(gridCount);
+                if (CellRootsReady() && toIndex < visible && _mosaic != null)
+                {
+                    ForgetCell(_cellRoots[toIndex]);
+                    _cellRoots[toIndex] = null;
+                    _keepMosaic = true;
+                    try { BuildLayout(); }
+                    finally { _keepMosaic = false; }
+                }
+                else
+                {
+                    BuildLayout();
+                }
             }
             ShowHudAndOverlays();
         }
@@ -2052,6 +2210,12 @@ namespace ModernImageViewer
         /// </summary>
         private void RemoveItem(ImageItem item)
         {
+            var freeformCard = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, item));
+            if (freeformCard != null)
+            {
+                CloseFreeformCard(freeformCard);
+                return;
+            }
             int index = _items.IndexOf(item);
             if (index < 0) return;
             _hiddenItems.Remove(item);
@@ -2121,10 +2285,9 @@ namespace ModernImageViewer
 
         private void ShowPositionBadges(int sourceIndex)
         {
-            int visible = VisibleCount(_items.Count);
             var accent = GetMultiViewAccentColor();
 
-            for (int i = 0; i < visible; i++)
+            for (int i = 0; i < _items.Count; i++)
             {
                 if (i < _cellRoots.Length && _cellRoots[i]?.Tag is CellParts parts)
                 {
@@ -2152,8 +2315,7 @@ namespace ModernImageViewer
 
         private void HighlightPositionBadge(int targetIndex, string action = "Swap with")
         {
-            int visible = VisibleCount(_items.Count);
-            if (targetIndex < 0 || targetIndex >= visible || targetIndex >= _cellRoots.Length) return;
+            if (targetIndex < 0 || targetIndex >= _items.Count || targetIndex >= _cellRoots.Length) return;
             if (_cellRoots[targetIndex]?.Tag is CellParts parts)
             {
                 var accent = GetMultiViewAccentColor();
@@ -2169,8 +2331,7 @@ namespace ModernImageViewer
 
         private void ClearHighlightPositionBadge(int targetIndex, int sourceIndex)
         {
-            int visible = VisibleCount(_items.Count);
-            if (targetIndex < 0 || targetIndex >= visible || targetIndex >= _cellRoots.Length) return;
+            if (targetIndex < 0 || targetIndex >= _items.Count || targetIndex >= _cellRoots.Length) return;
             if (_cellRoots[targetIndex]?.Tag is CellParts parts)
             {
                 bool isSource = (targetIndex == sourceIndex);
@@ -2195,10 +2356,9 @@ namespace ModernImageViewer
 
         private void HidePositionBadges()
         {
-            int visible = VisibleCount(_items.Count);
-            for (int i = 0; i < visible; i++)
+            for (int i = 0; i < _cellRoots.Length; i++)
             {
-                if (i < _cellRoots.Length && _cellRoots[i]?.Tag is CellParts parts)
+                if (_cellRoots[i]?.Tag is CellParts parts)
                 {
                     parts.PositionBadge.Opacity = 0.0;
                 }
@@ -2527,7 +2687,7 @@ namespace ModernImageViewer
             ChangePhotosRequested?.Invoke(this, EventArgs.Empty);
         }
 
-        public int ShownSlots => _items.Count == 0 ? 0 : VisibleCount(_items.Count);
+        public int ShownSlots => GridCellCount == 0 ? 0 : VisibleCount(GridCellCount);
 
         public IReadOnlyList<string> SessionPaths()
         {
@@ -2568,8 +2728,8 @@ namespace ModernImageViewer
                     parts.Bound.Reload?.Invoke();
                 }
             }
-            RefreshLinesChrome(_items.Count);
-            RefreshHeroChrome(_items.Count);
+            RefreshLinesChrome(GridCellCount);
+            RefreshHeroChrome(GridCellCount);
             ShowHudAndOverlays();
             return true;
         }
@@ -2674,11 +2834,10 @@ namespace ModernImageViewer
             if (idxA < 0 || idxA >= _items.Count || idxB < 0 || idxB >= _items.Count || idxA == idxB) return;
             (_items[idxA], _items[idxB]) = (_items[idxB], _items[idxA]);
 
-            int visible = VisibleCount(_items.Count);
-            if (idxA < visible && idxB < visible && _mosaic != null && CellRootsReady())
+            int gridCount = GridCellCount;
+            if (idxA < gridCount && idxB < gridCount && _mosaic != null && CellRootsReady())
             {
                 (_cellRoots[idxA], _cellRoots[idxB]) = (_cellRoots[idxB], _cellRoots[idxA]);
-                // The dragged photo is dimmed while it travels; it is the same element afterwards.
                 _cellRoots[idxA]!.Opacity = 1;
                 _cellRoots[idxB]!.Opacity = 1;
                 _keepMosaic = true;
@@ -2687,7 +2846,32 @@ namespace ModernImageViewer
             }
             else
             {
-                BuildLayout();
+                // One or both is a freeform cell: update cell bindings smoothly
+                if (idxA < _cellRoots.Length && _cellRoots[idxA]?.Tag is CellParts partsA)
+                {
+                    partsA.Bound.Item = _items[idxA];
+                    partsA.Bound.Reload?.Invoke();
+                    partsA.UpdateLayout?.Invoke();
+                    if (partsA.ImageContainer != null)
+                        partsA.ImageContainer.Visibility = _hiddenItems.Contains(_items[idxA]) ? Visibility.Collapsed : Visibility.Visible;
+                    if (partsA.HiddenPlaceholder != null)
+                        partsA.HiddenPlaceholder.Visibility = _hiddenItems.Contains(_items[idxA]) ? Visibility.Visible : Visibility.Collapsed;
+                }
+                if (idxB < _cellRoots.Length && _cellRoots[idxB]?.Tag is CellParts partsB)
+                {
+                    partsB.Bound.Item = _items[idxB];
+                    partsB.Bound.Reload?.Invoke();
+                    partsB.UpdateLayout?.Invoke();
+                    if (partsB.ImageContainer != null)
+                        partsB.ImageContainer.Visibility = _hiddenItems.Contains(_items[idxB]) ? Visibility.Collapsed : Visibility.Visible;
+                    if (partsB.HiddenPlaceholder != null)
+                        partsB.HiddenPlaceholder.Visibility = _hiddenItems.Contains(_items[idxB]) ? Visibility.Visible : Visibility.Collapsed;
+                }
+
+                var cardA = _freeformCards.FirstOrDefault(c => ReferenceEquals(_cellRoots[idxA], c.Container));
+                if (cardA != null) cardA.Item = _items[idxA];
+                var cardB = _freeformCards.FirstOrDefault(c => ReferenceEquals(_cellRoots[idxB], c.Container));
+                if (cardB != null) cardB.Item = _items[idxB];
             }
             ShowHudAndOverlays();
         }

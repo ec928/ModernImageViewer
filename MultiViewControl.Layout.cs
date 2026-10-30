@@ -15,6 +15,15 @@ namespace ModernImageViewer
     {
         // Photos stay in these borders across a segment rebuild so a drag does not decode them again.
         private FrameworkElement?[] _cellRoots = Array.Empty<FrameworkElement?>();
+        public int GridCellCount => Math.Max(0, _items.Count - _freeformCards.Count);
+
+        public void EnsureCellRootsCapacity(int minCapacity)
+        {
+            if (_cellRoots.Length < minCapacity)
+            {
+                Array.Resize(ref _cellRoots, minCapacity);
+            }
+        }
         private readonly Dictionary<string, MosaicHost> _mosaicHosts = new();
         private MosaicLayout? _mosaic;
         private bool _mosaicCustom;
@@ -43,7 +52,7 @@ namespace ModernImageViewer
                 EndSegmentGesture();
 
             bool keepCells = (_keepMosaic && CellRootsReady())
-                || (_relayoutKeepingCells && _cellRoots.Length == VisibleCount(_items.Count));
+                || (_relayoutKeepingCells && _cellRoots.Length >= VisibleCount(GridCellCount));
             if (keepCells)
             {
                 for (int i = 0; i < _cellRoots.Length; i++)
@@ -78,7 +87,7 @@ namespace ModernImageViewer
             }
 
             NormalizeHero();
-            int stored = _items.Count;
+            int stored = GridCellCount;
             if (stored == 0)
             {
                 CellsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -133,14 +142,14 @@ namespace ModernImageViewer
             {
                 CellsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
                 CellsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                _cellRoots = new FrameworkElement?[1];
+                _cellRoots = new FrameworkElement?[Math.Max(1, _items.Count)];
                 AddCell(_items[0], 0, 0, 1, 1, 0);
             }
             else
             {
                 int visible = VisibleCount(count);
                 if (!keepCells)
-                    _cellRoots = new FrameworkElement?[visible];
+                    _cellRoots = new FrameworkElement?[Math.Max(visible, _items.Count)];
 
                 var mosaic = _mosaic;
                 if (mosaic == null)
@@ -163,6 +172,16 @@ namespace ModernImageViewer
                 RenderSplit(mosaic, CellsGrid, Array.Empty<int>());
             }
 
+            for (int fc = 0; fc < _freeformCards.Count; fc++)
+            {
+                var card = _freeformCards[fc];
+                int cardSlot = Slot(card.Item);
+                if (cardSlot >= 0 && cardSlot < _cellRoots.Length)
+                {
+                    _cellRoots[cardSlot] = card.Container;
+                }
+            }
+
             RefreshLinesChrome(stored);
             RefreshHeroChrome(stored);
         }
@@ -178,8 +197,8 @@ namespace ModernImageViewer
 
         private bool CellRootsReady()
         {
-            int visible = VisibleCount(_items.Count);
-            if (visible <= 0 || _cellRoots.Length != visible) return false;
+            int visible = VisibleCount(GridCellCount);
+            if (visible <= 0 || _cellRoots.Length < visible) return false;
             for (int i = 0; i < visible; i++)
             {
                 if (_cellRoots[i] == null) return false;

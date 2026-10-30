@@ -680,7 +680,7 @@ namespace ModernImageViewer
         private List<CellShot> CaptureCells()
         {
             var shots = new List<CellShot>();
-            int count = Math.Min(_items.Count, _cellRoots.Length);
+            int count = Math.Min(GridCellCount, _cellRoots.Length);
             double canvasW = CellsGrid.ActualWidth;
             double canvasH = CellsGrid.ActualHeight;
             if (canvasW < 1 || canvasH < 1) return shots;
@@ -748,6 +748,7 @@ namespace ModernImageViewer
                     Rect cardBounds = new Rect(cx, cy, cw, ch);
                     Rect photoBounds = new Rect(cx, cy + 32, cw, Math.Max(10, ch - 32));
 
+                    var parts = card.Container.Tag as CellParts;
                     shots.Add(new CellShot
                     {
                         Path = card.Item.Path ?? string.Empty,
@@ -755,10 +756,10 @@ namespace ModernImageViewer
                         Card = cardBounds,
                         Photo = photoBounds,
                         ImageW = cw,
-                        ImageH = Math.Max(10, ch - 32),
-                        Scale = card.Transform?.ScaleX ?? 1.0,
-                        TranslateX = card.Transform?.TranslateX ?? 0.0,
-                        TranslateY = card.Transform?.TranslateY ?? 0.0,
+                        ImageH = ch,
+                        Scale = parts?.Transform?.ScaleX ?? 1.0,
+                        TranslateX = parts?.Transform?.TranslateX ?? 0.0,
+                        TranslateY = parts?.Transform?.TranslateY ?? 0.0,
                         NativeW = 1920,
                         NativeH = 1080,
                         CanvasW = canvasW,
@@ -1093,7 +1094,8 @@ namespace ModernImageViewer
                 Mosaic = _mosaic != null ? MosaicNodeDto.FromMosaicLayout(_mosaic) : null
             };
 
-            for (int i = 0; i < _items.Count; i++)
+            int gridCount = GridCellCount;
+            for (int i = 0; i < gridCount; i++)
             {
                 var item = _items[i];
                 var slotDto = new PhotoSlotDto
@@ -1130,9 +1132,9 @@ namespace ModernImageViewer
                         Width = card.Container.ActualWidth > 0 ? card.Container.ActualWidth : card.Width,
                         Height = card.Container.ActualHeight > 0 ? card.Container.ActualHeight : card.Height,
                         ZIndex = Canvas.GetZIndex(card.Container),
-                        Zoom = card.Transform?.ScaleX,
-                        PanX = card.Transform?.TranslateX,
-                        PanY = card.Transform?.TranslateY,
+                        Zoom = (card.Container.Tag as CellParts)?.Transform?.ScaleX,
+                        PanX = (card.Container.Tag as CellParts)?.Transform?.TranslateX,
+                        PanY = (card.Container.Tag as CellParts)?.Transform?.TranslateY,
                         Border = card.Border?.Clone()
                     });
                 }
