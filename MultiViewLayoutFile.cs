@@ -127,6 +127,16 @@ namespace ModernImageViewer
         [JsonPropertyName("secondaryColor")]
         public string? SecondaryColor { get; set; }
 
+        [JsonPropertyName("gutter")]
+        public double Gutter
+        {
+            get => Padding;
+            set => Padding = value;
+        }
+
+        [JsonPropertyName("rimGlow")]
+        public bool RimGlow { get; set; }
+
         public CellBorderDto Clone() => new()
         {
             Thickness = Thickness,
@@ -136,7 +146,8 @@ namespace ModernImageViewer
             Shadow = Shadow,
             ShadowIntensity = ShadowIntensity,
             StrokeStyle = StrokeStyle,
-            SecondaryColor = SecondaryColor
+            SecondaryColor = SecondaryColor,
+            RimGlow = RimGlow
         };
     }
 

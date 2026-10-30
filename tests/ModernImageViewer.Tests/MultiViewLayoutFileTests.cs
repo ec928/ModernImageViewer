@@ -132,7 +132,8 @@ namespace ModernImageViewer.Tests
                             Padding = 8.0,
                             CornerRadius = 12.0,
                             ShadowIntensity = 45.0,
-                            StrokeStyle = "InnerMuted"
+                            StrokeStyle = "InnerMuted",
+                            RimGlow = true
                         }
                     },
                     new()
@@ -170,6 +171,8 @@ namespace ModernImageViewer.Tests
             Assert.Equal(12.0, b0.CornerRadius);
             Assert.Equal(45.0, b0.ShadowIntensity);
             Assert.Equal("InnerMuted", b0.StrokeStyle);
+            Assert.True(b0.RimGlow);
+            Assert.Equal(8.0, b0.Gutter);
 
             var b1 = loaded.Photos[1].Border;
             Assert.NotNull(b1);

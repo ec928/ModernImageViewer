@@ -87,23 +87,44 @@ namespace ModernImageViewer
             cellBorder.Margin = new Thickness(border.Padding);
             cellBorder.CornerRadius = new CornerRadius(border.CornerRadius);
 
-            // Shadow & Elevation
-            if (border.ShadowIntensity > 0)
-            {
-                cellBorder.Shadow = new ThemeShadow();
-                cellBorder.Translation = new Vector3(0, 0, (float)(border.ShadowIntensity * 0.32f));
-            }
-            else
-            {
-                cellBorder.Shadow = null;
-                cellBorder.Translation = Vector3.Zero;
-            }
-
-            // Dashed overlay rectangle reference
+            // Dashed overlay rectangle & Rim Glow overlay reference
             Microsoft.UI.Xaml.Shapes.Rectangle? dashedRect = null;
+            Microsoft.UI.Xaml.Shapes.Rectangle? rimGlowRect = null;
             if (cellBorder.Tag is CellParts parts)
             {
                 dashedRect = parts.DashedStroke;
+                rimGlowRect = parts.RimGlowStroke;
+            }
+
+            // Shadow & Rim Glow
+            if (border.ShadowIntensity > 0)
+            {
+                if (border.RimGlow)
+                {
+                    cellBorder.Shadow = null;
+                    cellBorder.Translation = Vector3.Zero;
+                    if (rimGlowRect != null)
+                    {
+                        rimGlowRect.Visibility = Visibility.Visible;
+                        byte alpha = (byte)Math.Clamp(border.ShadowIntensity * 2.1, 30, 240);
+                        rimGlowRect.Stroke = new SolidColorBrush(Color.FromArgb(alpha, 255, 255, 255));
+                        rimGlowRect.StrokeThickness = Math.Max(1.0, border.ShadowIntensity * 0.035 + 1.0);
+                        rimGlowRect.RadiusX = border.CornerRadius;
+                        rimGlowRect.RadiusY = border.CornerRadius;
+                    }
+                }
+                else
+                {
+                    if (rimGlowRect != null) rimGlowRect.Visibility = Visibility.Collapsed;
+                    cellBorder.Shadow = new ThemeShadow();
+                    cellBorder.Translation = new Vector3(0, 0, (float)(border.ShadowIntensity * 0.32f));
+                }
+            }
+            else
+            {
+                if (rimGlowRect != null) rimGlowRect.Visibility = Visibility.Collapsed;
+                cellBorder.Shadow = null;
+                cellBorder.Translation = Vector3.Zero;
             }
 
             // Stroke style application
@@ -146,7 +167,15 @@ namespace ModernImageViewer
                 {
                     cellBorder.BorderThickness = new Thickness(Math.Max(1, border.Thickness));
                     var primary = ParseColor(border.Color);
-                    var secondary = Color.FromArgb((byte)(primary.A * 0.40f), primary.R, primary.G, primary.B);
+                    Color secondary;
+                    if (!string.IsNullOrEmpty(border.SecondaryColor) && border.SecondaryColor != "#00000000")
+                    {
+                        secondary = ParseColor(border.SecondaryColor);
+                    }
+                    else
+                    {
+                        secondary = Color.FromArgb((byte)(primary.A * 0.40f), primary.R, primary.G, primary.B);
+                    }
                     var lgb = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 1) };
                     lgb.GradientStops.Add(new GradientStop { Color = primary, Offset = 0.0 });
                     lgb.GradientStops.Add(new GradientStop { Color = secondary, Offset = 1.0 });
@@ -194,7 +223,7 @@ namespace ModernImageViewer
             // 1. Title Header
             var header = new TextBlock
             {
-                Text = $"Frame & Border â€” Photo {slot + 1}",
+                Text = $"Frame & Border — Photo {slot + 1}",
                 FontSize = 14,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                 Foreground = _menuWhitePrimary
@@ -225,18 +254,25 @@ namespace ModernImageViewer
             Slider? gapSliderRef = null;
             Slider? radiusSliderRef = null;
             Slider? shadowSliderRef = null;
-            List<Button>? swatchButtonsRef = null;
+            TextBlock? color1LabelRef = null;
+            StackPanel? color2ContainerRef = null;
             Action? updateSwatchesAction = null;
+            Action? updateSecondarySwatchesAction = null;
 
             void UpdateStrokeSelection()
             {
                 string cur = border.StrokeStyle ?? "Solid";
+                bool isGrad = string.Equals(cur, "Gradient", StringComparison.OrdinalIgnoreCase);
+
                 for (int i = 0; i < strokeStyles.Length; i++)
                 {
                     bool sel = string.Equals(cur, strokeStyles[i], StringComparison.OrdinalIgnoreCase);
                     strokeButtons[i].Background = sel ? new SolidColorBrush(Color.FromArgb(70, 255, 255, 255)) : new SolidColorBrush(Color.FromArgb(20, 255, 255, 255));
                     strokeButtons[i].BorderBrush = sel ? new SolidColorBrush(Color.FromArgb(180, 255, 255, 255)) : new SolidColorBrush(Color.FromArgb(40, 255, 255, 255));
                 }
+
+                if (color1LabelRef != null) color1LabelRef.Text = isGrad ? "Gradient Color 1" : "Border Color";
+                if (color2ContainerRef != null) color2ContainerRef.Visibility = isGrad ? Visibility.Visible : Visibility.Collapsed;
             }
 
             for (int i = 0; i < strokeStyles.Length; i++)
@@ -281,16 +317,16 @@ namespace ModernImageViewer
                 strokeGrid.Children.Add(sBtn);
                 strokeButtons.Add(sBtn);
             }
-            UpdateStrokeSelection();
             panel.Children.Add(strokeGrid);
 
-            // 3. Color Swatches
+            // 3. Color Swatches (Primary / Color 1)
             var colorLabel = new TextBlock
             {
                 Text = "Border Color",
                 FontSize = 11,
                 Foreground = _menuWhiteSecondary
             };
+            color1LabelRef = colorLabel;
             panel.Children.Add(colorLabel);
 
             var swatchesPanel = new StackPanel
@@ -311,7 +347,6 @@ namespace ModernImageViewer
             };
 
             var swatchButtons = new List<Button>();
-            swatchButtonsRef = swatchButtons;
             void UpdateSwatchSelection()
             {
                 string currentHex = border.Color ?? "#FFFFFFFF";
@@ -356,7 +391,94 @@ namespace ModernImageViewer
             UpdateSwatchSelection();
             panel.Children.Add(swatchesPanel);
 
-            // 4. Sliders
+            // 3b. Gradient Color 2 (Secondary Color, visible only when Gradient is selected)
+            var color2Container = new StackPanel
+            {
+                Spacing = 4,
+                Visibility = string.Equals(border.StrokeStyle, "Gradient", StringComparison.OrdinalIgnoreCase) ? Visibility.Visible : Visibility.Collapsed
+            };
+            color2ContainerRef = color2Container;
+
+            var color2Label = new TextBlock
+            {
+                Text = "Gradient Color 2",
+                FontSize = 11,
+                Foreground = _menuWhiteSecondary
+            };
+            color2Container.Children.Add(color2Label);
+
+            var swatches2Panel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8
+            };
+
+            (string label, string hex, Color previewColor)[] swatches2 = new[]
+            {
+                ("Auto (Fade)", "#00000000", Color.FromArgb(0, 0, 0, 0)),
+                ("White", "#FFFFFFFF", Color.FromArgb(255, 255, 255, 255)),
+                ("Black", "#FF000000", Color.FromArgb(255, 0, 0, 0)),
+                ("Charcoal", "#FF252525", Color.FromArgb(255, 37, 37, 37)),
+                ("Gold", "#FFFFC83B", Color.FromArgb(255, 255, 200, 59)),
+                ("Blue", "#FF0078D4", Color.FromArgb(255, 0, 120, 212)),
+                ("Red", "#FFD13438", Color.FromArgb(255, 209, 52, 56)),
+                ("Cyan", "#FF00B7C3", Color.FromArgb(255, 0, 183, 195))
+            };
+
+            var swatch2Buttons = new List<Button>();
+            void UpdateSecondarySwatchSelection()
+            {
+                string current2 = border.SecondaryColor ?? "#00000000";
+                for (int i = 0; i < swatches2.Length; i++)
+                {
+                    bool isMatch = string.Equals(swatches2[i].hex, current2, StringComparison.OrdinalIgnoreCase);
+                    swatch2Buttons[i].BorderBrush = isMatch ? new SolidColorBrush(Microsoft.UI.Colors.White) : new SolidColorBrush(Color.FromArgb(60, 255, 255, 255));
+                    swatch2Buttons[i].BorderThickness = isMatch ? new Thickness(2) : new Thickness(1);
+                }
+            }
+            updateSecondarySwatchesAction = UpdateSecondarySwatchSelection;
+
+            foreach (var s in swatches2)
+            {
+                var swatchBtn = new Button
+                {
+                    Width = 28,
+                    Height = 28,
+                    CornerRadius = new CornerRadius(14),
+                    Padding = new Thickness(0),
+                    Background = s.hex == "#00000000" ? new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)) : new SolidColorBrush(s.previewColor),
+                    BorderBrush = new SolidColorBrush(Color.FromArgb(60, 255, 255, 255)),
+                    BorderThickness = new Thickness(1)
+                };
+                if (s.hex == "#00000000")
+                {
+                    swatchBtn.Content = new FontIcon
+                    {
+                        Glyph = "\uE706",
+                        FontSize = 11,
+                        FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
+                        Foreground = _menuWhiteSecondary
+                    };
+                }
+                ToolTipService.SetToolTip(swatchBtn, s.label);
+                string chosenHex = s.hex;
+                swatchBtn.Click += (_, _) =>
+                {
+                    border.SecondaryColor = chosenHex;
+                    _lastBorderSettings = border.Clone();
+                    ApplyBorderToCell(slot);
+                    UpdateSecondarySwatchSelection();
+                };
+                swatch2Buttons.Add(swatchBtn);
+                swatches2Panel.Children.Add(swatchBtn);
+            }
+            UpdateSecondarySwatchSelection();
+            color2Container.Children.Add(swatches2Panel);
+            panel.Children.Add(color2Container);
+
+            UpdateStrokeSelection();
+
+            // 4. Sliders (Thickness, Gutter, Corner Radius, Shadow Intensity + Rim Glow Toggle)
             var thicknessRow = CreateSliderRow("Thickness", 0, 24, border.Thickness, "px", val =>
             {
                 border.Thickness = val;
@@ -365,13 +487,14 @@ namespace ModernImageViewer
             }, out thicknessSliderRef);
             panel.Children.Add(thicknessRow);
 
-            var gapRow = CreateSliderRow("Spacing (Gap)", 0, 32, border.Padding, "px", val =>
+            var gutterRow = CreateSliderRow("Gutter", 0, 48, border.Padding, "px", val =>
             {
                 border.Padding = val;
                 _lastBorderSettings = border.Clone();
                 ApplyBorderToCell(slot);
             }, out gapSliderRef);
-            panel.Children.Add(gapRow);
+            ToolTipService.SetToolTip(gutterRow, "Gutter spacing around this photo card (exposes canvas background)");
+            panel.Children.Add(gutterRow);
 
             var radiusRow = CreateSliderRow("Corner Radius", 0, 32, border.CornerRadius, "px", val =>
             {
@@ -381,14 +504,79 @@ namespace ModernImageViewer
             }, out radiusSliderRef);
             panel.Children.Add(radiusRow);
 
-            var shadowRow = CreateSliderRow("Shadow Intensity", 0, 100, border.ShadowIntensity, "%", val =>
+            // 4b. Shadow Intensity with Ambient Rim Glow Toggle on the right of the same line
+            var shadowPanel = new StackPanel { Spacing = 4 };
+            var shadowHeader = new Grid();
+            shadowHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            shadowHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var shadowLeft = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+            var shadowTitle = new TextBlock { Text = "Shadow Intensity", FontSize = 11.5, Foreground = _menuWhiteSecondary, VerticalAlignment = VerticalAlignment.Center };
+            var shadowVal = new TextBlock { Text = $"{(int)border.ShadowIntensity} %", FontSize = 11.5, Foreground = _menuWhitePrimary, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+            shadowLeft.Children.Add(shadowTitle);
+            shadowLeft.Children.Add(shadowVal);
+            Grid.SetColumn(shadowLeft, 0);
+            shadowHeader.Children.Add(shadowLeft);
+
+            var glowToggle = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton
             {
-                border.ShadowIntensity = val;
-                border.Shadow = val > 0;
+                IsChecked = border.RimGlow,
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(8, 2, 8, 2),
+                MinHeight = 24,
+                BorderThickness = new Thickness(1),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            var glowStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+            var glowIcon = new FontIcon { Glyph = "\uE706", FontSize = 11, FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets") };
+            var glowText = new TextBlock { Text = "Rim Glow", FontSize = 11 };
+            glowStack.Children.Add(glowIcon);
+            glowStack.Children.Add(glowText);
+            glowToggle.Content = glowStack;
+
+            void SyncGlowToggle()
+            {
+                bool on = glowToggle.IsChecked == true;
+                glowToggle.Background = on ? new SolidColorBrush(Color.FromArgb(60, 255, 255, 255)) : new SolidColorBrush(Color.FromArgb(18, 255, 255, 255));
+                glowToggle.BorderBrush = on ? new SolidColorBrush(Color.FromArgb(160, 255, 255, 255)) : new SolidColorBrush(Color.FromArgb(40, 255, 255, 255));
+                glowIcon.Foreground = on ? new SolidColorBrush(Color.FromArgb(255, 255, 200, 59)) : _menuWhiteSecondary;
+                glowText.Foreground = on ? _menuWhitePrimary : _menuWhiteSecondary;
+            }
+            SyncGlowToggle();
+
+            glowToggle.Click += (_, _) =>
+            {
+                border.RimGlow = glowToggle.IsChecked == true;
+                SyncGlowToggle();
                 _lastBorderSettings = border.Clone();
                 ApplyBorderToCell(slot);
-            }, out shadowSliderRef);
-            panel.Children.Add(shadowRow);
+            };
+            ToolTipService.SetToolTip(glowToggle, "Toggle ambient luminous rim glow (ideal for dark/black backgrounds)");
+            Grid.SetColumn(glowToggle, 1);
+            shadowHeader.Children.Add(glowToggle);
+            shadowPanel.Children.Add(shadowHeader);
+
+            var shadowSlider = new Slider
+            {
+                Minimum = 0,
+                Maximum = 100,
+                Value = border.ShadowIntensity,
+                StepFrequency = 1,
+                SnapsTo = SliderSnapsTo.StepValues,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Margin = new Thickness(0, -2, 0, 0)
+            };
+            shadowSlider.ValueChanged += (_, e) =>
+            {
+                shadowVal.Text = $"{(int)e.NewValue} %";
+                border.ShadowIntensity = e.NewValue;
+                border.Shadow = e.NewValue > 0;
+                _lastBorderSettings = border.Clone();
+                ApplyBorderToCell(slot);
+            };
+            shadowSliderRef = shadowSlider;
+            shadowPanel.Children.Add(shadowSlider);
+            panel.Children.Add(shadowPanel);
 
             // 5. Quick Presets (Now including "Last Settings")
             var presetsLabel = new TextBlock
@@ -412,17 +600,23 @@ namespace ModernImageViewer
                 border.Padding = targetValues.Padding;
                 border.CornerRadius = targetValues.CornerRadius;
                 border.Color = targetValues.Color;
+                border.SecondaryColor = targetValues.SecondaryColor;
                 border.StrokeStyle = targetValues.StrokeStyle ?? "Solid";
                 border.ShadowIntensity = targetValues.ShadowIntensity;
                 border.Shadow = targetValues.ShadowIntensity > 0;
+                border.RimGlow = targetValues.RimGlow;
 
                 if (thicknessSliderRef != null) thicknessSliderRef.Value = border.Thickness;
                 if (gapSliderRef != null) gapSliderRef.Value = border.Padding;
                 if (radiusSliderRef != null) radiusSliderRef.Value = border.CornerRadius;
                 if (shadowSliderRef != null) shadowSliderRef.Value = border.ShadowIntensity;
 
+                glowToggle.IsChecked = border.RimGlow;
+                SyncGlowToggle();
+
                 UpdateStrokeSelection();
                 updateSwatchesAction?.Invoke();
+                updateSecondarySwatchesAction?.Invoke();
                 _lastBorderSettings = border.Clone();
                 ApplyBorderToCell(slot);
             }
@@ -437,19 +631,19 @@ namespace ModernImageViewer
                 else
                 {
                     // Fallback to card
-                    ApplyPresetValues(new CellBorderDto { Thickness = 1, Padding = 8, CornerRadius = 12, Color = "#FFFFFFFF", StrokeStyle = "InnerMuted", ShadowIntensity = 40 });
+                    ApplyPresetValues(new CellBorderDto { Thickness = 1, Padding = 8, CornerRadius = 12, Color = "#FFFFFFFF", StrokeStyle = "InnerMuted", ShadowIntensity = 40, RimGlow = true });
                 }
             }, isAccent: true);
             ToolTipService.SetToolTip(lastBtn, _lastBorderSettings != null
-                ? $"Apply last used frame ({_lastBorderSettings.StrokeStyle}, {_lastBorderSettings.Thickness}px, Gap {_lastBorderSettings.Padding}px)"
+                ? $"Apply last used frame ({_lastBorderSettings.StrokeStyle}, {_lastBorderSettings.Thickness}px, Gutter {_lastBorderSettings.Padding}px)"
                 : "Apply last used settings");
             Grid.SetColumn(lastBtn, 0);
             presetsGrid.Children.Add(lastBtn);
 
-            // Button 2: Card (Fluent elevation card)
+            // Button 2: Card (Fluent elevation card with Rim Glow)
             var cardBtn = CreateSmallPresetButton("Card", () =>
             {
-                ApplyPresetValues(new CellBorderDto { Thickness = 1, Padding = 8, CornerRadius = 12, Color = "#FFFFFFFF", StrokeStyle = "InnerMuted", ShadowIntensity = 40 });
+                ApplyPresetValues(new CellBorderDto { Thickness = 1, Padding = 8, CornerRadius = 12, Color = "#FFFFFFFF", StrokeStyle = "InnerMuted", ShadowIntensity = 40, RimGlow = true });
             });
             Grid.SetColumn(cardBtn, 1);
             presetsGrid.Children.Add(cardBtn);
@@ -457,15 +651,15 @@ namespace ModernImageViewer
             // Button 3: Mat
             var matBtn = CreateSmallPresetButton("Mat", () =>
             {
-                ApplyPresetValues(new CellBorderDto { Thickness = 8, Padding = 10, CornerRadius = 0, Color = "#FFFFFFFF", StrokeStyle = "Solid", ShadowIntensity = 0 });
+                ApplyPresetValues(new CellBorderDto { Thickness = 8, Padding = 10, CornerRadius = 0, Color = "#FFFFFFFF", StrokeStyle = "Solid", ShadowIntensity = 0, RimGlow = false });
             });
             Grid.SetColumn(matBtn, 2);
             presetsGrid.Children.Add(matBtn);
 
-            // Button 4: Round (Gradient frame)
+            // Button 4: Round (Gradient frame with subtle Rim Glow)
             var roundBtn = CreateSmallPresetButton("Round", () =>
             {
-                ApplyPresetValues(new CellBorderDto { Thickness = 2, Padding = 6, CornerRadius = 16, Color = "#FFFFFFFF", StrokeStyle = "Gradient", ShadowIntensity = 30 });
+                ApplyPresetValues(new CellBorderDto { Thickness = 2, Padding = 6, CornerRadius = 16, Color = "#FFFFFFFF", SecondaryColor = "#FFFFC83B", StrokeStyle = "Gradient", ShadowIntensity = 30, RimGlow = true });
             });
             Grid.SetColumn(roundBtn, 3);
             presetsGrid.Children.Add(roundBtn);
@@ -473,7 +667,7 @@ namespace ModernImageViewer
             // Button 5: Flush
             var flushBtn = CreateSmallPresetButton("Flush", () =>
             {
-                ApplyPresetValues(new CellBorderDto { Thickness = 0, Padding = 0, CornerRadius = 0, Color = "#00000000", StrokeStyle = "Solid", ShadowIntensity = 0 });
+                ApplyPresetValues(new CellBorderDto { Thickness = 0, Padding = 0, CornerRadius = 0, Color = "#00000000", StrokeStyle = "Solid", ShadowIntensity = 0, RimGlow = false });
             });
             Grid.SetColumn(flushBtn, 4);
             presetsGrid.Children.Add(flushBtn);
@@ -498,22 +692,25 @@ namespace ModernImageViewer
                     HorizontalAlignment = HorizontalAlignment.Center,
                     Children =
                     {
-                        new FontIcon { Glyph = "\uE738", FontSize = 13, Foreground = _menuWhitePrimary },
-                        new TextBlock { Text = "Apply to All Photos", FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = _menuWhitePrimary }
+                        new FontIcon { Glyph = "\uE8B7", FontSize = 13, Foreground = _menuWhitePrimary },
+                        new TextBlock { Text = "Apply to All Photos", FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = _menuWhitePrimary }
                     }
                 }
             };
             applyAllBtn.Click += (_, _) =>
             {
-                _lastBorderSettings = border.Clone();
-                foreach (var it in _items)
+                var proto = border.Clone();
+                _lastBorderSettings = proto.Clone();
+                for (int i = 0; i < _items.Count; i++)
                 {
-                    if (!string.IsNullOrEmpty(it.Path))
+                    var it = _items[i];
+                    if (it != null && !string.IsNullOrEmpty(it.Path))
                     {
-                        _itemBorders[it.Path] = border.Clone();
+                        _itemBorders[it.Path] = proto.Clone();
                     }
                 }
                 ApplyBorderToAllCells();
+                _cellBorderFlyout?.Hide();
             };
             panel.Children.Add(applyAllBtn);
 

@@ -769,20 +769,45 @@ namespace ModernImageViewer
                 double cardW = shot.Card.Width * scaleX;
                 double cardH = shot.Card.Height * scaleY;
 
-                // 1. Draw Drop Shadow
+                // 1. Draw Drop Shadow or Ambient Rim Glow
                 if (shot.Border != null && shot.Border.ShadowIntensity > 0)
                 {
-                    double shadowOffset = shot.Border.ShadowIntensity * scaleX * 0.12;
-                    byte shadowAlpha = (byte)Math.Clamp(shot.Border.ShadowIntensity * 1.4, 0, 160);
-                    var shadowColor = Color.FromArgb(shadowAlpha, 0, 0, 0);
-
                     using var shadowSession = target.CreateDrawingSession();
-                    float shX = (float)(cardX + shadowOffset * 0.5);
-                    float shY = (float)(cardY + shadowOffset * 0.7);
-                    if (rx > 0)
-                        shadowSession.FillRoundedRectangle(shX, shY, (float)cardW, (float)cardH, rx, ry, shadowColor);
+                    if (shot.Border.RimGlow)
+                    {
+                        byte baseAlpha = (byte)Math.Clamp(shot.Border.ShadowIntensity * 1.6, 12, 190);
+                        int steps = 4;
+                        for (int s = 1; s <= steps; s++)
+                        {
+                            float expand = (float)(s * scaleX * 1.5);
+                            byte a = (byte)(baseAlpha / (s * 1.7));
+                            var glowCol = Color.FromArgb(a, 255, 255, 255);
+                            float sx = (float)(cardX - expand);
+                            float sy = (float)(cardY - expand);
+                            float sw = (float)(cardW + 2 * expand);
+                            float sh = (float)(cardH + 2 * expand);
+                            float srx = (float)(rx + expand);
+                            float sry = (float)(ry + expand);
+
+                            if (rx > 0)
+                                shadowSession.DrawRoundedRectangle(sx, sy, sw, sh, srx, sry, glowCol, (float)(1.5 * scaleX));
+                            else
+                                shadowSession.DrawRectangle(sx, sy, sw, sh, glowCol, (float)(1.5 * scaleX));
+                        }
+                    }
                     else
-                        shadowSession.FillRectangle(shX, shY, (float)cardW, (float)cardH, shadowColor);
+                    {
+                        double shadowOffset = shot.Border.ShadowIntensity * scaleX * 0.12;
+                        byte shadowAlpha = (byte)Math.Clamp(shot.Border.ShadowIntensity * 1.4, 0, 160);
+                        var shadowColor = Color.FromArgb(shadowAlpha, 0, 0, 0);
+
+                        float shX = (float)(cardX + shadowOffset * 0.5);
+                        float shY = (float)(cardY + shadowOffset * 0.7);
+                        if (rx > 0)
+                            shadowSession.FillRoundedRectangle(shX, shY, (float)cardW, (float)cardH, rx, ry, shadowColor);
+                        else
+                            shadowSession.FillRectangle(shX, shY, (float)cardW, (float)cardH, shadowColor);
+                    }
                 }
 
                 // 2. Draw Image with Rounded or Sharp Clipping
@@ -832,7 +857,15 @@ namespace ModernImageViewer
                     {
                         float sW = (float)(Math.Max(1, shot.Border?.Thickness ?? 2) * scaleX);
                         var primaryColor = ParseColor(shot.Border?.Color);
-                        var secondaryColor = Color.FromArgb((byte)(primaryColor.A * 0.40f), primaryColor.R, primaryColor.G, primaryColor.B);
+                        Color secondaryColor;
+                        if (!string.IsNullOrEmpty(shot.Border?.SecondaryColor) && shot.Border.SecondaryColor != "#00000000")
+                        {
+                            secondaryColor = ParseColor(shot.Border.SecondaryColor);
+                        }
+                        else
+                        {
+                            secondaryColor = Color.FromArgb((byte)(primaryColor.A * 0.40f), primaryColor.R, primaryColor.G, primaryColor.B);
+                        }
 
                         float half = sW / 2.0f;
                         float sx = (float)(cardX + half);
