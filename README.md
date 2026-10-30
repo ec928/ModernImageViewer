@@ -29,7 +29,7 @@ HEIC/HEIF and AVIF need the corresponding Windows codecs installed. If a file wi
 | Graphics | Win2D (Direct2D) |
 | Architecture | Asynchronous tiered decoding with reference-counted GPU resources for VRAM efficiency |
 
-Supported formats: JPEG, PNG, BMP, GIF, WebP, HEIC/HEIF, AVIF, CBZ, CBR.
+Supported formats: JPEG, PNG, BMP, GIF, TIFF, WebP, HEIC/HEIF, AVIF, CBZ, CBR. A multi-page TIFF opens on its first page.
 
 ## 📦 Installation (Portable)
 

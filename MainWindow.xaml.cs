@@ -106,7 +106,7 @@ namespace ModernImageViewer
 
         private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
         {
-            ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".heic", ".heif", ".avif", ".cbz", ".cbr"
+            ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff", ".webp", ".heic", ".heif", ".avif", ".cbz", ".cbr"
         };
 
         private readonly string _settingsPath = Path.Combine(AppPaths.LocalDirectory, "settings.json");

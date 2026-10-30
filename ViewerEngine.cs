@@ -215,6 +215,13 @@ namespace ModernImageViewer
         public const uint DisplayMaxEdge = 4096;
         public const uint HighFidelityMaxEdge = 16384;
 
+        private static bool IsTiff(string path)
+        {
+            string ext = Path.GetExtension(path);
+            return ext.Equals(".tif", StringComparison.OrdinalIgnoreCase)
+                || ext.Equals(".tiff", StringComparison.OrdinalIgnoreCase);
+        }
+
         public static async Task<Windows.Storage.Streams.IRandomAccessStream?> OpenImageStreamAsync(string path, CancellationToken token = default)
         {
             if (ComicArchive.IsEntryPath(path) || ComicArchive.IsComicArchivePath(path))
@@ -314,7 +321,8 @@ namespace ModernImageViewer
 
                     uint frameCount = decoder.FrameCount;
 
-                    if (frameCount > 1)
+                    // A multi-page TIFF is a still. The frame loop is the GIF player.
+                    if (frameCount > 1 && !IsTiff(path))
                     {
                         var rawFrames = new List<(SoftwareBitmap Bitmap, TimeSpan Delay, ushort Disposal, float Left, float Top)>();
                         try

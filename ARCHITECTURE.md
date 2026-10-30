@@ -23,6 +23,8 @@ Local state lives under `%LocalAppData%\ModernImageViewer\` (`settings.json`, co
 
 WIC color-manages to sRGB. The draw path does **not** use Win2D `ColorManagementEffect`. Do not allocate a `ColorManagementProfile` unless a draw path consumes it.
 
+`.tif` and `.tiff` use that same decode. A multi-page TIFF shows its first page. A frame count above one is played only for other files, which is the GIF path.
+
 ## Image cache ownership
 
 `ImageCache` is the only writer of the shared decode cache.

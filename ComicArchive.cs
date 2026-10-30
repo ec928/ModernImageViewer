@@ -31,7 +31,7 @@ namespace ModernImageViewer
 
         private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
         {
-            ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".heic", ".heif", ".avif"
+            ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff", ".webp", ".heic", ".heif", ".avif"
         };
 
         private static readonly ConcurrentDictionary<string, SemaphoreSlim> ArchiveLocks = new(StringComparer.OrdinalIgnoreCase);

@@ -119,7 +119,7 @@ namespace ModernImageViewer.Cinematic.ViewModels
         private readonly HashSet<string> _sourceFolders = new(StringComparer.OrdinalIgnoreCase);
         private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
         {
-            ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".heic", ".heif", ".avif"
+            ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff", ".webp", ".heic", ".heif", ".avif"
         };
         private int _currentIndex;
         private string? _pendingNextClipId;
