@@ -104,6 +104,8 @@ namespace ModernImageViewer
         private ItemsWrapGrid? _imageWrapGrid;
         private readonly List<string> _recentFolders = [];
         private readonly List<string> _favouriteFolders = [];
+        // Activated and flyout Closed can still fire after the window closes; touching Content then throws and kills the app.
+        private bool _windowClosed;
 
         private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -166,6 +168,7 @@ namespace ModernImageViewer
 
             this.Closed += (s, e) =>
             {
+                _windowClosed = true;
                 CancelPreviewLoad();
                 RootGrid.RemoveHandler(UIElement.KeyDownEvent, _globalKeyDownHandler);
                 RootGrid.RemoveHandler(UIElement.KeyUpEvent, _globalKeyUpHandler);

@@ -1128,7 +1128,7 @@ namespace ModernImageViewer
 
         private void FocusGrid()
         {
-            if (RootGrid == null) return;
+            if (RootGrid == null || _windowClosed) return;
             if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible)
             {
                 ViewerControl.Focus(FocusState.Programmatic);
@@ -1139,7 +1139,7 @@ namespace ModernImageViewer
             RootGrid.Focus(FocusState.Programmatic);
             DispatcherQueue?.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
             {
-                if (RootGrid == null) return;
+                if (RootGrid == null || _windowClosed) return;
                 if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible) return;
                 if (TileKeyFocusStays()) return;
                 if (SidebarView != null && SidebarView.IsPaneOpen && FocusIsInside(SidebarPane)) return;
@@ -1998,6 +1998,7 @@ namespace ModernImageViewer
 
         private bool TileKeyFocusStays()
         {
+            if (_windowClosed) return false;
             var xamlRoot = this.Content?.XamlRoot;
             if (xamlRoot == null) return false;
             if (Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(xamlRoot) is not DependencyObject node)
