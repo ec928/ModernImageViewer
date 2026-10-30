@@ -1055,38 +1055,197 @@ namespace ModernImageViewer
             if (item != null) item.IsChecked = on;
         }
 
-        private void RecentFoldersMenu_Opening(object s, object e)
+        private const int MaxRecentFolders = 10;
+        private const int MaxFavouriteFolders = 10;
+
+        private Grid? _folderMenuHoverRow;
+        private readonly List<Action> _folderMenuStarSyncs = [];
+
+        private void RecentFoldersMenu_Opening(object s, object e) => BuildRecentFoldersMenu(null, FocusState.Programmatic);
+
+        // Favourites on top (filled star, always shown), then recent folders (outline star on hover or keyboard focus).
+        // A favourite is not listed again under Recent. Starring rebuilds the menu in place, so it stays open.
+        private void BuildRecentFoldersMenu(string? focusStarFor, FocusState focusHow)
         {
-            if (RecentFoldersMenu != null)
+            if (RecentFoldersMenu == null) return;
+            _folderMenuHoverRow = null;
+            _folderMenuStarSyncs.Clear();
+            var panel = new StackPanel { MinWidth = 280, XYFocusKeyboardNavigation = XYFocusKeyboardNavigationMode.Enabled };
+            var recents = _recentFolders.Where(p => !IsFavouriteFolder(p)).Take(MaxRecentFolders).ToList();
+            Button? focusTarget = null;
+
+            if (_favouriteFolders.Count > 0)
             {
-                RecentFoldersMenu.Items.Clear();
-                if (_recentFolders.Count == 0)
-                {
-                    RecentFoldersMenu.Items.Add(new MenuFlyoutItem { Text = "No recent folders", IsEnabled = false });
-                    return;
-                }
-                foreach (var p in _recentFolders)
-                {
-                    var i = new MenuFlyoutItem { Text = p, Icon = new SymbolIcon(Symbol.Folder) };
-                    i.Click += async (s2, ev) =>
-                    {
-                        var text = (s2 as MenuFlyoutItem)?.Text;
-                        if (!string.IsNullOrEmpty(text)) await ScanFolder(text);
-                    };
-                    RecentFoldersMenu.Items.Add(i);
-                }
-                RecentFoldersMenu.Items.Add(new MenuFlyoutSeparator());
-                var clearItem = new MenuFlyoutItem { Text = "Clear Recent Folders", Icon = new SymbolIcon(Symbol.Delete) };
-                clearItem.Click += ClearRecentFolders_Click;
-                RecentFoldersMenu.Items.Add(clearItem);
+                panel.Children.Add(FolderMenuHeader(_favouriteFolders.Count >= MaxFavouriteFolders
+                    ? $"Favourites ({MaxFavouriteFolders} of {MaxFavouriteFolders})"
+                    : "Favourites"));
+                foreach (var p in _favouriteFolders)
+                    panel.Children.Add(FolderMenuRow(p, favourite: true, focusStarFor, ref focusTarget));
+                panel.Children.Add(FolderMenuDivider());
+                panel.Children.Add(FolderMenuHeader("Recent"));
             }
+
+            if (recents.Count == 0)
+            {
+                panel.Children.Add(new TextBlock
+                {
+                    Text = "No recent folders",
+                    Style = (Style)RootGrid.Resources["FolderMenuEmptyTextStyle"],
+                });
+            }
+            else
+            {
+                foreach (var p in recents)
+                    panel.Children.Add(FolderMenuRow(p, favourite: false, focusStarFor, ref focusTarget));
+                panel.Children.Add(FolderMenuDivider());
+                var clear = FolderMenuButton(new SymbolIcon(Symbol.Delete), "Clear Recent Folders", bold: false);
+                clear.Click += (s2, ev) =>
+                {
+                    RecentFoldersMenu.Hide();
+                    ClearRecentFolders_Click(s2, ev);
+                };
+                panel.Children.Add(clear);
+            }
+
+            RecentFoldersMenu.Content = panel;
+            if (focusTarget != null)
+                focusTarget.Loaded += (s2, ev) => focusTarget.Focus(focusHow);
+        }
+
+        private void SetFolderMenuHover(Grid? row)
+        {
+            _folderMenuHoverRow = row;
+            foreach (var sync in _folderMenuStarSyncs) sync();
+        }
+
+        private Grid FolderMenuRow(string path, bool favourite, string? focusStarFor, ref Button? focusTarget)
+        {
+            bool available = Directory.Exists(path) || (ComicArchive.IsComicArchivePath(path) && File.Exists(path));
+            bool current = string.Equals(path, _currentDirectory, StringComparison.OrdinalIgnoreCase);
+
+            var open = FolderMenuButton(new SymbolIcon(Symbol.Folder), available ? path : path + "  (not available)", bold: current);
+            open.IsEnabled = available;
+            open.Click += async (s2, ev) =>
+            {
+                RecentFoldersMenu.Hide();
+                await ScanFolder(path);
+            };
+
+            bool full = !favourite && _favouriteFolders.Count >= MaxFavouriteFolders;
+            var star = new Button
+            {
+                Style = (Style)RootGrid.Resources["FolderMenuRowButtonStyle"],
+                Content = new FontIcon { Glyph = favourite ? "" : "", FontSize = 14 },
+                Width = 32,
+                Height = 32,
+                Padding = new Thickness(0),
+                Margin = new Thickness(2, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                IsEnabled = !full,
+            };
+            ToolTipService.SetToolTip(star, favourite ? "Remove from favourites" : "Add to favourites");
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(star, (favourite ? "Remove from favourites: " : "Add to favourites: ") + path);
+            star.Click += (s2, ev) =>
+            {
+                // Keep keyboard users on the moved star; after a click, focus moves quietly so no star lights up.
+                var how = star.FocusState == FocusState.Keyboard ? FocusState.Keyboard : FocusState.Programmatic;
+                ToggleFavouriteFolder(path);
+                BuildRecentFoldersMenu(path, how);
+            };
+
+            var row = new Grid();
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            Grid.SetColumn(star, 1);
+            row.Children.Add(open);
+            row.Children.Add(star);
+
+            // One hovered row at a time for the whole menu, so a missed PointerExited cannot leave a second star lit.
+            row.PointerEntered += (s2, ev) => SetFolderMenuHover(row);
+            row.PointerExited += (s2, ev) => { if (ReferenceEquals(_folderMenuHoverRow, row)) SetFolderMenuHover(null); };
+            if (!favourite)
+            {
+                // The outline star shows on the row under the pointer, or on the row with keyboard focus --
+                // not on focus the menu sets itself when it opens or rebuilds.
+                void Sync() => star.Opacity = ReferenceEquals(_folderMenuHoverRow, row)
+                    || open.FocusState == FocusState.Keyboard || star.FocusState == FocusState.Keyboard ? 1 : 0;
+                star.Opacity = 0;
+                _folderMenuStarSyncs.Add(Sync);
+                open.GotFocus += (s2, ev) => Sync();
+                open.LostFocus += (s2, ev) => Sync();
+                star.GotFocus += (s2, ev) => Sync();
+                star.LostFocus += (s2, ev) => Sync();
+            }
+
+            if (focusStarFor != null && string.Equals(path, focusStarFor, StringComparison.OrdinalIgnoreCase))
+                focusTarget = star;
+            return row;
+        }
+
+        private Button FolderMenuButton(IconElement icon, string text, bool bold)
+        {
+            var content = new Grid { ColumnSpacing = 12 };
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var label = new TextBlock
+            {
+                Text = text,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center,
+                FontWeight = bold ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal,
+            };
+            ToolTipService.SetToolTip(label, text);
+            Grid.SetColumn(label, 1);
+            content.Children.Add(icon);
+            content.Children.Add(label);
+            var button = new Button
+            {
+                Style = (Style)RootGrid.Resources["FolderMenuRowButtonStyle"],
+                Content = content,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                Padding = new Thickness(11, 8, 11, 8),
+            };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, text);
+            return button;
+        }
+
+        // Colours come from styles in MainWindow.xaml: a ThemeResource there follows the menu's theme,
+        // while Application.Current.Resources hands back the app-level (light) brush.
+        private TextBlock FolderMenuHeader(string text) => new()
+        {
+            Text = text,
+            Style = (Style)RootGrid.Resources["FolderMenuHeaderTextStyle"],
+        };
+
+        private Microsoft.UI.Xaml.Shapes.Rectangle FolderMenuDivider() => new()
+        {
+            Style = (Style)RootGrid.Resources["FolderMenuDividerStyle"],
+        };
+
+        private bool IsFavouriteFolder(string path) =>
+            _favouriteFolders.Exists(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+
+        private void ToggleFavouriteFolder(string path)
+        {
+            int i = _favouriteFolders.FindIndex(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+            if (i >= 0) _favouriteFolders.RemoveAt(i);
+            else if (_favouriteFolders.Count < MaxFavouriteFolders) _favouriteFolders.Add(path);
+            else return;
+            SaveAllSettings();
         }
 
         private void AddFolderToRecent(string p)
         {
             _recentFolders.Remove(p);
             _recentFolders.Insert(0, p);
-            if (_recentFolders.Count > 10) _recentFolders.RemoveAt(10);
+            // Favourites stay in the history (so unstarring puts them back) but do not count towards the cap.
+            int kept = 0;
+            for (int i = 0; i < _recentFolders.Count; i++)
+            {
+                if (IsFavouriteFolder(_recentFolders[i])) continue;
+                if (++kept > MaxRecentFolders) _recentFolders.RemoveAt(i--);
+            }
         }
 
         private void RootGrid_DragOver(object s, DragEventArgs e) => e.AcceptedOperation = DataPackageOperation.Copy;

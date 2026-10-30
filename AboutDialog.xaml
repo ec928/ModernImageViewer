@@ -56,6 +56,9 @@
                     <Run Text="&#x2022;  "/><Run Text="Tile &amp; List View modes" FontWeight="SemiBold"/><Run Text=" &#x2014; switch between resizable thumbnail grids and high-density multi-column lists with a live metadata and image preview bar."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
+                    <Run Text="&#x2022;  "/><Run Text="Favourite folders" FontWeight="SemiBold"/><Run Text=" &#x2014; star up to 10 folders in the Favourites and Recent Folders menu to keep them; they stay until you remove them."/>
+                </TextBlock>
+                <TextBlock Style="{StaticResource AboutBullet}">
                     <Run Text="&#x2022;  "/><Run Text="Multi-View" FontWeight="SemiBold"/><Run Text=" &#x2014; compare up to 16 photos in rows or columns of your choosing, with hero layouts, draggable edges, Alt+drag to swap, and JPEG export."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">

@@ -28,6 +28,24 @@
                 <Setter Property="CornerRadius" Value="4"/>
                 <Setter Property="IsTabStop" Value="False"/>
             </Style>
+            <Style x:Key="FolderMenuRowButtonStyle" TargetType="Button" BasedOn="{StaticResource SubtleButtonStyle}">
+                <Setter Property="MinWidth" Value="0"/>
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="CornerRadius" Value="4"/>
+            </Style>
+            <Style x:Key="FolderMenuHeaderTextStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}"/>
+                <Setter Property="Margin" Value="11,8,11,4"/>
+            </Style>
+            <Style x:Key="FolderMenuEmptyTextStyle" TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorDisabledBrush}"/>
+                <Setter Property="Margin" Value="11,8,11,8"/>
+            </Style>
+            <Style x:Key="FolderMenuDividerStyle" TargetType="Rectangle">
+                <Setter Property="Height" Value="1"/>
+                <Setter Property="Margin" Value="-4,4,-4,4"/>
+                <Setter Property="Fill" Value="{ThemeResource DividerStrokeColorDefaultBrush}"/>
+            </Style>
         </Grid.Resources>
 
         <Grid.RowDefinitions>
@@ -59,16 +77,18 @@
                             <Button Style="{StaticResource HeaderButtonStyle}" Click="BrowseButton_Click" ToolTipService.ToolTip="Browse Folders">
                                 <FontIcon x:Name="HeaderFolderIcon" Glyph="&#xE8B7;" FontFamily="Segoe Fluent Icons" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             </Button>
-                            <Button Style="{StaticResource HeaderButtonStyle}" ToolTipService.ToolTip="Recent Folders">
+                            <Button Style="{StaticResource HeaderButtonStyle}" ToolTipService.ToolTip="Favourites and Recent Folders" AutomationProperties.Name="Favourites and Recent Folders">
                                 <FontIcon Glyph="&#xE8F1;" FontFamily="Segoe Fluent Icons" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 <Button.Flyout>
-                                    <MenuFlyout x:Name="RecentFoldersMenu" Opening="RecentFoldersMenu_Opening" Closed="HeaderFlyout_Closed">
-                                        <MenuFlyout.MenuFlyoutPresenterStyle>
-                                            <Style TargetType="MenuFlyoutPresenter">
+                                    <Flyout x:Name="RecentFoldersMenu" Placement="BottomEdgeAlignedLeft" Opening="RecentFoldersMenu_Opening" Closed="HeaderFlyout_Closed">
+                                        <Flyout.FlyoutPresenterStyle>
+                                            <Style TargetType="FlyoutPresenter">
                                                 <Setter Property="CornerRadius" Value="10"/>
+                                                <Setter Property="Padding" Value="4"/>
+                                                <Setter Property="MaxWidth" Value="900"/>
                                             </Style>
-                                        </MenuFlyout.MenuFlyoutPresenterStyle>
-                                    </MenuFlyout>
+                                        </Flyout.FlyoutPresenterStyle>
+                                    </Flyout>
                                 </Button.Flyout>
                                 <Button.ContextFlyout>
                                     <MenuFlyout Closed="HeaderFlyout_Closed">

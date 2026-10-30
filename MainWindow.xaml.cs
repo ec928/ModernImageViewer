@@ -103,6 +103,7 @@ namespace ModernImageViewer
 
         private ItemsWrapGrid? _imageWrapGrid;
         private readonly List<string> _recentFolders = [];
+        private readonly List<string> _favouriteFolders = [];
 
         private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -341,6 +342,7 @@ namespace ModernImageViewer
             public string ThemeMode { get; set; } = "System";
             public List<WindowPreset?> WindowPresets { get; set; } = new() { null, null, null };
             public List<string> RecentFolders { get; set; } = new();
+            public List<string> FavouriteFolders { get; set; } = new();
         }
 
         private void ConfigureWindow(bool forceReset)
@@ -447,6 +449,14 @@ namespace ModernImageViewer
             {
                 if (Directory.Exists(folder) && !_recentFolders.Contains(folder))
                     _recentFolders.Add(folder);
+            }
+
+            // Favourites are kept even when the folder is missing (an unplugged drive); only the user removes them.
+            _favouriteFolders.Clear();
+            foreach (var folder in settings.FavouriteFolders)
+            {
+                if (!string.IsNullOrWhiteSpace(folder) && !IsFavouriteFolder(folder) && _favouriteFolders.Count < MaxFavouriteFolders)
+                    _favouriteFolders.Add(folder);
             }
 
             if (ViewerControl != null)
@@ -633,6 +643,7 @@ namespace ModernImageViewer
                 _currentSettings.ImageEditorPath = ImageEditorPath;
                 _currentSettings.SortOrder = _currentSettings.SortOrder; // Will be updated when sorting, just to keep it
                 _currentSettings.RecentFolders = new List<string>(_recentFolders);
+                _currentSettings.FavouriteFolders = new List<string>(_favouriteFolders);
                 if (ThumbSizeSlider != null) _currentSettings.TileSize = Math.Round(ThumbSizeSlider.Value);
 
                 string json = System.Text.Json.JsonSerializer.Serialize(_currentSettings, new System.Text.Json.JsonSerializerOptions

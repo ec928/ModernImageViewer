@@ -14,6 +14,8 @@ A high-performance, hardware-accelerated image viewer built for creators, 3D art
 
 **Comic Book Reader (`.cbz` / `.cbr`) & Dual View Modes** — Browse folders in responsive Tile View or high-density multi-column List View with an instant metadata/thumbnail inspector, and read `.cbz`/`.cbr` comic archives natively with 2-page spread mode (`B`).
 
+**Favourite Folders** — Star up to 10 folders in the Favourites and Recent Folders menu to keep them above your 10 most recent folders. A favourite stays until you remove it, even when its drive is unplugged, and Clear Recent Folders leaves favourites alone.
+
 **Multi-View** — Compare up to 16 photos in one window. Set how many rows or columns and how many photos sit in each, give one or two photos a hero spot, drag the edges between photos, swap photos with Alt+drag, and save the result as a JPEG. See [Multi-View](#-multi-view) below.
 
 **Collage and Cinematic (beta)** — In-app collage editor, and a cinematic slideshow whose show you can edit: reorder, hide and duplicate slides, hold a Ken Burns move on one slide, and save or reload the show. These are still being hardened; save often.
