@@ -1715,11 +1715,32 @@ namespace ModernImageViewer
             cellGrid.Children.Add(rimGlowStroke);
 
             AttachSwapDrop(cellBorder, cellGrid, photo);
-            cellBorder.Tag = new CellParts(transform, updateLayout, topControls, fullImg, photo, positionBadge, badgeText, dashedStroke, rimGlowStroke);
+
+            var slotGrid = new Grid
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch
+            };
+
+            var gutterBorder = new Border
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch,
+                IsHitTestVisible = false
+            };
+            Canvas.SetZIndex(gutterBorder, 0);
+            Canvas.SetZIndex(cellBorder, 1);
+
+            slotGrid.Children.Add(gutterBorder);
+            slotGrid.Children.Add(cellBorder);
+
+            var parts = new CellParts(transform, updateLayout, topControls, fullImg, photo, positionBadge, badgeText, dashedStroke, rimGlowStroke, gutterBorder);
+            cellBorder.Tag = parts;
+            slotGrid.Tag = parts;
 
             cellBorder.Child = cellGrid;
             ApplyBorderToCellBorder(cellBorder, cellGrid, photo.Item);
-            return cellBorder;
+            return slotGrid;
         }
 
         private Button CreateNudgeButton(string glyph, Func<string> tip, Action move)
@@ -1852,7 +1873,7 @@ namespace ModernImageViewer
             public CellPhoto(ImageItem item) => Item = item;
         }
 
-        private sealed record CellParts(CompositeTransform Transform, Action UpdateLayout, UIElement TopControls, Image Photo, CellPhoto Bound, Border PositionBadge, TextBlock BadgeText, Microsoft.UI.Xaml.Shapes.Rectangle DashedStroke, Microsoft.UI.Xaml.Shapes.Rectangle? RimGlowStroke = null);
+        private sealed record CellParts(CompositeTransform Transform, Action UpdateLayout, UIElement TopControls, Image Photo, CellPhoto Bound, Border PositionBadge, TextBlock BadgeText, Microsoft.UI.Xaml.Shapes.Rectangle DashedStroke, Microsoft.UI.Xaml.Shapes.Rectangle? RimGlowStroke = null, Border? GutterHost = null);
 
         /// <summary>
         /// Remove a photo and keep the other cells, so none of them decodes again. The layout is rebuilt

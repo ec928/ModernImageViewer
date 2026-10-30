@@ -393,7 +393,7 @@ namespace ModernImageViewer
             });
             content.Children.Add(new TextBlock
             {
-                Text = $"+{extraCount} more layouts in folder…",
+                Text = $"+{extraCount} more layouts in folderâ€¦",
                 FontSize = 11.5,
                 Foreground = _menuWhiteSecondary,
                 VerticalAlignment = VerticalAlignment.Center
@@ -687,7 +687,21 @@ namespace ModernImageViewer
 
             for (int i = 0; i < count; i++)
             {
-                if (_cellRoots[i] is not Border root || root.Child is not Grid cell || cell.ActualWidth < 1 || cell.ActualHeight < 1)
+                var rootElem = _cellRoots[i];
+                if (rootElem == null) continue;
+                Border? root = rootElem as Border;
+                if (root == null && rootElem is Grid slotGrid)
+                {
+                    foreach (var child in slotGrid.Children)
+                    {
+                        if (child is Border b && b.Child is Grid)
+                        {
+                            root = b;
+                            break;
+                        }
+                    }
+                }
+                if (root == null || root.Child is not Grid cell || cell.ActualWidth < 1 || cell.ActualHeight < 1)
                     continue;
                 Grid? container = null;
                 foreach (var child in cell.Children)
@@ -707,7 +721,7 @@ namespace ModernImageViewer
                 int nativeW = bitmap.PixelWidth;
                 int nativeH = bitmap.PixelHeight;
 
-                Rect bounds = cell.TransformToVisual(CellsGrid).TransformBounds(new Rect(0, 0, cell.ActualWidth, cell.ActualHeight));
+                Rect bounds = rootElem.TransformToVisual(CellsGrid).TransformBounds(new Rect(0, 0, rootElem.ActualWidth, rootElem.ActualHeight));
                 Rect cardBounds = root.TransformToVisual(CellsGrid).TransformBounds(new Rect(0, 0, root.ActualWidth, root.ActualHeight));
                 if (container.RenderTransform is not CompositeTransform transform) continue;
                 shots.Add(new CellShot
@@ -768,6 +782,30 @@ namespace ModernImageViewer
                 double cardY = shot.Card.Y * scaleY;
                 double cardW = shot.Card.Width * scaleX;
                 double cardH = shot.Card.Height * scaleY;
+
+                // 0. Draw Gutter Mat Background (Receiver surface for drop shadow)
+                if (shot.Border != null && !string.IsNullOrEmpty(shot.Border.GutterMaterial) && !string.Equals(shot.Border.GutterMaterial, "None", StringComparison.OrdinalIgnoreCase))
+                {
+                    using var matSession = target.CreateDrawingSession();
+                    float slotX = (float)(shot.Cell.X * scaleX);
+                    float slotY = (float)(shot.Cell.Y * scaleY);
+                    float slotW = (float)(shot.Cell.Width * scaleX);
+                    float slotH = (float)(shot.Cell.Height * scaleY);
+
+                    if (string.Equals(shot.Border.GutterMaterial, "Acrylic", StringComparison.OrdinalIgnoreCase))
+                    {
+                        matSession.FillRectangle(slotX, slotY, slotW, slotH, Color.FromArgb(45, 255, 255, 255));
+                        matSession.DrawRectangle(slotX, slotY, slotW, slotH, Color.FromArgb(70, 255, 255, 255), (float)Math.Max(1, 1.0 * scaleX));
+                    }
+                    else
+                    {
+                        var matColor = ParseColor(shot.Border.GutterColor);
+                        if (matColor.A > 0)
+                        {
+                            matSession.FillRectangle(slotX, slotY, slotW, slotH, matColor);
+                        }
+                    }
+                }
 
                 // 1. Draw Drop Shadow or Ambient Rim Glow
                 if (shot.Border != null && shot.Border.ShadowIntensity > 0)

@@ -133,7 +133,9 @@ namespace ModernImageViewer.Tests
                             CornerRadius = 12.0,
                             ShadowIntensity = 45.0,
                             StrokeStyle = "InnerMuted",
-                            RimGlow = true
+                            RimGlow = true,
+                            GutterColor = "#FFF8F8F8",
+                            GutterMaterial = "Solid"
                         }
                     },
                     new()
@@ -173,6 +175,8 @@ namespace ModernImageViewer.Tests
             Assert.Equal("InnerMuted", b0.StrokeStyle);
             Assert.True(b0.RimGlow);
             Assert.Equal(8.0, b0.Gutter);
+            Assert.Equal("#FFF8F8F8", b0.GutterColor);
+            Assert.Equal("Solid", b0.GutterMaterial);
 
             var b1 = loaded.Photos[1].Border;
             Assert.NotNull(b1);
