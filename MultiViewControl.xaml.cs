@@ -1128,6 +1128,28 @@ namespace ModernImageViewer
         {
             _hudMenusOpen++;
             ShowHudAndOverlays();
+            EnforceDarkFlyoutPresenter();
+        }
+
+        private void EnforceDarkFlyoutPresenter()
+        {
+            if (XamlRoot == null) return;
+            try
+            {
+                var popups = VisualTreeHelper.GetOpenPopupsForXamlRoot(XamlRoot);
+                foreach (var popup in popups)
+                {
+                    if (popup.Child is MenuFlyoutPresenter presenter)
+                    {
+                        presenter.RequestedTheme = ElementTheme.Dark;
+                        presenter.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(242, 32, 32, 32));
+                        presenter.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(51, 255, 255, 255));
+                        presenter.BorderThickness = new Thickness(1);
+                        presenter.CornerRadius = new CornerRadius(10);
+                    }
+                }
+            }
+            catch { }
         }
 
         private void HudMenu_Closed(object? sender, object e)
@@ -1656,10 +1678,17 @@ namespace ModernImageViewer
             cellGrid.Children.Add(positionBadge);
 
             // Right-Click Context Menu, filled when it opens so it names the photo's current place
-            var menu = new MenuFlyout();
+            var menu = new MenuFlyout
+            {
+                MenuFlyoutPresenterStyle = (Style)Resources["MultiViewMenuFlyoutPresenterStyle"]
+            };
             FillCellMenu(menu, photo.Item);
             menu.Opening += (_, _) => FillCellMenu(menu, photo.Item);
-            menu.Opened += (_, _) => ShowPositionBadges(Slot(photo.Item));
+            menu.Opened += (_, _) =>
+            {
+                ShowPositionBadges(Slot(photo.Item));
+                EnforceDarkFlyoutPresenter();
+            };
             menu.Closed += (_, _) => HidePositionBadges();
 
             cellGrid.ContextFlyout = menu;

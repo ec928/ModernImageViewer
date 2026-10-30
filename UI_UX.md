@@ -155,6 +155,9 @@ Multi-View enables comparative inspection of up to 16 images in fluid mosaics:
    - Clicking Solo/Maximize expands the chosen photo to fill the canvas while preserving all multi-view layout state.
    - The top-left info HUD is identical in visual treatment and data layout to the Single Viewer inspection HUD.
    - Exit button returns cleanly to the mosaic view.
+5. **Immersive Dark Flyout & Menu Presenters**:
+   - The photo canvas and floating playbar are an immersive dark surface. All playbar flyouts (Aspect menu, Save resolutions) and photo cell context menus must render with a dark background (`#F2202020`), subtle 1px border (`#33FFFFFF`), `CornerRadius="10"`, and white text.
+   - **WinUI 3 Trap Avoided**: Setting only `<Setter Property="RequestedTheme" Value="Dark" />` on `MenuFlyoutPresenter` causes the presenter's template background to resolve against the Light popup root while child items turn white (resulting in white text on a light beige background). Menus hosted in `XamlRoot` must explicitly set `Background="#F2202020"` and `BorderBrush="#33FFFFFF"` via `MultiViewMenuFlyoutPresenterStyle` and enforce dark styling on open.
 
 ---
 
