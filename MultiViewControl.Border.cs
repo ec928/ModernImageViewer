@@ -1,11 +1,13 @@
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using System;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Numerics;
+using System.Runtime.InteropServices.WindowsRuntime;
+using Microsoft.UI.Xaml.Automation;
 using Windows.Foundation;
 using Windows.UI;
 
@@ -15,6 +17,8 @@ namespace ModernImageViewer
     {
         private readonly Dictionary<string, CellBorderDto> _itemBorders = new(StringComparer.OrdinalIgnoreCase);
         private static CellBorderDto? _lastBorderSettings;
+        private CellBorderDto? _openFrameBorder;
+        private int _frameFlyoutTicket;
         private Flyout? _cellBorderFlyout;
 
         public CellBorderDto GetBorderForItem(ImageItem? item)
@@ -41,29 +45,11 @@ namespace ModernImageViewer
 
         public static Color ParseColor(string? hex)
         {
-            if (string.IsNullOrWhiteSpace(hex)) return Color.FromArgb(0, 0, 0, 0);
-            hex = hex.Trim().TrimStart('#');
-            if (hex.Length == 6)
-            {
-                if (byte.TryParse(hex.Substring(0, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out byte r) &&
-                    byte.TryParse(hex.Substring(2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out byte g) &&
-                    byte.TryParse(hex.Substring(4, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out byte b))
-                {
-                    return Color.FromArgb(255, r, g, b);
-                }
-            }
-            else if (hex.Length == 8)
-            {
-                if (byte.TryParse(hex.Substring(0, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out byte a) &&
-                    byte.TryParse(hex.Substring(2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out byte r) &&
-                    byte.TryParse(hex.Substring(4, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out byte g) &&
-                    byte.TryParse(hex.Substring(6, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out byte b))
-                {
-                    return Color.FromArgb(a, r, g, b);
-                }
-            }
-            return Color.FromArgb(255, 255, 255, 255);
+            var c = FrameColor.Parse(hex);
+            return Color.FromArgb(c.A, c.R, c.G, c.B);
         }
+
+        private static Color ToColor(FrameColor.Rgba c) => Color.FromArgb(c.A, c.R, c.G, c.B);
 
         public static SolidColorBrush ParseBorderBrush(string? hex)
         {
@@ -75,18 +61,7 @@ namespace ModernImageViewer
             if ((uint)index >= (uint)_cellRoots.Length) return;
             var root = _cellRoots[index];
             if (root == null) return;
-            Border? cellBorder = root as Border;
-            if (cellBorder == null && root is Grid slotGrid)
-            {
-                foreach (var child in slotGrid.Children)
-                {
-                    if (child is Border b && b.Child is Grid)
-                    {
-                        cellBorder = b;
-                        break;
-                    }
-                }
-            }
+            Border? cellBorder = CardBorder(root);
             if (cellBorder == null) return;
             if ((uint)index >= (uint)_items.Count) return;
 
@@ -112,63 +87,38 @@ namespace ModernImageViewer
                 gutterHost = parts.GutterHost;
             }
 
-            // Gutter Host Material & Color styling
+            // The mat fills the rectangular cell. The card above it is what rounds.
             if (gutterHost != null)
             {
-                string mat = border.GutterMaterial ?? "None";
-                if (string.Equals(mat, "Acrylic", StringComparison.OrdinalIgnoreCase))
-                {
-                    gutterHost.Background = new SolidColorBrush(Color.FromArgb(45, 255, 255, 255));
-                    gutterHost.BorderBrush = new SolidColorBrush(Color.FromArgb(70, 255, 255, 255));
-                    gutterHost.BorderThickness = new Thickness(1);
-                    gutterHost.CornerRadius = new CornerRadius(Math.Max(4, border.CornerRadius + 2));
-                }
-                else if (string.Equals(mat, "Solid", StringComparison.OrdinalIgnoreCase) ||
-                         (!string.IsNullOrEmpty(border.GutterColor) && border.GutterColor != "#00000000"))
-                {
-                    Color matColor = ParseColor(border.GutterColor ?? "#FFF8F8F8");
-                    gutterHost.Background = new SolidColorBrush(matColor);
-                    gutterHost.BorderBrush = null;
-                    gutterHost.BorderThickness = new Thickness(0);
-                    gutterHost.CornerRadius = new CornerRadius(border.CornerRadius);
-                }
-                else // None / Void
-                {
+                gutterHost.Margin = new Thickness(0);
+                var mat = FrameColor.MatFill(border.GutterMaterial, border.GutterColor);
+                gutterHost.BorderBrush = null;
+                gutterHost.BorderThickness = new Thickness(0);
+                gutterHost.CornerRadius = new CornerRadius(0);
+                if (mat.A > 0)
+                    gutterHost.Background = new SolidColorBrush(ToColor(mat));
+                else
                     gutterHost.Background = null;
-                    gutterHost.BorderBrush = null;
-                    gutterHost.BorderThickness = new Thickness(0);
-                }
             }
 
-            // Shadow & Rim Glow
-            if (border.ShadowIntensity > 0)
+            cellBorder.Shadow = null;
+            ApplyDropShadow(gutterHost, border);
+
+            if (border.ShadowIntensity > 0 && border.RimGlow)
             {
-                if (border.RimGlow)
+                if (rimGlowRect != null)
                 {
-                    cellBorder.Shadow = null;
-                    cellBorder.Translation = Vector3.Zero;
-                    if (rimGlowRect != null)
-                    {
-                        rimGlowRect.Visibility = Visibility.Visible;
-                        byte alpha = (byte)Math.Clamp(border.ShadowIntensity * 2.1, 30, 240);
-                        rimGlowRect.Stroke = new SolidColorBrush(Color.FromArgb(alpha, 255, 255, 255));
-                        rimGlowRect.StrokeThickness = Math.Max(1.0, border.ShadowIntensity * 0.035 + 1.0);
-                        rimGlowRect.RadiusX = border.CornerRadius;
-                        rimGlowRect.RadiusY = border.CornerRadius;
-                    }
-                }
-                else
-                {
-                    if (rimGlowRect != null) rimGlowRect.Visibility = Visibility.Collapsed;
-                    cellBorder.Shadow = new ThemeShadow();
-                    cellBorder.Translation = new Vector3(0, 0, (float)(border.ShadowIntensity * 0.32f));
+                    rimGlowRect.Visibility = Visibility.Visible;
+                    byte alpha = (byte)Math.Clamp(border.ShadowIntensity * 2.1, 30, 240);
+                    rimGlowRect.Stroke = new SolidColorBrush(Color.FromArgb(alpha, 255, 255, 255));
+                    rimGlowRect.StrokeThickness = Math.Max(1.0, border.ShadowIntensity * 0.035 + 1.0);
+                    rimGlowRect.RadiusX = border.CornerRadius;
+                    rimGlowRect.RadiusY = border.CornerRadius;
                 }
             }
-            else
+            else if (rimGlowRect != null)
             {
-                if (rimGlowRect != null) rimGlowRect.Visibility = Visibility.Collapsed;
-                cellBorder.Shadow = null;
-                cellBorder.Translation = Vector3.Zero;
+                rimGlowRect.Visibility = Visibility.Collapsed;
             }
 
             // Stroke style application
@@ -180,12 +130,20 @@ namespace ModernImageViewer
 
                 if (dashedRect != null)
                 {
-                    dashedRect.Visibility = Visibility.Visible;
-                    dashedRect.Stroke = ParseBorderBrush(border.Color);
-                    dashedRect.StrokeThickness = Math.Max(1, border.Thickness);
-                    dashedRect.StrokeDashArray = new DoubleCollection { 3, 2 };
-                    dashedRect.RadiusX = border.CornerRadius;
-                    dashedRect.RadiusY = border.CornerRadius;
+                    var dash = FrameColor.Parse(border.Color);
+                    if (border.Thickness <= 0 || dash.A == 0)
+                    {
+                        dashedRect.Visibility = Visibility.Collapsed;
+                    }
+                    else
+                    {
+                        dashedRect.Visibility = Visibility.Visible;
+                        dashedRect.Stroke = new SolidColorBrush(ToColor(dash));
+                        dashedRect.StrokeThickness = border.Thickness;
+                        dashedRect.StrokeDashArray = new DoubleCollection { 3, 2 };
+                        dashedRect.RadiusX = border.CornerRadius;
+                        dashedRect.RadiusY = border.CornerRadius;
+                    }
                 }
             }
             else
@@ -194,35 +152,17 @@ namespace ModernImageViewer
 
                 if (string.Equals(style, "InnerMuted", StringComparison.OrdinalIgnoreCase))
                 {
-                    cellBorder.BorderThickness = new Thickness(1);
-                    if (Application.Current.Resources.TryGetValue("ControlElevationBorderBrush", out var brushObj) && brushObj is Brush b)
-                    {
-                        cellBorder.BorderBrush = b;
-                    }
-                    else
-                    {
-                        var lgb = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
-                        lgb.GradientStops.Add(new GradientStop { Color = Color.FromArgb(36, 255, 255, 255), Offset = 0.0 });
-                        lgb.GradientStops.Add(new GradientStop { Color = Color.FromArgb(14, 255, 255, 255), Offset = 1.0 });
-                        cellBorder.BorderBrush = lgb;
-                    }
+                    cellBorder.BorderThickness = new Thickness(Math.Max(0, border.Thickness));
+                    cellBorder.BorderBrush = new SolidColorBrush(ToColor(FrameColor.MutedStroke(border.Color)));
                 }
                 else if (string.Equals(style, "Gradient", StringComparison.OrdinalIgnoreCase))
                 {
-                    cellBorder.BorderThickness = new Thickness(Math.Max(1, border.Thickness));
-                    var primary = ParseColor(border.Color);
-                    Color secondary;
-                    if (!string.IsNullOrEmpty(border.SecondaryColor) && border.SecondaryColor != "#00000000")
-                    {
-                        secondary = ParseColor(border.SecondaryColor);
-                    }
-                    else
-                    {
-                        secondary = Color.FromArgb((byte)(primary.A * 0.40f), primary.R, primary.G, primary.B);
-                    }
+                    cellBorder.BorderThickness = new Thickness(Math.Max(0, border.Thickness));
+                    var primary = FrameColor.Parse(border.Color);
+                    var secondary = FrameColor.GradientEnd(border.SecondaryColor, primary);
                     var lgb = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 1) };
-                    lgb.GradientStops.Add(new GradientStop { Color = primary, Offset = 0.0 });
-                    lgb.GradientStops.Add(new GradientStop { Color = secondary, Offset = 1.0 });
+                    lgb.GradientStops.Add(new GradientStop { Color = ToColor(primary), Offset = 0.0 });
+                    lgb.GradientStops.Add(new GradientStop { Color = ToColor(secondary), Offset = 1.0 });
                     cellBorder.BorderBrush = lgb;
                 }
                 else // Solid
@@ -232,13 +172,6 @@ namespace ModernImageViewer
                 }
             }
 
-            if (cellGrid != null)
-            {
-                cellGrid.Clip = new RectangleGeometry
-                {
-                    Rect = new Rect(0, 0, Math.Max(0, cellGrid.ActualWidth), Math.Max(0, cellGrid.ActualHeight))
-                };
-            }
         }
 
         public void ApplyBorderToAllCells()
@@ -256,629 +189,372 @@ namespace ModernImageViewer
             if (slot < 0 || (uint)slot >= (uint)_cellRoots.Length) return;
             var targetElement = _cellRoots[slot] ?? (FrameworkElement)this;
 
+            // Remember the frame that was open, then ignore that panel's close so it cannot overwrite this one.
+            if (_openFrameBorder != null)
+                _lastBorderSettings = _openFrameBorder.Clone();
+            int ticket = ++_frameFlyoutTicket;
+            _cellBorderFlyout?.Hide();
+
             var border = GetBorderForItem(item);
+            _openFrameBorder = border;
+            CellBorderDto? remembered = _lastBorderSettings?.Clone();
+            bool syncing = false;
 
-            var panel = new StackPanel
+            Action? refreshColor = null;
+            Action? refreshEnd = null;
+            Action? refreshMatColor = null;
+            Action<int>? showStroke = null;
+            Action<int>? showPreset = null;
+            Action<int>? showMat = null;
+            TextBlock? colorLabel = null;
+            StackPanel? endBlock = null;
+            ToggleButton? glowToggle = null;
+            FontIcon? glowIcon = null;
+            TextBlock? glowText = null;
+
+            var thicknessRow = CreateSliderRow("Thickness", 0, 24, border.Thickness, "px", value =>
             {
-                Width = 330,
-                Spacing = 10
-            };
-
-            // 1. Title Header
-            var header = new TextBlock
+                if (syncing) return;
+                border.Thickness = value;
+                Touch();
+            }, out Slider thicknessSlider);
+            var radiusRow = CreateSliderRow("Corner radius", 0, 32, border.CornerRadius, "px", value =>
             {
-                Text = $"Frame & Border — Photo {slot + 1}",
-                FontSize = 14,
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Foreground = _menuWhitePrimary
-            };
-            panel.Children.Add(header);
-
-            // 2. Stroke Style Selector
-            var strokeLabel = new TextBlock
+                if (syncing) return;
+                border.CornerRadius = value;
+                Touch();
+            }, out Slider radiusSlider);
+            var gutterRow = CreateSliderRow("Gutter", 0, 48, border.Padding, "px", value =>
             {
-                Text = "Stroke Style",
-                FontSize = 11,
-                Foreground = _menuWhiteSecondary
-            };
-            panel.Children.Add(strokeLabel);
+                if (syncing) return;
+                border.Padding = value;
+                Touch();
+            }, out Slider gutterSlider);
+            Slider shadowSlider = null!;
+            TextBlock shadowValue = null!;
+            ToolTipService.SetToolTip(gutterRow, "How far this photo sits inside its cell. The photo beside it keeps its own inset.");
 
-            var strokeGrid = new Grid { ColumnSpacing = 4 };
-            strokeGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            strokeGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            strokeGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            strokeGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-            string[] strokeStyles = new[] { "Solid", "Dashed", "InnerMuted", "Gradient" };
-            string[] strokeDisplay = new[] { "Solid", "Dashed", "Muted", "Gradient" };
-            var strokeButtons = new List<Button>();
-
-            // Sliders reference declaration
-            Slider? thicknessSliderRef = null;
-            Slider? gapSliderRef = null;
-            Slider? radiusSliderRef = null;
-            Slider? shadowSliderRef = null;
-            TextBlock? color1LabelRef = null;
-            StackPanel? color2ContainerRef = null;
-            Action? updateSwatchesAction = null;
-            Action? updateSecondarySwatchesAction = null;
-
-            void UpdateStrokeSelection()
+            void StyleGlow()
             {
-                string cur = border.StrokeStyle ?? "Solid";
-                bool isGrad = string.Equals(cur, "Gradient", StringComparison.OrdinalIgnoreCase);
+                if (glowToggle == null || glowIcon == null || glowText == null) return;
+                bool on = glowToggle.IsChecked == true;
+                var fill = new SolidColorBrush(on ? Color.FromArgb(255, 62, 62, 62) : Color.FromArgb(0, 0, 0, 0));
+                var edge = new SolidColorBrush(on ? Color.FromArgb(180, 255, 255, 255) : Color.FromArgb(48, 255, 255, 255));
+                glowToggle.Background = fill;
+                glowToggle.BorderBrush = edge;
+                glowToggle.Resources["ToggleButtonBackground"] = fill;
+                glowToggle.Resources["ToggleButtonBackgroundChecked"] = fill;
+                glowToggle.Resources["ToggleButtonBackgroundCheckedPointerOver"] = fill;
+                glowToggle.Resources["ToggleButtonBackgroundPointerOver"] = new SolidColorBrush(Color.FromArgb(28, 255, 255, 255));
+                glowToggle.Resources["ToggleButtonBorderBrush"] = edge;
+                glowToggle.Resources["ToggleButtonBorderBrushChecked"] = edge;
+                glowIcon.Foreground = on ? _menuWhitePrimary : _menuWhiteSecondary;
+                glowText.Foreground = on ? _menuWhitePrimary : _menuWhiteSecondary;
+                glowText.FontWeight = on ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal;
+            }
 
-                for (int i = 0; i < strokeStyles.Length; i++)
+            void RefreshPanel()
+            {
+                showStroke?.Invoke(FrameIndex(new[] { "Solid", "Dashed", "InnerMuted", "Gradient" }, border.StrokeStyle));
+                showPreset?.Invoke(FrameLooks.Match(border));
+                showMat?.Invoke(FrameIndex(new[] { "None", "Solid", "Acrylic" }, border.GutterMaterial));
+                refreshColor?.Invoke();
+                refreshEnd?.Invoke();
+                refreshMatColor?.Invoke();
+                bool gradient = string.Equals(border.StrokeStyle, "Gradient", StringComparison.OrdinalIgnoreCase);
+                if (colorLabel != null) colorLabel.Text = gradient ? "Start color" : "Color";
+                if (endBlock != null) endBlock.Visibility = gradient ? Visibility.Visible : Visibility.Collapsed;
+                if (glowToggle != null)
                 {
-                    bool sel = string.Equals(cur, strokeStyles[i], StringComparison.OrdinalIgnoreCase);
-                    strokeButtons[i].Background = sel ? new SolidColorBrush(Color.FromArgb(70, 255, 255, 255)) : new SolidColorBrush(Color.FromArgb(20, 255, 255, 255));
-                    strokeButtons[i].BorderBrush = sel ? new SolidColorBrush(Color.FromArgb(180, 255, 255, 255)) : new SolidColorBrush(Color.FromArgb(40, 255, 255, 255));
+                    glowToggle.IsChecked = border.RimGlow;
+                    StyleGlow();
                 }
-
-                if (color1LabelRef != null) color1LabelRef.Text = isGrad ? "Gradient Color 1" : "Border Color";
-                if (color2ContainerRef != null) color2ContainerRef.Visibility = isGrad ? Visibility.Visible : Visibility.Collapsed;
             }
 
-            for (int i = 0; i < strokeStyles.Length; i++)
+            void Touch()
             {
-                string sName = strokeStyles[i];
-                var sBtn = new Button
-                {
-                    Content = new TextBlock { Text = strokeDisplay[i], FontSize = 11, Foreground = _menuWhitePrimary },
-                    HorizontalAlignment = HorizontalAlignment.Stretch,
-                    HorizontalContentAlignment = HorizontalAlignment.Center,
-                    Padding = new Thickness(2, 4, 2, 4),
-                    MinHeight = 28,
-                    CornerRadius = new CornerRadius(4),
-                    BorderThickness = new Thickness(1)
-                };
-                ToolTipService.SetToolTip(sBtn, sName switch
-                {
-                    "Solid" => "Solid line border",
-                    "Dashed" => "Dashed vector border",
-                    "InnerMuted" => "1px semi-transparent Fluent elevation border",
-                    "Gradient" => "Two-stop gradient frame effect",
-                    _ => sName
-                });
-                sBtn.Click += (_, _) =>
-                {
-                    border.StrokeStyle = sName;
-                    if (sName == "InnerMuted")
-                    {
-                        border.Thickness = 1;
-                        if (thicknessSliderRef != null) thicknessSliderRef.Value = 1;
-                    }
-                    else if (border.Thickness == 0)
-                    {
-                        border.Thickness = 2;
-                        if (thicknessSliderRef != null) thicknessSliderRef.Value = 2;
-                    }
-                    _lastBorderSettings = border.Clone();
-                    ApplyBorderToCell(slot);
-                    UpdateStrokeSelection();
-                };
-                Grid.SetColumn(sBtn, i);
-                strokeGrid.Children.Add(sBtn);
-                strokeButtons.Add(sBtn);
+                ApplyBorderToCell(slot);
+                RefreshPanel();
             }
-            panel.Children.Add(strokeGrid);
 
-            // 3. General Color & Surface Palette (Line / Stroke vs Gutter / Mat)
-            var paletteHeader = new Grid();
-            paletteHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            paletteHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-            var paletteTitle = new TextBlock
+            void ApplyLook(CellBorderDto source)
             {
-                Text = "Palette Target",
-                FontSize = 11,
+                syncing = true;
+                CopyFrame(border, source);
+                thicknessSlider.Value = border.Thickness;
+                radiusSlider.Value = border.CornerRadius;
+                gutterSlider.Value = border.Padding;
+                shadowSlider.Value = border.ShadowIntensity;
+                syncing = false;
+                Touch();
+            }
+
+            var body = new StackPanel { Spacing = 10, MinWidth = 300 };
+
+            var presetHeader = new Grid { VerticalAlignment = VerticalAlignment.Center };
+            presetHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            presetHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var presetLabel = SectionLabel("Presets");
+            presetLabel.Margin = new Thickness(0);
+            presetHeader.Children.Add(presetLabel);
+            var lastButton = new Button
+            {
+                Content = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 4,
+                    Children =
+                    {
+                        new FontIcon
+                        {
+                            Glyph = "\uE823",
+                            FontSize = 12,
+                            FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
+                            Foreground = _menuWhitePrimary
+                        },
+                        new TextBlock { Text = "Last", FontSize = 12, Foreground = _menuWhitePrimary, VerticalAlignment = VerticalAlignment.Center }
+                    }
+                },
+                IsEnabled = remembered != null,
+                Padding = new Thickness(8, 0, 8, 0),
+                MinWidth = 0,
+                MinHeight = 28,
+                CornerRadius = new CornerRadius(4),
+                BorderThickness = new Thickness(0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            PaintButton(lastButton, Color.FromArgb(0, 0, 0, 0), Color.FromArgb(28, 255, 255, 255), Color.FromArgb(16, 255, 255, 255));
+            ToolTipService.SetToolTip(lastButton, remembered == null
+                ? "Available after you close a frame"
+                : "Put back the frame from the last time this panel closed");
+            lastButton.Click += (_, _) =>
+            {
+                if (remembered != null) ApplyLook(remembered);
+            };
+            Grid.SetColumn(lastButton, 1);
+            presetHeader.Children.Add(lastButton);
+            body.Children.Add(presetHeader);
+
+            string[] presetNames = { "Card", "Mat", "Round", "Flush" };
+            var presetTrack = MakeSegment(presetNames, new[]
+            {
+                "Soft card, slight radius, rim light",
+                "Gallery mat with a square black line",
+                "Rounded gradient on a frosted mat",
+                "No line, mat, or shadow"
+            }, index =>
+            {
+                CellBorderDto source = index switch
+                {
+                    0 => FrameLooks.Card(),
+                    1 => FrameLooks.Mat(),
+                    2 => FrameLooks.Round(),
+                    _ => FrameLooks.Flush()
+                };
+                ApplyLook(source);
+            }, out var presetShow);
+            showPreset = presetShow;
+            body.Children.Add(presetTrack);
+
+            body.Children.Add(SectionLabel("Stroke"));
+            string[] strokeStyles = { "Solid", "Dashed", "InnerMuted", "Gradient" };
+            var strokeTrack = MakeSegment(new[] { "Solid", "Dashed", "Muted", "Gradient" }, new[]
+            {
+                "Solid line",
+                "Dashed line",
+                "Soft line in the chosen colour",
+                "Line that fades into a second colour"
+            }, index =>
+            {
+                border.StrokeStyle = strokeStyles[index];
+                if (border.Thickness <= 0)
+                {
+                    border.Thickness = strokeStyles[index] == "InnerMuted" ? 1 : 2;
+                    syncing = true;
+                    thicknessSlider.Value = border.Thickness;
+                    syncing = false;
+                }
+                Touch();
+            }, out var strokeShow);
+            showStroke = strokeShow;
+            body.Children.Add(strokeTrack);
+
+            colorLabel = SectionLabel("Color");
+            body.Children.Add(colorLabel);
+            (string Label, string Hex)[] lineColors =
+            {
+                ("Clear", "#00000000"),
+                ("White", "#FFFFFFFF"),
+                ("Black", "#FF000000"),
+                ("Charcoal", "#FF252525"),
+                ("Gold", "#FFFFC83B"),
+                ("Blue", "#FF0078D4"),
+                ("Red", "#FFD13438"),
+                ("Cyan", "#FF00B7C3")
+            };
+            var colorRow = MakeSwatches(lineColors, () => border.Color, hex =>
+            {
+                border.Color = hex;
+                if (border.Thickness <= 0 && !string.Equals(hex, "#00000000", StringComparison.OrdinalIgnoreCase))
+                {
+                    border.Thickness = 2;
+                    syncing = true;
+                    thicknessSlider.Value = 2;
+                    syncing = false;
+                }
+                Touch();
+            }, out var colorRefresh);
+            refreshColor = colorRefresh;
+            body.Children.Add(colorRow);
+
+            endBlock = new StackPanel { Spacing = 6 };
+            endBlock.Children.Add(SectionLabel("End color"));
+            (string Label, string Hex)[] endColors =
+            {
+                ("Fade", "#00000000"),
+                ("White", "#FFFFFFFF"),
+                ("Black", "#FF000000"),
+                ("Charcoal", "#FF252525"),
+                ("Gold", "#FFFFC83B"),
+                ("Blue", "#FF0078D4"),
+                ("Red", "#FFD13438"),
+                ("Cyan", "#FF00B7C3")
+            };
+            var endRow = MakeSwatches(endColors, () => border.SecondaryColor, hex =>
+            {
+                border.SecondaryColor = hex;
+                Touch();
+            }, out var endRefresh);
+            refreshEnd = endRefresh;
+            endBlock.Children.Add(endRow);
+            body.Children.Add(endBlock);
+
+            body.Children.Add(thicknessRow);
+            body.Children.Add(radiusRow);
+            body.Children.Add(gutterRow);
+
+            body.Children.Add(SectionLabel("Mat"));
+            string[] matStyles = { "None", "Solid", "Acrylic" };
+            var matTrack = MakeSegment(new[] { "None", "Solid", "Frosted" }, new[]
+            {
+                "No mat. The gutter shows the dark canvas",
+                "Flat colour in the gutter",
+                "The mat colour, translucent"
+            }, index =>
+            {
+                border.GutterMaterial = matStyles[index];
+                bool bare = string.IsNullOrEmpty(border.GutterColor) || string.Equals(border.GutterColor, "#00000000", StringComparison.OrdinalIgnoreCase);
+                if (matStyles[index] != "None" && bare)
+                    border.GutterColor = "#FFF8F8F8";
+                if (border.Padding <= 0 && matStyles[index] != "None")
+                {
+                    border.Padding = 16;
+                    syncing = true;
+                    gutterSlider.Value = 16;
+                    syncing = false;
+                }
+                Touch();
+            }, out var matShow);
+            showMat = matShow;
+            body.Children.Add(matTrack);
+
+            (string Label, string Hex)[] matColors =
+            {
+                ("None", "#00000000"),
+                ("Gallery white", "#FFF8F8F8"),
+                ("Warm cream", "#FFF3EFE6"),
+                ("Studio gray", "#FFE0E0E0"),
+                ("Charcoal", "#FF262626"),
+                ("Black", "#FF000000"),
+                ("Navy", "#FF182230"),
+                ("Gold", "#FFFFC83B")
+            };
+            var matRow = MakeSwatches(matColors, () => border.GutterColor, hex =>
+            {
+                border.GutterColor = hex;
+                if (string.Equals(hex, "#00000000", StringComparison.OrdinalIgnoreCase))
+                    border.GutterMaterial = "None";
+                else if (string.Equals(border.GutterMaterial, "None", StringComparison.OrdinalIgnoreCase))
+                    border.GutterMaterial = "Solid";
+                if (border.Padding <= 0 && !string.Equals(hex, "#00000000", StringComparison.OrdinalIgnoreCase))
+                {
+                    border.Padding = 16;
+                    syncing = true;
+                    gutterSlider.Value = 16;
+                    syncing = false;
+                }
+                Touch();
+            }, out var matColorRefresh);
+            refreshMatColor = matColorRefresh;
+            body.Children.Add(matRow);
+
+            var shadowHeader = new Grid { VerticalAlignment = VerticalAlignment.Center };
+            shadowHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            shadowHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            shadowHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            shadowHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var shadowTitle = new TextBlock
+            {
+                Text = "Shadow",
+                FontSize = 12,
                 Foreground = _menuWhiteSecondary,
                 VerticalAlignment = VerticalAlignment.Center
             };
-            Grid.SetColumn(paletteTitle, 0);
-            paletteHeader.Children.Add(paletteTitle);
-
-            var targetSelector = new StackPanel
+            shadowValue = new TextBlock
             {
-                Orientation = Orientation.Horizontal,
-                Spacing = 4,
+                Text = $"{(int)border.ShadowIntensity} %",
+                FontSize = 12,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = _menuWhitePrimary,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(8, 0, 0, 0)
+            };
+            shadowHeader.Children.Add(shadowTitle);
+            Grid.SetColumn(shadowValue, 1);
+            shadowHeader.Children.Add(shadowValue);
+
+            glowIcon = new FontIcon
+            {
+                Glyph = "\uE706",
+                FontSize = 12,
+                FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
                 VerticalAlignment = VerticalAlignment.Center
             };
-
-            var lineTargetBtn = new Button
-            {
-                Content = new TextBlock { Text = "Line / Stroke", FontSize = 10.5 },
-                Padding = new Thickness(7, 3, 7, 3),
-                MinHeight = 24,
-                CornerRadius = new CornerRadius(4),
-                BorderThickness = new Thickness(1)
-            };
-            var gutterTargetBtn = new Button
-            {
-                Content = new TextBlock { Text = "Gutter / Mat", FontSize = 10.5 },
-                Padding = new Thickness(7, 3, 7, 3),
-                MinHeight = 24,
-                CornerRadius = new CornerRadius(4),
-                BorderThickness = new Thickness(1)
-            };
-            targetSelector.Children.Add(lineTargetBtn);
-            targetSelector.Children.Add(gutterTargetBtn);
-            Grid.SetColumn(targetSelector, 1);
-            paletteHeader.Children.Add(targetSelector);
-            panel.Children.Add(paletteHeader);
-
-            var lineContainer = new StackPanel { Spacing = 6 };
-            var gutterContainer = new StackPanel { Spacing = 6 };
-
-            Action? updateMatSelectionAction = null;
-            Action? updateGutterSwatchesAction = null;
-            Button? matIndicatorBtnRef = null;
-
-            void UpdateMatIndicator()
-            {
-                if (matIndicatorBtnRef == null) return;
-                string m = border.GutterMaterial ?? "None";
-                string summary = m switch
-                {
-                    "Acrylic" => "Mat: Frosted Acrylic",
-                    "Solid" => string.Equals(border.GutterColor, "#FFF8F8F8", StringComparison.OrdinalIgnoreCase) ? "Mat: Gallery White" :
-                               string.Equals(border.GutterColor, "#FFF3EFE6", StringComparison.OrdinalIgnoreCase) ? "Mat: Warm Cream" :
-                               string.Equals(border.GutterColor, "#FFE0E0E0", StringComparison.OrdinalIgnoreCase) ? "Mat: Studio Gray" :
-                               string.Equals(border.GutterColor, "#FF262626", StringComparison.OrdinalIgnoreCase) ? "Mat: Charcoal" :
-                               string.Equals(border.GutterColor, "#FF000000", StringComparison.OrdinalIgnoreCase) ? "Mat: Black" :
-                               string.Equals(border.GutterColor, "#FF182230", StringComparison.OrdinalIgnoreCase) ? "Mat: Navy" :
-                               string.Equals(border.GutterColor, "#FFFFC83B", StringComparison.OrdinalIgnoreCase) ? "Mat: Gold" : "Mat: Solid Color",
-                    _ => "Mat: Void (Canvas)"
-                };
-                matIndicatorBtnRef.Content = new TextBlock { Text = summary, FontSize = 10.5, Foreground = _menuWhitePrimary };
-            }
-
-            void SwitchPaletteTarget(bool toLine)
-            {
-                lineContainer.Visibility = toLine ? Visibility.Visible : Visibility.Collapsed;
-                gutterContainer.Visibility = toLine ? Visibility.Collapsed : Visibility.Visible;
-
-                lineTargetBtn.Background = toLine ? new SolidColorBrush(Color.FromArgb(70, 255, 255, 255)) : new SolidColorBrush(Color.FromArgb(18, 255, 255, 255));
-                lineTargetBtn.BorderBrush = toLine ? new SolidColorBrush(Color.FromArgb(180, 255, 255, 255)) : new SolidColorBrush(Color.FromArgb(40, 255, 255, 255));
-                lineTargetBtn.Foreground = toLine ? _menuWhitePrimary : _menuWhiteSecondary;
-
-                gutterTargetBtn.Background = !toLine ? new SolidColorBrush(Color.FromArgb(70, 255, 255, 255)) : new SolidColorBrush(Color.FromArgb(18, 255, 255, 255));
-                gutterTargetBtn.BorderBrush = !toLine ? new SolidColorBrush(Color.FromArgb(180, 255, 255, 255)) : new SolidColorBrush(Color.FromArgb(40, 255, 255, 255));
-                gutterTargetBtn.Foreground = !toLine ? _menuWhitePrimary : _menuWhiteSecondary;
-            }
-
-            lineTargetBtn.Click += (_, _) => SwitchPaletteTarget(true);
-            gutterTargetBtn.Click += (_, _) => SwitchPaletteTarget(false);
-
-            // --- 3a. Line / Stroke Controls ---
-            var colorLabel = new TextBlock
-            {
-                Text = "Border Color",
-                FontSize = 11,
-                Foreground = _menuWhiteSecondary
-            };
-            color1LabelRef = colorLabel;
-            lineContainer.Children.Add(colorLabel);
-
-            var swatchesPanel = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 8
-            };
-
-            (string label, string hex, Color previewColor)[] swatches = new[]
-            {
-                ("Clear", "#00000000", Color.FromArgb(0, 0, 0, 0)),
-                ("White", "#FFFFFFFF", Color.FromArgb(255, 255, 255, 255)),
-                ("Black", "#FF000000", Color.FromArgb(255, 0, 0, 0)),
-                ("Charcoal", "#FF252525", Color.FromArgb(255, 37, 37, 37)),
-                ("Gold", "#FFFFC83B", Color.FromArgb(255, 255, 200, 59)),
-                ("Blue", "#FF0078D4", Color.FromArgb(255, 0, 120, 212)),
-                ("Red", "#FFD13438", Color.FromArgb(255, 209, 52, 56)),
-                ("Cyan", "#FF00B7C3", Color.FromArgb(255, 0, 183, 195))
-            };
-
-            var swatchButtons = new List<Button>();
-            void UpdateSwatchSelection()
-            {
-                string currentHex = border.Color ?? "#FFFFFFFF";
-                for (int i = 0; i < swatches.Length; i++)
-                {
-                    bool isMatch = string.Equals(swatches[i].hex, currentHex, StringComparison.OrdinalIgnoreCase);
-                    swatchButtons[i].BorderBrush = isMatch ? new SolidColorBrush(Microsoft.UI.Colors.White) : new SolidColorBrush(Color.FromArgb(60, 255, 255, 255));
-                    swatchButtons[i].BorderThickness = isMatch ? new Thickness(2) : new Thickness(1);
-                }
-            }
-            updateSwatchesAction = UpdateSwatchSelection;
-
-            foreach (var s in swatches)
-            {
-                var swatchBtn = new Button
-                {
-                    Width = 28,
-                    Height = 28,
-                    CornerRadius = new CornerRadius(14),
-                    Padding = new Thickness(0),
-                    Background = s.hex == "#00000000" ? new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)) : new SolidColorBrush(s.previewColor),
-                    BorderBrush = new SolidColorBrush(Color.FromArgb(60, 255, 255, 255)),
-                    BorderThickness = new Thickness(1)
-                };
-                if (s.hex == "#00000000")
-                {
-                    swatchBtn.Content = new FontIcon
-                    {
-                        Glyph = "",
-                        FontSize = 10,
-                        FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
-                        Foreground = _menuWhiteSecondary
-                    };
-                }
-                ToolTipService.SetToolTip(swatchBtn, s.label);
-                string chosenHex = s.hex;
-                swatchBtn.Click += (_, _) =>
-                {
-                    border.Color = chosenHex;
-                    if (border.Thickness == 0 && chosenHex != "#00000000")
-                    {
-                        border.Thickness = 2;
-                        if (thicknessSliderRef != null) thicknessSliderRef.Value = 2;
-                    }
-                    _lastBorderSettings = border.Clone();
-                    ApplyBorderToCell(slot);
-                    UpdateSwatchSelection();
-                };
-                swatchButtons.Add(swatchBtn);
-                swatchesPanel.Children.Add(swatchBtn);
-            }
-            UpdateSwatchSelection();
-            lineContainer.Children.Add(swatchesPanel);
-
-            // Gradient Color 2 (Secondary Color)
-            var color2Container = new StackPanel
-            {
-                Spacing = 4,
-                Visibility = string.Equals(border.StrokeStyle, "Gradient", StringComparison.OrdinalIgnoreCase) ? Visibility.Visible : Visibility.Collapsed
-            };
-            color2ContainerRef = color2Container;
-
-            var color2Label = new TextBlock
-            {
-                Text = "Gradient Color 2",
-                FontSize = 11,
-                Foreground = _menuWhiteSecondary
-            };
-            color2Container.Children.Add(color2Label);
-
-            var swatches2Panel = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 8
-            };
-
-            (string label, string hex, Color previewColor)[] swatches2 = new[]
-            {
-                ("Auto (Fade)", "#00000000", Color.FromArgb(0, 0, 0, 0)),
-                ("White", "#FFFFFFFF", Color.FromArgb(255, 255, 255, 255)),
-                ("Black", "#FF000000", Color.FromArgb(255, 0, 0, 0)),
-                ("Charcoal", "#FF252525", Color.FromArgb(255, 37, 37, 37)),
-                ("Gold", "#FFFFC83B", Color.FromArgb(255, 255, 200, 59)),
-                ("Blue", "#FF0078D4", Color.FromArgb(255, 0, 120, 212)),
-                ("Red", "#FFD13438", Color.FromArgb(255, 209, 52, 56)),
-                ("Cyan", "#FF00B7C3", Color.FromArgb(255, 0, 183, 195))
-            };
-
-            var swatch2Buttons = new List<Button>();
-            void UpdateSecondarySwatchSelection()
-            {
-                string current2 = border.SecondaryColor ?? "#00000000";
-                for (int i = 0; i < swatches2.Length; i++)
-                {
-                    bool isMatch = string.Equals(swatches2[i].hex, current2, StringComparison.OrdinalIgnoreCase);
-                    swatch2Buttons[i].BorderBrush = isMatch ? new SolidColorBrush(Microsoft.UI.Colors.White) : new SolidColorBrush(Color.FromArgb(60, 255, 255, 255));
-                    swatch2Buttons[i].BorderThickness = isMatch ? new Thickness(2) : new Thickness(1);
-                }
-            }
-            updateSecondarySwatchesAction = UpdateSecondarySwatchSelection;
-
-            foreach (var s in swatches2)
-            {
-                var swatchBtn = new Button
-                {
-                    Width = 28,
-                    Height = 28,
-                    CornerRadius = new CornerRadius(14),
-                    Padding = new Thickness(0),
-                    Background = s.hex == "#00000000" ? new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)) : new SolidColorBrush(s.previewColor),
-                    BorderBrush = new SolidColorBrush(Color.FromArgb(60, 255, 255, 255)),
-                    BorderThickness = new Thickness(1)
-                };
-                if (s.hex == "#00000000")
-                {
-                    swatchBtn.Content = new FontIcon
-                    {
-                        Glyph = "",
-                        FontSize = 10,
-                        FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
-                        Foreground = _menuWhiteSecondary
-                    };
-                }
-                ToolTipService.SetToolTip(swatchBtn, s.label);
-                string chosenHex = s.hex;
-                swatchBtn.Click += (_, _) =>
-                {
-                    border.SecondaryColor = chosenHex;
-                    _lastBorderSettings = border.Clone();
-                    ApplyBorderToCell(slot);
-                    UpdateSecondarySwatchSelection();
-                };
-                swatch2Buttons.Add(swatchBtn);
-                swatches2Panel.Children.Add(swatchBtn);
-            }
-            UpdateSecondarySwatchSelection();
-            color2Container.Children.Add(swatches2Panel);
-            lineContainer.Children.Add(color2Container);
-            panel.Children.Add(lineContainer);
-
-            // --- 3b. Gutter / Mat Surface Controls ---
-            var matLabel = new TextBlock
-            {
-                Text = "Mat Material",
-                FontSize = 11,
-                Foreground = _menuWhiteSecondary
-            };
-            gutterContainer.Children.Add(matLabel);
-
-            var matGrid = new Grid { ColumnSpacing = 4 };
-            matGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            matGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            matGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-            string[] matTypes = new[] { "None", "Solid", "Acrylic" };
-            string[] matDisplay = new[] { "None / Void", "Solid Mat", "Frosted Acrylic" };
-            var matButtons = new List<Button>();
-
-            void UpdateMatSelection()
-            {
-                string curMat = border.GutterMaterial ?? "None";
-                for (int i = 0; i < matTypes.Length; i++)
-                {
-                    bool sel = string.Equals(curMat, matTypes[i], StringComparison.OrdinalIgnoreCase);
-                    matButtons[i].Background = sel ? new SolidColorBrush(Color.FromArgb(70, 255, 255, 255)) : new SolidColorBrush(Color.FromArgb(20, 255, 255, 255));
-                    matButtons[i].BorderBrush = sel ? new SolidColorBrush(Color.FromArgb(180, 255, 255, 255)) : new SolidColorBrush(Color.FromArgb(40, 255, 255, 255));
-                }
-                UpdateMatIndicator();
-            }
-            updateMatSelectionAction = UpdateMatSelection;
-
-            for (int i = 0; i < matTypes.Length; i++)
-            {
-                string mName = matTypes[i];
-                var mBtn = new Button
-                {
-                    Content = new TextBlock { Text = matDisplay[i], FontSize = 10.5, Foreground = _menuWhitePrimary },
-                    HorizontalAlignment = HorizontalAlignment.Stretch,
-                    HorizontalContentAlignment = HorizontalAlignment.Center,
-                    Padding = new Thickness(2, 4, 2, 4),
-                    MinHeight = 26,
-                    CornerRadius = new CornerRadius(4),
-                    BorderThickness = new Thickness(1)
-                };
-                mBtn.Click += (_, _) =>
-                {
-                    border.GutterMaterial = mName;
-                    if (mName == "Solid" && (string.IsNullOrEmpty(border.GutterColor) || border.GutterColor == "#00000000"))
-                    {
-                        border.GutterColor = "#FFF8F8F8";
-                    }
-                    if (border.Padding == 0 && mName != "None")
-                    {
-                        border.Padding = 16;
-                        if (gapSliderRef != null) gapSliderRef.Value = 16;
-                    }
-                    _lastBorderSettings = border.Clone();
-                    ApplyBorderToCell(slot);
-                    UpdateMatSelection();
-                    updateGutterSwatchesAction?.Invoke();
-                };
-                Grid.SetColumn(mBtn, i);
-                matGrid.Children.Add(mBtn);
-                matButtons.Add(mBtn);
-            }
-            gutterContainer.Children.Add(matGrid);
-
-            var gutterColorLabel = new TextBlock
-            {
-                Text = "Mat Color",
-                FontSize = 11,
-                Foreground = _menuWhiteSecondary
-            };
-            gutterContainer.Children.Add(gutterColorLabel);
-
-            var gutterSwatchesPanel = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 8
-            };
-
-            (string label, string hex, Color previewColor)[] gutterSwatches = new[]
-            {
-                ("Void", "#00000000", Color.FromArgb(0, 0, 0, 0)),
-                ("Gallery White", "#FFF8F8F8", Color.FromArgb(255, 248, 248, 248)),
-                ("Warm Cream", "#FFF3EFE6", Color.FromArgb(255, 243, 239, 230)),
-                ("Studio Gray", "#FFE0E0E0", Color.FromArgb(255, 224, 224, 224)),
-                ("Charcoal", "#FF262626", Color.FromArgb(255, 38, 38, 38)),
-                ("Pure Black", "#FF000000", Color.FromArgb(255, 0, 0, 0)),
-                ("Deep Navy", "#FF182230", Color.FromArgb(255, 24, 34, 48)),
-                ("Gold Accent", "#FFFFC83B", Color.FromArgb(255, 255, 200, 59))
-            };
-
-            var gutterSwatchButtons = new List<Button>();
-            void UpdateGutterSwatchSelection()
-            {
-                string currentMatHex = border.GutterColor ?? "#00000000";
-                for (int i = 0; i < gutterSwatches.Length; i++)
-                {
-                    bool isMatch = string.Equals(gutterSwatches[i].hex, currentMatHex, StringComparison.OrdinalIgnoreCase);
-                    gutterSwatchButtons[i].BorderBrush = isMatch ? new SolidColorBrush(Microsoft.UI.Colors.White) : new SolidColorBrush(Color.FromArgb(60, 255, 255, 255));
-                    gutterSwatchButtons[i].BorderThickness = isMatch ? new Thickness(2) : new Thickness(1);
-                }
-                UpdateMatIndicator();
-            }
-            updateGutterSwatchesAction = UpdateGutterSwatchSelection;
-
-            foreach (var s in gutterSwatches)
-            {
-                var swatchBtn = new Button
-                {
-                    Width = 28,
-                    Height = 28,
-                    CornerRadius = new CornerRadius(14),
-                    Padding = new Thickness(0),
-                    Background = s.hex == "#00000000" ? new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)) : new SolidColorBrush(s.previewColor),
-                    BorderBrush = new SolidColorBrush(Color.FromArgb(60, 255, 255, 255)),
-                    BorderThickness = new Thickness(1)
-                };
-                if (s.hex == "#00000000")
-                {
-                    swatchBtn.Content = new FontIcon
-                    {
-                        Glyph = "",
-                        FontSize = 10,
-                        FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
-                        Foreground = _menuWhiteSecondary
-                    };
-                }
-                ToolTipService.SetToolTip(swatchBtn, s.label);
-                string chosenHex = s.hex;
-                swatchBtn.Click += (_, _) =>
-                {
-                    border.GutterColor = chosenHex;
-                    if (chosenHex == "#00000000")
-                    {
-                        border.GutterMaterial = "None";
-                    }
-                    else if (border.GutterMaterial == "None")
-                    {
-                        border.GutterMaterial = "Solid";
-                    }
-                    if (border.Padding == 0 && chosenHex != "#00000000")
-                    {
-                        border.Padding = 16;
-                        if (gapSliderRef != null) gapSliderRef.Value = 16;
-                    }
-                    _lastBorderSettings = border.Clone();
-                    ApplyBorderToCell(slot);
-                    UpdateMatSelection();
-                    UpdateGutterSwatchSelection();
-                };
-                gutterSwatchButtons.Add(swatchBtn);
-                gutterSwatchesPanel.Children.Add(swatchBtn);
-            }
-            UpdateGutterSwatchSelection();
-            gutterContainer.Children.Add(gutterSwatchesPanel);
-            panel.Children.Add(gutterContainer);
-
-            UpdateMatSelection();
-            SwitchPaletteTarget(true);
-            UpdateStrokeSelection();
-
-            // 4. Sliders (Thickness, Gutter, Corner Radius, Shadow Intensity + Rim Glow Toggle)
-            var thicknessRow = CreateSliderRow("Thickness", 0, 24, border.Thickness, "px", val =>
-            {
-                border.Thickness = val;
-                _lastBorderSettings = border.Clone();
-                ApplyBorderToCell(slot);
-            }, out thicknessSliderRef);
-            panel.Children.Add(thicknessRow);
-
-            var gutterRow = CreateSliderRow("Gutter", 0, 48, border.Padding, "px", val =>
-            {
-                border.Padding = val;
-                _lastBorderSettings = border.Clone();
-                ApplyBorderToCell(slot);
-            }, out gapSliderRef);
-            ToolTipService.SetToolTip(gutterRow, "Gutter spacing around this photo card (reveals mat/background)");
-
-            // Mat indicator pill under Gutter slider
-            var matIndicatorBtn = new Button
-            {
-                Padding = new Thickness(6, 2, 6, 2),
-                CornerRadius = new CornerRadius(3),
-                MinHeight = 22,
-                Margin = new Thickness(0, -2, 0, 0),
-                Background = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255)),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255)),
-                BorderThickness = new Thickness(1),
-                HorizontalAlignment = HorizontalAlignment.Left
-            };
-            matIndicatorBtnRef = matIndicatorBtn;
-            UpdateMatIndicator();
-            ToolTipService.SetToolTip(matIndicatorBtn, "Click to switch palette to Gutter / Mat settings");
-            matIndicatorBtn.Click += (_, _) => SwitchPaletteTarget(false);
-            if (gutterRow is Panel gp) gp.Children.Add(matIndicatorBtn);
-            panel.Children.Add(gutterRow);
-
-            var radiusRow = CreateSliderRow("Corner Radius", 0, 32, border.CornerRadius, "px", val =>
-            {
-                border.CornerRadius = val;
-                _lastBorderSettings = border.Clone();
-                ApplyBorderToCell(slot);
-            }, out radiusSliderRef);
-            panel.Children.Add(radiusRow);
-
-            // 4b. Shadow Intensity with Ambient Rim Glow Toggle
-            var shadowPanel = new StackPanel { Spacing = 4 };
-            var shadowHeader = new Grid();
-            shadowHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            shadowHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-            var shadowLeft = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
-            var shadowTitle = new TextBlock { Text = "Shadow Intensity", FontSize = 11.5, Foreground = _menuWhiteSecondary, VerticalAlignment = VerticalAlignment.Center };
-            var shadowVal = new TextBlock { Text = $"{(int)border.ShadowIntensity} %", FontSize = 11.5, Foreground = _menuWhitePrimary, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
-            shadowLeft.Children.Add(shadowTitle);
-            shadowLeft.Children.Add(shadowVal);
-            Grid.SetColumn(shadowLeft, 0);
-            shadowHeader.Children.Add(shadowLeft);
-
-            var glowToggle = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton
+            glowText = new TextBlock { Text = "Rim", FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
+            glowToggle = new ToggleButton
             {
                 IsChecked = border.RimGlow,
+                Padding = new Thickness(8, 0, 8, 0),
+                MinHeight = 28,
+                MinWidth = 0,
                 CornerRadius = new CornerRadius(4),
-                Padding = new Thickness(8, 2, 8, 2),
-                MinHeight = 24,
                 BorderThickness = new Thickness(1),
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = VerticalAlignment.Center,
+                Content = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 4,
+                    Children = { glowIcon, glowText }
+                }
             };
-            var glowStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
-            var glowIcon = new FontIcon { Glyph = "", FontSize = 11, FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets") };
-            var glowText = new TextBlock { Text = "Rim Glow", FontSize = 11 };
-            glowStack.Children.Add(glowIcon);
-            glowStack.Children.Add(glowText);
-            glowToggle.Content = glowStack;
-
-            void SyncGlowToggle()
-            {
-                bool on = glowToggle.IsChecked == true;
-                glowToggle.Background = on ? new SolidColorBrush(Color.FromArgb(60, 255, 255, 255)) : new SolidColorBrush(Color.FromArgb(18, 255, 255, 255));
-                glowToggle.BorderBrush = on ? new SolidColorBrush(Color.FromArgb(160, 255, 255, 255)) : new SolidColorBrush(Color.FromArgb(40, 255, 255, 255));
-                glowIcon.Foreground = on ? new SolidColorBrush(Color.FromArgb(255, 255, 200, 59)) : _menuWhiteSecondary;
-                glowText.Foreground = on ? _menuWhitePrimary : _menuWhiteSecondary;
-            }
-            SyncGlowToggle();
-
+            ToolTipService.SetToolTip(glowToggle, "A light edge instead of a drop shadow");
             glowToggle.Click += (_, _) =>
             {
                 border.RimGlow = glowToggle.IsChecked == true;
-                SyncGlowToggle();
-                _lastBorderSettings = border.Clone();
-                ApplyBorderToCell(slot);
+                if (border.RimGlow && border.ShadowIntensity <= 0)
+                {
+                    border.ShadowIntensity = 40;
+                    syncing = true;
+                    shadowSlider.Value = 40;
+                    syncing = false;
+                }
+                Touch();
             };
-            ToolTipService.SetToolTip(glowToggle, "Toggle ambient luminous rim glow (ideal on dark backgrounds)");
-            Grid.SetColumn(glowToggle, 1);
+            Grid.SetColumn(glowToggle, 3);
             shadowHeader.Children.Add(glowToggle);
-            shadowPanel.Children.Add(shadowHeader);
+            body.Children.Add(shadowHeader);
 
-            var shadowSlider = new Slider
+            shadowSlider = new Slider
             {
                 Minimum = 0,
                 Maximum = 100,
@@ -890,120 +566,36 @@ namespace ModernImageViewer
             };
             shadowSlider.ValueChanged += (_, e) =>
             {
-                shadowVal.Text = $"{(int)e.NewValue} %";
+                shadowValue.Text = $"{(int)e.NewValue} %";
+                if (syncing) return;
                 border.ShadowIntensity = e.NewValue;
                 border.Shadow = e.NewValue > 0;
-                _lastBorderSettings = border.Clone();
-                ApplyBorderToCell(slot);
+                Touch();
             };
-            shadowSliderRef = shadowSlider;
-            shadowPanel.Children.Add(shadowSlider);
-            panel.Children.Add(shadowPanel);
+            body.Children.Add(shadowSlider);
 
-            // 5. Quick Presets
-            var presetsLabel = new TextBlock
+            RefreshPanel();
+
+            double scrollMax = 560;
+            if (XamlRoot != null && XamlRoot.Size.Height > 200)
+                scrollMax = Math.Clamp(XamlRoot.Size.Height - 240, 280, 640);
+            var scroll = new ScrollViewer
             {
-                Text = "Quick Presets",
-                FontSize = 11,
-                Foreground = _menuWhiteSecondary
+                Content = body,
+                MaxHeight = scrollMax,
+                HorizontalScrollMode = ScrollMode.Disabled,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                VerticalScrollMode = ScrollMode.Enabled,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto
             };
-            panel.Children.Add(presetsLabel);
 
-            var presetsGrid = new Grid { ColumnSpacing = 4 };
-            presetsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.1, GridUnitType.Star) });
-            presetsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.0, GridUnitType.Star) });
-            presetsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.0, GridUnitType.Star) });
-            presetsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.0, GridUnitType.Star) });
-            presetsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.0, GridUnitType.Star) });
-
-            void ApplyPresetValues(CellBorderDto targetValues)
-            {
-                border.Thickness = targetValues.Thickness;
-                border.Padding = targetValues.Padding;
-                border.CornerRadius = targetValues.CornerRadius;
-                border.Color = targetValues.Color;
-                border.SecondaryColor = targetValues.SecondaryColor;
-                border.StrokeStyle = targetValues.StrokeStyle ?? "Solid";
-                border.ShadowIntensity = targetValues.ShadowIntensity;
-                border.Shadow = targetValues.ShadowIntensity > 0;
-                border.RimGlow = targetValues.RimGlow;
-                border.GutterColor = targetValues.GutterColor ?? "#00000000";
-                border.GutterMaterial = targetValues.GutterMaterial ?? "None";
-
-                if (thicknessSliderRef != null) thicknessSliderRef.Value = border.Thickness;
-                if (gapSliderRef != null) gapSliderRef.Value = border.Padding;
-                if (radiusSliderRef != null) radiusSliderRef.Value = border.CornerRadius;
-                if (shadowSliderRef != null) shadowSliderRef.Value = border.ShadowIntensity;
-
-                glowToggle.IsChecked = border.RimGlow;
-                SyncGlowToggle();
-
-                UpdateStrokeSelection();
-                updateMatSelectionAction?.Invoke();
-                updateSwatchesAction?.Invoke();
-                updateSecondarySwatchesAction?.Invoke();
-                updateGutterSwatchesAction?.Invoke();
-                UpdateMatIndicator();
-                _lastBorderSettings = border.Clone();
-                ApplyBorderToCell(slot);
-            }
-
-            var lastBtn = CreateSmallPresetButton(" Last", () =>
-            {
-                if (_lastBorderSettings != null)
-                {
-                    ApplyPresetValues(_lastBorderSettings);
-                }
-                else
-                {
-                    ApplyPresetValues(new CellBorderDto { Thickness = 1, Padding = 8, CornerRadius = 12, Color = "#FFFFFFFF", StrokeStyle = "InnerMuted", ShadowIntensity = 40, RimGlow = true });
-                }
-            }, isAccent: true);
-            ToolTipService.SetToolTip(lastBtn, _lastBorderSettings != null
-                ? $"Apply last used frame ({_lastBorderSettings.StrokeStyle}, {_lastBorderSettings.Thickness}px, Gutter {_lastBorderSettings.Padding}px)"
-                : "Apply last used settings");
-            Grid.SetColumn(lastBtn, 0);
-            presetsGrid.Children.Add(lastBtn);
-
-            var cardBtn = CreateSmallPresetButton("Card", () =>
-            {
-                ApplyPresetValues(new CellBorderDto { Thickness = 1, Padding = 8, CornerRadius = 12, Color = "#FFFFFFFF", StrokeStyle = "InnerMuted", ShadowIntensity = 40, RimGlow = true, GutterMaterial = "None", GutterColor = "#00000000" });
-            });
-            Grid.SetColumn(cardBtn, 1);
-            presetsGrid.Children.Add(cardBtn);
-
-            var matBtn = CreateSmallPresetButton("Mat", () =>
-            {
-                ApplyPresetValues(new CellBorderDto { Thickness = 1, Padding = 18, CornerRadius = 0, Color = "#FF000000", StrokeStyle = "Solid", ShadowIntensity = 45, RimGlow = false, GutterMaterial = "Solid", GutterColor = "#FFF8F8F8" });
-            });
-            Grid.SetColumn(matBtn, 2);
-            presetsGrid.Children.Add(matBtn);
-
-            var roundBtn = CreateSmallPresetButton("Round", () =>
-            {
-                ApplyPresetValues(new CellBorderDto { Thickness = 2, Padding = 8, CornerRadius = 16, Color = "#FFFFFFFF", SecondaryColor = "#FFFFC83B", StrokeStyle = "Gradient", ShadowIntensity = 30, RimGlow = true, GutterMaterial = "Acrylic", GutterColor = "#FFF8F8F8" });
-            });
-            Grid.SetColumn(roundBtn, 3);
-            presetsGrid.Children.Add(roundBtn);
-
-            var flushBtn = CreateSmallPresetButton("Flush", () =>
-            {
-                ApplyPresetValues(new CellBorderDto { Thickness = 0, Padding = 0, CornerRadius = 0, Color = "#00000000", StrokeStyle = "Solid", ShadowIntensity = 0, RimGlow = false, GutterMaterial = "None", GutterColor = "#00000000" });
-            });
-            Grid.SetColumn(flushBtn, 4);
-            presetsGrid.Children.Add(flushBtn);
-
-            panel.Children.Add(presetsGrid);            // 6. Action Buttons
-            panel.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle { Height = 1, Fill = _menuDividerBrush, Margin = new Thickness(0, 4, 0, 4) });
-
-            var applyAllBtn = new Button
+            var apply = new Button
             {
                 HorizontalAlignment = HorizontalAlignment.Stretch,
-                Padding = new Thickness(10, 6, 10, 6),
+                Padding = new Thickness(10, 8, 10, 8),
                 CornerRadius = new CornerRadius(6),
-                Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(80, 255, 255, 255)),
                 BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(90, 255, 255, 255)),
                 Content = new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
@@ -1011,54 +603,385 @@ namespace ModernImageViewer
                     HorizontalAlignment = HorizontalAlignment.Center,
                     Children =
                     {
-                        new FontIcon { Glyph = "\uE8B7", FontSize = 13, Foreground = _menuWhitePrimary },
-                        new TextBlock { Text = "Apply to All Photos", FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = _menuWhitePrimary }
+                        new FontIcon
+                        {
+                            Glyph = "\uE74C",
+                            FontSize = 13,
+                            FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
+                            Foreground = _menuWhitePrimary
+                        },
+                        new TextBlock
+                        {
+                            Text = "Apply to all photos",
+                            FontSize = 12,
+                            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                            Foreground = _menuWhitePrimary,
+                            VerticalAlignment = VerticalAlignment.Center
+                        }
                     }
                 }
             };
-            applyAllBtn.Click += (_, _) =>
+            PaintButton(apply, Color.FromArgb(36, 255, 255, 255), Color.FromArgb(56, 255, 255, 255), Color.FromArgb(24, 255, 255, 255));
+            ToolTipService.SetToolTip(apply, "Copy this frame onto every photo in the comparison");
+            apply.Click += (_, _) =>
             {
                 var proto = border.Clone();
-                _lastBorderSettings = proto.Clone();
                 for (int i = 0; i < _items.Count; i++)
                 {
                     var it = _items[i];
                     if (it != null && !string.IsNullOrEmpty(it.Path))
-                    {
                         _itemBorders[it.Path] = proto.Clone();
-                    }
                 }
+                if (!string.IsNullOrEmpty(item.Path) && _itemBorders.TryGetValue(item.Path, out var stored))
+                {
+                    border = stored;
+                    _openFrameBorder = stored;
+                }
+                _lastBorderSettings = border.Clone();
                 ApplyBorderToAllCells();
                 _cellBorderFlyout?.Hide();
             };
-            panel.Children.Add(applyAllBtn);
 
-            _cellBorderFlyout = new Flyout
+            // A finite width is required. Star columns and the sliders are measured while the
+            // flyout opens, and an unbounded width makes ShowAt reject the popup.
+            var root = new StackPanel { Spacing = 10, Width = 328 };
+            var title = new TextBlock
             {
-                Content = panel,
+                Text = "Frame & Border \u2014 Photo " + (slot + 1),
+                FontSize = 14,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = _menuWhitePrimary
+            };
+            root.Children.Add(title);
+            root.Children.Add(scroll);
+            root.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle { Height = 1, Fill = _menuDividerBrush });
+            root.Children.Add(apply);
+            AutomationProperties.SetName(root, "Frame and border for photo " + (slot + 1));
+
+            var flyout = new Flyout
+            {
+                Content = root,
                 Placement = FlyoutPlacementMode.Top
             };
-            _cellBorderFlyout.FlyoutPresenterStyle = new Style(typeof(FlyoutPresenter))
+            flyout.FlyoutPresenterStyle = new Style(typeof(FlyoutPresenter))
             {
                 Setters =
                 {
                     new Setter(FlyoutPresenter.CornerRadiusProperty, new CornerRadius(10)),
                     new Setter(FlyoutPresenter.PaddingProperty, new Thickness(14, 12, 14, 12)),
                     new Setter(FlyoutPresenter.WidthProperty, 356.0),
-                    new Setter(FlyoutPresenter.BackgroundProperty, new SolidColorBrush(Color.FromArgb(242, 30, 30, 30))),
-                    new Setter(FlyoutPresenter.BorderBrushProperty, new SolidColorBrush(Color.FromArgb(64, 255, 255, 255))),
+                    new Setter(FlyoutPresenter.BackgroundProperty, new SolidColorBrush(Color.FromArgb(242, 32, 32, 32))),
+                    new Setter(FlyoutPresenter.BorderBrushProperty, new SolidColorBrush(Color.FromArgb(51, 255, 255, 255))),
                     new Setter(FlyoutPresenter.BorderThicknessProperty, new Thickness(1)),
                     new Setter(FlyoutPresenter.RequestedThemeProperty, ElementTheme.Dark)
                 }
             };
+            flyout.Closed += (_, _) =>
+            {
+                if (ticket != _frameFlyoutTicket) return;
+                _lastBorderSettings = border.Clone();
+                _openFrameBorder = border;
+            };
+            _cellBorderFlyout = flyout;
+            int showTicket = ticket;
+            var anchor = targetElement;
+            DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
+            {
+                if (showTicket != _frameFlyoutTicket) return;
+                if (!ReferenceEquals(_cellBorderFlyout, flyout)) return;
+                ShowFrameFlyout(flyout, anchor);
+            });
+        }
 
-            _cellBorderFlyout.ShowAt(targetElement);
+        private void ShowFrameFlyout(Flyout flyout, FrameworkElement anchor)
+        {
+            try
+            {
+                var target = anchor;
+                if (!target.IsLoaded || target.XamlRoot == null)
+                    target = this;
+                flyout.ShowAt(target);
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    flyout.ShowAt(this);
+                }
+                catch (Exception fallback)
+                {
+                    try
+                    {
+                        string logFile = System.IO.Path.Combine(AppPaths.LocalDirectory, "crash.log");
+                        System.IO.File.AppendAllText(logFile,
+                            $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] Frame flyout did not open: {ex.Message} / {fallback.Message}{Environment.NewLine}");
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+        }
+
+        private static Border? CardBorder(FrameworkElement? root)
+        {
+            if (root is Border direct && direct.Tag is CellParts) return direct;
+            if (root is Grid slot)
+            {
+                foreach (var child in slot.Children)
+                {
+                    if (child is Border card && card.Tag is CellParts) return card;
+                }
+            }
+            return null;
+        }
+
+        private static void ApplyDropShadow(Border? gutterHost, CellBorderDto border)
+        {
+            if (gutterHost?.Child is not Image image) return;
+            bool drop = border.ShadowIntensity > 0 && !border.RimGlow;
+            int width = (int)Math.Round(gutterHost.ActualWidth);
+            int height = (int)Math.Round(gutterHost.ActualHeight);
+            if (!drop || width < 2 || height < 2)
+            {
+                image.Source = null;
+                image.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            double pad = Math.Max(0, border.Padding);
+            double cardW = width - (pad * 2);
+            double cardH = height - (pad * 2);
+            if (cardW < 1 || cardH < 1)
+            {
+                image.Source = null;
+                image.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            var alpha = FrameShadow.RenderAlpha(width, height, pad, pad, cardW, cardH, border.CornerRadius, border.ShadowIntensity);
+            var pixels = new byte[width * height * 4];
+            for (int i = 0; i < alpha.Length; i++)
+            {
+                byte a = alpha[i];
+                if (a == 0) continue;
+                pixels[(i * 4) + 3] = a;
+            }
+
+            var bitmap = new WriteableBitmap(width, height);
+            using (var stream = bitmap.PixelBuffer.AsStream())
+                stream.Write(pixels, 0, pixels.Length);
+            bitmap.Invalidate();
+            image.Source = bitmap;
+            image.Visibility = Visibility.Visible;
+        }
+
+        private static void CopyFrame(CellBorderDto target, CellBorderDto source)
+        {
+            target.Thickness = source.Thickness;
+            target.Padding = source.Padding;
+            target.CornerRadius = source.CornerRadius;
+            target.Color = source.Color;
+            target.SecondaryColor = source.SecondaryColor;
+            target.StrokeStyle = string.IsNullOrWhiteSpace(source.StrokeStyle) ? "Solid" : source.StrokeStyle;
+            target.ShadowIntensity = source.ShadowIntensity;
+            target.Shadow = source.ShadowIntensity > 0;
+            target.RimGlow = source.RimGlow;
+            target.GutterColor = string.IsNullOrWhiteSpace(source.GutterColor) ? "#00000000" : source.GutterColor;
+            target.GutterMaterial = string.IsNullOrWhiteSpace(source.GutterMaterial) ? "None" : source.GutterMaterial;
+        }
+
+        private static int FrameIndex(string[] names, string? value)
+        {
+            for (int i = 0; i < names.Length; i++)
+            {
+                if (string.Equals(names[i], value, StringComparison.OrdinalIgnoreCase)) return i;
+            }
+            return 0;
+        }
+
+        private TextBlock SectionLabel(string text) => new()
+        {
+            Text = text,
+            FontSize = 12,
+            Foreground = _menuWhiteSecondary
+        };
+
+        private void PaintButton(Button button, Color fill, Color hover, Color pressed)
+        {
+            button.Background = new SolidColorBrush(fill);
+            button.Foreground = _menuWhitePrimary;
+            button.Resources["ButtonBackground"] = new SolidColorBrush(fill);
+            button.Resources["ButtonBackgroundPointerOver"] = new SolidColorBrush(hover);
+            button.Resources["ButtonBackgroundPressed"] = new SolidColorBrush(pressed);
+            button.Resources["ButtonBorderBrush"] = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
+            button.Resources["ButtonBorderBrushPointerOver"] = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
+            button.Resources["ButtonBorderBrushPressed"] = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
+            button.Resources["ButtonForeground"] = _menuWhitePrimary;
+            button.Resources["ButtonForegroundPointerOver"] = _menuWhitePrimary;
+            button.Resources["ButtonForegroundPressed"] = _menuWhitePrimary;
+            button.Resources["ButtonForegroundDisabled"] = _menuWhiteTertiary;
+        }
+
+        private Border MakeSegment(string[] labels, string[] tips, Action<int> onPick, out Action<int> show)
+        {
+            var grid = new Grid { Height = 32 };
+            for (int i = 0; i < labels.Length; i++)
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var selection = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(255, 62, 62, 62)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(180, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(4),
+                IsHitTestVisible = false,
+                Visibility = Visibility.Collapsed
+            };
+            grid.Children.Add(selection);
+
+            var caption = new TextBlock[labels.Length];
+            for (int i = 0; i < labels.Length; i++)
+            {
+                int captured = i;
+                var text = new TextBlock
+                {
+                    Text = labels[i],
+                    FontSize = 12,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Foreground = _menuWhiteSecondary
+                };
+                caption[i] = text;
+                var button = new Button
+                {
+                    Content = text,
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    VerticalAlignment = VerticalAlignment.Stretch,
+                    HorizontalContentAlignment = HorizontalAlignment.Center,
+                    VerticalContentAlignment = VerticalAlignment.Center,
+                    MinWidth = 0,
+                    MinHeight = 0,
+                    Padding = new Thickness(2, 0, 2, 0),
+                    BorderThickness = new Thickness(0),
+                    CornerRadius = new CornerRadius(4)
+                };
+                PaintButton(button, Color.FromArgb(0, 0, 0, 0), Color.FromArgb(28, 255, 255, 255), Color.FromArgb(16, 255, 255, 255));
+                if (i < tips.Length && !string.IsNullOrEmpty(tips[i]))
+                    ToolTipService.SetToolTip(button, tips[i]);
+                AutomationProperties.SetName(button, labels[i]);
+                button.Click += (_, _) => onPick(captured);
+                Grid.SetColumn(button, i);
+                grid.Children.Add(button);
+            }
+
+            show = index =>
+            {
+                if ((uint)index >= (uint)labels.Length)
+                    selection.Visibility = Visibility.Collapsed;
+                else
+                {
+                    selection.Visibility = Visibility.Visible;
+                    Grid.SetColumn(selection, index);
+                }
+                for (int i = 0; i < caption.Length; i++)
+                {
+                    bool on = i == index;
+                    caption[i].FontWeight = on ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal;
+                    caption[i].Foreground = on ? _menuWhitePrimary : _menuWhiteSecondary;
+                }
+            };
+
+            return new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(18, 255, 255, 255)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(2),
+                Child = grid
+            };
+        }
+
+        private StackPanel MakeSwatches((string Label, string Hex)[] items, Func<string?> current, Action<string> pick, out Action refresh)
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            var shells = new Border[items.Length];
+            for (int i = 0; i < items.Length; i++)
+            {
+                string hex = items[i].Hex;
+                bool clear = string.Equals(hex, "#00000000", StringComparison.OrdinalIgnoreCase);
+                var dot = new Grid { Width = 16, Height = 16, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+                if (clear)
+                {
+                    dot.Children.Add(new FontIcon
+                    {
+                        Glyph = "\uE711",
+                        FontSize = 10,
+                        FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
+                        Foreground = _menuWhiteSecondary,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center
+                    });
+                }
+                else
+                {
+                    dot.Children.Add(new Microsoft.UI.Xaml.Shapes.Ellipse
+                    {
+                        Fill = new SolidColorBrush(ParseColor(hex)),
+                        HorizontalAlignment = HorizontalAlignment.Stretch,
+                        VerticalAlignment = VerticalAlignment.Stretch
+                    });
+                }
+                var shell = new Border
+                {
+                    Width = 26,
+                    Height = 26,
+                    CornerRadius = new CornerRadius(13),
+                    BorderThickness = new Thickness(1),
+                    BorderBrush = new SolidColorBrush(Color.FromArgb(70, 255, 255, 255)),
+                    Background = new SolidColorBrush(clear ? Color.FromArgb(40, 255, 255, 255) : Color.FromArgb(0, 0, 0, 0)),
+                    Child = dot,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                shells[i] = shell;
+                var button = new Button
+                {
+                    Width = 28,
+                    Height = 28,
+                    MinWidth = 0,
+                    MinHeight = 0,
+                    Padding = new Thickness(0),
+                    Content = shell,
+                    BorderThickness = new Thickness(0),
+                    CornerRadius = new CornerRadius(14)
+                };
+                PaintButton(button, Color.FromArgb(0, 0, 0, 0), Color.FromArgb(20, 255, 255, 255), Color.FromArgb(12, 255, 255, 255));
+                ToolTipService.SetToolTip(button, items[i].Label);
+                AutomationProperties.SetName(button, items[i].Label);
+                string chosen = hex;
+                button.Click += (_, _) => pick(chosen);
+                row.Children.Add(button);
+            }
+
+            refresh = () =>
+            {
+                string cur = FrameColor.Canon(current(), "#00000000");
+                for (int i = 0; i < items.Length; i++)
+                {
+                    bool on = string.Equals(FrameColor.Canon(items[i].Hex, "#00000000"), cur, StringComparison.OrdinalIgnoreCase);
+                    shells[i].BorderBrush = new SolidColorBrush(on ? Color.FromArgb(255, 255, 255, 255) : Color.FromArgb(70, 255, 255, 255));
+                    shells[i].BorderThickness = new Thickness(on ? 2 : 1);
+                }
+            };
+            refresh();
+            return row;
         }
 
         private FrameworkElement CreateSliderRow(string label, double min, double max, double initialValue, string unit, Action<double> onValueChanged, out Slider sliderRef)
         {
             var panel = new StackPanel { Spacing = 2 };
-
             var headerGrid = new Grid();
             headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -1066,22 +989,20 @@ namespace ModernImageViewer
             var title = new TextBlock
             {
                 Text = label,
-                FontSize = 11.5,
+                FontSize = 12,
                 Foreground = _menuWhiteSecondary
             };
-            Grid.SetColumn(title, 0);
             headerGrid.Children.Add(title);
 
             var valueLabel = new TextBlock
             {
                 Text = $"{(int)initialValue} {unit}",
-                FontSize = 11.5,
+                FontSize = 12,
                 Foreground = _menuWhitePrimary,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
             };
             Grid.SetColumn(valueLabel, 1);
             headerGrid.Children.Add(valueLabel);
-
             panel.Children.Add(headerGrid);
 
             var slider = new Slider
@@ -1099,34 +1020,10 @@ namespace ModernImageViewer
                 valueLabel.Text = $"{(int)e.NewValue} {unit}";
                 onValueChanged(e.NewValue);
             };
-
             sliderRef = slider;
             panel.Children.Add(slider);
             return panel;
         }
-
-        private Button CreateSmallPresetButton(string text, Action onClick, bool isAccent = false)
-        {
-            var btn = new Button
-            {
-                Content = new TextBlock
-                {
-                    Text = text,
-                    FontSize = 11,
-                    FontWeight = isAccent ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal,
-                    Foreground = isAccent ? new SolidColorBrush(Color.FromArgb(255, 255, 200, 59)) : _menuWhitePrimary
-                },
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                HorizontalContentAlignment = HorizontalAlignment.Center,
-                Padding = new Thickness(2, 4, 2, 4),
-                MinHeight = 26,
-                CornerRadius = new CornerRadius(4),
-                Background = isAccent ? new SolidColorBrush(Color.FromArgb(40, 255, 200, 59)) : new SolidColorBrush(Color.FromArgb(25, 255, 255, 255)),
-                BorderBrush = isAccent ? new SolidColorBrush(Color.FromArgb(120, 255, 200, 59)) : new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
-                BorderThickness = new Thickness(1)
-            };
-            btn.Click += (_, _) => onClick();
-            return btn;
-        }
     }
 }
+

@@ -157,6 +157,339 @@ namespace ModernImageViewer
             GutterColor = GutterColor,
             GutterMaterial = GutterMaterial
         };
+
+        /// <summary>True when the drawn frame matches. The Shadow flag is ignored because the intensity is what draws.</summary>
+        public bool SameLook(CellBorderDto? other)
+        {
+            if (other == null) return false;
+            return Nearly(Thickness, other.Thickness)
+                && Nearly(Padding, other.Padding)
+                && Nearly(CornerRadius, other.CornerRadius)
+                && Nearly(ShadowIntensity, other.ShadowIntensity)
+                && RimGlow == other.RimGlow
+                && string.Equals(FrameColor.Token(StrokeStyle, "Solid"), FrameColor.Token(other.StrokeStyle, "Solid"), StringComparison.OrdinalIgnoreCase)
+                && string.Equals(FrameColor.Canon(Color, "#FFFFFFFF"), FrameColor.Canon(other.Color, "#FFFFFFFF"), StringComparison.OrdinalIgnoreCase)
+                && string.Equals(FrameColor.Canon(SecondaryColor, "#00000000"), FrameColor.Canon(other.SecondaryColor, "#00000000"), StringComparison.OrdinalIgnoreCase)
+                && string.Equals(FrameColor.Token(GutterMaterial, "None"), FrameColor.Token(other.GutterMaterial, "None"), StringComparison.OrdinalIgnoreCase)
+                && string.Equals(FrameColor.Canon(GutterColor, "#00000000"), FrameColor.Canon(other.GutterColor, "#00000000"), StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool Nearly(double a, double b) => Math.Abs(a - b) < 0.01;
+    }
+
+    /// <summary>The four frames the multi-view menu applies in one click.</summary>
+    public static class FrameLooks
+    {
+        public static CellBorderDto Card() => new()
+        {
+            Thickness = 1,
+            Padding = 8,
+            CornerRadius = 12,
+            Color = "#FFFFFFFF",
+            StrokeStyle = "InnerMuted",
+            ShadowIntensity = 40,
+            Shadow = true,
+            RimGlow = true,
+            GutterMaterial = "None",
+            GutterColor = "#00000000"
+        };
+
+        public static CellBorderDto Mat() => new()
+        {
+            Thickness = 1,
+            Padding = 18,
+            CornerRadius = 0,
+            Color = "#FF000000",
+            StrokeStyle = "Solid",
+            ShadowIntensity = 45,
+            Shadow = true,
+            RimGlow = false,
+            GutterMaterial = "Solid",
+            GutterColor = "#FFF8F8F8"
+        };
+
+        public static CellBorderDto Round() => new()
+        {
+            Thickness = 2,
+            Padding = 8,
+            CornerRadius = 16,
+            Color = "#FFFFFFFF",
+            SecondaryColor = "#FFFFC83B",
+            StrokeStyle = "Gradient",
+            ShadowIntensity = 30,
+            Shadow = true,
+            RimGlow = true,
+            GutterMaterial = "Acrylic",
+            GutterColor = "#FFF8F8F8"
+        };
+
+        public static CellBorderDto Flush() => new()
+        {
+            Thickness = 0,
+            Padding = 0,
+            CornerRadius = 0,
+            Color = "#00000000",
+            StrokeStyle = "Solid",
+            ShadowIntensity = 0,
+            Shadow = false,
+            RimGlow = false,
+            GutterMaterial = "None",
+            GutterColor = "#00000000"
+        };
+
+        public static int Match(CellBorderDto? value)
+        {
+            if (value == null) return -1;
+            if (value.SameLook(Card())) return 0;
+            if (value.SameLook(Mat())) return 1;
+            if (value.SameLook(Round())) return 2;
+            if (value.SameLook(Flush())) return 3;
+            return -1;
+        }
+    }
+
+    /// <summary>Shared colour rules for the on-screen frame and the JPEG export.</summary>
+    public static class FrameColor
+    {
+        public readonly record struct Rgba(byte A, byte R, byte G, byte B);
+
+        public static Rgba Parse(string? hex)
+        {
+            if (string.IsNullOrWhiteSpace(hex)) return new Rgba(0, 0, 0, 0);
+            hex = hex.Trim().TrimStart('#');
+            if (hex.Length == 6 && TryByte(hex, 0, out byte r) && TryByte(hex, 2, out byte g) && TryByte(hex, 4, out byte b))
+                return new Rgba(255, r, g, b);
+            if (hex.Length == 8 && TryByte(hex, 0, out byte a) && TryByte(hex, 2, out byte r8) && TryByte(hex, 4, out byte g8) && TryByte(hex, 6, out byte b8))
+                return new Rgba(a, r8, g8, b8);
+            return new Rgba(255, 255, 255, 255);
+        }
+
+        public static string Canon(string? hex, string fallback)
+        {
+            string raw = string.IsNullOrWhiteSpace(hex) ? fallback : hex.Trim();
+            if (raw.StartsWith("#", StringComparison.Ordinal)) raw = raw.Substring(1);
+            if (raw.Length == 6) raw = "FF" + raw;
+            return raw.ToUpperInvariant();
+        }
+
+        public static string Token(string? value, string fallback) =>
+            string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+
+        /// <summary>A hairline in the chosen colour. A clear colour becomes a white hairline so Muted still draws.</summary>
+        public static Rgba MutedStroke(string? color)
+        {
+            var c = Parse(color);
+            if (c.A == 0) c = new Rgba(255, 255, 255, 255);
+            int a = (int)Math.Round(c.A * 0.55);
+            if (a < 70) a = 70;
+            if (a > 180) a = 180;
+            return new Rgba((byte)a, c.R, c.G, c.B);
+        }
+
+        /// <summary>Clear secondary means fade the start colour. Any other stored colour is the second stop.</summary>
+        public static Rgba GradientEnd(string? secondary, Rgba primary)
+        {
+            if (string.Equals(Canon(secondary, "#00000000"), "00000000", StringComparison.OrdinalIgnoreCase))
+            {
+                int a = (int)Math.Round(primary.A * 0.40);
+                if (a < 0) a = 0;
+                if (a > 255) a = 255;
+                return new Rgba((byte)a, primary.R, primary.G, primary.B);
+            }
+            return Parse(secondary);
+        }
+
+        /// <summary>Frosted uses the mat colour at a fixed translucency. Solid uses it opaque. None draws nothing.</summary>
+        public static Rgba MatFill(string? material, string? color)
+        {
+            if (string.Equals(Token(material, "None"), "Acrylic", StringComparison.OrdinalIgnoreCase))
+            {
+                var tint = Parse(color);
+                if (tint.A == 0) tint = new Rgba(255, 255, 255, 255);
+                return new Rgba(48, tint.R, tint.G, tint.B);
+            }
+            if (!string.Equals(Token(material, "None"), "Solid", StringComparison.OrdinalIgnoreCase))
+                return new Rgba(0, 0, 0, 0);
+            return Parse(color);
+        }
+
+        private static bool TryByte(string hex, int index, out byte value) =>
+            byte.TryParse(hex.Substring(index, 2), System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out value);
+    }
+
+    /// <summary>
+    /// A drop shadow is the card's silhouette, shifted down and blurred. The card covers
+    /// the middle, so only the fade on the mat is seen. Intensity 0 draws nothing.
+    /// Sigma stays larger than the downward shift, so the fringe fades instead of forming a lip.
+    /// </summary>
+    public static class FrameShadow
+    {
+        public readonly record struct Spec(double Sigma, double OffsetX, double OffsetY, double Source);
+
+        public static Spec At(double intensity)
+        {
+            if (intensity <= 0) return new Spec(0, 0, 0, 0);
+            double t = intensity >= 100 ? 1 : intensity / 100.0;
+            return new Spec(
+                6 + (12 * t),
+                0.6 * t,
+                2 + (6 * t),
+                0.45 + (0.45 * t));
+        }
+
+        /// <summary>Straight alpha, one byte per pixel, row-major. 0 is clear.</summary>
+        public static byte[] RenderAlpha(
+            int width,
+            int height,
+            double cardX,
+            double cardY,
+            double cardW,
+            double cardH,
+            double cornerRadius,
+            double intensity,
+            double scaleX = 1,
+            double scaleY = 1)
+        {
+            int count = width > 0 && height > 0 ? width * height : 0;
+            var alpha = new byte[count];
+            if (count == 0 || intensity <= 0 || cardW < 1 || cardH < 1) return alpha;
+
+            var spec = At(intensity);
+            double sigma = spec.Sigma * Math.Max(scaleX, scaleY);
+            if (sigma < 0.5 || spec.Source <= 0) return alpha;
+            double ox = spec.OffsetX * scaleX;
+            double oy = spec.OffsetY * scaleY;
+            int radius = Math.Max(1, (int)Math.Ceiling(sigma * 2.8));
+            var kernel = Kernel(sigma, radius);
+
+            int x0 = Clamp((int)Math.Floor(cardX + ox) - radius, 0, width);
+            int y0 = Clamp((int)Math.Floor(cardY + oy) - radius, 0, height);
+            int x1 = Clamp((int)Math.Ceiling(cardX + ox + cardW) + radius, 0, width);
+            int y1 = Clamp((int)Math.Ceiling(cardY + oy + cardH) + radius, 0, height);
+            if (x1 <= x0 || y1 <= y0) return alpha;
+
+            var src = new float[count];
+            Fill(src, width, height, cardX + ox, cardY + oy, cardW, cardH, cornerRadius, (float)spec.Source, x0, y0, x1, y1);
+            Blur(src, width, height, x0, y0, x1, y1, kernel);
+            ZeroInside(src, width, height, cardX, cardY, cardW, cardH, cornerRadius);
+
+            for (int i = 0; i < count; i++)
+            {
+                float a = src[i];
+                if (a <= 0) continue;
+                if (a > 1) a = 1;
+                alpha[i] = (byte)Math.Round(a * 255f);
+            }
+            return alpha;
+        }
+
+        private static float[] Kernel(double sigma, int radius)
+        {
+            var kernel = new float[radius * 2 + 1];
+            double denom = 2 * sigma * sigma;
+            double sum = 0;
+            for (int i = -radius; i <= radius; i++)
+            {
+                double v = Math.Exp(-(i * i) / denom);
+                kernel[i + radius] = (float)v;
+                sum += v;
+            }
+            if (sum <= 0) sum = 1;
+            for (int i = 0; i < kernel.Length; i++) kernel[i] /= (float)sum;
+            return kernel;
+        }
+
+        private static void Fill(float[] src, int width, int height, double x, double y, double w, double h, double radius, float alpha, int x0, int y0, int x1, int y1)
+        {
+            for (int py = y0; py < y1; py++)
+            {
+                int row = py * width;
+                double cy = py + 0.5;
+                for (int px = x0; px < x1; px++)
+                {
+                    if (Inside(px + 0.5, cy, x, y, w, h, radius))
+                        src[row + px] = alpha;
+                }
+            }
+        }
+
+        private static void ZeroInside(float[] src, int width, int height, double x, double y, double w, double h, double radius)
+        {
+            int x0 = Clamp((int)Math.Floor(x), 0, width);
+            int y0 = Clamp((int)Math.Floor(y), 0, height);
+            int x1 = Clamp((int)Math.Ceiling(x + w), 0, width);
+            int y1 = Clamp((int)Math.Ceiling(y + h), 0, height);
+            for (int py = y0; py < y1; py++)
+            {
+                int row = py * width;
+                double cy = py + 0.5;
+                for (int px = x0; px < x1; px++)
+                {
+                    if (Inside(px + 0.5, cy, x, y, w, h, radius))
+                        src[row + px] = 0;
+                }
+            }
+        }
+
+        private static bool Inside(double px, double py, double x, double y, double w, double h, double radius)
+        {
+            if (px < x || py < y || px >= x + w || py >= y + h) return false;
+            if (radius <= 0) return true;
+            double r = Math.Min(radius, Math.Min(w, h) * 0.5);
+            double dx = 0;
+            double dy = 0;
+            if (px < x + r) dx = px - (x + r);
+            else if (px > x + w - r) dx = px - (x + w - r);
+            if (py < y + r) dy = py - (y + r);
+            else if (py > y + h - r) dy = py - (y + h - r);
+            if (dx == 0 && dy == 0) return true;
+            return (dx * dx) + (dy * dy) <= r * r;
+        }
+
+        private static void Blur(float[] src, int width, int height, int x0, int y0, int x1, int y1, float[] kernel)
+        {
+            int radius = kernel.Length / 2;
+            var tmp = new float[width * height];
+            for (int y = y0; y < y1; y++)
+            {
+                int row = y * width;
+                for (int x = x0; x < x1; x++)
+                {
+                    float sum = 0;
+                    int start = x - radius;
+                    for (int k = 0; k < kernel.Length; k++)
+                    {
+                        int xx = start + k;
+                        if ((uint)xx >= (uint)width) continue;
+                        sum += src[row + xx] * kernel[k];
+                    }
+                    tmp[row + x] = sum;
+                }
+            }
+            for (int y = y0; y < y1; y++)
+            {
+                int row = y * width;
+                for (int x = x0; x < x1; x++)
+                {
+                    float sum = 0;
+                    int start = y - radius;
+                    for (int k = 0; k < kernel.Length; k++)
+                    {
+                        int yy = start + k;
+                        if ((uint)yy >= (uint)height) continue;
+                        sum += tmp[(yy * width) + x] * kernel[k];
+                    }
+                    src[row + x] = sum;
+                }
+            }
+        }
+
+        private static int Clamp(int value, int min, int max)
+        {
+            if (value < min) return min;
+            if (value > max) return max;
+            return value;
+        }
     }
 
     public sealed class MosaicNodeDto

@@ -196,5 +196,176 @@ namespace ModernImageViewer.Tests
             Assert.Equal(b1.ShadowIntensity, clone.ShadowIntensity);
             Assert.Equal(b1.StrokeStyle, clone.StrokeStyle);
         }
+
+        [Fact]
+        public void FrameLooks_MatchOnlyThePresetTheyName()
+        {
+            Assert.Equal(0, FrameLooks.Match(FrameLooks.Card()));
+            Assert.Equal(1, FrameLooks.Match(FrameLooks.Mat()));
+            Assert.Equal(2, FrameLooks.Match(FrameLooks.Round()));
+            Assert.Equal(3, FrameLooks.Match(FrameLooks.Flush()));
+
+            var card = FrameLooks.Card();
+            var same = card.Clone();
+            same.Shadow = !card.Shadow;
+            Assert.True(card.SameLook(same));
+
+            same.Thickness = 9;
+            Assert.Equal(-1, FrameLooks.Match(same));
+            Assert.Equal(-1, FrameLooks.Match(new CellBorderDto()));
+        }
+
+        [Fact]
+        public void FrameColor_MutedMatAndGradientFollowTheSwatch()
+        {
+            var gold = FrameColor.MutedStroke("#FFFFC83B");
+            Assert.Equal(255, gold.R);
+            Assert.Equal(200, gold.G);
+            Assert.Equal(59, gold.B);
+            Assert.Equal(140, gold.A);
+
+            var fromClear = FrameColor.MutedStroke("#00000000");
+            Assert.Equal(255, fromClear.R);
+            Assert.Equal(140, fromClear.A);
+
+            var frost = FrameColor.MatFill("Acrylic", "#FFF3EFE6");
+            Assert.Equal(48, frost.A);
+            Assert.Equal(243, frost.R);
+            Assert.Equal(239, frost.G);
+            Assert.Equal(230, frost.B);
+
+            var solid = FrameColor.MatFill("Solid", "#FFF8F8F8");
+            Assert.Equal(255, solid.A);
+            Assert.Equal(248, solid.R);
+
+            Assert.Equal(0, FrameColor.MatFill("None", "#FFFFFFFF").A);
+
+            var faded = FrameColor.GradientEnd("#00000000", new FrameColor.Rgba(255, 0, 120, 212));
+            Assert.Equal(102, faded.A);
+            Assert.Equal(0, faded.R);
+            Assert.Equal(120, faded.G);
+            Assert.Equal(212, faded.B);
+
+            var goldEnd = FrameColor.GradientEnd("#FFFFC83B", new FrameColor.Rgba(255, 255, 255, 255));
+            Assert.Equal(255, goldEnd.A);
+            Assert.Equal(255, goldEnd.R);
+            Assert.Equal(200, goldEnd.G);
+            Assert.Equal(59, goldEnd.B);
+
+            Assert.Equal("FFFFC83B", FrameColor.Canon("#FFC83B", "#00000000"));
+            Assert.Equal(0, FrameColor.Parse("").A);
+            Assert.Equal(255, FrameColor.Parse("nope").A);
+        }
+
+        [Fact]
+        public void FrameShadow_NinetyOnCreamIsLowAndFades()
+        {
+            const int width = 640;
+            const int height = 400;
+            const double pad = 48;
+            double cardW = width - (pad * 2);
+            double cardH = height - (pad * 2);
+            int cardTop = (int)pad;
+            int cardBottom = (int)(pad + cardH);
+            int cardLeft = (int)pad;
+            int midX = width / 2;
+            int midY = height / 2;
+
+            var none = FrameShadow.RenderAlpha(width, height, pad, pad, cardW, cardH, 0, 0);
+            Assert.Equal(0, none[midY * width + midX]);
+
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            var alpha = FrameShadow.RenderAlpha(width, height, pad, pad, cardW, cardH, 0, 90);
+            watch.Stop();
+
+            int At(int x, int y) => alpha[(y * width) + x];
+            int bottomNear = At(midX, cardBottom + 2);
+            int bottomMid = At(midX, cardBottom + 10);
+            int bottomFar = At(midX, cardBottom + 22);
+            int bottomGone = At(midX, cardBottom + 36);
+            int topNear = At(midX, cardTop - 4);
+            int sideNear = At(cardLeft - 4, midY);
+            int outer = At(8, 8);
+
+            var mild = FrameShadow.RenderAlpha(width, height, pad, pad, cardW, cardH, 0, 30);
+            int mildBottom = mild[((cardBottom + 2) * width) + midX];
+
+            WriteShadowPreview(width, height, pad, cardW, cardH, alpha, watch.ElapsedMilliseconds, bottomNear, bottomMid, bottomFar, bottomGone, topNear, sideNear, outer);
+
+            Assert.True(bottomNear > topNear + 15, "bottom " + bottomNear + " top " + topNear);
+            Assert.True(bottomNear > sideNear, "bottom " + bottomNear + " side " + sideNear);
+            Assert.InRange(bottomNear, 40, 190);
+            Assert.True(bottomNear > bottomMid && bottomMid > bottomFar && bottomFar > bottomGone);
+            Assert.True(bottomNear - bottomMid < bottomNear * 0.55);
+            Assert.True(bottomFar > 12, "far " + bottomFar);
+            Assert.True(bottomGone < 14, "gone " + bottomGone);
+            Assert.True(outer < 8, "outer " + outer);
+            Assert.True(mildBottom < bottomNear);
+        }
+
+        private static void WriteShadowPreview(int width, int height, double pad, double cardW, double cardH, byte[] alpha, long elapsedMs, int bottomNear, int bottomMid, int bottomFar, int bottomGone, int topNear, int sideNear, int outer)
+        {
+            const byte matR = 0xF3, matG = 0xEF, matB = 0xE6;
+            const byte cardR = 0x1A, cardG = 0x6E, cardB = 0xA8;
+            var bgr = new byte[width * height * 3];
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    int a = alpha[(y * width) + x];
+                    byte r = (byte)(matR * (255 - a) / 255);
+                    byte g = (byte)(matG * (255 - a) / 255);
+                    byte b = (byte)(matB * (255 - a) / 255);
+                    double px = x + 0.5;
+                    double py = y + 0.5;
+                    if (px >= pad && py >= pad && px < pad + cardW && py < pad + cardH)
+                    {
+                        r = cardR;
+                        g = cardG;
+                        b = cardB;
+                    }
+                    int i = ((y * width) + x) * 3;
+                    bgr[i] = b;
+                    bgr[i + 1] = g;
+                    bgr[i + 2] = r;
+                }
+            }
+
+            string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "frame-shadow-90.bmp");
+            int row = ((width * 3) + 3) & ~3;
+            int pixelBytes = row * height;
+            var file = new byte[54 + pixelBytes];
+            file[0] = (byte)'B';
+            file[1] = (byte)'M';
+            int fileSize = file.Length;
+            file[2] = (byte)fileSize;
+            file[3] = (byte)(fileSize >> 8);
+            file[4] = (byte)(fileSize >> 16);
+            file[5] = (byte)(fileSize >> 24);
+            file[10] = 54;
+            file[14] = 40;
+            file[18] = (byte)width;
+            file[19] = (byte)(width >> 8);
+            file[22] = (byte)height;
+            file[23] = (byte)(height >> 8);
+            file[26] = 1;
+            file[28] = 24;
+            for (int y = 0; y < height; y++)
+            {
+                int src = (height - 1 - y) * width * 3;
+                int dst = 54 + (y * row);
+                System.Buffer.BlockCopy(bgr, src, file, dst, width * 3);
+            }
+            System.IO.File.WriteAllBytes(path, file);
+            System.IO.File.WriteAllText(path + ".txt",
+                "ms=" + elapsedMs
+                + " bottom2=" + bottomNear
+                + " bottom10=" + bottomMid
+                + " bottom22=" + bottomFar
+                + " bottom36=" + bottomGone
+                + " top4=" + topNear
+                + " side4=" + sideNear
+                + " outer=" + outer);
+        }
     }
 }

@@ -1728,6 +1728,20 @@ namespace ModernImageViewer
                 VerticalAlignment = VerticalAlignment.Stretch,
                 IsHitTestVisible = false
             };
+            var shadowImage = new Image
+            {
+                IsHitTestVisible = false,
+                Stretch = Stretch.Fill,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch,
+                Visibility = Visibility.Collapsed
+            };
+            gutterBorder.Child = shadowImage;
+            gutterBorder.SizeChanged += (_, e) =>
+            {
+                if (e.NewSize.Width < 2 || e.NewSize.Height < 2) return;
+                ApplyDropShadow(gutterBorder, GetBorderForItem(photo.Item));
+            };
             Canvas.SetZIndex(gutterBorder, 0);
             Canvas.SetZIndex(cellBorder, 1);
 

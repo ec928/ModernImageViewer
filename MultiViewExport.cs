@@ -689,18 +689,7 @@ namespace ModernImageViewer
             {
                 var rootElem = _cellRoots[i];
                 if (rootElem == null) continue;
-                Border? root = rootElem as Border;
-                if (root == null && rootElem is Grid slotGrid)
-                {
-                    foreach (var child in slotGrid.Children)
-                    {
-                        if (child is Border b && b.Child is Grid)
-                        {
-                            root = b;
-                            break;
-                        }
-                    }
-                }
+                Border? root = CardBorder(rootElem);
                 if (root == null || root.Child is not Grid cell || cell.ActualWidth < 1 || cell.ActualHeight < 1)
                     continue;
                 Grid? container = null;
@@ -723,12 +712,14 @@ namespace ModernImageViewer
 
                 Rect bounds = rootElem.TransformToVisual(CellsGrid).TransformBounds(new Rect(0, 0, rootElem.ActualWidth, rootElem.ActualHeight));
                 Rect cardBounds = root.TransformToVisual(CellsGrid).TransformBounds(new Rect(0, 0, root.ActualWidth, root.ActualHeight));
+                Rect photoBounds = cell.TransformToVisual(CellsGrid).TransformBounds(new Rect(0, 0, cell.ActualWidth, cell.ActualHeight));
                 if (container.RenderTransform is not CompositeTransform transform) continue;
                 shots.Add(new CellShot
                 {
                     Path = _items[i].Path,
                     Cell = bounds,
                     Card = cardBounds,
+                    Photo = photoBounds,
                     ImageW = container.Width,
                     ImageH = container.Height,
                     Scale = transform.ScaleX,
@@ -753,17 +744,19 @@ namespace ModernImageViewer
 
             foreach (var shot in shots)
             {
-                var placed = GridCanvasMath.Place(shot.Cell.Width, shot.Cell.Height, shot.ImageW, shot.ImageH, shot.Scale, shot.TranslateX, shot.TranslateY);
+                Rect photo = shot.Photo.Width >= 1 && shot.Photo.Height >= 1 ? shot.Photo
+                    : (shot.Card.Width >= 1 && shot.Card.Height >= 1 ? shot.Card : shot.Cell);
+                var placed = GridCanvasMath.Place(photo.Width, photo.Height, shot.ImageW, shot.ImageH, shot.Scale, shot.TranslateX, shot.TranslateY);
                 double scaleX = width / shot.CanvasW;
                 double scaleY = height / shot.CanvasH;
                 var decode = GridCanvasMath.DecodeSize(shot.NativeW, shot.NativeH, placed.Width * scaleX, placed.Height * scaleY);
                 using var bitmap = await DecodeForCellAsync(shot.Path, device, decode.Width, decode.Height);
                 if (bitmap == null) continue;
 
-                double x0 = Math.Floor(shot.Cell.X * scaleX);
-                double y0 = Math.Floor(shot.Cell.Y * scaleY);
-                double x1 = Math.Ceiling((shot.Cell.X + shot.Cell.Width) * scaleX);
-                double y1 = Math.Ceiling((shot.Cell.Y + shot.Cell.Height) * scaleY);
+                double x0 = Math.Floor(photo.X * scaleX);
+                double y0 = Math.Floor(photo.Y * scaleY);
+                double x1 = Math.Ceiling((photo.X + photo.Width) * scaleX);
+                double y1 = Math.Ceiling((photo.Y + photo.Height) * scaleY);
                 x0 = Math.Clamp(x0, 0, width);
                 y0 = Math.Clamp(y0, 0, height);
                 x1 = Math.Clamp(x1, 0, width);
@@ -771,8 +764,8 @@ namespace ModernImageViewer
                 if (x1 <= x0 || y1 <= y0) continue;
 
                 var dest = new Rect(
-                    (shot.Cell.X + placed.Left) * scaleX,
-                    (shot.Cell.Y + placed.Top) * scaleY,
+                    (photo.X + placed.Left) * scaleX,
+                    (photo.Y + placed.Top) * scaleY,
                     placed.Width * scaleX,
                     placed.Height * scaleY);
 
@@ -783,28 +776,16 @@ namespace ModernImageViewer
                 double cardW = shot.Card.Width * scaleX;
                 double cardH = shot.Card.Height * scaleY;
 
-                // 0. Draw Gutter Mat Background (Receiver surface for drop shadow)
-                if (shot.Border != null && !string.IsNullOrEmpty(shot.Border.GutterMaterial) && !string.Equals(shot.Border.GutterMaterial, "None", StringComparison.OrdinalIgnoreCase))
+                // The mat is the cell around the photo. The photo is drawn inside the card, so it does not cover the gutter.
+                var mat = FrameColor.MatFill(shot.Border?.GutterMaterial, shot.Border?.GutterColor);
+                if (mat.A > 0)
                 {
                     using var matSession = target.CreateDrawingSession();
                     float slotX = (float)(shot.Cell.X * scaleX);
                     float slotY = (float)(shot.Cell.Y * scaleY);
                     float slotW = (float)(shot.Cell.Width * scaleX);
                     float slotH = (float)(shot.Cell.Height * scaleY);
-
-                    if (string.Equals(shot.Border.GutterMaterial, "Acrylic", StringComparison.OrdinalIgnoreCase))
-                    {
-                        matSession.FillRectangle(slotX, slotY, slotW, slotH, Color.FromArgb(45, 255, 255, 255));
-                        matSession.DrawRectangle(slotX, slotY, slotW, slotH, Color.FromArgb(70, 255, 255, 255), (float)Math.Max(1, 1.0 * scaleX));
-                    }
-                    else
-                    {
-                        var matColor = ParseColor(shot.Border.GutterColor);
-                        if (matColor.A > 0)
-                        {
-                            matSession.FillRectangle(slotX, slotY, slotW, slotH, matColor);
-                        }
-                    }
+                    matSession.FillRectangle(slotX, slotY, slotW, slotH, Color.FromArgb(mat.A, mat.R, mat.G, mat.B));
                 }
 
                 // 1. Draw Drop Shadow or Ambient Rim Glow
@@ -835,16 +816,35 @@ namespace ModernImageViewer
                     }
                     else
                     {
-                        double shadowOffset = shot.Border.ShadowIntensity * scaleX * 0.12;
-                        byte shadowAlpha = (byte)Math.Clamp(shot.Border.ShadowIntensity * 1.4, 0, 160);
-                        var shadowColor = Color.FromArgb(shadowAlpha, 0, 0, 0);
-
-                        float shX = (float)(cardX + shadowOffset * 0.5);
-                        float shY = (float)(cardY + shadowOffset * 0.7);
-                        if (rx > 0)
-                            shadowSession.FillRoundedRectangle(shX, shY, (float)cardW, (float)cardH, rx, ry, shadowColor);
-                        else
-                            shadowSession.FillRectangle(shX, shY, (float)cardW, (float)cardH, shadowColor);
+                        float slotX = (float)(shot.Cell.X * scaleX);
+                        float slotY = (float)(shot.Cell.Y * scaleY);
+                        int slotW = Math.Max(1, (int)Math.Round(shot.Cell.Width * scaleX));
+                        int slotH = Math.Max(1, (int)Math.Round(shot.Cell.Height * scaleY));
+                        var shade = FrameShadow.RenderAlpha(
+                            slotW,
+                            slotH,
+                            cardX - slotX,
+                            cardY - slotY,
+                            cardW,
+                            cardH,
+                            shot.Border.CornerRadius * scaleX,
+                            shot.Border.ShadowIntensity,
+                            scaleX,
+                            scaleY);
+                        var shadePixels = new byte[slotW * slotH * 4];
+                        for (int p = 0; p < shade.Length; p++)
+                        {
+                            byte a = shade[p];
+                            if (a == 0) continue;
+                            shadePixels[(p * 4) + 3] = a;
+                        }
+                        using var shadeBitmap = CanvasBitmap.CreateFromBytes(
+                            device,
+                            shadePixels,
+                            slotW,
+                            slotH,
+                            Windows.Graphics.DirectX.DirectXPixelFormat.B8G8R8A8UIntNormalized);
+                        shadowSession.DrawImage(shadeBitmap, slotX, slotY);
                     }
                 }
 
@@ -852,8 +852,7 @@ namespace ModernImageViewer
                 using (var session = target.CreateDrawingSession())
                 {
                     string strokeStyle = shot.Border?.StrokeStyle ?? "Solid";
-                    float strokeW = (float)((shot.Border?.Thickness ?? 0) * scaleX);
-                    if (string.Equals(strokeStyle, "InnerMuted", StringComparison.OrdinalIgnoreCase)) strokeW = (float)(1.0 * scaleX);
+                    float strokeW = (float)(Math.Max(0, shot.Border?.Thickness ?? 0) * scaleX);
 
                     if (rx > 0 && ry > 0)
                     {
@@ -876,8 +875,12 @@ namespace ModernImageViewer
                     // 3. Draw Stroke (Solid, Dashed, InnerMuted, Gradient)
                     if (string.Equals(strokeStyle, "InnerMuted", StringComparison.OrdinalIgnoreCase))
                     {
-                        float sW = (float)Math.Max(1, 1.0 * scaleX);
-                        var strokeColor = Color.FromArgb(45, 255, 255, 255);
+                        if (strokeW <= 0) { }
+                        else
+                        {
+                        float sW = strokeW;
+                        var muted = FrameColor.MutedStroke(shot.Border?.Color);
+                        var strokeColor = Color.FromArgb(muted.A, muted.R, muted.G, muted.B);
                         float half = sW / 2.0f;
                         float sx = (float)(cardX + half);
                         float sy = (float)(cardY + half);
@@ -890,20 +893,15 @@ namespace ModernImageViewer
                             session.DrawRoundedRectangle(sx, sy, sw, sh, srx, sry, strokeColor, sW);
                         else
                             session.DrawRectangle(sx, sy, sw, sh, strokeColor, sW);
+                        }
                     }
                     else if (string.Equals(strokeStyle, "Gradient", StringComparison.OrdinalIgnoreCase))
                     {
-                        float sW = (float)(Math.Max(1, shot.Border?.Thickness ?? 2) * scaleX);
-                        var primaryColor = ParseColor(shot.Border?.Color);
-                        Color secondaryColor;
-                        if (!string.IsNullOrEmpty(shot.Border?.SecondaryColor) && shot.Border.SecondaryColor != "#00000000")
-                        {
-                            secondaryColor = ParseColor(shot.Border.SecondaryColor);
-                        }
-                        else
-                        {
-                            secondaryColor = Color.FromArgb((byte)(primaryColor.A * 0.40f), primaryColor.R, primaryColor.G, primaryColor.B);
-                        }
+                        float sW = strokeW;
+                        var primaryRgba = FrameColor.Parse(shot.Border?.Color);
+                        var endRgba = FrameColor.GradientEnd(shot.Border?.SecondaryColor, primaryRgba);
+                        var primaryColor = Color.FromArgb(primaryRgba.A, primaryRgba.R, primaryRgba.G, primaryRgba.B);
+                        var secondaryColor = Color.FromArgb(endRgba.A, endRgba.R, endRgba.G, endRgba.B);
 
                         float half = sW / 2.0f;
                         float sx = (float)(cardX + half);
@@ -919,16 +917,16 @@ namespace ModernImageViewer
                             EndPoint = new System.Numerics.Vector2((float)(cardX + cardW), (float)(cardY + cardH))
                         };
 
-                        if (rx > 0)
+                        if (sW > 0 && rx > 0)
                             session.DrawRoundedRectangle(sx, sy, sw, sh, srx, sry, gradBrush, sW);
-                        else
+                        else if (sW > 0)
                             session.DrawRectangle(sx, sy, sw, sh, gradBrush, sW);
                     }
                     else if (string.Equals(strokeStyle, "Dashed", StringComparison.OrdinalIgnoreCase))
                     {
-                        float sW = (float)(Math.Max(1, shot.Border?.Thickness ?? 2) * scaleX);
+                        float sW = strokeW;
                         var strokeColor = ParseColor(shot.Border?.Color);
-                        if (strokeColor.A > 0)
+                        if (strokeColor.A > 0 && sW > 0)
                         {
                             float half = sW / 2.0f;
                             float sx = (float)(cardX + half);
@@ -1253,6 +1251,7 @@ namespace ModernImageViewer
             public string Path = "";
             public Rect Cell;
             public Rect Card;
+            public Rect Photo;
             public double ImageW;
             public double ImageH;
             public double Scale;
