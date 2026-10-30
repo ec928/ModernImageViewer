@@ -112,5 +112,72 @@ namespace ModernImageViewer.Tests
             Assert.Single(loaded.Photos);
             Assert.Equal(@"D:\test.jpg", loaded.Photos[0].Path);
         }
+
+        [Fact]
+        public void SerializeAndDeserialize_PreservesCellBordersAndFraming()
+        {
+            var file = new MultiViewLayoutFile
+            {
+                SchemaVersion = 1,
+                Photos = new List<PhotoSlotDto>
+                {
+                    new()
+                    {
+                        Slot = 0,
+                        Path = @"C:\Photos\PhotoA.jpg",
+                        Border = new CellBorderDto
+                        {
+                            Thickness = 4.0,
+                            Color = "#FFFFFFFF",
+                            Padding = 8.0,
+                            CornerRadius = 12.0
+                        }
+                    },
+                    new()
+                    {
+                        Slot = 1,
+                        Path = @"C:\Photos\PhotoB.jpg",
+                        Border = new CellBorderDto
+                        {
+                            Thickness = 1.0,
+                            Color = "#FFFFC83B",
+                            Padding = 16.0,
+                            CornerRadius = 6.0
+                        }
+                    }
+                }
+            };
+
+            string json = file.ToJson();
+            Assert.Contains(@"""thickness"": 4", json);
+            Assert.Contains(@"""color"": ""#FFFFFFFF""", json);
+            Assert.Contains(@"""padding"": 8", json);
+            Assert.Contains(@"""cornerRadius"": 12", json);
+
+            var loaded = MultiViewLayoutFile.FromJson(json);
+            Assert.NotNull(loaded);
+            Assert.Equal(2, loaded.Photos.Count);
+
+            var b0 = loaded.Photos[0].Border;
+            Assert.NotNull(b0);
+            Assert.Equal(4.0, b0.Thickness);
+            Assert.Equal("#FFFFFFFF", b0.Color);
+            Assert.Equal(8.0, b0.Padding);
+            Assert.Equal(12.0, b0.CornerRadius);
+
+            var b1 = loaded.Photos[1].Border;
+            Assert.NotNull(b1);
+            Assert.Equal(1.0, b1.Thickness);
+            Assert.Equal("#FFFFC83B", b1.Color);
+            Assert.Equal(16.0, b1.Padding);
+            Assert.Equal(6.0, b1.CornerRadius);
+
+            // Test clone
+            var clone = b1.Clone();
+            Assert.Equal(b1.Thickness, clone.Thickness);
+            Assert.Equal(b1.Color, clone.Color);
+            Assert.Equal(b1.Padding, clone.Padding);
+            Assert.Equal(b1.CornerRadius, clone.CornerRadius);
+        }
     }
 }

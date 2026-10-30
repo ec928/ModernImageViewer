@@ -107,7 +107,7 @@ namespace ModernImageViewer
         public double Thickness { get; set; }
 
         [JsonPropertyName("color")]
-        public string? Color { get; set; }
+        public string? Color { get; set; } = "#FFFFFFFF";
 
         [JsonPropertyName("padding")]
         public double Padding { get; set; }
@@ -117,6 +117,15 @@ namespace ModernImageViewer
 
         [JsonPropertyName("shadow")]
         public bool Shadow { get; set; }
+
+        public CellBorderDto Clone() => new()
+        {
+            Thickness = Thickness,
+            Color = Color,
+            Padding = Padding,
+            CornerRadius = CornerRadius,
+            Shadow = Shadow
+        };
     }
 
     public sealed class MosaicNodeDto

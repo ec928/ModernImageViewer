@@ -1,3 +1,4 @@
+using Microsoft.Graphics.Canvas.Geometry;
 using Microsoft.Graphics.Canvas;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -541,11 +542,13 @@ namespace ModernImageViewer
                 int nativeH = bitmap.PixelHeight;
 
                 Rect bounds = cell.TransformToVisual(CellsGrid).TransformBounds(new Rect(0, 0, cell.ActualWidth, cell.ActualHeight));
+                Rect cardBounds = root.TransformToVisual(CellsGrid).TransformBounds(new Rect(0, 0, root.ActualWidth, root.ActualHeight));
                 if (container.RenderTransform is not CompositeTransform transform) continue;
                 shots.Add(new CellShot
                 {
                     Path = _items[i].Path,
                     Cell = bounds,
+                    Card = cardBounds,
                     ImageW = container.Width,
                     ImageH = container.Height,
                     Scale = transform.ScaleX,
@@ -554,7 +557,8 @@ namespace ModernImageViewer
                     NativeW = nativeW,
                     NativeH = nativeH,
                     CanvasW = canvasW,
-                    CanvasH = canvasH
+                    CanvasH = canvasH,
+                    Border = GetBorderForItem(_items[i]).Clone()
                 });
             }
             return shots;
@@ -591,9 +595,56 @@ namespace ModernImageViewer
                     (shot.Cell.Y + placed.Top) * scaleY,
                     placed.Width * scaleX,
                     placed.Height * scaleY);
-                using var session = target.CreateDrawingSession();
-                using (session.CreateLayer(1f, new Rect(x0, y0, x1 - x0, y1 - y0)))
-                    session.DrawImage(bitmap, dest);
+
+                float rx = (float)((shot.Border?.CornerRadius ?? 0) * scaleX);
+                float ry = (float)((shot.Border?.CornerRadius ?? 0) * scaleY);
+                float strokeW = (float)((shot.Border?.Thickness ?? 0) * scaleX);
+
+                using (var session = target.CreateDrawingSession())
+                {
+                    if (rx > 0 && ry > 0)
+                    {
+                        float innerRx = Math.Max(0, rx - strokeW / 2.0f);
+                        float innerRy = Math.Max(0, ry - strokeW / 2.0f);
+                        using var clip = CanvasGeometry.CreateRoundedRectangle(device, (float)x0, (float)y0, (float)(x1 - x0), (float)(y1 - y0), innerRx, innerRy);
+                        using (session.CreateLayer(1f, clip))
+                        {
+                            session.DrawImage(bitmap, dest);
+                        }
+                    }
+                    else
+                    {
+                        using (session.CreateLayer(1f, new Rect(x0, y0, x1 - x0, y1 - y0)))
+                        {
+                            session.DrawImage(bitmap, dest);
+                        }
+                    }
+
+                    if (strokeW > 0 && !string.IsNullOrEmpty(shot.Border?.Color))
+                    {
+                        var strokeColor = ParseColor(shot.Border.Color);
+                        if (strokeColor.A > 0)
+                        {
+                            double cardX = shot.Card.X * scaleX;
+                            double cardY = shot.Card.Y * scaleY;
+                            double cardW = shot.Card.Width * scaleX;
+                            double cardH = shot.Card.Height * scaleY;
+
+                            float half = strokeW / 2.0f;
+                            float sx = (float)(cardX + half);
+                            float sy = (float)(cardY + half);
+                            float sw = (float)Math.Max(1, cardW - strokeW);
+                            float sh = (float)Math.Max(1, cardH - strokeW);
+                            float srx = Math.Max(0, rx - half);
+                            float sry = Math.Max(0, ry - half);
+
+                            if (rx > 0)
+                                session.DrawRoundedRectangle(sx, sy, sw, sh, srx, sry, strokeColor, strokeW);
+                            else
+                                session.DrawRectangle(sx, sy, sw, sh, strokeColor, strokeW);
+                        }
+                    }
+                }
             }
 
             using IRandomAccessStream stream = await file.OpenAsync(FileAccessMode.ReadWrite);
@@ -686,7 +737,8 @@ namespace ModernImageViewer
                 {
                     Slot = i,
                     Path = item.Path ?? string.Empty,
-                    Name = item.Name
+                    Name = item.Name,
+                    Border = GetBorderForItem(item).Clone()
                 };
 
                 if (i < _cellRoots.Length && _cellRoots[i]?.Tag is CellParts parts)
@@ -755,12 +807,17 @@ namespace ModernImageViewer
                 var items = new List<ImageItem>();
                 foreach (var photo in layoutFile.Photos)
                 {
-                    items.Add(new ImageItem
+                    var it = new ImageItem
                     {
                         Path = photo.Path ?? string.Empty,
                         Name = !string.IsNullOrEmpty(photo.Name) ? photo.Name : Path.GetFileName(photo.Path ?? string.Empty),
                         Dispatcher = this.DispatcherQueue
-                    });
+                    };
+                    items.Add(it);
+                    if (photo.Border != null && !string.IsNullOrEmpty(it.Path))
+                    {
+                        _itemBorders[it.Path] = photo.Border.Clone();
+                    }
                 }
                 _items.Clear();
                 _items.AddRange(items);
@@ -806,6 +863,8 @@ namespace ModernImageViewer
             {
                 _layoutFromTemplate = false;
             }
+
+            ApplyBorderToAllCells();
 
             // Restore zoom and pan
             if (layoutFile.Photos != null)
@@ -859,6 +918,7 @@ namespace ModernImageViewer
         {
             public string Path = "";
             public Rect Cell;
+            public Rect Card;
             public double ImageW;
             public double ImageH;
             public double Scale;
@@ -868,6 +928,7 @@ namespace ModernImageViewer
             public int NativeH;
             public double CanvasW;
             public double CanvasH;
+            public CellBorderDto? Border;
         }
     }
 }

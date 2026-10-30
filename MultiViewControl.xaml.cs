@@ -1697,6 +1697,7 @@ namespace ModernImageViewer
             cellBorder.Tag = new CellParts(transform, updateLayout, topControls, fullImg, photo, positionBadge, badgeText);
 
             cellBorder.Child = cellGrid;
+            ApplyBorderToCellBorder(cellBorder, cellGrid, photo.Item);
             return cellBorder;
         }
 
@@ -1802,6 +1803,10 @@ namespace ModernImageViewer
             var soloItem = new MenuFlyoutItem { Text = "Solo / Maximize", Icon = new FontIcon { Glyph = "\uE922" } };
             soloItem.Click += (s, e) => EnterSolo(Slot(item));
             menu.Items.Add(soloItem);
+
+            var borderItem = new MenuFlyoutItem { Text = "Frame & Border\u2026", Icon = new FontIcon { Glyph = "\uE790" } };
+            borderItem.Click += (s, e) => OpenCellBorderFlyout(item);
+            menu.Items.Add(borderItem);
 
             var removeItem = new MenuFlyoutItem { Text = "Remove from View", Icon = new FontIcon { Glyph = "\uE8BB" } };
             removeItem.Click += (s, e) => RemoveItem(item);
