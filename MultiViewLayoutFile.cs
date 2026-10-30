@@ -118,13 +118,25 @@ namespace ModernImageViewer
         [JsonPropertyName("shadow")]
         public bool Shadow { get; set; }
 
+        [JsonPropertyName("shadowIntensity")]
+        public double ShadowIntensity { get; set; }
+
+        [JsonPropertyName("strokeStyle")]
+        public string StrokeStyle { get; set; } = "Solid";
+
+        [JsonPropertyName("secondaryColor")]
+        public string? SecondaryColor { get; set; }
+
         public CellBorderDto Clone() => new()
         {
             Thickness = Thickness,
             Color = Color,
             Padding = Padding,
             CornerRadius = CornerRadius,
-            Shadow = Shadow
+            Shadow = Shadow,
+            ShadowIntensity = ShadowIntensity,
+            StrokeStyle = StrokeStyle,
+            SecondaryColor = SecondaryColor
         };
     }
 

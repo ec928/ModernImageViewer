@@ -395,7 +395,7 @@
                             Style="{StaticResource QuietButtonStyle}"
                             Padding="8,5"
                             CornerRadius="12"
-                            ToolTipService.ToolTip="Save image or Save/Load layout (Ctrl+S)">
+                            ToolTipService.ToolTip="Export JPEG or Save/Load layout (Ctrl+S)">
                         <Button.Flyout>
                             <Flyout x:Name="SaveFlyout" 
                                     Placement="Top"
@@ -404,9 +404,9 @@
                                     <Style TargetType="FlyoutPresenter">
                                         <Setter Property="CornerRadius" Value="10"/>
                                         <Setter Property="Padding" Value="4"/>
-                                        <Setter Property="Width" Value="380"/>
-                                        <Setter Property="MaxWidth" Value="380"/>
-                                        <Setter Property="MaxHeight" Value="560"/>
+                                        <Setter Property="MinWidth" Value="360"/>
+                                        <Setter Property="MaxWidth" Value="440"/>
+                                        <Setter Property="MaxHeight" Value="580"/>
                                         <Setter Property="Background" Value="#F21E1E1E"/>
                                         <Setter Property="BorderBrush" Value="#40FFFFFF"/>
                                         <Setter Property="BorderThickness" Value="1"/>

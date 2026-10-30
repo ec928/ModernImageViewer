@@ -1,3 +1,4 @@
+using Microsoft.Graphics.Canvas.Brushes;
 using Microsoft.Graphics.Canvas.Geometry;
 using Microsoft.Graphics.Canvas;
 using Microsoft.UI.Xaml;
@@ -62,7 +63,7 @@ namespace ModernImageViewer
         {
             var panel = new StackPanel
             {
-                Width = 370,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
                 Spacing = 1,
                 XYFocusKeyboardNavigation = Microsoft.UI.Xaml.Input.XYFocusKeyboardNavigationMode.Enabled
             };
@@ -142,21 +143,26 @@ namespace ModernImageViewer
 
                 if (favs.Count > 0)
                 {
-                    panel.Children.Add(CreateSectionHeader(favs.Count >= 3 ? "FAVOURITES (3 of 3)" : "FAVOURITES"));
+                    panel.Children.Add(CreateSectionHeader(favs.Count >= 3 ? "Favourites (3 of 3)" : "Favourites"));
                     foreach (var p in favs)
                     {
-                        panel.Children.Add(CreateFolderRow(p, isFavourite: true));
+                        AddFolderAndLayouts(panel, p, isFavourite: true);
                     }
                 }
 
                 if (recents.Count > 0)
                 {
-                    panel.Children.Add(CreateSectionHeader("RECENT LOCATIONS"));
+                    if (favs.Count > 0)
+                    {
+                        panel.Children.Add(CreateMenuDivider());
+                    }
+                    panel.Children.Add(CreateSectionHeader("Recent"));
                     foreach (var p in recents)
                     {
-                        panel.Children.Add(CreateFolderRow(p, isFavourite: false));
+                        AddFolderAndLayouts(panel, p, isFavourite: false);
                     }
 
+                    panel.Children.Add(CreateMenuDivider());
                     var clearBtn = CreateMenuItemButton("Clear Recent Locations", icon: new FontIcon { Glyph = "\uE74D", FontSize = 13, Foreground = _menuWhiteSecondary });
                     clearBtn.Click += (_, _) =>
                     {
@@ -165,15 +171,27 @@ namespace ModernImageViewer
                     };
                     panel.Children.Add(clearBtn);
                 }
+                else if (favs.Count == 0)
+                {
+                    panel.Children.Add(CreateMenuDivider());
+                    panel.Children.Add(new TextBlock
+                    {
+                        Text = "No recent locations",
+                        FontSize = 12,
+                        Foreground = _menuWhiteTertiary,
+                        Margin = new Thickness(12, 6, 12, 6),
+                        FontStyle = Windows.UI.Text.FontStyle.Italic
+                    });
+                }
             }
 
             var scroll = new ScrollViewer
             {
                 Content = panel,
-                Width = 370,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                MaxHeight = 520
+                MaxHeight = 540
             };
 
             SaveFlyout.Content = scroll;
@@ -242,19 +260,167 @@ namespace ModernImageViewer
             return new TextBlock
             {
                 Text = text,
-                FontSize = 11,
+                FontSize = 12,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                CharacterSpacing = 40,
                 Foreground = _menuWhiteSecondary,
-                Margin = new Thickness(10, 8, 10, 4)
+                Margin = new Thickness(12, 10, 12, 4)
             };
+        }
+
+        private void AddFolderAndLayouts(StackPanel panel, string path, bool isFavourite)
+        {
+            panel.Children.Add(CreateFolderRow(path, isFavourite));
+
+            if (Directory.Exists(path))
+            {
+                List<string> layoutFiles = new();
+                try
+                {
+                    layoutFiles = Directory.GetFiles(path, "*.mivlayout")
+                        .OrderByDescending(f => File.GetLastWriteTimeUtc(f))
+                        .ToList();
+                }
+                catch { }
+
+                foreach (var layoutPath in layoutFiles.Take(3))
+                {
+                    panel.Children.Add(CreateLayoutFileRow(layoutPath));
+                }
+
+                if (layoutFiles.Count > 3)
+                {
+                    panel.Children.Add(CreateMoreLayoutsButton(path, layoutFiles.Count - 3));
+                }
+            }
+        }
+
+        private Button CreateLayoutFileRow(string layoutPath)
+        {
+            var content = new Grid { ColumnSpacing = 8, Margin = new Thickness(24, 0, 4, 0) };
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var icon = new FontIcon
+            {
+                Glyph = "\uE8A5",
+                FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
+                FontSize = 12,
+                Foreground = _menuWhiteSecondary,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(icon, 0);
+            content.Children.Add(icon);
+
+            string fileName = Path.GetFileName(layoutPath);
+            var label = new TextBlock
+            {
+                Text = fileName,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center,
+                FontSize = 12.5,
+                Foreground = _menuWhitePrimary
+            };
+            Grid.SetColumn(label, 1);
+            content.Children.Add(label);
+
+            var btn = new Button
+            {
+                Style = (Style)Application.Current.Resources["SubtleButtonStyle"],
+                Content = content,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                Padding = new Thickness(6, 4, 8, 4),
+                CornerRadius = new CornerRadius(4),
+                MinHeight = 28,
+                Margin = new Thickness(0, 0, 0, 1)
+            };
+
+            ToolTipService.SetToolTip(btn, $"Load layout:\n{layoutPath}");
+            btn.Click += async (_, _) =>
+            {
+                SaveFlyout.Hide();
+                await LoadLayoutFromPathAsync(layoutPath);
+            };
+
+            var contextMenu = new MenuFlyout();
+            var loadItem = new MenuFlyoutItem
+            {
+                Text = "Load Layout",
+                Icon = new FontIcon { Glyph = "\uE8E5", FontSize = 13 }
+            };
+            loadItem.Click += async (_, _) =>
+            {
+                SaveFlyout.Hide();
+                await LoadLayoutFromPathAsync(layoutPath);
+            };
+            contextMenu.Items.Add(loadItem);
+
+            var revealItem = new MenuFlyoutItem
+            {
+                Text = "Show in File Explorer",
+                Icon = new FontIcon { Glyph = "\uE838", FontSize = 13 }
+            };
+            revealItem.Click += (_, _) =>
+            {
+                SaveFlyout.Hide();
+                try
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "explorer.exe",
+                        Arguments = $"/select,\"{layoutPath}\"",
+                        UseShellExecute = true
+                    });
+                }
+                catch { }
+            };
+            contextMenu.Items.Add(revealItem);
+
+            btn.ContextFlyout = contextMenu;
+            return btn;
+        }
+
+        private Button CreateMoreLayoutsButton(string folderPath, int extraCount)
+        {
+            var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(24, 0, 0, 0) };
+            content.Children.Add(new FontIcon
+            {
+                Glyph = "\uE8DA",
+                FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
+                FontSize = 11,
+                Foreground = _menuWhiteTertiary,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            content.Children.Add(new TextBlock
+            {
+                Text = $"+{extraCount} more layouts in folder…",
+                FontSize = 11.5,
+                Foreground = _menuWhiteSecondary,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+
+            var btn = new Button
+            {
+                Style = (Style)Application.Current.Resources["SubtleButtonStyle"],
+                Content = content,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Left,
+                Padding = new Thickness(6, 2, 8, 2),
+                CornerRadius = new CornerRadius(4),
+                MinHeight = 24
+            };
+            btn.Click += async (_, _) =>
+            {
+                SaveFlyout.Hide();
+                await OpenLayoutFileAsync();
+            };
+            return btn;
         }
 
         private Grid CreateFolderRow(string path, bool isFavourite)
         {
             var row = new Grid
             {
-                Width = 370,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 Margin = new Thickness(0, 1, 0, 1)
             };
@@ -270,6 +436,7 @@ namespace ModernImageViewer
             var icon = new FontIcon
             {
                 Glyph = "\uE8B7",
+                FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
                 FontSize = 13.5,
                 Foreground = _menuWhiteSecondary,
                 VerticalAlignment = VerticalAlignment.Center
@@ -334,7 +501,7 @@ namespace ModernImageViewer
             {
                 Style = (Style)Application.Current.Resources["SubtleButtonStyle"],
                 Content = starIcon,
-                Width = 34,
+                Width = 32,
                 Height = 32,
                 Padding = new Thickness(0),
                 CornerRadius = new CornerRadius(4),
@@ -385,8 +552,7 @@ namespace ModernImageViewer
                 }
             };
             contextMenu.Items.Add(openExpItem);
-            row.ContextFlyout = contextMenu;
-
+            openBtn.ContextFlyout = contextMenu;
             return row;
         }
 
@@ -598,10 +764,34 @@ namespace ModernImageViewer
 
                 float rx = (float)((shot.Border?.CornerRadius ?? 0) * scaleX);
                 float ry = (float)((shot.Border?.CornerRadius ?? 0) * scaleY);
-                float strokeW = (float)((shot.Border?.Thickness ?? 0) * scaleX);
+                double cardX = shot.Card.X * scaleX;
+                double cardY = shot.Card.Y * scaleY;
+                double cardW = shot.Card.Width * scaleX;
+                double cardH = shot.Card.Height * scaleY;
 
+                // 1. Draw Drop Shadow
+                if (shot.Border != null && shot.Border.ShadowIntensity > 0)
+                {
+                    double shadowOffset = shot.Border.ShadowIntensity * scaleX * 0.12;
+                    byte shadowAlpha = (byte)Math.Clamp(shot.Border.ShadowIntensity * 1.4, 0, 160);
+                    var shadowColor = Color.FromArgb(shadowAlpha, 0, 0, 0);
+
+                    using var shadowSession = target.CreateDrawingSession();
+                    float shX = (float)(cardX + shadowOffset * 0.5);
+                    float shY = (float)(cardY + shadowOffset * 0.7);
+                    if (rx > 0)
+                        shadowSession.FillRoundedRectangle(shX, shY, (float)cardW, (float)cardH, rx, ry, shadowColor);
+                    else
+                        shadowSession.FillRectangle(shX, shY, (float)cardW, (float)cardH, shadowColor);
+                }
+
+                // 2. Draw Image with Rounded or Sharp Clipping
                 using (var session = target.CreateDrawingSession())
                 {
+                    string strokeStyle = shot.Border?.StrokeStyle ?? "Solid";
+                    float strokeW = (float)((shot.Border?.Thickness ?? 0) * scaleX);
+                    if (string.Equals(strokeStyle, "InnerMuted", StringComparison.OrdinalIgnoreCase)) strokeW = (float)(1.0 * scaleX);
+
                     if (rx > 0 && ry > 0)
                     {
                         float innerRx = Math.Max(0, rx - strokeW / 2.0f);
@@ -620,28 +810,90 @@ namespace ModernImageViewer
                         }
                     }
 
-                    if (strokeW > 0 && !string.IsNullOrEmpty(shot.Border?.Color))
+                    // 3. Draw Stroke (Solid, Dashed, InnerMuted, Gradient)
+                    if (string.Equals(strokeStyle, "InnerMuted", StringComparison.OrdinalIgnoreCase))
                     {
-                        var strokeColor = ParseColor(shot.Border.Color);
+                        float sW = (float)Math.Max(1, 1.0 * scaleX);
+                        var strokeColor = Color.FromArgb(45, 255, 255, 255);
+                        float half = sW / 2.0f;
+                        float sx = (float)(cardX + half);
+                        float sy = (float)(cardY + half);
+                        float sw = (float)Math.Max(1, cardW - sW);
+                        float sh = (float)Math.Max(1, cardH - sW);
+                        float srx = Math.Max(0, rx - half);
+                        float sry = Math.Max(0, ry - half);
+
+                        if (rx > 0)
+                            session.DrawRoundedRectangle(sx, sy, sw, sh, srx, sry, strokeColor, sW);
+                        else
+                            session.DrawRectangle(sx, sy, sw, sh, strokeColor, sW);
+                    }
+                    else if (string.Equals(strokeStyle, "Gradient", StringComparison.OrdinalIgnoreCase))
+                    {
+                        float sW = (float)(Math.Max(1, shot.Border?.Thickness ?? 2) * scaleX);
+                        var primaryColor = ParseColor(shot.Border?.Color);
+                        var secondaryColor = Color.FromArgb((byte)(primaryColor.A * 0.40f), primaryColor.R, primaryColor.G, primaryColor.B);
+
+                        float half = sW / 2.0f;
+                        float sx = (float)(cardX + half);
+                        float sy = (float)(cardY + half);
+                        float sw = (float)Math.Max(1, cardW - sW);
+                        float sh = (float)Math.Max(1, cardH - sW);
+                        float srx = Math.Max(0, rx - half);
+                        float sry = Math.Max(0, ry - half);
+
+                        using var gradBrush = new CanvasLinearGradientBrush(device, primaryColor, secondaryColor)
+                        {
+                            StartPoint = new System.Numerics.Vector2((float)cardX, (float)cardY),
+                            EndPoint = new System.Numerics.Vector2((float)(cardX + cardW), (float)(cardY + cardH))
+                        };
+
+                        if (rx > 0)
+                            session.DrawRoundedRectangle(sx, sy, sw, sh, srx, sry, gradBrush, sW);
+                        else
+                            session.DrawRectangle(sx, sy, sw, sh, gradBrush, sW);
+                    }
+                    else if (string.Equals(strokeStyle, "Dashed", StringComparison.OrdinalIgnoreCase))
+                    {
+                        float sW = (float)(Math.Max(1, shot.Border?.Thickness ?? 2) * scaleX);
+                        var strokeColor = ParseColor(shot.Border?.Color);
                         if (strokeColor.A > 0)
                         {
-                            double cardX = shot.Card.X * scaleX;
-                            double cardY = shot.Card.Y * scaleY;
-                            double cardW = shot.Card.Width * scaleX;
-                            double cardH = shot.Card.Height * scaleY;
-
-                            float half = strokeW / 2.0f;
+                            float half = sW / 2.0f;
                             float sx = (float)(cardX + half);
                             float sy = (float)(cardY + half);
-                            float sw = (float)Math.Max(1, cardW - strokeW);
-                            float sh = (float)Math.Max(1, cardH - strokeW);
+                            float sw = (float)Math.Max(1, cardW - sW);
+                            float sh = (float)Math.Max(1, cardH - sW);
                             float srx = Math.Max(0, rx - half);
                             float sry = Math.Max(0, ry - half);
 
+                            var canvasStrokeStyle = new CanvasStrokeStyle { DashStyle = CanvasDashStyle.Dash };
                             if (rx > 0)
-                                session.DrawRoundedRectangle(sx, sy, sw, sh, srx, sry, strokeColor, strokeW);
+                                session.DrawRoundedRectangle(sx, sy, sw, sh, srx, sry, strokeColor, sW, canvasStrokeStyle);
                             else
-                                session.DrawRectangle(sx, sy, sw, sh, strokeColor, strokeW);
+                                session.DrawRectangle(sx, sy, sw, sh, strokeColor, sW, canvasStrokeStyle);
+                        }
+                    }
+                    else // Solid
+                    {
+                        if (strokeW > 0 && !string.IsNullOrEmpty(shot.Border?.Color))
+                        {
+                            var strokeColor = ParseColor(shot.Border.Color);
+                            if (strokeColor.A > 0)
+                            {
+                                float half = strokeW / 2.0f;
+                                float sx = (float)(cardX + half);
+                                float sy = (float)(cardY + half);
+                                float sw = (float)Math.Max(1, cardW - strokeW);
+                                float sh = (float)Math.Max(1, cardH - strokeW);
+                                float srx = Math.Max(0, rx - half);
+                                float sry = Math.Max(0, ry - half);
+
+                                if (rx > 0)
+                                    session.DrawRoundedRectangle(sx, sy, sw, sh, srx, sry, strokeColor, strokeW);
+                                else
+                                    session.DrawRectangle(sx, sy, sw, sh, strokeColor, strokeW);
+                            }
                         }
                     }
                 }
@@ -765,6 +1017,33 @@ namespace ModernImageViewer
             }
         }
 
+        public async Task LoadLayoutFromPathAsync(string filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+            {
+                await ShowExportMessageAsync($"File not found:\n{filePath}");
+                return;
+            }
+
+            try
+            {
+                string json = await File.ReadAllTextAsync(filePath);
+                var layoutFile = MultiViewLayoutFile.FromJson(json);
+                if (layoutFile == null)
+                {
+                    await ShowExportMessageAsync("Could not read layout file.");
+                    return;
+                }
+                string? openedDir = Path.GetDirectoryName(filePath);
+                if (!string.IsNullOrEmpty(openedDir)) MainWindow.Instance?.AddMultiViewSaveLocation(openedDir);
+                ApplyLayoutFile(layoutFile);
+            }
+            catch (Exception ex)
+            {
+                await ShowExportMessageAsync($"Failed to load layout: {ex.Message}");
+            }
+        }
+
         private async Task OpenLayoutFileAsync()
         {
             if (MainWindow.Instance == null) return;
@@ -779,23 +1058,7 @@ namespace ModernImageViewer
             StorageFile? file = await picker.PickSingleFileAsync();
             if (file == null) return;
 
-            try
-            {
-                string json = await FileIO.ReadTextAsync(file);
-                var layoutFile = MultiViewLayoutFile.FromJson(json);
-                if (layoutFile == null)
-                {
-                    await ShowExportMessageAsync("Could not read layout file.");
-                    return;
-                }
-                string? openedDir = Path.GetDirectoryName(file.Path);
-                if (!string.IsNullOrEmpty(openedDir)) MainWindow.Instance?.AddMultiViewSaveLocation(openedDir);
-                ApplyLayoutFile(layoutFile);
-            }
-            catch (Exception ex)
-            {
-                await ShowExportMessageAsync($"Failed to open layout: {ex.Message}");
-            }
+            await LoadLayoutFromPathAsync(file.Path);
         }
 
         public void ApplyLayoutFile(MultiViewLayoutFile layoutFile)

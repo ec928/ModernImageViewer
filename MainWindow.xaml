@@ -200,7 +200,7 @@
                                         <FontIcon x:Name="ListModeIcon" Glyph="&#xE8FD;" FontSize="13"/>
                                     </Button>
                                     <Button x:Name="MultiModeButton" Style="{StaticResource HeaderButtonStyle}" Width="28" Height="22" CornerRadius="4" Click="MultiMode_Click" ToolTipService.ToolTip="Multi-View / Layout (Enter)">
-                                        <FontIcon x:Name="MultiModeIcon" Glyph="&#xE748;" FontSize="13"/>
+                                        <FontIcon x:Name="MultiModeIcon" Glyph="&#xEE49;" FontSize="13"/>
                                     </Button>
                                 </StackPanel>
                             </Border>

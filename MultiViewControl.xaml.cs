@@ -1693,8 +1693,19 @@ namespace ModernImageViewer
 
             cellGrid.ContextFlyout = menu;
 
+            // Dashed Border Overlay (for vector dashed stroke style)
+            var dashedStroke = new Microsoft.UI.Xaml.Shapes.Rectangle
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch,
+                IsHitTestVisible = false,
+                Visibility = Visibility.Collapsed
+            };
+            Canvas.SetZIndex(dashedStroke, 50);
+            cellGrid.Children.Add(dashedStroke);
+
             AttachSwapDrop(cellBorder, cellGrid, photo);
-            cellBorder.Tag = new CellParts(transform, updateLayout, topControls, fullImg, photo, positionBadge, badgeText);
+            cellBorder.Tag = new CellParts(transform, updateLayout, topControls, fullImg, photo, positionBadge, badgeText, dashedStroke);
 
             cellBorder.Child = cellGrid;
             ApplyBorderToCellBorder(cellBorder, cellGrid, photo.Item);
@@ -1831,7 +1842,7 @@ namespace ModernImageViewer
             public CellPhoto(ImageItem item) => Item = item;
         }
 
-        private sealed record CellParts(CompositeTransform Transform, Action UpdateLayout, UIElement TopControls, Image Photo, CellPhoto Bound, Border PositionBadge, TextBlock BadgeText);
+        private sealed record CellParts(CompositeTransform Transform, Action UpdateLayout, UIElement TopControls, Image Photo, CellPhoto Bound, Border PositionBadge, TextBlock BadgeText, Microsoft.UI.Xaml.Shapes.Rectangle DashedStroke);
 
         /// <summary>
         /// Remove a photo and keep the other cells, so none of them decodes again. The layout is rebuilt

@@ -130,7 +130,9 @@ namespace ModernImageViewer.Tests
                             Thickness = 4.0,
                             Color = "#FFFFFFFF",
                             Padding = 8.0,
-                            CornerRadius = 12.0
+                            CornerRadius = 12.0,
+                            ShadowIntensity = 45.0,
+                            StrokeStyle = "InnerMuted"
                         }
                     },
                     new()
@@ -142,7 +144,9 @@ namespace ModernImageViewer.Tests
                             Thickness = 1.0,
                             Color = "#FFFFC83B",
                             Padding = 16.0,
-                            CornerRadius = 6.0
+                            CornerRadius = 6.0,
+                            ShadowIntensity = 20.0,
+                            StrokeStyle = "Gradient"
                         }
                     }
                 }
@@ -164,6 +168,8 @@ namespace ModernImageViewer.Tests
             Assert.Equal("#FFFFFFFF", b0.Color);
             Assert.Equal(8.0, b0.Padding);
             Assert.Equal(12.0, b0.CornerRadius);
+            Assert.Equal(45.0, b0.ShadowIntensity);
+            Assert.Equal("InnerMuted", b0.StrokeStyle);
 
             var b1 = loaded.Photos[1].Border;
             Assert.NotNull(b1);
@@ -171,6 +177,8 @@ namespace ModernImageViewer.Tests
             Assert.Equal("#FFFFC83B", b1.Color);
             Assert.Equal(16.0, b1.Padding);
             Assert.Equal(6.0, b1.CornerRadius);
+            Assert.Equal(20.0, b1.ShadowIntensity);
+            Assert.Equal("Gradient", b1.StrokeStyle);
 
             // Test clone
             var clone = b1.Clone();
@@ -178,6 +186,8 @@ namespace ModernImageViewer.Tests
             Assert.Equal(b1.Color, clone.Color);
             Assert.Equal(b1.Padding, clone.Padding);
             Assert.Equal(b1.CornerRadius, clone.CornerRadius);
+            Assert.Equal(b1.ShadowIntensity, clone.ShadowIntensity);
+            Assert.Equal(b1.StrokeStyle, clone.StrokeStyle);
         }
     }
 }

@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Media;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Numerics;
 using Windows.Foundation;
 using Windows.UI;
 
@@ -13,16 +14,17 @@ namespace ModernImageViewer
     public sealed partial class MultiViewControl
     {
         private readonly Dictionary<string, CellBorderDto> _itemBorders = new(StringComparer.OrdinalIgnoreCase);
+        private static CellBorderDto? _lastBorderSettings;
         private Flyout? _cellBorderFlyout;
 
         public CellBorderDto GetBorderForItem(ImageItem? item)
         {
             if (item == null || string.IsNullOrEmpty(item.Path))
-                return new CellBorderDto { Color = "#FFFFFFFF", Thickness = 0, Padding = 0, CornerRadius = 0 };
+                return new CellBorderDto { Color = "#FFFFFFFF", Thickness = 0, Padding = 0, CornerRadius = 0, StrokeStyle = "Solid", ShadowIntensity = 0 };
 
             if (!_itemBorders.TryGetValue(item.Path, out var border))
             {
-                border = new CellBorderDto { Color = "#FFFFFFFF", Thickness = 0, Padding = 0, CornerRadius = 0 };
+                border = new CellBorderDto { Color = "#FFFFFFFF", Thickness = 0, Padding = 0, CornerRadius = 0, StrokeStyle = "Solid", ShadowIntensity = 0 };
                 _itemBorders[item.Path] = border;
             }
             return border;
@@ -32,6 +34,7 @@ namespace ModernImageViewer
         {
             if (item == null || string.IsNullOrEmpty(item.Path)) return;
             _itemBorders[item.Path] = border.Clone();
+            _lastBorderSettings = border.Clone();
             int slot = Slot(item);
             if (slot >= 0) ApplyBorderToCell(slot);
         }
@@ -82,9 +85,79 @@ namespace ModernImageViewer
             var border = GetBorderForItem(item);
 
             cellBorder.Margin = new Thickness(border.Padding);
-            cellBorder.BorderThickness = new Thickness(border.Thickness);
             cellBorder.CornerRadius = new CornerRadius(border.CornerRadius);
-            cellBorder.BorderBrush = ParseBorderBrush(border.Color);
+
+            // Shadow & Elevation
+            if (border.ShadowIntensity > 0)
+            {
+                cellBorder.Shadow = new ThemeShadow();
+                cellBorder.Translation = new Vector3(0, 0, (float)(border.ShadowIntensity * 0.32f));
+            }
+            else
+            {
+                cellBorder.Shadow = null;
+                cellBorder.Translation = Vector3.Zero;
+            }
+
+            // Dashed overlay rectangle reference
+            Microsoft.UI.Xaml.Shapes.Rectangle? dashedRect = null;
+            if (cellBorder.Tag is CellParts parts)
+            {
+                dashedRect = parts.DashedStroke;
+            }
+
+            // Stroke style application
+            string style = border.StrokeStyle ?? "Solid";
+            if (string.Equals(style, "Dashed", StringComparison.OrdinalIgnoreCase))
+            {
+                cellBorder.BorderThickness = new Thickness(0);
+                cellBorder.BorderBrush = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
+
+                if (dashedRect != null)
+                {
+                    dashedRect.Visibility = Visibility.Visible;
+                    dashedRect.Stroke = ParseBorderBrush(border.Color);
+                    dashedRect.StrokeThickness = Math.Max(1, border.Thickness);
+                    dashedRect.StrokeDashArray = new DoubleCollection { 3, 2 };
+                    dashedRect.RadiusX = border.CornerRadius;
+                    dashedRect.RadiusY = border.CornerRadius;
+                }
+            }
+            else
+            {
+                if (dashedRect != null) dashedRect.Visibility = Visibility.Collapsed;
+
+                if (string.Equals(style, "InnerMuted", StringComparison.OrdinalIgnoreCase))
+                {
+                    cellBorder.BorderThickness = new Thickness(1);
+                    if (Application.Current.Resources.TryGetValue("ControlElevationBorderBrush", out var brushObj) && brushObj is Brush b)
+                    {
+                        cellBorder.BorderBrush = b;
+                    }
+                    else
+                    {
+                        var lgb = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
+                        lgb.GradientStops.Add(new GradientStop { Color = Color.FromArgb(36, 255, 255, 255), Offset = 0.0 });
+                        lgb.GradientStops.Add(new GradientStop { Color = Color.FromArgb(14, 255, 255, 255), Offset = 1.0 });
+                        cellBorder.BorderBrush = lgb;
+                    }
+                }
+                else if (string.Equals(style, "Gradient", StringComparison.OrdinalIgnoreCase))
+                {
+                    cellBorder.BorderThickness = new Thickness(Math.Max(1, border.Thickness));
+                    var primary = ParseColor(border.Color);
+                    var secondary = Color.FromArgb((byte)(primary.A * 0.40f), primary.R, primary.G, primary.B);
+                    var lgb = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 1) };
+                    lgb.GradientStops.Add(new GradientStop { Color = primary, Offset = 0.0 });
+                    lgb.GradientStops.Add(new GradientStop { Color = secondary, Offset = 1.0 });
+                    cellBorder.BorderBrush = lgb;
+                }
+                else // Solid
+                {
+                    cellBorder.BorderThickness = new Thickness(border.Thickness);
+                    cellBorder.BorderBrush = ParseBorderBrush(border.Color);
+                }
+            }
 
             if (cellGrid != null)
             {
@@ -114,8 +187,8 @@ namespace ModernImageViewer
 
             var panel = new StackPanel
             {
-                Width = 320,
-                Spacing = 12
+                Width = 330,
+                Spacing = 10
             };
 
             // 1. Title Header
@@ -128,11 +201,94 @@ namespace ModernImageViewer
             };
             panel.Children.Add(header);
 
-            // 2. Color Swatches
+            // 2. Stroke Style Selector
+            var strokeLabel = new TextBlock
+            {
+                Text = "Stroke Style",
+                FontSize = 11,
+                Foreground = _menuWhiteSecondary
+            };
+            panel.Children.Add(strokeLabel);
+
+            var strokeGrid = new Grid { ColumnSpacing = 4 };
+            strokeGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            strokeGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            strokeGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            strokeGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            string[] strokeStyles = new[] { "Solid", "Dashed", "InnerMuted", "Gradient" };
+            string[] strokeDisplay = new[] { "Solid", "Dashed", "Muted", "Gradient" };
+            var strokeButtons = new List<Button>();
+
+            // Sliders reference declaration
+            Slider? thicknessSliderRef = null;
+            Slider? gapSliderRef = null;
+            Slider? radiusSliderRef = null;
+            Slider? shadowSliderRef = null;
+            List<Button>? swatchButtonsRef = null;
+            Action? updateSwatchesAction = null;
+
+            void UpdateStrokeSelection()
+            {
+                string cur = border.StrokeStyle ?? "Solid";
+                for (int i = 0; i < strokeStyles.Length; i++)
+                {
+                    bool sel = string.Equals(cur, strokeStyles[i], StringComparison.OrdinalIgnoreCase);
+                    strokeButtons[i].Background = sel ? new SolidColorBrush(Color.FromArgb(70, 255, 255, 255)) : new SolidColorBrush(Color.FromArgb(20, 255, 255, 255));
+                    strokeButtons[i].BorderBrush = sel ? new SolidColorBrush(Color.FromArgb(180, 255, 255, 255)) : new SolidColorBrush(Color.FromArgb(40, 255, 255, 255));
+                }
+            }
+
+            for (int i = 0; i < strokeStyles.Length; i++)
+            {
+                string sName = strokeStyles[i];
+                var sBtn = new Button
+                {
+                    Content = new TextBlock { Text = strokeDisplay[i], FontSize = 11, Foreground = _menuWhitePrimary },
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    HorizontalContentAlignment = HorizontalAlignment.Center,
+                    Padding = new Thickness(2, 4, 2, 4),
+                    MinHeight = 28,
+                    CornerRadius = new CornerRadius(4),
+                    BorderThickness = new Thickness(1)
+                };
+                ToolTipService.SetToolTip(sBtn, sName switch
+                {
+                    "Solid" => "Solid line border",
+                    "Dashed" => "Dashed vector border",
+                    "InnerMuted" => "1px semi-transparent Fluent elevation border",
+                    "Gradient" => "Two-stop gradient frame effect",
+                    _ => sName
+                });
+                sBtn.Click += (_, _) =>
+                {
+                    border.StrokeStyle = sName;
+                    if (sName == "InnerMuted")
+                    {
+                        border.Thickness = 1;
+                        if (thicknessSliderRef != null) thicknessSliderRef.Value = 1;
+                    }
+                    else if (border.Thickness == 0)
+                    {
+                        border.Thickness = 2;
+                        if (thicknessSliderRef != null) thicknessSliderRef.Value = 2;
+                    }
+                    _lastBorderSettings = border.Clone();
+                    ApplyBorderToCell(slot);
+                    UpdateStrokeSelection();
+                };
+                Grid.SetColumn(sBtn, i);
+                strokeGrid.Children.Add(sBtn);
+                strokeButtons.Add(sBtn);
+            }
+            UpdateStrokeSelection();
+            panel.Children.Add(strokeGrid);
+
+            // 3. Color Swatches
             var colorLabel = new TextBlock
             {
                 Text = "Border Color",
-                FontSize = 12,
+                FontSize = 11,
                 Foreground = _menuWhiteSecondary
             };
             panel.Children.Add(colorLabel);
@@ -155,6 +311,7 @@ namespace ModernImageViewer
             };
 
             var swatchButtons = new List<Button>();
+            swatchButtonsRef = swatchButtons;
             void UpdateSwatchSelection()
             {
                 string currentHex = border.Color ?? "#FFFFFFFF";
@@ -165,11 +322,7 @@ namespace ModernImageViewer
                     swatchButtons[i].BorderThickness = isMatch ? new Thickness(2) : new Thickness(1);
                 }
             }
-
-            // References to sliders so presets can update them
-            Slider? thicknessSliderRef = null;
-            Slider? gapSliderRef = null;
-            Slider? radiusSliderRef = null;
+            updateSwatchesAction = UpdateSwatchSelection;
 
             foreach (var s in swatches)
             {
@@ -193,6 +346,7 @@ namespace ModernImageViewer
                         border.Thickness = 2;
                         if (thicknessSliderRef != null) thicknessSliderRef.Value = 2;
                     }
+                    _lastBorderSettings = border.Clone();
                     ApplyBorderToCell(slot);
                     UpdateSwatchSelection();
                 };
@@ -202,31 +356,41 @@ namespace ModernImageViewer
             UpdateSwatchSelection();
             panel.Children.Add(swatchesPanel);
 
-            // 3. Thickness Slider
-            var thicknessRow = CreateSliderRow("Thickness", 0, 24, border.Thickness, val =>
+            // 4. Sliders
+            var thicknessRow = CreateSliderRow("Thickness", 0, 24, border.Thickness, "px", val =>
             {
                 border.Thickness = val;
+                _lastBorderSettings = border.Clone();
                 ApplyBorderToCell(slot);
             }, out thicknessSliderRef);
             panel.Children.Add(thicknessRow);
 
-            // 4. Spacing / Gap Slider
-            var gapRow = CreateSliderRow("Spacing (Gap)", 0, 32, border.Padding, val =>
+            var gapRow = CreateSliderRow("Spacing (Gap)", 0, 32, border.Padding, "px", val =>
             {
                 border.Padding = val;
+                _lastBorderSettings = border.Clone();
                 ApplyBorderToCell(slot);
             }, out gapSliderRef);
             panel.Children.Add(gapRow);
 
-            // 5. Corner Radius Slider
-            var radiusRow = CreateSliderRow("Corner Radius", 0, 32, border.CornerRadius, val =>
+            var radiusRow = CreateSliderRow("Corner Radius", 0, 32, border.CornerRadius, "px", val =>
             {
                 border.CornerRadius = val;
+                _lastBorderSettings = border.Clone();
                 ApplyBorderToCell(slot);
             }, out radiusSliderRef);
             panel.Children.Add(radiusRow);
 
-            // 6. Quick Presets
+            var shadowRow = CreateSliderRow("Shadow Intensity", 0, 100, border.ShadowIntensity, "%", val =>
+            {
+                border.ShadowIntensity = val;
+                border.Shadow = val > 0;
+                _lastBorderSettings = border.Clone();
+                ApplyBorderToCell(slot);
+            }, out shadowSliderRef);
+            panel.Children.Add(shadowRow);
+
+            // 5. Quick Presets (Now including "Last Settings")
             var presetsLabel = new TextBlock
             {
                 Text = "Quick Presets",
@@ -235,73 +399,88 @@ namespace ModernImageViewer
             };
             panel.Children.Add(presetsLabel);
 
-            var presetsGrid = new Grid { ColumnSpacing = 6 };
-            presetsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            presetsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            presetsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            presetsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var presetsGrid = new Grid { ColumnSpacing = 4 };
+            presetsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.1, GridUnitType.Star) }); // Last Settings
+            presetsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.0, GridUnitType.Star) }); // Card
+            presetsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.0, GridUnitType.Star) }); // Mat
+            presetsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.0, GridUnitType.Star) }); // Round
+            presetsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.0, GridUnitType.Star) }); // Flush
 
-            var flushBtn = CreateSmallPresetButton("Flush", () =>
+            void ApplyPresetValues(CellBorderDto targetValues)
             {
-                border.Thickness = 0;
-                border.Padding = 0;
-                border.CornerRadius = 0;
-                if (thicknessSliderRef != null) thicknessSliderRef.Value = 0;
-                if (gapSliderRef != null) gapSliderRef.Value = 0;
-                if (radiusSliderRef != null) radiusSliderRef.Value = 0;
-                ApplyBorderToCell(slot);
-            });
-            Grid.SetColumn(flushBtn, 0);
-            presetsGrid.Children.Add(flushBtn);
+                border.Thickness = targetValues.Thickness;
+                border.Padding = targetValues.Padding;
+                border.CornerRadius = targetValues.CornerRadius;
+                border.Color = targetValues.Color;
+                border.StrokeStyle = targetValues.StrokeStyle ?? "Solid";
+                border.ShadowIntensity = targetValues.ShadowIntensity;
+                border.Shadow = targetValues.ShadowIntensity > 0;
 
+                if (thicknessSliderRef != null) thicknessSliderRef.Value = border.Thickness;
+                if (gapSliderRef != null) gapSliderRef.Value = border.Padding;
+                if (radiusSliderRef != null) radiusSliderRef.Value = border.CornerRadius;
+                if (shadowSliderRef != null) shadowSliderRef.Value = border.ShadowIntensity;
+
+                UpdateStrokeSelection();
+                updateSwatchesAction?.Invoke();
+                _lastBorderSettings = border.Clone();
+                ApplyBorderToCell(slot);
+            }
+
+            // Button 1: Last Settings
+            var lastBtn = CreateSmallPresetButton("\uE735 Last", () =>
+            {
+                if (_lastBorderSettings != null)
+                {
+                    ApplyPresetValues(_lastBorderSettings);
+                }
+                else
+                {
+                    // Fallback to card
+                    ApplyPresetValues(new CellBorderDto { Thickness = 1, Padding = 8, CornerRadius = 12, Color = "#FFFFFFFF", StrokeStyle = "InnerMuted", ShadowIntensity = 40 });
+                }
+            }, isAccent: true);
+            ToolTipService.SetToolTip(lastBtn, _lastBorderSettings != null
+                ? $"Apply last used frame ({_lastBorderSettings.StrokeStyle}, {_lastBorderSettings.Thickness}px, Gap {_lastBorderSettings.Padding}px)"
+                : "Apply last used settings");
+            Grid.SetColumn(lastBtn, 0);
+            presetsGrid.Children.Add(lastBtn);
+
+            // Button 2: Card (Fluent elevation card)
             var cardBtn = CreateSmallPresetButton("Card", () =>
             {
-                border.Thickness = 1;
-                border.Padding = 8;
-                border.CornerRadius = 12;
-                border.Color = "#FFFFFFFF";
-                if (thicknessSliderRef != null) thicknessSliderRef.Value = 1;
-                if (gapSliderRef != null) gapSliderRef.Value = 8;
-                if (radiusSliderRef != null) radiusSliderRef.Value = 12;
-                UpdateSwatchSelection();
-                ApplyBorderToCell(slot);
+                ApplyPresetValues(new CellBorderDto { Thickness = 1, Padding = 8, CornerRadius = 12, Color = "#FFFFFFFF", StrokeStyle = "InnerMuted", ShadowIntensity = 40 });
             });
             Grid.SetColumn(cardBtn, 1);
             presetsGrid.Children.Add(cardBtn);
 
+            // Button 3: Mat
             var matBtn = CreateSmallPresetButton("Mat", () =>
             {
-                border.Thickness = 8;
-                border.Padding = 10;
-                border.CornerRadius = 0;
-                border.Color = "#FFFFFFFF";
-                if (thicknessSliderRef != null) thicknessSliderRef.Value = 8;
-                if (gapSliderRef != null) gapSliderRef.Value = 10;
-                if (radiusSliderRef != null) radiusSliderRef.Value = 0;
-                UpdateSwatchSelection();
-                ApplyBorderToCell(slot);
+                ApplyPresetValues(new CellBorderDto { Thickness = 8, Padding = 10, CornerRadius = 0, Color = "#FFFFFFFF", StrokeStyle = "Solid", ShadowIntensity = 0 });
             });
             Grid.SetColumn(matBtn, 2);
             presetsGrid.Children.Add(matBtn);
 
+            // Button 4: Round (Gradient frame)
             var roundBtn = CreateSmallPresetButton("Round", () =>
             {
-                border.Thickness = 3;
-                border.Padding = 6;
-                border.CornerRadius = 16;
-                border.Color = "#FFFFFFFF";
-                if (thicknessSliderRef != null) thicknessSliderRef.Value = 3;
-                if (gapSliderRef != null) gapSliderRef.Value = 6;
-                if (radiusSliderRef != null) radiusSliderRef.Value = 16;
-                UpdateSwatchSelection();
-                ApplyBorderToCell(slot);
+                ApplyPresetValues(new CellBorderDto { Thickness = 2, Padding = 6, CornerRadius = 16, Color = "#FFFFFFFF", StrokeStyle = "Gradient", ShadowIntensity = 30 });
             });
             Grid.SetColumn(roundBtn, 3);
             presetsGrid.Children.Add(roundBtn);
 
+            // Button 5: Flush
+            var flushBtn = CreateSmallPresetButton("Flush", () =>
+            {
+                ApplyPresetValues(new CellBorderDto { Thickness = 0, Padding = 0, CornerRadius = 0, Color = "#00000000", StrokeStyle = "Solid", ShadowIntensity = 0 });
+            });
+            Grid.SetColumn(flushBtn, 4);
+            presetsGrid.Children.Add(flushBtn);
+
             panel.Children.Add(presetsGrid);
 
-            // 7. Action Buttons
+            // 6. Action Buttons
             panel.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle { Height = 1, Fill = _menuDividerBrush, Margin = new Thickness(0, 4, 0, 4) });
 
             var applyAllBtn = new Button
@@ -326,6 +505,7 @@ namespace ModernImageViewer
             };
             applyAllBtn.Click += (_, _) =>
             {
+                _lastBorderSettings = border.Clone();
                 foreach (var it in _items)
                 {
                     if (!string.IsNullOrEmpty(it.Path))
@@ -348,7 +528,7 @@ namespace ModernImageViewer
                 {
                     new Setter(FlyoutPresenter.CornerRadiusProperty, new CornerRadius(10)),
                     new Setter(FlyoutPresenter.PaddingProperty, new Thickness(14, 12, 14, 12)),
-                    new Setter(FlyoutPresenter.WidthProperty, 348.0),
+                    new Setter(FlyoutPresenter.WidthProperty, 356.0),
                     new Setter(FlyoutPresenter.BackgroundProperty, new SolidColorBrush(Color.FromArgb(242, 30, 30, 30))),
                     new Setter(FlyoutPresenter.BorderBrushProperty, new SolidColorBrush(Color.FromArgb(64, 255, 255, 255))),
                     new Setter(FlyoutPresenter.BorderThicknessProperty, new Thickness(1)),
@@ -359,7 +539,7 @@ namespace ModernImageViewer
             _cellBorderFlyout.ShowAt(targetElement);
         }
 
-        private FrameworkElement CreateSliderRow(string label, double min, double max, double initialValue, Action<double> onValueChanged, out Slider sliderRef)
+        private FrameworkElement CreateSliderRow(string label, double min, double max, double initialValue, string unit, Action<double> onValueChanged, out Slider sliderRef)
         {
             var panel = new StackPanel { Spacing = 2 };
 
@@ -370,7 +550,7 @@ namespace ModernImageViewer
             var title = new TextBlock
             {
                 Text = label,
-                FontSize = 12,
+                FontSize = 11.5,
                 Foreground = _menuWhiteSecondary
             };
             Grid.SetColumn(title, 0);
@@ -378,8 +558,8 @@ namespace ModernImageViewer
 
             var valueLabel = new TextBlock
             {
-                Text = $"{(int)initialValue} px",
-                FontSize = 12,
+                Text = $"{(int)initialValue} {unit}",
+                FontSize = 11.5,
                 Foreground = _menuWhitePrimary,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
             };
@@ -400,7 +580,7 @@ namespace ModernImageViewer
             };
             slider.ValueChanged += (_, e) =>
             {
-                valueLabel.Text = $"{(int)e.NewValue} px";
+                valueLabel.Text = $"{(int)e.NewValue} {unit}";
                 onValueChanged(e.NewValue);
             };
 
@@ -409,18 +589,24 @@ namespace ModernImageViewer
             return panel;
         }
 
-        private Button CreateSmallPresetButton(string text, Action onClick)
+        private Button CreateSmallPresetButton(string text, Action onClick, bool isAccent = false)
         {
             var btn = new Button
             {
-                Content = new TextBlock { Text = text, FontSize = 11, Foreground = _menuWhitePrimary },
+                Content = new TextBlock
+                {
+                    Text = text,
+                    FontSize = 11,
+                    FontWeight = isAccent ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal,
+                    Foreground = isAccent ? new SolidColorBrush(Color.FromArgb(255, 255, 200, 59)) : _menuWhitePrimary
+                },
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 HorizontalContentAlignment = HorizontalAlignment.Center,
-                Padding = new Thickness(4, 3, 4, 3),
+                Padding = new Thickness(2, 4, 2, 4),
                 MinHeight = 26,
                 CornerRadius = new CornerRadius(4),
-                Background = new SolidColorBrush(Color.FromArgb(25, 255, 255, 255)),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
+                Background = isAccent ? new SolidColorBrush(Color.FromArgb(40, 255, 200, 59)) : new SolidColorBrush(Color.FromArgb(25, 255, 255, 255)),
+                BorderBrush = isAccent ? new SolidColorBrush(Color.FromArgb(120, 255, 200, 59)) : new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
                 BorderThickness = new Thickness(1)
             };
             btn.Click += (_, _) => onClick();
