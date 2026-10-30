@@ -25,6 +25,9 @@ namespace ModernImageViewer
         [JsonPropertyName("photos")]
         public List<PhotoSlotDto> Photos { get; set; } = new();
 
+        [JsonPropertyName("freeform")]
+        public List<FreeformCellDto>? Freeform { get; set; }
+
         public string ToJson()
         {
             return JsonSerializer.Serialize(this, new JsonSerializerOptions
@@ -99,6 +102,45 @@ namespace ModernImageViewer
 
         [JsonPropertyName("hidden")]
         public bool Hidden { get; set; }
+
+        [JsonPropertyName("border")]
+        public CellBorderDto? Border { get; set; }
+    }
+
+    public sealed class FreeformCellDto
+    {
+        [JsonPropertyName("sourceSlot")]
+        public int SourceSlot { get; set; }
+
+        [JsonPropertyName("path")]
+        public string Path { get; set; } = string.Empty;
+
+        [JsonPropertyName("name")]
+        public string? Name { get; set; }
+
+        [JsonPropertyName("x")]
+        public double X { get; set; }
+
+        [JsonPropertyName("y")]
+        public double Y { get; set; }
+
+        [JsonPropertyName("width")]
+        public double Width { get; set; }
+
+        [JsonPropertyName("height")]
+        public double Height { get; set; }
+
+        [JsonPropertyName("zIndex")]
+        public int ZIndex { get; set; } = 1;
+
+        [JsonPropertyName("zoom")]
+        public double? Zoom { get; set; }
+
+        [JsonPropertyName("panX")]
+        public double? PanX { get; set; }
+
+        [JsonPropertyName("panY")]
+        public double? PanY { get; set; }
 
         [JsonPropertyName("border")]
         public CellBorderDto? Border { get; set; }

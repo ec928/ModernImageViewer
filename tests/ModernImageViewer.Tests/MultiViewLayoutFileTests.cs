@@ -92,6 +92,52 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
+        public void SerializeAndDeserialize_PreservesFreeformCells()
+        {
+            var file = new MultiViewLayoutFile
+            {
+                Freeform = new List<FreeformCellDto>
+                {
+                    new()
+                    {
+                        SourceSlot = 0,
+                        Path = @"C:\Photos\Floating1.jpg",
+                        Name = "Floating1.jpg",
+                        X = 120.0,
+                        Y = 80.0,
+                        Width = 450.0,
+                        Height = 320.0,
+                        ZIndex = 5,
+                        Zoom = 1.25,
+                        PanX = 15.0,
+                        PanY = -10.0,
+                        Border = FrameLooks.Card()
+                    }
+                }
+            };
+
+            string json = file.ToJson();
+            Assert.Contains(@"""freeform"": [", json);
+            Assert.Contains(@"""sourceSlot"": 0", json);
+            Assert.Contains(@"""Floating1.jpg""", json);
+
+            var loaded = MultiViewLayoutFile.FromJson(json);
+            Assert.NotNull(loaded?.Freeform);
+            Assert.Single(loaded.Freeform);
+            var f0 = loaded.Freeform[0];
+            Assert.Equal(0, f0.SourceSlot);
+            Assert.Equal(@"C:\Photos\Floating1.jpg", f0.Path);
+            Assert.Equal(120.0, f0.X);
+            Assert.Equal(80.0, f0.Y);
+            Assert.Equal(450.0, f0.Width);
+            Assert.Equal(320.0, f0.Height);
+            Assert.Equal(5, f0.ZIndex);
+            Assert.Equal(1.25, f0.Zoom);
+            Assert.NotNull(f0.Border);
+            Assert.Equal("InnerMuted", f0.Border.StrokeStyle);
+        }
+
+        [Fact]
         public void Deserialization_HandlesUnknownPropertiesAndDefaultsGracefully()
         {
             string futureJson = """

@@ -733,6 +733,40 @@ namespace ModernImageViewer
                     IsHidden = _hiddenItems.Contains(_items[i])
                 });
             }
+            if (_freeformCards.Count > 0)
+            {
+                var sortedCards = _freeformCards.OrderBy(c => c.ZIndex).ToList();
+                foreach (var card in sortedCards)
+                {
+                    double cx = Canvas.GetLeft(card.Container);
+                    double cy = Canvas.GetTop(card.Container);
+                    double cw = card.Container.Width;
+                    double ch = card.Container.Height;
+
+                    Rect cardBounds = new Rect(cx, cy, cw, ch);
+                    Rect photoBounds = new Rect(cx, cy + 32, cw, Math.Max(10, ch - 32));
+
+                    shots.Add(new CellShot
+                    {
+                        Path = card.Item.Path ?? string.Empty,
+                        Cell = cardBounds,
+                        Card = cardBounds,
+                        Photo = photoBounds,
+                        ImageW = cw,
+                        ImageH = Math.Max(10, ch - 32),
+                        Scale = card.Transform?.ScaleX ?? 1.0,
+                        TranslateX = card.Transform?.TranslateX ?? 0.0,
+                        TranslateY = card.Transform?.TranslateY ?? 0.0,
+                        NativeW = 1920,
+                        NativeH = 1080,
+                        CanvasW = canvasW,
+                        CanvasH = canvasH,
+                        Border = card.Border?.Clone(),
+                        IsHidden = false
+                    });
+                }
+            }
+
             return shots;
         }
 
@@ -1079,6 +1113,29 @@ namespace ModernImageViewer
                 layoutFile.Photos.Add(slotDto);
             }
 
+            if (_freeformCards.Count > 0)
+            {
+                layoutFile.Freeform = new List<FreeformCellDto>();
+                foreach (var card in _freeformCards)
+                {
+                    layoutFile.Freeform.Add(new FreeformCellDto
+                    {
+                        SourceSlot = card.SourceSlot,
+                        Path = card.Item.Path ?? string.Empty,
+                        Name = card.Item.Name,
+                        X = Canvas.GetLeft(card.Container),
+                        Y = Canvas.GetTop(card.Container),
+                        Width = card.Container.Width,
+                        Height = card.Container.Height,
+                        ZIndex = Canvas.GetZIndex(card.Container),
+                        Zoom = card.Transform?.ScaleX,
+                        PanX = card.Transform?.TranslateX,
+                        PanY = card.Transform?.TranslateY,
+                        Border = card.Border?.Clone()
+                    });
+                }
+            }
+
             try
             {
                 string json = layoutFile.ToJson();
@@ -1210,6 +1267,20 @@ namespace ModernImageViewer
                 {
                     if (layoutFile.Photos[i].Hidden)
                         _hiddenItems.Add(_items[i]);
+                }
+            }
+
+            ClearAllFreeformCards();
+            if (layoutFile.Freeform != null && layoutFile.Freeform.Count > 0)
+            {
+                foreach (var dto in layoutFile.Freeform)
+                {
+                    var matchingItem = _items.FirstOrDefault(it => string.Equals(it.Path, dto.Path, StringComparison.OrdinalIgnoreCase))
+                                       ?? (dto.SourceSlot >= 0 && dto.SourceSlot < _items.Count ? _items[dto.SourceSlot] : null);
+                    if (matchingItem != null)
+                    {
+                        SpawnFreeformCell(matchingItem, dto);
+                    }
                 }
             }
 

@@ -211,6 +211,9 @@
             <!-- Dynamic Columns and Rows generated in C# -->
         </Grid>
 
+        <!-- Freeform Floating Canvas (Phase 3: Drag-to-move floating photo cells) -->
+        <Canvas x:Name="FreeformCanvas" Canvas.ZIndex="95" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+
         <!-- Bottom gradient scrim to guarantee HUD contrast over any image -->
         <Border x:Name="HudScrim"
                 VerticalAlignment="Bottom"

@@ -1917,6 +1917,30 @@ namespace ModernImageViewer
             soloItem.Click += (s, e) => EnterSolo(Slot(item));
             menu.Items.Add(soloItem);
 
+            bool inFreeform = _freeformCards.Any(c => string.Equals(c.Item.Path, item.Path, StringComparison.OrdinalIgnoreCase));
+            var freeformItem = new MenuFlyoutItem
+            {
+                Text = inFreeform ? "Bring Freeform to Front" : "Freeform",
+                Icon = new FontIcon { Glyph = "\uEE49" }
+            };
+            freeformItem.Click += (s, e) => SpawnFreeformCell(item);
+            menu.Items.Add(freeformItem);
+
+            if (inFreeform)
+            {
+                var dockItem = new MenuFlyoutItem
+                {
+                    Text = "Dock to Grid",
+                    Icon = new FontIcon { Glyph = "\uE8CA" }
+                };
+                dockItem.Click += (s, e) =>
+                {
+                    var cardToDock = _freeformCards.FirstOrDefault(c => string.Equals(c.Item.Path, item.Path, StringComparison.OrdinalIgnoreCase));
+                    if (cardToDock != null) DockFreeformCard(cardToDock);
+                };
+                menu.Items.Add(dockItem);
+            }
+
             bool isHidden = _hiddenItems.Contains(item);
             var hideItem = new MenuFlyoutItem
             {
