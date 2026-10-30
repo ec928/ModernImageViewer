@@ -31,18 +31,13 @@
     <Product>ModernImageViewer</Product>
 
     <!--
-      Output straight to bin\<Platform>\<Config>\ instead of the default
-      bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\. The framework and RID are
-      already fixed by this project, so the extra two levels only lengthen the path.
+      Output straight to bin\ directly instead of subfolders (bin\x64\Release, bin\Debug, etc.).
+      All builds and publishes land directly in bin\.
     -->
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
-
-    <!-- Pinned so EVERY publish lands in the Release folder, however it is invoked.
-         Without it a bare `dotnet publish` uses the SDK default and buries the output
-         in bin\x64\Release\win-x64\publish\ - a nested copy of the folder it
-         just built, leaving two candidate exes to choose between. -->
-    <PublishDir>bin\$(Platform)\$(Configuration)\</PublishDir>
+    <OutputPath>bin\</OutputPath>
+    <PublishDir>bin\</PublishDir>
 
     <!--
       Ship English resources only. Note this handles .NET satellite assemblies but NOT

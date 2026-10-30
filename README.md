@@ -62,7 +62,7 @@ publish.bat nosmoke    # publish only
 
 Exit codes: `0` success, `1` publish failed, `2` output looks wrong, `3` app crashed on launch.
 
-> `publish.bat` is the supported ship path (relative output under `bin\x64\Release`). Visual Studio `.pubxml` files now use the same relative `PublishDir`. Pass an extra folder argument to `publish.bat` if you want a different destination.
+> `publish.bat` is the supported ship path (output directly under `bin\`). Visual Studio `.pubxml` files now use the same relative `PublishDir`. Pass an extra folder argument to `publish.bat` if you want a different destination.
 
 > Deliberately **not** published as a single file. Single-file self-extracts ~277 MB to `%TEMP%` on the first launch after every publish, measured at ~2.8 s to first window versus ~1.5 s for loose files.
 

@@ -9,12 +9,12 @@ REM  not depend on a .pubxml (the publish profiles are gitignored and local to
 REM  the author's machine).
 REM
 REM  Usage:
-REM    publish.bat                     -> publishes to .\bin\x64\Release\
+REM    publish.bat                     -> publishes to .\bin\
 REM    publish.bat "D:\somewhere"      -> publishes to that folder
 REM    publish.bat "D:\somewhere" nosmoke
 REM
-REM  Output goes to bin\x64\Release, not a separate publish folder. "dotnet publish"
-REM  has to build before it copies, and that build lands in bin\x64\Release whatever
+REM  Output goes to bin, not a separate publish folder. "dotnet publish"
+REM  has to build before it copies, and that build lands in bin whatever
 REM  happens - so publishing elsewhere just leaves a half-built Release folder sitting
 REM  beside the real one, and two candidate exes to pick between.
 REM
@@ -23,9 +23,12 @@ REM  to %TEMP% on the first launch after every publish, which measurably slows
 REM  cold start (~2.8s to first window versus ~1.5s for loose files).
 REM ============================================================================
 
+if exist "%~dp0bin\x64" rd /s /q "%~dp0bin\x64"
+if exist "%~dp0bin\Debug" rd /s /q "%~dp0bin\Debug"
+if exist "%~dp0bin\Release" rd /s /q "%~dp0bin\Release"
 set "OUTDIR=%~1"
-if "%OUTDIR%"=="" set "OUTDIR=%~dp0bin\x64\Release"
-if /i "%OUTDIR%"=="nosmoke" set "OUTDIR=%~dp0bin\x64\Release"
+if "%OUTDIR%"=="" set "OUTDIR=%~dp0bin"
+if /i "%OUTDIR%"=="nosmoke" set "OUTDIR=%~dp0bin"
 
 set "PROJ=%~dp0ModernImageViewer.csproj"
 

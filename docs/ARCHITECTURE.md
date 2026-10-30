@@ -67,7 +67,7 @@ Disposal: 0/1 keep, 2 restore background (punch frame rect), 3 restore to previo
 
 `<Version>` / `<AssemblyVersion>` / `<FileVersion>` in `ModernImageViewer.csproj` are the single source of truth. Bump them in the same commit as the release tag, so the tag, the zip name (`ModernImageViewer-vX.Y.Z.zip`) and the exe's file properties all agree. `Package.appxmanifest` carries the same number for tidiness only — this app is unpackaged (`WindowsPackageType=None`), so nothing reads it.
 
-`publish.bat` is the supported ship path. It publishes self-contained x64 loose files to `bin\x64\Release\`, copies `LICENSE` and `README.md` in, checks `System.Private.Xml.dll` is full size (a part-installed SDK yields a build that compiles but crashes on launch), then smoke-launches the exe. Do not ship a zip that skipped the smoke test.
+`publish.bat` is the supported ship path. It publishes self-contained x64 loose files to `bin\`, copies `LICENSE` and `README.md` in, checks `System.Private.Xml.dll` is full size (a part-installed SDK yields a build that compiles but crashes on launch), then smoke-launches the exe. Do not ship a zip that skipped the smoke test.
 
 Tests live at `tests\ModernImageViewer.Tests` **inside** the repo. `ViewerMath.cs` is linked in by source rather than by project reference: the app targets `net8.0-windows10.0.19041.0` with WinUI, which an ordinary test project cannot reference. Keep pure geometry in `ViewerMath` so it stays testable.
 
