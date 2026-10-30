@@ -1236,7 +1236,7 @@ namespace ModernImageViewer
                 Margin = new Thickness(0)
             };
 
-            var cellGrid = new Grid
+            var cellGrid = new FreeformCellGrid
             {
                 Background = new SolidColorBrush(Windows.UI.Color.FromArgb(1, 0, 0, 0)), // Hit-testable
                 ManipulationMode = ManipulationModes.None
@@ -1296,6 +1296,12 @@ namespace ModernImageViewer
                 if (effW > cellW)
                 {
                     double maxPanX = (effW - cellW) / 2.0;
+                    if (isFreeform) maxPanX = Math.Max(maxPanX, Math.Max(cellW, effW));
+                    transform.TranslateX = Math.Clamp(transform.TranslateX, -maxPanX, maxPanX);
+                }
+                else if (isFreeform)
+                {
+                    double maxPanX = Math.Max(cellW, effW);
                     transform.TranslateX = Math.Clamp(transform.TranslateX, -maxPanX, maxPanX);
                 }
                 else
@@ -1306,6 +1312,12 @@ namespace ModernImageViewer
                 if (effH > cellH)
                 {
                     double maxPanY = (effH - cellH) / 2.0;
+                    if (isFreeform) maxPanY = Math.Max(maxPanY, Math.Max(cellH, effH));
+                    transform.TranslateY = Math.Clamp(transform.TranslateY, -maxPanY, maxPanY);
+                }
+                else if (isFreeform)
+                {
+                    double maxPanY = Math.Max(cellH, effH);
                     transform.TranslateY = Math.Clamp(transform.TranslateY, -maxPanY, maxPanY);
                 }
                 else
@@ -1457,6 +1469,19 @@ namespace ModernImageViewer
                         var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Container, slotGrid));
                         if (card != null) BringFreeformCardToFront(card);
 
+                        bool isCtrl = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+                        if (isCtrl || prop.IsMiddleButtonPressed)
+                        {
+                            // Ctrl-mouse drag or Middle-button drag: PAN photo inside freeform cell!
+                            isDragging = true;
+                            lastPoint = e.GetCurrentPoint(cellGrid).Position;
+                            dragPointerId = e.Pointer.PointerId;
+                            cellGrid.CapturePointer(e.Pointer);
+                            e.Handled = true;
+                            return;
+                        }
+
+                        // Normal mouse drag without Ctrl: MOVE the freeform window around
                         isMovingCard = true;
                         movePointerId = e.Pointer.PointerId;
                         dragStartInRoot = e.GetCurrentPoint(RootGrid).Position;
@@ -1481,6 +1506,12 @@ namespace ModernImageViewer
             {
                 ShowHudAndOverlays();
 
+                if (isFreeform && !isMovingCard && !isDragging)
+                {
+                    bool isCtrlHover = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+                    cellGrid.SetCursor(isCtrlHover ? InputSystemCursorShape.Hand : InputSystemCursorShape.SizeAll);
+                }
+
                 if (isFreeform && isMovingCard && e.Pointer.PointerId == movePointerId)
                 {
                     Point cur = e.GetCurrentPoint(RootGrid).Position;
@@ -1490,8 +1521,8 @@ namespace ModernImageViewer
                     double boundW = Math.Max(200, RootGrid.ActualWidth > 0 ? RootGrid.ActualWidth : 1280);
                     double boundH = Math.Max(150, RootGrid.ActualHeight > 0 ? RootGrid.ActualHeight : 720);
 
-                    double cardW = slotGrid.ActualWidth > 0 ? slotGrid.ActualWidth : slotGrid.Width;
-                    double cardH = slotGrid.ActualHeight > 0 ? slotGrid.ActualHeight : slotGrid.Height;
+                    double cardW = slotGrid.Width > 0 ? slotGrid.Width : (slotGrid.ActualWidth > 0 ? slotGrid.ActualWidth : 300);
+                    double cardH = slotGrid.Height > 0 ? slotGrid.Height : (slotGrid.ActualHeight > 0 ? slotGrid.ActualHeight : 200);
 
                     double newX = Math.Clamp(startLeft + dx, 0, Math.Max(0, boundW - cardW));
                     double newY = Math.Clamp(startTop + dy, 0, Math.Max(0, boundH - cardH));
@@ -1534,7 +1565,7 @@ namespace ModernImageViewer
                     if (isDragging)
                     {
                         isDragging = false;
-                        cellGrid.ReleasePointerCapture(e.Pointer);
+                        try { cellGrid.ReleasePointerCapture(e.Pointer); } catch { }
                         e.Handled = true;
                     }
                 }
@@ -1542,11 +1573,15 @@ namespace ModernImageViewer
 
             cellGrid.PointerCanceled += (s, e) =>
             {
-                if (isMovingCard) isMovingCard = false;
+                if (isMovingCard)
+                {
+                    isMovingCard = false;
+                    try { cellGrid.ReleasePointerCapture(e.Pointer); } catch { }
+                }
                 if (isDragging)
                 {
                     isDragging = false;
-                    cellGrid.ReleasePointerCapture(e.Pointer);
+                    try { cellGrid.ReleasePointerCapture(e.Pointer); } catch { }
                 }
             };
 
@@ -1854,85 +1889,9 @@ namespace ModernImageViewer
             cellBorder.Tag = parts;
             slotGrid.Tag = parts;
 
-                        if (isFreeform)
+            if (isFreeform)
             {
-                var resizeGrip = new Border
-                {
-                    Width = 24,
-                    Height = 24,
-                    HorizontalAlignment = HorizontalAlignment.Right,
-                    VerticalAlignment = VerticalAlignment.Bottom,
-                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(1, 0, 0, 0)),
-                    Child = new FontIcon
-                    {
-                        Glyph = "\uE7C5",
-                        FontSize = 10,
-                        FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
-                        Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(140, 255, 255, 255)),
-                        HorizontalAlignment = HorizontalAlignment.Right,
-                        VerticalAlignment = VerticalAlignment.Bottom,
-                        Margin = new Thickness(0, 0, 4, 4)
-                    }
-                };
-                Canvas.SetZIndex(resizeGrip, 80);
-
-                bool isResizing = false;
-                Point resizeStart = default;
-                double initialW = 0, initialH = 0;
-                uint resizePointerId = 0;
-
-                resizeGrip.PointerPressed += (s, e) =>
-                {
-                    var prop = e.GetCurrentPoint(resizeGrip).Properties;
-                    if (prop.IsLeftButtonPressed)
-                    {
-                        var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Container, slotGrid));
-                        if (card != null) BringFreeformCardToFront(card);
-
-                        isResizing = true;
-                        resizePointerId = e.Pointer.PointerId;
-                        resizeStart = e.GetCurrentPoint(RootGrid).Position;
-                        initialW = slotGrid.ActualWidth > 0 ? slotGrid.ActualWidth : slotGrid.Width;
-                        initialH = slotGrid.ActualHeight > 0 ? slotGrid.ActualHeight : slotGrid.Height;
-                        resizeGrip.CapturePointer(e.Pointer);
-                        e.Handled = true;
-                    }
-                };
-
-                resizeGrip.PointerMoved += (s, e) =>
-                {
-                    if (isResizing && e.Pointer.PointerId == resizePointerId)
-                    {
-                        Point cur = e.GetCurrentPoint(RootGrid).Position;
-                        double dx = cur.X - resizeStart.X;
-                        double dy = cur.Y - resizeStart.Y;
-
-                        double maxW = Math.Max(200, RootGrid.ActualWidth - Canvas.GetLeft(slotGrid));
-                        double maxH = Math.Max(150, RootGrid.ActualHeight - Canvas.GetTop(slotGrid));
-
-                        double newW = Math.Clamp(initialW + dx, 200, maxW);
-                        double newH = Math.Clamp(initialH + dy, 140, maxH);
-
-                        slotGrid.Width = newW;
-                        slotGrid.Height = newH;
-                        var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Container, slotGrid));
-                        if (card != null) { card.Width = newW; card.Height = newH; }
-                        updateLayout();
-                        e.Handled = true;
-                    }
-                };
-
-                resizeGrip.PointerReleased += (s, e) =>
-                {
-                    if (isResizing && e.Pointer.PointerId == resizePointerId)
-                    {
-                        isResizing = false;
-                        try { resizeGrip.ReleasePointerCapture(e.Pointer); } catch { }
-                        e.Handled = true;
-                    }
-                };
-
-                cellGrid.Children.Add(resizeGrip);
+                AttachWindowResizeHandles(slotGrid, updateLayout);
             }
 
             cellBorder.Child = cellGrid;

@@ -1129,13 +1129,13 @@ namespace ModernImageViewer
                         Name = card.Item.Name,
                         X = double.IsNaN(Canvas.GetLeft(card.Container)) ? card.X : Canvas.GetLeft(card.Container),
                         Y = double.IsNaN(Canvas.GetTop(card.Container)) ? card.Y : Canvas.GetTop(card.Container),
-                        Width = card.Container.ActualWidth > 0 ? card.Container.ActualWidth : card.Width,
-                        Height = card.Container.ActualHeight > 0 ? card.Container.ActualHeight : card.Height,
+                        Width = card.Container.Width > 0 ? card.Container.Width : (card.Container.ActualWidth > 0 ? card.Container.ActualWidth : card.Width),
+                        Height = card.Container.Height > 0 ? card.Container.Height : (card.Container.ActualHeight > 0 ? card.Container.ActualHeight : card.Height),
                         ZIndex = Canvas.GetZIndex(card.Container),
                         Zoom = (card.Container.Tag as CellParts)?.Transform?.ScaleX,
                         PanX = (card.Container.Tag as CellParts)?.Transform?.TranslateX,
                         PanY = (card.Container.Tag as CellParts)?.Transform?.TranslateY,
-                        Border = card.Border?.Clone()
+                        Border = (GetBorderForItem(card.Item) ?? card.Border)?.Clone()
                     });
                 }
             }

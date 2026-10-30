@@ -1,3 +1,4 @@
+using Microsoft.UI.Input;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -118,8 +119,8 @@ namespace ModernImageViewer
                 }
             }
 
-            w = Math.Clamp(w, 200, maxBoundW);
-            h = Math.Clamp(h, 140, maxBoundH);
+            w = Math.Clamp(w, 100, maxBoundW);
+            h = Math.Clamp(h, 80, maxBoundH);
             x = Math.Clamp(x, 0, Math.Max(0, maxBoundW - w));
             y = Math.Clamp(y, 0, Math.Max(0, maxBoundH - h));
 
@@ -244,6 +245,234 @@ namespace ModernImageViewer
             FreeformCanvas.Children.Clear();
             _freeformCards.Clear();
             _maxFreeformZIndex = 5000;
+        }
+        private enum WindowResizeDirection
+        {
+            Left,
+            Right,
+            Top,
+            Bottom,
+            TopLeft,
+            TopRight,
+            BottomLeft,
+            BottomRight
+        }
+
+        private void AttachWindowResizeHandles(Grid slotGrid, Action updateLayout)
+        {
+            var dirs = new[]
+            {
+                WindowResizeDirection.Top,
+                WindowResizeDirection.Bottom,
+                WindowResizeDirection.Left,
+                WindowResizeDirection.Right,
+                WindowResizeDirection.TopLeft,
+                WindowResizeDirection.TopRight,
+                WindowResizeDirection.BottomLeft,
+                WindowResizeDirection.BottomRight
+            };
+
+            foreach (var dir in dirs)
+            {
+                var handle = new FreeformResizeHandle
+                {
+                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(1, 0, 0, 0)),
+                    IsHitTestVisible = true
+                };
+                Canvas.SetZIndex(handle, 200);
+
+                InputSystemCursorShape cursorShape = dir switch
+                {
+                    WindowResizeDirection.Top or WindowResizeDirection.Bottom => InputSystemCursorShape.SizeNorthSouth,
+                    WindowResizeDirection.Left or WindowResizeDirection.Right => InputSystemCursorShape.SizeWestEast,
+                    WindowResizeDirection.TopLeft or WindowResizeDirection.BottomRight => InputSystemCursorShape.SizeNorthwestSoutheast,
+                    WindowResizeDirection.TopRight or WindowResizeDirection.BottomLeft => InputSystemCursorShape.SizeNortheastSouthwest,
+                    _ => InputSystemCursorShape.Arrow
+                };
+                handle.SetCursor(cursorShape);
+
+                switch (dir)
+                {
+                    case WindowResizeDirection.Top:
+                        handle.Height = 8;
+                        handle.VerticalAlignment = VerticalAlignment.Top;
+                        handle.HorizontalAlignment = HorizontalAlignment.Stretch;
+                        handle.Margin = new Thickness(14, 0, 14, 0);
+                        break;
+                    case WindowResizeDirection.Bottom:
+                        handle.Height = 8;
+                        handle.VerticalAlignment = VerticalAlignment.Bottom;
+                        handle.HorizontalAlignment = HorizontalAlignment.Stretch;
+                        handle.Margin = new Thickness(14, 0, 14, 0);
+                        break;
+                    case WindowResizeDirection.Left:
+                        handle.Width = 8;
+                        handle.HorizontalAlignment = HorizontalAlignment.Left;
+                        handle.VerticalAlignment = VerticalAlignment.Stretch;
+                        handle.Margin = new Thickness(0, 14, 0, 14);
+                        break;
+                    case WindowResizeDirection.Right:
+                        handle.Width = 8;
+                        handle.HorizontalAlignment = HorizontalAlignment.Right;
+                        handle.VerticalAlignment = VerticalAlignment.Stretch;
+                        handle.Margin = new Thickness(0, 14, 0, 14);
+                        break;
+                    case WindowResizeDirection.TopLeft:
+                        handle.Width = 14; handle.Height = 14;
+                        handle.HorizontalAlignment = HorizontalAlignment.Left;
+                        handle.VerticalAlignment = VerticalAlignment.Top;
+                        break;
+                    case WindowResizeDirection.TopRight:
+                        handle.Width = 14; handle.Height = 14;
+                        handle.HorizontalAlignment = HorizontalAlignment.Right;
+                        handle.VerticalAlignment = VerticalAlignment.Top;
+                        break;
+                    case WindowResizeDirection.BottomLeft:
+                        handle.Width = 14; handle.Height = 14;
+                        handle.HorizontalAlignment = HorizontalAlignment.Left;
+                        handle.VerticalAlignment = VerticalAlignment.Bottom;
+                        break;
+                    case WindowResizeDirection.BottomRight:
+                        handle.Width = 14; handle.Height = 14;
+                        handle.HorizontalAlignment = HorizontalAlignment.Right;
+                        handle.VerticalAlignment = VerticalAlignment.Bottom;
+                        break;
+                }
+
+                bool isResizing = false;
+                Point startPoint = default;
+                double initX = 0, initY = 0, initW = 0, initH = 0;
+                uint resizePointerId = 0;
+
+                handle.PointerPressed += (s, e) =>
+                {
+                    var prop = e.GetCurrentPoint(handle).Properties;
+                    if (prop.IsLeftButtonPressed)
+                    {
+                        var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Container, slotGrid));
+                        if (card != null) BringFreeformCardToFront(card);
+
+                        isResizing = true;
+                        resizePointerId = e.Pointer.PointerId;
+                        startPoint = e.GetCurrentPoint(RootGrid).Position;
+
+                        initX = Canvas.GetLeft(slotGrid);
+                        if (double.IsNaN(initX)) initX = 0;
+                        initY = Canvas.GetTop(slotGrid);
+                        if (double.IsNaN(initY)) initY = 0;
+
+                        initW = slotGrid.Width > 0 ? slotGrid.Width : (slotGrid.ActualWidth > 0 ? slotGrid.ActualWidth : 300);
+                        initH = slotGrid.Height > 0 ? slotGrid.Height : (slotGrid.ActualHeight > 0 ? slotGrid.ActualHeight : 200);
+
+                        handle.CapturePointer(e.Pointer);
+                        e.Handled = true;
+                    }
+                };
+
+                handle.PointerMoved += (s, e) =>
+                {
+                    if (isResizing && e.Pointer.PointerId == resizePointerId)
+                    {
+                        Point cur = e.GetCurrentPoint(RootGrid).Position;
+                        double dx = cur.X - startPoint.X;
+                        double dy = cur.Y - startPoint.Y;
+
+                        double boundW = RootGrid.ActualWidth > 0 ? RootGrid.ActualWidth : 1920;
+                        double boundH = RootGrid.ActualHeight > 0 ? RootGrid.ActualHeight : 1080;
+                        const double minW = 120;
+                        const double minH = 90;
+
+                        double curX = initX;
+                        double curY = initY;
+                        double curW = initW;
+                        double curH = initH;
+
+                        if (dir is WindowResizeDirection.Right or WindowResizeDirection.TopRight or WindowResizeDirection.BottomRight)
+                        {
+                            curW = Math.Clamp(initW + dx, minW, Math.Max(minW, boundW - initX));
+                        }
+                        else if (dir is WindowResizeDirection.Left or WindowResizeDirection.TopLeft or WindowResizeDirection.BottomLeft)
+                        {
+                            double proposedW = initW - dx;
+                            if (proposedW < minW) proposedW = minW;
+                            if (initX + (initW - proposedW) < 0) proposedW = initX + initW;
+                            curW = proposedW;
+                            curX = initX + (initW - curW);
+                        }
+
+                        if (dir is WindowResizeDirection.Bottom or WindowResizeDirection.BottomLeft or WindowResizeDirection.BottomRight)
+                        {
+                            curH = Math.Clamp(initH + dy, minH, Math.Max(minH, boundH - initY));
+                        }
+                        else if (dir is WindowResizeDirection.Top or WindowResizeDirection.TopLeft or WindowResizeDirection.TopRight)
+                        {
+                            double proposedH = initH - dy;
+                            if (proposedH < minH) proposedH = minH;
+                            if (initY + (initH - proposedH) < 0) proposedH = initY + initH;
+                            curH = proposedH;
+                            curY = initY + (initH - curH);
+                        }
+
+                        slotGrid.Width = curW;
+                        slotGrid.Height = curH;
+                        Canvas.SetLeft(slotGrid, curX);
+                        Canvas.SetTop(slotGrid, curY);
+
+                        var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Container, slotGrid));
+                        if (card != null)
+                        {
+                            card.X = curX;
+                            card.Y = curY;
+                            card.Width = curW;
+                            card.Height = curH;
+                        }
+
+                        updateLayout();
+                        e.Handled = true;
+                    }
+                };
+
+                handle.PointerReleased += (s, e) =>
+                {
+                    if (isResizing && e.Pointer.PointerId == resizePointerId)
+                    {
+                        isResizing = false;
+                        try { handle.ReleasePointerCapture(e.Pointer); } catch { }
+                        e.Handled = true;
+                    }
+                };
+
+                handle.PointerCanceled += (s, e) =>
+                {
+                    if (isResizing && e.Pointer.PointerId == resizePointerId)
+                    {
+                        isResizing = false;
+                        try { handle.ReleasePointerCapture(e.Pointer); } catch { }
+                    }
+                };
+
+                handle.PointerCaptureLost += (s, e) =>
+                {
+                    isResizing = false;
+                };
+
+                slotGrid.Children.Add(handle);
+            }
+        }
+        public sealed class FreeformResizeHandle : Grid
+        {
+            public void SetCursor(InputSystemCursorShape shape)
+            {
+                try { ProtectedCursor = InputSystemCursor.Create(shape); } catch { }
+            }
+        }
+
+        public sealed class FreeformCellGrid : Grid
+        {
+            public void SetCursor(InputSystemCursorShape shape)
+            {
+                try { ProtectedCursor = InputSystemCursor.Create(shape); } catch { }
+            }
         }
     }
 }
