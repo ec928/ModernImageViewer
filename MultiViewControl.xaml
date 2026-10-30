@@ -211,8 +211,7 @@
             <!-- Dynamic Columns and Rows generated in C# -->
         </Grid>
 
-        <!-- Freeform Floating Canvas (Phase 3: Drag-to-move floating photo cells) -->
-        <Canvas x:Name="FreeformCanvas" Canvas.ZIndex="95" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+
 
         <!-- Bottom gradient scrim to guarantee HUD contrast over any image -->
         <Border x:Name="HudScrim"
@@ -236,7 +235,8 @@
               VerticalAlignment="Bottom" 
               HorizontalAlignment="Center" 
               Margin="0,0,0,28" 
-              Canvas.ZIndex="100"
+              Canvas.ZIndex="6000"
+              Translation="0,0,300"
               Opacity="1.0"
               PointerEntered="Hud_PointerEntered" 
               PointerExited="Hud_PointerExited">
@@ -495,5 +495,14 @@
                 </Button>
             </Grid>
         </Grid>
+
+        <!-- Freeform Floating Canvas (Phase 3: Drag-to-move floating photo cells)
+             Maximum Z-Index (5000) and Translation Z (256) so floating cards float above all grid cells and layers -->
+        <Canvas x:Name="FreeformCanvas" 
+                Canvas.ZIndex="5000" 
+                Translation="0,0,256" 
+                HorizontalAlignment="Stretch" 
+                VerticalAlignment="Stretch" 
+                IsHitTestVisible="True" />
     </Grid>
 </UserControl>

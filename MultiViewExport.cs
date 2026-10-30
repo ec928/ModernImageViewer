@@ -740,8 +740,10 @@ namespace ModernImageViewer
                 {
                     double cx = Canvas.GetLeft(card.Container);
                     double cy = Canvas.GetTop(card.Container);
-                    double cw = card.Container.Width;
-                    double ch = card.Container.Height;
+                    if (double.IsNaN(cx)) cx = card.X;
+                    if (double.IsNaN(cy)) cy = card.Y;
+                    double cw = card.Container.ActualWidth > 0 ? card.Container.ActualWidth : card.Width;
+                    double ch = card.Container.ActualHeight > 0 ? card.Container.ActualHeight : card.Height;
 
                     Rect cardBounds = new Rect(cx, cy, cw, ch);
                     Rect photoBounds = new Rect(cx, cy + 32, cw, Math.Max(10, ch - 32));
@@ -1123,10 +1125,10 @@ namespace ModernImageViewer
                         SourceSlot = card.SourceSlot,
                         Path = card.Item.Path ?? string.Empty,
                         Name = card.Item.Name,
-                        X = Canvas.GetLeft(card.Container),
-                        Y = Canvas.GetTop(card.Container),
-                        Width = card.Container.Width,
-                        Height = card.Container.Height,
+                        X = double.IsNaN(Canvas.GetLeft(card.Container)) ? card.X : Canvas.GetLeft(card.Container),
+                        Y = double.IsNaN(Canvas.GetTop(card.Container)) ? card.Y : Canvas.GetTop(card.Container),
+                        Width = card.Container.ActualWidth > 0 ? card.Container.ActualWidth : card.Width,
+                        Height = card.Container.ActualHeight > 0 ? card.Container.ActualHeight : card.Height,
                         ZIndex = Canvas.GetZIndex(card.Container),
                         Zoom = card.Transform?.ScaleX,
                         PanX = card.Transform?.TranslateX,

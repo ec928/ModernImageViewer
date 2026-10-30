@@ -86,7 +86,15 @@ namespace ModernImageViewer
             RootGrid.PointerMoved += SegmentGesture_PointerMoved;
             RootGrid.PointerReleased += SegmentGesture_PointerReleased;
             RootGrid.PointerCaptureLost += SegmentGesture_PointerReleased;
-            SizeChanged += (_, _) => RefreshCanvasLabel();
+            SizeChanged += (_, e) =>
+            {
+                RefreshCanvasLabel();
+                if (FreeformCanvas != null && e.NewSize.Width > 0 && e.NewSize.Height > 0)
+                {
+                    FreeformCanvas.Width = e.NewSize.Width;
+                    FreeformCanvas.Height = e.NewSize.Height;
+                }
+            };
 
             SetupSoloInteractions();
         }
@@ -2460,6 +2468,7 @@ namespace ModernImageViewer
             UpdateSoloHud();
             SoloContainer.Visibility = Visibility.Visible;
             UnifiedHud.Visibility = Visibility.Collapsed;
+            if (FreeformCanvas != null) FreeformCanvas.Visibility = Visibility.Collapsed;
             ShowHudAndOverlays();
         }
 
@@ -2467,6 +2476,7 @@ namespace ModernImageViewer
         {
             SoloContainer.Visibility = Visibility.Collapsed;
             UnifiedHud.Visibility = Visibility.Visible;
+            if (FreeformCanvas != null) FreeformCanvas.Visibility = Visibility.Visible;
             SoloImage.Source = null;
             _soloIndex = -1;
             ResetSoloZoom();
