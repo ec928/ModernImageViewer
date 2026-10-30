@@ -33,9 +33,9 @@ In `MultiViewControl.xaml`, the existing bottom playbar **Save** button flyout i
 |  This window                                |
 |  Custom…                                    |
 |---------------------------------------------|  <-- Divider
-| LAYOUT TEMPLATES                            |
-|  Save Layout as…            (Ctrl+Shift+S)  |
-|  Open Layout…               (Ctrl+O)        |
+| LAYOUT                                      |
+|  Save Layout as…                            |
+|  Open Layout…                               |
 +---------------------------------------------+
 ```
 
@@ -87,10 +87,8 @@ Layout files will be human-readable, versioned JSON (`.mivlayout` or `.json`):
 1. **Schema Versioning**: Every saved file records `$schemaVersion: 1`. If future versions add new properties (e.g. text layers, asymmetric mats), older files load gracefully with default values.
 2. **Missing Files Grace Period**:
    - If a saved image is deleted or on an unplugged drive, the cell displays a clean placeholder tile with the missing filename, allowing the user to either locate the photo or drop a new photo into that slot.
-3. **Template Reusability ("Apply to Current Photos")**:
-   - When opening a layout, if the user already has photos selected in Multi-View, the app offers:
-     - **Open Project**: Restores the exact saved photos and paths.
-     - **Apply Layout as Template**: Retains the currently loaded photos, but arranges them into the saved layout ratios and framing settings.
+3. **Restores Saved Photos by Default**:
+   - Opening a `.mivlayout` always restores the exact saved photos and paths directly into the canvas. Because Multi-View already includes built-in mechanics to swap, replace, or alter photos while preserving the mosaic partition geometry (`_keepMosaic` / `_relayoutKeepingCells`), this keeps the workflow direct, intuitive, and friction-free without modal interruption.
 
 ---
 
@@ -137,14 +135,16 @@ All border, gap, color, and corner radius values serialize directly into the `bo
 ## 4. Step 3+: Future Roadmap (High-Level)
 
 1. **In-Cell Nudge & Pan (Framing)**:
-   - When in "Fill" mode, allow holding an modifier key or secondary drag to pan the photo inside its cell frame to avoid awkward head crops.
+   - When in "Fill" mode, allow holding a modifier key or secondary drag to pan the photo inside its cell frame to avoid awkward head crops.
 2. **Polaroid / Asymmetric Matting**:
    - A 1-click option to multiply the bottom border padding by 2.5× to achieve a classic Polaroid or fine-art gallery mat.
 3. **Instant "Copy Collage to Clipboard" (`Ctrl+C`)**:
    - Render the collage directly to the Windows Clipboard at 1080p / 4K without requiring saving a file to disk first.
-4. **Overlay / Freeform Layer (Strictly Non-Destructive)**:
+4. **Step 4: Generic Image-Agnostic Layout Templates**:
+   - The ability to save and apply pure geometric layout templates (partition tree, ratios, borders) without baked-in photo paths, allowing users to save their favorite proportions and apply them with one click to any active photo selection.
+5. **Overlay / Freeform Layer (Strictly Non-Destructive)**:
    - If freeform overlapping photos are ever explored, they will be treated strictly as **floating overlay badges/cards** on top of the locked mosaic base—never compromising the divider-dragging and partition geometry underneath.
-5. **Retirement of Legacy Collage**:
+6. **Retirement of Legacy Collage**:
    - Once Steps 1 and 2 land, the old `CollageEditorWindow` and its associated codebase can be safely deprecated and removed from the tree.
 
 ---
