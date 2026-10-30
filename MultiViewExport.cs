@@ -61,7 +61,7 @@ namespace ModernImageViewer
         {
             var panel = new StackPanel
             {
-                MinWidth = 295,
+                Width = 370,
                 Spacing = 1,
                 XYFocusKeyboardNavigation = Microsoft.UI.Xaml.Input.XYFocusKeyboardNavigationMode.Enabled
             };
@@ -169,6 +169,7 @@ namespace ModernImageViewer
             var scroll = new ScrollViewer
             {
                 Content = panel,
+                Width = 370,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
                 MaxHeight = 520
@@ -250,7 +251,12 @@ namespace ModernImageViewer
 
         private Grid CreateFolderRow(string path, bool isFavourite)
         {
-            var row = new Grid { HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 1, 0, 1) };
+            var row = new Grid
+            {
+                Width = 370,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Margin = new Thickness(0, 1, 0, 1)
+            };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
@@ -320,14 +326,14 @@ namespace ModernImageViewer
                 Glyph = isFavourite ? "\uE735" : "\uE734",
                 FontSize = 14,
                 FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
-                Foreground = isFavourite ? _menuGoldStar : _menuWhiteTertiary
+                Foreground = isFavourite ? _menuGoldStar : _menuWhiteSecondary
             };
 
             var starBtn = new Button
             {
                 Style = (Style)Application.Current.Resources["SubtleButtonStyle"],
                 Content = starIcon,
-                Width = 32,
+                Width = 34,
                 Height = 32,
                 Padding = new Thickness(0),
                 CornerRadius = new CornerRadius(4),
@@ -344,6 +350,41 @@ namespace ModernImageViewer
             };
             Grid.SetColumn(starBtn, 1);
             row.Children.Add(starBtn);
+
+            // Context menu on the row
+            var contextMenu = new MenuFlyout();
+            var favItem = new MenuFlyoutItem
+            {
+                Text = isFavourite ? "Remove from Favourites" : "Add to Favourites",
+                Icon = new FontIcon { Glyph = isFavourite ? "\uE735" : "\uE734", FontSize = 14, Foreground = isFavourite ? _menuGoldStar : _menuWhiteSecondary },
+                IsEnabled = !full || isFavourite
+            };
+            favItem.Click += (_, _) =>
+            {
+                MainWindow.Instance?.ToggleMultiViewFavourite(path);
+                BuildSaveFlyoutMenu();
+            };
+            contextMenu.Items.Add(favItem);
+
+            var openExpItem = new MenuFlyoutItem
+            {
+                Text = "Open in File Explorer",
+                Icon = new FontIcon { Glyph = "\uE838", FontSize = 14, Foreground = _menuWhiteSecondary }
+            };
+            openExpItem.Click += (_, _) =>
+            {
+                SaveFlyout.Hide();
+                if (Directory.Exists(path))
+                {
+                    try
+                    {
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = path, UseShellExecute = true });
+                    }
+                    catch { }
+                }
+            };
+            contextMenu.Items.Add(openExpItem);
+            row.ContextFlyout = contextMenu;
 
             return row;
         }
