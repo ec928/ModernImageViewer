@@ -8,6 +8,8 @@ Unpackaged WinUI 3 / Win2D image browser (portable zip). Collage editor and in-a
 
 Local state lives under `%LocalAppData%\ModernImageViewer\` (`settings.json`, collage window bounds, cinematic window bounds, `CinematicAutoSave.json`). Never `ApplicationData.Current` — this app has no package identity.
 
+UI/UX styling, typography, theme parity, and component specifications are documented in `UI_UX.md`.
+
 ## Decode tiers
 
 | Tier | Max edge | Who | GPU? |
