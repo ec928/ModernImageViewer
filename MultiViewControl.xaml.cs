@@ -1962,6 +1962,7 @@ namespace ModernImageViewer
 
         private void SetupSoloInteractions()
         {
+            SoloImageContainer.SizeChanged += (s, e) => { if (_soloIndex >= 0) UpdateSoloHud(); };
             SoloImageContainer.PointerPressed += (s, e) =>
             {
                 ShowHudAndOverlays();
@@ -2068,6 +2069,7 @@ namespace ModernImageViewer
                     SoloTransform.TranslateY = pos.Y - (pos.Y - SoloTransform.TranslateY) * (newScale / oldScale);
                     SoloTransform.ScaleX = newScale;
                     SoloTransform.ScaleY = newScale;
+                    UpdateSoloHud();
                 }
 
                 e.Handled = true;
@@ -2138,23 +2140,83 @@ namespace ModernImageViewer
                 displayedH);
         }
 
+        private void UpdateSoloHud()
+        {
+            if (_soloIndex < 0 || _soloIndex >= _items.Count) return;
+            var item = _items[_soloIndex];
+
+            SoloTitleText.Text = !string.IsNullOrWhiteSpace(item.Name) ? item.Name : " ";
+
+            double w = 0, h = 0;
+            if (ImageCache.TryGet(item.Path, out var entry) && entry != null && entry.NativeWidth > 0 && entry.NativeHeight > 0)
+            {
+                w = entry.NativeWidth;
+                h = entry.NativeHeight;
+            }
+            else if (SoloImage.Source is BitmapSource bs && bs.PixelWidth > 0 && bs.PixelHeight > 0)
+            {
+                w = bs.PixelWidth;
+                h = bs.PixelHeight;
+            }
+            else if (item.Thumbnail is BitmapSource ts && ts.PixelWidth > 0 && ts.PixelHeight > 0)
+            {
+                w = ts.PixelWidth;
+                h = ts.PixelHeight;
+            }
+
+            if (w > 0 && h > 0)
+            {
+                SoloSecondaryText.Text = item.GetHudDisplayString(w, h);
+            }
+            else
+            {
+                string size = !string.IsNullOrEmpty(item.SizeString) ? item.SizeString : "";
+                string date = item.DateModified != DateTime.MinValue ? item.DateModified.ToString("yyyy-MM-dd HH:mm") : item.DateText;
+                SoloSecondaryText.Text = $"{size} \u2022 {date}".Trim(' ', '\u2022');
+            }
+
+            double viewW = SoloImageContainer.ActualWidth;
+            double viewH = SoloImageContainer.ActualHeight;
+            if (viewW <= 0 || viewH <= 0)
+            {
+                viewW = ActualWidth;
+                viewH = ActualHeight;
+            }
+
+            double zoomRatio = 1.0;
+            if (w > 0 && h > 0 && viewW > 0 && viewH > 0)
+            {
+                double fit = Math.Min(viewW / w, viewH / h);
+                zoomRatio = fit * SoloTransform.ScaleX;
+            }
+            else
+            {
+                zoomRatio = SoloTransform.ScaleX;
+            }
+
+            SoloZoomText.Text = item.GetZoomString((float)zoomRatio);
+            SoloFidelityText.Text = "HF";
+        }
+
         private void EnterSolo(int index)
         {
             if (index < 0 || index >= _items.Count) return;
             _soloIndex = index;
             var item = _items[index];
 
-            SoloTitleText.Text = item.Name;
-            SoloSecondaryText.Text = !string.IsNullOrEmpty(item.SizeString) ? item.SizeString : item.DateText;
             SoloCounterText.Text = $"{index + 1} of {_items.Count}";
 
             try
             {
-                SoloImage.Source = new BitmapImage(new Uri(item.Path, UriKind.Absolute));
+                var bmp = new BitmapImage();
+                bmp.UriSource = new Uri(item.Path, UriKind.Absolute);
+                bmp.ImageOpened += (_, _) => UpdateSoloHud();
+                SoloImage.Source = bmp;
             }
             catch { }
 
             ResetSoloZoom();
+            UpdateSoloHud();
             SoloContainer.Visibility = Visibility.Visible;
             UnifiedHud.Visibility = Visibility.Collapsed;
             ShowHudAndOverlays();
@@ -2176,6 +2238,7 @@ namespace ModernImageViewer
             SoloTransform.ScaleY = 1.0;
             SoloTransform.TranslateX = 0;
             SoloTransform.TranslateY = 0;
+            UpdateSoloHud();
         }
 
         private void PrevSolo()

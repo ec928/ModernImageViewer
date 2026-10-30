@@ -421,15 +421,20 @@
                 </Image>
             </Grid>
 
-            <!-- Solo Top-Left Info Overlay (auto-hides with HUD) -->
-            <Border x:Name="SoloInfoOverlay" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="16,16,0,0"
-                    Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="10" Padding="12,8" Translation="0,0,24">
+            <!-- Solo Top-Left Info Overlay (auto-hides with HUD, identical to single viewer HUD) -->
+            <Border x:Name="SoloInfoOverlay" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="24,60,0,0"
+                    Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}" BorderThickness="1" CornerRadius="12" Padding="14,10" Translation="0,0,24" IsHitTestVisible="False">
                 <Border.Shadow>
                     <ThemeShadow/>
                 </Border.Shadow>
-                <StackPanel Spacing="3">
-                    <TextBlock x:Name="SoloTitleText" Text="Photo 1 of 4" Style="{ThemeResource BodyStrongTextBlockStyle}" />
-                    <TextBlock x:Name="SoloSecondaryText" Text="" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <StackPanel Spacing="4" HorizontalAlignment="Center">
+                    <TextBlock x:Name="SoloTitleText" Style="{ThemeResource BodyStrongTextBlockStyle}" Foreground="{ThemeResource TextFillColorPrimaryBrush}" TextTrimming="CharacterEllipsis" MaxWidth="350" HorizontalAlignment="Center"/>
+                    <TextBlock x:Name="SoloSecondaryText" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center"/>
+                    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                        <TextBlock x:Name="SoloZoomText" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Typography.NumeralAlignment="Tabular"/>
+                        <TextBlock Text="&#x2022;" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Opacity="0.5"/>
+                        <TextBlock x:Name="SoloFidelityText" Text="HF" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorPrimaryBrush}" FontWeight="Bold"/>
+                    </StackPanel>
                 </StackPanel>
             </Border>
 
