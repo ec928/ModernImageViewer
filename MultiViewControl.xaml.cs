@@ -1628,15 +1628,44 @@ namespace ModernImageViewer
             topControls.Children.Add(topStack);
             cellGrid.Children.Add(topControls);
 
+            // Top-Left Position Badge (for right-click Swap / Move target indication)
+            var positionBadge = new Border
+            {
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(10),
+                Padding = new Thickness(8, 3, 8, 3),
+                CornerRadius = new CornerRadius(6),
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(220, 20, 20, 20)),
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(80, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
+                Opacity = 0.0,
+                IsHitTestVisible = false
+            };
+            Canvas.SetZIndex(positionBadge, 70);
+
+            var badgeText = new TextBlock
+            {
+                FontSize = 11.5,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Center
+            };
+            positionBadge.Child = badgeText;
+            cellGrid.Children.Add(positionBadge);
+
             // Right-Click Context Menu, filled when it opens so it names the photo's current place
             var menu = new MenuFlyout();
             FillCellMenu(menu, photo.Item);
             menu.Opening += (_, _) => FillCellMenu(menu, photo.Item);
+            menu.Opened += (_, _) => ShowPositionBadges(Slot(photo.Item));
+            menu.Closed += (_, _) => HidePositionBadges();
 
             cellGrid.ContextFlyout = menu;
 
             AttachSwapDrop(cellBorder, cellGrid, photo);
-            cellBorder.Tag = new CellParts(transform, updateLayout, topControls, fullImg, photo);
+            cellBorder.Tag = new CellParts(transform, updateLayout, topControls, fullImg, photo, positionBadge, badgeText);
 
             cellBorder.Child = cellGrid;
             return cellBorder;
@@ -1685,18 +1714,36 @@ namespace ModernImageViewer
 
             if (_items.Count > 1)
             {
+                int visible = VisibleCount(_items.Count);
+                int curSlot = Slot(item);
+
                 var moveLeftItem = new MenuFlyoutItem { Text = "Move Left / Up", Icon = new FontIcon { Glyph = "\uE76B" } };
                 moveLeftItem.Click += (s, e) => MovePhoto(Slot(item), -1);
+                if (visible > 1)
+                {
+                    int prevSlot = ((curSlot - 1) % visible + visible) % visible;
+                    moveLeftItem.PointerEntered += (s, e) => HighlightPositionBadge(prevSlot);
+                    moveLeftItem.PointerExited += (s, e) => ClearHighlightPositionBadge(prevSlot, curSlot);
+                }
                 menu.Items.Add(moveLeftItem);
 
                 var moveRightItem = new MenuFlyoutItem { Text = "Move Right / Down", Icon = new FontIcon { Glyph = "\uE76C" } };
                 moveRightItem.Click += (s, e) => MovePhoto(Slot(item), 1);
+                if (visible > 1)
+                {
+                    int nextSlot = ((curSlot + 1) % visible + visible) % visible;
+                    moveRightItem.PointerEntered += (s, e) => HighlightPositionBadge(nextSlot);
+                    moveRightItem.PointerExited += (s, e) => ClearHighlightPositionBadge(nextSlot, curSlot);
+                }
                 menu.Items.Add(moveRightItem);
 
                 if (_items.Count == 2)
                 {
                     var swapItem = new MenuFlyoutItem { Text = "Swap with Other Photo", Icon = new FontIcon { Glyph = "\uE8AB" } };
-                    swapItem.Click += (s, e) => SwapItems(Slot(item), 1 - Slot(item));
+                    int otherSlot = 1 - curSlot;
+                    swapItem.Click += (s, e) => SwapItems(Slot(item), otherSlot);
+                    swapItem.PointerEntered += (s, e) => HighlightPositionBadge(otherSlot);
+                    swapItem.PointerExited += (s, e) => ClearHighlightPositionBadge(otherSlot, curSlot);
                     menu.Items.Add(swapItem);
                 }
                 else
@@ -1706,8 +1753,14 @@ namespace ModernImageViewer
                     {
                         if (i == index) continue;
                         var target = _items[i];
+                        int targetSlot = i;
                         var targetItem = new MenuFlyoutItem { Text = $"Position {i + 1} ({target.Name})" };
                         targetItem.Click += (s, e) => SwapItems(Slot(item), Slot(target));
+                        if (targetSlot < visible)
+                        {
+                            targetItem.PointerEntered += (s, e) => HighlightPositionBadge(targetSlot);
+                            targetItem.PointerExited += (s, e) => ClearHighlightPositionBadge(targetSlot, curSlot);
+                        }
                         swapSub.Items.Add(targetItem);
                     }
                     menu.Items.Add(swapSub);
@@ -1744,7 +1797,7 @@ namespace ModernImageViewer
             public CellPhoto(ImageItem item) => Item = item;
         }
 
-        private sealed record CellParts(CompositeTransform Transform, Action UpdateLayout, UIElement TopControls, Image Photo, CellPhoto Bound);
+        private sealed record CellParts(CompositeTransform Transform, Action UpdateLayout, UIElement TopControls, Image Photo, CellPhoto Bound, Border PositionBadge, TextBlock BadgeText);
 
         /// <summary>
         /// Remove a photo and keep the other cells, so none of them decodes again. The layout is rebuilt
@@ -1799,6 +1852,108 @@ namespace ModernImageViewer
                 _cellTopControls.Remove(parts.TopControls);
             }
             if (cell.Parent is Panel parent) parent.Children.Remove(cell);
+        }
+
+        #endregion
+
+
+        #region Position Badges for Swap / Move Indication
+
+        private Windows.UI.Color GetMultiViewAccentColor()
+        {
+            Windows.UI.Color accent = Windows.UI.Color.FromArgb(255, 0, 120, 212);
+            try
+            {
+                if (Application.Current.Resources["SystemAccentColor"] is Windows.UI.Color c) accent = c;
+                else if (Application.Current.Resources["SystemAccentColorLight2"] is Windows.UI.Color c2) accent = c2;
+            }
+            catch { }
+            return accent;
+        }
+
+        private void ShowPositionBadges(int sourceIndex)
+        {
+            int visible = VisibleCount(_items.Count);
+            var accent = GetMultiViewAccentColor();
+
+            for (int i = 0; i < visible; i++)
+            {
+                if (i < _cellRoots.Length && _cellRoots[i]?.Tag is CellParts parts)
+                {
+                    bool isSource = (i == sourceIndex);
+                    bool compact = (_cellRoots[i] is FrameworkElement fe && fe.ActualWidth < 140);
+
+                    if (isSource)
+                    {
+                        parts.BadgeText.Text = compact ? $"#{i + 1} (This)" : $"Position {i + 1} (This Photo)";
+                        parts.PositionBadge.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(235, 36, 36, 36));
+                        parts.PositionBadge.BorderBrush = new SolidColorBrush(accent);
+                        parts.PositionBadge.BorderThickness = new Thickness(1.5);
+                    }
+                    else
+                    {
+                        parts.BadgeText.Text = compact ? $"#{i + 1}" : $"Position {i + 1}";
+                        parts.PositionBadge.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(220, 20, 20, 20));
+                        parts.PositionBadge.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(90, 255, 255, 255));
+                        parts.PositionBadge.BorderThickness = new Thickness(1);
+                    }
+                    parts.PositionBadge.Opacity = 1.0;
+                }
+            }
+        }
+
+        private void HighlightPositionBadge(int targetIndex)
+        {
+            int visible = VisibleCount(_items.Count);
+            if (targetIndex < 0 || targetIndex >= visible || targetIndex >= _cellRoots.Length) return;
+            if (_cellRoots[targetIndex]?.Tag is CellParts parts)
+            {
+                var accent = GetMultiViewAccentColor();
+                bool compact = (_cellRoots[targetIndex] is FrameworkElement fe && fe.ActualWidth < 140);
+                parts.BadgeText.Text = compact ? $"➜ #{targetIndex + 1}" : $"➜ Swap with Position {targetIndex + 1}";
+                parts.PositionBadge.Background = new SolidColorBrush(accent);
+                parts.PositionBadge.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.White);
+                parts.PositionBadge.BorderThickness = new Thickness(2);
+                parts.PositionBadge.Opacity = 1.0;
+            }
+        }
+
+        private void ClearHighlightPositionBadge(int targetIndex, int sourceIndex)
+        {
+            int visible = VisibleCount(_items.Count);
+            if (targetIndex < 0 || targetIndex >= visible || targetIndex >= _cellRoots.Length) return;
+            if (_cellRoots[targetIndex]?.Tag is CellParts parts)
+            {
+                bool isSource = (targetIndex == sourceIndex);
+                bool compact = (_cellRoots[targetIndex] is FrameworkElement fe && fe.ActualWidth < 140);
+                if (isSource)
+                {
+                    var accent = GetMultiViewAccentColor();
+                    parts.BadgeText.Text = compact ? $"#{targetIndex + 1} (This)" : $"Position {targetIndex + 1} (This Photo)";
+                    parts.PositionBadge.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(235, 36, 36, 36));
+                    parts.PositionBadge.BorderBrush = new SolidColorBrush(accent);
+                    parts.PositionBadge.BorderThickness = new Thickness(1.5);
+                }
+                else
+                {
+                    parts.BadgeText.Text = compact ? $"#{targetIndex + 1}" : $"Position {targetIndex + 1}";
+                    parts.PositionBadge.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(220, 20, 20, 20));
+                    parts.PositionBadge.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(90, 255, 255, 255));
+                    parts.PositionBadge.BorderThickness = new Thickness(1);
+                }
+            }
+        }
+
+        private void HidePositionBadges()
+        {
+            int visible = VisibleCount(_items.Count);
+            for (int i = 0; i < visible; i++)
+            {
+                if (i < _cellRoots.Length && _cellRoots[i]?.Tag is CellParts parts)
+                {
+                    parts.PositionBadge.Opacity = 0.0;
+                }
+            }
         }
 
         #endregion
@@ -2135,6 +2290,7 @@ namespace ModernImageViewer
 
             cellGrid.DragStarting += async (s, e) =>
             {
+                ShowPositionBadges(Slot(photo.Item));
                 e.AllowedOperations = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
                 e.Data.RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
                 e.Data.SetText(photo.Item.Name);
@@ -2144,7 +2300,11 @@ namespace ModernImageViewer
                 catch { }
                 finally { deferral.Complete(); }
             };
-            cellGrid.DropCompleted += (s, e) => cellBorder.Opacity = 1;
+            cellGrid.DropCompleted += (s, e) =>
+            {
+                HidePositionBadges();
+                cellBorder.Opacity = 1;
+            };
 
             void Over(object s, DragEventArgs e)
             {
