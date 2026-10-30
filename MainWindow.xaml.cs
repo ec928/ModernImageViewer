@@ -81,6 +81,9 @@ namespace ModernImageViewer
         private bool _isStartupIndexing = false;
 
         private string _currentDirectory = string.Empty;
+        public string CurrentDirectory => _currentDirectory;
+        public IReadOnlyList<string> FavouriteFolders => _favouriteFolders;
+        public IReadOnlyList<string> RecentFolders => _recentFolders;
         // Not a filesystem path. The list and sidebar use it as the level above the drives.
         private const string DriveRootPath = "::{Drives}";
         private const string DriveRootName = "This PC";

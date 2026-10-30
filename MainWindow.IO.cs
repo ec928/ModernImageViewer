@@ -189,7 +189,7 @@ namespace ModernImageViewer
             FocusGrid();
         }
 
-        private async Task ScanFolder(string folderPath, bool openFirstPage = false)
+        public async Task ScanFolder(string folderPath, bool openFirstPage = false)
         {
             if (folderPath == DriveRootPath)
             {
@@ -1240,14 +1240,14 @@ namespace ModernImageViewer
             Style = (Style)RootGrid.Resources["FolderMenuDividerStyle"],
         };
 
-        private bool IsFavouriteFolder(string path) =>
+        public bool IsFavouriteFolder(string path) =>
             _favouriteFolders.Exists(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
 
-        private void ToggleFavouriteFolder(string path)
+        public void ToggleFavouriteFolder(string path, int maxLimit = 10)
         {
             int i = _favouriteFolders.FindIndex(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
             if (i >= 0) _favouriteFolders.RemoveAt(i);
-            else if (_favouriteFolders.Count < MaxFavouriteFolders) _favouriteFolders.Add(path);
+            else if (_favouriteFolders.Count < maxLimit) _favouriteFolders.Add(path);
             else return;
             SaveAllSettings();
         }

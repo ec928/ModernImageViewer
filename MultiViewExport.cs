@@ -6,6 +6,8 @@ using Microsoft.UI.Xaml.Media.Imaging;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using Rectangle = Microsoft.UI.Xaml.Shapes.Rectangle;
 using System.Threading.Tasks;
 using Windows.Foundation;
 using Windows.Graphics.Imaging;
@@ -46,46 +48,285 @@ namespace ModernImageViewer
 
         private void SaveFlyout_Opening(object sender, object e)
         {
-            SaveMenuFlyout.Items.Clear();
+            BuildSaveFlyoutMenu();
+        }
+
+        private void BuildSaveFlyoutMenu()
+        {
+            var panel = new StackPanel
+            {
+                MinWidth = 290,
+                Spacing = 1,
+                XYFocusKeyboardNavigation = Microsoft.UI.Xaml.Input.XYFocusKeyboardNavigationMode.Enabled
+            };
+
             double canvasW = CellsGrid.ActualWidth;
             double canvasH = CellsGrid.ActualHeight;
+
+            // Resolutions
             foreach (int height in GridCanvasMath.SaveHeights)
             {
                 if (!GridCanvasMath.TryOutputSize(height, canvasW, canvasH, out int width, out int outputH))
                     continue;
                 int chosen = height;
-                var item = new MenuFlyoutItem { Text = $"{chosen}p    {width}\u00D7{outputH}" };
-                item.Click += async (_, _) => await SaveAtHeightAsync(chosen);
-                SaveMenuFlyout.Items.Add(item);
+                var item = CreateMenuItemButton($"{chosen}p", $"{width}\u00D7{outputH}");
+                item.Click += async (_, _) =>
+                {
+                    SaveFlyout.Hide();
+                    await SaveAtHeightAsync(chosen);
+                };
+                panel.Children.Add(item);
             }
 
             var pixels = CanvasPixels();
             if (pixels.Width > 0 && pixels.Height > 0
                 && pixels.Width <= GridCanvasMath.MaxEdge && pixels.Height <= GridCanvasMath.MaxEdge)
             {
-                var windowItem = new MenuFlyoutItem { Text = $"This window    {pixels.Width}\u00D7{pixels.Height}" };
-                windowItem.Click += async (_, _) => await SavePixelsAsync(pixels.Width, pixels.Height);
-                SaveMenuFlyout.Items.Add(windowItem);
+                var windowItem = CreateMenuItemButton("This window", $"{pixels.Width}\u00D7{pixels.Height}");
+                windowItem.Click += async (_, _) =>
+                {
+                    SaveFlyout.Hide();
+                    await SavePixelsAsync(pixels.Width, pixels.Height);
+                };
+                panel.Children.Add(windowItem);
             }
 
-            var custom = new MenuFlyoutItem { Text = "Custom\u2026" };
+            var custom = CreateMenuItemButton("Custom\u2026");
             custom.Click += async (_, _) =>
             {
+                SaveFlyout.Hide();
                 int? height = await AskHeightAsync(canvasW, canvasH);
                 if (height != null) await SaveAtHeightAsync(height.Value);
             };
-            SaveMenuFlyout.Items.Add(custom);
+            panel.Children.Add(custom);
 
             // Layout Save & Load
-            SaveMenuFlyout.Items.Add(new MenuFlyoutSeparator());
+            panel.Children.Add(CreateMenuDivider());
 
-            var saveLayoutItem = new MenuFlyoutItem { Text = "Save Layout as\u2026" };
-            saveLayoutItem.Click += async (_, _) => await SaveLayoutFileAsync();
-            SaveMenuFlyout.Items.Add(saveLayoutItem);
+            var saveLayoutItem = CreateMenuItemButton("Save Layout as\u2026", icon: new FontIcon { Glyph = "\uE74E", FontSize = 13 });
+            saveLayoutItem.Click += async (_, _) =>
+            {
+                SaveFlyout.Hide();
+                await SaveLayoutFileAsync();
+            };
+            panel.Children.Add(saveLayoutItem);
 
-            var openLayoutItem = new MenuFlyoutItem { Text = "Open Layout\u2026" };
-            openLayoutItem.Click += async (_, _) => await OpenLayoutFileAsync();
-            SaveMenuFlyout.Items.Add(openLayoutItem);
+            var openLayoutItem = CreateMenuItemButton("Open Layout\u2026", icon: new FontIcon { Glyph = "\uE8E5", FontSize = 13 });
+            openLayoutItem.Click += async (_, _) =>
+            {
+                SaveFlyout.Hide();
+                await OpenLayoutFileAsync();
+            };
+            panel.Children.Add(openLayoutItem);
+
+            // Favourites & Recent directories (top 3 each)
+            if (MainWindow.Instance != null)
+            {
+                var favs = MainWindow.Instance.FavouriteFolders.Take(3).ToList();
+                var recents = MainWindow.Instance.RecentFolders
+                    .Where(p => !MainWindow.Instance.IsFavouriteFolder(p))
+                    .Take(3)
+                    .ToList();
+
+                if (favs.Count > 0 || recents.Count > 0)
+                {
+                    panel.Children.Add(CreateMenuDivider());
+                }
+
+                if (favs.Count > 0)
+                {
+                    panel.Children.Add(CreateSectionHeader(favs.Count >= 3 ? "Favourites (3 of 3)" : "Favourites"));
+                    foreach (var p in favs)
+                    {
+                        panel.Children.Add(CreateFolderRow(p, isFavourite: true));
+                    }
+                }
+
+                if (recents.Count > 0)
+                {
+                    panel.Children.Add(CreateSectionHeader("Recent"));
+                    foreach (var p in recents)
+                    {
+                        panel.Children.Add(CreateFolderRow(p, isFavourite: false));
+                    }
+                }
+            }
+
+            var scroll = new ScrollViewer
+            {
+                Content = panel,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                MaxHeight = 520
+            };
+
+            SaveFlyout.Content = scroll;
+        }
+
+        private Button CreateMenuItemButton(string text, string? rightText = null, IconElement? icon = null)
+        {
+            var grid = new Grid { HorizontalAlignment = HorizontalAlignment.Stretch, ColumnSpacing = 10 };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            if (icon != null)
+            {
+                Grid.SetColumn(icon, 0);
+                grid.Children.Add(icon);
+            }
+
+            var label = new TextBlock
+            {
+                Text = text,
+                VerticalAlignment = VerticalAlignment.Center,
+                FontSize = 13
+            };
+            Grid.SetColumn(label, icon != null ? 1 : 0);
+            grid.Children.Add(label);
+
+            if (!string.IsNullOrEmpty(rightText))
+            {
+                var rightLabel = new TextBlock
+                {
+                    Text = rightText,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    FontSize = 12,
+                    Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
+                };
+                Grid.SetColumn(rightLabel, 2);
+                grid.Children.Add(rightLabel);
+            }
+
+            return new Button
+            {
+                Style = (Style)Application.Current.Resources["SubtleButtonStyle"],
+                Content = grid,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                Padding = new Thickness(10, 6, 10, 6),
+                CornerRadius = new CornerRadius(4),
+                MinHeight = 32
+            };
+        }
+
+        private FrameworkElement CreateMenuDivider()
+        {
+            return new Rectangle
+            {
+                Height = 1,
+                Margin = new Thickness(4, 4, 4, 4),
+                Fill = (Brush)Application.Current.Resources["DividerStrokeColorDefaultBrush"]
+            };
+        }
+
+        private TextBlock CreateSectionHeader(string text)
+        {
+            return new TextBlock
+            {
+                Text = text,
+                FontSize = 12,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                Margin = new Thickness(10, 6, 10, 4)
+            };
+        }
+
+        private Grid CreateFolderRow(string path, bool isFavourite)
+        {
+            var row = new Grid { HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 1, 0, 1) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            bool current = string.Equals(path, MainWindow.Instance?.CurrentDirectory, StringComparison.OrdinalIgnoreCase);
+            bool available = Directory.Exists(path) || (ComicArchive.IsComicArchivePath(path) && File.Exists(path));
+
+            var content = new Grid { ColumnSpacing = 10 };
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var icon = new FontIcon
+            {
+                Glyph = "\uE8B7",
+                FontSize = 13.5,
+                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(icon, 0);
+            content.Children.Add(icon);
+
+            string displayName = available ? path : path + " (not available)";
+            var label = new TextBlock
+            {
+                Text = displayName,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center,
+                FontSize = 13,
+                FontWeight = current ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal
+            };
+            ToolTipService.SetToolTip(label, path);
+            Grid.SetColumn(label, 1);
+            content.Children.Add(label);
+
+            var openBtn = new Button
+            {
+                Style = (Style)Application.Current.Resources["SubtleButtonStyle"],
+                Content = content,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                Padding = new Thickness(10, 6, 8, 6),
+                CornerRadius = new CornerRadius(4),
+                MinHeight = 32,
+                IsEnabled = available
+            };
+            openBtn.Click += async (_, _) =>
+            {
+                SaveFlyout.Hide();
+                if (MainWindow.Instance != null)
+                {
+                    await MainWindow.Instance.ScanFolder(path);
+                    var items = MainWindow.Instance.Images.Where(i => !i.IsDirectory).ToList();
+                    LoadImages(items);
+                }
+            };
+            Grid.SetColumn(openBtn, 0);
+            row.Children.Add(openBtn);
+
+            // Star button
+            bool full = !isFavourite && (MainWindow.Instance?.FavouriteFolders.Count ?? 0) >= 3;
+            var starIcon = new FontIcon
+            {
+                Glyph = isFavourite ? "\uE735" : "\uE734",
+                FontSize = 14,
+                FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
+                Foreground = isFavourite
+                    ? (Brush)Application.Current.Resources["FavouriteStarBrush"]
+                    : (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
+            };
+
+            var starBtn = new Button
+            {
+                Style = (Style)Application.Current.Resources["SubtleButtonStyle"],
+                Content = starIcon,
+                Width = 32,
+                Height = 32,
+                Padding = new Thickness(0),
+                CornerRadius = new CornerRadius(4),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(2, 0, 4, 0),
+                IsEnabled = !full || isFavourite
+            };
+            string tip = isFavourite ? "Remove from favourites" : (full ? "Favourites limit reached (3 of 3)" : "Add to favourites");
+            ToolTipService.SetToolTip(starBtn, tip);
+            starBtn.Click += (_, _) =>
+            {
+                MainWindow.Instance?.ToggleFavouriteFolder(path, maxLimit: 3);
+                BuildSaveFlyoutMenu();
+            };
+            Grid.SetColumn(starBtn, 1);
+            row.Children.Add(starBtn);
+
+            return row;
         }
 
         private (int Width, int Height) CanvasPixels()

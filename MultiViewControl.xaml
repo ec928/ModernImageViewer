@@ -397,9 +397,20 @@
                             CornerRadius="12"
                             ToolTipService.ToolTip="Save image or Save/Load layout (Ctrl+S)">
                         <Button.Flyout>
-                            <MenuFlyout x:Name="SaveMenuFlyout" 
-                                        MenuFlyoutPresenterStyle="{StaticResource MultiViewMenuFlyoutPresenterStyle}"
-                                        Opening="SaveFlyout_Opening" Opened="HudMenu_Opened" Closed="HudMenu_Closed"/>
+                            <Flyout x:Name="SaveFlyout" 
+                                    Placement="Top"
+                                    Opening="SaveFlyout_Opening" Opened="HudMenu_Opened" Closed="HudMenu_Closed">
+                                <Flyout.FlyoutPresenterStyle>
+                                    <Style TargetType="FlyoutPresenter">
+                                        <Setter Property="CornerRadius" Value="10"/>
+                                        <Setter Property="Padding" Value="4"/>
+                                        <Setter Property="MinWidth" Value="300"/>
+                                        <Setter Property="MaxWidth" Value="420"/>
+                                        <Setter Property="MaxHeight" Value="560"/>
+                                        <Setter Property="Background" Value="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}"/>
+                                    </Style>
+                                </Flyout.FlyoutPresenterStyle>
+                            </Flyout>
                         </Button.Flyout>
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE74E;" FontSize="14" />
