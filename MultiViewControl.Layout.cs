@@ -23,6 +23,7 @@ namespace ModernImageViewer
         private bool _relayoutKeepingCells;
         private SegmentGesture? _segmentGesture;
         private bool _applyingSegmentUnlock;
+        private bool _layoutFromTemplate;
 
         private void ResetMosaicFields()
         {
@@ -32,6 +33,7 @@ namespace ModernImageViewer
             _mosaic = null;
             _mosaicCustom = false;
             _keepMosaic = false;
+            _layoutFromTemplate = false;
             _framedSlots = 0;
         }
 
@@ -63,8 +65,11 @@ namespace ModernImageViewer
                 _layoutUpdaters.Clear();
                 _cellTopControls.Clear();
                 _cellRoots = Array.Empty<FrameworkElement?>();
-                _mosaic = null;
-                _mosaicCustom = false;
+                if (!_layoutFromTemplate)
+                {
+                    _mosaic = null;
+                    _mosaicCustom = false;
+                }
             }
             else if (_relayoutKeepingCells)
             {

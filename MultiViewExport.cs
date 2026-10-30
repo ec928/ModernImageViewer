@@ -75,6 +75,17 @@ namespace ModernImageViewer
                 if (height != null) await SaveAtHeightAsync(height.Value);
             };
             SaveMenuFlyout.Items.Add(custom);
+
+            // Layout Save & Load
+            SaveMenuFlyout.Items.Add(new MenuFlyoutSeparator());
+
+            var saveLayoutItem = new MenuFlyoutItem { Text = "Save Layout as\u2026" };
+            saveLayoutItem.Click += async (_, _) => await SaveLayoutFileAsync();
+            SaveMenuFlyout.Items.Add(saveLayoutItem);
+
+            var openLayoutItem = new MenuFlyoutItem { Text = "Open Layout\u2026" };
+            openLayoutItem.Click += async (_, _) => await OpenLayoutFileAsync();
+            SaveMenuFlyout.Items.Add(openLayoutItem);
         }
 
         private (int Width, int Height) CanvasPixels()
@@ -317,6 +328,212 @@ namespace ModernImageViewer
             software.DpiX = 96;
             software.DpiY = 96;
             return CanvasBitmap.CreateFromSoftwareBitmap(device, software);
+        }
+
+        private string SuggestedLayoutName()
+        {
+            string stem = _items.Count > 0 ? Path.GetFileNameWithoutExtension(_items[0].Name) : "layout";
+            if (string.IsNullOrWhiteSpace(stem)) stem = "layout";
+            foreach (char c in Path.GetInvalidFileNameChars())
+                stem = stem.Replace(c, '-');
+            return $"{stem}-layout";
+        }
+
+        private async Task SaveLayoutFileAsync()
+        {
+            if (MainWindow.Instance == null) return;
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(MainWindow.Instance);
+            var picker = new FileSavePicker
+            {
+                SuggestedStartLocation = PickerLocationId.PicturesLibrary,
+                SuggestedFileName = SuggestedLayoutName()
+            };
+            picker.FileTypeChoices.Add("Multi-View Layout", new List<string> { ".mivlayout" });
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+            StorageFile? file = await picker.PickSaveFileAsync();
+            if (file == null) return;
+
+            WriteAllGridWeights();
+
+            var layoutFile = new MultiViewLayoutFile
+            {
+                Created = DateTime.UtcNow,
+                Canvas = new CanvasLayoutDto
+                {
+                    Aspect = AspectText?.Text,
+                    BackgroundColor = null
+                },
+                State = new LayoutStateDto
+                {
+                    Lines = _lines,
+                    LineCounts = _lineCounts != null ? new List<int>(_lineCounts) : null,
+                    Flipped = _flipped,
+                    HeroActive = _heroActive,
+                    HeroKind = _heroKind.ToString(),
+                    HeroPosition = _heroPosition,
+                    IsFillMode = _isFillMode
+                },
+                Mosaic = _mosaic != null ? MosaicNodeDto.FromMosaicLayout(_mosaic) : null
+            };
+
+            for (int i = 0; i < _items.Count; i++)
+            {
+                var item = _items[i];
+                var slotDto = new PhotoSlotDto
+                {
+                    Slot = i,
+                    Path = item.Path ?? string.Empty,
+                    Name = item.Name
+                };
+
+                if (i < _cellRoots.Length && _cellRoots[i]?.Tag is CellParts parts)
+                {
+                    slotDto.Zoom = parts.Transform.ScaleX;
+                    slotDto.PanX = parts.Transform.TranslateX;
+                    slotDto.PanY = parts.Transform.TranslateY;
+                }
+
+                layoutFile.Photos.Add(slotDto);
+            }
+
+            try
+            {
+                string json = layoutFile.ToJson();
+                await FileIO.WriteTextAsync(file, json);
+                await ShowExportMessageAsync("Layout saved.");
+            }
+            catch (Exception ex)
+            {
+                await ShowExportMessageAsync($"Failed to save layout: {ex.Message}");
+            }
+        }
+
+        private async Task OpenLayoutFileAsync()
+        {
+            if (MainWindow.Instance == null) return;
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(MainWindow.Instance);
+            var picker = new FileOpenPicker
+            {
+                SuggestedStartLocation = PickerLocationId.PicturesLibrary
+            };
+            picker.FileTypeFilter.Add(".mivlayout");
+            picker.FileTypeFilter.Add(".json");
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+            StorageFile? file = await picker.PickSingleFileAsync();
+            if (file == null) return;
+
+            try
+            {
+                string json = await FileIO.ReadTextAsync(file);
+                var layoutFile = MultiViewLayoutFile.FromJson(json);
+                if (layoutFile == null)
+                {
+                    await ShowExportMessageAsync("Could not read layout file.");
+                    return;
+                }
+                ApplyLayoutFile(layoutFile);
+            }
+            catch (Exception ex)
+            {
+                await ShowExportMessageAsync($"Failed to open layout: {ex.Message}");
+            }
+        }
+
+        public void ApplyLayoutFile(MultiViewLayoutFile layoutFile)
+        {
+            if (layoutFile == null) return;
+
+            if (layoutFile.Photos != null && layoutFile.Photos.Count > 0)
+            {
+                var items = new List<ImageItem>();
+                foreach (var photo in layoutFile.Photos)
+                {
+                    items.Add(new ImageItem
+                    {
+                        Path = photo.Path ?? string.Empty,
+                        Name = !string.IsNullOrEmpty(photo.Name) ? photo.Name : Path.GetFileName(photo.Path ?? string.Empty),
+                        Dispatcher = this.DispatcherQueue
+                    });
+                }
+                _items.Clear();
+                _items.AddRange(items);
+            }
+
+            _framedSlots = 0;
+
+            if (layoutFile.State != null)
+            {
+                _isFillMode = layoutFile.State.IsFillMode;
+                _lines = layoutFile.State.Lines > 0 ? layoutFile.State.Lines : 1;
+                _lineCounts = layoutFile.State.LineCounts != null ? layoutFile.State.LineCounts.ToArray() : null;
+                _flipped = layoutFile.State.Flipped;
+                _heroActive = layoutFile.State.HeroActive;
+                if (Enum.TryParse<HeroKind>(layoutFile.State.HeroKind, out var heroKind))
+                    _heroKind = heroKind;
+                else
+                    _heroKind = HeroKind.Banner;
+                _heroPosition = layoutFile.State.HeroPosition;
+            }
+
+            if (layoutFile.Mosaic != null)
+            {
+                _mosaic = layoutFile.Mosaic.ToMosaicLayout();
+                _mosaicCustom = true;
+                _keepMosaic = true;
+            }
+            else
+            {
+                _mosaic = null;
+                _mosaicCustom = false;
+                _keepMosaic = false;
+            }
+
+            ExitSolo();
+
+            _layoutFromTemplate = true;
+            try
+            {
+                BuildLayout();
+            }
+            finally
+            {
+                _layoutFromTemplate = false;
+            }
+
+            // Restore zoom and pan
+            if (layoutFile.Photos != null)
+            {
+                for (int i = 0; i < layoutFile.Photos.Count; i++)
+                {
+                    var photo = layoutFile.Photos[i];
+                    if (i < _cellRoots.Length && _cellRoots[i]?.Tag is CellParts parts)
+                    {
+                        if (photo.Zoom.HasValue && photo.Zoom.Value > 0)
+                        {
+                            parts.Transform.ScaleX = photo.Zoom.Value;
+                            parts.Transform.ScaleY = photo.Zoom.Value;
+                        }
+                        if (photo.PanX.HasValue) parts.Transform.TranslateX = photo.PanX.Value;
+                        if (photo.PanY.HasValue) parts.Transform.TranslateY = photo.PanY.Value;
+                    }
+                }
+            }
+
+            UpdateFillFitButton();
+            ShowHudAndOverlays();
+
+            // Aspect ratio if specified
+            if (!string.IsNullOrWhiteSpace(layoutFile.Canvas?.Aspect))
+            {
+                foreach (var aspect in GridCanvasMath.Aspects)
+                {
+                    if (string.Equals(aspect.Label, layoutFile.Canvas.Aspect, StringComparison.OrdinalIgnoreCase))
+                    {
+                        CanvasAspectChosen?.Invoke(aspect.WidthOverHeight);
+                        break;
+                    }
+                }
+            }
         }
 
         private async Task ShowExportMessageAsync(string message)

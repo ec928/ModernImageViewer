@@ -43,6 +43,12 @@ namespace ModernImageViewer
         {
             if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) return;
 
+            if (filePath.EndsWith(".mivlayout", StringComparison.OrdinalIgnoreCase))
+            {
+                OpenLayoutFromFilePath(filePath);
+                return;
+            }
+
             if (ComicArchive.IsComicArchivePath(filePath))
             {
                 await ScanFolder(filePath, openFirstPage: true);
@@ -1274,6 +1280,11 @@ namespace ModernImageViewer
                     }
                     else if (items[0] is StorageFile file)
                     {
+                        if (file.Path.EndsWith(".mivlayout", StringComparison.OrdinalIgnoreCase))
+                        {
+                            OpenLayoutFromFilePath(file.Path);
+                            return;
+                        }
                         var parentFolder = await file.GetParentAsync();
                         if (parentFolder != null)
                         {

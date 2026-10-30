@@ -847,6 +847,35 @@ namespace ModernImageViewer
             }
         }
 
+        public void OpenLayoutFromFilePath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return;
+            try
+            {
+                string json = File.ReadAllText(path);
+                var layoutFile = MultiViewLayoutFile.FromJson(json);
+                if (layoutFile == null) return;
+
+                if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible)
+                {
+                    ClosePreviewInternal();
+                }
+
+                if (MultiViewControl != null)
+                {
+                    _multiViewParked = false;
+                    BeginMultiViewCanvas();
+                    MultiViewControl.ApplyLayoutFile(layoutFile);
+                    MultiViewControl.Visibility = Visibility.Visible;
+                    MultiViewControl.FocusView();
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Failed to open layout file: {ex.Message}");
+            }
+        }
+
         public void OpenMultiView(IList<ImageItem> items)
         {
             if (_multiViewParked)
