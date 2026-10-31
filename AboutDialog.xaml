@@ -47,7 +47,7 @@
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                            Margin="0,2,0,0"/>
 
-                <TextBlock Text="A fast, hardware-accelerated image and comic book viewer built with WinUI 3 and Win2D. Browse large high-resolution folders in Tile or List mode, read CBR and CBZ comics with automatic two-page spreads, tear images off into floating reference windows, or direct a cinematic Ken Burns slideshow."
+                <TextBlock Text="A fast, hardware-accelerated image and comic book viewer built with WinUI 3 and Win2D. Browse large high-resolution folders in Tile or List mode, read CBR and CBZ comics with automatic two-page spreads, tear images off into floating reference windows, build collages in Multi-View, or direct a cinematic Ken Burns slideshow."
                            TextWrapping="Wrap" Margin="0,10,0,0"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
 
@@ -59,7 +59,10 @@
                     <Run Text="&#x2022;  "/><Run Text="Favourite folders" FontWeight="SemiBold"/><Run Text=" &#x2014; star up to 10 folders in the Favourites and Recent Folders menu to keep them; they stay until you remove them."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Multi-View" FontWeight="SemiBold"/><Run Text=" &#x2014; compare up to 16 photos in rows or columns of your choosing, with hero layouts, draggable edges, Alt+drag to swap, and JPEG export."/>
+                    <Run Text="&#x2022;  "/><Run Text="Multi-View" FontWeight="SemiBold"/><Run Text=" &#x2014; compare up to 16 photos in rows or columns of your choosing, with hero layouts, draggable edges, and Alt+drag to swap."/>
+                </TextBlock>
+                <TextBlock Style="{StaticResource AboutBullet}">
+                    <Run Text="&#x2022;  "/><Run Text="Collages" FontWeight="SemiBold"/><Run Text=" &#x2014; frame each cell, rotate and mirror photos, float cells above the grid in shapes, choose the canvas, undo and redo, save layouts, and export to JPEG, PNG, or the clipboard."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
                     <Run Text="&#x2022;  "/><Run Text="Window &amp; Tile Size presets" FontWeight="SemiBold"/><Run Text=" &#x2014; save up to three window and tile size states (Ctrl+1, Ctrl+2, Ctrl+3) to jump between compact browsing and wide two-page layouts."/>
