@@ -51,8 +51,8 @@ namespace ModernImageViewer
             if (!_applyingSegmentUnlock)
                 EndSegmentGesture();
 
-            bool keepCells = (_keepMosaic && CellRootsReady())
-                || (_relayoutKeepingCells && _cellRoots.Length >= VisibleCount(GridCellCount));
+            bool keepCells = !_layoutFromTemplate && ((_keepMosaic && CellRootsReady())
+                || (_relayoutKeepingCells && _cellRoots.Length >= VisibleCount(GridCellCount)));
             if (keepCells)
             {
                 int gridCount = GridCellCount;
@@ -282,6 +282,10 @@ namespace ModernImageViewer
                 Grid.SetRowSpan(existing, 1);
                 Grid.SetColumnSpan(existing, 1);
                 host.Children.Add(existing);
+                if ((uint)index < (uint)_items.Count && existing.Tag is CellParts parts)
+                {
+                    parts.Bound.Item = _items[index];
+                }
                 return;
             }
 

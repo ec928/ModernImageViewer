@@ -1244,7 +1244,7 @@ namespace ModernImageViewer
             {
                 _mosaic = layoutFile.Mosaic.ToMosaicLayout();
                 _mosaicCustom = true;
-                _keepMosaic = true;
+                _keepMosaic = false;
             }
             else
             {

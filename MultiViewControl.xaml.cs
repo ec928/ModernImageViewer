@@ -1952,6 +1952,8 @@ namespace ModernImageViewer
             if (item == null) return -1;
             int idx = _items.IndexOf(item);
             if (idx >= 0) return idx;
+            idx = _items.FindIndex(i => string.Equals(i.Path, item.Path, StringComparison.OrdinalIgnoreCase));
+            if (idx >= 0) return idx;
             var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, item) || string.Equals(c.Item.Path, item.Path, StringComparison.OrdinalIgnoreCase));
             if (card != null) return _items.IndexOf(card.Item);
             return -1;
@@ -1960,7 +1962,21 @@ namespace ModernImageViewer
         private void FillCellMenu(MenuFlyout menu, ImageItem item)
         {
             menu.Items.Clear();
+            if (item == null) return;
             int curSlot = Slot(item);
+            if (curSlot < 0)
+            {
+                for (int s = 0; s < _cellRoots.Length; s++)
+                {
+                    if (_cellRoots[s]?.Tag is CellParts p && 
+                        (ReferenceEquals(p.Bound.Item, item) || 
+                         string.Equals(p.Bound.Item?.Path, item?.Path, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        curSlot = s;
+                        break;
+                    }
+                }
+            }
             if (curSlot < 0) return;
 
             if (_items.Count > 1)
