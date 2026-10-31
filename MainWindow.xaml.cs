@@ -136,7 +136,7 @@ namespace ModernImageViewer
             SaveAllSettings();
         }
 
-        private readonly CellBorderDto?[] _multiViewFramePresets = new CellBorderDto?[2];
+        private readonly CellBorderDto?[] _multiViewFramePresets = new CellBorderDto?[3];
 
         public CellBorderDto? MultiViewFramePreset(int index) =>
             (uint)index < (uint)_multiViewFramePresets.Length ? _multiViewFramePresets[index]?.Clone() : null;

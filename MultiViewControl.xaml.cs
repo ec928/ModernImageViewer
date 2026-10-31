@@ -116,7 +116,6 @@ namespace ModernImageViewer
             _itemBorders.Clear();
             _cellGeometry.Clear();
             SetCanvas(null, null);
-            _lastBorderSettings = null;
             _cellRoots = Array.Empty<FrameworkElement?>();
 
             _items.Clear();
@@ -147,7 +146,6 @@ namespace ModernImageViewer
             _itemBorders.Clear();
             _cellGeometry.Clear();
             SetCanvas(null, null);
-            _lastBorderSettings = null;
             _cellRoots = Array.Empty<FrameworkElement?>();
             _items.Clear();
             _cellTransforms.Clear();

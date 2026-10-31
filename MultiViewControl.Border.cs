@@ -18,8 +18,6 @@ namespace ModernImageViewer
     {
         // Each cell has its own ImageItem, so two cells showing one file keep separate frames.
         private readonly Dictionary<ImageItem, CellBorderDto> _itemBorders = new();
-        private static CellBorderDto? _lastBorderSettings;
-        private CellBorderDto? _openFrameBorder;
         private int _frameFlyoutTicket;
         private Flyout? _cellBorderFlyout;
         private FrameworkElement? _cellBorderFlyoutAnchor;
@@ -41,7 +39,6 @@ namespace ModernImageViewer
         {
             if (item == null || string.IsNullOrEmpty(item.Path)) return;
             _itemBorders[item] = border.Clone();
-            _lastBorderSettings = border.Clone();
             int slot = Slot(item);
             if (slot >= 0) ApplyBorderToCell(slot);
         }
@@ -276,15 +273,11 @@ namespace ModernImageViewer
             if (slot < 0 || (uint)slot >= (uint)_cellRoots.Length) return;
             var targetElement = _cellRoots[slot] ?? (FrameworkElement)this;
 
-            // Remember the frame that was open, then ignore that panel's close so it cannot overwrite this one.
-            if (_openFrameBorder != null)
-                _lastBorderSettings = _openFrameBorder.Clone();
+            // Ignore the open panel's close, so it cannot overwrite this one.
             int ticket = ++_frameFlyoutTicket;
             _cellBorderFlyout?.Hide();
 
             var border = GetBorderForItem(item);
-            _openFrameBorder = border;
-            CellBorderDto? remembered = _lastBorderSettings?.Clone();
             bool syncing = false;
 
             Action? refreshColor = null;
@@ -343,7 +336,7 @@ namespace ModernImageViewer
             void RefreshPanel()
             {
                 showStroke?.Invoke(FrameIndex(new[] { "Solid", "Dashed", "InnerMuted", "Gradient" }, border.StrokeStyle));
-                showPreset?.Invoke(PresetIndexFor(border, remembered));
+                showPreset?.Invoke(PresetIndexFor(border));
                 showMat?.Invoke(FrameIndex(new[] { "None", "Solid", "Acrylic" }, border.GutterMaterial));
                 refreshColor?.Invoke();
                 refreshEnd?.Invoke();
@@ -378,15 +371,13 @@ namespace ModernImageViewer
 
             var body = new StackPanel { Spacing = 10, MinWidth = 300 };
 
-            // One line: nothing, the last frame, and two frames the user keeps. Hold a preset to save, click to recall.
+            // One line: nothing, and three frames the user keeps. Hold a preset to save, click to recall.
             var presetButtons = new Button[4];
             var heldPreset = new bool[4];
-            var presetTrack = MakeSegment(new[] { "Flush", "Last", "Preset 1", "Preset 2" }, new[]
+            var presetTrack = MakeSegment(new[] { "Flush", "Preset 1", "Preset 2", "Preset 3" }, new[]
             {
                 "No line, mat, or shadow",
-                remembered == null
-                    ? "Available after you close a frame"
-                    : "Put back the frame from the last time this panel closed",
+                "",
                 "",
                 ""
             }, index =>
@@ -397,20 +388,14 @@ namespace ModernImageViewer
                     heldPreset[index] = false;
                     return;
                 }
-                CellBorderDto? source = index switch
-                {
-                    0 => FrameLooks.Flush(),
-                    1 => remembered,
-                    _ => MainWindow.Instance?.MultiViewFramePreset(index - 2)
-                };
+                var source = index == 0 ? FrameLooks.Flush() : MainWindow.Instance?.MultiViewFramePreset(index - 1);
                 if (source != null) ApplyLook(source);
             }, out var presetShow, presetButtons);
             showPreset = presetShow;
-            presetButtons[1].IsEnabled = remembered != null;
-            for (int p = 0; p < 2; p++)
+            for (int p = 0; p < 3; p++)
             {
                 int presetIndex = p;
-                var button = presetButtons[p + 2];
+                var button = presetButtons[p + 1];
                 void ShowPresetTip()
                 {
                     bool saved = MainWindow.Instance?.MultiViewFramePreset(presetIndex) != null;
@@ -421,7 +406,7 @@ namespace ModernImageViewer
                 ShowPresetTip();
                 AttachLongPress(button, () =>
                 {
-                    heldPreset[presetIndex + 2] = true;
+                    heldPreset[presetIndex + 1] = true;
                     MainWindow.Instance?.SaveMultiViewFramePreset(presetIndex, border);
                     ShowPresetTip();
                     RefreshPanel();
@@ -691,9 +676,7 @@ namespace ModernImageViewer
                 if (_itemBorders.TryGetValue(item, out var stored))
                 {
                     border = stored;
-                    _openFrameBorder = stored;
                 }
-                _lastBorderSettings = border.Clone();
                 ApplyBorderToAllCells();
                 _cellBorderFlyout?.Hide();
             };
@@ -736,8 +719,6 @@ namespace ModernImageViewer
             flyout.Closed += (_, _) =>
             {
                 if (ticket != _frameFlyoutTicket) return;
-                _lastBorderSettings = border.Clone();
-                _openFrameBorder = border;
                 NoteUserAction();
             };
             _cellBorderFlyout = flyout;
@@ -887,15 +868,15 @@ namespace ModernImageViewer
             button.Resources["ButtonForegroundDisabled"] = _menuWhiteTertiary;
         }
 
-        /// <summary>Which of the one-line presets this frame matches: 0 Flush, 1 Last, 2 and 3 the saved presets, or -1.</summary>
-        private static int PresetIndexFor(CellBorderDto frame, CellBorderDto? last)
+        /// <summary>Which of the one-line presets this frame matches: 0 Flush, 1 to 3 the saved presets, or -1.</summary>
+        private static int PresetIndexFor(CellBorderDto frame)
         {
             if (frame.SameLook(FrameLooks.Flush())) return 0;
-            for (int i = 0; i < 2; i++)
+            for (int i = 0; i < 3; i++)
             {
-                if (frame.SameLook(MainWindow.Instance?.MultiViewFramePreset(i))) return i + 2;
+                if (frame.SameLook(MainWindow.Instance?.MultiViewFramePreset(i))) return i + 1;
             }
-            return frame.SameLook(last) ? 1 : -1;
+            return -1;
         }
 
         /// <summary>Runs the action when the pointer stays down on the button. Moving off it or letting go cancels.</summary>
