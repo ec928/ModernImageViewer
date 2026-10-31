@@ -41,9 +41,7 @@ namespace ModernImageViewer
         private int _soloIndex = -1;
         private int _lines = 1;
         private int[]? _lineCounts;
-        private const int CountsCardDismissGraceMs = 500;
-        private const int CountsCardOpenDelayMs = 60;
-        private long _countsCardClosedAt;
+        private bool _countsCardOpenAtPress;
         private bool _countsCardClosing;
         private bool _reopenCountsCard;
         private TextBlock? _lineCountLabel;
@@ -94,11 +92,9 @@ namespace ModernImageViewer
             AttachUndoWatchers();
             // Clicks on the switch reach it while the card is open, so one click can change sides.
             CountsFlyout.OverlayInputPassThroughElement = CountsSwitch;
-            CountsFlyout.Closing += (_, _) =>
-            {
-                _countsCardClosing = true;
-                _countsCardClosedAt = Environment.TickCount64;
-            };
+            CountsFlyout.Closing += (_, _) => _countsCardClosing = true;
+            CountsSwitch.AddHandler(PointerPressedEvent, new PointerEventHandler((_, _) =>
+                _countsCardOpenAtPress = IsLayoutFlyoutOpen || _countsCardClosing), true);
             SizeChanged += (_, e) =>
             {
                 RefreshCanvasLabel();
@@ -242,7 +238,11 @@ namespace ModernImageViewer
             _countsCardClosing = false;
             ShowCountsSides();
             HudMenu_Closed(sender, e);
-            if (_reopenCountsCard) ShowCountsCard();
+            if (_reopenCountsCard)
+            {
+                _reopenCountsCard = false;
+                ShowCountsCard();
+            }
         }
 
         private void RowsSide_Click(object sender, RoutedEventArgs e) => CountsSide_Click(wantRows: true);
@@ -252,31 +252,36 @@ namespace ModernImageViewer
         /// <summary>The other side switches and opens the card. The chosen side opens the card, or closes it.</summary>
         private void CountsSide_Click(bool wantRows)
         {
+            // A press on the switch can dismiss the open card before this click arrives, so the press recorded it.
+            bool wasOpen = _countsCardOpenAtPress || IsLayoutFlyoutOpen;
+            _countsCardOpenAtPress = false;
             if (wantRows == _flipped)
             {
                 ToggleRowsColumns();
                 ShowCountsCard();
-                return;
             }
-            // A press on the switch has already dismissed an open card by the time the click arrives.
-            bool wasOpen = IsLayoutFlyoutOpen || _countsCardClosing || Environment.TickCount64 - _countsCardClosedAt < CountsCardDismissGraceMs;
-            if (wasOpen) CountsFlyout.Hide();
-            else ShowCountsCard();
+            else if (wasOpen)
+            {
+                _reopenCountsCard = false;
+                if (IsLayoutFlyoutOpen) CountsFlyout.Hide();
+            }
+            else
+            {
+                ShowCountsCard();
+            }
         }
 
-        /// <summary>Waits out the click that asked for it, whose pointer release would dismiss a card opened any sooner.</summary>
+        /// <summary>A card still open or closing comes back when it has closed, so it is placed again for its new size.</summary>
         private void ShowCountsCard()
         {
-            _reopenCountsCard = _countsCardClosing;
-            if (_reopenCountsCard) return;
-            var wait = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(CountsCardOpenDelayMs) };
-            wait.Tick += (_, _) =>
+            if (CountsSwitch.Visibility != Visibility.Visible) return;
+            if (IsLayoutFlyoutOpen || _countsCardClosing)
             {
-                wait.Stop();
-                if (CountsSwitch.Visibility == Visibility.Visible && !IsLayoutFlyoutOpen)
-                    CountsFlyout.ShowAt(CountsSwitch);
-            };
-            wait.Start();
+                _reopenCountsCard = true;
+                if (IsLayoutFlyoutOpen) CountsFlyout.Hide();
+                return;
+            }
+            CountsFlyout.ShowAt(CountsSwitch);
         }
 
         /// <summary>The chosen side carries a plate, and a brighter one while the card is open.</summary>
