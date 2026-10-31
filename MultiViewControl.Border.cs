@@ -167,7 +167,8 @@ namespace ModernImageViewer
                     && placeholder.Children[2] is TextBlock detail)
                 {
                     icon.Glyph = failed && !hidden ? "" : "";
-                    title.Text = empty ? "Empty cell" : failed && !hidden ? "File not found" : "Image hidden";
+                    string failure = System.IO.File.Exists(_items[slot].Path) ? "Can't open this file" : "File not found";
+                    title.Text = empty ? "Empty cell" : failed && !hidden ? failure : "Image hidden";
                     detail.Text = empty ? "Right-click to add an image" : failed && !hidden ? _items[slot].Name ?? string.Empty : "Right-click to show";
                 }
             }

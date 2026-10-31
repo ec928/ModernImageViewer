@@ -1942,6 +1942,10 @@ namespace ModernImageViewer
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
                 Spacing = 6,
+                // A floating cell has whatever is behind it showing through, so the message carries its own backing.
+                Padding = new Thickness(14, 10, 14, 10),
+                CornerRadius = new CornerRadius(8),
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(200, 10, 10, 10)),
                 IsHitTestVisible = false,
                 Visibility = ShowsNoImage(photo.Item) ? Visibility.Visible : Visibility.Collapsed
             };

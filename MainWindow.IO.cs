@@ -844,7 +844,7 @@ namespace ModernImageViewer
 
         private async void GoUp_Click(object s, RoutedEventArgs e)
         {
-            if (AtDriveRoot) return;
+            if (AtDriveRoot || string.IsNullOrEmpty(_currentDirectory)) return;
             var parent = Directory.GetParent(_currentDirectory);
             if (parent != null) await ScanFolder(parent.FullName);
             else if (IsDriveRoot(_currentDirectory)) ShowDriveList();
