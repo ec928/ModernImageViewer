@@ -236,11 +236,11 @@ namespace ModernImageViewer
             };
         }
 
-        /// <summary>The two autosaved sessions, newest first. Returns the height they take.</summary>
+        /// <summary>The autosaved sessions, newest first. Returns the height they take.</summary>
         private double AddAutoSaveRows(StackPanel panel)
         {
             double height = 0;
-            for (int age = 0; age < 2; age++)
+            for (int age = 0; age < AutoSaveCount; age++)
             {
                 string path = AutoSavePath(age);
                 string json;
@@ -263,7 +263,7 @@ namespace ModernImageViewer
                 }
                 int photos = file.Photos.Count(p => !string.IsNullOrEmpty(p.Path) && !p.Hidden) + (file.Freeform?.Count ?? 0);
                 var saved = File.GetLastWriteTime(path);
-                string when = saved.Date == DateTime.Today ? saved.ToString("HH:mm") : saved.ToString("d MMM HH:mm");
+                string when = saved.Date == DateTime.Today ? saved.ToString("HH:mm:ss") : saved.ToString("d MMM HH:mm:ss");
                 var row = CreateMenuItemButton(when, photos == 1 ? "1 photo" : photos + " photos");
                 row.Click += (_, _) =>
                 {

@@ -125,32 +125,13 @@ namespace ModernImageViewer
             RestoreSnapshot(next);
         }
 
-        /// <summary>Start again in place: four empty cells, no floating cells, default frames and canvas. It is one undo step.</summary>
-        private void ResetCanvas()
-        {
-            AutoSaveSession();
-            CaptureUndoPoint();
-            var blank = new MultiViewLayoutFile { State = new LayoutStateDto { Lines = 2, IsFillMode = true } };
-            for (int i = 0; i < 4; i++)
-                blank.Photos.Add(new PhotoSlotDto { Slot = i, Path = string.Empty });
-            _cellBorderFlyout?.Hide();
-            _restoringUndo = true;
-            try
-            {
-                ApplyLayoutFile(blank, restoreAspect: false);
-            }
-            finally
-            {
-                _restoringUndo = false;
-            }
-            CaptureUndoPoint();
-        }
+        private const int AutoSaveCount = 3;
 
         private static string AutoSavePath(int age) =>
-            System.IO.Path.Combine(AppPaths.LocalDirectory, "autosave", age == 0 ? "last.mivlayout" : "previous.mivlayout");
+            System.IO.Path.Combine(AppPaths.LocalDirectory, "autosave", $"autosave-{age + 1}.mivlayout");
 
         /// <summary>
-        /// Keeps the last two sessions, so work that gets replaced or left behind can be had back from Save/Load.
+        /// Keeps the last three sessions, so work that gets replaced or left behind can be had back from Save/Load.
         /// Taken whenever a session is left or replaced, and when the app closes. Blank sessions and repeats are skipped.
         /// </summary>
         public void AutoSaveSession()
@@ -162,7 +143,11 @@ namespace ModernImageViewer
                 string last = AutoSavePath(0);
                 if (System.IO.File.Exists(last) && System.IO.File.ReadAllText(last) == json) return;
                 System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(last)!);
-                if (System.IO.File.Exists(last)) System.IO.File.Copy(last, AutoSavePath(1), true);
+                for (int age = AutoSaveCount - 1; age > 0; age--)
+                {
+                    if (System.IO.File.Exists(AutoSavePath(age - 1)))
+                        System.IO.File.Copy(AutoSavePath(age - 1), AutoSavePath(age), true);
+                }
                 System.IO.File.WriteAllText(last, json);
             }
             catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException or System.Runtime.InteropServices.COMException)

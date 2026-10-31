@@ -640,11 +640,6 @@ namespace ModernImageViewer
                 NoteUserAction();
             })));
             menu.Items.Add(color);
-
-            menu.Items.Add(new MenuFlyoutSeparator());
-            var reset = MakeAdvancedItem("Reset Canvas", "\uE72C", ResetCanvas);
-            ToolTipService.SetToolTip(reset, "Start again with four empty cells. Undo brings it back.");
-            menu.Items.Add(reset);
         }
 
         private void SetCanvas(string? color, string? surface)
