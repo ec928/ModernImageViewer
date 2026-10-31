@@ -99,6 +99,8 @@ Rotating the shape alone turns the window one way and the photo the other (`Imag
 
 Undo (`MultiViewControl.Undo.cs`) keeps whole-session snapshots in the layout file format. After a pointer release, wheel, key or closed menu it compares the session with the last snapshot, so anything saved in a layout is undoable with no extra code. A restore rebuilds the cells and hands them the images already decoded. The window's size is not part of undo.
 
+Strokes, gradient ends and mats share one set of swatches (`FramePalette`), and a test fails if any two in it, or in the canvas list, come too close. The last swatch, and Custom in the canvas menu, open the standard Windows colour dialog (`WindowsColorDialog`). It has no transparency, and its custom slots last until the app closes.
+
 Known limits of this prototype. Solo view ignores rotation and mirroring. Snapping uses a rotated cell's unrotated rectangle. Freeform positions are stored in window units, so they do not follow a window resize.
 
 The layout is a `MosaicLayout` tree of row and column splits; a leaf is a photo's index in `_items`. `MosaicLayout.ShownCount` is the one place the 16-photo limit lives. When the selection is larger, the playbar reads `16 of 23 shown`. Grids come from `FromCounts` (photos per line), Banner and Pair from `CreateHeroLines` (the hero plus the other photos in lines), and Rectangle from `CreateRectangleHero`, which is drawn by hand for 4, 5, 6, 7 and 9 photos only.

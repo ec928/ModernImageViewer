@@ -967,7 +967,7 @@ namespace ModernImageViewer
 
         private StackPanel MakeSwatches((string Label, string Hex)[] items, Func<string?> current, Action<string> pick, out Action refresh)
         {
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3 };
             var shells = new Border[items.Length];
             for (int i = 0; i < items.Length; i++)
             {
@@ -1027,18 +1027,92 @@ namespace ModernImageViewer
                 row.Children.Add(button);
             }
 
-            refresh = () =>
+            // The last swatch opens the Windows colour dialog, and shows the colour once one is chosen.
+            var customDot = new Microsoft.UI.Xaml.Shapes.Ellipse
+            {
+                Width = 16,
+                Height = 16,
+                Visibility = Visibility.Collapsed
+            };
+            var customIcon = new FontIcon
+            {
+                Glyph = "",
+                FontSize = 13,
+                FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
+                Foreground = _menuWhiteSecondary,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            var customFace = new Grid { Width = 16, Height = 16, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            customFace.Children.Add(customIcon);
+            customFace.Children.Add(customDot);
+            var customShell = new Border
+            {
+                Width = 26,
+                Height = 26,
+                CornerRadius = new CornerRadius(13),
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(70, 255, 255, 255)),
+                Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0)),
+                Child = customFace,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            var customButton = new Button
+            {
+                Width = 28,
+                Height = 28,
+                MinWidth = 0,
+                MinHeight = 0,
+                Padding = new Thickness(0),
+                Content = customShell,
+                BorderThickness = new Thickness(0),
+                CornerRadius = new CornerRadius(14)
+            };
+            PaintButton(customButton, Color.FromArgb(0, 0, 0, 0), Color.FromArgb(20, 255, 255, 255), Color.FromArgb(12, 255, 255, 255));
+            ToolTipService.SetToolTip(customButton, "Custom color…");
+            AutomationProperties.SetName(customButton, "Custom color");
+            row.Children.Add(customButton);
+
+            Action refreshRow = () =>
             {
                 string cur = FrameColor.Canon(current(), "#00000000");
+                bool known = false;
                 for (int i = 0; i < items.Length; i++)
                 {
                     bool on = string.Equals(FrameColor.Canon(items[i].Hex, "#00000000"), cur, StringComparison.OrdinalIgnoreCase);
+                    known |= on;
                     shells[i].BorderBrush = new SolidColorBrush(on ? Color.FromArgb(255, 255, 255, 255) : Color.FromArgb(70, 255, 255, 255));
                     shells[i].BorderThickness = new Thickness(on ? 2 : 1);
                 }
+                customDot.Visibility = known ? Visibility.Collapsed : Visibility.Visible;
+                customIcon.Visibility = known ? Visibility.Visible : Visibility.Collapsed;
+                if (!known) customDot.Fill = new SolidColorBrush(ParseColor(current()));
+                customShell.BorderBrush = new SolidColorBrush(known ? Color.FromArgb(70, 255, 255, 255) : Color.FromArgb(255, 255, 255, 255));
+                customShell.BorderThickness = new Thickness(known ? 1 : 2);
             };
+            customButton.Click += (_, _) => PickCustomColor(current, hex =>
+            {
+                pick(hex);
+                refreshRow();
+                NoteUserAction();
+            });
+
+            refresh = refreshRow;
             refresh();
             return row;
+        }
+
+        /// <summary>Opens the dialog after the click has finished, because it runs its own message loop until it closes.</summary>
+        private void PickCustomColor(Func<string?> current, Action<string> chosen)
+        {
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                if (MainWindow.Instance == null) return;
+                var owner = WinRT.Interop.WindowNative.GetWindowHandle(MainWindow.Instance);
+                string? hex = WindowsColorDialog.Pick(owner, current());
+                if (hex != null) chosen(hex);
+            });
         }
 
         private FrameworkElement CreateSliderRow(string label, double min, double max, double initialValue, string unit, Action<double> onValueChanged, out Slider sliderRef)

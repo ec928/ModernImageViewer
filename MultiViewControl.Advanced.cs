@@ -542,6 +542,13 @@ namespace ModernImageViewer
                 color.Items.Add(MakeChoiceItem(name, string.Equals(_canvasColor, hex, StringComparison.OrdinalIgnoreCase),
                     () => SetCanvas(chosen, _canvasSurface)));
             }
+            bool customCanvas = !CanvasLook.Colors.Any(c => string.Equals(c.Hex, _canvasColor, StringComparison.OrdinalIgnoreCase));
+            color.Items.Add(new MenuFlyoutSeparator());
+            color.Items.Add(MakeChoiceItem("Custom…", customCanvas, () => PickCustomColor(() => _canvasColor, hex =>
+            {
+                SetCanvas(hex, _canvasSurface);
+                NoteUserAction();
+            })));
             canvas.Items.Add(color);
 
             AdvancedMenuFlyout.Items.Add(canvas);
