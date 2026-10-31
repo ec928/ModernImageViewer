@@ -79,7 +79,13 @@ A new Play from the grid or viewer starts from the launch list. `CinematicAutoSa
 
 ## Multi-view
 
-Multi-view is cell based, not multi-image. A freeform cell is a cell that can also be moved and resized and sits at a high z-index. `CreateCell` builds both kinds, and both are indexed by `_items` and `_cellRoots`. A freeform cell is hosted on `FreeformCanvas` and is not in the `MosaicLayout` tree, so `GridCellCount` leaves it out. Some state is still held by photo or by index rather than by cell: `_itemBorders` by file path, `_hiddenItems` by `ImageItem`, and `FreeformCard.SourceSlot` by index.
+Multi-view is cell based, not multi-image. A freeform cell is a cell that can also be moved and resized and sits at a high z-index. `CreateCell` builds both kinds, and both are indexed by `_items` and `_cellRoots`. A freeform cell is hosted on `FreeformCanvas` and is not in the `MosaicLayout` tree, so `GridCellCount` leaves it out.
+
+A cell holds the parameters that are applied to its content, and the content is the image. Copying an image changes only the target cell's content: the target keeps its parameters and applies them to the new image. A swap exchanges content in the same way.
+
+Triggering Freeform generates a new cell: the existing cell becomes hidden, and the new cell has a copy of the image, default cell parameters and the highest z-index, so a 4-cell view becomes a 5-cell view.
+
+The code does not fully follow this yet. `SpawnFreeformCell` gives the new cell a copy of the source's frame. A swap between grid cells exchanges the cells themselves, so their parameters move with the images. `CopyItemTo` gives the target the source's frame. `_itemBorders` holds frames by file path, `_hiddenItems` holds hidden state by `ImageItem`, and `FreeformCard.SourceSlot` holds an index.
 
 The layout is a `MosaicLayout` tree of row and column splits; a leaf is a photo's index in `_items`. `MosaicLayout.ShownCount` is the one place the 16-photo limit lives. When the selection is larger, the playbar reads `16 of 23 shown`. Grids come from `FromCounts` (photos per line), Banner and Pair from `CreateHeroLines` (the hero plus the other photos in lines), and Rectangle from `CreateRectangleHero`, which is drawn by hand for 4, 5, 6, 7 and 9 photos only.
 

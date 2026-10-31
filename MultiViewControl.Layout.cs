@@ -55,7 +55,8 @@ namespace ModernImageViewer
                 || (_relayoutKeepingCells && _cellRoots.Length >= VisibleCount(GridCellCount));
             if (keepCells)
             {
-                for (int i = 0; i < _cellRoots.Length; i++)
+                int gridCount = GridCellCount;
+                for (int i = 0; i < gridCount && i < _cellRoots.Length; i++)
                 {
                     var cell = _cellRoots[i];
                     if (cell?.Parent is Panel parent)
@@ -179,6 +180,17 @@ namespace ModernImageViewer
                 if (cardSlot >= 0 && cardSlot < _cellRoots.Length)
                 {
                     _cellRoots[cardSlot] = card.Container;
+                }
+                if (!FreeformCanvas.Children.Contains(card.Container))
+                {
+                    FreeformCanvas.Children.Add(card.Container);
+                }
+                if (card.Container?.Tag is CellParts cardParts)
+                {
+                    if (!_cellTransforms.Contains(cardParts.Transform))
+                        _cellTransforms.Add(cardParts.Transform);
+                    if (!_layoutUpdaters.Contains(cardParts.UpdateLayout))
+                        _layoutUpdaters.Add(cardParts.UpdateLayout);
                 }
             }
 

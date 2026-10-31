@@ -41,6 +41,18 @@ namespace ModernImageViewer
 
             int sourceSlot = restoreDto?.SourceSlot ?? Slot(item);
 
+            // Check if there is ALREADY an active freeform card for this item or sourceSlot or path
+            var existingCard = _freeformCards.FirstOrDefault(c => 
+                ReferenceEquals(c.Item, item) || 
+                (sourceSlot >= 0 && c.SourceSlot == sourceSlot) ||
+                string.Equals(c.Item.Path, item.Path, StringComparison.OrdinalIgnoreCase));
+
+            if (existingCard != null && restoreDto == null)
+            {
+                BringFreeformCardToFront(existingCard);
+                return;
+            }
+
             // Hide the photo in the underlying grid cell (exact same hide mechanism)
             if (sourceSlot >= 0 && sourceSlot < _items.Count && !_hiddenItems.Contains(_items[sourceSlot]))
             {
@@ -53,7 +65,9 @@ namespace ModernImageViewer
                 Path = item.Path,
                 Name = item.Name ?? Path.GetFileName(item.Path),
                 DateModified = item.DateModified,
-                SizeString = item.SizeString
+                SizeString = item.SizeString,
+                Thumbnail = item.Thumbnail,
+                Dispatcher = item.Dispatcher
             };
 
             // Calculate geometry (matching natural photo aspect ratio for zero letterboxing)
@@ -196,10 +210,24 @@ namespace ModernImageViewer
             FreeformCanvas.Children.Remove(card.Container);
             _freeformCards.Remove(card);
 
-            // Unhide the source grid cell if it was hidden
-            if (card.SourceSlot >= 0 && card.SourceSlot < _items.Count && _hiddenItems.Contains(_items[card.SourceSlot]))
+            // Transfer the current freeform photo content back to the docked grid cell if it was swapped
+            if (card.SourceSlot >= 0 && card.SourceSlot < _items.Count)
             {
-                ToggleHideImage(_items[card.SourceSlot]);
+                var gridRoot = (uint)card.SourceSlot < (uint)_cellRoots.Length ? _cellRoots[card.SourceSlot] : null;
+                if (gridRoot?.Tag is CellParts gridParts && card.Container?.Tag is CellParts freeformParts)
+                {
+                    gridParts.Photo.Source = freeformParts.Photo.Source;
+                    var dims = freeformParts.Bound.GetDimensions?.Invoke() ?? (16, 9);
+                    gridParts.Bound.SetDimensions?.Invoke(dims.Width, dims.Height);
+                    _items[card.SourceSlot] = card.Item;
+                    gridParts.Bound.Item = card.Item;
+                    gridParts.UpdateLayout?.Invoke();
+                }
+
+                if (_hiddenItems.Contains(_items[card.SourceSlot]))
+                {
+                    ToggleHideImage(_items[card.SourceSlot]);
+                }
             }
 
             int index = _items.IndexOf(card.Item);
