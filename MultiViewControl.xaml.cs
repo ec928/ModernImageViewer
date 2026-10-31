@@ -2006,14 +2006,6 @@ namespace ModernImageViewer
             if (IsEmptyCell(item))
                 menu.Items.Add(MakeAdvancedItem("Add image\u2026", "\uE8E5", () => PickReplacementImage(item)));
             AddCellAdvancedMenu(menu, item);
-            menu.Items.Add(new MenuFlyoutSeparator());
-
-            if (!IsEmptyCell(item))
-            {
-                var soloItem = new MenuFlyoutItem { Text = "Solo / Maximize", Icon = new FontIcon { Glyph = "\uE922" } };
-                soloItem.Click += (s, e) => EnterSolo(curSlot);
-                menu.Items.Add(soloItem);
-            }
 
             var activeCard = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, item));
             bool isCurrentCellFreeform = activeCard != null;
@@ -2028,6 +2020,7 @@ namespace ModernImageViewer
                 {
                     if (activeCard != null) DockFreeformCard(activeCard);
                 };
+                menu.Items.Add(new MenuFlyoutSeparator());
                 menu.Items.Add(dockItem);
             }
             else if (!IsEmptyCell(item))
@@ -2038,14 +2031,9 @@ namespace ModernImageViewer
                     Icon = new FontIcon { Glyph = "\uEE49" }
                 };
                 freeformItem.Click += (s, e) => SpawnFreeformCell(item);
+                menu.Items.Add(new MenuFlyoutSeparator());
                 menu.Items.Add(freeformItem);
             }
-
-            menu.Items.Add(new MenuFlyoutSeparator());
-
-            var removeItem = new MenuFlyoutItem { Text = "Remove cell", Icon = new FontIcon { Glyph = "\uE8BB" } };
-            removeItem.Click += (s, e) => RemoveItem(item);
-            menu.Items.Add(removeItem);
         }
 
         /// <summary>
