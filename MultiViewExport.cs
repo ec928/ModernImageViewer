@@ -766,7 +766,6 @@ namespace ModernImageViewer
                     CanvasW = canvasW,
                     CanvasH = canvasH,
                     Border = GetBorderForItem(_items[i]).Clone(),
-                    IsHidden = _hiddenItems.Contains(_items[i]),
                     Geometry = GetGeometry(_items[i]).Clone()
                 });
             }
@@ -808,7 +807,6 @@ namespace ModernImageViewer
             foreach (var shot in shots)
             {
                 // Hidden means the whole cell: no image, mat, frame or shadow.
-                if (shot.IsHidden) continue;
 
                 Rect photo = shot.Photo.Width >= 1 && shot.Photo.Height >= 1 ? shot.Photo
                     : (shot.Card.Width >= 1 && shot.Card.Height >= 1 ? shot.Card : shot.Cell);
@@ -1243,7 +1241,6 @@ namespace ModernImageViewer
                     Slot = i,
                     Path = item.Path ?? string.Empty,
                     Name = item.Name,
-                    Hidden = _hiddenItems.Contains(item),
                     Border = GetBorderForItem(item).Clone(),
                     Geometry = GetGeometry(item).Clone()
                 };
@@ -1268,7 +1265,6 @@ namespace ModernImageViewer
                         SourceSlot = card.SourceSlot,
                         Path = card.Item.Path ?? string.Empty,
                         Name = card.Item.Name,
-                        Hidden = _hiddenItems.Contains(card.Item),
                         X = Canvas.GetLeft(card.Container),
                         Y = Canvas.GetTop(card.Container),
                         Width = card.Container.Width,
@@ -1381,7 +1377,6 @@ namespace ModernImageViewer
 
             if (layoutFile.Photos != null && layoutFile.Photos.Count > 0)
             {
-                _hiddenItems.Clear();
                 _itemBorders.Clear();
                 _cellGeometry.Clear();
                 var items = new List<ImageItem>();
@@ -1389,8 +1384,9 @@ namespace ModernImageViewer
                 {
                     var it = new ImageItem
                     {
-                        Path = photo.Path ?? string.Empty,
-                        Name = !string.IsNullOrEmpty(photo.Name) ? photo.Name : Path.GetFileName(photo.Path ?? string.Empty),
+                        // Layouts saved when cells could be hidden: those cells are now empty.
+                        Path = photo.Hidden ? string.Empty : photo.Path ?? string.Empty,
+                        Name = photo.Hidden ? string.Empty : !string.IsNullOrEmpty(photo.Name) ? photo.Name : Path.GetFileName(photo.Path ?? string.Empty),
                         Dispatcher = this.DispatcherQueue
                     };
                     if (known.TryGetValue(it.Path, out var seen))
@@ -1408,8 +1404,6 @@ namespace ModernImageViewer
                     {
                         _itemBorders[it] = photo.Border.Clone();
                     }
-                    if (photo.Hidden)
-                        _hiddenItems.Add(it);
                     if (photo.Geometry != null)
                         _cellGeometry[it] = photo.Geometry.Clone();
                 }
@@ -1482,7 +1476,7 @@ namespace ModernImageViewer
             RescaleFreeformCards(liveW, liveH);
 
             for (int i = 0; i < _cellRoots.Length; i++)
-                ShowHiddenState(i);
+                ShowEmptyState(i);
 
             ApplyBorderToAllCells();
 
@@ -1542,7 +1536,6 @@ namespace ModernImageViewer
             public Rect Cell;
             public Rect Card;
             public Rect Photo;
-            public bool IsHidden;
             public double ImageW;
             public double ImageH;
             public double Scale;

@@ -136,7 +136,7 @@ Advanced                  >   Replace image...
                               Mirror image, Flip image
 Solo / Maximize               ----------- floating cells only
 Freeform  (or Dock to Grid)   Window  >   Rectangle, Squircle, Circle / Oval, Arch / Tombstone,
-Hide image                                L-shape, Triangle, Right triangle, Rhombus / Diamond,
+Clear cell                                L-shape, Triangle, Right triangle, Rhombus / Diamond,
                                           Trapezoid, Hexagon, Organic blob
                                           Rotate left / right
 --------------------------                Rotate shape only, left / right
@@ -153,7 +153,9 @@ Hovering a floating cell shows its resize rectangle as a dashed outline with a w
 
 Rows and Columns are a switch on the playbar, with the line count on the side in use. Clicking the other side turns the grid and opens the Grid layout card. Clicking the side in use opens or closes the card. The card holds how many lines and what is in each. The switch stays clickable while the card is open, so one click changes sides.
 
-Save/Load is one menu of two columns, image sizes and layouts, with no sideways scrolling. Folder names are shortened, with the full path in the tooltip. Every folder always shows, its layouts share the height left, and any that do not fit are counted as +N on the folder row. Only a window too short for the image sizes scrolls.\n\nThe Frame & Border card always shows at full height for the window, in front of every cell. It opens beside its cell, or against the window edge farther from a cell too big to sit beside, and scrolls only when the window is too short.
+Save/Load is one menu of two columns, image sizes and layouts, with no sideways scrolling. Folder names are shortened, with the full path in the tooltip. Every folder always shows, its layouts share the height left, and any that do not fit are counted as +N on the folder row. Only a window too short for the image sizes scrolls.
+
+The Frame & Border card always shows at full height for the window, in front of every cell. It opens beside its cell, or against the window edge farther from a cell too big to sit beside, and scrolls only when the window is too short.
 
 ### Invariants:
 1. **Dynamic Swap Badges**:
@@ -170,7 +172,7 @@ Save/Load is one menu of two columns, image sizes and layouts, with no sideways 
    - Exit button returns cleanly to the mosaic view.
 5. **Show Controls Only When They Apply**:
    - The next-position button shows only while a hero is on. Grid Layout is disabled below two grid cells that show an image. An empty preset is dimmed.
-   - A hidden cell's label fades with the playbar, so the composition can be seen without it.
+   - An empty cell's label fades with the playbar, so the composition can be seen without it.
 6. **Floating Cell Labels and Handles**:
    - A floating cell's position label is centered and stays upright, however the window is turned. Its hover buttons and handles are not clipped by its shape, and stay briefly after the pointer leaves so they can be reached.
 7. **One Word for a Thing**:

@@ -27,7 +27,6 @@ namespace ModernImageViewer
         public event Action<double>? CanvasAspectChosen;
 
         private readonly List<ImageItem> _items = new();
-        private readonly HashSet<ImageItem> _hiddenItems = new();
 
         private readonly List<CompositeTransform> _cellTransforms = new();
         private readonly List<Action> _layoutUpdaters = new();
@@ -118,7 +117,6 @@ namespace ModernImageViewer
         public void LoadImages(IEnumerable<ImageItem> items)
         {
             ClearAllFreeformCards();
-            _hiddenItems.Clear();
             _itemBorders.Clear();
             _cellGeometry.Clear();
             SetCanvas(null, null);
@@ -149,7 +147,6 @@ namespace ModernImageViewer
             _hudTimer.Stop();
             ClearUndo();
             ClearAllFreeformCards();
-            _hiddenItems.Clear();
             _itemBorders.Clear();
             _cellGeometry.Clear();
             SetCanvas(null, null);
@@ -1387,7 +1384,7 @@ namespace ModernImageViewer
             {
                 if (!ReferenceEquals(photo.Item, failedItem)) return;
                 photo.Failed = true;
-                ShowHiddenState(Slot(failedItem));
+                ShowEmptyState(Slot(failedItem));
             }
 
             void LoadPhoto()
@@ -1936,7 +1933,7 @@ namespace ModernImageViewer
             slotGrid.Children.Add(gutterBorder);
             slotGrid.Children.Add(cellBorder);
 
-            // Hidden image placeholder
+            // Shown when the cell has no image
             var placeholder = new StackPanel
             {
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -1947,7 +1944,7 @@ namespace ModernImageViewer
                 CornerRadius = new CornerRadius(8),
                 Background = new SolidColorBrush(Windows.UI.Color.FromArgb(200, 10, 10, 10)),
                 IsHitTestVisible = false,
-                Visibility = ShowsNoImage(photo.Item) ? Visibility.Visible : Visibility.Collapsed
+                Visibility = IsEmptyCell(photo.Item) ? Visibility.Visible : Visibility.Collapsed
             };
             placeholder.Children.Add(new FontIcon
             {
@@ -1959,14 +1956,14 @@ namespace ModernImageViewer
             });
             placeholder.Children.Add(new TextBlock
             {
-                Text = "Image hidden",
+                Text = "Empty cell",
                 FontSize = 12,
                 Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(120, 255, 255, 255)),
                 HorizontalAlignment = HorizontalAlignment.Center
             });
             placeholder.Children.Add(new TextBlock
             {
-                Text = "Right-click to show",
+                Text = "Right-click to add an image",
                 FontSize = 10.5,
                 Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(70, 255, 255, 255)),
                 HorizontalAlignment = HorizontalAlignment.Center
@@ -1974,7 +1971,7 @@ namespace ModernImageViewer
             Canvas.SetZIndex(placeholder, 5);
             cellGrid.Children.Add(placeholder);
 
-            imgContainer.Visibility = ShowsNoImage(photo.Item) ? Visibility.Collapsed : Visibility.Visible;
+            imgContainer.Visibility = IsEmptyCell(photo.Item) ? Visibility.Collapsed : Visibility.Visible;
 
             var parts = new CellParts(transform, updateLayout, topControls, fullImg, photo, positionBadge, badgeText, dashedStroke, rimGlowStroke, gutterBorder, imgContainer, placeholder);
             cellBorder.Tag = parts;
@@ -2108,14 +2105,9 @@ namespace ModernImageViewer
 
             if (!IsEmptyCell(item))
             {
-                bool isHidden = _hiddenItems.Contains(item);
-                var hideItem = new MenuFlyoutItem
-                {
-                    Text = isHidden ? "Show image" : "Hide image",
-                    Icon = new FontIcon { Glyph = isHidden ? "\uE7B3" : "\uED1A" }
-                };
-                hideItem.Click += (s, e) => ToggleHideImage(item);
-                menu.Items.Add(hideItem);
+                var clearItem = new MenuFlyoutItem { Text = "Clear cell", Icon = new FontIcon { Glyph = "\uE894" } };
+                clearItem.Click += (s, e) => EmptyCell(Slot(item));
+                menu.Items.Add(clearItem);
             }
             menu.Items.Add(new MenuFlyoutSeparator());
 
@@ -2260,7 +2252,7 @@ namespace ModernImageViewer
             if (card != null) card.Item = copy;
 
             if (withAttributes) CopyCellAttributes(fromIndex, toIndex);
-            ShowHiddenState(toIndex);
+            ShowEmptyState(toIndex);
             ShowHudAndOverlays();
         }
 
@@ -2276,16 +2268,6 @@ namespace ModernImageViewer
             parts.Bound.Item = _items[slot];
             parts.Bound.Reload?.Invoke();
             parts.UpdateLayout?.Invoke();
-        }
-
-        private void ToggleHideImage(ImageItem item)
-        {
-            if (_hiddenItems.Contains(item))
-                _hiddenItems.Remove(item);
-            else
-                _hiddenItems.Add(item);
-
-            ShowHiddenState(Slot(item));
         }
 
         /// <summary>What a cell registered in the shared lists, so removing the cell can take it back out.</summary>
@@ -2316,7 +2298,6 @@ namespace ModernImageViewer
             }
             int index = _items.IndexOf(item);
             if (index < 0) return;
-            _hiddenItems.Remove(item);
             _itemBorders.Remove(item);
             _cellGeometry.Remove(item);
             int visibleBefore = VisibleCount(GridCellCount);
@@ -2806,7 +2787,7 @@ namespace ModernImageViewer
             for (int step = 1; step < total; step++)
             {
                 int slot = ((_soloIndex + direction * step) % total + total) % total;
-                if (ShowsNoImage(_items[slot])) continue;
+                if (IsEmptyCell(_items[slot])) continue;
                 EnterSolo(slot);
                 return;
             }
@@ -2889,8 +2870,7 @@ namespace ModernImageViewer
             {
                 _itemBorders.Remove(_items[i]);
                 _cellGeometry.Remove(_items[i]);
-                _hiddenItems.Remove(_items[i]);
-            }
+                }
 
             var changed = new List<int>();
             var used = new HashSet<int>();
@@ -2925,7 +2905,7 @@ namespace ModernImageViewer
                     parts.Bound.Item = _items[i];
                     parts.Bound.Reload?.Invoke();
                 }
-                ShowHiddenState(i);
+                ShowEmptyState(i);
             }
             RefreshLinesChrome(GridCellCount);
             RefreshHeroChrome(GridCellCount);
@@ -3075,8 +3055,8 @@ namespace ModernImageViewer
             if (cardB != null) cardB.Item = itemA;
 
             if (withAttributes) ExchangeCellAttributes(idxA, idxB);
-            ShowHiddenState(idxA);
-            ShowHiddenState(idxB);
+            ShowEmptyState(idxA);
+            ShowEmptyState(idxB);
             ShowHudAndOverlays();
         }
 

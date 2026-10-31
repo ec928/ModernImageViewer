@@ -8,7 +8,7 @@ How it is built is in `ARCHITECTURE.md`, under Multi-view. How it looks and beha
 
 - Grid layout tool, heroes and draggable edges
 - Per-cell frames: stroke, corner radius, gutter, mat and shadow, with Flush and three saved presets
-- Swap, copy, hide and move, with parameters staying on the cell, and swap and copy that can bring the cell's attributes too
+- Swap, copy, clear and move, with parameters staying on the cell, and swap and copy that can bring the cell's attributes too
 - Rotate, mirror and flip the image on any cell, and replace it from a file
 - Floating cells: move, resize, snap, layer, and Dock back into the grid
 - Pictures dropped from Explorer become new floating cells

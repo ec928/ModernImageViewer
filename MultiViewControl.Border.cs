@@ -40,7 +40,7 @@ namespace ModernImageViewer
             return border;
         }
 
-        /// <summary>A cell's content is changing from one item to another. The cell keeps its frame and hidden state.</summary>
+        /// <summary>A cell's content is changing from one item to another. The cell keeps its frame.</summary>
         private void MoveCellParameters(ImageItem from, ImageItem to)
         {
             if (ReferenceEquals(from, to)) return;
@@ -48,27 +48,19 @@ namespace ModernImageViewer
                 _itemBorders[to] = border;
             else
                 _itemBorders.Remove(to);
-            if (_hiddenItems.Remove(from))
-                _hiddenItems.Add(to);
-            else
-                _hiddenItems.Remove(to);
             if (_cellGeometry.Remove(from, out var geometry))
                 _cellGeometry[to] = geometry;
             else
                 _cellGeometry.Remove(to);
         }
 
-        /// <summary>Two cells are exchanging content. Each keeps its own frame and hidden state.</summary>
+        /// <summary>Two cells are exchanging content. Each keeps its own frame.</summary>
         private void ExchangeCellParameters(ImageItem a, ImageItem b)
         {
             bool hasA = _itemBorders.Remove(a, out var borderA);
             bool hasB = _itemBorders.Remove(b, out var borderB);
             if (hasA) _itemBorders[b] = borderA!;
             if (hasB) _itemBorders[a] = borderB!;
-            bool hiddenA = _hiddenItems.Remove(a);
-            bool hiddenB = _hiddenItems.Remove(b);
-            if (hiddenA) _hiddenItems.Add(b);
-            if (hiddenB) _hiddenItems.Add(a);
             bool turnedA = _cellGeometry.Remove(a, out var geometryA);
             bool turnedB = _cellGeometry.Remove(b, out var geometryB);
             if (turnedA) _cellGeometry[b] = geometryA!;
@@ -133,43 +125,40 @@ namespace ModernImageViewer
         /// <summary>A cell can hold no image. It keeps its parameters, and they apply to the next image it gets.</summary>
         private static bool IsEmptyCell(ImageItem item) => string.IsNullOrEmpty(item.Path);
 
-        private bool ShowsNoImage(ImageItem item) => IsEmptyCell(item) || _hiddenItems.Contains(item);
-
         /// <summary>Take the image out of this cell.</summary>
         private void EmptyCell(int slot)
         {
             var old = _items[slot];
             var empty = new ImageItem { Path = string.Empty, Name = string.Empty, Dispatcher = old.Dispatcher };
             MoveCellParameters(old, empty);
-            _hiddenItems.Remove(empty);
             _items[slot] = empty;
+            var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, old));
+            if (card != null) card.Item = empty;
             RebindCell(slot);
-            ShowHiddenState(slot);
+            ShowEmptyState(slot);
         }
 
-        /// <summary>Show this cell's hidden state: the placeholder alone, or the image with its frame.</summary>
-        private void ShowHiddenState(int slot)
+        /// <summary>Show this cell's state: the placeholder alone, or the image with its frame.</summary>
+        private void ShowEmptyState(int slot)
         {
             RefreshGridLayoutEnabled();
             if ((uint)slot >= (uint)_cellRoots.Length || (uint)slot >= (uint)_items.Count) return;
             if (_cellRoots[slot]?.Tag is not CellParts parts) return;
-            bool hidden = ShowsNoImage(_items[slot]);
             bool empty = IsEmptyCell(_items[slot]);
             bool failed = parts.Bound.Failed;
             if (parts.ImageContainer != null)
-                parts.ImageContainer.Visibility = hidden || failed ? Visibility.Collapsed : Visibility.Visible;
+                parts.ImageContainer.Visibility = empty || failed ? Visibility.Collapsed : Visibility.Visible;
             if (parts.HiddenPlaceholder is StackPanel placeholder)
             {
-                placeholder.Visibility = hidden || failed ? Visibility.Visible : Visibility.Collapsed;
+                placeholder.Visibility = empty || failed ? Visibility.Visible : Visibility.Collapsed;
                 if (placeholder.Children.Count >= 3
                     && placeholder.Children[0] is FontIcon icon
                     && placeholder.Children[1] is TextBlock title
                     && placeholder.Children[2] is TextBlock detail)
                 {
-                    icon.Glyph = failed && !hidden ? "" : "";
-                    string failure = System.IO.File.Exists(_items[slot].Path) ? "Can't open this file" : "File not found";
-                    title.Text = empty ? "Empty cell" : failed && !hidden ? failure : "Image hidden";
-                    detail.Text = empty ? "Right-click to add an image" : failed && !hidden ? _items[slot].Name ?? string.Empty : "Right-click to show";
+                    icon.Glyph = failed ? "" : "";
+                    title.Text = empty ? "Empty cell" : System.IO.File.Exists(_items[slot].Path) ? "Can't open this file" : "File not found";
+                    detail.Text = empty ? "Right-click to add an image" : _items[slot].Name ?? string.Empty;
                 }
             }
             parts.Bound.ApplyGeometry?.Invoke();
@@ -221,7 +210,7 @@ namespace ModernImageViewer
                 gutterHost = parts.GutterHost;
             }
 
-            bool isHidden = ShowsNoImage(item);
+            bool isHidden = IsEmptyCell(item);
             if (isHidden)
             {
                 cellBorder.Margin = new Thickness(0);

@@ -85,8 +85,12 @@ namespace ModernImageViewer
                 Dispatcher = item.Dispatcher
             };
             if (!sameAsSource) FillFileDetails(freeformItem);
+            // Layouts saved when cells could be hidden: those cells are now empty.
             if (restoreDto?.Hidden == true)
-                _hiddenItems.Add(freeformItem);
+            {
+                freeformItem.Path = string.Empty;
+                freeformItem.Name = string.Empty;
+            }
 
             // Calculate geometry (matching natural photo aspect ratio for zero letterboxing)
             double naturalW = 1920;
@@ -334,7 +338,7 @@ namespace ModernImageViewer
             int cardSlot = _items.IndexOf(card.Item);
             int source = card.SourceSlot;
             bool backToSource = source >= 0 && source < GridCellCount
-                && ShowsNoImage(_items[source])
+                && IsEmptyCell(_items[source])
                 && (uint)source < (uint)_cellRoots.Length && _cellRoots[source]?.Tag is CellParts;
 
             FreeformCanvas.Children.Remove(card.Container);
@@ -347,7 +351,6 @@ namespace ModernImageViewer
                 var oldItem = _items[source];
                 _items[source] = card.Item;
                 MoveCellParameters(oldItem, card.Item);
-                _hiddenItems.Remove(card.Item);
                 if (card.Container.Tag is CellParts freeformParts && CellImageReady(freeformParts))
                 {
                     gridParts.Photo.Source = freeformParts.Photo.Source;
@@ -360,7 +363,7 @@ namespace ModernImageViewer
                 {
                     RebindCell(source);
                 }
-                ShowHiddenState(source);
+                ShowEmptyState(source);
             }
 
             if (cardSlot >= 0)
@@ -377,7 +380,6 @@ namespace ModernImageViewer
                 // The source cell is gone or shows something else, so the image gets a new grid cell.
                 int gridEnd = GridCellCount;
                 _items.Insert(gridEnd, card.Item);
-                _hiddenItems.Remove(card.Item);
                 var roots = new List<FrameworkElement?>(_cellRoots);
                 roots.Insert(Math.Min(gridEnd, roots.Count), null);
                 _cellRoots = roots.ToArray();
@@ -398,7 +400,6 @@ namespace ModernImageViewer
             int index = _items.IndexOf(card.Item);
             if (index >= 0)
             {
-                _hiddenItems.Remove(card.Item);
                 _itemBorders.Remove(card.Item);
                 _cellGeometry.Remove(card.Item);
                 ForgetCell(card.Container);

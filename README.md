@@ -93,15 +93,15 @@ On the photos themselves:
 - Scroll to zoom, drag to pan, middle-click to reset, double-click to zoom in or back out.
 - Hover over a photo to show its buttons at the top right. The move arrows move it one place earlier or later; they are left out on a very small photo.
 - **Alt+drag** a photo onto another to swap the two.
-- Right-click a cell to move it, swap or copy its photo to another cell, set its frame, view it on its own, hide it, or remove it. **Advanced** replaces the photo with a file you choose, which also recovers a cell whose file is missing, and rotates, mirrors and flips the photo.
-- The maximise button at the top right shows one photo on its own. **←** / **→** step through the photos, skipping hidden ones; **Esc** returns to the grid.
+- Right-click a cell to move it, swap or copy its photo to another cell, set its frame, view it on its own, clear it, or remove it. **Clear cell** takes the photo out and keeps the cell, so its space stays empty on the canvas and in an export. **Advanced** replaces the photo with a file you choose, which also recovers a cell whose file is missing, and rotates, mirrors and flips the photo.
+- The maximise button at the top right shows one photo on its own. **←** / **→** step through the photos, skipping empty cells; **Esc** returns to the grid.
 
 A cell keeps its own settings. **Swap with** and **Copy to** each open a table of the other positions, with two columns:
 
 - **Contents only** changes just the photo a cell shows. Its frame, zoom and rotation stay, and the new photo takes them on. The move arrows and **Alt+drag** work this way too.
 - **With attributes** brings the source cell's frame, image rotation and mirroring, and zoom and pan along with the photo. Between two floating cells it brings the window shape and its rotation as well; a grid cell has no window shape, so with a grid cell on either side the floating cell keeps its own.
 
-Either way, each cell stays where it is at its own size and layer, and a hidden cell stays hidden. **Advanced > Replace image** works like Contents only: the cell keeps its settings and shows the new file.
+Either way, each cell stays where it is at its own size and layer. **Advanced > Replace image** works like Contents only: the cell keeps its settings and shows the new file.
 
 **Frame & Border** opens beside the cell, or against the window's far edge when the cell is too big to sit beside. It sets the line, corners, gutter, mat and shadow. Flush removes them all. Hold a preset button to save the current frame there, and click it to use it again. The last swatch in each color row opens the Windows color picker.
 
@@ -109,7 +109,7 @@ Either way, each cell stays where it is at its own size and layer, and a hidden 
 
 Right-click a cell and choose **Freeform** to float its photo above the grid. The photo moves to a new cell, which starts with the same frame, and the original cell is left empty. Right-click an empty cell to add an image. Copy to and Photos can also fill it.
 
-Drag pictures in from File Explorer to add them: each one becomes a new floating cell where you drop it, up to 16 at a time, in front of the others and with no frame. No other cell is hidden. Folders, comic books and saved layouts open as they do from anywhere else.
+Drag pictures in from File Explorer to add them: each one becomes a new floating cell where you drop it, up to 16 at a time, in front of the others and with no frame. No other cell changes. Folders, comic books and saved layouts open as they do from anywhere else.
 
 - Drag to move, and drag the edges or corners to resize. A cell can hang over the edge of the canvas as long as its centre stays on it, and whatever hangs over is left out of an export. **Ctrl+drag** pans the photo inside the cell. Dragged cells snap to the canvas, each other and the grid; hold **Alt** to move freely.
 - **Advanced > Window** sets the shape: rectangle, squircle, circle or oval, arch (tombstone), L-shape, triangle, right triangle, rhombus (diamond), trapezoid, hexagon, or organic blob. It also rotates, mirrors and flips the shape. **Rotate shape only** keeps the photo still.
