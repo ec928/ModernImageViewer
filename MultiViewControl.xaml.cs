@@ -1713,7 +1713,7 @@ namespace ModernImageViewer
                 Opacity = 0.0,
                 IsHitTestVisible = false
             };
-            Canvas.SetZIndex(topControls, isFreeform ? 205 : 60);
+            Canvas.SetZIndex(topControls, 205);
             topControls.PointerEntered += Hud_PointerEntered;
             topControls.PointerExited += Hud_PointerExited;
             _cellTopControls.Add(topControls);
@@ -1726,7 +1726,7 @@ namespace ModernImageViewer
                 topControls.Opacity = show ? 1.0 : 0.0;
                 topControls.IsHitTestVisible = show;
             }
-            // A floating cell's buttons sit on the window, which a shape may not fill, so they wait for the pointer to arrive.
+            // A floating cell's buttons can sit past its shape, where nothing is under the pointer, so they wait for it to arrive.
             DispatcherTimer? hoverOff = null;
             if (isFreeform)
             {
@@ -1737,13 +1737,12 @@ namespace ModernImageViewer
                     SetCellHover(false);
                 };
             }
-            FrameworkElement hoverHost = isFreeform ? slotGrid : cellGrid;
-            hoverHost.PointerEntered += (s, e) =>
+            slotGrid.PointerEntered += (s, e) =>
             {
                 hoverOff?.Stop();
                 SetCellHover(true);
             };
-            hoverHost.PointerExited += (s, e) =>
+            slotGrid.PointerExited += (s, e) =>
             {
                 if (hoverOff != null) hoverOff.Start();
                 else SetCellHover(false);
@@ -1803,8 +1802,8 @@ namespace ModernImageViewer
             topStack.Children.Add(closeBtn);
 
             topControls.Children.Add(topStack);
-            // On a floating cell these sit on the window, outside the shape's clip.
-            (isFreeform ? slotGrid : cellGrid).Children.Add(topControls);
+            // These sit on the cell, outside the shape's clip.
+            slotGrid.Children.Add(topControls);
 
             // Top-Left Position Badge (for right-click Swap / Move target indication)
             var positionBadge = new Border
@@ -1820,7 +1819,7 @@ namespace ModernImageViewer
                 Opacity = 0.0,
                 IsHitTestVisible = false
             };
-            Canvas.SetZIndex(positionBadge, 70);
+            Canvas.SetZIndex(positionBadge, 206);
 
             var badgeText = new TextBlock
             {
@@ -1833,18 +1832,13 @@ namespace ModernImageViewer
             positionBadge.Child = badgeText;
             if (isFreeform)
             {
-                // Centred and outside the clip, so a shape or a turn cannot cut it off. ApplyWindowTurn keeps it upright.
+                // Centred, so a turn cannot take it off the cell. ApplyWindowTurn keeps it upright.
                 positionBadge.HorizontalAlignment = HorizontalAlignment.Center;
                 positionBadge.VerticalAlignment = VerticalAlignment.Center;
                 positionBadge.Margin = new Thickness(0);
                 positionBadge.RenderTransformOrigin = new Point(0.5, 0.5);
-                Canvas.SetZIndex(positionBadge, 206);
-                slotGrid.Children.Add(positionBadge);
             }
-            else
-            {
-                cellGrid.Children.Add(positionBadge);
-            }
+            slotGrid.Children.Add(positionBadge);
 
             // Right-Click Context Menu, filled when it opens so it names the photo's current place
             var menu = new MenuFlyout
@@ -1963,6 +1957,10 @@ namespace ModernImageViewer
             if (isFreeform)
             {
                 AttachWindowResizeHandles(slotGrid, updateLayout);
+            }
+            else
+            {
+                slotGrid.SizeChanged += (_, _) => ApplyCellShape(slotGrid, photo.Item, null);
             }
 
             cellBorder.Child = cellGrid;
@@ -2085,7 +2083,7 @@ namespace ModernImageViewer
 
             var (header, headerCells) = MakeRow("Contents only", "With attributes", 12, _menuWhiteSecondary);
             ToolTipService.SetToolTip(headerCells[0], "The image alone. Each cell keeps its frame, image rotation and zoom, and its window shape.");
-            ToolTipService.SetToolTip(headerCells[1], "The image with its frame, image rotation and zoom. Window shape too, between floating cells.");
+            ToolTipService.SetToolTip(headerCells[1], "The image with its frame, image rotation, zoom and window shape. Window rotation too, between floating cells.");
             sub.Items.Add(new MenuFlyoutItem { Tag = header, Template = template, IsEnabled = false });
 
             for (int i = 0; i < _items.Count; i++)
@@ -2214,6 +2212,7 @@ namespace ModernImageViewer
             public Action? Reload { get; set; }
             public Action? ApplyGeometry { get; set; }
             public bool Failed { get; set; }
+            public string? ShadowKey { get; set; }
             public Action<double, double>? SetDimensions { get; set; }
             public Func<(double Width, double Height)>? GetDimensions { get; set; }
             public CellPhoto(ImageItem item) { Item = item; }

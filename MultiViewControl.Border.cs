@@ -72,8 +72,8 @@ namespace ModernImageViewer
             (uint)slot < (uint)_cellRoots.Length && _freeformCards.Any(c => ReferenceEquals(c.Container, _cellRoots[slot]));
 
         /// <summary>
-        /// A cell's attributes: its frame, image rotation, zoom and pan. Its window shape counts only between floating
-        /// cells, because a grid cell has none. Place, size, layer and hidden state belong to the cell and never move.
+        /// A cell's attributes: its frame, image rotation, zoom and pan, and its window shape. The window's rotation counts
+        /// only between floating cells, because a grid cell cannot turn. Place, size and layer belong to the cell and never move.
         /// </summary>
         private void CopyCellAttributes(int fromIndex, int toIndex)
         {
@@ -81,12 +81,7 @@ namespace ModernImageViewer
             var target = _items[toIndex];
             _itemBorders[target] = GetBorderForItem(source).Clone();
 
-            var from = GetGeometry(source);
-            var geometry = IsFloatingSlot(fromIndex) && IsFloatingSlot(toIndex) ? from.Clone() : GetGeometry(target).Clone();
-            geometry.ImageRotation = from.ImageRotation;
-            geometry.ImageFlipH = from.ImageFlipH;
-            geometry.ImageFlipV = from.ImageFlipV;
-            _cellGeometry[target] = geometry;
+            _cellGeometry[target] = GetGeometry(source).CarriedOnto(GetGeometry(target), IsFloatingSlot(fromIndex) && IsFloatingSlot(toIndex));
 
             if (_cellRoots[fromIndex]?.Tag is CellParts src && _cellRoots[toIndex]?.Tag is CellParts dst)
             {
@@ -111,11 +106,7 @@ namespace ModernImageViewer
 
             var itemB = _items[b];
             _itemBorders[itemB] = frameA;
-            var geometry = IsFloatingSlot(a) && IsFloatingSlot(b) ? geometryA : GetGeometry(itemB).Clone();
-            geometry.ImageRotation = geometryA.ImageRotation;
-            geometry.ImageFlipH = geometryA.ImageFlipH;
-            geometry.ImageFlipV = geometryA.ImageFlipV;
-            _cellGeometry[itemB] = geometry;
+            _cellGeometry[itemB] = geometryA.CarriedOnto(GetGeometry(itemB), IsFloatingSlot(a) && IsFloatingSlot(b));
             if (partsA != null && _cellRoots[b]?.Tag is CellParts partsB)
             {
                 (partsB.Transform.ScaleX, partsB.Transform.ScaleY, partsB.Transform.TranslateX, partsB.Transform.TranslateY) = view;
@@ -194,6 +185,7 @@ namespace ModernImageViewer
             // A shaped window draws its frame along its outline, so the outline follows every frame change.
             var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Container, root));
             if (card != null) ApplyWindowGeometry(card);
+            else if (root is Grid gridCell) ApplyCellShape(gridCell, item, null);
         }
 
         public void ApplyBorderToCellBorder(Border cellBorder, Grid? cellGrid, ImageItem item)

@@ -616,6 +616,25 @@ namespace ModernImageViewer
         public void TurnImage(int degrees) => ImageRotation = ((ImageRotation + degrees) % 360 + 360) % 360;
 
         public CellGeometryDto Clone() => (CellGeometryDto)MemberwiseClone();
+
+        /// <summary>A grid cell cannot turn, so it takes the shape without the window's rotation.</summary>
+        public void ClearWindowTurn()
+        {
+            WindowRotation = 0;
+            ImageCounter = 0;
+        }
+
+        /// <summary>This geometry as attributes for another cell. The window's rotation goes only between two floating cells.</summary>
+        public CellGeometryDto CarriedOnto(CellGeometryDto target, bool bothFloating)
+        {
+            var carried = Clone();
+            if (!bothFloating)
+            {
+                carried.WindowRotation = target.WindowRotation;
+                carried.ImageCounter = target.ImageCounter;
+            }
+            return carried;
+        }
     }
 
     /// <summary>Freeform window outlines, as corners in a unit square. A rectangle has no outline.</summary>

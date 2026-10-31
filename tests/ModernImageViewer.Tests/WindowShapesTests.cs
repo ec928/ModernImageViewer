@@ -12,6 +12,24 @@ namespace ModernImageViewer.Tests
             Assert.Null(WindowShapes.Outline(null));
         }
 
+        [Fact]
+        public void CarriedGeometry_BringsTheShapeButTurnsOnlyBetweenFloatingCells()
+        {
+            var source = new CellGeometryDto { Shape = WindowShapes.Hexagon, ShapeFlipH = true, WindowRotation = 30, ImageCounter = -30, ImageRotation = 90 };
+            var target = new CellGeometryDto { Shape = WindowShapes.Oval, WindowRotation = 10 };
+
+            var toGrid = source.CarriedOnto(target, bothFloating: false);
+            Assert.Equal(WindowShapes.Hexagon, toGrid.Shape);
+            Assert.True(toGrid.ShapeFlipH);
+            Assert.Equal(90, toGrid.ImageRotation);
+            Assert.Equal(10, toGrid.WindowRotation);
+            Assert.Equal(0, toGrid.ImageCounter);
+
+            var toFloating = source.CarriedOnto(target, bothFloating: true);
+            Assert.Equal(30, toFloating.WindowRotation);
+            Assert.Equal(-30, toFloating.ImageCounter);
+        }
+
         [Theory]
         [InlineData(WindowShapes.LShape)]
         [InlineData(WindowShapes.Oval)]

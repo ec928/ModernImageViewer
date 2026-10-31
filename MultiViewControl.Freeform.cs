@@ -60,7 +60,6 @@ namespace ModernImageViewer
             public int SourceSlot { get; set; }
             public FrameworkElement Container { get; set; } = null!;
             public Border? NotchHandle { get; set; }
-            public string? ShadowKey { get; set; }
             public int ZIndex { get; set; } = 5000;
         }
 
@@ -167,13 +166,8 @@ namespace ModernImageViewer
             int zIndex = restoreDto?.ZIndex ?? (++_maxFreeformZIndex);
             if (zIndex > _maxFreeformZIndex) _maxFreeformZIndex = zIndex;
 
-            // The new cell clones the source cell's image turn. The window itself starts plain.
-            var geometry = restoreDto?.Geometry?.Clone() ?? new CellGeometryDto
-            {
-                ImageRotation = GetGeometry(item).ImageRotation,
-                ImageFlipH = GetGeometry(item).ImageFlipH,
-                ImageFlipV = GetGeometry(item).ImageFlipV
-            };
+            // The new cell clones the source cell's image turn and shape. A grid cell has no window rotation to clone.
+            var geometry = restoreDto?.Geometry?.Clone() ?? GetGeometry(item).Clone();
             _cellGeometry[freeformItem] = geometry;
 
             // Add freeformItem to _items (so if there were 4 images, total cells increases to 5!)
@@ -384,7 +378,8 @@ namespace ModernImageViewer
 
             if (!backToSource && cardSlot >= 0)
             {
-                // The source cell is gone or shows something else, so the image gets a new grid cell.
+                // The source cell is gone or shows something else, so the image gets a new grid cell, which cannot turn.
+                GetGeometry(card.Item).ClearWindowTurn();
                 int gridEnd = GridCellCount;
                 _items.Insert(gridEnd, card.Item);
                 var roots = new List<FrameworkElement?>(_cellRoots);

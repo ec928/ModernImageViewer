@@ -15,7 +15,7 @@ using Windows.Storage.Pickers;
 
 namespace ModernImageViewer
 {
-    /// <summary>The Advanced menus: image rotation and mirroring on every cell, window shape on freeform cells, and the canvas.</summary>
+    /// <summary>The Advanced menus: image rotation, mirroring and window shape on every cell, window rotation and layer on freeform cells, and the canvas.</summary>
     public sealed partial class MultiViewControl
     {
         private const string SettingsGlyph = "\uE713";
@@ -77,15 +77,12 @@ namespace ModernImageViewer
                 advanced.Items.Add(MakeAdvancedItem("Flip image", "\uE8CB", () => ChangeImage(g => g.ImageFlipV = !g.ImageFlipV)));
             }
 
+            if (advanced.Items.Count > 0) advanced.Items.Add(new MenuFlyoutSeparator());
+            advanced.Items.Add(MakeWindowMenu(item));
             var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, item));
-            if (card != null)
-            {
-                if (advanced.Items.Count > 0) advanced.Items.Add(new MenuFlyoutSeparator());
-                advanced.Items.Add(MakeWindowMenu(card));
-                advanced.Items.Add(MakeLayerMenu(card));
-            }
+            if (card != null) advanced.Items.Add(MakeLayerMenu(card));
 
-            if (advanced.Items.Count > 0) menu.Items.Add(advanced);
+            menu.Items.Add(advanced);
         }
 
         /// <summary>Choose a file to show in this cell. The cell keeps its parameters, as with any change of content.</summary>
@@ -121,16 +118,16 @@ namespace ModernImageViewer
             NoteUserAction();
         }
 
-        private MenuFlyoutSubItem MakeWindowMenu(FreeformCard card)
+        private MenuFlyoutSubItem MakeWindowMenu(ImageItem item)
         {
             void Change(Action<CellGeometryDto> change)
             {
-                change(GetGeometry(card.Item));
-                ShowEmptyState(Slot(card.Item));
+                change(GetGeometry(item));
+                ShowEmptyState(Slot(item));
             }
 
             var window = new MenuFlyoutSubItem { Text = "Window", Icon = new FontIcon { Glyph = "\uE7C5" } };
-            string current = GetGeometry(card.Item).Shape;
+            string current = GetGeometry(item).Shape;
             foreach (string shape in WindowShapes.All)
             {
                 string chosen = shape;
@@ -183,13 +180,21 @@ namespace ModernImageViewer
                 parts.PositionBadge.RenderTransform = new RotateTransform { Angle = -angle };
         }
 
-        /// <summary>Turn and clip the floating window to its shape. Called again when the window changes size.</summary>
+        /// <summary>Turn the floating window and clip it to its shape.</summary>
         private void ApplyWindowGeometry(FreeformCard card)
         {
             if (card.Container is not Grid window) return;
-            var geometry = GetGeometry(card.Item);
-
             ApplyWindowTurn(card);
+            ApplyCellShape(window, card.Item, card);
+        }
+
+        /// <summary>
+        /// Clip a cell to its shape. Called again when the cell changes size. A grid cell has no card: nothing is behind it to
+        /// click through to, so its whole rectangle keeps taking pointer input.
+        /// </summary>
+        private void ApplyCellShape(Grid window, ImageItem item, FreeformCard? card)
+        {
+            var geometry = GetGeometry(item);
 
             var outlineElement = window.Children.OfType<Polygon>().FirstOrDefault();
             var outline = WindowShapes.Outline(geometry);
@@ -197,7 +202,7 @@ namespace ModernImageViewer
             double height = window.Height > 0 ? window.Height : window.ActualHeight;
             var photoGrid = CardBorder(window)?.Child as Grid;
             var hitArea = photoGrid?.Children.OfType<Polygon>().FirstOrDefault();
-            if (card.NotchHandle != null)
+            if (card?.NotchHandle != null)
                 card.NotchHandle.Visibility = geometry.Shape == WindowShapes.LShape ? Visibility.Visible : Visibility.Collapsed;
             if (outline == null || width < 1 || height < 1)
             {
@@ -210,26 +215,26 @@ namespace ModernImageViewer
                 }
                 bool wasShaped = hitArea != null && hitArea.Visibility == Visibility.Visible;
                 if (hitArea != null) hitArea.Visibility = Visibility.Collapsed;
-                if (photoGrid != null)
+                if (card != null && photoGrid != null)
                     photoGrid.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(1, 0, 0, 0));
                 if (wasShaped && CardBorder(window) is Border plainCard)
-                    ApplyBorderToCellBorder(plainCard, photoGrid, card.Item);
+                    ApplyBorderToCellBorder(plainCard, photoGrid, item);
                 return;
             }
 
             // The gutter insets the whole shape, as it insets a rectangle: the mat fills the outer outline, the photo and frame sit on the inner one.
             var shapedCard = CardBorder(window);
-            var frame = GetBorderForItem(card.Item);
+            var frame = GetBorderForItem(item);
             double gutter = shapedCard?.Margin.Left ?? 0;
             double radius = frame.CornerRadius;
             // In the card's own coordinates, which start one gutter inside the window.
             var cardOutline = WindowShapes.Placed(geometry, -gutter, -gutter, width, height, radius, gutter)!;
             var matOutline = WindowShapes.Placed(geometry, 0, 0, width, height, radius > 0 ? radius + gutter : 0,
                 concaveRadius: Math.Max(0, radius - gutter))!;
-            ApplyShapedShadow(card, window, geometry, frame, width, height, gutter);
+            ApplyShapedShadow(window, item, geometry, frame, width, height, gutter);
 
             // Pointers follow the outline: the empty part of the window has nothing to hit, so clicks reach what is behind.
-            if (photoGrid != null)
+            if (card != null && photoGrid != null)
             {
                 photoGrid.Background = null;
                 if (hitArea == null)
@@ -243,7 +248,7 @@ namespace ModernImageViewer
                 hitArea.Points = hitPoints;
             }
 
-            if (card.NotchHandle != null)
+            if (card?.NotchHandle != null)
             {
                 double nx = geometry.ShapeFlipH ? 1 - geometry.NotchX : geometry.NotchX;
                 double ny = geometry.ShapeFlipV ? 1 - geometry.NotchY : geometry.NotchY;
@@ -269,7 +274,7 @@ namespace ModernImageViewer
             bool dashed = string.Equals(frame.StrokeStyle, "Dashed", StringComparison.OrdinalIgnoreCase);
             outlineElement.Stroke = dashed ? ParseBorderBrush(frame.Color) : shapedCard?.BorderBrush ?? ParseBorderBrush(frame.Color);
             outlineElement.StrokeDashArray = dashed ? new DoubleCollection { 3, 2 } : new DoubleCollection();
-            outlineElement.Visibility = frame.Thickness > 0 && !IsEmptyCell(card.Item) ? Visibility.Visible : Visibility.Collapsed;
+            outlineElement.Visibility = frame.Thickness > 0 && !IsEmptyCell(item) ? Visibility.Visible : Visibility.Collapsed;
             outlineElement.StrokeThickness = frame.Thickness;
             if (shapedCard != null) shapedCard.BorderThickness = new Thickness(0);
             if (window.Tag is CellParts shapedParts)
@@ -286,7 +291,7 @@ namespace ModernImageViewer
         }
 
         /// <summary>The shadow is cast by the photo's outline onto the mat. Rendered only when something it depends on has changed.</summary>
-        private void ApplyShapedShadow(FreeformCard card, Grid window, CellGeometryDto geometry, CellBorderDto frame, double width, double height, double gutter)
+        private void ApplyShapedShadow(Grid window, ImageItem item, CellGeometryDto geometry, CellBorderDto frame, double width, double height, double gutter)
         {
             if (window.Tag is not CellParts { GutterHost: not null } parts) return;
             if (parts.GutterHost.Child is not Image image) return;
@@ -294,19 +299,19 @@ namespace ModernImageViewer
             int w = (int)Math.Round(width);
             int h = (int)Math.Round(height);
             // Rim glow is a rectangle's effect, so a shape keeps its shadow whichever is chosen.
-            bool drop = frame.ShadowIntensity > 0 && !IsEmptyCell(card.Item) && w >= 2 && h >= 2;
+            bool drop = frame.ShadowIntensity > 0 && !IsEmptyCell(item) && w >= 2 && h >= 2;
             if (!drop)
             {
                 image.Source = null;
                 image.Visibility = Visibility.Collapsed;
-                card.ShadowKey = null;
+                parts.Bound.ShadowKey = null;
                 return;
             }
 
             string key = string.Join("|", w, h, gutter, frame.ShadowIntensity, frame.CornerRadius,
                 geometry.Shape, geometry.ShapeFlipH, geometry.ShapeFlipV, geometry.NotchX, geometry.NotchY);
-            if (key == card.ShadowKey && image.Source != null) return;
-            card.ShadowKey = key;
+            if (key == parts.Bound.ShadowKey && image.Source != null) return;
+            parts.Bound.ShadowKey = key;
 
             int previewW = Math.Max(1, w / ShadowPreviewDivisor);
             int previewH = Math.Max(1, h / ShadowPreviewDivisor);
