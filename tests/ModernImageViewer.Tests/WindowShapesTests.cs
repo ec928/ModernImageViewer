@@ -181,6 +181,26 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
+        public void AFloatingCellMovesUntilItsCentreReachesTheCanvasEdge()
+        {
+            Assert.Equal(-200, FreeformBounds.Move(-500, 400, 1000));
+            Assert.Equal(800, FreeformBounds.Move(1500, 400, 1000));
+            Assert.Equal(-150, FreeformBounds.Move(-150, 400, 1000));
+            // A cell bigger than the canvas can still move.
+            Assert.Equal(-1000, FreeformBounds.Move(-5000, 2000, 1000));
+            Assert.Equal(0, FreeformBounds.Move(5000, 2000, 1000));
+        }
+
+        [Fact]
+        public void AResizeStopsWhereTheCentreWouldLeaveTheCanvas()
+        {
+            Assert.Equal(1, FreeformBounds.ResizeShare(500, 100, 1000));
+            Assert.Equal(0.5, FreeformBounds.ResizeShare(900, 200, 1000));
+            Assert.Equal(0.25, FreeformBounds.ResizeShare(100, -400, 1000));
+            Assert.Equal(1, FreeformBounds.ResizeShare(1200, 300, 1000));
+        }
+
+        [Fact]
         public void TurningAnImageWrapsAroundACircle()
         {
             var geometry = new CellGeometryDto();

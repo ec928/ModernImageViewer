@@ -1578,11 +1578,11 @@ namespace ModernImageViewer
                     double cardW = slotGrid.Width > 0 ? slotGrid.Width : (slotGrid.ActualWidth > 0 ? slotGrid.ActualWidth : 300);
                     double cardH = slotGrid.Height > 0 ? slotGrid.Height : (slotGrid.ActualHeight > 0 ? slotGrid.ActualHeight : 200);
 
-                    double newX = Math.Clamp(startLeft + dx, 0, Math.Max(0, boundW - cardW));
-                    double newY = Math.Clamp(startTop + dy, 0, Math.Max(0, boundH - cardH));
+                    double newX = FreeformBounds.Move(startLeft + dx, cardW, boundW);
+                    double newY = FreeformBounds.Move(startTop + dy, cardH, boundH);
                     var snapped = SnapDraggedCard(slotGrid, newX, newY, cardW, cardH);
-                    newX = snapped.X;
-                    newY = snapped.Y;
+                    newX = FreeformBounds.Move(snapped.X, cardW, boundW);
+                    newY = FreeformBounds.Move(snapped.Y, cardH, boundH);
 
                     Canvas.SetLeft(slotGrid, newX);
                     Canvas.SetTop(slotGrid, newY);

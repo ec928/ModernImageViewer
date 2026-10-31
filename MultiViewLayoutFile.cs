@@ -859,6 +859,25 @@ namespace ModernImageViewer
         }
     }
 
+    /// <summary>
+    /// How far a floating cell can go: its centre stays on the canvas. A cell turns about its centre,
+    /// so the limit is the same at any rotation and for any shape.
+    /// </summary>
+    public static class FreeformBounds
+    {
+        public static double Move(double start, double size, double canvas) => Math.Clamp(start, -size / 2, canvas - size / 2);
+
+        /// <summary>The share of a resize's centre movement, 0 to 1, that keeps the centre on the canvas. A centre already off it is not held back.</summary>
+        public static double ResizeShare(double centre, double move, double canvas)
+        {
+            if (centre < 0 || centre > canvas) return 1;
+            double end = centre + move;
+            if (end < 0) return centre / -move;
+            if (end > canvas) return (canvas - centre) / move;
+            return 1;
+        }
+    }
+
     /// <summary>Pulls a dragged floating cell onto nearby edges and centres.</summary>
     public static class FreeformSnap
     {

@@ -231,6 +231,13 @@ namespace ModernImageViewer
             ShowHudAndOverlays();
         }
 
+        /// <summary>What hangs over the canvas edge is cut there, as in an export, so it cannot cover the title bar or take its clicks.</summary>
+        private void AttachCanvasClip()
+        {
+            RootGrid.SizeChanged += (_, e) =>
+                FreeformCanvas.Clip = new RectangleGeometry { Rect = new Rect(0, 0, e.NewSize.Width, e.NewSize.Height) };
+        }
+
         /// <summary>
         /// Pictures dragged in from outside each become a new floating cell where they land. A drop with no pictures in it,
         /// such as a folder or a saved layout, goes on to the main window as it would from anywhere else.
@@ -562,10 +569,9 @@ namespace ModernImageViewer
                         double cos = Math.Cos(radians);
                         double sin = Math.Sin(radians);
 
-                        // The pointer's movement along the window's own axes. An upright window also stays inside the canvas.
+                        // The pointer's movement along the window's own axes.
                         double localX = dx * cos + dy * sin;
                         double localY = -dx * sin + dy * cos;
-                        bool upright = degrees == 0;
                         bool right = dir is WindowResizeDirection.Right or WindowResizeDirection.TopRight or WindowResizeDirection.BottomRight;
                         bool left = dir is WindowResizeDirection.Left or WindowResizeDirection.TopLeft or WindowResizeDirection.BottomLeft;
                         bool bottom = dir is WindowResizeDirection.Bottom or WindowResizeDirection.BottomLeft or WindowResizeDirection.BottomRight;
@@ -577,19 +583,21 @@ namespace ModernImageViewer
                         else if (left) curW = Math.Max(minW, initW - localX);
                         if (bottom) curH = Math.Max(minH, initH + localY);
                         else if (top) curH = Math.Max(minH, initH - localY);
-                        if (upright)
-                        {
-                            if (right) curW = Math.Min(curW, Math.Max(minW, boundW - initX));
-                            else if (left) curW = Math.Min(curW, initX + initW);
-                            if (bottom) curH = Math.Min(curH, Math.Max(minH, boundH - initY));
-                            else if (top) curH = Math.Min(curH, initY + initH);
-                        }
 
                         // The window turns about its centre, so the centre moves to hold the far edge still.
                         double shiftX = right ? (curW - initW) / 2 : left ? -(curW - initW) / 2 : 0;
                         double shiftY = bottom ? (curH - initH) / 2 : top ? -(curH - initH) / 2 : 0;
-                        double curX = initX + initW / 2 + shiftX * cos - shiftY * sin - curW / 2;
-                        double curY = initY + initH / 2 + shiftX * sin + shiftY * cos - curH / 2;
+                        double centreX = initX + initW / 2;
+                        double centreY = initY + initH / 2;
+                        double moveX = shiftX * cos - shiftY * sin;
+                        double moveY = shiftX * sin + shiftY * cos;
+
+                        // The resize stops where the centre would leave the canvas, as a move does.
+                        double share = Math.Min(FreeformBounds.ResizeShare(centreX, moveX, boundW), FreeformBounds.ResizeShare(centreY, moveY, boundH));
+                        curW = initW + (curW - initW) * share;
+                        curH = initH + (curH - initH) * share;
+                        double curX = centreX + moveX * share - curW / 2;
+                        double curY = centreY + moveY * share - curH / 2;
 
                         slotGrid.Width = curW;
                         slotGrid.Height = curH;
