@@ -620,7 +620,7 @@ namespace ModernImageViewer
             return chosen;
         }
 
-        private async Task SavePixelsAsync(int width, int height)
+        private async Task SavePixelsAsync(int width, int height, bool preferPng = false)
         {
             if (_savingGrid) return;
             var shots = CaptureCells();
@@ -642,7 +642,9 @@ namespace ModernImageViewer
                 SuggestedStartLocation = PickerLocationId.PicturesLibrary,
                 SuggestedFileName = SuggestedJpegName(width, height)
             };
+            if (preferPng) picker.FileTypeChoices.Add("PNG Image", new List<string> { ".png" });
             picker.FileTypeChoices.Add("JPEG Image", new List<string> { ".jpg" });
+            if (!preferPng) picker.FileTypeChoices.Add("PNG Image", new List<string> { ".png" });
             WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
             StorageFile? file = await picker.PickSaveFileAsync();
             if (file == null) return;
@@ -652,7 +654,13 @@ namespace ModernImageViewer
             SaveText.Text = "Saving\u2026";
             try
             {
-                await RenderJpegAsync(file, shots, width, height, _canvasColor, _canvasSurface);
+                using var image = await RenderCanvasAsync(shots, width, height, _canvasColor, _canvasSurface);
+                using IRandomAccessStream stream = await file.OpenAsync(FileAccessMode.ReadWrite);
+                stream.Size = 0;
+                if (string.Equals(Path.GetExtension(file.Path), ".png", StringComparison.OrdinalIgnoreCase))
+                    await image.SaveAsync(stream, CanvasBitmapFileFormat.Png);
+                else
+                    await image.SaveAsync(stream, CanvasBitmapFileFormat.Jpeg, 0.95f);
                 string? savedDir = Path.GetDirectoryName(file.Path);
                 if (!string.IsNullOrEmpty(savedDir)) MainWindow.Instance?.AddMultiViewSaveLocation(savedDir);
             }
@@ -756,10 +764,11 @@ namespace ModernImageViewer
             return shots;
         }
 
-        private static async Task RenderJpegAsync(StorageFile file, List<CellShot> shots, int width, int height, string canvasColor, string canvasSurface)
+        /// <summary>Draw the canvas and its cells. The caller owns the image and disposes it.</summary>
+        private static async Task<CanvasRenderTarget> RenderCanvasAsync(List<CellShot> shots, int width, int height, string canvasColor, string canvasSurface)
         {
             var device = CanvasDevice.GetSharedDevice();
-            using var target = new CanvasRenderTarget(device, width, height, 96);
+            var target = new CanvasRenderTarget(device, width, height, 96);
             using (var clear = target.CreateDrawingSession())
             {
                 var near = ToColor(FrameColor.Parse(canvasColor));
@@ -827,7 +836,7 @@ namespace ModernImageViewer
                 var cellRect = new Rect(shot.Cell.X * scaleX, shot.Cell.Y * scaleY, shot.Cell.Width * scaleX, shot.Cell.Height * scaleY);
                 var cellCenter = new System.Numerics.Vector2((float)(cellRect.X + cellRect.Width / 2), (float)(cellRect.Y + cellRect.Height / 2));
                 var windowTurn = System.Numerics.Matrix3x2.CreateRotation((float)((shot.Geometry?.WindowRotation ?? 0) * Math.PI / 180), cellCenter);
-                var outline = WindowShapes.Outline(shot.Geometry?.Shape, shot.Geometry?.ShapeFlipH == true, shot.Geometry?.ShapeFlipV == true);
+                var outline = WindowShapes.Outline(shot.Geometry);
                 using CanvasGeometry? shape = outline == null ? null : CanvasGeometry.CreatePolygon(device, outline
                     .Select(p => new System.Numerics.Vector2((float)(cellRect.X + p.X * cellRect.Width), (float)(cellRect.Y + p.Y * cellRect.Height)))
                     .ToArray());
@@ -1052,9 +1061,40 @@ namespace ModernImageViewer
                 }
             }
 
-            using IRandomAccessStream stream = await file.OpenAsync(FileAccessMode.ReadWrite);
-            stream.Size = 0;
-            await target.SaveAsync(stream, CanvasBitmapFileFormat.Jpeg, 0.95f);
+            return target;
+        }
+
+        private async Task CopyCanvasToClipboardAsync()
+        {
+            if (_savingGrid) return;
+            var shots = CaptureCells();
+            if (shots.Count == 0) return;
+            var (width, height) = CanvasPixels();
+            if (width < 1 || height < 1) return;
+
+            _savingGrid = true;
+            try
+            {
+                using var image = await RenderCanvasAsync(shots, width, height, _canvasColor, _canvasSurface);
+                var stream = new InMemoryRandomAccessStream();
+                await image.SaveAsync(stream, CanvasBitmapFileFormat.Png);
+                stream.Seek(0);
+                var package = new Windows.ApplicationModel.DataTransfer.DataPackage
+                {
+                    RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Copy
+                };
+                package.SetBitmap(RandomAccessStreamReference.CreateFromStream(stream));
+                Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(package);
+                Windows.ApplicationModel.DataTransfer.Clipboard.Flush();
+            }
+            catch (Exception ex)
+            {
+                await ShowExportMessageAsync(ex.Message);
+            }
+            finally
+            {
+                _savingGrid = false;
+            }
         }
 
         private static async Task<CanvasBitmap?> DecodeForCellAsync(string path, CanvasDevice device, int decodeW, int decodeH)
@@ -1112,6 +1152,12 @@ namespace ModernImageViewer
             StorageFile? file = await picker.PickSaveFileAsync();
             if (file == null) return;
 
+            await WriteLayoutFileAsync(file, BuildLayoutFile());
+        }
+
+        /// <summary>The whole session as a layout file. Saving and undo both use this.</summary>
+        private MultiViewLayoutFile BuildLayoutFile()
+        {
             WriteAllGridWeights();
 
             var layoutFile = new MultiViewLayoutFile
@@ -1131,7 +1177,8 @@ namespace ModernImageViewer
                     HeroActive = _heroActive,
                     HeroKind = _heroKind.ToString(),
                     HeroPosition = _heroPosition,
-                    IsFillMode = _isFillMode
+                    IsFillMode = _isFillMode,
+                    FramedSlots = _framedSlots
                 },
                 Mosaic = _mosaic != null ? MosaicNodeDto.FromMosaicLayout(_mosaic) : null
             };
@@ -1185,6 +1232,11 @@ namespace ModernImageViewer
                 }
             }
 
+            return layoutFile;
+        }
+
+        private async Task WriteLayoutFileAsync(StorageFile file, MultiViewLayoutFile layoutFile)
+        {
             try
             {
                 string json = layoutFile.ToJson();
@@ -1243,9 +1295,18 @@ namespace ModernImageViewer
             await LoadLayoutFromPathAsync(file.Path);
         }
 
-        public void ApplyLayoutFile(MultiViewLayoutFile layoutFile)
+        public void ApplyLayoutFile(MultiViewLayoutFile layoutFile) => ApplyLayoutFile(layoutFile, restoreAspect: true);
+
+        private void ApplyLayoutFile(MultiViewLayoutFile layoutFile, bool restoreAspect)
         {
             if (layoutFile == null) return;
+
+            // An undo returns to photos already known, so their thumbnails and details carry over.
+            var known = new Dictionary<string, ImageItem>(StringComparer.OrdinalIgnoreCase);
+            foreach (var old in _items)
+            {
+                if (!string.IsNullOrEmpty(old.Path)) known[old.Path] = old;
+            }
 
             // Clear the cells of the session being replaced before anything counts them.
             ClearAllFreeformCards();
@@ -1265,6 +1326,12 @@ namespace ModernImageViewer
                         Name = !string.IsNullOrEmpty(photo.Name) ? photo.Name : Path.GetFileName(photo.Path ?? string.Empty),
                         Dispatcher = this.DispatcherQueue
                     };
+                    if (known.TryGetValue(it.Path, out var seen))
+                    {
+                        it.Thumbnail = seen.Thumbnail;
+                        it.DateModified = seen.DateModified;
+                        it.SizeString = seen.SizeString;
+                    }
                     items.Add(it);
                     if (photo.Border != null && !string.IsNullOrEmpty(it.Path))
                     {
@@ -1293,6 +1360,7 @@ namespace ModernImageViewer
                 else
                     _heroKind = HeroKind.Banner;
                 _heroPosition = layoutFile.State.HeroPosition;
+                _framedSlots = layoutFile.State.FramedSlots;
             }
 
             if (layoutFile.Mosaic != null)
@@ -1360,8 +1428,10 @@ namespace ModernImageViewer
             UpdateFillFitButton();
             ShowHudAndOverlays();
 
+            if (!_restoringUndo) ResetUndo();
+
             // Aspect ratio if specified
-            if (!string.IsNullOrWhiteSpace(layoutFile.Canvas?.Aspect))
+            if (restoreAspect && !string.IsNullOrWhiteSpace(layoutFile.Canvas?.Aspect))
             {
                 foreach (var aspect in GridCanvasMath.Aspects)
                 {

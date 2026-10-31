@@ -760,6 +760,7 @@ namespace ModernImageViewer
                 if (ticket != _frameFlyoutTicket) return;
                 _lastBorderSettings = border.Clone();
                 _openFrameBorder = border;
+                NoteUserAction();
             };
             _cellBorderFlyout = flyout;
             int showTicket = ticket;

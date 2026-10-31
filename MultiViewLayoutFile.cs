@@ -81,6 +81,9 @@ namespace ModernImageViewer
 
         [JsonPropertyName("isFillMode")]
         public bool IsFillMode { get; set; } = true;
+
+        [JsonPropertyName("framedSlots")]
+        public int FramedSlots { get; set; }
     }
 
     public sealed class PhotoSlotDto
@@ -573,6 +576,13 @@ namespace ModernImageViewer
         [JsonPropertyName("windowRotation")]
         public double WindowRotation { get; set; }
 
+        /// <summary>Where the L's inner corner sits, as a share of the window, before any flip.</summary>
+        [JsonPropertyName("notchX")]
+        public double NotchX { get; set; } = 0.5;
+
+        [JsonPropertyName("notchY")]
+        public double NotchY { get; set; } = 0.5;
+
         public void TurnImage(int degrees) => ImageRotation = ((ImageRotation + degrees) % 360 + 360) % 360;
 
         public CellGeometryDto Clone() => (CellGeometryDto)MemberwiseClone();
@@ -588,11 +598,15 @@ namespace ModernImageViewer
 
         public static readonly string[] All = { Rectangle, LShape, Oval, Triangle };
 
-        public static (double X, double Y)[]? Outline(string? shape, bool flipH = false, bool flipV = false)
+        public static (double X, double Y)[]? Outline(CellGeometryDto? geometry) => geometry == null
+            ? null
+            : Outline(geometry.Shape, geometry.ShapeFlipH, geometry.ShapeFlipV, geometry.NotchX, geometry.NotchY);
+
+        public static (double X, double Y)[]? Outline(string? shape, bool flipH = false, bool flipV = false, double notchX = 0.5, double notchY = 0.5)
         {
             (double X, double Y)[]? points = shape switch
             {
-                LShape => new (double, double)[] { (0, 0), (0.5, 0), (0.5, 0.5), (1, 0.5), (1, 1), (0, 1) },
+                LShape => new (double, double)[] { (0, 0), (notchX, 0), (notchX, notchY), (1, notchY), (1, 1), (0, 1) },
                 Triangle => new (double, double)[] { (0.5, 0), (1, 1), (0, 1) },
                 Oval => OvalPoints(72),
                 _ => null
@@ -614,6 +628,34 @@ namespace ModernImageViewer
                 points[i] = (0.5 + 0.5 * Math.Cos(a), 0.5 + 0.5 * Math.Sin(a));
             }
             return points;
+        }
+    }
+
+    /// <summary>Pulls a dragged floating cell onto nearby edges and centres.</summary>
+    public static class FreeformSnap
+    {
+        public const double Tolerance = 6;
+
+        /// <summary>The start that lines an edge or the centre of this span up with the nearest line, and that line. Null when none is close.</summary>
+        public static (double Start, double? Guide) Snap(double start, double size, IEnumerable<double> lines, double tolerance = Tolerance)
+        {
+            double best = tolerance;
+            double result = start;
+            double? guide = null;
+            foreach (double line in lines)
+            {
+                foreach (double part in new[] { 0, size / 2, size })
+                {
+                    double gap = Math.Abs(start + part - line);
+                    if (gap < best)
+                    {
+                        best = gap;
+                        result = line - part;
+                        guide = line;
+                    }
+                }
+            }
+            return (result, guide);
         }
     }
 

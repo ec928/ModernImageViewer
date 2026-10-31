@@ -86,6 +86,7 @@ namespace ModernImageViewer
             RootGrid.PointerMoved += SegmentGesture_PointerMoved;
             RootGrid.PointerReleased += SegmentGesture_PointerReleased;
             RootGrid.PointerCaptureLost += SegmentGesture_PointerReleased;
+            AttachUndoWatchers();
             SizeChanged += (_, e) =>
             {
                 RefreshCanvasLabel();
@@ -134,11 +135,13 @@ namespace ModernImageViewer
             BuildLayout();
             UpdateFillFitButton();
             ShowHudAndOverlays();
+            ResetUndo();
         }
 
         public void Clear()
         {
             _hudTimer.Stop();
+            ClearUndo();
             ClearAllFreeformCards();
             _hiddenItems.Clear();
             _itemBorders.Clear();
@@ -1102,6 +1105,30 @@ namespace ModernImageViewer
                         return true;
                     }
                     break;
+                case VirtualKey.Z:
+                    if (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
+                    {
+                        if (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
+                            Redo();
+                        else
+                            Undo();
+                        return true;
+                    }
+                    break;
+                case VirtualKey.Y:
+                    if (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
+                    {
+                        Redo();
+                        return true;
+                    }
+                    break;
+                case VirtualKey.C:
+                    if (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
+                    {
+                        _ = CopyCanvasToClipboardAsync();
+                        return true;
+                    }
+                    break;
             }
 
             return false;
@@ -1182,6 +1209,7 @@ namespace ModernImageViewer
         {
             _hudMenusOpen = Math.Max(0, _hudMenusOpen - 1);
             ShowHudAndOverlays();
+            NoteUserAction();
         }
 
         private void HideHudAndOverlays()
@@ -1414,6 +1442,19 @@ namespace ModernImageViewer
             void LoadPhoto()
             {
                 var current = photo.Item;
+                if (_reuseBitmaps != null && _reuseBitmaps.TryGetValue(current.Path, out var decoded))
+                {
+                    naturalWidth = decoded.PixelWidth;
+                    naturalHeight = decoded.PixelHeight;
+                    fullImg.Source = decoded;
+                    if (thumb != null && imgContainer.Children.Contains(thumb))
+                    {
+                        imgContainer.Children.Remove(thumb);
+                        thumb = null;
+                    }
+                    UpdateImageLayout();
+                    return;
+                }
                 if (current.Thumbnail is BitmapSource bs && bs.PixelWidth > 0 && bs.PixelHeight > 0)
                 {
                     naturalWidth = bs.PixelWidth;
@@ -1505,9 +1546,6 @@ namespace ModernImageViewer
 
                     if (isFreeform)
                     {
-                        var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Container, slotGrid));
-                        if (card != null) BringFreeformCardToFront(card);
-
                         bool isCtrl = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
                         if (isCtrl || prop.IsMiddleButtonPressed)
                         {
@@ -1565,6 +1603,9 @@ namespace ModernImageViewer
 
                     double newX = Math.Clamp(startLeft + dx, 0, Math.Max(0, boundW - cardW));
                     double newY = Math.Clamp(startTop + dy, 0, Math.Max(0, boundH - cardH));
+                    var snapped = SnapDraggedCard(slotGrid, newX, newY, cardW, cardH);
+                    newX = snapped.X;
+                    newY = snapped.Y;
 
                     Canvas.SetLeft(slotGrid, newX);
                     Canvas.SetTop(slotGrid, newY);
@@ -1594,6 +1635,7 @@ namespace ModernImageViewer
                 if (isFreeform && isMovingCard && e.Pointer.PointerId == movePointerId)
                 {
                     isMovingCard = false;
+                    HideSnapGuides();
                     try { cellGrid.ReleasePointerCapture(e.Pointer); } catch { }
                     e.Handled = true;
                     return;
@@ -1615,6 +1657,7 @@ namespace ModernImageViewer
                 if (isMovingCard)
                 {
                     isMovingCard = false;
+                    HideSnapGuides();
                     try { cellGrid.ReleasePointerCapture(e.Pointer); } catch { }
                 }
                 if (isDragging)
@@ -1835,7 +1878,11 @@ namespace ModernImageViewer
                 ShowPositionBadges(Slot(photo.Item));
                 EnforceDarkFlyoutPresenter();
             };
-            menu.Closed += (_, _) => HidePositionBadges();
+            menu.Closed += (_, _) =>
+            {
+                HidePositionBadges();
+                NoteUserAction();
+            };
 
             cellGrid.ContextFlyout = menu;
 

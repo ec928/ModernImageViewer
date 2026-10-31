@@ -36,6 +36,21 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
+        public void NotchMovesTheInnerCornerOfTheL()
+        {
+            Assert.Contains((0.3, 0.7), WindowShapes.Outline(WindowShapes.LShape, notchX: 0.3, notchY: 0.7)!);
+        }
+
+        [Fact]
+        public void SnapPullsTheNearestEdgeOrCentreOntoALine()
+        {
+            Assert.Equal((100.0, (double?)100), FreeformSnap.Snap(104, 50, new[] { 100.0 }));
+            Assert.Equal((75.0, (double?)100), FreeformSnap.Snap(72, 50, new[] { 100.0 }));
+            Assert.Equal((50.0, (double?)100), FreeformSnap.Snap(53, 50, new[] { 100.0 }));
+            Assert.Equal((200.0, (double?)null), FreeformSnap.Snap(200, 50, new[] { 100.0 }));
+        }
+
+        [Fact]
         public void TurningAnImageWrapsAroundACircle()
         {
             var geometry = new CellGeometryDto();

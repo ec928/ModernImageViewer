@@ -94,7 +94,15 @@ namespace ModernImageViewer
                     g.ShapeFlipH = false;
                     g.ShapeFlipV = false;
                     g.WindowRotation = 0;
+                    g.NotchX = 0.5;
+                    g.NotchY = 0.5;
                 })));
+
+                advanced.Items.Add(new MenuFlyoutSeparator());
+                advanced.Items.Add(MakeAdvancedItem("Bring to front", "", () => MoveCardLayer(card, int.MaxValue)));
+                advanced.Items.Add(MakeAdvancedItem("Bring forward", "", () => MoveCardLayer(card, 1)));
+                advanced.Items.Add(MakeAdvancedItem("Send backward", "", () => MoveCardLayer(card, -1)));
+                advanced.Items.Add(MakeAdvancedItem("Send to back", "", () => MoveCardLayer(card, int.MinValue)));
             }
 
             menu.Items.Add(advanced);
@@ -113,9 +121,13 @@ namespace ModernImageViewer
             }
 
             var outlineElement = window.Children.OfType<Polygon>().FirstOrDefault();
-            var outline = WindowShapes.Outline(geometry.Shape, geometry.ShapeFlipH, geometry.ShapeFlipV);
+            var outline = WindowShapes.Outline(geometry);
             double width = window.Width > 0 ? window.Width : window.ActualWidth;
             double height = window.Height > 0 ? window.Height : window.ActualHeight;
+            var photoGrid = CardBorder(window)?.Child as Grid;
+            var hitArea = photoGrid?.Children.OfType<Polygon>().FirstOrDefault();
+            if (card.NotchHandle != null)
+                card.NotchHandle.Visibility = geometry.Shape == WindowShapes.LShape ? Visibility.Visible : Visibility.Collapsed;
             if (outline == null || width < 1 || height < 1)
             {
                 // A plain window never takes a composition clip, so it needs no composition visual.
@@ -125,7 +137,33 @@ namespace ModernImageViewer
                         ElementCompositionPreview.GetElementVisual(part).Clip = null;
                     outlineElement.Visibility = Visibility.Collapsed;
                 }
+                if (hitArea != null) hitArea.Visibility = Visibility.Collapsed;
+                if (photoGrid != null)
+                    photoGrid.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(1, 0, 0, 0));
                 return;
+            }
+
+            // Pointers follow the outline: the empty part of the window has nothing to hit, so clicks reach what is behind.
+            if (photoGrid != null)
+            {
+                var inset = CardBorder(window)!.Margin;
+                photoGrid.Background = null;
+                if (hitArea == null)
+                {
+                    hitArea = new Polygon { Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(1, 0, 0, 0)) };
+                    photoGrid.Children.Insert(0, hitArea);
+                }
+                hitArea.Visibility = Visibility.Visible;
+                var hitPoints = new PointCollection();
+                foreach (var p in outline) hitPoints.Add(new Point(p.X * width - inset.Left, p.Y * height - inset.Top));
+                hitArea.Points = hitPoints;
+            }
+
+            if (card.NotchHandle != null)
+            {
+                double nx = geometry.ShapeFlipH ? 1 - geometry.NotchX : geometry.NotchX;
+                double ny = geometry.ShapeFlipV ? 1 - geometry.NotchY : geometry.NotchY;
+                card.NotchHandle.Margin = new Thickness(nx * width - card.NotchHandle.Width / 2, ny * height - card.NotchHandle.Height / 2, 0, 0);
             }
 
             // The clip goes on the parts inside the window. A composition visual on the window itself stops it taking pointer input.
@@ -133,8 +171,8 @@ namespace ModernImageViewer
             foreach (var part in ShapedParts(window))
             {
                 var visual = ElementCompositionPreview.GetElementVisual(part);
-                var inset = new Vector2((float)part.Margin.Left, (float)part.Margin.Top);
-                using var shape = CanvasGeometry.CreatePolygon(CanvasDevice.GetSharedDevice(), points.Select(p => p - inset).ToArray());
+                var partInset = new Vector2((float)part.Margin.Left, (float)part.Margin.Top);
+                using var shape = CanvasGeometry.CreatePolygon(CanvasDevice.GetSharedDevice(), points.Select(p => p - partInset).ToArray());
                 var compositor = visual.Compositor;
                 visual.Clip = compositor.CreateGeometricClip(compositor.CreatePathGeometry(new CompositionPath(shape)));
             }
@@ -154,6 +192,221 @@ namespace ModernImageViewer
             outlineElement.Points = drawn;
         }
 
+        /// <summary>Move a floating cell among the floating cells. They all stay above the grid.</summary>
+        private void MoveCardLayer(FreeformCard card, int steps)
+        {
+            var order = _freeformCards.OrderBy(c => c.ZIndex).ToList();
+            int from = order.IndexOf(card);
+            if (from < 0) return;
+            long wanted = (long)from + steps;
+            int to = (int)Math.Clamp(wanted, 0, order.Count - 1);
+            order.RemoveAt(from);
+            order.Insert(to, card);
+            for (int i = 0; i < order.Count; i++)
+            {
+                order[i].ZIndex = 5001 + i;
+                Canvas.SetZIndex(order[i].Container, order[i].ZIndex);
+                order[i].Container.Translation = new Vector3(0, 0, 256 + ((order[i].ZIndex - 5000) * 8));
+            }
+            _maxFreeformZIndex = 5000 + order.Count;
+        }
+
+        private static Border MakeWindowHandle(double size, string? glyph)
+        {
+            var handle = new Border
+            {
+                Width = size,
+                Height = size,
+                CornerRadius = new CornerRadius(size / 2),
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(225, 32, 32, 32)),
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(220, 255, 255, 255)),
+                BorderThickness = new Thickness(1.5),
+                Opacity = 0
+            };
+            if (glyph != null)
+            {
+                handle.Child = new FontIcon
+                {
+                    Glyph = glyph,
+                    FontSize = 12,
+                    FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
+                    Foreground = new SolidColorBrush(Microsoft.UI.Colors.White)
+                };
+            }
+            Canvas.SetZIndex(handle, 210);
+            return handle;
+        }
+
+        /// <summary>The rotate handle and the L's inner-corner handle. Both show while the pointer is over the window.</summary>
+        private void AttachWindowHandles(FreeformCard card)
+        {
+            if (card.Container is not Grid window) return;
+
+            var rotate = MakeWindowHandle(28, "");
+            rotate.HorizontalAlignment = HorizontalAlignment.Center;
+            rotate.VerticalAlignment = VerticalAlignment.Top;
+            rotate.Margin = new Thickness(0, 12, 0, 0);
+            ToolTipService.SetToolTip(rotate, "Drag to rotate the window. Hold Shift for 15 degree steps.");
+
+            bool turning = false;
+            double startPointer = 0;
+            double startRotation = 0;
+            double PointerAngle(Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+            {
+                var p = e.GetCurrentPoint(RootGrid).Position;
+                double cx = Canvas.GetLeft(window) + window.Width / 2;
+                double cy = Canvas.GetTop(window) + window.Height / 2;
+                return Math.Atan2(p.Y - cy, p.X - cx) * 180 / Math.PI;
+            }
+            rotate.PointerPressed += (_, e) =>
+            {
+                turning = true;
+                startPointer = PointerAngle(e);
+                startRotation = GetGeometry(card.Item).WindowRotation;
+                rotate.CapturePointer(e.Pointer);
+                e.Handled = true;
+            };
+            rotate.PointerMoved += (_, e) =>
+            {
+                if (!turning) return;
+                double angle = startRotation + PointerAngle(e) - startPointer;
+                bool shift = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
+                    .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+                if (shift) angle = Math.Round(angle / WindowRotationStep) * WindowRotationStep;
+                GetGeometry(card.Item).WindowRotation = angle;
+                ApplyWindowGeometry(card);
+                e.Handled = true;
+            };
+            void EndTurn(object _, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+            {
+                if (!turning) return;
+                turning = false;
+                rotate.ReleasePointerCapture(e.Pointer);
+                e.Handled = true;
+            }
+            rotate.PointerReleased += EndTurn;
+            rotate.PointerCanceled += EndTurn;
+            window.Children.Add(rotate);
+
+            var notch = MakeWindowHandle(16, null);
+            notch.HorizontalAlignment = HorizontalAlignment.Left;
+            notch.VerticalAlignment = VerticalAlignment.Top;
+            notch.Visibility = Visibility.Collapsed;
+            ToolTipService.SetToolTip(notch, "Drag to change the shape of the L");
+            bool moving = false;
+            notch.PointerPressed += (_, e) =>
+            {
+                moving = true;
+                notch.CapturePointer(e.Pointer);
+                e.Handled = true;
+            };
+            notch.PointerMoved += (_, e) =>
+            {
+                if (!moving) return;
+                // Measured against the window, so its rotation is already taken out.
+                var p = e.GetCurrentPoint(window).Position;
+                var geometry = GetGeometry(card.Item);
+                double fx = Math.Clamp(p.X / window.Width, 0.15, 0.85);
+                double fy = Math.Clamp(p.Y / window.Height, 0.15, 0.85);
+                geometry.NotchX = geometry.ShapeFlipH ? 1 - fx : fx;
+                geometry.NotchY = geometry.ShapeFlipV ? 1 - fy : fy;
+                ApplyWindowGeometry(card);
+                e.Handled = true;
+            };
+            void EndNotch(object _, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+            {
+                if (!moving) return;
+                moving = false;
+                notch.ReleasePointerCapture(e.Pointer);
+                e.Handled = true;
+            }
+            notch.PointerReleased += EndNotch;
+            notch.PointerCanceled += EndNotch;
+            window.Children.Add(notch);
+            card.NotchHandle = notch;
+
+            window.PointerEntered += (_, _) => { rotate.Opacity = 1; notch.Opacity = 1; };
+            window.PointerExited += (_, _) =>
+            {
+                if (turning || moving) return;
+                rotate.Opacity = 0;
+                notch.Opacity = 0;
+            };
+        }
+
+        private Microsoft.UI.Xaml.Shapes.Rectangle? _guideX;
+        private Microsoft.UI.Xaml.Shapes.Rectangle? _guideY;
+
+        /// <summary>Pull a dragged cell onto the canvas, the other floating cells and the showing grid cells. Alt turns it off.</summary>
+        private Point SnapDraggedCard(Grid window, double x, double y, double width, double height)
+        {
+            bool alt = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Menu)
+                .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+            if (alt)
+            {
+                HideSnapGuides();
+                return new Point(x, y);
+            }
+
+            double canvasW = RootGrid.ActualWidth;
+            double canvasH = RootGrid.ActualHeight;
+            var linesX = new List<double> { 0, canvasW / 2, canvasW };
+            var linesY = new List<double> { 0, canvasH / 2, canvasH };
+            foreach (var other in _freeformCards)
+            {
+                if (ReferenceEquals(other.Container, window)) continue;
+                double l = Canvas.GetLeft(other.Container), t = Canvas.GetTop(other.Container);
+                double w = other.Container.Width, h = other.Container.Height;
+                linesX.AddRange(new[] { l, l + w / 2, l + w });
+                linesY.AddRange(new[] { t, t + h / 2, t + h });
+            }
+            int visible = VisibleCount(GridCellCount);
+            for (int i = 0; i < visible && i < _cellRoots.Length; i++)
+            {
+                if (_cellRoots[i] is not FrameworkElement cell || _hiddenItems.Contains(_items[i]) || cell.ActualWidth < 1) continue;
+                var at = cell.TransformToVisual(RootGrid).TransformPoint(new Point(0, 0));
+                linesX.AddRange(new[] { at.X, at.X + cell.ActualWidth });
+                linesY.AddRange(new[] { at.Y, at.Y + cell.ActualHeight });
+            }
+
+            var snappedX = FreeformSnap.Snap(x, width, linesX);
+            var snappedY = FreeformSnap.Snap(y, height, linesY);
+            ShowSnapGuide(ref _guideX, snappedX.Guide, vertical: true);
+            ShowSnapGuide(ref _guideY, snappedY.Guide, vertical: false);
+            return new Point(snappedX.Start, snappedY.Start);
+        }
+
+        private void ShowSnapGuide(ref Microsoft.UI.Xaml.Shapes.Rectangle? guide, double? at, bool vertical)
+        {
+            if (at == null)
+            {
+                if (guide != null) guide.Visibility = Visibility.Collapsed;
+                return;
+            }
+            if (guide == null)
+            {
+                guide = new Microsoft.UI.Xaml.Shapes.Rectangle
+                {
+                    Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(230, 0, 162, 237)),
+                    IsHitTestVisible = false,
+                    HorizontalAlignment = vertical ? HorizontalAlignment.Left : HorizontalAlignment.Stretch,
+                    VerticalAlignment = vertical ? VerticalAlignment.Stretch : VerticalAlignment.Top,
+                    Width = vertical ? 1 : double.NaN,
+                    Height = vertical ? double.NaN : 1
+                };
+                Canvas.SetZIndex(guide, 5500);
+                RootGrid.Children.Add(guide);
+            }
+            guide.Visibility = Visibility.Visible;
+            guide.Margin = vertical ? new Thickness(at.Value, 0, 0, 0) : new Thickness(0, at.Value, 0, 0);
+        }
+
+        private void HideSnapGuides()
+        {
+            if (_guideX != null) _guideX.Visibility = Visibility.Collapsed;
+            if (_guideY != null) _guideY.Visibility = Visibility.Collapsed;
+        }
+
         /// <summary>What draws inside a floating window: the mat behind, and the card with the photo.</summary>
         private static IEnumerable<FrameworkElement> ShapedParts(Grid window)
         {
@@ -164,6 +417,35 @@ namespace ModernImageViewer
         private void AdvancedFlyout_Opening(object sender, object e)
         {
             AdvancedMenuFlyout.Items.Clear();
+            CaptureUndoPoint();
+
+            var undo = MakeAdvancedItem("Undo", "", Undo);
+            undo.KeyboardAcceleratorTextOverride = "Ctrl+Z";
+            undo.IsEnabled = CanUndo;
+            ToolTipService.SetToolTip(undo, "Undo (Ctrl+Z)");
+            AdvancedMenuFlyout.Items.Add(undo);
+
+            var redo = MakeAdvancedItem("Redo", "", Redo);
+            redo.KeyboardAcceleratorTextOverride = "Ctrl+Y";
+            redo.IsEnabled = CanRedo;
+            ToolTipService.SetToolTip(redo, "Redo (Ctrl+Y)");
+            AdvancedMenuFlyout.Items.Add(redo);
+
+            AdvancedMenuFlyout.Items.Add(new MenuFlyoutSeparator());
+
+            var copy = MakeAdvancedItem("Copy to clipboard", "", () => _ = CopyCanvasToClipboardAsync());
+            copy.KeyboardAcceleratorTextOverride = "Ctrl+C";
+            ToolTipService.SetToolTip(copy, "Copy the canvas as an image (Ctrl+C)");
+            AdvancedMenuFlyout.Items.Add(copy);
+
+            AdvancedMenuFlyout.Items.Add(MakeAdvancedItem("Save as PNG…", "", () =>
+            {
+                var (width, height) = CanvasPixels();
+                _ = SavePixelsAsync(width, height, preferPng: true);
+            }));
+
+            AdvancedMenuFlyout.Items.Add(new MenuFlyoutSeparator());
+
             var canvas = new MenuFlyoutSubItem { Text = "Canvas", Icon = new FontIcon { Glyph = "" } };
 
             var surface = new MenuFlyoutSubItem { Text = "Surface" };

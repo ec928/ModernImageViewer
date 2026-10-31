@@ -27,6 +27,7 @@ namespace ModernImageViewer
             public ImageItem Item { get; set; } = null!;
             public int SourceSlot { get; set; }
             public FrameworkElement Container { get; set; } = null!;
+            public Border? NotchHandle { get; set; }
             public int ZIndex { get; set; } = 5000;
             public double X { get; set; }
             public double Y { get; set; }
@@ -190,6 +191,7 @@ namespace ModernImageViewer
 
             _freeformCards.Add(card);
             FreeformCanvas.Children.Add(freeformCell);
+            AttachWindowHandles(card);
             ApplyWindowGeometry(card);
             freeformCell.SizeChanged += (_, _) => ApplyWindowGeometry(card);
 
@@ -405,9 +407,6 @@ namespace ModernImageViewer
                     var prop = e.GetCurrentPoint(handle).Properties;
                     if (prop.IsLeftButtonPressed)
                     {
-                        var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Container, slotGrid));
-                        if (card != null) BringFreeformCardToFront(card);
-
                         isResizing = true;
                         resizePointerId = e.Pointer.PointerId;
                         startPoint = e.GetCurrentPoint(RootGrid).Position;
@@ -438,43 +437,46 @@ namespace ModernImageViewer
                         const double minW = 120;
                         const double minH = 90;
 
-                        double curX = initX;
-                        double curY = initY;
+                        var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Container, slotGrid));
+                        double degrees = card != null ? GetGeometry(card.Item).WindowRotation : 0;
+                        double radians = degrees * Math.PI / 180;
+                        double cos = Math.Cos(radians);
+                        double sin = Math.Sin(radians);
+
+                        // The pointer's movement along the window's own axes. An upright window also stays inside the canvas.
+                        double localX = dx * cos + dy * sin;
+                        double localY = -dx * sin + dy * cos;
+                        bool upright = degrees == 0;
+                        bool right = dir is WindowResizeDirection.Right or WindowResizeDirection.TopRight or WindowResizeDirection.BottomRight;
+                        bool left = dir is WindowResizeDirection.Left or WindowResizeDirection.TopLeft or WindowResizeDirection.BottomLeft;
+                        bool bottom = dir is WindowResizeDirection.Bottom or WindowResizeDirection.BottomLeft or WindowResizeDirection.BottomRight;
+                        bool top = dir is WindowResizeDirection.Top or WindowResizeDirection.TopLeft or WindowResizeDirection.TopRight;
+
                         double curW = initW;
                         double curH = initH;
-
-                        if (dir is WindowResizeDirection.Right or WindowResizeDirection.TopRight or WindowResizeDirection.BottomRight)
+                        if (right) curW = Math.Max(minW, initW + localX);
+                        else if (left) curW = Math.Max(minW, initW - localX);
+                        if (bottom) curH = Math.Max(minH, initH + localY);
+                        else if (top) curH = Math.Max(minH, initH - localY);
+                        if (upright)
                         {
-                            curW = Math.Clamp(initW + dx, minW, Math.Max(minW, boundW - initX));
-                        }
-                        else if (dir is WindowResizeDirection.Left or WindowResizeDirection.TopLeft or WindowResizeDirection.BottomLeft)
-                        {
-                            double proposedW = initW - dx;
-                            if (proposedW < minW) proposedW = minW;
-                            if (initX + (initW - proposedW) < 0) proposedW = initX + initW;
-                            curW = proposedW;
-                            curX = initX + (initW - curW);
+                            if (right) curW = Math.Min(curW, Math.Max(minW, boundW - initX));
+                            else if (left) curW = Math.Min(curW, initX + initW);
+                            if (bottom) curH = Math.Min(curH, Math.Max(minH, boundH - initY));
+                            else if (top) curH = Math.Min(curH, initY + initH);
                         }
 
-                        if (dir is WindowResizeDirection.Bottom or WindowResizeDirection.BottomLeft or WindowResizeDirection.BottomRight)
-                        {
-                            curH = Math.Clamp(initH + dy, minH, Math.Max(minH, boundH - initY));
-                        }
-                        else if (dir is WindowResizeDirection.Top or WindowResizeDirection.TopLeft or WindowResizeDirection.TopRight)
-                        {
-                            double proposedH = initH - dy;
-                            if (proposedH < minH) proposedH = minH;
-                            if (initY + (initH - proposedH) < 0) proposedH = initY + initH;
-                            curH = proposedH;
-                            curY = initY + (initH - curH);
-                        }
+                        // The window turns about its centre, so the centre moves to hold the far edge still.
+                        double shiftX = right ? (curW - initW) / 2 : left ? -(curW - initW) / 2 : 0;
+                        double shiftY = bottom ? (curH - initH) / 2 : top ? -(curH - initH) / 2 : 0;
+                        double curX = initX + initW / 2 + shiftX * cos - shiftY * sin - curW / 2;
+                        double curY = initY + initH / 2 + shiftX * sin + shiftY * cos - curH / 2;
 
                         slotGrid.Width = curW;
                         slotGrid.Height = curH;
                         Canvas.SetLeft(slotGrid, curX);
                         Canvas.SetTop(slotGrid, curY);
 
-                        var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Container, slotGrid));
                         if (card != null)
                         {
                             card.X = curX;
