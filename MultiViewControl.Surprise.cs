@@ -72,21 +72,23 @@ namespace ModernImageViewer
 
         private void AttachSurpriseStops()
         {
-            // While the card is open, the input is about the card: closing it leaves auto-play running.
+            // Closing the card leaves auto-play running. Only a click on the picture, Esc or Space pauses it,
+            // so Alt+Tab or a click on the bar does not.
             RootGrid.AddHandler(PointerPressedEvent, new PointerEventHandler((_, e) =>
             {
-                if (_surpriseCard == null) StopAutoPlay();
-                else if (!IsInSurpriseCard(e.OriginalSource)) RemoveSurpriseCard();
+                if (_surpriseCard != null && !IsInSurpriseCard(e.OriginalSource)) RemoveSurpriseCard();
             }), true);
             RootGrid.AddHandler(KeyDownEvent, new KeyEventHandler((_, e) =>
             {
-                if (_surpriseCard == null)
+                if (_surpriseCard != null)
+                {
+                    if (e.Key != Windows.System.VirtualKey.Escape) return;
+                    RemoveSurpriseCard();
+                    e.Handled = true;
+                }
+                else if (_autoPlaySeconds > 0 && e.Key is Windows.System.VirtualKey.Escape or Windows.System.VirtualKey.Space)
                 {
                     StopAutoPlay();
-                }
-                else if (e.Key == Windows.System.VirtualKey.Escape)
-                {
-                    RemoveSurpriseCard();
                     e.Handled = true;
                 }
             }), true);
@@ -170,11 +172,14 @@ namespace ModernImageViewer
             Toggle(right, "Skip screens and repeats", "Leave out what looks like a screen capture or a graphic, and all but one of near-identical shots. This is a guess.", options.SkipScreens, (o, on) => o.SkipScreens = on);
 
             Heading(right, "Auto-play");
-            Row(right, "New layout every", "Starts as soon as it is chosen. Once this card is closed, a click on the picture or a key stops it.",
-                Choice(new[] { "Off", "5 seconds", "10 seconds", "30 seconds" }, _autoPlaySeconds > 0 ? _autoPlaySeconds + " seconds" : "Off", name =>
+            string AutoPlayName(int seconds) => seconds > 0 ? seconds + " seconds" : "Off";
+            Row(right, "New layout every", "Saved like the other settings. Starts when chosen, or when you press Surprise me. A click on the picture, Esc or Space pauses it, and Surprise me resumes it.",
+                Choice(SurpriseOptions.AutoPlayChoices.Select(AutoPlayName), AutoPlayName(options.AutoPlaySeconds), name =>
                 {
-                    if (name == "Off") StopAutoPlay();
-                    else StartAutoPlay(int.Parse(name.Split(' ')[0]));
+                    int seconds = name == "Off" ? 0 : int.Parse(name.Split(' ')[0]);
+                    ChangeSurpriseChoices(o => o.AutoPlaySeconds = seconds);
+                    if (seconds == 0) StopAutoPlay();
+                    else StartAutoPlay(seconds);
                 }));
 
             var columns = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 24 };
@@ -189,6 +194,7 @@ namespace ModernImageViewer
             {
                 _surpriseOptions = new SurpriseOptions();
                 ChangeSurpriseChoices(_ => { });
+                StopAutoPlay();
                 RemoveSurpriseCard();
                 ShowSurpriseCard();
             };
@@ -274,17 +280,21 @@ namespace ModernImageViewer
         }
 
         /// <summary>
-        /// Clear, over the canvas and under the card, so the click that stops auto-play only stops it and does not also open
-        /// the picture under it. It stays until that click is released, so the release cannot land on a cell either.
+        /// Clear, over the canvas and under the bar and the card, so the click that pauses auto-play only pauses it and does not
+        /// also reach the picture under it. It stays until that click is released, so the release cannot land on a cell either.
         /// </summary>
         private void AddAutoPlayShield()
         {
             if (_autoPlayShield != null) return;
             var shield = new Border { Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent) };
-            Canvas.SetZIndex(shield, 6400);
+            Canvas.SetZIndex(shield, 5900);
             Grid.SetRowSpan(shield, Math.Max(1, RootGrid.RowDefinitions.Count));
             Grid.SetColumnSpan(shield, Math.Max(1, RootGrid.ColumnDefinitions.Count));
-            shield.PointerPressed += (_, _) => _autoPlayShieldPressed = true;
+            shield.PointerPressed += (_, _) =>
+            {
+                _autoPlayShieldPressed = true;
+                if (_surpriseCard == null) StopAutoPlay();
+            };
             void Released()
             {
                 _autoPlayShieldPressed = false;
@@ -306,10 +316,12 @@ namespace ModernImageViewer
             _autoPlayShieldPressed = false;
         }
 
+        /// <summary>With an interval set, this starts or keeps auto-play going, from a new layout now.</summary>
         private async void SurpriseButton_Click(object sender, RoutedEventArgs e)
         {
-            StopAutoPlay();
-            await SurpriseAsync(fade: false);
+            int seconds = SurpriseChoices.AutoPlaySeconds;
+            if (seconds > 0) StartAutoPlay(seconds);
+            else await SurpriseAsync(fade: false);
         }
 
         private async Task SurpriseAsync(bool fade)

@@ -392,6 +392,17 @@ namespace ModernImageViewer.Tests
             Assert.Equal(expected, LayoutComposer.LooksLikeScreen(name, camera, width, height, faces, flat));
         }
 
+        [Theory]
+        [InlineData(5, 5)]
+        [InlineData(30, 30)]
+        [InlineData(7, 0)]
+        [InlineData(-5, 0)]
+        public void The_auto_play_interval_is_saved_and_a_bad_one_is_off(int saved, int expected)
+        {
+            var read = SurpriseOptions.FromJson(new SurpriseOptions { AutoPlaySeconds = saved }.ToJson());
+            Assert.Equal(expected, read.AutoPlaySeconds);
+        }
+
         [Fact]
         public void Hero_shape_is_not_decided_by_the_score()
         {

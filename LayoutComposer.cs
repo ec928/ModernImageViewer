@@ -172,6 +172,9 @@ namespace ModernImageViewer
         /// <summary>The odds that a click from a large set takes pictures next to each other in folder and date.</summary>
         public double TogetherChance { get; set; } = 0.8;
         public bool SkipScreens { get; set; } = true;
+        /// <summary>0 is off. A saved setting like the rest: pausing auto-play does not change it.</summary>
+        public int AutoPlaySeconds { get; set; }
+        public static readonly int[] AutoPlayChoices = { 0, 5, 10, 30 };
 
         public double OddsOf(string design) => DesignOdds.TryGetValue(design, out double odds) ? Math.Clamp(odds, RarestDesign, MostFavouredDesign) : 1;
 
@@ -193,6 +196,7 @@ namespace ModernImageViewer
                 read.MostPictures = Math.Clamp(read.MostPictures, read.FewestPictures, MosaicLayout.MaxShown);
                 read.TogetherChance = Math.Clamp(read.TogetherChance, 0, 1);
                 if (!Cards.Contains(read.Card)) read.Card = CardAny;
+                if (!AutoPlayChoices.Contains(read.AutoPlaySeconds)) read.AutoPlaySeconds = 0;
                 return read;
             }
             catch (System.Text.Json.JsonException)
