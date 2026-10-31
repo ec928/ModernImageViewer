@@ -22,6 +22,7 @@ namespace ModernImageViewer
         private CellBorderDto? _openFrameBorder;
         private int _frameFlyoutTicket;
         private Flyout? _cellBorderFlyout;
+        private FrameworkElement? _cellBorderFlyoutAnchor;
 
         public CellBorderDto GetBorderForItem(ImageItem? item)
         {
@@ -342,7 +343,7 @@ namespace ModernImageViewer
             void RefreshPanel()
             {
                 showStroke?.Invoke(FrameIndex(new[] { "Solid", "Dashed", "InnerMuted", "Gradient" }, border.StrokeStyle));
-                showPreset?.Invoke(FrameLooks.Match(border));
+                showPreset?.Invoke(PresetIndexFor(border, remembered));
                 showMat?.Invoke(FrameIndex(new[] { "None", "Solid", "Acrylic" }, border.GutterMaterial));
                 refreshColor?.Invoke();
                 refreshEnd?.Invoke();
@@ -377,69 +378,67 @@ namespace ModernImageViewer
 
             var body = new StackPanel { Spacing = 10, MinWidth = 300 };
 
-            var presetHeader = new Grid { VerticalAlignment = VerticalAlignment.Center };
-            presetHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            presetHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var presetLabel = SectionLabel("Presets");
-            presetLabel.Margin = new Thickness(0);
-            presetHeader.Children.Add(presetLabel);
-            var lastButton = new Button
+            // One line: nothing, the last frame, and two frames the user keeps. Hold a preset to save, click to recall.
+            var presetButtons = new Button[4];
+            var heldPreset = new bool[4];
+            var presetTrack = MakeSegment(new[] { "Flush", "Last", "Preset 1", "Preset 2" }, new[]
             {
-                Content = new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 4,
-                    Children =
-                    {
-                        new FontIcon
-                        {
-                            Glyph = "\uE823",
-                            FontSize = 12,
-                            FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
-                            Foreground = _menuWhitePrimary
-                        },
-                        new TextBlock { Text = "Last", FontSize = 12, Foreground = _menuWhitePrimary, VerticalAlignment = VerticalAlignment.Center }
-                    }
-                },
-                IsEnabled = remembered != null,
-                Padding = new Thickness(8, 0, 8, 0),
-                MinWidth = 0,
-                MinHeight = 28,
-                CornerRadius = new CornerRadius(4),
-                BorderThickness = new Thickness(0),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            PaintButton(lastButton, Color.FromArgb(0, 0, 0, 0), Color.FromArgb(28, 255, 255, 255), Color.FromArgb(16, 255, 255, 255));
-            ToolTipService.SetToolTip(lastButton, remembered == null
-                ? "Available after you close a frame"
-                : "Put back the frame from the last time this panel closed");
-            lastButton.Click += (_, _) =>
-            {
-                if (remembered != null) ApplyLook(remembered);
-            };
-            Grid.SetColumn(lastButton, 1);
-            presetHeader.Children.Add(lastButton);
-            body.Children.Add(presetHeader);
-
-            string[] presetNames = { "Card", "Mat", "Round", "Flush" };
-            var presetTrack = MakeSegment(presetNames, new[]
-            {
-                "Soft card, slight radius, rim light",
-                "Gallery mat with a square black line",
-                "Rounded gradient on a frosted mat",
-                "No line, mat, or shadow"
+                "No line, mat, or shadow",
+                remembered == null
+                    ? "Available after you close a frame"
+                    : "Put back the frame from the last time this panel closed",
+                "",
+                ""
             }, index =>
             {
-                CellBorderDto source = index switch
+                // The click that ends a long press has already saved.
+                if (heldPreset[index])
                 {
-                    0 => FrameLooks.Card(),
-                    1 => FrameLooks.Mat(),
-                    2 => FrameLooks.Round(),
-                    _ => FrameLooks.Flush()
+                    heldPreset[index] = false;
+                    return;
+                }
+                CellBorderDto? source = index switch
+                {
+                    0 => FrameLooks.Flush(),
+                    1 => remembered,
+                    _ => MainWindow.Instance?.MultiViewFramePreset(index - 2)
                 };
-                ApplyLook(source);
-            }, out var presetShow);
+                if (source != null) ApplyLook(source);
+            }, out var presetShow, presetButtons);
             showPreset = presetShow;
+            presetButtons[1].IsEnabled = remembered != null;
+            for (int p = 0; p < 2; p++)
+            {
+                int presetIndex = p;
+                var button = presetButtons[p + 2];
+                void ShowPresetTip()
+                {
+                    bool saved = MainWindow.Instance?.MultiViewFramePreset(presetIndex) != null;
+                    ToolTipService.SetToolTip(button, saved
+                        ? "Click to use this frame. Hold to save the current frame here."
+                        : "Empty. Hold to save the current frame here.");
+                }
+                ShowPresetTip();
+                AttachLongPress(button, () =>
+                {
+                    heldPreset[presetIndex + 2] = true;
+                    MainWindow.Instance?.SaveMultiViewFramePreset(presetIndex, border);
+                    ShowPresetTip();
+                    RefreshPanel();
+                    if (button.Content is TextBlock caption)
+                    {
+                        string label = caption.Text;
+                        caption.Text = "Saved";
+                        var restore = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(900) };
+                        restore.Tick += (_, _) =>
+                        {
+                            restore.Stop();
+                            caption.Text = label;
+                        };
+                        restore.Start();
+                    }
+                });
+            }
             body.Children.Add(presetTrack);
 
             body.Children.Add(SectionLabel("Stroke"));
@@ -632,9 +631,10 @@ namespace ModernImageViewer
 
             RefreshPanel();
 
-            double scrollMax = 560;
+            // Tall enough for every control. It scrolls only when the window is too short to hold them.
+            double scrollMax = 800;
             if (XamlRoot != null && XamlRoot.Size.Height > 200)
-                scrollMax = Math.Clamp(XamlRoot.Size.Height - 240, 280, 640);
+                scrollMax = Math.Max(280, XamlRoot.Size.Height - 150);
             var scroll = new ScrollViewer
             {
                 Content = body,
@@ -726,6 +726,7 @@ namespace ModernImageViewer
                     new Setter(FlyoutPresenter.CornerRadiusProperty, new CornerRadius(10)),
                     new Setter(FlyoutPresenter.PaddingProperty, new Thickness(14, 12, 14, 12)),
                     new Setter(FlyoutPresenter.WidthProperty, 356.0),
+                    new Setter(FlyoutPresenter.MaxHeightProperty, 4000.0),
                     new Setter(FlyoutPresenter.BackgroundProperty, new SolidColorBrush(Color.FromArgb(242, 32, 32, 32))),
                     new Setter(FlyoutPresenter.BorderBrushProperty, new SolidColorBrush(Color.FromArgb(51, 255, 255, 255))),
                     new Setter(FlyoutPresenter.BorderThicknessProperty, new Thickness(1)),
@@ -742,6 +743,7 @@ namespace ModernImageViewer
             _cellBorderFlyout = flyout;
             int showTicket = ticket;
             var anchor = targetElement;
+            _cellBorderFlyoutAnchor = anchor;
             DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
             {
                 if (showTicket != _frameFlyoutTicket) return;
@@ -885,7 +887,36 @@ namespace ModernImageViewer
             button.Resources["ButtonForegroundDisabled"] = _menuWhiteTertiary;
         }
 
-        private Border MakeSegment(string[] labels, string[] tips, Action<int> onPick, out Action<int> show)
+        /// <summary>Which of the one-line presets this frame matches: 0 Flush, 1 Last, 2 and 3 the saved presets, or -1.</summary>
+        private static int PresetIndexFor(CellBorderDto frame, CellBorderDto? last)
+        {
+            if (frame.SameLook(FrameLooks.Flush())) return 0;
+            for (int i = 0; i < 2; i++)
+            {
+                if (frame.SameLook(MainWindow.Instance?.MultiViewFramePreset(i))) return i + 2;
+            }
+            return frame.SameLook(last) ? 1 : -1;
+        }
+
+        /// <summary>Runs the action when the pointer stays down on the button. Moving off it or letting go cancels.</summary>
+        private static void AttachLongPress(Button button, Action action)
+        {
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(600) };
+            timer.Tick += (_, _) =>
+            {
+                timer.Stop();
+                action();
+            };
+            // A button handles its own press, so these listen for handled events too.
+            button.AddHandler(PointerPressedEvent, new Microsoft.UI.Xaml.Input.PointerEventHandler((_, _) => timer.Start()), true);
+            var stop = new Microsoft.UI.Xaml.Input.PointerEventHandler((_, _) => timer.Stop());
+            button.AddHandler(PointerReleasedEvent, stop, true);
+            button.AddHandler(PointerExitedEvent, stop, true);
+            button.AddHandler(PointerCanceledEvent, stop, true);
+            button.AddHandler(PointerCaptureLostEvent, stop, true);
+        }
+
+        private Border MakeSegment(string[] labels, string[] tips, Action<int> onPick, out Action<int> show, Button[]? buttons = null)
         {
             var grid = new Grid { Height = 32 };
             for (int i = 0; i < labels.Length; i++)
@@ -933,6 +964,7 @@ namespace ModernImageViewer
                     ToolTipService.SetToolTip(button, tips[i]);
                 AutomationProperties.SetName(button, labels[i]);
                 button.Click += (_, _) => onPick(captured);
+                if (buttons != null) buttons[i] = button;
                 Grid.SetColumn(button, i);
                 grid.Children.Add(button);
             }
@@ -1096,7 +1128,7 @@ namespace ModernImageViewer
                 pick(hex);
                 refreshRow();
                 NoteUserAction();
-            });
+            }, reopenFrameCard: true);
 
             refresh = refreshRow;
             refresh();
@@ -1104,7 +1136,7 @@ namespace ModernImageViewer
         }
 
         /// <summary>Opens the dialog after the click has finished, because it runs its own message loop until it closes.</summary>
-        private void PickCustomColor(Func<string?> current, Action<string> chosen)
+        private void PickCustomColor(Func<string?> current, Action<string> chosen, bool reopenFrameCard = false)
         {
             DispatcherQueue.TryEnqueue(() =>
             {
@@ -1112,6 +1144,20 @@ namespace ModernImageViewer
                 var owner = WinRT.Interop.WindowNative.GetWindowHandle(MainWindow.Instance);
                 string? hex = WindowsColorDialog.Pick(owner, current());
                 if (hex != null) chosen(hex);
+                if (reopenFrameCard) ReopenFrameCard();
+            });
+        }
+
+        /// <summary>The dialog takes the window's focus, which closes the frame card. The same card comes back with its settings.</summary>
+        private void ReopenFrameCard()
+        {
+            var flyout = _cellBorderFlyout;
+            var anchor = _cellBorderFlyoutAnchor;
+            if (flyout == null || anchor == null) return;
+            DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
+            {
+                if (ReferenceEquals(_cellBorderFlyout, flyout) && !flyout.IsOpen)
+                    ShowFrameFlyout(flyout, anchor);
             });
         }
 

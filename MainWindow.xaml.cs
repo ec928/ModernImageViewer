@@ -136,6 +136,18 @@ namespace ModernImageViewer
             SaveAllSettings();
         }
 
+        private readonly CellBorderDto?[] _multiViewFramePresets = new CellBorderDto?[2];
+
+        public CellBorderDto? MultiViewFramePreset(int index) =>
+            (uint)index < (uint)_multiViewFramePresets.Length ? _multiViewFramePresets[index]?.Clone() : null;
+
+        public void SaveMultiViewFramePreset(int index, CellBorderDto frame)
+        {
+            if ((uint)index >= (uint)_multiViewFramePresets.Length) return;
+            _multiViewFramePresets[index] = frame.Clone();
+            SaveAllSettings();
+        }
+
         public void AddMultiViewSaveLocation(string path)
         {
             if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path)) return;
@@ -396,6 +408,7 @@ namespace ModernImageViewer
             public List<string> FavouriteFolders { get; set; } = new();
             public List<string> MultiViewRecentSaveLocations { get; set; } = new();
             public List<string> MultiViewFavouriteSaveLocations { get; set; } = new();
+            public List<CellBorderDto?> MultiViewFramePresets { get; set; } = new();
         }
 
         private void ConfigureWindow(bool forceReset)
@@ -525,6 +538,8 @@ namespace ModernImageViewer
                 if (!string.IsNullOrWhiteSpace(folder) && !_multiViewFavouriteSaveLocations.Contains(folder) && _multiViewFavouriteSaveLocations.Count < 3)
                     _multiViewFavouriteSaveLocations.Add(folder);
             }
+            for (int i = 0; i < _multiViewFramePresets.Length && i < settings.MultiViewFramePresets.Count; i++)
+                _multiViewFramePresets[i] = settings.MultiViewFramePresets[i];
 
             if (ViewerControl != null)
             {
@@ -713,6 +728,7 @@ namespace ModernImageViewer
                 _currentSettings.FavouriteFolders = new List<string>(_favouriteFolders);
                 _currentSettings.MultiViewRecentSaveLocations = new List<string>(_multiViewRecentSaveLocations);
                 _currentSettings.MultiViewFavouriteSaveLocations = new List<string>(_multiViewFavouriteSaveLocations);
+                _currentSettings.MultiViewFramePresets = new List<CellBorderDto?>(_multiViewFramePresets);
                 if (ThumbSizeSlider != null) _currentSettings.TileSize = Math.Round(ThumbSizeSlider.Value);
 
                 string json = System.Text.Json.JsonSerializer.Serialize(_currentSettings, new System.Text.Json.JsonSerializerOptions

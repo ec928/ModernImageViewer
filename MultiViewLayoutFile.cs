@@ -868,7 +868,7 @@ namespace ModernImageViewer
             ("Purple", "#FF8764B8")
         };
 
-        /// <summary>The same set, with the white the Mat and Round presets use, so those presets mark it as chosen.</summary>
+        /// <summary>The same set, with the white a new solid mat starts on, so it shows as chosen.</summary>
         public static readonly (string Label, string Hex)[] MatColors =
             Colors.Select(c => c.Label == "White" ? (c.Label, "#FFF8F8F8") : c).ToArray();
 
