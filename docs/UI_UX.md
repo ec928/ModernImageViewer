@@ -127,7 +127,8 @@ Multi-View shows up to 16 grid cells in fluid mosaics, with floating cells above
 ```
 Swap with...              >   Contents only | With attributes
 Copy to...                >   Position 1    | Position 1
---------------------------    Position 2... | Position 2...
+Move to...                >   Position 2... | Position 2...
+--------------------------
 Frame & Border...
 Replace image...  (or Add image... on an empty cell)
 Advanced                  >   Rotate image left / right, Mirror image, Flip image
@@ -141,7 +142,7 @@ Remove cell                   Layer   >   Bring to front, Bring forward, Send ba
 
 The playbar's wheel holds Undo, Redo and one Fill or Fit row, which names what it will switch to and has no shortcut. Add images sends the user to the folders to pick pictures, each of which comes back as a floating cell. The Canvas button holds Shape, Surface, Color and Frame & Border, which is the cell card without Apply to all cells. Save/Load holds Copy to clipboard and the last three autosaved sessions, timed to the second. Replacing a session never asks, because it can be had back from there. Back, Esc and the tile and list buttons leave the session waiting, and the Multi-View button returns to it.
 
-Swap with and Copy to name positions only, never file names, so the two columns stay about the width of a single column of named entries. Each row is one menu entry, and the side of the row under the pointer is the column chosen, shown by a highlight on that half. Pointing at a target marks its cell's badge, with "+ attributes" for the second column. The same layout appears with any number of cells, down to one row with two photos.
+Swap with, Copy to and Move to name positions only, never file names, so the two columns stay about the width of a single column of named entries. Each row is one menu entry, and the side of the row under the pointer is the column chosen, shown by a highlight on that half. Pointing at a target marks its cell's badge, with "+ attributes" for the second column. The same layout appears with any number of cells, down to one row with two photos.
 
 Hovering a floating cell shows its resize rectangle as a dashed outline with a white square grip at each corner. This is the same for every shape, because the corners of an irregular shape's rectangle are otherwise empty space with nothing to show they can be dragged.
 

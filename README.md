@@ -91,15 +91,17 @@ On the photos themselves:
 - Scroll to zoom, drag to pan, middle-click to reset, double-click to zoom in or back out.
 - Hover over a photo to show its buttons at the top right: view it on its own, or remove the cell.
 - **Alt+drag** a photo onto another to swap the two.
-- Right-click a cell to swap or copy its photo to another cell, replace it from a file, set its frame, view it on its own, clear it, or remove it. **Clear cell** takes the photo out and keeps the cell, so its space stays empty on the canvas and in an export. **Replace image** also recovers a cell whose file is missing. **Advanced** rotates, mirrors and flips the photo.
+- Right-click a cell to swap, copy or move its photo to another cell, replace it from a file, set its frame, view it on its own, clear it, or remove it. **Clear cell** takes the photo out and keeps the cell, so its space stays empty on the canvas and in an export. **Replace image** also recovers a cell whose file is missing. **Advanced** rotates, mirrors and flips the photo.
 - The maximise button at the top right shows one photo on its own. **←** / **→** step through the photos, skipping empty cells; **Esc** returns to the grid.
 
-A cell keeps its own settings. **Swap with** and **Copy to** each open a table of the other positions, with two columns:
+A cell keeps its own settings. **Swap with**, **Copy to** and **Move to** each open a table of the other positions, with two columns:
 
 - **Contents only** changes just the photo a cell shows. Its frame, zoom and rotation stay, and the new photo takes them on. **Alt+drag** works this way too.
 - **With attributes** brings the source cell's frame, image rotation and mirroring, and zoom and pan along with the photo. Between two floating cells it brings the window shape and its rotation as well; a grid cell has no window shape, so with a grid cell on either side the floating cell keeps its own.
 
-Either way, each cell stays where it is at its own size and layer. **Replace image** works like Contents only: the cell keeps its settings and shows the new file.
+**Move to** replaces the photo in the target. A floating cell then disappears, and a grid cell is left empty.
+
+Either way, each remaining cell stays where it is at its own size and layer. **Replace image** works like Contents only: the cell keeps its settings and shows the new file.
 
 **Frame & Border** opens beside the cell, or against the window's far edge when the cell is too big to sit beside. It sets the line, corners, gutter, mat and shadow. Flush removes them all. Hold a preset button to save the current frame there, and click it to use it again. The last swatch in each color row opens the Windows color picker.
 

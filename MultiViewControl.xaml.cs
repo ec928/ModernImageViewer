@@ -1989,8 +1989,12 @@ namespace ModernImageViewer
                 menu.Items.Add(MakeCellTargetMenu("Swap with...", "\uE8AB", "Swap with", curSlot,
                     (target, withAttributes) => SwapItems(curSlot, target, withAttributes)));
                 if (!IsEmptyCell(item))
+                {
                     menu.Items.Add(MakeCellTargetMenu("Copy to...", "\uE8C8", "Copy to", curSlot,
                         (target, withAttributes) => CopyItemTo(curSlot, target, withAttributes)));
+                    menu.Items.Add(MakeCellTargetMenu("Move to...", "\uE8DE", "Move to", curSlot,
+                        (target, withAttributes) => MoveItemTo(curSlot, target, withAttributes)));
+                }
 
                 menu.Items.Add(new MenuFlyoutSeparator());
             }
@@ -2177,6 +2181,16 @@ namespace ModernImageViewer
             if (withAttributes) CopyCellAttributes(fromIndex, toIndex);
             ShowEmptyState(toIndex);
             ShowHudAndOverlays();
+        }
+
+        /// <summary>A copy, then the source goes: a floating cell disappears and a grid cell is left empty.</summary>
+        private void MoveItemTo(int fromIndex, int toIndex, bool withAttributes = false)
+        {
+            if (fromIndex < 0 || fromIndex >= _items.Count || toIndex < 0 || toIndex >= _items.Count || fromIndex == toIndex) return;
+            CopyItemTo(fromIndex, toIndex, withAttributes);
+            var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, _items[fromIndex]));
+            if (card != null) CloseFreeformCard(card);
+            else EmptyCell(fromIndex);
         }
 
         /// <summary>A decoded image can move to another cell. One still opening, or a missing one, cannot.</summary>
