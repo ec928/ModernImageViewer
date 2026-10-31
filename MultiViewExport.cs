@@ -720,7 +720,7 @@ namespace ModernImageViewer
             try
             {
                 bool png = string.Equals(Path.GetExtension(file.Path), ".png", StringComparison.OrdinalIgnoreCase);
-                using var image = await RenderCanvasAsync(shots, width, height, _canvasColor, _canvasSurface, _canvasFrame, transparentCorners: png);
+                using var image = await RenderCanvasAsync(shots, width, height, _canvasColor, _canvasSurface, _canvasFrame);
                 using IRandomAccessStream stream = await file.OpenAsync(FileAccessMode.ReadWrite);
                 stream.Size = 0;
                 if (png)
@@ -831,7 +831,7 @@ namespace ModernImageViewer
         }
 
         /// <summary>Draw the canvas and its cells. The caller owns the image and disposes it.</summary>
-        private static async Task<CanvasRenderTarget> RenderCanvasAsync(List<CellShot> shots, int width, int height, string canvasColor, string canvasSurface, CellBorderDto canvasFrame, bool transparentCorners)
+        private static async Task<CanvasRenderTarget> RenderCanvasAsync(List<CellShot> shots, int width, int height, string canvasColor, string canvasSurface, CellBorderDto canvasFrame)
         {
             var device = CanvasDevice.GetSharedDevice();
             var target = new CanvasRenderTarget(device, width, height, 96);
@@ -1182,19 +1182,7 @@ namespace ModernImageViewer
 
             FinishGrid();
 
-            float cornerRadius = (float)(Math.Max(0, canvasFrame.CornerRadius) * frameScale);
-            if (cornerRadius <= 0) return target;
-
-            // The finished canvas is painted through a rounded shape, so nothing on it reaches past the corners.
-            var rounded = new CanvasRenderTarget(device, width, height, 96);
-            using (var session = rounded.CreateDrawingSession())
-            {
-                session.Clear(transparentCorners ? Color.FromArgb(0, 0, 0, 0) : ToColor(FrameColor.Parse(canvasColor)));
-                using var brush = new CanvasImageBrush(device, target);
-                session.FillRoundedRectangle(0, 0, width, height, cornerRadius, cornerRadius, brush);
-            }
-            target.Dispose();
-            return rounded;
+            return target;
         }
 
         /// <summary>The whole canvas less a rounded rectangle set in from its edge.</summary>
@@ -1211,7 +1199,7 @@ namespace ModernImageViewer
         {
             double gutter = Math.Max(0, frame.Padding) * scale;
             var mat = ToColor(FrameColor.MatFill(frame.GutterMaterial, frame.GutterColor));
-            if (gutter <= 0 || mat.A == 0) return;
+            if (mat.A == 0) return;
             double line = Math.Max(0, frame.Thickness) * scale;
             double radius = Math.Max(0, frame.CornerRadius) * scale;
             using var ring = CanvasFrameRing(device, width, height, gutter + line / 2, Math.Max(0, radius - line / 2));
@@ -1301,7 +1289,7 @@ namespace ModernImageViewer
             _savingGrid = true;
             try
             {
-                using var image = await RenderCanvasAsync(shots, width, height, _canvasColor, _canvasSurface, _canvasFrame, transparentCorners: true);
+                using var image = await RenderCanvasAsync(shots, width, height, _canvasColor, _canvasSurface, _canvasFrame);
                 var stream = new InMemoryRandomAccessStream();
                 await image.SaveAsync(stream, CanvasBitmapFileFormat.Png);
                 stream.Seek(0);

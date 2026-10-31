@@ -664,7 +664,7 @@ namespace ModernImageViewer
             CellsGrid.Margin = new Thickness(gutter + line);
 
             var mat = FrameColor.MatFill(frame.GutterMaterial, frame.GutterColor);
-            CanvasFrameMat.Background = mat.A > 0 && gutter > 0 ? new SolidColorBrush(ToColor(mat)) : null;
+            CanvasFrameMat.Background = mat.A > 0 ? new SolidColorBrush(ToColor(mat)) : null;
 
             string style = frame.StrokeStyle ?? "Solid";
             bool dashed = string.Equals(style, "Dashed", StringComparison.OrdinalIgnoreCase);
@@ -715,24 +715,22 @@ namespace ModernImageViewer
         }
 
         /// <summary>
-        /// Rounds the canvas with everything on it, and the grid inside the line so no photo corner pokes through it.
-        /// The mat is a whole-canvas fill with the line's shape cut out, so it reaches right up to the rounded line.
+        /// As in a cell, the canvas and its mat stay square and only the line and what is inside it round.
+        /// The grid is cut to the inside of the line, and the mat is a whole-canvas fill with the line's shape cut out.
         /// </summary>
         private void ApplyCanvasCorners()
         {
             var frame = _canvasFrame;
             double width = RootGrid.ActualWidth, height = RootGrid.ActualHeight;
-            var visual = ElementCompositionPreview.GetElementVisual(RootGrid);
             var gridVisual = ElementCompositionPreview.GetElementVisual(CellsGrid);
             var matVisual = ElementCompositionPreview.GetElementVisual(CanvasFrameMat);
             if (width < 1 || height < 1)
             {
-                visual.Clip = null;
                 gridVisual.Clip = null;
                 matVisual.Clip = null;
                 return;
             }
-            var compositor = visual.Compositor;
+            var compositor = gridVisual.Compositor;
             double radius = Math.Max(0, frame.CornerRadius);
             double gutter = Math.Max(0, frame.Padding);
             double line = Math.Max(0, frame.Thickness);
@@ -745,7 +743,6 @@ namespace ModernImageViewer
                 return compositor.CreateGeometricClip(geometry);
             }
 
-            visual.Clip = radius > 0 ? Rounded(width, height, radius) : null;
             double inset = gutter + line;
             gridVisual.Clip = radius > line ? Rounded(width - 2 * inset, height - 2 * inset, radius - line) : null;
 
