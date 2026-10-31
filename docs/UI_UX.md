@@ -146,7 +146,7 @@ Remove from View                          Mirror shape, Flip shape, Reset window
 
 The playbar's wheel holds Undo, Redo, Copy to clipboard, Save as PNG, and Canvas (Surface, Color).
 
-Swap with and Copy to name positions only, never file names, so the two-column table stays about the width of a single column of named entries. Pointing at a target marks its cell's badge, with "+ attributes" for the second column. The same table appears with any number of cells, down to one row with two photos.
+Swap with and Copy to name positions only, never file names, so the two columns stay about the width of a single column of named entries. Each row is one menu entry, and the side of the row under the pointer is the column chosen, shown by a highlight on that half. Pointing at a target marks its cell's badge, with "+ attributes" for the second column. The same layout appears with any number of cells, down to one row with two photos.
 
 The Frame & Border card always shows at full height for the window, in front of every cell. It opens beside its cell, or against the window edge farther from a cell too big to sit beside, and scrolls only when the window is too short.
 

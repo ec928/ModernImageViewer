@@ -1271,25 +1271,38 @@ namespace ModernImageViewer
         {
             if (e.DataView.Contains(StandardDataFormats.StorageItems))
             {
-                var items = await e.DataView.GetStorageItemsAsync();
-                if (items.Count > 0)
+                await OpenDroppedItemsAsync(await e.DataView.GetStorageItemsAsync());
+            }
+        }
+
+        /// <summary>A still picture, as opposed to a comic archive, which opens as a book.</summary>
+        internal static bool IsPictureFile(string path)
+        {
+            string extension = Path.GetExtension(path);
+            return SupportedExtensions.Contains(extension)
+                && !extension.Equals(".cbz", StringComparison.OrdinalIgnoreCase)
+                && !extension.Equals(".cbr", StringComparison.OrdinalIgnoreCase);
+        }
+
+        internal async Task OpenDroppedItemsAsync(IReadOnlyList<IStorageItem> items)
+        {
+            if (items.Count > 0)
+            {
+                if (items[0] is StorageFolder folder)
                 {
-                    if (items[0] is StorageFolder folder)
+                    await ScanFolder(folder.Path);
+                }
+                else if (items[0] is StorageFile file)
+                {
+                    if (file.Path.EndsWith(".mivlayout", StringComparison.OrdinalIgnoreCase))
                     {
-                        await ScanFolder(folder.Path);
+                        OpenLayoutFromFilePath(file.Path);
+                        return;
                     }
-                    else if (items[0] is StorageFile file)
+                    var parentFolder = await file.GetParentAsync();
+                    if (parentFolder != null)
                     {
-                        if (file.Path.EndsWith(".mivlayout", StringComparison.OrdinalIgnoreCase))
-                        {
-                            OpenLayoutFromFilePath(file.Path);
-                            return;
-                        }
-                        var parentFolder = await file.GetParentAsync();
-                        if (parentFolder != null)
-                        {
-                            HandleFileActivation(file.Path);
-                        }
+                        HandleFileActivation(file.Path);
                     }
                 }
             }

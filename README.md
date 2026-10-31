@@ -109,6 +109,8 @@ Either way, each cell stays where it is at its own size and layer, and a hidden 
 
 Right-click a cell and choose **Freeform** to float a copy of it above the grid. The original cell is hidden, and the new cell starts with its frame.
 
+Drag pictures in from File Explorer to add them: each one becomes a new floating cell where you drop it, up to 16 at a time, in front of the others and with no frame. No other cell is hidden. Folders, comic books and saved layouts open as they do from anywhere else.
+
 - Drag to move, and drag the edges or corners to resize. **Ctrl+drag** pans the photo inside the cell. Dragged cells snap to the canvas, each other and the grid; hold **Alt** to move freely.
 - **Advanced > Window** sets the shape: rectangle, squircle, circle or oval, arch (tombstone), L-shape, triangle, right triangle, rhombus (diamond), trapezoid, hexagon, or organic blob. It also rotates, mirrors and flips the shape. **Rotate shape only** keeps the photo still.
 - Hover over a floating cell for its handles. The round handle at the top rotates it: hold **Shift** for 15 degree steps, or **Ctrl** to turn the shape and keep the photo still. On an L-shape, the small handle moves the inner corner.

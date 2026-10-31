@@ -18,6 +18,7 @@ namespace ModernImageViewer
     {
         // Each cell has its own ImageItem, so two cells showing one file keep separate frames.
         private readonly Dictionary<ImageItem, CellBorderDto> _itemBorders = new();
+        private static readonly SolidColorBrush _cellTargetHover = new(Color.FromArgb(32, 255, 255, 255));
         private const double FrameCardWidth = 356;
         private const double FrameCardMargin = 8;
         // About the height of the card with every control showing, for centering it.

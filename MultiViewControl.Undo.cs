@@ -30,6 +30,7 @@ namespace ModernImageViewer
             RootGrid.AddHandler(PointerReleasedEvent, new PointerEventHandler((_, _) => NoteUserAction()), true);
             RootGrid.AddHandler(PointerWheelChangedEvent, new PointerEventHandler((_, _) => NoteUserAction()), true);
             RootGrid.AddHandler(KeyUpEvent, new KeyEventHandler((_, _) => NoteUserAction()), true);
+            AttachFileDrop();
         }
 
         private void NoteUserAction()

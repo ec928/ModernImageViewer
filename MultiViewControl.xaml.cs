@@ -2059,9 +2059,9 @@ namespace ModernImageViewer
                 moveRightItem.PointerExited += (s, e) => ClearHighlightPositionBadge(nextSlot, curSlot);
                 menu.Items.Add(moveRightItem);
 
-                menu.Items.Add(MakeCellTargetMenu(menu, "Swap with...", "\uE8AB", "Swap with", curSlot,
+                menu.Items.Add(MakeCellTargetMenu("Swap with...", "\uE8AB", "Swap with", curSlot,
                     (target, withAttributes) => SwapItems(curSlot, target, withAttributes)));
-                menu.Items.Add(MakeCellTargetMenu(menu, "Copy to...", "\uE8C8", "Copy to", curSlot,
+                menu.Items.Add(MakeCellTargetMenu("Copy to...", "\uE8C8", "Copy to", curSlot,
                     (target, withAttributes) => CopyItemTo(curSlot, target, withAttributes)));
 
                 menu.Items.Add(new MenuFlyoutSeparator());
@@ -2129,86 +2129,86 @@ namespace ModernImageViewer
             SwapItems(index, target);
         }
 
-        /// <summary>One menu entry opening a table of the other cells: the contents alone in one column, with the cell attributes in the other.</summary>
-        private MenuFlyoutSubItem MakeCellTargetMenu(MenuFlyout menu, string text, string glyph, string action, int curSlot, Action<int, bool> run)
+        /// <summary>
+        /// A submenu of the other cells in two columns: the contents alone, or with the cell attributes. Each row is one
+        /// ordinary menu entry, so the menu handles its click for every kind of input. Where the pointer is picks the column.
+        /// </summary>
+        private MenuFlyoutSubItem MakeCellTargetMenu(string text, string glyph, string action, int curSlot, Action<int, bool> run)
         {
-            var table = new Grid { ColumnSpacing = 2, XYFocusKeyboardNavigation = XYFocusKeyboardNavigationMode.Enabled };
-            table.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(116) });
-            table.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(116) });
-            table.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var template = (ControlTemplate)Resources["CellTargetRowTemplate"];
+            var sub = new MenuFlyoutSubItem { Text = text, Icon = new FontIcon { Glyph = glyph } };
+            int column = 0;
 
-            void AddHeader(string header, int column, string tip)
+            static (Grid Row, Border[] Cells) MakeRow(string left, string right, double fontSize, Brush foreground)
             {
-                var label = new TextBlock
+                var row = new Grid { ColumnSpacing = 2, Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0)) };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(116) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(116) });
+                var cells = new Border[2];
+                for (int i = 0; i < 2; i++)
                 {
-                    Text = header,
-                    FontSize = 12,
-                    Foreground = _menuWhiteSecondary,
-                    Margin = new Thickness(10, 6, 4, 6)
-                };
-                ToolTipService.SetToolTip(label, tip);
-                Grid.SetColumn(label, column);
-                table.Children.Add(label);
+                    cells[i] = new Border
+                    {
+                        CornerRadius = new CornerRadius(4),
+                        Padding = new Thickness(10, 6, 10, 6),
+                        Child = new TextBlock { Text = i == 0 ? left : right, FontSize = fontSize, Foreground = foreground }
+                    };
+                    Grid.SetColumn(cells[i], i);
+                    row.Children.Add(cells[i]);
+                }
+                return (row, cells);
             }
-            AddHeader("Contents only", 0, "The image alone. Each cell keeps its frame, image rotation and zoom, and its window shape.");
-            AddHeader("With attributes", 1, "The image with its frame, image rotation and zoom. Window shape too, between floating cells.");
 
-            Button? first = null;
-            int row = 1;
+            var (header, headerCells) = MakeRow("Contents only", "With attributes", 12, _menuWhiteSecondary);
+            ToolTipService.SetToolTip(headerCells[0], "The image alone. Each cell keeps its frame, image rotation and zoom, and its window shape.");
+            ToolTipService.SetToolTip(headerCells[1], "The image with its frame, image rotation and zoom. Window shape too, between floating cells.");
+            sub.Items.Add(new MenuFlyoutItem { Tag = header, Template = template, IsEnabled = false });
+
             for (int i = 0; i < _items.Count; i++)
             {
                 if (i == curSlot) continue;
                 int targetSlot = i;
-                table.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                for (int column = 0; column < 2; column++)
+                string position = $"Position {i + 1}";
+                var (row, cells) = MakeRow(position, position, 14, _menuWhitePrimary);
+                var entry = new MenuFlyoutItem { Text = position, Tag = row, Template = template };
+
+                void Mark()
                 {
-                    bool withAttributes = column == 1;
-                    var button = new Button
-                    {
-                        Content = $"Position {i + 1}",
-                        Style = (Style)Resources["CellTargetButtonStyle"]
-                    };
-                    AutomationProperties.SetName(button, $"{action} position {i + 1}, {(withAttributes ? "with attributes" : "contents only")}");
-                    button.Click += (_, _) =>
-                    {
-                        menu.Hide();
-                        run(targetSlot, withAttributes);
-                    };
-                    button.PointerEntered += (_, _) => HighlightPositionBadge(targetSlot, action, withAttributes);
-                    button.PointerExited += (_, _) => ClearHighlightPositionBadge(targetSlot, curSlot);
-                    Grid.SetRow(button, row);
-                    Grid.SetColumn(button, column);
-                    table.Children.Add(button);
-                    first ??= button;
+                    cells[column].Background = _cellTargetHover;
+                    cells[1 - column].Background = null;
+                    HighlightPositionBadge(targetSlot, action, column == 1);
                 }
-                row++;
-            }
-
-            // Arrow keys move around the table. At its left edge they fall through, which closes the submenu as usual.
-            table.KeyDown += (_, e) =>
-            {
-                FocusNavigationDirection? direction = e.Key switch
+                void Unmark()
                 {
-                    Windows.System.VirtualKey.Up => FocusNavigationDirection.Up,
-                    Windows.System.VirtualKey.Down => FocusNavigationDirection.Down,
-                    Windows.System.VirtualKey.Left => FocusNavigationDirection.Left,
-                    Windows.System.VirtualKey.Right => FocusNavigationDirection.Right,
-                    _ => null
+                    cells[0].Background = null;
+                    cells[1].Background = null;
+                    ClearHighlightPositionBadge(targetSlot, curSlot);
+                }
+                void Track(PointerRoutedEventArgs e)
+                {
+                    column = e.GetCurrentPoint(row).Position.X < row.ActualWidth / 2 ? 0 : 1;
+                    Mark();
+                }
+
+                // Handled events too: a menu entry marks its own pointer presses as handled.
+                entry.AddHandler(PointerEnteredEvent, new PointerEventHandler((_, e) => Track(e)), true);
+                entry.AddHandler(PointerMovedEvent, new PointerEventHandler((_, e) => Track(e)), true);
+                entry.AddHandler(PointerPressedEvent, new PointerEventHandler((_, e) => Track(e)), true);
+                entry.AddHandler(PointerExitedEvent, new PointerEventHandler((_, _) => Unmark()), true);
+                entry.GotFocus += (_, _) => Mark();
+                entry.LostFocus += (_, _) => Unmark();
+                // Left at the first column falls through, which closes the submenu as usual.
+                entry.KeyDown += (_, e) =>
+                {
+                    int wanted = e.Key == Windows.System.VirtualKey.Right ? 1 : e.Key == Windows.System.VirtualKey.Left ? 0 : column;
+                    if (wanted == column) return;
+                    column = wanted;
+                    Mark();
+                    e.Handled = true;
                 };
-                if (direction != null && table.XamlRoot != null)
-                    e.Handled = FocusManager.TryMoveFocus(direction.Value, new FindNextElementOptions { SearchRoot = table });
-            };
-            // A press on the headers is not a choice, so the menu entry must not see it and close.
-            table.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
-            table.PointerPressed += (_, e) => e.Handled = true;
-            table.PointerReleased += (_, e) => e.Handled = true;
-            table.Tapped += (_, e) => e.Handled = true;
-
-            var entry = new MenuFlyoutItem { Tag = table, Template = (ControlTemplate)Resources["CellTargetTableTemplate"] };
-            entry.GotFocus += (_, _) => first?.Focus(FocusState.Programmatic);
-
-            var sub = new MenuFlyoutSubItem { Text = text, Icon = new FontIcon { Glyph = glyph } };
-            sub.Items.Add(entry);
+                entry.Click += (_, _) => run(targetSlot, column == 1);
+                sub.Items.Add(entry);
+            }
             return sub;
         }
 

@@ -9,13 +9,23 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Numerics;
+using System.Runtime.InteropServices;
+using System.Threading.Tasks;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
+using Windows.Graphics.Imaging;
+using Windows.Storage;
 using Windows.UI;
 
 namespace ModernImageViewer
 {
     public sealed partial class MultiViewControl
     {
+        // One drop adds no more cells than the grid could hold, so dropping a whole folder's selection cannot flood the canvas.
+        private const int MaxDroppedCells = 16;
+        private const double DroppedCellShare = 0.45;
+        private const double DroppedCellCascade = 28;
+
         private readonly List<FreeformCard> _freeformCards = new();
         private int _maxFreeformZIndex = 5000;
         // The canvas size the floating cells are currently laid out for.
@@ -217,6 +227,97 @@ namespace ModernImageViewer
             _cellRoots[newSlot] = freeformCell;
 
             ShowHudAndOverlays();
+        }
+
+        /// <summary>
+        /// Pictures dragged in from outside each become a new floating cell where they land. A drop with no pictures in it,
+        /// such as a folder or a saved layout, goes on to the main window as it would from anywhere else.
+        /// </summary>
+        private void AttachFileDrop()
+        {
+            bool Takes(DragEventArgs e) => _swapSource < 0 && _soloIndex < 0 && e.DataView.Contains(StandardDataFormats.StorageItems);
+            void Over(object _, DragEventArgs e)
+            {
+                if (!Takes(e)) return;
+                e.AcceptedOperation = DataPackageOperation.Copy;
+                e.Handled = true;
+            }
+
+            RootGrid.AllowDrop = true;
+            RootGrid.DragEnter += Over;
+            RootGrid.DragOver += Over;
+            RootGrid.Drop += async (_, e) =>
+            {
+                if (!Takes(e)) return;
+                e.Handled = true;
+                var where = e.GetPosition(FreeformCanvas);
+                var deferral = e.GetDeferral();
+                IReadOnlyList<IStorageItem> items;
+                try { items = await e.DataView.GetStorageItemsAsync(); }
+                finally { deferral.Complete(); }
+
+                var pictures = items.OfType<StorageFile>().Select(f => f.Path).Where(MainWindow.IsPictureFile).ToList();
+                if (pictures.Count > 0)
+                    await AddDroppedPicturesAsync(pictures, where);
+                else if (MainWindow.Instance != null)
+                    await MainWindow.Instance.OpenDroppedItemsAsync(items);
+            };
+        }
+
+        private async Task AddDroppedPicturesAsync(IReadOnlyList<string> paths, Point where)
+        {
+            double canvasW = Math.Max(320, RootGrid.ActualWidth);
+            double canvasH = Math.Max(240, RootGrid.ActualHeight);
+            int placed = 0;
+            foreach (string path in paths.Take(MaxDroppedCells))
+            {
+                double aspect = await ReadAspectAsync(path);
+                double h = canvasH * DroppedCellShare;
+                double w = h * aspect;
+                if (w > canvasW * DroppedCellShare)
+                {
+                    w = canvasW * DroppedCellShare;
+                    h = w / aspect;
+                }
+                double x = Math.Clamp(where.X - w / 2 + placed * DroppedCellCascade, 0, Math.Max(0, canvasW - w));
+                double y = Math.Clamp(where.Y - h / 2 + placed * DroppedCellCascade, 0, Math.Max(0, canvasH - h));
+
+                var dropped = new ImageItem { Path = path, Name = Path.GetFileName(path), Dispatcher = DispatcherQueue };
+                FillFileDetails(dropped);
+                // No source: nothing is hidden, and Dock gives it a new grid cell. A plain frame, in front of the others.
+                SpawnFreeformCell(dropped, new FreeformCellDto
+                {
+                    SourceSlot = -1,
+                    Path = path,
+                    Name = dropped.Name,
+                    X = x,
+                    Y = y,
+                    Width = w,
+                    Height = h,
+                    ZIndex = _maxFreeformZIndex + 1,
+                    Border = GetBorderForItem(null),
+                    Geometry = new CellGeometryDto()
+                });
+                placed++;
+            }
+            NoteUserAction();
+        }
+
+        /// <summary>The file's shape as it displays, read from its header. A file that will not open counts as 16:9, and its cell says so.</summary>
+        private static async Task<double> ReadAspectAsync(string path)
+        {
+            try
+            {
+                var file = await StorageFile.GetFileFromPathAsync(path);
+                using var stream = await file.OpenReadAsync();
+                var decoder = await BitmapDecoder.CreateAsync(stream);
+                if (decoder.OrientedPixelWidth > 0 && decoder.OrientedPixelHeight > 0)
+                    return decoder.OrientedPixelWidth / (double)decoder.OrientedPixelHeight;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or COMException or ArgumentException)
+            {
+            }
+            return 16.0 / 9.0;
         }
 
         public void DockFreeformCard(FreeformCard card)
