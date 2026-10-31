@@ -268,6 +268,24 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
+        public void NewPhotosFillEmptyCellsBeforeFilesFromElsewhere()
+        {
+            string[] cells = { "x", "", "a" };
+            Assert.Equal(new[] { -1, 0, -1 }, CellPhotoPick.Assign(cells, new[] { "a", "b" }, Folder("a", "b")));
+            Assert.Equal(new[] { 1, 0, -1 }, CellPhotoPick.Assign(cells, new[] { "a", "b", "c" }, Folder("a", "b", "c")));
+            Assert.Equal(0, CellPhotoPick.StillNeeded(cells, new[] { "a" }, Folder("a", "b")));
+        }
+
+        [Fact]
+        public void AnEmptyCellSurvivesTheLayoutFile()
+        {
+            var file = new MultiViewLayoutFile { Photos = { new PhotoSlotDto { Path = "", Border = new CellBorderDto { Thickness = 7 } } } };
+            var loaded = MultiViewLayoutFile.FromJson(file.ToJson())!;
+            Assert.Equal("", loaded.Photos.Single().Path);
+            Assert.Equal(7, loaded.Photos.Single().Border!.Thickness);
+        }
+
+        [Fact]
         public void TurningAnImageWrapsAroundACircle()
         {
             var geometry = new CellGeometryDto();

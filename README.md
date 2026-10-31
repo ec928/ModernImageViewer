@@ -107,7 +107,7 @@ Either way, each cell stays where it is at its own size and layer, and a hidden 
 
 ### Floating cells
 
-Right-click a cell and choose **Freeform** to float a copy of it above the grid. The original cell is hidden, and the new cell starts with its frame.
+Right-click a cell and choose **Freeform** to float its photo above the grid. The photo moves to a new cell, which starts with the same frame, and the original cell is left empty. Right-click an empty cell to add an image. Copy to and Photos can also fill it.
 
 Drag pictures in from File Explorer to add them: each one becomes a new floating cell where you drop it, up to 16 at a time, in front of the others and with no frame. No other cell is hidden. Folders, comic books and saved layouts open as they do from anywhere else.
 
@@ -115,7 +115,7 @@ Drag pictures in from File Explorer to add them: each one becomes a new floating
 - **Advanced > Window** sets the shape: rectangle, squircle, circle or oval, arch (tombstone), L-shape, triangle, right triangle, rhombus (diamond), trapezoid, hexagon, or organic blob. It also rotates, mirrors and flips the shape. **Rotate shape only** keeps the photo still.
 - Hover over a floating cell for its handles. A dashed outline shows the rectangle that resizes, whatever the shape, with a white square at each corner to drag. The round handle at the top rotates it: hold **Shift** for 15 degree steps, or **Ctrl** to turn the shape and keep the photo still. On an L-shape, the small handle moves the inner corner.
 - **Advanced > Layer** sets which floating cell is in front. Floating cells stay above the grid.
-- **Dock to Grid** puts the photo back into its hidden cell, or a new cell if that one is gone or in use.
+- **Dock to Grid** puts the photo back into its original cell, or a new cell if that one is gone or in use. Closing a floating cell removes its photo; Undo brings it back.
 
 Floating cells keep their share of the canvas when the window changes size. **Grid** at the bottom left of the bar ends the session and clears them, along with any frames and settings, so save the layout first to keep your work.
 

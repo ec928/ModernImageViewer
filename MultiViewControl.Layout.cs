@@ -333,7 +333,7 @@ namespace ModernImageViewer
                 int filled = 0;
                 for (int i = 0; i < visible; i++)
                 {
-                    if (!_hiddenItems.Contains(_items[i])) filled++;
+                    if (!ShowsNoImage(_items[i])) filled++;
                 }
                 return filled >= 2;
             }

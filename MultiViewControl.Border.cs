@@ -29,7 +29,7 @@ namespace ModernImageViewer
 
         public CellBorderDto GetBorderForItem(ImageItem? item)
         {
-            if (item == null || string.IsNullOrEmpty(item.Path))
+            if (item == null)
                 return new CellBorderDto { Color = "#FFFFFFFF", Thickness = 0, Padding = 0, CornerRadius = 0, StrokeStyle = "Solid", ShadowIntensity = 0 };
 
             if (!_itemBorders.TryGetValue(item, out var border))
@@ -130,13 +130,31 @@ namespace ModernImageViewer
             }
         }
 
+        /// <summary>A cell can hold no image. It keeps its parameters, and they apply to the next image it gets.</summary>
+        private static bool IsEmptyCell(ImageItem item) => string.IsNullOrEmpty(item.Path);
+
+        private bool ShowsNoImage(ImageItem item) => IsEmptyCell(item) || _hiddenItems.Contains(item);
+
+        /// <summary>Take the image out of this cell.</summary>
+        private void EmptyCell(int slot)
+        {
+            var old = _items[slot];
+            var empty = new ImageItem { Path = string.Empty, Name = string.Empty, Dispatcher = old.Dispatcher };
+            MoveCellParameters(old, empty);
+            _hiddenItems.Remove(empty);
+            _items[slot] = empty;
+            RebindCell(slot);
+            ShowHiddenState(slot);
+        }
+
         /// <summary>Show this cell's hidden state: the placeholder alone, or the image with its frame.</summary>
         private void ShowHiddenState(int slot)
         {
             RefreshGridLayoutEnabled();
             if ((uint)slot >= (uint)_cellRoots.Length || (uint)slot >= (uint)_items.Count) return;
             if (_cellRoots[slot]?.Tag is not CellParts parts) return;
-            bool hidden = _hiddenItems.Contains(_items[slot]);
+            bool hidden = ShowsNoImage(_items[slot]);
+            bool empty = IsEmptyCell(_items[slot]);
             bool failed = parts.Bound.Failed;
             if (parts.ImageContainer != null)
                 parts.ImageContainer.Visibility = hidden || failed ? Visibility.Collapsed : Visibility.Visible;
@@ -149,8 +167,8 @@ namespace ModernImageViewer
                     && placeholder.Children[2] is TextBlock detail)
                 {
                     icon.Glyph = failed && !hidden ? "" : "";
-                    title.Text = failed && !hidden ? "File not found" : "Image hidden";
-                    detail.Text = failed && !hidden ? _items[slot].Name ?? string.Empty : "Right-click to show";
+                    title.Text = empty ? "Empty cell" : failed && !hidden ? "File not found" : "Image hidden";
+                    detail.Text = empty ? "Right-click to add an image" : failed && !hidden ? _items[slot].Name ?? string.Empty : "Right-click to show";
                 }
             }
             parts.Bound.ApplyGeometry?.Invoke();
@@ -202,7 +220,7 @@ namespace ModernImageViewer
                 gutterHost = parts.GutterHost;
             }
 
-            bool isHidden = _hiddenItems.Contains(item);
+            bool isHidden = ShowsNoImage(item);
             if (isHidden)
             {
                 cellBorder.Margin = new Thickness(0);
@@ -734,7 +752,7 @@ namespace ModernImageViewer
                 for (int i = 0; i < _items.Count; i++)
                 {
                     var it = _items[i];
-                    if (it != null && !string.IsNullOrEmpty(it.Path))
+                    if (it != null)
                         _itemBorders[it] = proto.Clone();
                 }
                 if (_itemBorders.TryGetValue(item, out var stored))

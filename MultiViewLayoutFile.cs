@@ -901,7 +901,7 @@ namespace ModernImageViewer
 
     /// <summary>
     /// Which cell shows what after a change of selection. A cell whose photo is still selected keeps it, so cells that share
-    /// a photo and an arrangement made with Swap both survive. New photos fill the cells whose photo was deselected. A cell
+    /// a photo and an arrangement made with Swap both survive. New photos fill the cells whose photo was deselected, then empty cells. A cell
     /// showing a file from outside the folder on screen could not be selected: new photos replace it only once those are full.
     /// </summary>
     public static class CellPhotoPick
@@ -937,7 +937,11 @@ namespace ModernImageViewer
             }
             for (int i = 0; i < cells.Count && next < count; i++)
             {
-                if (!selected.Contains(cells[i]) && !folder.Contains(cells[i])) plan[i] = next++;
+                if (string.IsNullOrEmpty(cells[i])) plan[i] = next++;
+            }
+            for (int i = 0; i < cells.Count && next < count; i++)
+            {
+                if (plan[i] < 0 && !string.IsNullOrEmpty(cells[i]) && !selected.Contains(cells[i]) && !folder.Contains(cells[i])) plan[i] = next++;
             }
             return plan;
         }

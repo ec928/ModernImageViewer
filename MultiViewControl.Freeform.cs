@@ -66,16 +66,9 @@ namespace ModernImageViewer
 
         public void SpawnFreeformCell(ImageItem item, FreeformCellDto? restoreDto = null)
         {
-            if (item == null || string.IsNullOrEmpty(item.Path)) return;
+            if (item == null || (IsEmptyCell(item) && string.IsNullOrEmpty(restoreDto?.Path))) return;
 
             int sourceSlot = restoreDto?.SourceSlot ?? Slot(item);
-
-            // Hide the photo in the underlying grid cell (exact same hide mechanism).
-            // A saved layout restores the hidden state it recorded, so a restore leaves the source alone.
-            if (restoreDto == null && sourceSlot >= 0 && sourceSlot < _items.Count && !_hiddenItems.Contains(_items[sourceSlot]))
-            {
-                ToggleHideImage(_items[sourceSlot]);
-            }
 
             // A saved freeform cell may hold a different image from its source cell, after a swap or a copy.
             bool sameAsSource = restoreDto == null || string.IsNullOrEmpty(restoreDto.Path)
@@ -228,6 +221,10 @@ namespace ModernImageViewer
             EnsureCellRootsCapacity(_items.Count);
             _cellRoots[newSlot] = freeformCell;
 
+            // The image has moved to the new cell, so the source cell is left empty. A restore already has its cells as saved.
+            if (restoreDto == null && sourceSlot >= 0 && sourceSlot < GridCellCount)
+                EmptyCell(sourceSlot);
+
             ShowHudAndOverlays();
         }
 
@@ -337,7 +334,7 @@ namespace ModernImageViewer
             int cardSlot = _items.IndexOf(card.Item);
             int source = card.SourceSlot;
             bool backToSource = source >= 0 && source < GridCellCount
-                && _hiddenItems.Contains(_items[source])
+                && ShowsNoImage(_items[source])
                 && (uint)source < (uint)_cellRoots.Length && _cellRoots[source]?.Tag is CellParts;
 
             FreeformCanvas.Children.Remove(card.Container);
@@ -345,7 +342,7 @@ namespace ModernImageViewer
 
             if (backToSource)
             {
-                // The image returns to its hidden source cell, which keeps its own parameters.
+                // The image returns to its source cell, which keeps its own parameters.
                 var gridParts = (CellParts)_cellRoots[source]!.Tag;
                 var oldItem = _items[source];
                 _items[source] = card.Item;

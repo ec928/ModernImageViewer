@@ -271,7 +271,7 @@ namespace ModernImageViewer
             bool dashed = string.Equals(frame.StrokeStyle, "Dashed", StringComparison.OrdinalIgnoreCase);
             outlineElement.Stroke = dashed ? ParseBorderBrush(frame.Color) : shapedCard?.BorderBrush ?? ParseBorderBrush(frame.Color);
             outlineElement.StrokeDashArray = dashed ? new DoubleCollection { 3, 2 } : new DoubleCollection();
-            outlineElement.Visibility = frame.Thickness > 0 && !_hiddenItems.Contains(card.Item) ? Visibility.Visible : Visibility.Collapsed;
+            outlineElement.Visibility = frame.Thickness > 0 && !ShowsNoImage(card.Item) ? Visibility.Visible : Visibility.Collapsed;
             outlineElement.StrokeThickness = frame.Thickness;
             if (shapedCard != null) shapedCard.BorderThickness = new Thickness(0);
             if (window.Tag is CellParts shapedParts)
@@ -296,7 +296,7 @@ namespace ModernImageViewer
             int w = (int)Math.Round(width);
             int h = (int)Math.Round(height);
             // Rim glow is a rectangle's effect, so a shape keeps its shadow whichever is chosen.
-            bool drop = frame.ShadowIntensity > 0 && !_hiddenItems.Contains(card.Item) && w >= 2 && h >= 2;
+            bool drop = frame.ShadowIntensity > 0 && !ShowsNoImage(card.Item) && w >= 2 && h >= 2;
             if (!drop)
             {
                 image.Source = null;
@@ -545,7 +545,7 @@ namespace ModernImageViewer
             int visible = VisibleCount(GridCellCount);
             for (int i = 0; i < visible && i < _cellRoots.Length; i++)
             {
-                if (_cellRoots[i] is not FrameworkElement cell || _hiddenItems.Contains(_items[i]) || cell.ActualWidth < 1) continue;
+                if (_cellRoots[i] is not FrameworkElement cell || ShowsNoImage(_items[i]) || cell.ActualWidth < 1) continue;
                 var at = cell.TransformToVisual(RootGrid).TransformPoint(new Point(0, 0));
                 linesX.AddRange(new[] { at.X, at.X + cell.ActualWidth });
                 linesY.AddRange(new[] { at.Y, at.Y + cell.ActualHeight });

@@ -628,7 +628,7 @@ namespace ModernImageViewer
 
         /// <summary>A photo waiting off screen has no cell, and a missing file will never finish.</summary>
         private bool AnyPhotoLoading() =>
-            _cellRoots.Any(root => root?.Tag is CellParts parts && !parts.Bound.Failed && !CellImageReady(parts));
+            _cellRoots.Any(root => root?.Tag is CellParts parts && !parts.Bound.Failed && !IsEmptyCell(parts.Bound.Item) && !CellImageReady(parts));
 
         private async Task SavePixelsAsync(int width, int height, bool preferPng = false)
         {
@@ -1404,7 +1404,7 @@ namespace ModernImageViewer
                         FillFileDetails(it);
                     }
                     items.Add(it);
-                    if (photo.Border != null && !string.IsNullOrEmpty(it.Path))
+                    if (photo.Border != null)
                     {
                         _itemBorders[it] = photo.Border.Clone();
                     }

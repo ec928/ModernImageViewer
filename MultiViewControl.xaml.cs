@@ -1394,6 +1394,16 @@ namespace ModernImageViewer
             {
                 var current = photo.Item;
                 photo.Failed = false;
+                if (IsEmptyCell(current))
+                {
+                    fullImg.Source = null;
+                    if (thumb != null && imgContainer.Children.Contains(thumb))
+                    {
+                        imgContainer.Children.Remove(thumb);
+                        thumb = null;
+                    }
+                    return;
+                }
                 if (_reuseBitmaps != null && _reuseBitmaps.TryGetValue(current.Path, out var decoded))
                 {
                     naturalWidth = decoded.PixelWidth;
@@ -1933,7 +1943,7 @@ namespace ModernImageViewer
                 VerticalAlignment = VerticalAlignment.Center,
                 Spacing = 6,
                 IsHitTestVisible = false,
-                Visibility = _hiddenItems.Contains(photo.Item) ? Visibility.Visible : Visibility.Collapsed
+                Visibility = ShowsNoImage(photo.Item) ? Visibility.Visible : Visibility.Collapsed
             };
             placeholder.Children.Add(new FontIcon
             {
@@ -1960,7 +1970,7 @@ namespace ModernImageViewer
             Canvas.SetZIndex(placeholder, 5);
             cellGrid.Children.Add(placeholder);
 
-            imgContainer.Visibility = _hiddenItems.Contains(photo.Item) ? Visibility.Collapsed : Visibility.Visible;
+            imgContainer.Visibility = ShowsNoImage(photo.Item) ? Visibility.Collapsed : Visibility.Visible;
 
             var parts = new CellParts(transform, updateLayout, topControls, fullImg, photo, positionBadge, badgeText, dashedStroke, rimGlowStroke, gutterBorder, imgContainer, placeholder);
             cellBorder.Tag = parts;
@@ -2041,8 +2051,9 @@ namespace ModernImageViewer
 
                 menu.Items.Add(MakeCellTargetMenu("Swap with...", "\uE8AB", "Swap with", curSlot,
                     (target, withAttributes) => SwapItems(curSlot, target, withAttributes)));
-                menu.Items.Add(MakeCellTargetMenu("Copy to...", "\uE8C8", "Copy to", curSlot,
-                    (target, withAttributes) => CopyItemTo(curSlot, target, withAttributes)));
+                if (!IsEmptyCell(item))
+                    menu.Items.Add(MakeCellTargetMenu("Copy to...", "\uE8C8", "Copy to", curSlot,
+                        (target, withAttributes) => CopyItemTo(curSlot, target, withAttributes)));
 
                 menu.Items.Add(new MenuFlyoutSeparator());
             }
@@ -2054,9 +2065,16 @@ namespace ModernImageViewer
             AddCellAdvancedMenu(menu, item);
             menu.Items.Add(new MenuFlyoutSeparator());
 
-            var soloItem = new MenuFlyoutItem { Text = "Solo / Maximize", Icon = new FontIcon { Glyph = "\uE922" } };
-            soloItem.Click += (s, e) => EnterSolo(curSlot);
-            menu.Items.Add(soloItem);
+            if (IsEmptyCell(item))
+            {
+                menu.Items.Add(MakeAdvancedItem("Add image\u2026", "\uE8E5", () => PickReplacementImage(item)));
+            }
+            else
+            {
+                var soloItem = new MenuFlyoutItem { Text = "Solo / Maximize", Icon = new FontIcon { Glyph = "\uE922" } };
+                soloItem.Click += (s, e) => EnterSolo(curSlot);
+                menu.Items.Add(soloItem);
+            }
 
             var activeCard = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, item));
             bool isCurrentCellFreeform = activeCard != null;
@@ -2073,7 +2091,7 @@ namespace ModernImageViewer
                 };
                 menu.Items.Add(dockItem);
             }
-            else
+            else if (!IsEmptyCell(item))
             {
                 var freeformItem = new MenuFlyoutItem
                 {
@@ -2084,14 +2102,17 @@ namespace ModernImageViewer
                 menu.Items.Add(freeformItem);
             }
 
-            bool isHidden = _hiddenItems.Contains(item);
-            var hideItem = new MenuFlyoutItem
+            if (!IsEmptyCell(item))
             {
-                Text = isHidden ? "Show image" : "Hide image",
-                Icon = new FontIcon { Glyph = isHidden ? "\uE7B3" : "\uED1A" }
-            };
-            hideItem.Click += (s, e) => ToggleHideImage(item);
-            menu.Items.Add(hideItem);
+                bool isHidden = _hiddenItems.Contains(item);
+                var hideItem = new MenuFlyoutItem
+                {
+                    Text = isHidden ? "Show image" : "Hide image",
+                    Icon = new FontIcon { Glyph = isHidden ? "\uE7B3" : "\uED1A" }
+                };
+                hideItem.Click += (s, e) => ToggleHideImage(item);
+                menu.Items.Add(hideItem);
+            }
             menu.Items.Add(new MenuFlyoutSeparator());
 
             var removeItem = new MenuFlyoutItem { Text = "Remove from View", Icon = new FontIcon { Glyph = "\uE8BB" } };
@@ -2700,6 +2721,7 @@ namespace ModernImageViewer
 
         private void EnterSolo(int index)
         {
+            if ((uint)index < (uint)_items.Count && IsEmptyCell(_items[index])) return;
             if (index < 0 || index >= _items.Count) return;
             _soloIndex = index;
             var item = _items[index];
@@ -2780,7 +2802,7 @@ namespace ModernImageViewer
             for (int step = 1; step < total; step++)
             {
                 int slot = ((_soloIndex + direction * step) % total + total) % total;
-                if (_hiddenItems.Contains(_items[slot])) continue;
+                if (ShowsNoImage(_items[slot])) continue;
                 EnterSolo(slot);
                 return;
             }
