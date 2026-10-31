@@ -11,7 +11,7 @@ How it is built is in `ARCHITECTURE.md`, under Multi-view. How it looks and beha
 - Swap, copy, clear and move, with parameters staying on the cell, and swap and copy that can bring the cell's attributes too
 - Rotate, mirror and flip the image on any cell, and replace it from a file
 - Floating cells: move, resize, snap, layer, and Dock back into the grid
-- Pictures dropped from Explorer become new floating cells
+- Pictures from the app (Add images) or dropped from Explorer become new floating cells
 - Window shapes on floating cells: rectangle, squircle, circle or oval, arch, L-shape, triangle, right triangle, rhombus, trapezoid, hexagon and organic blob, with rotation, mirroring and shape-only rotation
 - Canvas surface and color, including custom colors
 - Undo and redo
@@ -20,7 +20,6 @@ How it is built is in `ARCHITECTURE.md`, under Multi-view. How it looks and beha
 
 ## Still open
 
-- Add new images from the tile grid. Explorer drops are built, and the Photos button changes images.
 - Select several cells to move or align together.
 - Text as cell content.
 - Layouts as templates, applied to any selection of photos.

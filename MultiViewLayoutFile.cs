@@ -900,54 +900,6 @@ namespace ModernImageViewer
     }
 
     /// <summary>
-    /// Which cell shows what after a change of selection. A cell whose photo is still selected keeps it, so cells that share
-    /// a photo and an arrangement made with Swap both survive. New photos fill the cells whose photo was deselected, then empty cells. A cell
-    /// showing a file from outside the folder on screen could not be selected: new photos replace it only once those are full.
-    /// </summary>
-    public static class CellPhotoPick
-    {
-        private static List<string> NewPhotos(IReadOnlyList<string> cells, IReadOnlyList<string> picked)
-        {
-            var seen = new HashSet<string>(cells, StringComparer.OrdinalIgnoreCase);
-            return picked.Where(seen.Add).ToList();
-        }
-
-        private static bool IsDeselected(string cell, HashSet<string> selected, ISet<string> folder) =>
-            !selected.Contains(cell) && folder.Contains(cell);
-
-        /// <summary>How many more photos the selection needs before every cell has one.</summary>
-        public static int StillNeeded(IReadOnlyList<string> cells, IReadOnlyList<string> picked, ISet<string> folder)
-        {
-            var selected = new HashSet<string>(picked, StringComparer.OrdinalIgnoreCase);
-            int open = cells.Count(c => IsDeselected(c, selected, folder));
-            return Math.Max(0, open - NewPhotos(cells, picked).Count);
-        }
-
-        /// <summary>For each cell, the index of the new photo it takes, or -1 to keep its own. Null when photos are still needed.</summary>
-        public static int[]? Assign(IReadOnlyList<string> cells, IReadOnlyList<string> picked, ISet<string> folder)
-        {
-            if (StillNeeded(cells, picked, folder) > 0) return null;
-            var selected = new HashSet<string>(picked, StringComparer.OrdinalIgnoreCase);
-            int count = NewPhotos(cells, picked).Count;
-            var plan = Enumerable.Repeat(-1, cells.Count).ToArray();
-            int next = 0;
-            for (int i = 0; i < cells.Count && next < count; i++)
-            {
-                if (IsDeselected(cells[i], selected, folder)) plan[i] = next++;
-            }
-            for (int i = 0; i < cells.Count && next < count; i++)
-            {
-                if (string.IsNullOrEmpty(cells[i])) plan[i] = next++;
-            }
-            for (int i = 0; i < cells.Count && next < count; i++)
-            {
-                if (plan[i] < 0 && !string.IsNullOrEmpty(cells[i]) && !selected.Contains(cells[i]) && !folder.Contains(cells[i])) plan[i] = next++;
-            }
-            return plan;
-        }
-    }
-
-    /// <summary>
     /// How far a floating cell can go: its centre stays on the canvas. A cell turns about its centre,
     /// so the limit is the same at any rotation and for any shape.
     /// </summary>

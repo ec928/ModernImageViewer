@@ -959,28 +959,47 @@ namespace ModernImageViewer
         private void SetMultiModeTip() =>
             ToolTipService.SetToolTip(MultiModeButton, _multiViewKept ? "Back to your Multi-View layout" : "Multi-View / Layout (Enter)");
 
-        private void MultiViewControl_ChangePhotosRequested(object? sender, EventArgs e)
+        /// <summary>The session waits while the user finds pictures with the app's own navigation.</summary>
+        private void MultiViewControl_AddImagesRequested(object? sender, EventArgs e)
         {
-            if (MultiViewControl == null || !_multiViewCanvasActive || MultiViewControl.ShownSlots < 2) return;
+            if (MultiViewControl == null || !_multiViewCanvasActive) return;
+            MultiViewControl.PrepareToLeave();
             MultiViewControl.Visibility = Visibility.Collapsed;
             EndMultiViewCanvas();
             _multiViewParked = true;
-            ToolTipService.SetToolTip(ViewTogetherButton, "Use these photos in the layout (Enter)");
-            SelectSessionPhotos();
+            ImageGrid.SelectedItems.Clear();
+            ToolTipService.SetToolTip(ViewTogetherButton, "Add these to the layout (Enter)");
+            ViewTogetherText.Text = "Add to layout";
             NoteParkedSelection();
             FocusGrid();
         }
 
+        private void MultiViewControl_StartOverRequested(object? sender, EventArgs e)
+        {
+            if (MultiViewControl == null) return;
+            EndMultiViewCanvas();
+            MultiViewControl.Visibility = Visibility.Collapsed;
+            MultiViewControl.Clear();
+            _multiViewKept = false;
+            SetMultiModeTip();
+            FocusGrid();
+        }
+
+        /// <summary>Back to the session, with whatever pictures were selected as new floating cells.</summary>
         private void ApplyParkedPhotos()
         {
             if (MultiViewControl == null) return;
-            var picked = Images.Where(img => img.IsGridSelected && !img.IsDirectory).ToList();
-            if (!MultiViewControl.TryReplacePhotos(picked, FolderPaths()))
-            {
-                NoteParkedSelection();
-                return;
-            }
+            var picked = Images
+                .Where(img => img.IsGridSelected && !img.IsDirectory && !img.IsComicEntry && IsPictureFile(img.Path))
+                .Select(img => img.Path)
+                .ToList();
             ResumeParkedMultiView();
+            if (picked.Count > 0)
+            {
+                MultiViewControl.DispatcherQueue.TryEnqueue(
+                    Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
+                    () => _ = MultiViewControl.AddPicturesAsync(picked));
+            }
         }
 
         private void ResumeParkedMultiView()
@@ -988,6 +1007,7 @@ namespace ModernImageViewer
             if (!_multiViewParked || MultiViewControl == null) return;
             _multiViewParked = false;
             RestoreViewTogetherTip();
+            ImageGrid.SelectedItems.Clear();
             BeginMultiViewCanvas();
             MultiViewControl.Visibility = Visibility.Visible;
             MultiViewControl.FocusView();
@@ -996,36 +1016,24 @@ namespace ModernImageViewer
                 MultiViewControl.ReflowFrames);
         }
 
-        private void SelectSessionPhotos()
-        {
-            if (ImageGrid == null || MultiViewControl == null) return;
-            var wanted = new HashSet<string>(MultiViewControl.SessionPaths(), StringComparer.OrdinalIgnoreCase);
-            ImageGrid.SelectedItems.Clear();
-            foreach (var img in Images)
-            {
-                if (!img.IsDirectory && !string.IsNullOrEmpty(img.Path) && wanted.Contains(img.Path))
-                    ImageGrid.SelectedItems.Add(img);
-            }
-        }
-
+        /// <summary>While the session waits the bar stays up, so it is clear what the selection is for.</summary>
         private void NoteParkedSelection()
         {
-            if (!_multiViewParked || MultiViewControl == null || MultiSelectCountText == null) return;
-            var picked = Images.Where(img => img.IsGridSelected && !img.IsDirectory).ToList();
-            if (picked.Count <= 0) return;
-            int missing = MultiViewControl.PhotosStillNeeded(picked, FolderPaths());
-            MultiSelectCountText.Text = picked.Count + " selected." + (missing > 0 ? " Pick " + missing + " more for the layout." : " Ready for the layout.");
+            if (!_multiViewParked || MultiSelectCountText == null) return;
+            int count = Images.Count(img => img.IsGridSelected && !img.IsDirectory);
+            MultiSelectActionBar.Visibility = Visibility.Visible;
+            MultiSelectCountText.Text = count > 0 ? count + " selected" : "Select pictures to add";
+            ViewTogetherButton.IsEnabled = count > 0;
         }
-
-        private HashSet<string> FolderPaths() =>
-            new(Images.Where(img => !img.IsDirectory && !string.IsNullOrEmpty(img.Path)).Select(img => img.Path), StringComparer.OrdinalIgnoreCase);
 
         private bool CanViewTogether(int selected) => selected > 1 || (_multiViewParked && selected > 0);
 
         private void RestoreViewTogetherTip()
         {
-            if (ViewTogetherButton != null)
-                ToolTipService.SetToolTip(ViewTogetherButton, "View Together (Enter)");
+            if (ViewTogetherButton == null) return;
+            ToolTipService.SetToolTip(ViewTogetherButton, "View Together (Enter)");
+            ViewTogetherText.Text = "View Together";
+            ViewTogetherButton.IsEnabled = true;
         }
 
         private bool BeginMultiViewCanvas()

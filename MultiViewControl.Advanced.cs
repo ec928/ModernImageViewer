@@ -75,7 +75,6 @@ namespace ModernImageViewer
                 advanced.Items.Add(MakeAdvancedItem("Rotate image right", "\uE7AD", () => ChangeImage(g => g.TurnImage(90))));
                 advanced.Items.Add(MakeAdvancedItem("Mirror image", "\uE8AB", () => ChangeImage(g => g.ImageFlipH = !g.ImageFlipH)));
                 advanced.Items.Add(MakeAdvancedItem("Flip image", "\uE8CB", () => ChangeImage(g => g.ImageFlipV = !g.ImageFlipV)));
-                advanced.Items.Add(MakeAdvancedItem("Reset zoom", "\uE71F", () => ResetCellZoom(item)));
             }
 
             var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, item));
@@ -609,6 +608,9 @@ namespace ModernImageViewer
             redo.IsEnabled = CanRedo;
             ToolTipService.SetToolTip(redo, "Redo (Ctrl+Y)");
             AdvancedMenuFlyout.Items.Add(redo);
+
+            AdvancedMenuFlyout.Items.Add(new MenuFlyoutSeparator());
+            AdvancedMenuFlyout.Items.Add(MakeAdvancedItem("Start over\u2026", "\uE74D", () => _ = ConfirmStartOverAsync()));
 
         }
 

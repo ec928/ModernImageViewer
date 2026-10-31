@@ -274,6 +274,10 @@ namespace ModernImageViewer
             };
         }
 
+        /// <summary>Pictures chosen in the app arrive like dropped ones, around the middle of the canvas.</summary>
+        public Task AddPicturesAsync(IReadOnlyList<string> paths) =>
+            AddDroppedPicturesAsync(paths, new Point(RootGrid.ActualWidth / 2, RootGrid.ActualHeight / 2));
+
         private async Task AddDroppedPicturesAsync(IReadOnlyList<string> paths, Point where)
         {
             double canvasW = Math.Max(320, RootGrid.ActualWidth);

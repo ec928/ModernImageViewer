@@ -200,53 +200,6 @@ namespace ModernImageViewer.Tests
             Assert.Equal(1, FreeformBounds.ResizeShare(1200, 300, 1000));
         }
 
-        private static HashSet<string> Folder(params string[] paths) => new(paths, StringComparer.OrdinalIgnoreCase);
-
-        [Fact]
-        public void CellsSharingAPhotoCanComeBackFromTheFolder()
-        {
-            string[] cells = { "a", "b", "b" };
-            string[] picked = { "a", "b" };
-            Assert.Equal(new[] { -1, -1, -1 }, CellPhotoPick.Assign(cells, picked, Folder("a", "b", "c")));
-        }
-
-        [Fact]
-        public void AnArrangementSurvivesWhenNothingIsDeselected()
-        {
-            string[] cells = { "c", "a", "b" };
-            Assert.Equal(new[] { -1, -1, -1 }, CellPhotoPick.Assign(cells, new[] { "a", "b", "c" }, Folder("a", "b", "c")));
-        }
-
-        [Fact]
-        public void NewPhotosGoOnlyIntoCellsThatWereDeselected()
-        {
-            string[] cells = { "a", "b", "c" };
-            Assert.Equal(new[] { -1, 0, -1 }, CellPhotoPick.Assign(cells, new[] { "a", "c", "d" }, Folder("a", "b", "c", "d")));
-        }
-
-        [Fact]
-        public void TooFewPhotosForTheDeselectedCellsLeavesYouInTheFolder()
-        {
-            string[] cells = { "a", "b", "c" };
-            string[] picked = { "a" };
-            Assert.Null(CellPhotoPick.Assign(cells, picked, Folder("a", "b", "c")));
-            Assert.Equal(2, CellPhotoPick.StillNeeded(cells, picked, Folder("a", "b", "c")));
-        }
-
-        [Fact]
-        public void AFileFromAnotherFolderStaysUntilNewPhotosReachIt()
-        {
-            string[] cells = { "x", "a" };
-            Assert.Equal(new[] { -1, -1 }, CellPhotoPick.Assign(cells, new[] { "a" }, Folder("a", "b")));
-            Assert.Equal(new[] { 0, -1 }, CellPhotoPick.Assign(cells, new[] { "a", "b" }, Folder("a", "b")));
-        }
-
-        [Fact]
-        public void PathsMatchWhateverTheirCase()
-        {
-            Assert.Equal(new[] { -1 }, CellPhotoPick.Assign(new[] { "C:\\A.JPG" }, new[] { "c:\\a.jpg" }, Folder("c:\\a.jpg")));
-        }
-
         [Theory]
         [InlineData("C:\\Users\\me\\Downloads", "Downloads")]
         [InlineData("C:\\Users\\me\\Pictures\\Trips", "Pictures\\Trips")]
@@ -265,15 +218,6 @@ namespace ModernImageViewer.Tests
             Assert.Equal(new[] { 2, 1, 1 }, MenuRows.Share(new[] { 9, 9, 1 }, 4, 3));
             Assert.Equal(new[] { 3, 0, 2 }, MenuRows.Share(new[] { 9, 0, 2 }, 99, 3));
             Assert.Equal(new[] { 0, 0 }, MenuRows.Share(new[] { 5, 5 }, 0, 3));
-        }
-
-        [Fact]
-        public void NewPhotosFillEmptyCellsBeforeFilesFromElsewhere()
-        {
-            string[] cells = { "x", "", "a" };
-            Assert.Equal(new[] { -1, 0, -1 }, CellPhotoPick.Assign(cells, new[] { "a", "b" }, Folder("a", "b")));
-            Assert.Equal(new[] { 1, 0, -1 }, CellPhotoPick.Assign(cells, new[] { "a", "b", "c" }, Folder("a", "b", "c")));
-            Assert.Equal(0, CellPhotoPick.StillNeeded(cells, new[] { "a" }, Folder("a", "b")));
         }
 
         [Fact]

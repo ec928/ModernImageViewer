@@ -807,6 +807,12 @@ namespace ModernImageViewer
 
         private void MultiSelectClear_Click(object sender, RoutedEventArgs e)
         {
+            // With nothing selected, the close button is the way back to the waiting session.
+            if (_multiViewParked && !Images.Any(img => img.IsGridSelected && !img.IsDirectory))
+            {
+                ResumeParkedMultiView();
+                return;
+            }
             ImageGrid.SelectedItems.Clear();
             FocusGrid();
         }

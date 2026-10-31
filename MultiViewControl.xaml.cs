@@ -18,7 +18,8 @@ namespace ModernImageViewer
     public sealed partial class MultiViewControl : UserControl
     {
         public event EventHandler? CloseRequested;
-        public event EventHandler? ChangePhotosRequested;
+        public event EventHandler? AddImagesRequested;
+        public event EventHandler? StartOverRequested;
 
         // When set, this many frames stay on screen and later photos wait off screen.
         private int _framedSlots;
@@ -2732,111 +2733,29 @@ namespace ModernImageViewer
             CloseRequested?.Invoke(this, EventArgs.Empty);
         }
 
-        private void ChangePhotosButton_Click(object sender, RoutedEventArgs e)
+        private void AddImagesButton_Click(object sender, RoutedEventArgs e)
         {
-            ChangePhotosRequested?.Invoke(this, EventArgs.Empty);
+            AddImagesRequested?.Invoke(this, EventArgs.Empty);
+        }
+
+        /// <summary>Clears the whole session. Undo goes with it, so this asks first.</summary>
+        private async System.Threading.Tasks.Task ConfirmStartOverAsync()
+        {
+            var dialog = new ContentDialog
+            {
+                Title = "Start over?",
+                Content = "This clears the layout, its cells and its undo history. Save the layout first to keep it.",
+                PrimaryButtonText = "Start over",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Close,
+                RequestedTheme = ElementTheme.Dark,
+                XamlRoot = XamlRoot
+            };
+            if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+                StartOverRequested?.Invoke(this, EventArgs.Empty);
         }
 
         public int ShownSlots => GridCellCount == 0 ? 0 : VisibleCount(GridCellCount);
-
-        public IReadOnlyList<string> SessionPaths()
-        {
-            var paths = new List<string>(_items.Count);
-            int grid = GridCellCount;
-            for (int i = 0; i < grid; i++)
-            {
-                if (!string.IsNullOrEmpty(_items[i].Path))
-                    paths.Add(_items[i].Path);
-            }
-            return paths;
-        }
-
-        private List<string> ShownCellPaths()
-        {
-            int slots = ShownSlots;
-            var paths = new List<string>(slots);
-            for (int i = 0; i < slots; i++) paths.Add(_items[i].Path);
-            return paths;
-        }
-
-        private static List<string> PickedPaths(IReadOnlyList<ImageItem> picked) =>
-            picked.Where(p => p != null && !p.IsDirectory && !string.IsNullOrEmpty(p.Path)).Select(p => p.Path).ToList();
-
-        public int PhotosStillNeeded(IReadOnlyList<ImageItem> picked, ISet<string> folderPaths) =>
-            CellPhotoPick.StillNeeded(ShownCellPaths(), PickedPaths(picked), folderPaths);
-
-        /// <summary>
-        /// Apply a selection to the cells on screen. A cell whose photo is still selected keeps it, and the
-        /// newly selected photos go into the others (see <see cref="CellPhotoPick"/>). Each cell keeps its parameters.
-        /// Later photos wait off screen. False when the selection leaves a cell with nothing to show.
-        /// </summary>
-        public bool TryReplacePhotos(IReadOnlyList<ImageItem> picked, ISet<string> folderPaths)
-        {
-            int slots = ShownSlots;
-            if (slots < 1 || !CellRootsReady()) return false;
-            var cells = ShownCellPaths();
-            var plan = CellPhotoPick.Assign(cells, PickedPaths(picked), folderPaths);
-            if (plan == null) return false;
-
-            ExitSolo();
-            _framedSlots = slots;
-
-            // One item for each new path: its ImageItem holds the cell's parameters once it is on a cell.
-            var incoming = new List<ImageItem>();
-            var seen = new HashSet<string>(cells, StringComparer.OrdinalIgnoreCase);
-            foreach (var photo in picked)
-            {
-                if (photo != null && !photo.IsDirectory && !string.IsNullOrEmpty(photo.Path) && seen.Add(photo.Path))
-                    incoming.Add(photo);
-            }
-
-            int oldGrid = GridCellCount;
-            for (int i = slots; i < oldGrid; i++)
-            {
-                _itemBorders.Remove(_items[i]);
-                _cellGeometry.Remove(_items[i]);
-                }
-
-            var changed = new List<int>();
-            var used = new HashSet<int>();
-            var shown = _items.Take(slots).ToList();
-            for (int i = 0; i < slots; i++)
-            {
-                if (plan[i] < 0) continue;
-                var photo = incoming[plan[i]];
-                MoveCellParameters(shown[i], photo);
-                shown[i] = photo;
-                used.Add(plan[i]);
-                changed.Add(i);
-            }
-
-            // Floating cells are not part of the selection. They stay, after the waiting photos.
-            var freeformRoots = _freeformCards.Select(c => c.Container).ToList();
-            var gridRoots = _cellRoots.Take(slots).ToList();
-            var waiting = incoming.Where((_, index) => !used.Contains(index)).ToList();
-            _items.Clear();
-            _items.AddRange(shown);
-            _items.AddRange(waiting);
-            _items.AddRange(_freeformCards.Select(c => c.Item));
-            var roots = new FrameworkElement?[_items.Count];
-            for (int i = 0; i < slots; i++) roots[i] = gridRoots[i];
-            for (int i = 0; i < freeformRoots.Count; i++) roots[slots + waiting.Count + i] = freeformRoots[i];
-            _cellRoots = roots;
-
-            foreach (int i in changed)
-            {
-                if (_cellRoots[i]?.Tag is CellParts parts)
-                {
-                    parts.Bound.Item = _items[i];
-                    parts.Bound.Reload?.Invoke();
-                }
-                ShowEmptyState(i);
-            }
-            RefreshLinesChrome(GridCellCount);
-            RefreshHeroChrome(GridCellCount);
-            ShowHudAndOverlays();
-            return true;
-        }
 
         private int _swapSource = -1;
 
@@ -3024,17 +2943,6 @@ namespace ModernImageViewer
                     ? "Fill Mode (F) - Zero wasted space (Click for Fit Entire Photo)" 
                     : "Fit Mode (F) - Whole photo visible (Click for Fill)");
             }
-        }
-
-        private void ResetCellZoom(ImageItem item)
-        {
-            int slot = Slot(item);
-            if ((uint)slot >= (uint)_cellRoots.Length || _cellRoots[slot]?.Tag is not CellParts parts) return;
-            parts.Transform.ScaleX = 1.0;
-            parts.Transform.ScaleY = 1.0;
-            parts.Transform.TranslateX = 0;
-            parts.Transform.TranslateY = 0;
-            parts.UpdateLayout?.Invoke();
         }
 
         private void ResetAllZooms()

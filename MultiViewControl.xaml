@@ -259,14 +259,14 @@
                             <TextBlock Text="Back" VerticalAlignment="Center" FontSize="13" />
                         </StackPanel>
                     </Button>
-                    <Button Click="ChangePhotosButton_Click"
+                    <Button Click="AddImagesButton_Click"
                             Style="{StaticResource QuietButtonStyle}"
                             Padding="8,5"
                             CornerRadius="12"
-                            ToolTipService.ToolTip="Pick different photos. The layout stays.">
+                            ToolTipService.ToolTip="Find pictures in your folders and add them to the layout.">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8B9;" FontSize="14" />
-                            <TextBlock Text="Photos" VerticalAlignment="Center" FontSize="13" />
+                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE710;" FontSize="14" />
+                            <TextBlock Text="Add images" VerticalAlignment="Center" FontSize="13" />
                         </StackPanel>
                     </Button>
                     <Border x:Name="ShownBadge"

@@ -632,7 +632,7 @@
                                 <Button x:Name="ViewTogetherButton" Click="MultiSelectViewTogether_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" ToolTipService.ToolTip="View Together (Enter)">
                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                         <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE748;" FontSize="14" />
-                                        <TextBlock Text="View Together" FontSize="13" VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="ViewTogetherText" Text="View Together" FontSize="13" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
                                 
@@ -776,7 +776,8 @@
                                             Visibility="Collapsed"
                                             Canvas.ZIndex="1000"
                                             CloseRequested="MultiViewControl_CloseRequested"
-                                            ChangePhotosRequested="MultiViewControl_ChangePhotosRequested" />
+                                            AddImagesRequested="MultiViewControl_AddImagesRequested"
+                                            StartOverRequested="MultiViewControl_StartOverRequested" />
                 </Grid>
             </SplitView.Content>
         </SplitView>
