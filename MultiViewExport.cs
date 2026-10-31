@@ -1127,6 +1127,7 @@ namespace ModernImageViewer
                         SourceSlot = card.SourceSlot,
                         Path = card.Item.Path ?? string.Empty,
                         Name = card.Item.Name,
+                        Hidden = _hiddenItems.Contains(card.Item),
                         X = double.IsNaN(Canvas.GetLeft(card.Container)) ? card.X : Canvas.GetLeft(card.Container),
                         Y = double.IsNaN(Canvas.GetTop(card.Container)) ? card.Y : Canvas.GetTop(card.Container),
                         Width = card.Container.Width > 0 ? card.Container.Width : (card.Container.ActualWidth > 0 ? card.Container.ActualWidth : card.Width),
@@ -1284,7 +1285,25 @@ namespace ModernImageViewer
                     if (matchingItem != null)
                     {
                         SpawnFreeformCell(matchingItem, dto);
+                        if (dto.Hidden && _freeformCards.Count > 0)
+                        {
+                            var newCard = _freeformCards.Last();
+                            _hiddenItems.Add(newCard.Item);
+                        }
                     }
+                }
+            }
+
+            // Sync visual hidden state and placeholders for ALL cells (both grid and freeform)
+            for (int i = 0; i < _cellRoots.Length; i++)
+            {
+                if (_cellRoots[i]?.Tag is CellParts parts)
+                {
+                    bool isHidden = (i < _items.Count) && _hiddenItems.Contains(_items[i]);
+                    if (parts.ImageContainer != null)
+                        parts.ImageContainer.Visibility = isHidden ? Visibility.Collapsed : Visibility.Visible;
+                    if (parts.HiddenPlaceholder != null)
+                        parts.HiddenPlaceholder.Visibility = isHidden ? Visibility.Visible : Visibility.Collapsed;
                 }
             }
 

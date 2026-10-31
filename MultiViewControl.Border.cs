@@ -73,9 +73,6 @@ namespace ModernImageViewer
         {
             var border = GetBorderForItem(item);
 
-            cellBorder.Margin = new Thickness(border.Padding);
-            cellBorder.CornerRadius = new CornerRadius(border.CornerRadius);
-
             // Dashed overlay rectangle, Rim Glow overlay, & Gutter Host reference
             Microsoft.UI.Xaml.Shapes.Rectangle? dashedRect = null;
             Microsoft.UI.Xaml.Shapes.Rectangle? rimGlowRect = null;
@@ -86,6 +83,39 @@ namespace ModernImageViewer
                 rimGlowRect = parts.RimGlowStroke;
                 gutterHost = parts.GutterHost;
             }
+
+            bool isHidden = _hiddenItems.Contains(item);
+            if (isHidden)
+            {
+                cellBorder.Margin = new Thickness(0);
+                cellBorder.BorderThickness = new Thickness(0);
+                cellBorder.BorderBrush = null;
+                cellBorder.CornerRadius = new CornerRadius(0);
+                cellBorder.Shadow = null;
+                cellBorder.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 10, 10, 10));
+
+                if (dashedRect != null) dashedRect.Visibility = Visibility.Collapsed;
+                if (rimGlowRect != null) rimGlowRect.Visibility = Visibility.Collapsed;
+
+                if (gutterHost != null)
+                {
+                    gutterHost.Margin = new Thickness(0);
+                    gutterHost.Background = null;
+                    gutterHost.BorderThickness = new Thickness(0);
+                    gutterHost.BorderBrush = null;
+                    gutterHost.CornerRadius = new CornerRadius(0);
+                    gutterHost.Shadow = null;
+                    if (gutterHost.Child is Image shadowImage)
+                    {
+                        shadowImage.Source = null;
+                        shadowImage.Visibility = Visibility.Collapsed;
+                    }
+                }
+                return;
+            }
+
+            cellBorder.Margin = new Thickness(border.Padding);
+            cellBorder.CornerRadius = new CornerRadius(border.CornerRadius);
 
             // The mat fills the rectangular cell. The card above it is what rounds.
             if (gutterHost != null)
@@ -176,8 +206,7 @@ namespace ModernImageViewer
 
         public void ApplyBorderToAllCells()
         {
-            int visible = VisibleCount(_items.Count);
-            for (int i = 0; i < visible; i++)
+            for (int i = 0; i < _cellRoots.Length; i++)
             {
                 ApplyBorderToCell(i);
             }

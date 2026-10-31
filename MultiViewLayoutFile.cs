@@ -142,6 +142,9 @@ namespace ModernImageViewer
         [JsonPropertyName("panY")]
         public double? PanY { get; set; }
 
+        [JsonPropertyName("hidden")]
+        public bool Hidden { get; set; }
+
         [JsonPropertyName("border")]
         public CellBorderDto? Border { get; set; }
     }

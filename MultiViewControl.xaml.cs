@@ -110,6 +110,12 @@ namespace ModernImageViewer
 
         public void LoadImages(IEnumerable<ImageItem> items)
         {
+            ClearAllFreeformCards();
+            _hiddenItems.Clear();
+            _itemBorders.Clear();
+            _lastBorderSettings = null;
+            _cellRoots = Array.Empty<FrameworkElement?>();
+
             _items.Clear();
             _items.AddRange(items.Where(i => i != null && !i.IsDirectory));
             _framedSlots = 0;
@@ -131,6 +137,11 @@ namespace ModernImageViewer
         public void Clear()
         {
             _hudTimer.Stop();
+            ClearAllFreeformCards();
+            _hiddenItems.Clear();
+            _itemBorders.Clear();
+            _lastBorderSettings = null;
+            _cellRoots = Array.Empty<FrameworkElement?>();
             _items.Clear();
             _cellTransforms.Clear();
             _layoutUpdaters.Clear();
@@ -2121,6 +2132,7 @@ namespace ModernImageViewer
                     partsDst.ImageContainer.Visibility = _hiddenItems.Contains(copy) ? Visibility.Collapsed : Visibility.Visible;
                 if (partsDst.HiddenPlaceholder != null)
                     partsDst.HiddenPlaceholder.Visibility = _hiddenItems.Contains(copy) ? Visibility.Visible : Visibility.Collapsed;
+                ApplyBorderToCell(toIndex);
             }
 
             var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(rootDst, c.Container));
@@ -2143,6 +2155,7 @@ namespace ModernImageViewer
                     parts.ImageContainer.Visibility = hidden ? Visibility.Collapsed : Visibility.Visible;
                 if (parts.HiddenPlaceholder != null)
                     parts.HiddenPlaceholder.Visibility = hidden ? Visibility.Visible : Visibility.Collapsed;
+                ApplyBorderToCell(slot);
             }
         }
 
@@ -2838,6 +2851,9 @@ namespace ModernImageViewer
                 // Update layout for both cells to reflect new image dimensions
                 partsA.UpdateLayout?.Invoke();
                 partsB.UpdateLayout?.Invoke();
+
+                ApplyBorderToCell(idxA);
+                ApplyBorderToCell(idxB);
             }
 
             ShowHudAndOverlays();

@@ -111,6 +111,7 @@ namespace ModernImageViewer.Tests
                         Zoom = 1.25,
                         PanX = 15.0,
                         PanY = -10.0,
+                        Hidden = true,
                         Border = FrameLooks.Card()
                     }
                 }
@@ -133,6 +134,7 @@ namespace ModernImageViewer.Tests
             Assert.Equal(320.0, f0.Height);
             Assert.Equal(5, f0.ZIndex);
             Assert.Equal(1.25, f0.Zoom);
+            Assert.True(f0.Hidden);
             Assert.NotNull(f0.Border);
             Assert.Equal("InnerMuted", f0.Border.StrokeStyle);
         }

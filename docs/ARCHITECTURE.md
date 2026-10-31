@@ -83,9 +83,11 @@ Multi-view is cell based, not multi-image. A freeform cell is a cell that can al
 
 A cell holds the parameters that are applied to its content, and the content is the image. Copying an image changes only the target cell's content: the target keeps its parameters and applies them to the new image. A swap exchanges content in the same way.
 
-Triggering Freeform generates a new cell: the existing cell becomes hidden, and the new cell has a copy of the image, default cell parameters and the highest z-index, so a 4-cell view becomes a 5-cell view.
+Triggering Freeform always generates a new cell, whatever other cells exist or show: the existing cell becomes hidden, and the new cell has a copy of the image, a clone of the existing cell's parameters and the highest z-index, so a 4-cell view becomes a 5-cell view. The new cell is independent: changing it does not change the existing cell.
 
-The code does not fully follow this yet. `SpawnFreeformCell` gives the new cell a copy of the source's frame. A swap between grid cells exchanges the cells themselves, so their parameters move with the images. `CopyItemTo` gives the target the source's frame. `_itemBorders` holds frames by file path, `_hiddenItems` holds hidden state by `ImageItem`, and `FreeformCard.SourceSlot` holds an index.
+Hidden hides everything in the cell, including the image, borders and shadow. Going back to the grid deletes the extra cells and resets cell parameters. A saved layout keeps the hidden state.
+
+The code does not fully follow this yet. `SpawnFreeformCell` clones only the frame, and zoom and pan start at default. It stores the clone under the same file-path key in `_itemBorders`, so the two cells share one frame entry and are not independent, which is a defect. A swap between grid cells exchanges the cells themselves, so their parameters move with the images. `CopyItemTo` gives the target the source's frame. `_itemBorders` holds frames by file path, `_hiddenItems` holds hidden state by `ImageItem`, and `FreeformCard.SourceSlot` holds an index.
 
 The layout is a `MosaicLayout` tree of row and column splits; a leaf is a photo's index in `_items`. `MosaicLayout.ShownCount` is the one place the 16-photo limit lives. When the selection is larger, the playbar reads `16 of 23 shown`. Grids come from `FromCounts` (photos per line), Banner and Pair from `CreateHeroLines` (the hero plus the other photos in lines), and Rectangle from `CreateRectangleHero`, which is drawn by hand for 4, 5, 6, 7 and 9 photos only.
 
