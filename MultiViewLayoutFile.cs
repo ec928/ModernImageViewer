@@ -321,7 +321,8 @@ namespace ModernImageViewer
             {
                 var tint = Parse(color);
                 if (tint.A == 0) tint = new Rgba(255, 255, 255, 255);
-                return new Rgba(48, tint.R, tint.G, tint.B);
+                // Strong enough that the color reads as itself over a dark canvas. At 48 white came out near black.
+                return new Rgba(180, tint.R, tint.G, tint.B);
             }
             if (!string.Equals(Token(material, "None"), "Solid", StringComparison.OrdinalIgnoreCase))
                 return new Rgba(0, 0, 0, 0);

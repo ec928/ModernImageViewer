@@ -296,7 +296,7 @@ namespace ModernImageViewer.Tests
             Assert.Equal(140, fromClear.A);
 
             var frost = FrameColor.MatFill("Acrylic", "#FFF3EFE6");
-            Assert.Equal(48, frost.A);
+            Assert.Equal(180, frost.A);
             Assert.Equal(243, frost.R);
             Assert.Equal(239, frost.G);
             Assert.Equal(230, frost.B);
