@@ -37,7 +37,7 @@ WIC color-manages to sRGB, so the draw path has no color management of its own.
 - `Rename(old, new)` — move the slot; release anything displaced at `new`.
 - Never `dictionary[path] = entry`. Never `Dispose()` GPU fields on a shared entry. Device-lost: `ImageCache.Clear()` (including GIF `AnimationFrames`) and re-decode. Treat animation-frame device mismatch like `GpuBitmap` mismatch.
 
-Refcount: cache hold = 1. Detached windows `AddRef` when they display a cache entry and `Release` on close. `ManageCache` `Evict`s keys outside the keep-alive radius (current ± 20). Prefetch is current +15 / −8.
+Refcount: cache hold = 1. Detached windows `AddRef` when they display a cache entry and `Release` on close. The main window counts them by window (`_detachedWindowCount`), and closing it only hides it until the last has gone. A detached window opens fitted and stays fitted through resizing, as the viewer does, until it is zoomed. `ManageCache` `Evict`s keys outside the keep-alive radius (current ± 20). Prefetch is current +15 / −8.
 
 GPU objects (`CanvasBitmap`, `CanvasRenderTarget`, Win2D effects) are created and disposed on the UI thread that owns the `CanvasDevice`.
 

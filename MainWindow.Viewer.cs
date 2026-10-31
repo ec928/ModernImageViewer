@@ -51,7 +51,6 @@ namespace ModernImageViewer
             double currentLogicalW = 0;
             double currentLogicalH = 0;
             float targetZoom = 1.0f;
-            bool shouldFitToWindow = !cursorSpawnPosition.HasValue;
 
             if (cursorSpawnPosition.HasValue)
             {
@@ -166,7 +165,7 @@ namespace ModernImageViewer
             int finalW = Math.Clamp((int)Math.Round(targetW), 320, (int)workAreaW);
             int finalH = Math.Clamp((int)Math.Round(targetH), 240, (int)workAreaH);
 
-            var detachedWindow = new DetachedWindow(targetItem, targetZoom, finalW, finalH, _currentGamma, shouldFitToWindow);
+            var detachedWindow = new DetachedWindow(targetItem, finalW, finalH, _currentGamma);
             var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(detachedWindow);
             var appWindowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
             var appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(appWindowId);
@@ -3687,14 +3686,12 @@ namespace ModernImageViewer
         {
             if (_isStartupIndexing || item.IsDirectory) return;
             await item.CancelAndAwaitTasksAsync();
-            string oldPath = item.Path;
             bool watcherWasEnabled = _folderWatcher?.EnableRaisingEvents == true;
             if (_folderWatcher != null) _folderWatcher.EnableRaisingEvents = false;
             try
             {
                 if (await ViewerEngine.RenameImageAsync(item, RootGrid.XamlRoot))
                 {
-                    NotifyImageRenamed(oldPath, item.Path);
                     UpdateListPreview(CursorItem());
                 }
             }
@@ -3751,15 +3748,6 @@ namespace ModernImageViewer
             {
                 if (Images.Count == 0) ClosePreviewInternal();
                 else LoadFullImage(Math.Min(_currentIndex, Images.Count - 1));
-            }
-        }
-
-        public void NotifyImageRenamed(string oldPath, string newPath)
-        {
-            if (DetachedPaths.TryGetValue(oldPath, out int count))
-            {
-                DetachedPaths.Remove(oldPath);
-                DetachedPaths[newPath] = count;
             }
         }
 
@@ -3833,23 +3821,8 @@ namespace ModernImageViewer
 
             if (_currentIndex >= 0 && _currentIndex < Images.Count)
             {
-                string targetPath = Images[_currentIndex].Path;
-                string editor = string.IsNullOrWhiteSpace(ImageEditorPath) ? "mspaint.exe" : ImageEditorPath;
-
-                try
-                {
-                    var psi = new ProcessStartInfo
-                    {
-                        FileName = editor,
-                        Arguments = $"\"{targetPath}\"",
-                        UseShellExecute = true
-                    };
-                    Process.Start(psi);
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"Failed to start editor: {ex.Message}");
-                }
+                string? problem = ViewerEngine.OpenInEditor(Images[_currentIndex].Path, ImageEditorPath);
+                if (problem != null) ViewerControl.ShowNotification(problem);
             }
         }
 
@@ -3874,7 +3847,6 @@ namespace ModernImageViewer
                 {
                     if (await ViewerEngine.RenameImageAsync(_currentRenderedItem, this.Content.XamlRoot))
                     {
-                        NotifyImageRenamed(oldPath, _currentRenderedItem.Path);
                         LoadFullImage(_currentIndex);
                     }
                 }

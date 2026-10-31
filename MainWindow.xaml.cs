@@ -34,7 +34,9 @@ namespace ModernImageViewer
         public static MainWindow? Instance { get; private set; }
 
         public string? StartupFilePath { get; set; }
-        public Dictionary<string, int> DetachedPaths { get; } = new(StringComparer.OrdinalIgnoreCase);
+        // Counted by window, not by file: a window holds on to the picture it opened with, which a rename can leave out of step with the list.
+        private int _detachedWindowCount;
+        private const int MaxDraggedOutWindows = 16;
 
         public DetachLimit CurrentDetachLimit = DetachLimit.CurrentZoom;
         public string ImageEditorPath { get; set; } = "mspaint.exe";
@@ -333,12 +335,7 @@ namespace ModernImageViewer
             FocusGrid();
         }
 
-        public void RegisterDetachedWindow(string path)
-        {
-            if (string.IsNullOrEmpty(path)) return;
-            if (DetachedPaths.TryGetValue(path, out int count)) DetachedPaths[path] = count + 1;
-            else DetachedPaths[path] = 1;
-        }
+        public void RegisterDetachedWindow() => _detachedWindowCount++;
 
         private bool _isMainWindowHidden = false;
 
@@ -365,7 +362,7 @@ namespace ModernImageViewer
 
         private void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)
         {
-            if (DetachedPaths.Count > 0)
+            if (_detachedWindowCount > 0)
             {
                 args.Cancel = true;
                 _isMainWindowHidden = true;
@@ -375,15 +372,13 @@ namespace ModernImageViewer
 
         public void UnregisterDetachedWindow(string path)
         {
-            if (string.IsNullOrEmpty(path)) return;
-            if (DetachedPaths.TryGetValue(path, out int count))
-            {
-                if (count <= 1) DetachedPaths.Remove(path);
-                else DetachedPaths[path] = count - 1;
-            }
-            ManageCache(_currentIndex, 0);
+            _detachedWindowCount = Math.Max(0, _detachedWindowCount - 1);
 
-            if (_isMainWindowHidden && DetachedPaths.Count == 0)
+            // With the viewer shut there is nothing to prefetch around, so only what this window was showing lets go.
+            if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible) ManageCache(_currentIndex, 0);
+            else if (!string.IsNullOrEmpty(path)) ImageCache.Evict(path);
+
+            if (_isMainWindowHidden && _detachedWindowCount == 0)
             {
                 _isMainWindowHidden = false;
                 this.Close();
@@ -618,12 +613,14 @@ namespace ModernImageViewer
             if (Math.Sqrt(dx * dx + dy * dy) >= 20)
             {
                 int offset = 0;
-                foreach (var item in items)
+                foreach (var item in items.Take(MaxDraggedOutWindows))
                 {
                     var spawn = new Windows.Graphics.PointInt32(dropCursorPos.X + offset, dropCursorPos.Y + offset);
                     LaunchDetachedWindow(item, cursorSpawnPosition: null, screenSpawnPosition: spawn);
                     offset += 24;
                 }
+                if (items.Count > MaxDraggedOutWindows)
+                    _ = ViewerEngine.ShowMessageAsync(RootGrid.XamlRoot, "Detach", $"Opened the first {MaxDraggedOutWindows} of {items.Count} pictures.");
             }
         }
 

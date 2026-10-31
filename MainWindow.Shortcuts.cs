@@ -41,6 +41,12 @@ namespace ModernImageViewer
                 ("Delete", "Move to the Recycle Bin"),
                 ("Enter, Esc", "Back to the folder"),
             }),
+            ("Detached window", new[]
+            {
+                ("F11", "Full screen"),
+                ("Delete", "Move to the Recycle Bin"),
+                ("Esc", "Close the window"),
+            }),
             ("Multi-View", new[]
             {
                 ("+, -", "More or fewer lines"),

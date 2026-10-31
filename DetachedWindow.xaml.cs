@@ -25,26 +25,21 @@ namespace ModernImageViewer
 
         private KeyEventHandler _globalKeyDownHandler;
         private int _currentImageLoadId = 0;
-        private ImageCacheEntry? _localCacheEntry;
         private CancellationTokenSource? _loadCts;
         private CancellationTokenSource? _promoteCts;
         private DispatcherQueueTimer? _promoteTimer;
         private int _promoteEdge;
         private bool _closed;
-        private float _initialZoom;
-        private bool _shouldFitToWindow;
 
         private bool _isWindowDragging = false;
         private bool _isDragThresholdPassed = false;
         private NativeMethods.POINT _dragStartCursorPos;
         private Windows.Graphics.PointInt32 _dragStartWindowPos;
 
-        public DetachedWindow(ImageItem imageItem, float initialZoom, int targetWidth, int targetHeight, float initialGamma, bool shouldFitToWindow = false)
+        public DetachedWindow(ImageItem imageItem, int targetWidth, int targetHeight, float initialGamma)
         {
             this.InitializeComponent();
             _imageItem = imageItem;
-            _initialZoom = initialZoom;
-            _shouldFitToWindow = shouldFitToWindow;
             this.Title = string.IsNullOrEmpty(_imageItem.Name) ? "Detached Image" : _imageItem.Name;
 
             var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
@@ -63,7 +58,7 @@ namespace ModernImageViewer
             RootGrid.AddHandler(UIElement.KeyDownEvent, _globalKeyDownHandler, true);
             this.Closed += DetachedWindow_Closed;
 
-            MainWindow.Instance?.RegisterDetachedWindow(_imageItem.Path);
+            MainWindow.Instance?.RegisterDetachedWindow();
             if (MainWindow.Instance != null)
                 MainWindow.Instance.GammaApplied += OnHostGammaChanged;
 
@@ -102,10 +97,7 @@ namespace ModernImageViewer
         private void RootGrid_Loaded(object sender, RoutedEventArgs e)
         {
             RootGrid.Focus(FocusState.Programmatic);
-            if (_shouldFitToWindow)
-            {
-                ViewerControl.FitToWindow();
-            }
+            ViewerControl.FitToWindow();
         }
 
         private void RootGrid_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -113,11 +105,8 @@ namespace ModernImageViewer
             bool isMaxOrFullscreen = (_appWindow.Presenter.Kind == AppWindowPresenterKind.FullScreen) ||
                                      (_appWindow.Presenter is OverlappedPresenter p && p.State == OverlappedPresenterState.Maximized);
 
-            if (isMaxOrFullscreen && !_wasMaximizedOrFullscreen)
-            {
-                ViewerControl.FitToWindow();
-            }
-            else if (_shouldFitToWindow && e.NewSize.Width > 0 && e.NewSize.Height > 0)
+            // Maximizing and coming back both show the whole picture. Otherwise the viewer keeps a fitted picture fitted and leaves a zoomed one alone.
+            if (isMaxOrFullscreen != _wasMaximizedOrFullscreen)
             {
                 ViewerControl.FitToWindow();
             }
@@ -215,6 +204,11 @@ namespace ModernImageViewer
 
         private void Global_KeyDown(object sender, KeyRoutedEventArgs e)
         {
+            // This handler also receives keys already dealt with, such as the Esc that closes a menu or a box.
+            if (e.Handled) return;
+            var focused = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(this.Content.XamlRoot);
+            if (focused is TextBox || focused is PasswordBox || focused is RichEditBox) return;
+
             if (e.Key == Windows.System.VirtualKey.Escape)
             {
                 this.Close();
@@ -227,10 +221,6 @@ namespace ModernImageViewer
             }
             else if (e.Key == Windows.System.VirtualKey.Delete)
             {
-                var focusedElement = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(this.Content.XamlRoot);
-                if (focusedElement is TextBox || focusedElement is PasswordBox || focusedElement is RichEditBox)
-                    return;
-
                 ViewerControl_DeleteRequested(this, EventArgs.Empty);
                 e.Handled = true;
             }
@@ -257,8 +247,6 @@ namespace ModernImageViewer
             // Do not call ViewerControl.PrepareForNewImage(null) here because scheduling RequestRender() /
             // PreviewCanvas.Invalidate() during window shutdown causes a WinUI 3 fail-fast crash (0xc000027b).
             // ImageViewerControl_Unloaded handles canvas and effect cleanup safely.
-            _localCacheEntry?.Release();
-            _localCacheEntry = null;
 
             ViewerControl.CloseRequested -= ViewerControl_CloseRequested;
             ViewerControl.ToggleFullscreenRequested -= ViewerControl_ToggleFullscreenRequested;
@@ -270,15 +258,6 @@ namespace ModernImageViewer
             ViewerControl.DeleteRequested -= ViewerControl_DeleteRequested;
             ViewerControl.ShowInExplorerRequested -= ViewerControl_ShowInExplorerRequested;
             ViewerControl.SwitchToMainRequested -= ViewerControl_SwitchToMainRequested;
-        }
-
-        private void ApplyInitialZoomOrFit()
-        {
-            bool isMaxOrFullscreen = (_appWindow.Presenter.Kind == AppWindowPresenterKind.FullScreen) ||
-                                     (_appWindow.Presenter is OverlappedPresenter p && p.State == OverlappedPresenterState.Maximized);
-
-            if (isMaxOrFullscreen || _shouldFitToWindow) ViewerControl.FitToWindow();
-            else ViewerControl.SetZoom(_initialZoom);
         }
 
         private void QueuePromote()
@@ -326,7 +305,7 @@ namespace ModernImageViewer
                     if (sharedEntry.GpuBitmap != null || sharedEntry.AnimationFrames != null)
                     {
                         ViewerControl.InjectImage(sharedEntry, false);
-                        ApplyInitialZoomOrFit();
+                        ViewerControl.FitToWindow();
                         QueuePromote();
                         return;
                     }
@@ -353,8 +332,12 @@ namespace ModernImageViewer
                         && (shown.GpuBitmap != null || shown.AnimationFrames != null))
                     {
                         ViewerControl.InjectImage(shown, false);
-                        ApplyInitialZoomOrFit();
+                        ViewerControl.FitToWindow();
                     }
+                }
+                else
+                {
+                    ViewerControl.ShowNotification("Could not decode this image");
                 }
 
                 if (!_closed && myLoadId == _currentImageLoadId)
@@ -363,6 +346,7 @@ namespace ModernImageViewer
             catch (Exception ex)
             {
                 Debug.WriteLine($"Detached Load Failed: {ex.Message}");
+                if (!_closed) ViewerControl.ShowNotification("Could not decode this image");
             }
         }
 
@@ -376,7 +360,10 @@ namespace ModernImageViewer
 
             int have = 0;
             if (ImageCache.TryGet(_imageItem.Path, out var cached) && cached != null)
+            {
+                if (cached.AnimationCapped) return;
                 have = cached.DecodedLongEdge;
+            }
 
             int edge = ViewerMath.NextDecodeEdge(nativeW, nativeH, ViewerControl.CurrentZoom, ViewerControl.FitZoom, have, (int)ViewerEngine.HighFidelityMaxEdge);
             if (edge <= 0) return;
@@ -411,6 +398,7 @@ namespace ModernImageViewer
             if (published.GpuBitmap == null && published.AnimationFrames == null) return;
 
             ViewerControl.InjectImage(published, false);
+            if (published.AnimationNote != null) ViewerControl.ShowNotification(published.AnimationNote);
         }
 
         private void ToggleFullscreen()
@@ -499,38 +487,15 @@ namespace ModernImageViewer
 
         private void ViewerControl_EditRequested(object? sender, EventArgs e)
         {
-            if (!string.IsNullOrEmpty(_imageItem.Path))
-            {
-                try
-                {
-                    string editor = "mspaint.exe";
-                    if (MainWindow.Instance != null && !string.IsNullOrWhiteSpace(MainWindow.Instance.ImageEditorPath))
-                    {
-                        editor = MainWindow.Instance.ImageEditorPath;
-                    }
-
-                    var psi = new ProcessStartInfo
-                    {
-                        FileName = editor,
-                        Arguments = $"\"{_imageItem.Path}\"",
-                        UseShellExecute = true
-                    };
-                    Process.Start(psi);
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"Failed to start editor: {ex.Message}");
-                }
-            }
+            string? problem = ViewerEngine.OpenInEditor(_imageItem.Path, MainWindow.Instance?.ImageEditorPath);
+            if (problem != null) ViewerControl.ShowNotification(problem);
         }
 
         private async void ViewerControl_RenameRequested(object? sender, EventArgs e)
         {
-            string oldPath = _imageItem.Path;
             if (await ViewerEngine.RenameImageAsync(_imageItem, this.Content.XamlRoot))
             {
                 this.Title = _imageItem.Name;
-                MainWindow.Instance?.NotifyImageRenamed(oldPath, _imageItem.Path);
                 LoadImageAsync();
             }
         }

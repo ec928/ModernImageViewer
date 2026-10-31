@@ -600,6 +600,24 @@ namespace ModernImageViewer
             return copy;
         }
 
+        /// <summary>Opens the picture in the chosen editor, or Paint. Returns what to tell the user if it could not.</summary>
+        public static string? OpenInEditor(string path, string? editorPath)
+        {
+            if (string.IsNullOrEmpty(path)) return null;
+            if (ComicArchive.IsEntryPath(path)) return "Pages inside a comic book can't be edited";
+            string editor = string.IsNullOrWhiteSpace(editorPath) ? "mspaint.exe" : editorPath;
+            try
+            {
+                Process.Start(new ProcessStartInfo { FileName = editor, Arguments = $"\"{path}\"", UseShellExecute = true });
+                return null;
+            }
+            catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or FileNotFoundException)
+            {
+                Debug.WriteLine($"Failed to start editor: {ex.Message}");
+                return "Could not open the image editor";
+            }
+        }
+
         public static bool RecycleFile(string path)
         {
             try
