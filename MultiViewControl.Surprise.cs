@@ -32,8 +32,9 @@ namespace ModernImageViewer
         private SurpriseOptions? _surpriseOptions;
         private DispatcherTimer? _autoPlayTimer;
         private int _autoPlaySeconds;
-        private int _autoPlayAsked;
         private Border? _surpriseCard;
+        private Border? _autoPlayShield;
+        private bool _autoPlayShieldPressed;
 
         private static string SurpriseOptionsPath => System.IO.Path.Combine(AppPaths.LocalDirectory, "surprise-options.json");
 
@@ -71,17 +72,21 @@ namespace ModernImageViewer
 
         private void AttachSurpriseStops()
         {
+            // While the card is open, the input is about the card: closing it leaves auto-play running.
             RootGrid.AddHandler(PointerPressedEvent, new PointerEventHandler((_, e) =>
             {
-                StopAutoPlay();
-                if (_surpriseCard != null && !IsInSurpriseCard(e.OriginalSource)) CloseSurpriseCard();
+                if (_surpriseCard == null) StopAutoPlay();
+                else if (!IsInSurpriseCard(e.OriginalSource)) RemoveSurpriseCard();
             }), true);
             RootGrid.AddHandler(KeyDownEvent, new KeyEventHandler((_, e) =>
             {
-                StopAutoPlay();
-                if (e.Key == Windows.System.VirtualKey.Escape && _surpriseCard != null)
+                if (_surpriseCard == null)
                 {
-                    CloseSurpriseCard();
+                    StopAutoPlay();
+                }
+                else if (e.Key == Windows.System.VirtualKey.Escape)
+                {
+                    RemoveSurpriseCard();
                     e.Handled = true;
                 }
             }), true);
@@ -91,7 +96,6 @@ namespace ModernImageViewer
         private void ShowSurpriseCard()
         {
             var options = SurpriseChoices;
-            _autoPlayAsked = 0;
             var left = new StackPanel { Spacing = 2, Width = 320 };
             var right = new StackPanel { Spacing = 2, Width = 340 };
 
@@ -157,18 +161,21 @@ namespace ModernImageViewer
             Slide(right, "Gallery gaps", "1 is the usual gap between pictures on a Gallery wall.", 0.25, 3, 0.25, options.GapScale, (o, v) => o.GapScale = v);
             Row(right, "Gallery card", "The color of the card the pictures are set into.",
                 Choice(SurpriseOptions.Cards, options.Card, name => ChangeSurpriseChoices(o => o.Card = name)));
-            Toggle(right, "Keep my canvas", "Keep this canvas color, surface and frame instead of the design's.", options.KeepCanvas, (o, on) => o.KeepCanvas = on);
+            Toggle(right, "Keep my canvas", "Keep the canvas color, surface and frame as they are now, instead of the design's.", options.KeepCanvas, (o, on) => o.KeepCanvas = on);
 
             Heading(right, "With more than 16 pictures");
             Slide(right, "Fewest each click", "The least a click uses.", SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.FewestPictures, (o, v) => o.FewestPictures = (int)v);
             Slide(right, "Most each click", "The most a click uses.", SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.MostPictures, (o, v) => o.MostPictures = (int)v);
-            Slide(right, "One occasion, %", "The odds that a click takes pictures next to each other in folder and date, rather than from anywhere.", 0, 100, 5, options.TogetherChance * 100, (o, v) => o.TogetherChance = v / 100);
+            Slide(right, "Same folder and date, %", "The odds that a click takes pictures that are neighbours when sorted by folder, then file date, which usually means one event. Otherwise it takes them from anywhere.", 0, 100, 5, options.TogetherChance * 100, (o, v) => o.TogetherChance = v / 100);
             Toggle(right, "Skip screens and repeats", "Leave out what looks like a screen capture or a graphic, and all but one of near-identical shots. This is a guess.", options.SkipScreens, (o, on) => o.SkipScreens = on);
 
             Heading(right, "Auto-play");
-            Row(right, "New layout every", "Starts when this card closes. A click or a key stops it.",
-                Choice(new[] { "Off", "5 seconds", "10 seconds", "30 seconds" }, "Off",
-                    name => _autoPlayAsked = name == "Off" ? 0 : int.Parse(name.Split(' ')[0])));
+            Row(right, "New layout every", "Starts as soon as it is chosen. Once this card is closed, a click on the picture or a key stops it.",
+                Choice(new[] { "Off", "5 seconds", "10 seconds", "30 seconds" }, _autoPlaySeconds > 0 ? _autoPlaySeconds + " seconds" : "Off", name =>
+                {
+                    if (name == "Off") StopAutoPlay();
+                    else StartAutoPlay(int.Parse(name.Split(' ')[0]));
+                }));
 
             var columns = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 24 };
             columns.Children.Add(left);
@@ -176,7 +183,7 @@ namespace ModernImageViewer
             var content = new StackPanel { Spacing = 8 };
             var close = new Button { Content = "Close", HorizontalAlignment = HorizontalAlignment.Right };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(close, "Close Surprise me options");
-            close.Click += (_, _) => CloseSurpriseCard();
+            close.Click += (_, _) => RemoveSurpriseCard();
             var defaults = new Button { Content = "Back to defaults" };
             defaults.Click += (_, _) =>
             {
@@ -227,13 +234,6 @@ namespace ModernImageViewer
             HudMenu_Closed(this, EventArgs.Empty);
         }
 
-        private void CloseSurpriseCard()
-        {
-            if (_surpriseCard == null) return;
-            RemoveSurpriseCard();
-            if (_autoPlayAsked > 0) StartAutoPlay(_autoPlayAsked);
-        }
-
         private bool IsInSurpriseCard(object? source)
         {
             for (var node = source as DependencyObject; node != null; node = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(node))
@@ -243,19 +243,23 @@ namespace ModernImageViewer
             return false;
         }
 
-        private void StartAutoPlay(int seconds)
+        /// <summary>The first new layout comes at once, so choosing it visibly does something.</summary>
+        private async void StartAutoPlay(int seconds)
         {
             StopAutoPlay();
             CaptureUndoPoint();
             _autoPlaySeconds = seconds;
-            _autoPlayTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(seconds) };
-            _autoPlayTimer.Tick += async (_, _) =>
+            AddAutoPlayShield();
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(seconds) };
+            _autoPlayTimer = timer;
+            timer.Tick += async (_, _) =>
             {
-                _autoPlayTimer?.Stop();
+                timer.Stop();
                 await SurpriseAsync(fade: true);
-                if (_autoPlaySeconds > 0) _autoPlayTimer?.Start();
+                if (ReferenceEquals(_autoPlayTimer, timer)) timer.Start();
             };
-            _autoPlayTimer.Start();
+            await SurpriseAsync(fade: true);
+            if (ReferenceEquals(_autoPlayTimer, timer)) timer.Start();
         }
 
         /// <summary>Everything auto-play showed is one undo step.</summary>
@@ -265,7 +269,41 @@ namespace ModernImageViewer
             _autoPlaySeconds = 0;
             _autoPlayTimer?.Stop();
             _autoPlayTimer = null;
+            if (!_autoPlayShieldPressed) RemoveAutoPlayShield();
             CaptureUndoPoint();
+        }
+
+        /// <summary>
+        /// Clear, over the canvas and under the card, so the click that stops auto-play only stops it and does not also open
+        /// the picture under it. It stays until that click is released, so the release cannot land on a cell either.
+        /// </summary>
+        private void AddAutoPlayShield()
+        {
+            if (_autoPlayShield != null) return;
+            var shield = new Border { Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent) };
+            Canvas.SetZIndex(shield, 6400);
+            Grid.SetRowSpan(shield, Math.Max(1, RootGrid.RowDefinitions.Count));
+            Grid.SetColumnSpan(shield, Math.Max(1, RootGrid.ColumnDefinitions.Count));
+            shield.PointerPressed += (_, _) => _autoPlayShieldPressed = true;
+            void Released()
+            {
+                _autoPlayShieldPressed = false;
+                if (_autoPlaySeconds == 0) RemoveAutoPlayShield();
+            }
+            shield.PointerReleased += (_, _) => Released();
+            shield.PointerCanceled += (_, _) => Released();
+            shield.PointerCaptureLost += (_, _) => Released();
+            shield.Tapped += (_, e) => e.Handled = true;
+            _autoPlayShield = shield;
+            RootGrid.Children.Add(shield);
+        }
+
+        private void RemoveAutoPlayShield()
+        {
+            if (_autoPlayShield == null) return;
+            RootGrid.Children.Remove(_autoPlayShield);
+            _autoPlayShield = null;
+            _autoPlayShieldPressed = false;
         }
 
         private async void SurpriseButton_Click(object sender, RoutedEventArgs e)

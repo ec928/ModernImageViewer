@@ -74,7 +74,7 @@ namespace ModernImageViewer
         private void CaptureUndoPoint()
         {
             _undoTimer?.Stop();
-            if (_restoringUndo || _items.Count == 0 || _undoStack.Count == 0) return;
+            if (_restoringUndo || _autoPlaySeconds > 0 || _items.Count == 0 || _undoStack.Count == 0) return;
             string now = UndoSnapshot();
             if (now == _undoStack[^1]) return;
             _undoStack.Add(now);
