@@ -122,3 +122,4 @@ The Win2D viewer core is real, but GPU lifetime was not reference-counted end-to
 - 2026-10-31: Multi-View, not released. Surprise me: the design tick-list is gone, and the options become a card of ranges and odds. Slanted panels and Circles. Pictures from one occasion, skipping screens and repeats, Feature in Surprise me, soft and dark pictures kept from the best place, and auto-play with a fade. Its interval is saved with the other settings, and only a click on the canvas, Esc or Space pauses it.
 - 2026-10-31: Multi-View, not released. Each auto-play layout is its own undo step. Saved framing is no longer wiped while a picture decodes, and Undo can no longer get stuck on a layout whose picture loaded slowly.
 - 2026-10-31: v0.26.0, internal. Surprise me options, new designs, featuring, auto-play, and the framing and Undo fixes.
+- 2026-10-31: v0.26.0, released. Everything since v0.24.0.
