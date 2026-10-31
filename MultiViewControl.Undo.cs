@@ -20,6 +20,7 @@ namespace ModernImageViewer
         private readonly List<string> _redoStack = new();
         private DispatcherTimer? _undoTimer;
         private bool _restoringUndo;
+        private int _settleTicket;
         private Dictionary<string, BitmapSource>? _reuseBitmaps;
 
         private bool CanUndo => _undoStack.Count > 1;
@@ -74,7 +75,7 @@ namespace ModernImageViewer
         private void CaptureUndoPoint()
         {
             _undoTimer?.Stop();
-            if (_restoringUndo || _autoPlaySeconds > 0 || _items.Count == 0 || _undoStack.Count == 0) return;
+            if (_restoringUndo || _surpriseSettling || _items.Count == 0 || _undoStack.Count == 0) return;
             string now = UndoSnapshot();
             if (now == _undoStack[^1]) return;
             _undoStack.Add(now);
@@ -114,6 +115,7 @@ namespace ModernImageViewer
             _redoStack.Add(_undoStack[^1]);
             _undoStack.RemoveAt(_undoStack.Count - 1);
             RestoreSnapshot(_undoStack[^1]);
+            SettleRestoredStep();
         }
 
         private void Redo()
@@ -124,6 +126,22 @@ namespace ModernImageViewer
             _redoStack.RemoveAt(_redoStack.Count - 1);
             _undoStack.Add(next);
             RestoreSnapshot(next);
+            SettleRestoredStep();
+        }
+
+        /// <summary>
+        /// A step can be recorded before a slow picture has loaded, and its framing moves when it does. Restored as it was, it
+        /// would move again and be recorded as a new step, which the next Undo would remove, and Undo would never get past it.
+        /// So the step takes the settled state.
+        /// </summary>
+        private async void SettleRestoredStep()
+        {
+            int ticket = ++_settleTicket;
+            _surpriseSettling = true;
+            await WaitForPicturesAsync();
+            if (ticket != _settleTicket) return;
+            _surpriseSettling = false;
+            if (_undoStack.Count > 0) _undoStack[^1] = UndoSnapshot();
         }
 
         /// <summary>Start again in place: four empty cells, no floating cells, default frames and canvas. It is one undo step.</summary>

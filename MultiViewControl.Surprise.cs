@@ -29,6 +29,7 @@ namespace ModernImageViewer
         private bool _surpriseRun;
         private string? _surpriseRecipe;
         private bool _surpriseBusy;
+        private bool _surpriseSettling;
         private SurpriseOptions? _surpriseOptions;
         private DispatcherTimer? _autoPlayTimer;
         private int _autoPlaySeconds;
@@ -268,7 +269,6 @@ namespace ModernImageViewer
             if (ReferenceEquals(_autoPlayTimer, timer)) timer.Start();
         }
 
-        /// <summary>Everything auto-play showed is one undo step.</summary>
         private void StopAutoPlay()
         {
             if (_autoPlaySeconds == 0) return;
@@ -362,7 +362,7 @@ namespace ModernImageViewer
 
                 if (options.KeepCanvas) composition.KeepCanvas(_canvasColor, _canvasSurface, _canvasFrame);
                 if (!sameRun) AutoSaveSession();
-                if (!playing) CaptureUndoPoint();
+                CaptureUndoPoint();
                 _cellBorderFlyout?.Hide();
                 Image? before = fade ? await CoverWithPictureOfCanvasAsync() : null;
                 _restoringUndo = true;
@@ -376,10 +376,21 @@ namespace ModernImageViewer
                     _reuseBitmaps = null;
                     _restoringUndo = false;
                 }
-                if (!playing) CaptureUndoPoint();
                 _surpriseRun = true;
                 _surpriseRecipe = composition.Recipe;
-                if (before != null) await FadeAwayWhenLoadedAsync(before);
+                // A step taken while pictures load could differ from the settled layout, and come back as a second, near-identical one.
+                _settleTicket++;
+                _surpriseSettling = true;
+                try
+                {
+                    await WaitForPicturesAsync();
+                }
+                finally
+                {
+                    _surpriseSettling = false;
+                }
+                CaptureUndoPoint();
+                if (before != null) FadeAway(before);
             }
             finally
             {
@@ -422,11 +433,16 @@ namespace ModernImageViewer
             }
         }
 
-        /// <summary>The new layout stays covered until its pictures have loaded, so they appear together.</summary>
-        private async Task FadeAwayWhenLoadedAsync(Image cover)
+        private async Task WaitForPicturesAsync()
         {
             for (int waited = 0; waited < MostWaitForPicturesMs && AnyPhotoLoading(); waited += 50)
                 await Task.Delay(50);
+            await Task.Delay(50);
+        }
+
+        /// <summary>The new layout stays covered until its pictures have loaded, so they appear together.</summary>
+        private void FadeAway(Image cover)
+        {
             var fade = new DoubleAnimation { From = 1, To = 0, Duration = TimeSpan.FromMilliseconds(700) };
             Storyboard.SetTarget(fade, cover);
             Storyboard.SetTargetProperty(fade, "Opacity");

@@ -1307,6 +1307,8 @@ namespace ModernImageViewer
                 IsHitTestVisible = false // Ensure all pointer events go directly to cellGrid
             };
 
+            // Until the picture has decoded, its shape is a guess, and clamping to that would wipe a saved pan.
+            bool decodedSize = false;
             double naturalWidth = 16.0;
             double naturalHeight = 9.0;
 
@@ -1338,7 +1340,7 @@ namespace ModernImageViewer
 
             var photo = new CellPhoto(item)
             {
-                SetDimensions = (w, h) => { naturalWidth = w; naturalHeight = h; },
+                SetDimensions = (w, h) => { naturalWidth = w; naturalHeight = h; decodedSize = true; },
                 GetDimensions = () => (naturalWidth, naturalHeight)
             };
 
@@ -1410,7 +1412,7 @@ namespace ModernImageViewer
 
                 imgContainer.Width = naturalWidth * scale;
                 imgContainer.Height = naturalHeight * scale;
-                ClampTranslation();
+                if (decodedSize) ClampTranslation();
             }
 
             Action updateLayout = UpdateImageLayout;
@@ -1449,6 +1451,7 @@ namespace ModernImageViewer
                 {
                     naturalWidth = decoded.PixelWidth;
                     naturalHeight = decoded.PixelHeight;
+                    decodedSize = true;
                     fullImg.Source = decoded;
                     if (thumb != null && imgContainer.Children.Contains(thumb))
                     {
@@ -1475,6 +1478,7 @@ namespace ModernImageViewer
                         {
                             naturalWidth = bmp.PixelWidth;
                             naturalHeight = bmp.PixelHeight;
+                            decodedSize = true;
                             UpdateImageLayout();
                         }
                         // The thumbnail would show through a transparent photo, and is no longer needed.
