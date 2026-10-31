@@ -99,6 +99,13 @@ namespace ModernImageViewer
             if (slot >= 0) ReplaceCellImage(slot, file.Path);
         }
 
+        /// <summary>A picture chosen for this cell in the app.</summary>
+        public void FillCell(ImageItem cell, string path)
+        {
+            int slot = Slot(cell);
+            if (slot >= 0) ReplaceCellImage(slot, path);
+        }
+
         private void ReplaceCellImage(int slot, string path)
         {
             var replacement = new ImageItem { Path = path, Name = System.IO.Path.GetFileName(path), Dispatcher = DispatcherQueue };

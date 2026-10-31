@@ -54,6 +54,8 @@ namespace ModernImageViewer
         private AppSettings _currentSettings = new AppSettings();
         private bool _multiViewCanvasActive;
         private bool _multiViewParked;
+        // The cell waiting for one picture. Null when pictures are being added as floating cells.
+        private ImageItem? _parkedCell;
         private bool _multiViewKept;
         private int _stashedGridWidth;
         private int _stashedGridHeight;
@@ -695,6 +697,13 @@ namespace ModernImageViewer
                 var folder = _multiViewParked ? directories.FirstOrDefault(d => d.IsDirectory) : null;
                 if (folder != null) OpenGridFolder(folder);
             }
+
+            // A cell waits for one picture, so the click that picks it is the last step. Not from inside this event: going back clears the selection.
+            if (_parkedCell != null && e.AddedItems.OfType<ImageItem>().Any(item => item.IsGridSelected && IsPictureFile(item.Path)))
+                DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+                {
+                    if (_parkedCell != null) ApplyParkedPhotos();
+                });
 
             int count = 0;
             foreach (var item in ImageGrid.SelectedItems.OfType<ImageItem>())

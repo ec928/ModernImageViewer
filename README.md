@@ -109,9 +109,9 @@ The same card under **Canvas** frames the whole canvas. As in a cell, the gutter
 
 ### Floating cells
 
-Right-click a cell and choose **Freeform** to float its photo above the grid. The photo moves to a new cell, which starts with the same frame, and the original cell is left empty. Right-click an empty cell to add an image. Copy to can also fill it.
+Right-click a cell and choose **Freeform** to float its photo above the grid. The photo moves to a new cell, which starts with the same frame, and the original cell is left empty. Right-click an empty cell and choose **Add image** to find a picture using the app itself: click one and it goes straight into that cell, or press **Esc** to return without adding. Copy to can also fill it.
 
-Drag pictures in from File Explorer to add them: each one becomes a new floating cell where you drop it, up to 16 at a time, in front of the others and with no frame. No other cell changes. Folders, comic books and saved layouts open as they do from anywhere else.
+Drag pictures in from File Explorer to add them: each one becomes a new floating cell where you drop it, up to 16 at a time, in front of the others and with no frame. Drop onto an empty cell and the picture goes into that cell instead, which keeps its settings; with several pictures, the first goes in and the rest float. The caption on the drag says which you will get. No other cell changes. Folders, comic books and saved layouts open as they do from anywhere else.
 
 - Drag to move, and drag the edges or corners to resize. A cell can hang over the edge of the canvas as long as its centre stays on it, and whatever hangs over is left out of an export. **Ctrl+drag** pans the photo inside the cell. Dragged cells snap to the canvas, each other and the grid; hold **Alt** to move freely.
 - **Window** sets the shape: rectangle, squircle, circle or oval, arch (tombstone), L-shape, triangle, right triangle, rhombus (diamond), trapezoid, parallelogram, hexagon, or organic blob. It also mirrors and flips the shape.

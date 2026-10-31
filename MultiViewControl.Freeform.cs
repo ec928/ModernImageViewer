@@ -237,8 +237,9 @@ namespace ModernImageViewer
         }
 
         /// <summary>
-        /// Pictures dragged in from outside each become a new floating cell where they land. A drop with no pictures in it,
-        /// such as a folder or a saved layout, goes on to the main window as it would from anywhere else.
+        /// Pictures dragged in from outside each become a new floating cell where they land, except that an empty cell under the
+        /// pointer takes the first. A drop with no pictures in it, such as a folder or a saved layout, goes on to the main window
+        /// as it would from anywhere else.
         /// </summary>
         private void AttachFileDrop()
         {
@@ -247,6 +248,7 @@ namespace ModernImageViewer
             {
                 if (!Takes(e)) return;
                 e.AcceptedOperation = DataPackageOperation.Copy;
+                e.DragUIOverride.Caption = EmptyCellAt(e.GetPosition(FreeformCanvas)) >= 0 ? "Add to this cell" : "Add as a floating cell";
                 e.Handled = true;
             }
 
@@ -265,10 +267,35 @@ namespace ModernImageViewer
 
                 var pictures = items.OfType<StorageFile>().Select(f => f.Path).Where(MainWindow.IsPictureFile).ToList();
                 if (pictures.Count > 0)
-                    await AddDroppedPicturesAsync(pictures, where);
+                {
+                    int emptyCell = EmptyCellAt(where);
+                    if (emptyCell >= 0)
+                    {
+                        ReplaceCellImage(emptyCell, pictures[0]);
+                        pictures.RemoveAt(0);
+                    }
+                    if (pictures.Count > 0) await AddDroppedPicturesAsync(pictures, where);
+                }
                 else if (MainWindow.Instance != null)
                     await MainWindow.Instance.OpenDroppedItemsAsync(items);
             };
+        }
+
+        /// <summary>The empty cell at this point on the canvas, or -1. A floating cell covers the grid, so only the top cell there counts.</summary>
+        private int EmptyCellAt(Point point)
+        {
+            bool Over(FrameworkElement? root) => root != null && root.ActualWidth >= 1 && root.ActualHeight >= 1 && root.IsLoaded
+                && root.TransformToVisual(FreeformCanvas).TransformBounds(new Rect(0, 0, root.ActualWidth, root.ActualHeight)).Contains(point);
+
+            foreach (var card in _freeformCards.OrderByDescending(c => c.ZIndex))
+            {
+                if (Over(card.Container)) return IsEmptyCell(card.Item) ? Slot(card.Item) : -1;
+            }
+            for (int slot = 0; slot < Math.Min(GridCellCount, _cellRoots.Length); slot++)
+            {
+                if (Over(_cellRoots[slot])) return IsEmptyCell(_items[slot]) ? slot : -1;
+            }
+            return -1;
         }
 
         /// <summary>Pictures chosen in the app arrive like dropped ones, around the middle of the canvas.</summary>

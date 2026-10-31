@@ -19,6 +19,7 @@ namespace ModernImageViewer
     {
         public event EventHandler? CloseRequested;
         public event EventHandler? AddImagesRequested;
+        public event EventHandler<ImageItem>? AddImageRequested;
 
         // When set, this many frames stay on screen and later photos wait off screen.
         private int _framedSlots;
@@ -2017,7 +2018,7 @@ namespace ModernImageViewer
             menu.Items.Add(MakeWindowMenu(item));
             // An empty cell's label says to right-click to add an image, so that stays on the top level.
             if (IsEmptyCell(item))
-                menu.Items.Add(MakeAdvancedItem("Add image\u2026", "\uE8E5", () => PickReplacementImage(item)));
+                menu.Items.Add(MakeAdvancedItem("Add image\u2026", "\uE8E5", () => AddImageRequested?.Invoke(this, item)));
             var activeCard = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, item));
             bool isCurrentCellFreeform = activeCard != null;
             if (activeCard != null) menu.Items.Add(MakeLayerMenu(activeCard));

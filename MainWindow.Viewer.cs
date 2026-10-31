@@ -866,6 +866,7 @@ namespace ModernImageViewer
                 if (MultiViewControl != null)
                 {
                     _multiViewParked = false;
+                    _parkedCell = null;
                     _multiViewKept = false;
                     SetMultiModeTip();
                     BeginMultiViewCanvas();
@@ -927,6 +928,7 @@ namespace ModernImageViewer
             if (_multiViewParked)
             {
                 _multiViewParked = false;
+                _parkedCell = null;
                 ShowAddingMode(false);
             }
             else if (MultiViewControl.Visibility == Visibility.Visible)
@@ -961,9 +963,15 @@ namespace ModernImageViewer
             ToolTipService.SetToolTip(MultiModeButton, _multiViewKept ? "Back to your Multi-View layout" : "Multi-View / Layout (Enter)");
 
         /// <summary>The session waits while the user finds pictures with the app's own navigation.</summary>
-        private void MultiViewControl_AddImagesRequested(object? sender, EventArgs e)
+        private void MultiViewControl_AddImagesRequested(object? sender, EventArgs e) => ParkForPictures(null);
+
+        /// <summary>The same, for one picture that goes straight into this cell.</summary>
+        private void MultiViewControl_AddImageRequested(object? sender, ImageItem cell) => ParkForPictures(cell);
+
+        private void ParkForPictures(ImageItem? cell)
         {
             if (MultiViewControl == null || !_multiViewCanvasActive) return;
+            _parkedCell = cell;
             MultiViewControl.PrepareToLeave();
             MultiViewControl.Visibility = Visibility.Collapsed;
             EndMultiViewCanvas();
@@ -982,8 +990,15 @@ namespace ModernImageViewer
                 .Where(img => img.IsGridSelected && !img.IsDirectory && !img.IsComicEntry && IsPictureFile(img.Path))
                 .Select(img => img.Path)
                 .ToList();
+            var cell = _parkedCell;
             ResumeParkedMultiView();
-            if (picked.Count > 0)
+            if (picked.Count > 0 && cell != null)
+            {
+                MultiViewControl.DispatcherQueue.TryEnqueue(
+                    Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
+                    () => MultiViewControl.FillCell(cell, picked[0]));
+            }
+            else if (picked.Count > 0)
             {
                 MultiViewControl.DispatcherQueue.TryEnqueue(
                     Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
@@ -995,6 +1010,7 @@ namespace ModernImageViewer
         {
             if (!_multiViewParked || MultiViewControl == null) return;
             _multiViewParked = false;
+            _parkedCell = null;
             ImageGrid.SelectedItems.Clear();
             ShowAddingMode(false);
             BeginMultiViewCanvas();
@@ -1011,7 +1027,8 @@ namespace ModernImageViewer
             if (!_multiViewParked || MultiSelectCountText == null) return;
             int count = Images.Count(img => img.IsGridSelected && !img.IsDirectory);
             MultiSelectActionBar.Visibility = Visibility.Visible;
-            MultiSelectCountText.Text = count > 0 ? count + " selected" : "Click pictures to add";
+            MultiSelectCountText.Text = _parkedCell != null ? "Click a picture for this cell"
+                : count > 0 ? count + " selected" : "Click pictures to add";
             ViewTogetherButton.IsEnabled = count > 0;
         }
 
@@ -1026,6 +1043,8 @@ namespace ModernImageViewer
             ToolTipService.SetToolTip(ViewTogetherButton, adding ? "Add these to the layout (Enter)" : "View Together (Enter)");
             ViewTogetherText.Text = adding ? "Add to layout" : "View Together";
             ViewTogetherButton.IsEnabled = true;
+            // For one picture the click is the choice, so there is nothing for the button to confirm.
+            ViewTogetherButton.Visibility = adding && _parkedCell != null ? Visibility.Collapsed : Visibility.Visible;
             var other = adding ? Visibility.Collapsed : Visibility.Visible;
             MultiSelectPlayRule.Visibility = other;
             MultiSelectPlayButton.Visibility = other;
