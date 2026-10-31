@@ -202,6 +202,28 @@
             </Border.Background>
         </Border>
 
+        <!-- The Grid layout card. A plain panel above the bar, so only this control opens and closes it. -->
+        <Border x:Name="CountsCard"
+                Visibility="Collapsed"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Bottom"
+                MaxWidth="640"
+                Canvas.ZIndex="6001"
+                Translation="0,0,332"
+                RequestedTheme="Dark"
+                Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}"
+                BorderThickness="1"
+                CornerRadius="12"
+                Padding="16,14">
+            <Border.Shadow>
+                <ThemeShadow/>
+            </Border.Shadow>
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel x:Name="CountsPanel" Spacing="0" MinWidth="320" />
+            </ScrollViewer>
+        </Border>
+
         <!-- Unified Bottom Playbar / HUD (Single Continuous Glass Capsule Deck) -->
         <Grid x:Name="UnifiedHud" 
               VerticalAlignment="Bottom" 
@@ -265,32 +287,6 @@
 
                     <!-- Group 2: Layout & Composition -->
                     <Border x:Name="CountsSwitch" CornerRadius="12" Background="#14FFFFFF" VerticalAlignment="Center">
-                        <primitives:FlyoutBase.AttachedFlyout>
-                            <Flyout x:Name="CountsFlyout" Opening="CountsFlyout_Opening" Opened="CountsFlyout_Opened" Closed="CountsFlyout_Closed" Placement="Top">
-                                <Flyout.FlyoutPresenterStyle>
-                                    <Style TargetType="FlyoutPresenter">
-                                        <Setter Property="MinWidth" Value="0" />
-                                        <Setter Property="MaxWidth" Value="640" />
-                                        <Setter Property="MaxHeight" Value="760" />
-                                        <Setter Property="Padding" Value="0" />
-                                        <Setter Property="CornerRadius" Value="12" />
-                                        <Setter Property="Background" Value="Transparent" />
-                                        <Setter Property="BorderThickness" Value="0" />
-                                    </Style>
-                                </Flyout.FlyoutPresenterStyle>
-                                <Border x:Name="CountsCard"
-                                        Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}"
-                                        BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}"
-                                        BorderThickness="1"
-                                        CornerRadius="12"
-                                        Padding="16,14">
-                                    <Border.Shadow>
-                                        <ThemeShadow/>
-                                    </Border.Shadow>
-                                    <StackPanel x:Name="CountsPanel" Spacing="0" MinWidth="320" />
-                                </Border>
-                            </Flyout>
-                        </primitives:FlyoutBase.AttachedFlyout>
                         <StackPanel Orientation="Horizontal">
                             <Button x:Name="RowsSide"
                                     Click="RowsSide_Click"

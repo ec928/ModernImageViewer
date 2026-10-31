@@ -41,9 +41,7 @@ namespace ModernImageViewer
         private int _soloIndex = -1;
         private int _lines = 1;
         private int[]? _lineCounts;
-        private bool _countsCardOpenAtPress;
-        private bool _countsCardClosing;
-        private bool _reopenCountsCard;
+        private const double CountsCardGap = 8;
         private TextBlock? _lineCountLabel;
         private ScrollViewer? _countsScroll;
         private double _countsScrollOffset;
@@ -81,7 +79,6 @@ namespace ModernImageViewer
         public MultiViewControl()
         {
             this.InitializeComponent();
-            ActualThemeChanged += (_, _) => ApplyGridLayoutTheme();
 
             _hudTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2.5) };
             _hudTimer.Tick += HudTimer_Tick;
@@ -90,11 +87,10 @@ namespace ModernImageViewer
             RootGrid.PointerReleased += SegmentGesture_PointerReleased;
             RootGrid.PointerCaptureLost += SegmentGesture_PointerReleased;
             AttachUndoWatchers();
-            // Clicks on the switch reach it while the card is open, so one click can change sides.
-            CountsFlyout.OverlayInputPassThroughElement = CountsSwitch;
-            CountsFlyout.Closing += (_, _) => _countsCardClosing = true;
-            CountsSwitch.AddHandler(PointerPressedEvent, new PointerEventHandler((_, _) =>
-                _countsCardOpenAtPress = IsLayoutFlyoutOpen || _countsCardClosing), true);
+            RootGrid.AddHandler(PointerPressedEvent, new PointerEventHandler(CloseCountsCardOnPressOutside), true);
+            CountsCard.SizeChanged += (_, _) => PlaceCountsCard();
+            UnifiedHud.SizeChanged += (_, _) => PlaceCountsCard();
+            RootGrid.SizeChanged += (_, _) => PlaceCountsCard();
             SizeChanged += (_, e) =>
             {
                 RefreshCanvasLabel();
@@ -149,6 +145,7 @@ namespace ModernImageViewer
 
         public void Clear()
         {
+            CloseCountsCard();
             _hudTimer.Stop();
             ClearUndo();
             ClearAllFreeformCards();
@@ -220,31 +217,6 @@ namespace ModernImageViewer
             ShowHudAndOverlays();
         }
 
-        private void CountsFlyout_Opening(object sender, object e)
-        {
-            ApplyGridLayoutTheme();
-            FillCountsPanel();
-        }
-
-        private void CountsFlyout_Opened(object sender, object e)
-        {
-            HudMenu_Opened(sender, e);
-            ShowCountsSides();
-            DispatcherQueue.TryEnqueue(ApplyGridLayoutTheme);
-        }
-
-        private void CountsFlyout_Closed(object sender, object e)
-        {
-            _countsCardClosing = false;
-            ShowCountsSides();
-            HudMenu_Closed(sender, e);
-            if (_reopenCountsCard)
-            {
-                _reopenCountsCard = false;
-                ShowCountsCard();
-            }
-        }
-
         private void RowsSide_Click(object sender, RoutedEventArgs e) => CountsSide_Click(wantRows: true);
 
         private void ColumnsSide_Click(object sender, RoutedEventArgs e) => CountsSide_Click(wantRows: false);
@@ -252,36 +224,60 @@ namespace ModernImageViewer
         /// <summary>The other side switches and opens the card. The chosen side opens the card, or closes it.</summary>
         private void CountsSide_Click(bool wantRows)
         {
-            // A press on the switch can dismiss the open card before this click arrives, so the press recorded it.
-            bool wasOpen = _countsCardOpenAtPress || IsLayoutFlyoutOpen;
-            _countsCardOpenAtPress = false;
             if (wantRows == _flipped)
             {
                 ToggleRowsColumns();
-                ShowCountsCard();
+                OpenCountsCard();
             }
-            else if (wasOpen)
+            else if (IsCountsCardOpen)
             {
-                _reopenCountsCard = false;
-                if (IsLayoutFlyoutOpen) CountsFlyout.Hide();
+                CloseCountsCard();
             }
             else
             {
-                ShowCountsCard();
+                OpenCountsCard();
             }
         }
 
-        /// <summary>A card still open or closing comes back when it has closed, so it is placed again for its new size.</summary>
-        private void ShowCountsCard()
+        private void OpenCountsCard()
         {
-            if (CountsSwitch.Visibility != Visibility.Visible) return;
-            if (IsLayoutFlyoutOpen || _countsCardClosing)
+            if (IsCountsCardOpen || CountsSwitch.Visibility != Visibility.Visible) return;
+            FillCountsPanel();
+            CountsCard.Visibility = Visibility.Visible;
+            PlaceCountsCard();
+            ShowCountsSides();
+            HudMenu_Opened(this, EventArgs.Empty);
+        }
+
+        private void CloseCountsCard()
+        {
+            if (!IsCountsCardOpen) return;
+            CountsCard.Visibility = Visibility.Collapsed;
+            ShowCountsSides();
+            HudMenu_Closed(this, EventArgs.Empty);
+        }
+
+        /// <summary>Centred over the switch and just above the bar, inside the window.</summary>
+        private void PlaceCountsCard()
+        {
+            if (!IsCountsCardOpen) return;
+            double fromBottom = UnifiedHud.ActualHeight + UnifiedHud.Margin.Bottom + CountsCardGap;
+            CountsCard.MaxHeight = Math.Max(160, RootGrid.ActualHeight - fromBottom - CountsCardGap);
+            var at = CountsSwitch.TransformToVisual(RootGrid).TransformPoint(new Point(0, 0));
+            double left = at.X + (CountsSwitch.ActualWidth - CountsCard.ActualWidth) / 2;
+            left = Math.Max(CountsCardGap, Math.Min(left, RootGrid.ActualWidth - CountsCard.ActualWidth - CountsCardGap));
+            CountsCard.Margin = new Thickness(left, 0, 0, fromBottom);
+        }
+
+        /// <summary>A press anywhere but the card or the switch closes the card, and still does what it does.</summary>
+        private void CloseCountsCardOnPressOutside(object sender, PointerRoutedEventArgs e)
+        {
+            if (!IsCountsCardOpen) return;
+            for (var node = e.OriginalSource as DependencyObject; node != null; node = VisualTreeHelper.GetParent(node))
             {
-                _reopenCountsCard = true;
-                if (IsLayoutFlyoutOpen) CountsFlyout.Hide();
-                return;
+                if (ReferenceEquals(node, CountsCard) || ReferenceEquals(node, CountsSwitch)) return;
             }
-            CountsFlyout.ShowAt(CountsSwitch);
+            CloseCountsCard();
         }
 
         /// <summary>The chosen side carries a plate, and a brighter one while the card is open.</summary>
@@ -290,8 +286,8 @@ namespace ModernImageViewer
             var chosen = _flipped ? ColumnsSide : RowsSide;
             var other = _flipped ? RowsSide : ColumnsSide;
             HoldFlyoutSource(other, false);
-            HoldFlyoutSource(chosen, IsLayoutFlyoutOpen);
-            if (!IsLayoutFlyoutOpen)
+            HoldFlyoutSource(chosen, IsCountsCardOpen);
+            if (!IsCountsCardOpen)
                 chosen.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF));
         }
 
@@ -316,37 +312,7 @@ namespace ModernImageViewer
             button.BorderThickness = new Thickness(1);
         }
 
-        /// <summary>
-        /// The photo canvas forces Dark, and this card lives under that grid, so an
-        /// unset theme comes out dark. The card follows the window instead.
-        /// </summary>
-        private void ApplyGridLayoutTheme()
-        {
-            // Premium HUD: The photo canvas and floating controls are an immersive dark glass surface.
-            // Pin the layout inspector to Dark to prevent glare over media and match the playbar.
-            ElementTheme theme = ElementTheme.Dark;
-            if (CountsCard != null)
-                CountsCard.RequestedTheme = theme;
-            if (CountsPanel != null)
-                CountsPanel.RequestedTheme = theme;
-
-            FlyoutPresenter? presenter = FindFlyoutPresenter(CountsCard);
-            if (presenter != null)
-                presenter.RequestedTheme = theme;
-        }
-
-        private static FlyoutPresenter? FindFlyoutPresenter(DependencyObject? start)
-        {
-            DependencyObject? node = start;
-            while (node != null)
-            {
-                if (node is FlyoutPresenter presenter) return presenter;
-                node = VisualTreeHelper.GetParent(node);
-            }
-            return null;
-        }
-
-        private bool IsLayoutFlyoutOpen => CountsFlyout?.IsOpen == true;
+        private bool IsCountsCardOpen => CountsCard?.Visibility == Visibility.Visible;
 
         /// <summary>
         /// The steppers are RepeatButtons. Rebuilding the card on a click destroys the
@@ -355,7 +321,7 @@ namespace ModernImageViewer
         /// </summary>
         private void SyncOpenLayout()
         {
-            if (!IsLayoutFlyoutOpen)
+            if (!IsCountsCardOpen)
                 return;
             bool rows = !_flipped;
             if (_layoutSubtitle == null || _countsScroll == null || _lineLess == null || rows != _openLayoutIsRows)
@@ -378,7 +344,7 @@ namespace ModernImageViewer
 
         private void RefreshOpenLayout()
         {
-            if (IsLayoutFlyoutOpen)
+            if (IsCountsCardOpen)
                 FillCountsPanel();
         }
 
@@ -453,7 +419,6 @@ namespace ModernImageViewer
             }
 
             CountsPanel.Children.Clear();
-            ApplyGridLayoutTheme();
 
             var counts = CurrentLineCounts();
             bool rows = !_flipped;
@@ -1072,6 +1037,11 @@ namespace ModernImageViewer
             switch (key)
             {
                 case VirtualKey.Escape:
+                    if (IsCountsCardOpen)
+                    {
+                        CloseCountsCard();
+                        return true;
+                    }
                     CloseRequested?.Invoke(this, EventArgs.Empty);
                     return true;
                 case VirtualKey.Add:

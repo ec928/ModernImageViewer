@@ -311,6 +311,7 @@ namespace ModernImageViewer
             bool show = shown > 1;
             if (!show)
             {
+                CloseCountsCard();
                 CountsSwitch.Visibility = Visibility.Collapsed;
                 return;
             }
@@ -343,7 +344,7 @@ namespace ModernImageViewer
             bool enabled = CanEditGridLayout;
             RowsSide.IsEnabled = enabled;
             ColumnsSide.IsEnabled = enabled;
-            if (!enabled) CountsFlyout.Hide();
+            if (!enabled) CloseCountsCard();
         }
 
         private static double WeightAt(MosaicLayout node, int index)
