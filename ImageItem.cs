@@ -480,8 +480,8 @@ namespace ModernImageViewer
                                     var asyncOp = source.SetBitmapAsync(softwareBitmap);
                                     asyncOp.Completed = (info, status) =>
                                     {
+                                        // Never closed: doing so crashed the app inside WinUI. It goes with the source.
                                         tcs.TrySetResult(source);
-                                        softwareBitmap.Dispose();
                                     };
                                 }
                                 catch
@@ -525,8 +525,7 @@ namespace ModernImageViewer
             _cts?.Dispose();
             _cts = null;
 
-            // Only let go of it. A Multi-View cell, the viewer or the preview may be showing this source,
-            // and WinUI fails fast if it copies a closed one to the screen.
+            // Only let go of it. A Multi-View cell, the viewer or the preview may be showing this source.
             Thumbnail = null;
             _isLoadingThumb = false;
         }

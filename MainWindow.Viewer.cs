@@ -1814,7 +1814,7 @@ namespace ModernImageViewer
                         var op = source.SetBitmapAsync(bitmap);
                         op.Completed = (_, status) =>
                         {
-                            try { bitmap.Dispose(); } catch { }
+                            // Never closed: doing so crashed the app inside WinUI. It goes with the source.
                             if (status == Windows.Foundation.AsyncStatus.Completed) done.TrySetResult(source);
                             else done.TrySetResult(null);
                         };
