@@ -59,9 +59,9 @@ namespace ModernImageViewer
             return item;
         }
 
-        private void AddCellAdvancedMenu(MenuFlyout menu, ImageItem item)
+        private void AddCellImageMenu(MenuFlyout menu, ImageItem item)
         {
-            var advanced = new MenuFlyoutSubItem { Text = "Advanced", Icon = new FontIcon { Glyph = SettingsGlyph } };
+            var image = new MenuFlyoutSubItem { Text = "Image", Icon = new FontIcon { Glyph = "\uE8B9" } };
 
             void ChangeImage(Action<CellGeometryDto> change)
             {
@@ -71,23 +71,16 @@ namespace ModernImageViewer
 
             if (!IsEmptyCell(item))
             {
-                advanced.Items.Add(MakeAdvancedItem("Replace image\u2026", "\uE8E5", () => PickReplacementImage(item)));
-                advanced.Items.Add(MakeAdvancedItem("Clear cell", "\uE894", () => EmptyCell(Slot(item))));
-                advanced.Items.Add(new MenuFlyoutSeparator());
-                advanced.Items.Add(MakeAdvancedItem("Rotate image left", "\uE7AD", () => ChangeImage(g => g.TurnImage(-90)), mirrorIcon: true));
-                advanced.Items.Add(MakeAdvancedItem("Rotate image right", "\uE7AD", () => ChangeImage(g => g.TurnImage(90))));
-                advanced.Items.Add(MakeAdvancedItem("Mirror image", "\uE8AB", () => ChangeImage(g => g.ImageFlipH = !g.ImageFlipH)));
-                advanced.Items.Add(MakeAdvancedItem("Flip image", "\uE8CB", () => ChangeImage(g => g.ImageFlipV = !g.ImageFlipV)));
+                image.Items.Add(MakeAdvancedItem("Replace image\u2026", "\uE8E5", () => PickReplacementImage(item)));
+                image.Items.Add(MakeAdvancedItem("Clear cell", "\uE894", () => EmptyCell(Slot(item))));
+                image.Items.Add(new MenuFlyoutSeparator());
+                image.Items.Add(MakeAdvancedItem("Rotate image left", "\uE7AD", () => ChangeImage(g => g.TurnImage(-90)), mirrorIcon: true));
+                image.Items.Add(MakeAdvancedItem("Rotate image right", "\uE7AD", () => ChangeImage(g => g.TurnImage(90))));
+                image.Items.Add(MakeAdvancedItem("Mirror image", "\uE8AB", () => ChangeImage(g => g.ImageFlipH = !g.ImageFlipH)));
+                image.Items.Add(MakeAdvancedItem("Flip image", "\uE8CB", () => ChangeImage(g => g.ImageFlipV = !g.ImageFlipV)));
             }
 
-            var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, item));
-            if (card != null)
-            {
-                if (advanced.Items.Count > 0) advanced.Items.Add(new MenuFlyoutSeparator());
-                advanced.Items.Add(MakeLayerMenu(card));
-            }
-
-            if (advanced.Items.Count > 0) menu.Items.Add(advanced);
+            if (image.Items.Count > 0) menu.Items.Add(image);
         }
 
         /// <summary>Choose a file to show in this cell. The cell keeps its parameters, as with any change of content.</summary>

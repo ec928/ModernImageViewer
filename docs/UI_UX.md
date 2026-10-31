@@ -133,9 +133,9 @@ Frame & Border...
 Window                    >   Rectangle, Squircle, Circle / Oval, Arch / Tombstone, L-shape, Triangle,
 Add image...  (empty cell)    Right triangle, Rhombus / Diamond, Trapezoid, Parallelogram, Hexagon, Organic blob,
                               Mirror shape, Flip shape, Reset window
-Advanced                  >   Replace image..., Clear cell,
-                              Rotate image left / right, Mirror image, Flip image,
-                              Layer  >  Bring to front, Bring forward, Send backward, Send to back (floating cells only)
+Layer  (floating cells)   >   Bring to front, Bring forward, Send backward, Send to back
+Image                     >   Replace image..., Clear cell,
+                              Rotate image left / right, Mirror image, Flip image
 --------------------------
 Freeform  (or Dock to Grid)
 ```
