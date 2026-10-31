@@ -620,8 +620,18 @@ namespace ModernImageViewer
         public const string LShape = "L-shape";
         public const string Oval = "Circle / Oval";
         public const string Triangle = "Triangle";
+        public const string Arch = "Arch / Tombstone";
+        public const string Hexagon = "Hexagon";
+        public const string Trapezoid = "Trapezoid";
+        public const string Rhombus = "Rhombus / Diamond";
+        public const string RightTriangle = "Right triangle";
+        public const string Squircle = "Squircle";
+        public const string Blob = "Organic blob";
 
-        public static readonly string[] All = { Rectangle, LShape, Oval, Triangle };
+        public static readonly string[] All = { Rectangle, Squircle, Oval, Arch, LShape, Triangle, RightTriangle, Rhombus, Trapezoid, Hexagon, Blob };
+
+        // Curves all the way round, so they have no corners for the corner radius to round.
+        private static bool HasNoCorners(string? shape) => shape is Oval or Squircle or Blob;
 
         public static (double X, double Y)[]? Outline(CellGeometryDto? geometry) => geometry == null
             ? null
@@ -634,6 +644,13 @@ namespace ModernImageViewer
                 LShape => new (double, double)[] { (0, 0), (notchX, 0), (notchX, notchY), (1, notchY), (1, 1), (0, 1) },
                 Triangle => new (double, double)[] { (0.5, 0), (1, 1), (0, 1) },
                 Oval => OvalPoints(72),
+                Hexagon => new (double, double)[] { (0.25, 0), (0.75, 0), (1, 0.5), (0.75, 1), (0.25, 1), (0, 0.5) },
+                Trapezoid => new (double, double)[] { (0.2, 0), (0.8, 0), (1, 1), (0, 1) },
+                Rhombus => new (double, double)[] { (0.5, 0), (1, 0.5), (0.5, 1), (0, 0.5) },
+                RightTriangle => new (double, double)[] { (0, 0), (1, 1), (0, 1) },
+                Arch => ArchPoints(36),
+                Squircle => SquirclePoints(96),
+                Blob => BlobPoints(120),
                 _ => null
             };
             if (points == null) return null;
@@ -655,7 +672,7 @@ namespace ModernImageViewer
             var points = unit.Select(p => (X: x + p.X * width, Y: y + p.Y * height)).ToArray();
             if (inset > 0) points = Inset(points, inset);
             double inward = concaveRadius ?? radius;
-            return (radius > 0 || inward > 0) && geometry!.Shape != Oval ? Rounded(points, radius, inward) : points;
+            return (radius > 0 || inward > 0) && !HasNoCorners(geometry!.Shape) ? Rounded(points, radius, inward) : points;
         }
 
         private static double SignedArea((double X, double Y)[] points)
@@ -679,11 +696,30 @@ namespace ModernImageViewer
             {
                 var moved = MoveEdges(points, distance, area > 0 ? 1 : -1);
                 double movedArea = SignedArea(moved);
-                if (Math.Sign(movedArea) == Math.Sign(area) && Math.Abs(movedArea) >= 0.02 * Math.Abs(area))
+                if (Math.Sign(movedArea) == Math.Sign(area) && Math.Abs(movedArea) >= 0.02 * Math.Abs(area) && !TurnedInsideOut(points, moved))
                     return moved;
                 distance *= 0.7;
             }
             return points;
+        }
+
+        /// <summary>
+        /// A shape inset past its middle comes out upside down, with the same area sign, so edges pointing backwards are
+        /// the test. A tight curve may reverse a few tiny edges and still look right.
+        /// </summary>
+        private static bool TurnedInsideOut((double X, double Y)[] points, (double X, double Y)[] moved)
+        {
+            double total = 0, reversed = 0;
+            for (int i = 0; i < points.Length; i++)
+            {
+                int next = (i + 1) % points.Length;
+                double dx = points[next].X - points[i].X, dy = points[next].Y - points[i].Y;
+                double length = Math.Sqrt(dx * dx + dy * dy);
+                total += length;
+                if (dx * (moved[next].X - moved[i].X) + dy * (moved[next].Y - moved[i].Y) < 0)
+                    reversed += length;
+            }
+            return reversed > 0.1 * total;
         }
 
         private static (double X, double Y)[] MoveEdges((double X, double Y)[] points, double distance, int side)
@@ -775,6 +811,50 @@ namespace ModernImageViewer
                 double a = 2 * Math.PI * i / count;
                 points[i] = (0.5 + 0.5 * Math.Cos(a), 0.5 + 0.5 * Math.Sin(a));
             }
+            return points;
+        }
+
+        /// <summary>A half oval across the top half of the window, on straight sides.</summary>
+        private static (double X, double Y)[] ArchPoints(int arcSteps)
+        {
+            var points = new (double X, double Y)[arcSteps + 3];
+            points[0] = (0, 1);
+            for (int i = 0; i <= arcSteps; i++)
+            {
+                double a = Math.PI + Math.PI * i / arcSteps;
+                points[i + 1] = (0.5 + 0.5 * Math.Cos(a), 0.5 + 0.5 * Math.Sin(a));
+            }
+            points[arcSteps + 2] = (1, 1);
+            return points;
+        }
+
+        /// <summary>A superellipse of power 4, the soft square of app icons.</summary>
+        private static (double X, double Y)[] SquirclePoints(int count)
+        {
+            var points = new (double X, double Y)[count];
+            for (int i = 0; i < count; i++)
+            {
+                double a = 2 * Math.PI * i / count;
+                double cos = Math.Cos(a), sin = Math.Sin(a);
+                points[i] = (0.5 + 0.5 * Math.Sign(cos) * Math.Sqrt(Math.Abs(cos)), 0.5 + 0.5 * Math.Sign(sin) * Math.Sqrt(Math.Abs(sin)));
+            }
+            return points;
+        }
+
+        /// <summary>A fixed pebble: a circle with three slow waves on its radius, stretched to touch every side of the window.</summary>
+        private static (double X, double Y)[] BlobPoints(int count)
+        {
+            var points = new (double X, double Y)[count];
+            for (int i = 0; i < count; i++)
+            {
+                double a = 2 * Math.PI * i / count;
+                double r = 1 + 0.15 * Math.Sin(2 * a + 0.6) + 0.09 * Math.Sin(3 * a + 2.1) + 0.04 * Math.Sin(5 * a + 4.0);
+                points[i] = (r * Math.Cos(a), r * Math.Sin(a));
+            }
+            double minX = points.Min(p => p.X), maxX = points.Max(p => p.X);
+            double minY = points.Min(p => p.Y), maxY = points.Max(p => p.Y);
+            for (int i = 0; i < count; i++)
+                points[i] = ((points[i].X - minX) / (maxX - minX), (points[i].Y - minY) / (maxY - minY));
             return points;
         }
     }

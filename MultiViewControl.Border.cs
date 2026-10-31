@@ -18,6 +18,10 @@ namespace ModernImageViewer
     {
         // Each cell has its own ImageItem, so two cells showing one file keep separate frames.
         private readonly Dictionary<ImageItem, CellBorderDto> _itemBorders = new();
+        private const double FrameCardWidth = 356;
+        private const double FrameCardMargin = 8;
+        // About the height of the card with every control showing, for centering it.
+        private const double FrameCardTallest = 700;
         private int _frameFlyoutTicket;
         private Flyout? _cellBorderFlyout;
         private FrameworkElement? _cellBorderFlyoutAnchor;
@@ -68,6 +72,61 @@ namespace ModernImageViewer
             bool turnedB = _cellGeometry.Remove(b, out var geometryB);
             if (turnedA) _cellGeometry[b] = geometryA!;
             if (turnedB) _cellGeometry[a] = geometryB!;
+        }
+
+        private bool IsFloatingSlot(int slot) =>
+            (uint)slot < (uint)_cellRoots.Length && _freeformCards.Any(c => ReferenceEquals(c.Container, _cellRoots[slot]));
+
+        /// <summary>
+        /// A cell's attributes: its frame, image rotation, zoom and pan. Its window shape counts only between floating
+        /// cells, because a grid cell has none. Place, size, layer and hidden state belong to the cell and never move.
+        /// </summary>
+        private void CopyCellAttributes(int fromIndex, int toIndex)
+        {
+            var source = _items[fromIndex];
+            var target = _items[toIndex];
+            _itemBorders[target] = GetBorderForItem(source).Clone();
+
+            var from = GetGeometry(source);
+            var geometry = IsFloatingSlot(fromIndex) && IsFloatingSlot(toIndex) ? from.Clone() : GetGeometry(target).Clone();
+            geometry.ImageRotation = from.ImageRotation;
+            geometry.ImageFlipH = from.ImageFlipH;
+            geometry.ImageFlipV = from.ImageFlipV;
+            _cellGeometry[target] = geometry;
+
+            if (_cellRoots[fromIndex]?.Tag is CellParts src && _cellRoots[toIndex]?.Tag is CellParts dst)
+            {
+                dst.Transform.ScaleX = src.Transform.ScaleX;
+                dst.Transform.ScaleY = src.Transform.ScaleY;
+                dst.Transform.TranslateX = src.Transform.TranslateX;
+                dst.Transform.TranslateY = src.Transform.TranslateY;
+                dst.UpdateLayout?.Invoke();
+            }
+        }
+
+        /// <summary>Two cells trade attributes, by way of a copy of one. See <see cref="CopyCellAttributes"/>.</summary>
+        private void ExchangeCellAttributes(int a, int b)
+        {
+            var itemA = _items[a];
+            var frameA = GetBorderForItem(itemA).Clone();
+            var geometryA = GetGeometry(itemA).Clone();
+            var partsA = _cellRoots[a]?.Tag as CellParts;
+            var view = partsA == null ? default : (partsA.Transform.ScaleX, partsA.Transform.ScaleY, partsA.Transform.TranslateX, partsA.Transform.TranslateY);
+
+            CopyCellAttributes(b, a);
+
+            var itemB = _items[b];
+            _itemBorders[itemB] = frameA;
+            var geometry = IsFloatingSlot(a) && IsFloatingSlot(b) ? geometryA : GetGeometry(itemB).Clone();
+            geometry.ImageRotation = geometryA.ImageRotation;
+            geometry.ImageFlipH = geometryA.ImageFlipH;
+            geometry.ImageFlipV = geometryA.ImageFlipV;
+            _cellGeometry[itemB] = geometry;
+            if (partsA != null && _cellRoots[b]?.Tag is CellParts partsB)
+            {
+                (partsB.Transform.ScaleX, partsB.Transform.ScaleY, partsB.Transform.TranslateX, partsB.Transform.TranslateY) = view;
+                partsB.UpdateLayout?.Invoke();
+            }
         }
 
         /// <summary>Show this cell's hidden state: the placeholder alone, or the image with its frame.</summary>
@@ -712,7 +771,7 @@ namespace ModernImageViewer
                 {
                     new Setter(FlyoutPresenter.CornerRadiusProperty, new CornerRadius(10)),
                     new Setter(FlyoutPresenter.PaddingProperty, new Thickness(14, 12, 14, 12)),
-                    new Setter(FlyoutPresenter.WidthProperty, 356.0),
+                    new Setter(FlyoutPresenter.WidthProperty, FrameCardWidth),
                     new Setter(FlyoutPresenter.MaxHeightProperty, 4000.0),
                     new Setter(FlyoutPresenter.BackgroundProperty, new SolidColorBrush(Color.FromArgb(242, 32, 32, 32))),
                     new Setter(FlyoutPresenter.BorderBrushProperty, new SolidColorBrush(Color.FromArgb(51, 255, 255, 255))),
@@ -737,14 +796,34 @@ namespace ModernImageViewer
             });
         }
 
+        /// <summary>
+        /// The card opens beside its cell, or against the window edge farther from a cell too big to sit beside.
+        /// It is placed by point, because a placement relative to a large cell squeezes it into the space left over.
+        /// </summary>
+        private Point FrameCardPosition(FrameworkElement anchor)
+        {
+            double width = ActualWidth, height = ActualHeight;
+            double left = (width - FrameCardWidth) / 2;
+            if (anchor != this && anchor.IsLoaded && anchor.XamlRoot != null)
+            {
+                var cell = anchor.TransformToVisual(this).TransformBounds(new Rect(0, 0, anchor.ActualWidth, anchor.ActualHeight));
+                double needed = FrameCardWidth + 2 * FrameCardMargin;
+                if (width - cell.Right >= needed) left = cell.Right + FrameCardMargin;
+                else if (cell.Left >= needed) left = cell.Left - FrameCardWidth - FrameCardMargin;
+                else left = cell.Left + cell.Width / 2 < width / 2 ? width - FrameCardWidth - FrameCardMargin : FrameCardMargin;
+            }
+            return new Point(Math.Max(FrameCardMargin, left), Math.Max(FrameCardMargin, (height - FrameCardTallest) / 2));
+        }
+
         private void ShowFrameFlyout(Flyout flyout, FrameworkElement anchor)
         {
             try
             {
-                var target = anchor;
-                if (!target.IsLoaded || target.XamlRoot == null)
-                    target = this;
-                flyout.ShowAt(target);
+                flyout.ShowAt(this, new FlyoutShowOptions
+                {
+                    Position = FrameCardPosition(anchor),
+                    Placement = FlyoutPlacementMode.BottomEdgeAlignedLeft
+                });
             }
             catch (Exception ex)
             {

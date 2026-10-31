@@ -127,15 +127,17 @@ Multi-View shows up to 16 grid cells in fluid mosaics, with floating cells above
 ```
 Move Left / Up
 Move Right / Down
-Swap with...              >   Position 1, Position 2...
-Copy to...                >
---------------------------
+Swap with...              >   Contents only | With attributes
+Copy to...                >   Position 1    | Position 1
+--------------------------    Position 2... | Position 2...
 Frame & Border...
 Advanced                  >   Rotate image left / right
 --------------------------    Mirror image, Flip image
 Solo / Maximize               ----------- floating cells only
-Freeform  (or Dock to Grid)   Window  >   Rectangle, L-shape, Circle / Oval, Triangle
-Hide image                                Rotate left / right
+Freeform  (or Dock to Grid)   Window  >   Rectangle, Squircle, Circle / Oval, Arch / Tombstone,
+Hide image                                L-shape, Triangle, Right triangle, Rhombus / Diamond,
+                                          Trapezoid, Hexagon, Organic blob
+                                          Rotate left / right
 --------------------------                Rotate shape only, left / right
 Remove from View                          Mirror shape, Flip shape, Reset window
                               Layer   >   Bring to front, Bring forward,
@@ -143,6 +145,10 @@ Remove from View                          Mirror shape, Flip shape, Reset window
 ```
 
 The playbar's wheel holds Undo, Redo, Copy to clipboard, Save as PNG, and Canvas (Surface, Color).
+
+Swap with and Copy to name positions only, never file names, so the two-column table stays about the width of a single column of named entries. Pointing at a target marks its cell's badge, with "+ attributes" for the second column. The same table appears with any number of cells, down to one row with two photos.
+
+The Frame & Border card always shows at full height for the window, in front of every cell. It opens beside its cell, or against the window edge farther from a cell too big to sit beside, and scrolls only when the window is too short.
 
 ### Invariants:
 1. **Dynamic Swap Badges**:

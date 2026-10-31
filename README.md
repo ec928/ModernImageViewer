@@ -96,14 +96,21 @@ On the photos themselves:
 - Right-click a cell to move it, swap or copy its photo to another cell, set its frame, view it on its own, hide it, or remove it. **Advanced** rotates, mirrors and flips the photo.
 - The maximise button at the top right shows one photo on its own. **←** / **→** step through the photos, skipping hidden ones; **Esc** returns to the grid.
 
-A cell keeps its own settings. Swapping or copying changes only the photo it shows: its frame, zoom and rotation stay. **Frame & Border** sets the line, corners, gutter, mat and shadow. Flush removes them all. Hold a preset button to save the current frame there, and click it to use it again. The last swatch in each color row opens the Windows color picker.
+A cell keeps its own settings. **Swap with** and **Copy to** each open a table of the other positions, with two columns:
+
+- **Contents only** changes just the photo a cell shows. Its frame, zoom and rotation stay, and the new photo takes them on. The move arrows and **Alt+drag** work this way too.
+- **With attributes** brings the source cell's frame, image rotation and mirroring, and zoom and pan along with the photo. Between two floating cells it brings the window shape and its rotation as well; a grid cell has no window shape, so with a grid cell on either side the floating cell keeps its own.
+
+Either way, each cell stays where it is at its own size and layer, and a hidden cell stays hidden.
+
+**Frame & Border** opens beside the cell, or against the window's far edge when the cell is too big to sit beside. It sets the line, corners, gutter, mat and shadow. Flush removes them all. Hold a preset button to save the current frame there, and click it to use it again. The last swatch in each color row opens the Windows color picker.
 
 ### Floating cells
 
 Right-click a cell and choose **Freeform** to float a copy of it above the grid. The original cell is hidden, and the new cell starts with its frame.
 
 - Drag to move, and drag the edges or corners to resize. **Ctrl+drag** pans the photo inside the cell. Dragged cells snap to the canvas, each other and the grid; hold **Alt** to move freely.
-- **Advanced > Window** sets the shape: rectangle, L-shape, circle or oval, or triangle. It also rotates, mirrors and flips the shape. **Rotate shape only** keeps the photo still.
+- **Advanced > Window** sets the shape: rectangle, squircle, circle or oval, arch (tombstone), L-shape, triangle, right triangle, rhombus (diamond), trapezoid, hexagon, or organic blob. It also rotates, mirrors and flips the shape. **Rotate shape only** keeps the photo still.
 - Hover over a floating cell for its handles. The round handle at the top rotates it: hold **Shift** for 15 degree steps, or **Ctrl** to turn the shape and keep the photo still. On an L-shape, the small handle moves the inner corner.
 - **Advanced > Layer** sets which floating cell is in front. Floating cells stay above the grid.
 - **Dock to Grid** puts the photo back into its hidden cell, or a new cell if that one is gone or in use.

@@ -2059,52 +2059,10 @@ namespace ModernImageViewer
                 moveRightItem.PointerExited += (s, e) => ClearHighlightPositionBadge(nextSlot, curSlot);
                 menu.Items.Add(moveRightItem);
 
-                if (_items.Count == 2)
-                {
-                    var swapItem = new MenuFlyoutItem { Text = "Swap with Other Photo", Icon = new FontIcon { Glyph = "\uE8AB" } };
-                    int otherSlot = 1 - curSlot;
-                    swapItem.Click += (s, e) => SwapItems(curSlot, otherSlot);
-                    swapItem.PointerEntered += (s, e) => HighlightPositionBadge(otherSlot);
-                    swapItem.PointerExited += (s, e) => ClearHighlightPositionBadge(otherSlot, curSlot);
-                    menu.Items.Add(swapItem);
-
-                    var copyItem = new MenuFlyoutItem { Text = "Copy to Other Photo", Icon = new FontIcon { Glyph = "\uE8C8" } };
-                    copyItem.Click += (s, e) => CopyItemTo(curSlot, otherSlot);
-                    copyItem.PointerEntered += (s, e) => HighlightPositionBadge(otherSlot, "Copy to");
-                    copyItem.PointerExited += (s, e) => ClearHighlightPositionBadge(otherSlot, curSlot);
-                    menu.Items.Add(copyItem);
-                }
-                else
-                {
-                    var swapSub = new MenuFlyoutSubItem { Text = "Swap with...", Icon = new FontIcon { Glyph = "\uE8AB" } };
-                    var copySub = new MenuFlyoutSubItem { Text = "Copy to...", Icon = new FontIcon { Glyph = "\uE8C8" } };
-                    for (int i = 0; i < _items.Count; i++)
-                    {
-                        if (i == curSlot) continue;
-                        var target = _items[i];
-                        int targetSlot = i;
-
-                        var targetSwap = new MenuFlyoutItem { Text = $"Position {i + 1} ({target.Name})" };
-                        targetSwap.Click += (s, e) => SwapItems(curSlot, targetSlot);
-                        if (targetSlot < _cellRoots.Length && _cellRoots[targetSlot] != null)
-                        {
-                            targetSwap.PointerEntered += (s, e) => HighlightPositionBadge(targetSlot);
-                            targetSwap.PointerExited += (s, e) => ClearHighlightPositionBadge(targetSlot, curSlot);
-                        }
-                        swapSub.Items.Add(targetSwap);
-
-                        var targetCopy = new MenuFlyoutItem { Text = $"Position {i + 1} ({target.Name})" };
-                        targetCopy.Click += (s, e) => CopyItemTo(curSlot, targetSlot);
-                        if (targetSlot < _cellRoots.Length && _cellRoots[targetSlot] != null)
-                        {
-                            targetCopy.PointerEntered += (s, e) => HighlightPositionBadge(targetSlot, "Copy to");
-                            targetCopy.PointerExited += (s, e) => ClearHighlightPositionBadge(targetSlot, curSlot);
-                        }
-                        copySub.Items.Add(targetCopy);
-                    }
-                    menu.Items.Add(swapSub);
-                    menu.Items.Add(copySub);
-                }
+                menu.Items.Add(MakeCellTargetMenu(menu, "Swap with...", "\uE8AB", "Swap with", curSlot,
+                    (target, withAttributes) => SwapItems(curSlot, target, withAttributes)));
+                menu.Items.Add(MakeCellTargetMenu(menu, "Copy to...", "\uE8C8", "Copy to", curSlot,
+                    (target, withAttributes) => CopyItemTo(curSlot, target, withAttributes)));
 
                 menu.Items.Add(new MenuFlyoutSeparator());
             }
@@ -2171,7 +2129,90 @@ namespace ModernImageViewer
             SwapItems(index, target);
         }
 
-        private void CopyItemTo(int fromIndex, int toIndex)
+        /// <summary>One menu entry opening a table of the other cells: the contents alone in one column, with the cell attributes in the other.</summary>
+        private MenuFlyoutSubItem MakeCellTargetMenu(MenuFlyout menu, string text, string glyph, string action, int curSlot, Action<int, bool> run)
+        {
+            var table = new Grid { ColumnSpacing = 2, XYFocusKeyboardNavigation = XYFocusKeyboardNavigationMode.Enabled };
+            table.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(116) });
+            table.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(116) });
+            table.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            void AddHeader(string header, int column, string tip)
+            {
+                var label = new TextBlock
+                {
+                    Text = header,
+                    FontSize = 12,
+                    Foreground = _menuWhiteSecondary,
+                    Margin = new Thickness(10, 6, 4, 6)
+                };
+                ToolTipService.SetToolTip(label, tip);
+                Grid.SetColumn(label, column);
+                table.Children.Add(label);
+            }
+            AddHeader("Contents only", 0, "The image alone. Each cell keeps its frame, image rotation and zoom, and its window shape.");
+            AddHeader("With attributes", 1, "The image with its frame, image rotation and zoom. Window shape too, between floating cells.");
+
+            Button? first = null;
+            int row = 1;
+            for (int i = 0; i < _items.Count; i++)
+            {
+                if (i == curSlot) continue;
+                int targetSlot = i;
+                table.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                for (int column = 0; column < 2; column++)
+                {
+                    bool withAttributes = column == 1;
+                    var button = new Button
+                    {
+                        Content = $"Position {i + 1}",
+                        Style = (Style)Resources["CellTargetButtonStyle"]
+                    };
+                    AutomationProperties.SetName(button, $"{action} position {i + 1}, {(withAttributes ? "with attributes" : "contents only")}");
+                    button.Click += (_, _) =>
+                    {
+                        menu.Hide();
+                        run(targetSlot, withAttributes);
+                    };
+                    button.PointerEntered += (_, _) => HighlightPositionBadge(targetSlot, action, withAttributes);
+                    button.PointerExited += (_, _) => ClearHighlightPositionBadge(targetSlot, curSlot);
+                    Grid.SetRow(button, row);
+                    Grid.SetColumn(button, column);
+                    table.Children.Add(button);
+                    first ??= button;
+                }
+                row++;
+            }
+
+            // Arrow keys move around the table. At its left edge they fall through, which closes the submenu as usual.
+            table.KeyDown += (_, e) =>
+            {
+                FocusNavigationDirection? direction = e.Key switch
+                {
+                    Windows.System.VirtualKey.Up => FocusNavigationDirection.Up,
+                    Windows.System.VirtualKey.Down => FocusNavigationDirection.Down,
+                    Windows.System.VirtualKey.Left => FocusNavigationDirection.Left,
+                    Windows.System.VirtualKey.Right => FocusNavigationDirection.Right,
+                    _ => null
+                };
+                if (direction != null && table.XamlRoot != null)
+                    e.Handled = FocusManager.TryMoveFocus(direction.Value, new FindNextElementOptions { SearchRoot = table });
+            };
+            // A press on the headers is not a choice, so the menu entry must not see it and close.
+            table.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
+            table.PointerPressed += (_, e) => e.Handled = true;
+            table.PointerReleased += (_, e) => e.Handled = true;
+            table.Tapped += (_, e) => e.Handled = true;
+
+            var entry = new MenuFlyoutItem { Tag = table, Template = (ControlTemplate)Resources["CellTargetTableTemplate"] };
+            entry.GotFocus += (_, _) => first?.Focus(FocusState.Programmatic);
+
+            var sub = new MenuFlyoutSubItem { Text = text, Icon = new FontIcon { Glyph = glyph } };
+            sub.Items.Add(entry);
+            return sub;
+        }
+
+        private void CopyItemTo(int fromIndex, int toIndex, bool withAttributes = false)
         {
             if (fromIndex < 0 || fromIndex >= _items.Count || toIndex < 0 || toIndex >= _items.Count || fromIndex == toIndex) return;
             var source = _items[fromIndex];
@@ -2208,10 +2249,13 @@ namespace ModernImageViewer
             {
                 RebindCell(toIndex);
             }
-            ShowHiddenState(toIndex);
 
+            // Before the cell redraws: a floating cell draws its shape and frame from its card's item.
             var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(rootDst, c.Container));
             if (card != null) card.Item = copy;
+
+            if (withAttributes) CopyCellAttributes(fromIndex, toIndex);
+            ShowHiddenState(toIndex);
             ShowHudAndOverlays();
         }
 
@@ -2374,7 +2418,7 @@ namespace ModernImageViewer
             }
         }
 
-        private void HighlightPositionBadge(int targetIndex, string action = "Swap with")
+        private void HighlightPositionBadge(int targetIndex, string action = "Swap with", bool withAttributes = false)
         {
             if (targetIndex < 0 || targetIndex >= _items.Count || targetIndex >= _cellRoots.Length) return;
             if (_cellRoots[targetIndex]?.Tag is CellParts parts)
@@ -2382,7 +2426,7 @@ namespace ModernImageViewer
                 var accent = GetMultiViewAccentColor();
                 bool compact = (_cellRoots[targetIndex] is FrameworkElement fe && fe.ActualWidth < 220);
                 string symbol = action == "Copy to" ? "\u2398" : "\u279C";
-                parts.BadgeText.Text = compact ? $"{symbol} #{targetIndex + 1}" : $"{symbol} {action} Position {targetIndex + 1}";
+                parts.BadgeText.Text = compact ? $"{symbol} #{targetIndex + 1}" : $"{symbol} {action} Position {targetIndex + 1}{(withAttributes ? " + attributes" : "")}";
                 parts.PositionBadge.Background = new SolidColorBrush(accent);
                 parts.PositionBadge.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.White);
                 parts.PositionBadge.BorderThickness = new Thickness(2);
@@ -2956,7 +3000,7 @@ namespace ModernImageViewer
             ui.SetContentFromSoftwareBitmap(bitmap, new Point(grab.X * rtb.PixelWidth / w, grab.Y * rtb.PixelHeight / h));
         }
 
-        public void SwapItems(int idxA, int idxB)
+        public void SwapItems(int idxA, int idxB, bool withAttributes = false)
         {
             if (idxA < 0 || idxA >= _items.Count || idxB < 0 || idxB >= _items.Count || idxA == idxB) return;
             var itemA = _items[idxA];
@@ -3002,6 +3046,7 @@ namespace ModernImageViewer
             var cardB = _freeformCards.FirstOrDefault(c => ReferenceEquals(rootB, c.Container));
             if (cardB != null) cardB.Item = itemA;
 
+            if (withAttributes) ExchangeCellAttributes(idxA, idxB);
             ShowHiddenState(idxA);
             ShowHiddenState(idxB);
             ShowHudAndOverlays();

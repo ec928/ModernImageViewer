@@ -16,6 +16,13 @@ namespace ModernImageViewer.Tests
         [InlineData(WindowShapes.LShape)]
         [InlineData(WindowShapes.Oval)]
         [InlineData(WindowShapes.Triangle)]
+        [InlineData(WindowShapes.Arch)]
+        [InlineData(WindowShapes.Hexagon)]
+        [InlineData(WindowShapes.Trapezoid)]
+        [InlineData(WindowShapes.Rhombus)]
+        [InlineData(WindowShapes.RightTriangle)]
+        [InlineData(WindowShapes.Squircle)]
+        [InlineData(WindowShapes.Blob)]
         public void OutlineStaysInsideTheWindow(string shape)
         {
             var points = WindowShapes.Outline(shape, flipH: true, flipV: true)!;
@@ -25,6 +32,39 @@ namespace ModernImageViewer.Tests
                 Assert.InRange(p.X, 0, 1);
                 Assert.InRange(p.Y, 0, 1);
             });
+        }
+
+        [Fact]
+        public void EveryShapeTakesARadiusAndAHeavyGutterInAnyWindow()
+        {
+            foreach (string shape in WindowShapes.All.Where(s => s != WindowShapes.Rectangle))
+            {
+                foreach (var (w, h) in new[] { (800.0, 500.0), (500.0, 800.0), (100.0, 80.0), (1400.0, 90.0) })
+                {
+                    var geometry = new CellGeometryDto { Shape = shape };
+                    var outer = WindowShapes.Placed(geometry, 0, 0, w, h)!;
+                    var inner = WindowShapes.Placed(geometry, 0, 0, w, h, radius: 30, inset: 40)!;
+                    Assert.True(outer.Min(p => p.X) >= -1e-6 && outer.Max(p => p.X) <= w + 1e-6, shape);
+                    Assert.True(outer.Min(p => p.Y) >= -1e-6 && outer.Max(p => p.Y) <= h + 1e-6, shape);
+                    Assert.All(inner, p => Assert.True(double.IsFinite(p.X) && double.IsFinite(p.Y), shape));
+                    // A window too small for the gutter gets less of it, but the shape never spills out of its window.
+                    Assert.True(inner.Min(p => p.X) >= -1 && inner.Max(p => p.X) <= w + 1, $"{shape} {w}x{h} X");
+                    Assert.True(inner.Min(p => p.Y) >= -1 && inner.Max(p => p.Y) <= h + 1, $"{shape} {w}x{h} Y");
+                }
+            }
+        }
+
+        [Fact]
+        public void CurvedShapesReachEverySideOfTheWindow()
+        {
+            foreach (string shape in new[] { WindowShapes.Squircle, WindowShapes.Blob, WindowShapes.Arch })
+            {
+                var points = WindowShapes.Outline(shape)!;
+                Assert.Equal(0, points.Min(p => p.X), 2);
+                Assert.Equal(1, points.Max(p => p.X), 2);
+                Assert.Equal(0, points.Min(p => p.Y), 2);
+                Assert.Equal(1, points.Max(p => p.Y), 2);
+            }
         }
 
         [Fact]

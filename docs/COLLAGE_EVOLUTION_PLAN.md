@@ -8,10 +8,10 @@ How it is built is in `ARCHITECTURE.md`, under Multi-view. How it looks and beha
 
 - Grid layout tool, heroes and draggable edges
 - Per-cell frames: stroke, corner radius, gutter, mat and shadow, with Flush and three saved presets
-- Swap, copy, hide and move, with parameters staying on the cell
+- Swap, copy, hide and move, with parameters staying on the cell, and swap and copy that can bring the cell's attributes too
 - Rotate, mirror and flip the image on any cell
 - Floating cells: move, resize, snap, layer, and Dock back into the grid
-- Window shapes on floating cells: rectangle, L-shape, circle or oval, triangle, with rotation, mirroring and shape-only rotation
+- Window shapes on floating cells: rectangle, squircle, circle or oval, arch, L-shape, triangle, right triangle, rhombus, trapezoid, hexagon and organic blob, with rotation, mirroring and shape-only rotation
 - Canvas surface and color, including custom colors
 - Undo and redo
 - Save and load `.mivlayout` layouts
