@@ -27,7 +27,6 @@ namespace ModernImageViewer
             public ImageItem Item { get; set; } = null!;
             public int SourceSlot { get; set; }
             public FrameworkElement Container { get; set; } = null!;
-            public CellBorderDto? Border { get; set; }
             public int ZIndex { get; set; } = 5000;
             public double X { get; set; }
             public double Y { get; set; }
@@ -41,34 +40,29 @@ namespace ModernImageViewer
 
             int sourceSlot = restoreDto?.SourceSlot ?? Slot(item);
 
-            // Check if there is ALREADY an active freeform card for this item or sourceSlot or path
-            var existingCard = _freeformCards.FirstOrDefault(c => 
-                ReferenceEquals(c.Item, item) || 
-                (sourceSlot >= 0 && c.SourceSlot == sourceSlot) ||
-                string.Equals(c.Item.Path, item.Path, StringComparison.OrdinalIgnoreCase));
-
-            if (existingCard != null && restoreDto == null)
-            {
-                BringFreeformCardToFront(existingCard);
-                return;
-            }
-
-            // Hide the photo in the underlying grid cell (exact same hide mechanism)
-            if (sourceSlot >= 0 && sourceSlot < _items.Count && !_hiddenItems.Contains(_items[sourceSlot]))
+            // Hide the photo in the underlying grid cell (exact same hide mechanism).
+            // A saved layout restores the hidden state it recorded, so a restore leaves the source alone.
+            if (restoreDto == null && sourceSlot >= 0 && sourceSlot < _items.Count && !_hiddenItems.Contains(_items[sourceSlot]))
             {
                 ToggleHideImage(_items[sourceSlot]);
             }
 
+            // A saved freeform cell may hold a different image from its source cell, after a swap or a copy.
+            bool sameAsSource = restoreDto == null || string.IsNullOrEmpty(restoreDto.Path)
+                || string.Equals(restoreDto.Path, item.Path, StringComparison.OrdinalIgnoreCase);
+
             // Create a new ImageItem for this Freeform Cell so it becomes Position N+1 (e.g. Position 5)
             var freeformItem = new ImageItem
             {
-                Path = item.Path,
-                Name = item.Name ?? Path.GetFileName(item.Path),
-                DateModified = item.DateModified,
-                SizeString = item.SizeString,
-                Thumbnail = item.Thumbnail,
+                Path = sameAsSource ? item.Path : restoreDto!.Path,
+                Name = sameAsSource ? (item.Name ?? Path.GetFileName(item.Path)) : (restoreDto!.Name ?? Path.GetFileName(restoreDto.Path)),
+                DateModified = sameAsSource ? item.DateModified : default,
+                SizeString = sameAsSource ? item.SizeString : string.Empty,
+                Thumbnail = sameAsSource ? item.Thumbnail : null,
                 Dispatcher = item.Dispatcher
             };
+            if (restoreDto?.Hidden == true)
+                _hiddenItems.Add(freeformItem);
 
             // Calculate geometry (matching natural photo aspect ratio for zero letterboxing)
             double naturalW = 1920;
@@ -167,8 +161,7 @@ namespace ModernImageViewer
                 if (restoreDto?.PanY.HasValue == true) parts.Transform.TranslateY = restoreDto.PanY.Value;
             }
 
-            var borderSettings = (restoreDto?.Border ?? GetBorderForItem(item)).Clone();
-            _itemBorders[freeformItem.Path] = borderSettings;
+            _itemBorders[freeformItem] = (restoreDto?.Border ?? GetBorderForItem(item)).Clone();
             if (CardBorder(freeformCell) is Border cellBorder)
             {
                 ApplyBorderToCellBorder(cellBorder, cellBorder.Child as Grid, freeformItem);
@@ -179,7 +172,6 @@ namespace ModernImageViewer
                 Item = freeformItem,
                 SourceSlot = sourceSlot,
                 Container = freeformCell,
-                Border = borderSettings,
                 ZIndex = zIndex,
                 X = x,
                 Y = y,
@@ -207,38 +199,61 @@ namespace ModernImageViewer
         public void DockFreeformCard(FreeformCard card)
         {
             if (card == null) return;
+
+            // The floating cell's own slot, taken before its image moves into the grid.
+            int cardSlot = _items.IndexOf(card.Item);
+            int source = card.SourceSlot;
+            bool backToSource = source >= 0 && source < GridCellCount
+                && _hiddenItems.Contains(_items[source])
+                && (uint)source < (uint)_cellRoots.Length && _cellRoots[source]?.Tag is CellParts;
+
             FreeformCanvas.Children.Remove(card.Container);
             _freeformCards.Remove(card);
 
-            // Transfer the current freeform photo content back to the docked grid cell if it was swapped
-            if (card.SourceSlot >= 0 && card.SourceSlot < _items.Count)
+            if (backToSource)
             {
-                var gridRoot = (uint)card.SourceSlot < (uint)_cellRoots.Length ? _cellRoots[card.SourceSlot] : null;
-                if (gridRoot?.Tag is CellParts gridParts && card.Container?.Tag is CellParts freeformParts)
+                // The image returns to its hidden source cell, which keeps its own parameters.
+                var gridParts = (CellParts)_cellRoots[source]!.Tag;
+                var oldItem = _items[source];
+                _items[source] = card.Item;
+                MoveCellParameters(oldItem, card.Item);
+                _hiddenItems.Remove(card.Item);
+                if (card.Container.Tag is CellParts freeformParts && CellImageReady(freeformParts))
                 {
                     gridParts.Photo.Source = freeformParts.Photo.Source;
                     var dims = freeformParts.Bound.GetDimensions?.Invoke() ?? (16, 9);
                     gridParts.Bound.SetDimensions?.Invoke(dims.Width, dims.Height);
-                    _items[card.SourceSlot] = card.Item;
                     gridParts.Bound.Item = card.Item;
                     gridParts.UpdateLayout?.Invoke();
                 }
-
-                if (_hiddenItems.Contains(_items[card.SourceSlot]))
+                else
                 {
-                    ToggleHideImage(_items[card.SourceSlot]);
+                    RebindCell(source);
                 }
+                ShowHiddenState(source);
             }
 
-            int index = _items.IndexOf(card.Item);
-            if (index >= 0)
+            if (cardSlot >= 0)
             {
-                _hiddenItems.Remove(card.Item);
                 ForgetCell(card.Container);
-                _items.RemoveAt(index);
+                _items.RemoveAt(cardSlot);
                 var roots = new List<FrameworkElement?>(_cellRoots);
-                if (index < roots.Count) roots.RemoveAt(index);
+                if (cardSlot < roots.Count) roots.RemoveAt(cardSlot);
                 _cellRoots = roots.ToArray();
+            }
+
+            if (!backToSource && cardSlot >= 0)
+            {
+                // The source cell is gone or shows something else, so the image gets a new grid cell.
+                int gridEnd = GridCellCount;
+                _items.Insert(gridEnd, card.Item);
+                _hiddenItems.Remove(card.Item);
+                var roots = new List<FrameworkElement?>(_cellRoots);
+                roots.Insert(Math.Min(gridEnd, roots.Count), null);
+                _cellRoots = roots.ToArray();
+                if (_framedSlots > 0) _framedSlots++;
+                RelayoutKeepingCells();
+                RefreshOpenLayout();
             }
 
             ShowHudAndOverlays();
@@ -254,6 +269,7 @@ namespace ModernImageViewer
             if (index >= 0)
             {
                 _hiddenItems.Remove(card.Item);
+                _itemBorders.Remove(card.Item);
                 ForgetCell(card.Container);
                 _items.RemoveAt(index);
                 var roots = new List<FrameworkElement?>(_cellRoots);

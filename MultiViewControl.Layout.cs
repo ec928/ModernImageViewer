@@ -131,6 +131,7 @@ namespace ModernImageViewer
                 emptyPanel.Children.Add(openBtn);
                 CellsGrid.Children.Add(emptyPanel);
 
+                RelinkFreeformCells();
                 RefreshLinesChrome(0);
                 RefreshHeroChrome(0);
                 return;
@@ -143,8 +144,9 @@ namespace ModernImageViewer
             {
                 CellsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
                 CellsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                _cellRoots = new FrameworkElement?[Math.Max(1, _items.Count)];
-                AddCell(_items[0], 0, 0, 1, 1, 0);
+                if (!keepCells)
+                    _cellRoots = new FrameworkElement?[Math.Max(1, _items.Count)];
+                PlaceCell(CellsGrid, 0, 0, 0);
             }
             else
             {
@@ -173,6 +175,15 @@ namespace ModernImageViewer
                 RenderSplit(mosaic, CellsGrid, Array.Empty<int>());
             }
 
+            RelinkFreeformCells();
+            RefreshLinesChrome(stored);
+            RefreshHeroChrome(stored);
+        }
+
+        /// <summary>A rebuild can start the shared lists again. Freeform cells live outside the grid and carry on.</summary>
+        private void RelinkFreeformCells()
+        {
+            EnsureCellRootsCapacity(_items.Count);
             for (int fc = 0; fc < _freeformCards.Count; fc++)
             {
                 var card = _freeformCards[fc];
@@ -191,11 +202,10 @@ namespace ModernImageViewer
                         _cellTransforms.Add(cardParts.Transform);
                     if (!_layoutUpdaters.Contains(cardParts.UpdateLayout))
                         _layoutUpdaters.Add(cardParts.UpdateLayout);
+                    if (!_cellTopControls.Contains(cardParts.TopControls))
+                        _cellTopControls.Add(cardParts.TopControls);
                 }
             }
-
-            RefreshLinesChrome(stored);
-            RefreshHeroChrome(stored);
         }
 
         private int VisibleCount(int count)

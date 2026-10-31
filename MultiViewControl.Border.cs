@@ -15,7 +15,8 @@ namespace ModernImageViewer
 {
     public sealed partial class MultiViewControl
     {
-        private readonly Dictionary<string, CellBorderDto> _itemBorders = new(StringComparer.OrdinalIgnoreCase);
+        // Each cell has its own ImageItem, so two cells showing one file keep separate frames.
+        private readonly Dictionary<ImageItem, CellBorderDto> _itemBorders = new();
         private static CellBorderDto? _lastBorderSettings;
         private CellBorderDto? _openFrameBorder;
         private int _frameFlyoutTicket;
@@ -26,10 +27,10 @@ namespace ModernImageViewer
             if (item == null || string.IsNullOrEmpty(item.Path))
                 return new CellBorderDto { Color = "#FFFFFFFF", Thickness = 0, Padding = 0, CornerRadius = 0, StrokeStyle = "Solid", ShadowIntensity = 0 };
 
-            if (!_itemBorders.TryGetValue(item.Path, out var border))
+            if (!_itemBorders.TryGetValue(item, out var border))
             {
                 border = new CellBorderDto { Color = "#FFFFFFFF", Thickness = 0, Padding = 0, CornerRadius = 0, StrokeStyle = "Solid", ShadowIntensity = 0 };
-                _itemBorders[item.Path] = border;
+                _itemBorders[item] = border;
             }
             return border;
         }
@@ -37,10 +38,50 @@ namespace ModernImageViewer
         public void SetBorderForItem(ImageItem item, CellBorderDto border)
         {
             if (item == null || string.IsNullOrEmpty(item.Path)) return;
-            _itemBorders[item.Path] = border.Clone();
+            _itemBorders[item] = border.Clone();
             _lastBorderSettings = border.Clone();
             int slot = Slot(item);
             if (slot >= 0) ApplyBorderToCell(slot);
+        }
+
+        /// <summary>A cell's content is changing from one item to another. The cell keeps its frame and hidden state.</summary>
+        private void MoveCellParameters(ImageItem from, ImageItem to)
+        {
+            if (ReferenceEquals(from, to)) return;
+            if (_itemBorders.Remove(from, out var border))
+                _itemBorders[to] = border;
+            else
+                _itemBorders.Remove(to);
+            if (_hiddenItems.Remove(from))
+                _hiddenItems.Add(to);
+            else
+                _hiddenItems.Remove(to);
+        }
+
+        /// <summary>Two cells are exchanging content. Each keeps its own frame and hidden state.</summary>
+        private void ExchangeCellParameters(ImageItem a, ImageItem b)
+        {
+            bool hasA = _itemBorders.Remove(a, out var borderA);
+            bool hasB = _itemBorders.Remove(b, out var borderB);
+            if (hasA) _itemBorders[b] = borderA!;
+            if (hasB) _itemBorders[a] = borderB!;
+            bool hiddenA = _hiddenItems.Remove(a);
+            bool hiddenB = _hiddenItems.Remove(b);
+            if (hiddenA) _hiddenItems.Add(b);
+            if (hiddenB) _hiddenItems.Add(a);
+        }
+
+        /// <summary>Show this cell's hidden state: the placeholder alone, or the image with its frame.</summary>
+        private void ShowHiddenState(int slot)
+        {
+            if ((uint)slot >= (uint)_cellRoots.Length || (uint)slot >= (uint)_items.Count) return;
+            if (_cellRoots[slot]?.Tag is not CellParts parts) return;
+            bool hidden = _hiddenItems.Contains(_items[slot]);
+            if (parts.ImageContainer != null)
+                parts.ImageContainer.Visibility = hidden ? Visibility.Collapsed : Visibility.Visible;
+            if (parts.HiddenPlaceholder != null)
+                parts.HiddenPlaceholder.Visibility = hidden ? Visibility.Visible : Visibility.Collapsed;
+            ApplyBorderToCell(slot);
         }
 
         public static Color ParseColor(string? hex)
@@ -659,9 +700,9 @@ namespace ModernImageViewer
                 {
                     var it = _items[i];
                     if (it != null && !string.IsNullOrEmpty(it.Path))
-                        _itemBorders[it.Path] = proto.Clone();
+                        _itemBorders[it] = proto.Clone();
                 }
-                if (!string.IsNullOrEmpty(item.Path) && _itemBorders.TryGetValue(item.Path, out var stored))
+                if (_itemBorders.TryGetValue(item, out var stored))
                 {
                     border = stored;
                     _openFrameBorder = stored;

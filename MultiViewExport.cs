@@ -685,7 +685,15 @@ namespace ModernImageViewer
             double canvasH = CellsGrid.ActualHeight;
             if (canvasW < 1 || canvasH < 1) return shots;
 
-            for (int i = 0; i < count; i++)
+            // Grid cells first, then freeform cells from back to front, so the export stacks like the screen.
+            var slots = new List<int>(Enumerable.Range(0, count));
+            foreach (var card in _freeformCards.OrderBy(c => c.ZIndex))
+            {
+                int slot = _items.IndexOf(card.Item);
+                if (slot >= 0 && slot < _cellRoots.Length) slots.Add(slot);
+            }
+
+            foreach (int i in slots)
             {
                 var rootElem = _cellRoots[i];
                 if (rootElem == null) continue;
@@ -733,42 +741,6 @@ namespace ModernImageViewer
                     IsHidden = _hiddenItems.Contains(_items[i])
                 });
             }
-            if (_freeformCards.Count > 0)
-            {
-                var sortedCards = _freeformCards.OrderBy(c => c.ZIndex).ToList();
-                foreach (var card in sortedCards)
-                {
-                    double cx = Canvas.GetLeft(card.Container);
-                    double cy = Canvas.GetTop(card.Container);
-                    if (double.IsNaN(cx)) cx = card.X;
-                    if (double.IsNaN(cy)) cy = card.Y;
-                    double cw = card.Container.ActualWidth > 0 ? card.Container.ActualWidth : card.Width;
-                    double ch = card.Container.ActualHeight > 0 ? card.Container.ActualHeight : card.Height;
-
-                    Rect cardBounds = new Rect(cx, cy, cw, ch);
-                    Rect photoBounds = new Rect(cx, cy + 32, cw, Math.Max(10, ch - 32));
-
-                    var parts = card.Container.Tag as CellParts;
-                    shots.Add(new CellShot
-                    {
-                        Path = card.Item.Path ?? string.Empty,
-                        Cell = cardBounds,
-                        Card = cardBounds,
-                        Photo = photoBounds,
-                        ImageW = cw,
-                        ImageH = ch,
-                        Scale = parts?.Transform?.ScaleX ?? 1.0,
-                        TranslateX = parts?.Transform?.TranslateX ?? 0.0,
-                        TranslateY = parts?.Transform?.TranslateY ?? 0.0,
-                        NativeW = 1920,
-                        NativeH = 1080,
-                        CanvasW = canvasW,
-                        CanvasH = canvasH,
-                        Border = card.Border?.Clone(),
-                        IsHidden = false
-                    });
-                }
-            }
 
             return shots;
         }
@@ -782,6 +754,9 @@ namespace ModernImageViewer
 
             foreach (var shot in shots)
             {
+                // Hidden means the whole cell: no image, mat, frame or shadow.
+                if (shot.IsHidden) continue;
+
                 Rect photo = shot.Photo.Width >= 1 && shot.Photo.Height >= 1 ? shot.Photo
                     : (shot.Card.Width >= 1 && shot.Card.Height >= 1 ? shot.Card : shot.Cell);
                 var placed = GridCanvasMath.Place(photo.Width, photo.Height, shot.ImageW, shot.ImageH, shot.Scale, shot.TranslateX, shot.TranslateY);
@@ -824,11 +799,6 @@ namespace ModernImageViewer
                     float slotW = (float)(shot.Cell.Width * scaleX);
                     float slotH = (float)(shot.Cell.Height * scaleY);
                     matSession.FillRectangle(slotX, slotY, slotW, slotH, Color.FromArgb(mat.A, mat.R, mat.G, mat.B));
-                }
-
-                if (shot.IsHidden)
-                {
-                    continue;
                 }
 
                 // 1. Draw Drop Shadow or Ambient Rim Glow
@@ -1136,7 +1106,7 @@ namespace ModernImageViewer
                         Zoom = (card.Container.Tag as CellParts)?.Transform?.ScaleX,
                         PanX = (card.Container.Tag as CellParts)?.Transform?.TranslateX,
                         PanY = (card.Container.Tag as CellParts)?.Transform?.TranslateY,
-                        Border = (GetBorderForItem(card.Item) ?? card.Border)?.Clone()
+                        Border = GetBorderForItem(card.Item).Clone()
                     });
                 }
             }
@@ -1203,8 +1173,13 @@ namespace ModernImageViewer
         {
             if (layoutFile == null) return;
 
+            // Clear the cells of the session being replaced before anything counts them.
+            ClearAllFreeformCards();
+
             if (layoutFile.Photos != null && layoutFile.Photos.Count > 0)
             {
+                _hiddenItems.Clear();
+                _itemBorders.Clear();
                 var items = new List<ImageItem>();
                 foreach (var photo in layoutFile.Photos)
                 {
@@ -1217,8 +1192,10 @@ namespace ModernImageViewer
                     items.Add(it);
                     if (photo.Border != null && !string.IsNullOrEmpty(it.Path))
                     {
-                        _itemBorders[it.Path] = photo.Border.Clone();
+                        _itemBorders[it] = photo.Border.Clone();
                     }
+                    if (photo.Hidden)
+                        _hiddenItems.Add(it);
                 }
                 _items.Clear();
                 _items.AddRange(items);
@@ -1265,47 +1242,21 @@ namespace ModernImageViewer
                 _layoutFromTemplate = false;
             }
 
-            _hiddenItems.Clear();
-            if (layoutFile.Photos != null)
-            {
-                for (int i = 0; i < layoutFile.Photos.Count && i < _items.Count; i++)
-                {
-                    if (layoutFile.Photos[i].Hidden)
-                        _hiddenItems.Add(_items[i]);
-                }
-            }
-
-            ClearAllFreeformCards();
             if (layoutFile.Freeform != null && layoutFile.Freeform.Count > 0)
             {
                 foreach (var dto in layoutFile.Freeform)
                 {
-                    var matchingItem = _items.FirstOrDefault(it => string.Equals(it.Path, dto.Path, StringComparison.OrdinalIgnoreCase))
-                                       ?? (dto.SourceSlot >= 0 && dto.SourceSlot < _items.Count ? _items[dto.SourceSlot] : null);
-                    if (matchingItem != null)
-                    {
-                        SpawnFreeformCell(matchingItem, dto);
-                        if (dto.Hidden && _freeformCards.Count > 0)
-                        {
-                            var newCard = _freeformCards.Last();
-                            _hiddenItems.Add(newCard.Item);
-                        }
-                    }
+                    int grid = GridCellCount;
+                    var sourceItem = dto.SourceSlot >= 0 && dto.SourceSlot < grid
+                        ? _items[dto.SourceSlot]
+                        : _items.FirstOrDefault();
+                    if (sourceItem != null)
+                        SpawnFreeformCell(sourceItem, dto);
                 }
             }
 
-            // Sync visual hidden state and placeholders for ALL cells (both grid and freeform)
             for (int i = 0; i < _cellRoots.Length; i++)
-            {
-                if (_cellRoots[i]?.Tag is CellParts parts)
-                {
-                    bool isHidden = (i < _items.Count) && _hiddenItems.Contains(_items[i]);
-                    if (parts.ImageContainer != null)
-                        parts.ImageContainer.Visibility = isHidden ? Visibility.Collapsed : Visibility.Visible;
-                    if (parts.HiddenPlaceholder != null)
-                        parts.HiddenPlaceholder.Visibility = isHidden ? Visibility.Visible : Visibility.Collapsed;
-                }
-            }
+                ShowHiddenState(i);
 
             ApplyBorderToAllCells();
 

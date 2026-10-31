@@ -1950,13 +1950,7 @@ namespace ModernImageViewer
         private int Slot(ImageItem item)
         {
             if (item == null) return -1;
-            int idx = _items.IndexOf(item);
-            if (idx >= 0) return idx;
-            idx = _items.FindIndex(i => string.Equals(i.Path, item.Path, StringComparison.OrdinalIgnoreCase));
-            if (idx >= 0) return idx;
-            var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, item) || string.Equals(c.Item.Path, item.Path, StringComparison.OrdinalIgnoreCase));
-            if (card != null) return _items.IndexOf(card.Item);
-            return -1;
+            return _items.IndexOf(item);
         }
 
         private void FillCellMenu(MenuFlyout menu, ImageItem item)
@@ -1964,19 +1958,6 @@ namespace ModernImageViewer
             menu.Items.Clear();
             if (item == null) return;
             int curSlot = Slot(item);
-            if (curSlot < 0)
-            {
-                for (int s = 0; s < _cellRoots.Length; s++)
-                {
-                    if (_cellRoots[s]?.Tag is CellParts p && 
-                        (ReferenceEquals(p.Bound.Item, item) || 
-                         string.Equals(p.Bound.Item?.Path, item?.Path, StringComparison.OrdinalIgnoreCase)))
-                    {
-                        curSlot = s;
-                        break;
-                    }
-                }
-            }
             if (curSlot < 0) return;
 
             if (_items.Count > 1)
@@ -2050,10 +2031,7 @@ namespace ModernImageViewer
             soloItem.Click += (s, e) => EnterSolo(curSlot);
             menu.Items.Add(soloItem);
 
-            var activeCard = _freeformCards.FirstOrDefault(c => 
-                ReferenceEquals(c.Item, item) || 
-                (curSlot >= 0 && c.SourceSlot == curSlot) ||
-                string.Equals(c.Item.Path, item.Path, StringComparison.OrdinalIgnoreCase));
+            var activeCard = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, item));
             bool isCurrentCellFreeform = activeCard != null;
             if (isCurrentCellFreeform)
             {
@@ -2117,43 +2095,52 @@ namespace ModernImageViewer
             {
                 Path = source.Path,
                 Name = source.Name,
+                DateModified = source.DateModified,
+                SizeString = source.SizeString,
+                Thumbnail = source.Thumbnail,
                 Dispatcher = source.Dispatcher
             };
+
+            // Only the target's content changes. It keeps its own frame, hidden state, zoom and pan.
+            MoveCellParameters(_items[toIndex], copy);
             _items[toIndex] = copy;
-
-            if (!string.IsNullOrEmpty(source.Path))
-            {
-                var border = GetBorderForItem(source);
-                _itemBorders[copy.Path] = border.Clone();
-            }
-
-            if (_hiddenItems.Contains(source))
-                _hiddenItems.Add(copy);
-            else
-                _hiddenItems.Remove(copy);
 
             var rootSrc = (uint)fromIndex < (uint)_cellRoots.Length ? _cellRoots[fromIndex] : null;
             var rootDst = (uint)toIndex < (uint)_cellRoots.Length ? _cellRoots[toIndex] : null;
             var partsSrc = rootSrc?.Tag as CellParts;
             var partsDst = rootDst?.Tag as CellParts;
 
-            if (partsSrc != null && partsDst != null)
+            if (partsSrc != null && partsDst != null && CellImageReady(partsSrc))
             {
                 partsDst.Photo.Source = partsSrc.Photo.Source;
                 var dims = partsSrc.Bound.GetDimensions?.Invoke() ?? (16, 9);
                 partsDst.Bound.SetDimensions?.Invoke(dims.Width, dims.Height);
                 partsDst.Bound.Item = copy;
                 partsDst.UpdateLayout?.Invoke();
-                if (partsDst.ImageContainer != null)
-                    partsDst.ImageContainer.Visibility = _hiddenItems.Contains(copy) ? Visibility.Collapsed : Visibility.Visible;
-                if (partsDst.HiddenPlaceholder != null)
-                    partsDst.HiddenPlaceholder.Visibility = _hiddenItems.Contains(copy) ? Visibility.Visible : Visibility.Collapsed;
-                ApplyBorderToCell(toIndex);
             }
+            else
+            {
+                RebindCell(toIndex);
+            }
+            ShowHiddenState(toIndex);
 
             var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(rootDst, c.Container));
             if (card != null) card.Item = copy;
             ShowHudAndOverlays();
+        }
+
+        /// <summary>A decoded image can move to another cell. One still opening, or a missing one, cannot.</summary>
+        private static bool CellImageReady(CellParts parts) =>
+            parts.Photo.Source is BitmapSource bitmap && bitmap.PixelWidth > 0 && bitmap.PixelHeight > 0;
+
+        /// <summary>Load this slot's image into its cell, when the slot has a cell on screen.</summary>
+        private void RebindCell(int slot)
+        {
+            if ((uint)slot >= (uint)_cellRoots.Length || (uint)slot >= (uint)_items.Count) return;
+            if (_cellRoots[slot]?.Tag is not CellParts parts) return;
+            parts.Bound.Item = _items[slot];
+            parts.Bound.Reload?.Invoke();
+            parts.UpdateLayout?.Invoke();
         }
 
         private void ToggleHideImage(ImageItem item)
@@ -2163,16 +2150,7 @@ namespace ModernImageViewer
             else
                 _hiddenItems.Add(item);
 
-            int slot = Slot(item);
-            if (slot >= 0 && slot < _cellRoots.Length && _cellRoots[slot]?.Tag is CellParts parts)
-            {
-                bool hidden = _hiddenItems.Contains(item);
-                if (parts.ImageContainer != null)
-                    parts.ImageContainer.Visibility = hidden ? Visibility.Collapsed : Visibility.Visible;
-                if (parts.HiddenPlaceholder != null)
-                    parts.HiddenPlaceholder.Visibility = hidden ? Visibility.Visible : Visibility.Collapsed;
-                ApplyBorderToCell(slot);
-            }
+            ShowHiddenState(Slot(item));
         }
 
         /// <summary>What a cell registered in the shared lists, so removing the cell can take it back out.</summary>
@@ -2202,7 +2180,8 @@ namespace ModernImageViewer
             int index = _items.IndexOf(item);
             if (index < 0) return;
             _hiddenItems.Remove(item);
-            int visibleBefore = VisibleCount(_items.Count);
+            _itemBorders.Remove(item);
+            int visibleBefore = VisibleCount(GridCellCount);
             bool cellsReady = CellRootsReady();
             _items.RemoveAt(index);
             if (_items.Count == 0)
@@ -2211,19 +2190,29 @@ namespace ModernImageViewer
                 return;
             }
 
+            // Freeform cells remember their source by slot, and the later slots just moved down.
+            foreach (var card in _freeformCards)
+            {
+                if (card.SourceSlot == index) card.SourceSlot = -1;
+                else if (card.SourceSlot > index) card.SourceSlot--;
+            }
+
             if (cellsReady && index >= visibleBefore && _mosaic != null)
             {
                 // A photo that was not on screen: only the count changes.
+                var waiting = new List<FrameworkElement?>(_cellRoots);
+                if (index < waiting.Count) waiting.RemoveAt(index);
+                _cellRoots = waiting.ToArray();
                 _keepMosaic = true;
                 try { BuildLayout(); }
                 finally { _keepMosaic = false; }
             }
-            else if (cellsReady && _items.Count > 1)
+            else if (cellsReady)
             {
                 var roots = new List<FrameworkElement?>(_cellRoots);
                 ForgetCell(roots[index]);
                 roots.RemoveAt(index);
-                int visible = VisibleCount(_items.Count);
+                int visible = VisibleCount(GridCellCount);
                 while (roots.Count < visible) roots.Add(null);
                 _cellRoots = roots.ToArray();
                 _relayoutKeepingCells = true;
@@ -2675,10 +2664,11 @@ namespace ModernImageViewer
         public IReadOnlyList<string> SessionPaths()
         {
             var paths = new List<string>(_items.Count);
-            foreach (var item in _items)
+            int grid = GridCellCount;
+            for (int i = 0; i < grid; i++)
             {
-                if (!string.IsNullOrEmpty(item.Path))
-                    paths.Add(item.Path);
+                if (!string.IsNullOrEmpty(_items[i].Path))
+                    paths.Add(_items[i].Path);
             }
             return paths;
         }
@@ -2701,15 +2691,43 @@ namespace ModernImageViewer
 
             ExitSolo();
             _framedSlots = slots;
-            _items.Clear();
-            _items.AddRange(photos);
+
+            // Each on-screen cell keeps its frame and hidden state, whatever image it now shows.
+            var frames = new CellBorderDto?[slots];
+            var hidden = new bool[slots];
             for (int i = 0; i < slots; i++)
             {
+                _itemBorders.TryGetValue(_items[i], out frames[i]);
+                hidden[i] = _hiddenItems.Contains(_items[i]);
+            }
+            int oldGrid = GridCellCount;
+            for (int i = 0; i < oldGrid; i++)
+            {
+                _itemBorders.Remove(_items[i]);
+                _hiddenItems.Remove(_items[i]);
+            }
+
+            // Freeform cells are not part of the selection. They stay, after the new photos.
+            var freeformRoots = _freeformCards.Select(c => c.Container).ToList();
+            var gridRoots = _cellRoots.Take(slots).ToList();
+            _items.Clear();
+            _items.AddRange(photos);
+            _items.AddRange(_freeformCards.Select(c => c.Item));
+            var roots = new FrameworkElement?[_items.Count];
+            for (int i = 0; i < slots; i++) roots[i] = gridRoots[i];
+            for (int i = 0; i < freeformRoots.Count; i++) roots[photos.Count + i] = freeformRoots[i];
+            _cellRoots = roots;
+
+            for (int i = 0; i < slots; i++)
+            {
+                if (frames[i] != null) _itemBorders[_items[i]] = frames[i]!;
+                if (hidden[i]) _hiddenItems.Add(_items[i]);
                 if (_cellRoots[i]?.Tag is CellParts parts)
                 {
                     parts.Bound.Item = _items[i];
                     parts.Bound.Reload?.Invoke();
                 }
+                ShowHiddenState(i);
             }
             RefreshLinesChrome(GridCellCount);
             RefreshHeroChrome(GridCellCount);
@@ -2815,27 +2833,22 @@ namespace ModernImageViewer
         public void SwapItems(int idxA, int idxB)
         {
             if (idxA < 0 || idxA >= _items.Count || idxB < 0 || idxB >= _items.Count || idxA == idxB) return;
-            (_items[idxA], _items[idxB]) = (_items[idxB], _items[idxA]);
+            var itemA = _items[idxA];
+            var itemB = _items[idxB];
+            _items[idxA] = itemB;
+            _items[idxB] = itemA;
+
+            // The cells stay where they are and keep their parameters. Only their images change.
+            ExchangeCellParameters(itemA, itemB);
 
             var rootA = (uint)idxA < (uint)_cellRoots.Length ? _cellRoots[idxA] : null;
             var rootB = (uint)idxB < (uint)_cellRoots.Length ? _cellRoots[idxB] : null;
             var partsA = rootA?.Tag as CellParts;
             var partsB = rootB?.Tag as CellParts;
 
-            int gridCount = GridCellCount;
-            if (idxA < gridCount && idxB < gridCount && _mosaic != null && CellRootsReady())
+            if (partsA != null && partsB != null && CellImageReady(partsA) && CellImageReady(partsB))
             {
-                // Pure grid swap: swap cell roots in the array and rebuild grid layout
-                (_cellRoots[idxA], _cellRoots[idxB]) = (_cellRoots[idxB], _cellRoots[idxA]);
-                _cellRoots[idxA]!.Opacity = 1;
-                _cellRoots[idxB]!.Opacity = 1;
-                _keepMosaic = true;
-                try { BuildLayout(); }
-                finally { _keepMosaic = false; }
-            }
-            else if (partsA != null && partsB != null)
-            {
-                // Swap image content and natural dimensions directly between the cells
+                // Move the decoded images between the cells, so no photo decodes again.
                 (partsA.Photo.Source, partsB.Photo.Source) = (partsB.Photo.Source, partsA.Photo.Source);
 
                 var dimsA = partsA.Bound.GetDimensions?.Invoke() ?? (16, 9);
@@ -2843,35 +2856,28 @@ namespace ModernImageViewer
                 partsA.Bound.SetDimensions?.Invoke(dimsB.Width, dimsB.Height);
                 partsB.Bound.SetDimensions?.Invoke(dimsA.Width, dimsA.Height);
 
-                // Swap bound item references
-                partsA.Bound.Item = _items[idxA];
-                partsB.Bound.Item = _items[idxB];
-
-                // Update visibility based on whether the newly placed items are hidden
-                if (partsA.ImageContainer != null)
-                    partsA.ImageContainer.Visibility = _hiddenItems.Contains(_items[idxA]) ? Visibility.Collapsed : Visibility.Visible;
-                if (partsA.HiddenPlaceholder != null)
-                    partsA.HiddenPlaceholder.Visibility = _hiddenItems.Contains(_items[idxA]) ? Visibility.Visible : Visibility.Collapsed;
-
-                if (partsB.ImageContainer != null)
-                    partsB.ImageContainer.Visibility = _hiddenItems.Contains(_items[idxB]) ? Visibility.Collapsed : Visibility.Visible;
-                if (partsB.HiddenPlaceholder != null)
-                    partsB.HiddenPlaceholder.Visibility = _hiddenItems.Contains(_items[idxB]) ? Visibility.Visible : Visibility.Collapsed;
-
-                // Update freeform card items if either is a freeform card
-                var cardA = _freeformCards.FirstOrDefault(c => ReferenceEquals(rootA, c.Container));
-                if (cardA != null) cardA.Item = _items[idxA];
-                var cardB = _freeformCards.FirstOrDefault(c => ReferenceEquals(rootB, c.Container));
-                if (cardB != null) cardB.Item = _items[idxB];
-
-                // Update layout for both cells to reflect new image dimensions
+                partsA.Bound.Item = itemB;
+                partsB.Bound.Item = itemA;
                 partsA.UpdateLayout?.Invoke();
                 partsB.UpdateLayout?.Invoke();
-
-                ApplyBorderToCell(idxA);
-                ApplyBorderToCell(idxB);
+            }
+            else
+            {
+                // A photo waiting off screen has no cell, and one still opening has no image to move.
+                RebindCell(idxA);
+                RebindCell(idxB);
             }
 
+            if (rootA != null) rootA.Opacity = 1;
+            if (rootB != null) rootB.Opacity = 1;
+
+            var cardA = _freeformCards.FirstOrDefault(c => ReferenceEquals(rootA, c.Container));
+            if (cardA != null) cardA.Item = itemB;
+            var cardB = _freeformCards.FirstOrDefault(c => ReferenceEquals(rootB, c.Container));
+            if (cardB != null) cardB.Item = itemA;
+
+            ShowHiddenState(idxA);
+            ShowHiddenState(idxB);
             ShowHudAndOverlays();
         }
 
