@@ -70,7 +70,7 @@ Exit codes: `0` success, `1` publish failed, `2` output looks wrong, `3` app cra
 
 ## 🖼 Multi-View
 
-Select two or more photos in the tile grid (Ctrl+click or Shift+click), then click one of them or press **Enter**. Clicking a photo outside the selection opens that photo on its own. Multi-view shows up to 16 photos. When more are selected, the bar shows how many are on screen, for example **16 of 23 shown**. The multi-view window keeps its own size, separate from the normal window.
+Select two or more photos in the tile grid (Ctrl+click or Shift+click), then click one of them or press **Enter**. Clicking a photo outside the selection opens that photo on its own, and the selection is still there when you come back. Multi-view shows up to 16 photos. When more are selected, the bar shows how many are on screen, for example **16 of 23 shown**. The multi-view window keeps its own size, separate from the normal window.
 
 The bar appears when you move the mouse:
 
