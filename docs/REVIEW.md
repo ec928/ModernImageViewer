@@ -103,3 +103,4 @@ The Win2D viewer core is real, but GPU lifetime was not reference-counted end-to
 - 2026-10-31: Multi-View, not released. Save/Load is one two-column menu with no sideways scrolling, shortened folder names, and layouts sharing the height available.
 - 2026-10-31: Multi-View, not released. Freeform leaves its source cell empty rather than hidden. Empty cells keep their parameters, can be filled by Add image, Copy to, Swap with and Photos, and save in layouts.
 - 2026-10-31: Crash switching between the tile grid and Multi-View fixed: thumbnail bitmaps are no longer closed after SetBitmapAsync, and thumbnail sources are no longer disposed.
+- 2026-10-31: v0.22.0, internal. Crash switching between tiles and Multi-View fixed. Rows and Columns switch on the bar with a plain Grid layout panel, Save/Load as one two-column menu, and Freeform leaving its source cell empty.
