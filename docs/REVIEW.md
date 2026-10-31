@@ -97,3 +97,4 @@ The Win2D viewer core is real, but GPU lifetime was not reference-counted end-to
 - 2026-10-31: Multi-View, not released. Hovering a floating cell shows corner grips and a dashed outline of its resize rectangle, and the corner grab areas are larger.
 - 2026-10-31: Multi-View, not released. A floating cell moves and resizes until its centre reaches the canvas edge, at any rotation and shape. Floating cells are clipped to the canvas, so they no longer draw over the title bar.
 - 2026-10-31: Multi-View, not released. Coming back from Photos no longer depends on the selection count: a cell whose photo stays selected keeps it, so cells sharing a file and arrangements survive, and new photos fill only deselected cells.
+- 2026-10-31: v0.21.0, internal. Replace image from a file, resize grips and outline on floating cells, floating cells limited by their centre and clipped to the canvas, and Photos returning when cells share a file.
