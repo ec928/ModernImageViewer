@@ -75,7 +75,7 @@ The bar appears when you move the mouse:
 | Control | What it does |
 |---|---|
 | **Back** / **Esc** | Back to the tiles. Your layout stays while the app is open: the Multi-View button at the top returns to it. Choosing photos and **View Together**, or opening a layout, replaces it, and the old one is kept under **Autosaved** in Save/Load |
-| **Add images** | Find pictures in your folders using the app itself. Click the ones you want, then press **Add to layout** or **Enter**: each becomes a new floating cell. **Esc**, or the close button with nothing selected, returns to the layout without adding |
+| **Add images** | Find pictures in your folders using the app itself. Click the ones you want, or press **Enter** on each, then press **Add to layout** or **Enter**: each becomes a new floating cell. **Esc**, or the close button with nothing selected, returns to the layout without adding |
 | **3 Rows** / **Columns** | The switch on the bar turns the grid, and the side in use shows how many lines. Either side opens the grid layout card, and the side in use closes it again. The layout inspector and playbar stay as an immersive dark glass HUD over the photos. **−** and **+** at the top of the card set how many lines. Each line is drawn as that many photos, with the count on the bar: rows are bands, columns are stacks from the left. A line's **−** and **+** move one photo. **+** takes it from the last other line that has more than one, and **−** moves it to the last line, or to the line before when that line is already the last. **Even out** puts the lines back to an even split when they differ. **R** flips rows and columns. The **−** and **+** keys change how many lines. |
 | **Hero** (**H**) | The button reads **Hero** when it is off, and **Hero: Banner**, **Hero: Rectangle**, or **Hero: Pair** while that kind is on. Click for the next kind, and again after the last to turn it off. **Banner** is one large photo along a side. **Rectangle** is one large photo in a corner block, with 4, 5, 6, 7 or 9 photos. **Pair** is the first two photos large, with 3 or more |
 | **↻** (next position) | Shown while a hero is on. Moves it: a banner or pair goes round the top, right, bottom and left sides |
@@ -101,7 +101,7 @@ A cell keeps its own settings. **Swap with**, **Copy to** and **Move to** each o
 
 **Move to** replaces the photo in the target. A floating cell then disappears, and a grid cell is left empty.
 
-Either way, each remaining cell stays where it is at its own size and layer. **Replace image** works like Contents only: find a picture using the app itself and click it, and the cell keeps its settings and shows the new picture. **Esc** returns without changing it.
+Either way, each remaining cell stays where it is at its own size and layer. **Replace image** works like Contents only: find a picture using the app itself, starting in the folder of the current one, and click it. The cell keeps its settings and shows the new picture. **Esc** returns without changing it.
 
 **Frame & Border** opens beside the cell, or against the window's far edge when the cell is too big to sit beside. It sets the line, corners, gutter, mat and shadow. Flush removes them all. Hold a preset button to save the current frame there, and click it to use it again. The last swatch in each color row opens the Windows color picker.
 
@@ -109,9 +109,9 @@ The same card under **Canvas** frames the whole canvas. As in a cell, the gutter
 
 ### Floating cells
 
-Right-click a cell and choose **Freeform** to float its photo above the grid. The photo moves to a new cell, which starts with the same frame, and the original cell is left empty. Right-click an empty cell and choose **Add image** to find a picture using the app itself: click one and it goes straight into that cell, or press **Esc** to return without adding. Copy to can also fill it.
+Right-click a cell and choose **Freeform** to float its photo above the grid. The photo moves to a new cell, which starts with the same frame, and the original cell is left empty. Right-click an empty cell and choose **Add image** to find a picture using the app itself: click one, or press **Enter** on it, and it goes straight into that cell, or press **Esc** to return without adding. Copy to can also fill it.
 
-Drag pictures in from File Explorer to add them: each one becomes a new floating cell where you drop it, up to 16 at a time, in front of the others and with no frame. Drop onto an empty cell and the picture goes into that cell instead, which keeps its settings; with several pictures, the first goes in and the rest float. The caption on the drag says which you will get. No other cell changes. Folders, comic books and saved layouts open as they do from anywhere else.
+Drag pictures in from File Explorer to add them: each one becomes a new floating cell where you drop it, up to 16 at a time and with a message if there are more, in front of the others and with no frame. Drop onto an empty cell and the picture goes into that cell instead, which keeps its settings; with several pictures, the first goes in and the rest float. The caption on the drag says which you will get. No other cell changes. Folders, comic books and saved layouts open as they do from anywhere else.
 
 - Drag to move, and drag the edges or corners to resize. A cell can hang over the edge of the canvas as long as its centre stays on it, and whatever hangs over is left out of an export. **Ctrl+drag** pans the photo inside the cell. Dragged cells snap to the canvas, each other and the grid; hold **Alt** to move freely.
 - **Window** sets the shape: rectangle, squircle, circle or oval, arch (tombstone), L-shape, triangle, right triangle, rhombus (diamond), trapezoid, parallelogram, hexagon, or organic blob. It also mirrors and flips the shape.

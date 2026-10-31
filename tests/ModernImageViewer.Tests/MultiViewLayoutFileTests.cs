@@ -382,6 +382,47 @@ namespace ModernImageViewer.Tests
             Assert.True(mildBottom < bottomNear);
         }
 
+        [Fact]
+        public void ShadowDrawnSmallAndStretchedMatchesFullSizeOutsideTheCard()
+        {
+            const int width = 800, height = 450;
+            const double pad = 40, radius = 20, scale = 1.5, intensity = 70;
+            double cardW = width - 2 * pad, cardH = height - 2 * pad;
+            var full = FrameShadow.RenderAlpha(width, height, pad, pad, cardW, cardH, radius, intensity, scale, scale);
+
+            int d = FrameShadow.Downscale(intensity, scale);
+            Assert.True(d >= 4, "divisor " + d);
+            int w = width / d, h = height / d;
+
+            int WorstOutsideCard(double usedScale)
+            {
+                var small = FrameShadow.RenderAlpha(w, h, pad / d, pad / d, cardW / d, cardH / d, radius / d, intensity, usedScale, usedScale, underCard: true);
+                int worst = 0;
+                for (int y = 0; y < height; y += 3)
+                {
+                    for (int x = 0; x < width; x += 3)
+                    {
+                        if (x >= pad && x < pad + cardW && y >= pad && y < pad + cardH) continue;
+                        // Rounded corners of the card are cut at full size, so they are left out here.
+                        if ((x < pad + radius || x > pad + cardW - radius) && (y < pad + radius || y > pad + cardH - radius)
+                            && x >= pad - 2 && x <= pad + cardW + 2 && y >= pad - 2 && y <= pad + cardH + 2) continue;
+                        double sx = Math.Clamp((x + 0.5) / d - 0.5, 0, w - 1.001), sy = Math.Clamp((y + 0.5) / d - 0.5, 0, h - 1.001);
+                        int ix = (int)sx, iy = (int)sy;
+                        double fx = sx - ix, fy = sy - iy;
+                        double v = small[iy * w + ix] * (1 - fx) * (1 - fy) + small[iy * w + ix + 1] * fx * (1 - fy)
+                            + small[(iy + 1) * w + ix] * (1 - fx) * fy + small[(iy + 1) * w + ix + 1] * fx * fy;
+                        worst = Math.Max(worst, (int)Math.Abs(v - full[y * width + x]));
+                    }
+                }
+                return worst;
+            }
+
+            int right = WorstOutsideCard(scale / d);
+            Assert.True(right <= 10, "worst difference " + right);
+            // A control: forgetting to scale the blur down shows up as a large difference, so the check can see a wrong shadow.
+            Assert.True(WorstOutsideCard(scale) > 20);
+        }
+
         private static void WriteShadowPreview(int width, int height, double pad, double cardW, double cardH, byte[] alpha, long elapsedMs, int bottomNear, int bottomMid, int bottomFar, int bottomGone, int topNear, int sideNear, int outer)
         {
             const byte matR = 0xF3, matG = 0xEF, matB = 0xE6;

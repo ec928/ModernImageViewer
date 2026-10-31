@@ -244,16 +244,36 @@ namespace ModernImageViewer
         private void AttachFileDrop()
         {
             bool Takes(DragEventArgs e) => _swapSource < 0 && _soloIndex < 0 && e.DataView.Contains(StandardDataFormats.StorageItems);
+            // Known once the drag has been read. A folder or saved layout opens as usual, so it gets no caption about cells.
+            bool hasPictures = false;
             void Over(object _, DragEventArgs e)
             {
                 if (!Takes(e)) return;
                 e.AcceptedOperation = DataPackageOperation.Copy;
-                e.DragUIOverride.Caption = EmptyCellAt(e.GetPosition(FreeformCanvas)) >= 0 ? "Add to this cell" : "Add as a floating cell";
+                if (hasPictures)
+                    e.DragUIOverride.Caption = EmptyCellAt(e.GetPosition(FreeformCanvas)) >= 0 ? "Add to this cell" : "Add as a floating cell";
                 e.Handled = true;
             }
 
             RootGrid.AllowDrop = true;
-            RootGrid.DragEnter += Over;
+            RootGrid.DragEnter += async (_, e) =>
+            {
+                hasPictures = false;
+                if (!Takes(e)) return;
+                Over(RootGrid, e);
+                var deferral = e.GetDeferral();
+                try
+                {
+                    var dragged = await e.DataView.GetStorageItemsAsync();
+                    hasPictures = dragged.OfType<StorageFile>().Any(f => MainWindow.IsPictureFile(f.Path));
+                    Over(RootGrid, e);
+                }
+                catch (Exception ex) when (ex is COMException or UnauthorizedAccessException)
+                {
+                    // The drop itself still works. It just goes without the caption.
+                }
+                finally { deferral.Complete(); }
+            };
             RootGrid.DragOver += Over;
             RootGrid.Drop += async (_, e) =>
             {
@@ -322,7 +342,7 @@ namespace ModernImageViewer
 
                 var dropped = new ImageItem { Path = path, Name = Path.GetFileName(path), Dispatcher = DispatcherQueue };
                 FillFileDetails(dropped);
-                // No source: nothing is hidden, and Dock gives it a new grid cell. A plain frame, in front of the others.
+                // No source: no other cell changes, and Dock gives it a new grid cell. A plain frame, in front of the others.
                 SpawnFreeformCell(dropped, new FreeformCellDto
                 {
                     SourceSlot = -1,
@@ -339,6 +359,8 @@ namespace ModernImageViewer
                 placed++;
             }
             NoteUserAction();
+            if (paths.Count > MaxDroppedCells)
+                await ShowExportMessageAsync($"Added the first {MaxDroppedCells} of {paths.Count} pictures.");
         }
 
         /// <summary>The file's shape as it displays, read from its header. A file that will not open counts as 16:9, and its cell says so.</summary>

@@ -56,6 +56,7 @@ namespace ModernImageViewer
         private bool _multiViewParked;
         // The cell waiting for one picture. Null when pictures are being added as floating cells.
         private ImageItem? _parkedCell;
+        private string? _parkedNote;
         private bool _multiViewKept;
         private int _stashedGridWidth;
         private int _stashedGridHeight;
@@ -673,12 +674,14 @@ namespace ModernImageViewer
         private void ImageGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (_strippingDirectorySelection) return;
+            _parkedNote = null;
             foreach (var item in e.RemovedItems.OfType<ImageItem>())
                 item.IsGridSelected = false;
             var directories = new List<ImageItem>();
             foreach (var item in e.AddedItems.OfType<ImageItem>())
             {
-                if (item.IsDirectory || item.IsComicEntry) directories.Add(item);
+                // While adding, only a picture file can go into a cell, so anything else is refused and says why.
+                if (item.IsDirectory || item.IsComicEntry || (_multiViewParked && !IsPictureFile(item.Path))) directories.Add(item);
                 else item.IsGridSelected = true;
             }
             if (directories.Count > 0)
@@ -696,6 +699,7 @@ namespace ModernImageViewer
                 // While adding pictures there is no item click, so a folder opens from here.
                 var folder = _multiViewParked ? directories.FirstOrDefault(d => d.IsDirectory) : null;
                 if (folder != null) OpenGridFolder(folder);
+                else if (_multiViewParked) _parkedNote = "Comic books and their pages can't go into a cell";
             }
 
             // A cell waits for one picture, so the click that picks it is the last step. Not from inside this event: going back clears the selection.

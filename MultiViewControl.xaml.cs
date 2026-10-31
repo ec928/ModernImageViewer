@@ -1142,7 +1142,7 @@ namespace ModernImageViewer
             }
         }
 
-        /// <summary>A hidden cell's label fades with the bar, so the composition can be seen without it.</summary>
+        /// <summary>An empty cell's label fades with the bar, so the composition can be seen without it.</summary>
         private void SetPlaceholderOpacity(double opacity)
         {
             foreach (var root in _cellRoots)
@@ -1779,6 +1779,7 @@ namespace ModernImageViewer
             maxBtn.Resources["ButtonForegroundPointerOver"] = new SolidColorBrush(Microsoft.UI.Colors.White);
             maxBtn.Resources["ButtonForegroundPressed"] = new SolidColorBrush(Windows.UI.Color.FromArgb(200, 255, 255, 255));
             ToolTipService.SetToolTip(maxBtn, "Solo / Maximize");
+            maxBtn.Visibility = IsEmptyCell(photo.Item) ? Visibility.Collapsed : Visibility.Visible;
             maxBtn.Click += (s, e) => EnterSolo(Slot(photo.Item));
             topStack.Children.Add(maxBtn);
 
@@ -1849,7 +1850,8 @@ namespace ModernImageViewer
             {
                 MenuFlyoutPresenterStyle = (Style)Resources["MultiViewMenuFlyoutPresenterStyle"]
             };
-            FillCellMenu(menu, photo.Item);
+            // One entry so the menu counts as having something to open. It is filled for real as it opens.
+            menu.Items.Add(new MenuFlyoutItem());
             menu.Opening += (_, _) => FillCellMenu(menu, photo.Item);
             // The cell's own buttons show with its menu, and take a click through the menu's light dismiss.
             menu.OverlayInputPassThroughElement = topControls;
@@ -1942,21 +1944,21 @@ namespace ModernImageViewer
                 Glyph = "\uE739",
                 FontSize = 26,
                 FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
-                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(120, 255, 255, 255)),
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(170, 255, 255, 255)),
                 HorizontalAlignment = HorizontalAlignment.Center
             });
             placeholder.Children.Add(new TextBlock
             {
                 Text = "Empty cell",
                 FontSize = 12,
-                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(120, 255, 255, 255)),
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(200, 255, 255, 255)),
                 HorizontalAlignment = HorizontalAlignment.Center
             });
             placeholder.Children.Add(new TextBlock
             {
                 Text = "Right-click to add an image",
-                FontSize = 10.5,
-                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(70, 255, 255, 255)),
+                FontSize = 11,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(170, 255, 255, 255)),
                 HorizontalAlignment = HorizontalAlignment.Center
             });
             Canvas.SetZIndex(placeholder, 5);
@@ -1964,7 +1966,7 @@ namespace ModernImageViewer
 
             imgContainer.Visibility = IsEmptyCell(photo.Item) ? Visibility.Collapsed : Visibility.Visible;
 
-            var parts = new CellParts(transform, updateLayout, topControls, fullImg, photo, positionBadge, badgeText, dashedStroke, rimGlowStroke, gutterBorder, imgContainer, placeholder);
+            var parts = new CellParts(transform, updateLayout, topControls, fullImg, photo, positionBadge, badgeText, dashedStroke, rimGlowStroke, gutterBorder, imgContainer, placeholder, maxBtn);
             cellBorder.Tag = parts;
             slotGrid.Tag = parts;
 
@@ -1996,6 +1998,13 @@ namespace ModernImageViewer
             int curSlot = Slot(item);
             if (curSlot < 0) return;
 
+            // An empty cell's label asks for this, so it comes first.
+            if (IsEmptyCell(item))
+            {
+                menu.Items.Add(MakeAdvancedItem("Add image\u2026", "\uE8E5", () => AddImageRequested?.Invoke(this, item)));
+                menu.Items.Add(new MenuFlyoutSeparator());
+            }
+
             if (_items.Count > 1)
             {
                 menu.Items.Add(MakeCellTargetMenu("Swap with...", "\uE8AB", "Swap with", curSlot,
@@ -2016,15 +2025,11 @@ namespace ModernImageViewer
             menu.Items.Add(borderItem);
 
             menu.Items.Add(MakeWindowMenu(item));
-            // An empty cell's label says to right-click to add an image, so that stays on the top level.
-            if (IsEmptyCell(item))
-                menu.Items.Add(MakeAdvancedItem("Add image\u2026", "\uE8E5", () => AddImageRequested?.Invoke(this, item)));
             var activeCard = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, item));
-            bool isCurrentCellFreeform = activeCard != null;
             if (activeCard != null) menu.Items.Add(MakeLayerMenu(activeCard));
             AddCellImageMenu(menu, item);
 
-            if (isCurrentCellFreeform)
+            if (activeCard != null)
             {
                 var dockItem = new MenuFlyoutItem
                 {
@@ -2033,7 +2038,7 @@ namespace ModernImageViewer
                 };
                 dockItem.Click += (s, e) =>
                 {
-                    if (activeCard != null) DockFreeformCard(activeCard);
+                    DockFreeformCard(activeCard);
                 };
                 menu.Items.Add(new MenuFlyoutSeparator());
                 menu.Items.Add(dockItem);
@@ -2150,9 +2155,9 @@ namespace ModernImageViewer
                 Dispatcher = source.Dispatcher
             };
 
-            // Only the target's content changes. It keeps its own frame, hidden state, zoom and pan.
+            // Only the target's content changes. It keeps its own frame, zoom and pan.
             MoveCellParameters(_items[toIndex], copy);
-            _items[toIndex] = copy;
+            PutInCell(toIndex, copy);
 
             var rootSrc = (uint)fromIndex < (uint)_cellRoots.Length ? _cellRoots[fromIndex] : null;
             var rootDst = (uint)toIndex < (uint)_cellRoots.Length ? _cellRoots[toIndex] : null;
@@ -2171,10 +2176,6 @@ namespace ModernImageViewer
             {
                 RebindCell(toIndex);
             }
-
-            // Before the cell redraws: a floating cell draws its shape and frame from its card's item.
-            var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(rootDst, c.Container));
-            if (card != null) card.Item = copy;
 
             if (withAttributes) CopyCellAttributes(fromIndex, toIndex);
             ShowEmptyState(toIndex);
@@ -2212,13 +2213,12 @@ namespace ModernImageViewer
             public Action? Reload { get; set; }
             public Action? ApplyGeometry { get; set; }
             public bool Failed { get; set; }
-            public string? ShadowKey { get; set; }
             public Action<double, double>? SetDimensions { get; set; }
             public Func<(double Width, double Height)>? GetDimensions { get; set; }
             public CellPhoto(ImageItem item) { Item = item; }
         }
 
-        private sealed record CellParts(CompositeTransform Transform, Action UpdateLayout, UIElement TopControls, Image Photo, CellPhoto Bound, Border PositionBadge, TextBlock BadgeText, Microsoft.UI.Xaml.Shapes.Rectangle DashedStroke, Microsoft.UI.Xaml.Shapes.Rectangle? RimGlowStroke = null, Border? GutterHost = null, FrameworkElement? ImageContainer = null, FrameworkElement? HiddenPlaceholder = null);
+        private sealed record CellParts(CompositeTransform Transform, Action UpdateLayout, UIElement TopControls, Image Photo, CellPhoto Bound, Border PositionBadge, TextBlock BadgeText, Microsoft.UI.Xaml.Shapes.Rectangle DashedStroke, Microsoft.UI.Xaml.Shapes.Rectangle? RimGlowStroke = null, Border? GutterHost = null, FrameworkElement? ImageContainer = null, FrameworkElement? HiddenPlaceholder = null, Button? MaximizeButton = null);
 
         /// <summary>
         /// Remove a photo and keep the other cells, so none of them decodes again. The layout is rebuilt
@@ -2716,7 +2716,7 @@ namespace ModernImageViewer
 
         private void NextSolo() => StepSolo(1);
 
-        /// <summary>The next photo that is not hidden, wrapping round. Stays put when there is no other.</summary>
+        /// <summary>The next photo that is not an empty cell, wrapping round. Stays put when there is no other.</summary>
         private void StepSolo(int direction)
         {
             int total = _items.Count;
@@ -2850,8 +2850,8 @@ namespace ModernImageViewer
             if (idxA < 0 || idxA >= _items.Count || idxB < 0 || idxB >= _items.Count || idxA == idxB) return;
             var itemA = _items[idxA];
             var itemB = _items[idxB];
-            _items[idxA] = itemB;
-            _items[idxB] = itemA;
+            PutInCell(idxA, itemB);
+            PutInCell(idxB, itemA);
 
             // The cells stay where they are and keep their parameters. Only their images change.
             ExchangeCellParameters(itemA, itemB);
@@ -2885,11 +2885,6 @@ namespace ModernImageViewer
 
             if (rootA != null) rootA.Opacity = 1;
             if (rootB != null) rootB.Opacity = 1;
-
-            var cardA = _freeformCards.FirstOrDefault(c => ReferenceEquals(rootA, c.Container));
-            if (cardA != null) cardA.Item = itemB;
-            var cardB = _freeformCards.FirstOrDefault(c => ReferenceEquals(rootB, c.Container));
-            if (cardB != null) cardB.Item = itemA;
 
             if (withAttributes) ExchangeCellAttributes(idxA, idxB);
             ShowEmptyState(idxA);

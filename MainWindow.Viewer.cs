@@ -972,6 +972,12 @@ namespace ModernImageViewer
         {
             if (MultiViewControl == null || !_multiViewCanvasActive) return;
             _parkedCell = cell;
+            _parkedNote = null;
+            // A photo's replacement is most likely beside it. A file that has gone leaves the view where it is.
+            string? cellFolder = string.IsNullOrEmpty(cell?.Path) ? null : System.IO.Path.GetDirectoryName(cell.Path);
+            if (cellFolder != null && Directory.Exists(cellFolder)
+                && !string.Equals(cellFolder.TrimEnd('\\'), _currentDirectory?.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+                _ = ScanFolder(cellFolder);
             MultiViewControl.PrepareToLeave();
             MultiViewControl.Visibility = Visibility.Collapsed;
             EndMultiViewCanvas();
@@ -1027,8 +1033,9 @@ namespace ModernImageViewer
             if (!_multiViewParked || MultiSelectCountText == null) return;
             int count = Images.Count(img => img.IsGridSelected && !img.IsDirectory);
             MultiSelectActionBar.Visibility = Visibility.Visible;
-            MultiSelectCountText.Text = _parkedCell != null ? "Click a picture for this cell"
-                : count > 0 ? count + " selected" : "Click pictures to add";
+            MultiSelectCountText.Text = _parkedNote
+                ?? (_parkedCell != null ? $"Click a picture for position {MultiViewControl!.PositionOf(_parkedCell)}"
+                : count > 0 ? count + " selected" : "Click pictures to add");
             ViewTogetherButton.IsEnabled = count > 0;
         }
 
@@ -1040,6 +1047,8 @@ namespace ModernImageViewer
             ImageGrid.IsItemClickEnabled = !adding;
             ImageGrid.IsMultiSelectCheckBoxEnabled = !adding;
             ImageGrid.SelectionMode = adding ? ListViewSelectionMode.Multiple : ListViewSelectionMode.Extended;
+            // Opening, editing or deleting a picture has no place while choosing one.
+            ImageGrid.ContextFlyout = adding ? null : GridItemContextFlyout;
             ToolTipService.SetToolTip(ViewTogetherButton, adding ? "Add these to the layout (Enter)" : "View Together (Enter)");
             ViewTogetherText.Text = adding ? "Add to layout" : "View Together";
             ViewTogetherButton.IsEnabled = true;
@@ -2053,7 +2062,7 @@ namespace ModernImageViewer
                     return;
                 }
                 int photo = Images.IndexOf(item);
-                if (photo >= 0) LoadFullImage(photo);
+                if (photo >= 0) OpenOrPickPhoto(photo);
                 return;
             }
             if (Images.Count == 0) return;
@@ -2063,7 +2072,21 @@ namespace ModernImageViewer
                 if (origin < 0) return;
                 _currentIndex = origin;
             }
-            LoadFullImage(_currentIndex);
+            OpenOrPickPhoto(_currentIndex);
+        }
+
+        /// <summary>While pictures are being added, Enter on a picture chooses it, as a click does. It never opens the viewer.</summary>
+        private void OpenOrPickPhoto(int index)
+        {
+            if (!_multiViewParked)
+            {
+                LoadFullImage(index);
+                return;
+            }
+            var item = Images[index];
+            if (item.IsDirectory) OpenGridFolder(item);
+            else if (ImageGrid.SelectedItems.Contains(item)) ImageGrid.SelectedItems.Remove(item);
+            else ImageGrid.SelectedItems.Add(item);
         }
 
         private static bool TryTileCursorKey(Windows.System.VirtualKey key, out ViewerMath.TileCursorKey cursorKey)

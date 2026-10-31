@@ -323,7 +323,7 @@ namespace ModernImageViewer
             RefreshGridLayoutEnabled();
         }
 
-        /// <summary>Lines need at least two grid cells that show an image. Hidden cells and freeform cells do not count.</summary>
+        /// <summary>Lines need at least two grid cells that show an image. Empty cells and freeform cells do not count.</summary>
         private bool CanEditGridLayout
         {
             get

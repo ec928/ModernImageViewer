@@ -17,11 +17,9 @@ namespace ModernImageViewer
     /// <summary>The Advanced menus: image rotation, mirroring and window shape on every cell, window rotation and layer on freeform cells, and the canvas.</summary>
     public sealed partial class MultiViewControl
     {
-        private const string SettingsGlyph = "\uE713";
         private const double WindowRotationStep = 15;
         private const int WindowHoverGraceMs = 400;
-        // The shadow is soft, so half size looks the same on screen at about an eighth of the cost.
-        private const int ShadowPreviewDivisor = 2;
+        private const int MinShadowDivisor = 2;
 
         private readonly Dictionary<ImageItem, CellGeometryDto> _cellGeometry = new();
         private string _canvasColor = CanvasLook.DefaultColor;
@@ -82,6 +80,8 @@ namespace ModernImageViewer
             if (image.Items.Count > 0) menu.Items.Add(image);
         }
 
+        public int PositionOf(ImageItem cell) => Slot(cell) + 1;
+
         /// <summary>A picture chosen for this cell in the app.</summary>
         public void FillCell(ImageItem cell, string path)
         {
@@ -93,12 +93,9 @@ namespace ModernImageViewer
         {
             var replacement = new ImageItem { Path = path, Name = System.IO.Path.GetFileName(path), Dispatcher = DispatcherQueue };
             FillFileDetails(replacement);
-            var root = (uint)slot < (uint)_cellRoots.Length ? _cellRoots[slot] : null;
 
             MoveCellParameters(_items[slot], replacement);
-            _items[slot] = replacement;
-            var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(root, c.Container));
-            if (card != null) card.Item = replacement;
+            PutInCell(slot, replacement);
 
             RebindCell(slot);
             ShowEmptyState(slot);
@@ -127,11 +124,15 @@ namespace ModernImageViewer
             }
 
             window.Items.Add(new MenuFlyoutSeparator());
-            window.Items.Add(MakeAdvancedItem("Mirror shape", "\uE8AB", () => Change(g => g.ShapeFlipH = !g.ShapeFlipH)));
-            window.Items.Add(MakeAdvancedItem("Flip shape", "\uE8CB", () => Change(g => g.ShapeFlipV = !g.ShapeFlipV)));
+            var mirror = MakeAdvancedItem("Mirror shape", "\uE8AB", () => Change(g => g.ShapeFlipH = !g.ShapeFlipH));
+            mirror.IsEnabled = WindowShapes.MirrorChangesIt(current);
+            window.Items.Add(mirror);
+            var flip = MakeAdvancedItem("Flip shape", "\uE8CB", () => Change(g => g.ShapeFlipV = !g.ShapeFlipV));
+            flip.IsEnabled = WindowShapes.FlipChangesIt(current);
+            window.Items.Add(flip);
 
             window.Items.Add(new MenuFlyoutSeparator());
-            window.Items.Add(MakeAdvancedItem("Reset window", "\uE72C", () => Change(g =>
+            var reset = MakeAdvancedItem("Reset window", "\uE72C", () => Change(g =>
             {
                 g.Shape = WindowShapes.Rectangle;
                 g.ShapeFlipH = false;
@@ -140,17 +141,30 @@ namespace ModernImageViewer
                 g.ImageCounter = 0;
                 g.NotchX = 0.5;
                 g.NotchY = 0.5;
-            })));
+            }));
+            var now = GetGeometry(item);
+            reset.IsEnabled = now.Shape != WindowShapes.Rectangle || now.ShapeFlipH || now.ShapeFlipV || now.WindowRotation != 0 || now.ImageCounter != 0
+                || now.NotchX != 0.5 || now.NotchY != 0.5;
+            window.Items.Add(reset);
             return window;
         }
 
         private MenuFlyoutSubItem MakeLayerMenu(FreeformCard card)
         {
             var layer = new MenuFlyoutSubItem { Text = "Layer", Icon = new FontIcon { Glyph = "\uE81E" } };
-            layer.Items.Add(MakeAdvancedItem("Bring to front", "\uE74A", () => MoveCardLayer(card, int.MaxValue)));
-            layer.Items.Add(MakeAdvancedItem("Bring forward", "\uE74A", () => MoveCardLayer(card, 1)));
-            layer.Items.Add(MakeAdvancedItem("Send backward", "\uE74B", () => MoveCardLayer(card, -1)));
-            layer.Items.Add(MakeAdvancedItem("Send to back", "\uE74B", () => MoveCardLayer(card, int.MinValue)));
+            var order = _freeformCards.OrderBy(c => c.ZIndex).ToList();
+            int place = order.IndexOf(card);
+            layer.IsEnabled = order.Count > 1;
+            void Add(string text, string glyph, int steps, bool canMove)
+            {
+                var entry = MakeAdvancedItem(text, glyph, () => MoveCardLayer(card, steps));
+                entry.IsEnabled = canMove;
+                layer.Items.Add(entry);
+            }
+            Add("Bring to front", "\uE74A", int.MaxValue, place < order.Count - 1);
+            Add("Bring forward", "\uE74A", 1, place < order.Count - 1);
+            Add("Send backward", "\uE74B", -1, place > 0);
+            Add("Send to back", "\uE74B", int.MinValue, place > 0);
             return layer;
         }
 
@@ -292,21 +306,28 @@ namespace ModernImageViewer
             {
                 image.Source = null;
                 image.Visibility = Visibility.Collapsed;
-                parts.Bound.ShadowKey = null;
+                image.Tag = null;
                 return;
             }
 
             string key = string.Join("|", w, h, gutter, frame.ShadowIntensity, frame.CornerRadius,
                 geometry.Shape, geometry.ShapeFlipH, geometry.ShapeFlipV, geometry.NotchX, geometry.NotchY);
-            if (key == parts.Bound.ShadowKey && image.Source != null) return;
-            parts.Bound.ShadowKey = key;
+            if (key.Equals(image.Tag) && image.Source != null) return;
+            image.Tag = key;
 
-            int previewW = Math.Max(1, w / ShadowPreviewDivisor);
-            int previewH = Math.Max(1, h / ShadowPreviewDivisor);
-            double scale = 1.0 / ShadowPreviewDivisor;
+            int divisor = PreviewDivisor(frame.ShadowIntensity);
+            int previewW = Math.Max(1, w / divisor);
+            int previewH = Math.Max(1, h / divisor);
+            double scale = 1.0 / divisor;
             var outline = WindowShapes.Placed(geometry, 0, 0, previewW, previewH, frame.CornerRadius * scale, gutter * scale);
-            if (outline == null) return;
-            WriteShadow(image, FrameShadow.RenderAlpha(previewW, previewH, outline, frame.ShadowIntensity, scale, scale), previewW, previewH);
+            var cardOutline = WindowShapes.Placed(geometry, 0, 0, w, h, frame.CornerRadius, gutter);
+            if (outline == null || cardOutline == null) return;
+            WriteShadow(image, FrameShadow.RenderAlpha(previewW, previewH, outline, frame.ShadowIntensity, scale, scale, underCard: true), previewW, previewH);
+            var device = CanvasDevice.GetSharedDevice();
+            using var whole = CanvasGeometry.CreateRectangle(device, 0, 0, w, h);
+            using var card = CanvasGeometry.CreatePolygon(device, cardOutline.Select(p => new Vector2((float)p.X, (float)p.Y)).ToArray());
+            using var outside = whole.CombineWith(card, Matrix3x2.Identity, CanvasGeometryCombine.Exclude);
+            ClipShadowTo(image, outside);
         }
 
         private static void ClipToOutline(FrameworkElement part, (double X, double Y)[] outline)

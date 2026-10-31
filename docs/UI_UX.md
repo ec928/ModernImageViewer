@@ -125,13 +125,15 @@ The Single Viewer and Multi-View Solo/Maximize modes share an **identical** HUD 
 Multi-View shows up to 16 grid cells in fluid mosaics, with floating cells above them. Its right-click menu is grouped by what the user is doing:
 
 ```
+Add image...  (empty cell only, first in the menu)
 Swap with...              >   Contents only | With attributes
 Copy to...                >   Position 1    | Position 1
 Move to...                >   Position 2... | Position 2...
 --------------------------
 Frame & Border...
-Window                    >   Rectangle, Squircle, Circle / Oval, Arch / Tombstone, L-shape, Triangle,
-Add image...  (empty cell)    Right triangle, Rhombus / Diamond, Trapezoid, Parallelogram, Hexagon, Organic blob,
+Window  (Mirror, Flip and Reset grey out where they would do nothing) >
+                              Rectangle, Squircle, Circle / Oval, Arch / Tombstone, L-shape, Triangle,
+                              Right triangle, Rhombus / Diamond, Trapezoid, Parallelogram, Hexagon, Organic blob,
                               Mirror shape, Flip shape, Reset window
 Layer  (floating cells)   >   Bring to front, Bring forward, Send backward, Send to back
 Image                     >   Replace image..., Clear cell,

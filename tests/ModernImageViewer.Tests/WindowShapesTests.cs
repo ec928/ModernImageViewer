@@ -12,6 +12,22 @@ namespace ModernImageViewer.Tests
             Assert.Null(WindowShapes.Outline(null));
         }
 
+        [Theory]
+        [InlineData(WindowShapes.Rectangle, false, false)]
+        [InlineData(WindowShapes.Squircle, false, false)]
+        [InlineData(WindowShapes.Hexagon, false, false)]
+        [InlineData(WindowShapes.Rhombus, false, false)]
+        [InlineData(WindowShapes.Trapezoid, false, true)]
+        [InlineData(WindowShapes.Triangle, false, true)]
+        [InlineData(WindowShapes.Parallelogram, true, true)]
+        [InlineData(WindowShapes.RightTriangle, true, true)]
+        [InlineData(WindowShapes.LShape, true, true)]
+        public void MirrorAndFlipAreOfferedOnlyWhereTheyChangeTheShape(string shape, bool mirror, bool flip)
+        {
+            Assert.Equal(mirror, WindowShapes.MirrorChangesIt(shape));
+            Assert.Equal(flip, WindowShapes.FlipChangesIt(shape));
+        }
+
         [Fact]
         public void CarriedGeometry_BringsTheShapeButTurnsOnlyBetweenFloatingCells()
         {

@@ -883,8 +883,6 @@ namespace ModernImageViewer
             {
                 if (shot.Floating) FinishGrid();
 
-                // Hidden means the whole cell: no image, mat, frame or shadow.
-
                 Rect photo = shot.Photo.Width >= 1 && shot.Photo.Height >= 1 ? shot.Photo
                     : (shot.Card.Width >= 1 && shot.Card.Height >= 1 ? shot.Card : shot.Cell);
                 var placed = GridCanvasMath.Place(photo.Width, photo.Height, shot.ImageW, shot.ImageH, shot.Scale, shot.TranslateX, shot.TranslateY);
@@ -979,21 +977,26 @@ namespace ModernImageViewer
                         float slotY = (float)(shot.Cell.Y * scaleY);
                         int slotW = Math.Max(1, (int)Math.Round(shot.Cell.Width * scaleX));
                         int slotH = Math.Max(1, (int)Math.Round(shot.Cell.Height * scaleY));
-                        var shadeOutline = WindowShapes.Placed(shot.Geometry, 0, 0, slotW, slotH, rx, gutterPixels);
+                        int divisor = FrameShadow.Downscale(shot.Border.ShadowIntensity, Math.Max(scaleX, scaleY));
+                        double low = 1.0 / divisor;
+                        int shadeW = Math.Max(1, slotW / divisor);
+                        int shadeH = Math.Max(1, slotH / divisor);
+                        var shadeOutline = WindowShapes.Placed(shot.Geometry, 0, 0, shadeW, shadeH, rx * low, gutterPixels * low);
                         var shade = shadeOutline != null
-                            ? FrameShadow.RenderAlpha(slotW, slotH, shadeOutline, shot.Border.ShadowIntensity, scaleX, scaleY)
+                            ? FrameShadow.RenderAlpha(shadeW, shadeH, shadeOutline, shot.Border.ShadowIntensity, scaleX * low, scaleY * low, underCard: true)
                             : FrameShadow.RenderAlpha(
-                                slotW,
-                                slotH,
-                                cardX - slotX,
-                                cardY - slotY,
-                                cardW,
-                                cardH,
-                                shot.Border.CornerRadius * scaleX,
+                                shadeW,
+                                shadeH,
+                                (cardX - slotX) * low,
+                                (cardY - slotY) * low,
+                                cardW * low,
+                                cardH * low,
+                                shot.Border.CornerRadius * scaleX * low,
                                 shot.Border.ShadowIntensity,
-                                scaleX,
-                                scaleY);
-                        var shadePixels = new byte[slotW * slotH * 4];
+                                scaleX * low,
+                                scaleY * low,
+                                underCard: true);
+                        var shadePixels = new byte[shadeW * shadeH * 4];
                         for (int p = 0; p < shade.Length; p++)
                         {
                             byte a = shade[p];
@@ -1003,12 +1006,18 @@ namespace ModernImageViewer
                         using var shadeBitmap = CanvasBitmap.CreateFromBytes(
                             device,
                             shadePixels,
-                            slotW,
-                            slotH,
+                            shadeW,
+                            shadeH,
                             Windows.Graphics.DirectX.DirectXPixelFormat.B8G8R8A8UIntNormalized);
-                        using (shape == null ? null : shadowSession.CreateLayer(1f, shape))
+                        // Drawn small and stretched, so the card's hole is cut here at full size.
+                        using var slotRect = CanvasGeometry.CreateRectangle(device, slotX, slotY, slotW, slotH);
+                        using var plainCard = CanvasGeometry.CreateRoundedRectangle(device, (float)cardX, (float)cardY, (float)cardW, (float)cardH, rx, ry);
+                        using var shadeArea = shape != null && cardShape != null
+                            ? shape.CombineWith(cardShape, System.Numerics.Matrix3x2.Identity, CanvasGeometryCombine.Exclude)
+                            : slotRect.CombineWith(plainCard, System.Numerics.Matrix3x2.Identity, CanvasGeometryCombine.Exclude);
+                        using (shadowSession.CreateLayer(1f, shadeArea))
                         {
-                            shadowSession.DrawImage(shadeBitmap, slotX, slotY);
+                            shadowSession.DrawImage(shadeBitmap, new Rect(slotX, slotY, slotW, slotH), shadeBitmap.Bounds, 1f, CanvasImageInterpolation.Linear);
                         }
                     }
                 }
@@ -1211,13 +1220,22 @@ namespace ModernImageViewer
         {
             double gutter = Math.Max(0, frame.Padding) * scale;
             if (frame.ShadowIntensity <= 0 || frame.RimGlow || gutter <= 0) return;
-            var shade = FrameShadow.RenderAlpha(width, height, gutter, gutter, width - 2 * gutter, height - 2 * gutter,
-                Math.Max(0, frame.CornerRadius) * scale, frame.ShadowIntensity, scale, scale);
-            var pixels = new byte[width * height * 4];
+            int divisor = FrameShadow.Downscale(frame.ShadowIntensity, scale);
+            double low = scale / divisor;
+            int shadeW = Math.Max(1, width / divisor);
+            int shadeH = Math.Max(1, height / divisor);
+            double smallGutter = gutter / divisor;
+            var shade = FrameShadow.RenderAlpha(shadeW, shadeH, smallGutter, smallGutter, shadeW - 2 * smallGutter, shadeH - 2 * smallGutter,
+                Math.Max(0, frame.CornerRadius) * low, frame.ShadowIntensity, low, low, underCard: true);
+            var pixels = new byte[shadeW * shadeH * 4];
             for (int p = 0; p < shade.Length; p++)
                 pixels[(p * 4) + 3] = shade[p];
-            using var bitmap = CanvasBitmap.CreateFromBytes(device, pixels, width, height, Windows.Graphics.DirectX.DirectXPixelFormat.B8G8R8A8UIntNormalized);
-            session.DrawImage(bitmap, 0, 0);
+            using var bitmap = CanvasBitmap.CreateFromBytes(device, pixels, shadeW, shadeH, Windows.Graphics.DirectX.DirectXPixelFormat.B8G8R8A8UIntNormalized);
+            using var outside = CanvasFrameRing(device, width, height, gutter, Math.Max(0, frame.CornerRadius) * scale);
+            using (session.CreateLayer(1f, outside))
+            {
+                session.DrawImage(bitmap, new Rect(0, 0, width, height), bitmap.Bounds, 1f, CanvasImageInterpolation.Linear);
+            }
         }
 
         /// <summary>The light edge inside the line's outer edge, as ApplyCanvasFrame draws it.</summary>

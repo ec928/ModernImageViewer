@@ -357,6 +357,14 @@ namespace ModernImageViewer
                 0.45 + (0.45 * t));
         }
 
+        /// <summary>
+        /// A soft shadow looks the same drawn small and stretched, and costs far less. This is how many times smaller it can
+        /// be drawn for this intensity at this scale. A caller that stretches it passes underCard and cuts the card out itself,
+        /// because a hole cut at the small size would stretch into a light band around the card.
+        /// </summary>
+        public static int Downscale(double intensity, double scale = 1) =>
+            Math.Max(1, (int)Math.Floor(At(intensity).Sigma * scale / 2));
+
         /// <summary>Straight alpha, one byte per pixel, row-major. 0 is clear.</summary>
         public static byte[] RenderAlpha(
             int width,
@@ -368,7 +376,8 @@ namespace ModernImageViewer
             double cornerRadius,
             double intensity,
             double scaleX = 1,
-            double scaleY = 1)
+            double scaleY = 1,
+            bool underCard = false)
         {
             int count = width > 0 && height > 0 ? width * height : 0;
             var alpha = new byte[count];
@@ -391,7 +400,7 @@ namespace ModernImageViewer
             var src = new float[count];
             Fill(src, width, height, cardX + ox, cardY + oy, cardW, cardH, cornerRadius, (float)spec.Source, x0, y0, x1, y1);
             Blur(src, width, height, x0, y0, x1, y1, kernel);
-            ZeroInside(src, width, height, cardX, cardY, cardW, cardH, cornerRadius);
+            if (!underCard) ZeroInside(src, width, height, cardX, cardY, cardW, cardH, cornerRadius);
 
             for (int i = 0; i < count; i++)
             {
@@ -404,7 +413,7 @@ namespace ModernImageViewer
         }
 
         /// <summary>The same shadow cast by any outline, for a shaped window.</summary>
-        public static byte[] RenderAlpha(int width, int height, (double X, double Y)[] outline, double intensity, double scaleX = 1, double scaleY = 1)
+        public static byte[] RenderAlpha(int width, int height, (double X, double Y)[] outline, double intensity, double scaleX = 1, double scaleY = 1, bool underCard = false)
         {
             int count = width > 0 && height > 0 ? width * height : 0;
             var alpha = new byte[count];
@@ -426,7 +435,7 @@ namespace ModernImageViewer
             int y1 = Clamp((int)Math.Ceiling(outline.Max(p => p.Y) + oy) + radius, 0, height);
             if (x1 <= x0 || y1 <= y0) return alpha;
             Blur(src, width, height, x0, y0, x1, y1, kernel);
-            FillOutline(src, width, height, outline, 0, 0, 0);
+            if (!underCard) FillOutline(src, width, height, outline, 0, 0, 0);
 
             for (int i = 0; i < count; i++)
             {
@@ -656,6 +665,20 @@ namespace ModernImageViewer
         public static readonly string[] All = { Rectangle, Squircle, Oval, Arch, LShape, Triangle, RightTriangle, Rhombus, Trapezoid, Parallelogram, Hexagon, Blob };
 
         // Curves all the way round, so they have no corners for the corner radius to round.
+        /// <summary>False for a shape that looks the same mirrored, so offering to mirror it would do nothing.</summary>
+        public static bool MirrorChangesIt(string? shape) => OutlineKey(shape, true, false) != OutlineKey(shape, false, false);
+
+        /// <summary>False for a shape that looks the same flipped.</summary>
+        public static bool FlipChangesIt(string? shape) => OutlineKey(shape, false, true) != OutlineKey(shape, false, false);
+
+        private static string OutlineKey(string? shape, bool flipH, bool flipV)
+        {
+            var points = Outline(shape, flipH, flipV);
+            return points == null
+                ? string.Empty
+                : string.Join(";", points.Select(p => FormattableString.Invariant($"{Math.Round(p.X, 2):F2},{Math.Round(p.Y, 2):F2}")).OrderBy(p => p, StringComparer.Ordinal));
+        }
+
         private static bool HasNoCorners(string? shape) => shape is Oval or Squircle or Blob;
 
         public static (double X, double Y)[]? Outline(CellGeometryDto? geometry) => geometry == null

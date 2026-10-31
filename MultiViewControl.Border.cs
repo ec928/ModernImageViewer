@@ -1,14 +1,18 @@
+using Microsoft.Graphics.Canvas.Geometry;
+using Microsoft.Graphics.Canvas;
+using Microsoft.UI.Composition;
 using Microsoft.UI.Dispatching;
-using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls.Primitives;
-using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Media.Imaging;
-using System;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
-using Microsoft.UI.Xaml.Automation;
+using System;
 using Windows.Foundation;
 using Windows.UI;
 
@@ -114,6 +118,18 @@ namespace ModernImageViewer
             }
         }
 
+        /// <summary>
+        /// This cell now holds this image. A floating cell draws its shape and frame from its card's item,
+        /// so the card has to follow or the cell draws as a plain rectangle.
+        /// </summary>
+        private void PutInCell(int slot, ImageItem item)
+        {
+            _items[slot] = item;
+            var root = (uint)slot < (uint)_cellRoots.Length ? _cellRoots[slot] : null;
+            var card = root == null ? null : _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Container, root));
+            if (card != null) card.Item = item;
+        }
+
         /// <summary>A cell can hold no image. It keeps its parameters, and they apply to the next image it gets.</summary>
         private static bool IsEmptyCell(ImageItem item) => string.IsNullOrEmpty(item.Path);
 
@@ -123,9 +139,7 @@ namespace ModernImageViewer
             var old = _items[slot];
             var empty = new ImageItem { Path = string.Empty, Name = string.Empty, Dispatcher = old.Dispatcher };
             MoveCellParameters(old, empty);
-            _items[slot] = empty;
-            var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, old));
-            if (card != null) card.Item = empty;
+            PutInCell(slot, empty);
             RebindCell(slot);
             ShowEmptyState(slot);
         }
@@ -138,6 +152,7 @@ namespace ModernImageViewer
             if (_cellRoots[slot]?.Tag is not CellParts parts) return;
             bool empty = IsEmptyCell(_items[slot]);
             bool failed = parts.Bound.Failed;
+            if (parts.MaximizeButton != null) parts.MaximizeButton.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
             if (parts.ImageContainer != null)
                 parts.ImageContainer.Visibility = empty || failed ? Visibility.Collapsed : Visibility.Visible;
             if (parts.HiddenPlaceholder is StackPanel placeholder)
@@ -203,8 +218,7 @@ namespace ModernImageViewer
                 gutterHost = parts.GutterHost;
             }
 
-            bool isHidden = IsEmptyCell(item);
-            if (isHidden)
+            if (IsEmptyCell(item))
             {
                 cellBorder.Margin = new Thickness(0);
                 cellBorder.BorderThickness = new Thickness(0);
@@ -887,29 +901,41 @@ namespace ModernImageViewer
             bool drop = border.ShadowIntensity > 0 && !border.RimGlow;
             int width = (int)Math.Round(gutterHost.ActualWidth);
             int height = (int)Math.Round(gutterHost.ActualHeight);
-            if (!drop || width < 2 || height < 2)
-            {
-                image.Source = null;
-                image.Visibility = Visibility.Collapsed;
-                return;
-            }
-
             double pad = Math.Max(0, border.Padding);
             double cardW = width - (pad * 2);
             double cardH = height - (pad * 2);
-            if (cardW < 1 || cardH < 1)
+            if (!drop || width < 2 || height < 2 || cardW < 1 || cardH < 1)
             {
                 image.Source = null;
                 image.Visibility = Visibility.Collapsed;
+                image.Tag = null;
                 return;
             }
 
-            int previewW = Math.Max(1, width / ShadowPreviewDivisor);
-            int previewH = Math.Max(1, height / ShadowPreviewDivisor);
-            double scale = 1.0 / ShadowPreviewDivisor;
-            var alpha = FrameShadow.RenderAlpha(previewW, previewH, pad * scale, pad * scale, cardW * scale, cardH * scale, border.CornerRadius * scale, border.ShadowIntensity, scale, scale);
+            // Sliders and resizing land here over and over, so it is drawn again only when something it depends on has changed.
+            string key = string.Join("|", width, height, pad, border.ShadowIntensity, border.CornerRadius);
+            if (key.Equals(image.Tag) && image.Source != null) return;
+            image.Tag = key;
+
+            int divisor = PreviewDivisor(border.ShadowIntensity);
+            int previewW = Math.Max(1, width / divisor);
+            int previewH = Math.Max(1, height / divisor);
+            double scale = 1.0 / divisor;
+            var alpha = FrameShadow.RenderAlpha(previewW, previewH, pad * scale, pad * scale, cardW * scale, cardH * scale, border.CornerRadius * scale, border.ShadowIntensity, scale, scale, underCard: true);
             WriteShadow(image, alpha, previewW, previewH);
+            using var outside = CanvasFrameRing(CanvasDevice.GetSharedDevice(), width, height, pad, border.CornerRadius);
+            ClipShadowTo(image, outside);
         }
+
+        /// <summary>The shadow is drawn small, so the card's hole is cut sharp at full size.</summary>
+        private static void ClipShadowTo(Image image, CanvasGeometry outside)
+        {
+            var visual = ElementCompositionPreview.GetElementVisual(image);
+            var compositor = visual.Compositor;
+            visual.Clip = compositor.CreateGeometricClip(compositor.CreatePathGeometry(new CompositionPath(outside)));
+        }
+
+        private static int PreviewDivisor(double intensity) => Math.Max(MinShadowDivisor, FrameShadow.Downscale(intensity));
 
         private static void WriteShadow(Image image, byte[] alpha, int width, int height)
         {
