@@ -82,6 +82,7 @@ namespace ModernImageViewer
         /// <summary>Show this cell's hidden state: the placeholder alone, or the image with its frame.</summary>
         private void ShowHiddenState(int slot)
         {
+            RefreshGridLayoutEnabled();
             if ((uint)slot >= (uint)_cellRoots.Length || (uint)slot >= (uint)_items.Count) return;
             if (_cellRoots[slot]?.Tag is not CellParts parts) return;
             bool hidden = _hiddenItems.Contains(_items[slot]);

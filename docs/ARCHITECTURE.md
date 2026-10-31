@@ -85,7 +85,7 @@ A cell holds the parameters that are applied to its content, and the content is 
 
 Triggering Freeform always generates a new cell, whatever other cells exist or show: the existing cell becomes hidden, and the new cell has a copy of the image, a clone of the existing cell's parameters and the highest z-index, so a 4-cell view becomes a 5-cell view. The new cell is independent: changing it does not change the existing cell.
 
-Hidden hides everything in the cell, including the image, borders and shadow. Going back to the grid deletes the extra cells and resets cell parameters. A saved layout keeps the hidden state.
+Hidden hides everything in the cell, including the image, borders and shadow. Going back to the grid deletes the extra cells and resets cell parameters. A saved layout keeps the hidden state. Grid Layout, and its keys, need at least two grid cells that show an image: hidden cells and freeform cells do not count.
 
 Each cell has its own `ImageItem`, and `_itemBorders`, `_hiddenItems` and `_cellGeometry` hold its frame, hidden state and turns against that object. When the image changes, `MoveCellParameters` or `ExchangeCellParameters` carries them over, so they stay with the cell. Docking returns the image to its source cell while that cell is hidden, and otherwise adds a new grid cell. `FreeformCard.SourceSlot` is still an index. `RemoveItem` keeps it correct.
 

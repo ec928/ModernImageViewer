@@ -324,6 +324,29 @@ namespace ModernImageViewer
 
             ToolTipService.SetToolTip(CountsButton,
                 "Edit the lines. Choose rows or columns, or press R. Plus and minus change how many.");
+            RefreshGridLayoutEnabled();
+        }
+
+        /// <summary>Lines need at least two grid cells that show an image. Hidden cells and freeform cells do not count.</summary>
+        private bool CanEditGridLayout
+        {
+            get
+            {
+                int visible = VisibleCount(GridCellCount);
+                int filled = 0;
+                for (int i = 0; i < visible; i++)
+                {
+                    if (!_hiddenItems.Contains(_items[i])) filled++;
+                }
+                return filled >= 2;
+            }
+        }
+
+        private void RefreshGridLayoutEnabled()
+        {
+            bool enabled = CanEditGridLayout;
+            CountsButton.IsEnabled = enabled;
+            if (!enabled) CountsButton.Flyout?.Hide();
         }
 
         private static double WeightAt(MosaicLayout node, int index)

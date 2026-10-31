@@ -162,7 +162,7 @@ namespace ModernImageViewer
         public void ChangeLines(int delta)
         {
             int total = LineTotal();
-            if (VisibleCount(GridCellCount) < 2 || total < 1) return;
+            if (!CanEditGridLayout || total < 1) return;
             int current = Math.Clamp(_lines, 1, total);
             int next = Math.Clamp(current + delta, 1, total);
             bool linesInUse = !_heroActive || HeroUsesLines;
@@ -918,7 +918,7 @@ namespace ModernImageViewer
         /// </summary>
         public void ToggleRowsColumns()
         {
-            if (VisibleCount(GridCellCount) < 2) return;
+            if (!CanEditGridLayout) return;
             _flipped = !_flipped;
             if (!HeroUsesLines && _mosaic != null && CellRootsReady())
             {
