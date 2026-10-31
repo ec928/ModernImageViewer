@@ -228,6 +228,7 @@ namespace ModernImageViewer
 
             this.Closed += (s, e) =>
             {
+                MultiViewControl?.AutoSaveSession();
                 _windowClosed = true;
                 CancelPreviewLoad();
                 RootGrid.RemoveHandler(UIElement.KeyDownEvent, _globalKeyDownHandler);

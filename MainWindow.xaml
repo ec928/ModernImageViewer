@@ -776,8 +776,7 @@
                                             Visibility="Collapsed"
                                             Canvas.ZIndex="1000"
                                             CloseRequested="MultiViewControl_CloseRequested"
-                                            AddImagesRequested="MultiViewControl_AddImagesRequested"
-                                            StartOverRequested="MultiViewControl_StartOverRequested" />
+                                            AddImagesRequested="MultiViewControl_AddImagesRequested" />
                 </Grid>
             </SplitView.Content>
         </SplitView>

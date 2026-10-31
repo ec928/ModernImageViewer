@@ -19,7 +19,6 @@ namespace ModernImageViewer
     {
         public event EventHandler? CloseRequested;
         public event EventHandler? AddImagesRequested;
-        public event EventHandler? StartOverRequested;
 
         // When set, this many frames stay on screen and later photos wait off screen.
         private int _framedSlots;
@@ -2736,23 +2735,6 @@ namespace ModernImageViewer
         private void AddImagesButton_Click(object sender, RoutedEventArgs e)
         {
             AddImagesRequested?.Invoke(this, EventArgs.Empty);
-        }
-
-        /// <summary>Clears the whole session. Undo goes with it, so this asks first.</summary>
-        private async System.Threading.Tasks.Task ConfirmStartOverAsync()
-        {
-            var dialog = new ContentDialog
-            {
-                Title = "Start over?",
-                Content = "This clears the layout, its cells and its undo history. Save the layout first to keep it.",
-                PrimaryButtonText = "Start over",
-                CloseButtonText = "Cancel",
-                DefaultButton = ContentDialogButton.Close,
-                RequestedTheme = ElementTheme.Dark,
-                XamlRoot = XamlRoot
-            };
-            if (await dialog.ShowAsync() == ContentDialogResult.Primary)
-                StartOverRequested?.Invoke(this, EventArgs.Empty);
         }
 
         public int ShownSlots => GridCellCount == 0 ? 0 : VisibleCount(GridCellCount);

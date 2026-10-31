@@ -147,6 +147,8 @@ namespace ModernImageViewer
             };
             panel.Children.Add(openLayoutItem);
 
+            double autosaveHeight = AddAutoSaveRows(panel);
+
             // Favourites & Recent save locations (last 3 recent, 3 favourites)
             if (MainWindow.Instance != null)
             {
@@ -164,7 +166,7 @@ namespace ModernImageViewer
                 // Every folder always shows. Its layouts take whatever height the window has left.
                 var folders = favs.Concat(recents).ToList();
                 var files = folders.Select(LayoutFilesIn).ToList();
-                double taken = MenuHeaderHeight + 2 * MenuRowHeight + folders.Count * MenuFolderHeight;
+                double taken = MenuHeaderHeight + 2 * MenuRowHeight + autosaveHeight + folders.Count * MenuFolderHeight;
                 if (favs.Count > 0) taken += MenuDividerHeight + MenuHeaderHeight;
                 if (recents.Count > 0) taken += 2 * MenuDividerHeight + MenuHeaderHeight + MenuRowHeight;
                 int spare = (int)Math.Max(0, (SaveMenuHeight() - taken) / MenuLayoutHeight);
@@ -232,6 +234,46 @@ namespace ModernImageViewer
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
                 MaxHeight = SaveMenuHeight()
             };
+        }
+
+        /// <summary>The two autosaved sessions, newest first. Returns the height they take.</summary>
+        private double AddAutoSaveRows(StackPanel panel)
+        {
+            double height = 0;
+            for (int age = 0; age < 2; age++)
+            {
+                string path = AutoSavePath(age);
+                string json;
+                try
+                {
+                    if (!File.Exists(path)) continue;
+                    json = File.ReadAllText(path);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    continue;
+                }
+                var file = MultiViewLayoutFile.FromJson(json);
+                if (file == null) continue;
+                if (height == 0)
+                {
+                    panel.Children.Add(CreateMenuDivider());
+                    panel.Children.Add(CreateSectionHeader("Autosaved"));
+                    height = MenuDividerHeight + MenuHeaderHeight;
+                }
+                int photos = file.Photos.Count(p => !string.IsNullOrEmpty(p.Path) && !p.Hidden) + (file.Freeform?.Count ?? 0);
+                var saved = File.GetLastWriteTime(path);
+                string when = saved.Date == DateTime.Today ? saved.ToString("HH:mm") : saved.ToString("d MMM HH:mm");
+                var row = CreateMenuItemButton(when, photos == 1 ? "1 photo" : photos + " photos");
+                row.Click += (_, _) =>
+                {
+                    SaveFlyout.Hide();
+                    ApplyLayoutFile(file);
+                };
+                panel.Children.Add(row);
+                height += MenuRowHeight;
+            }
+            return height;
         }
 
         /// <summary>The height free above the bar.</summary>
@@ -1376,6 +1418,7 @@ namespace ModernImageViewer
         private void ApplyLayoutFile(MultiViewLayoutFile layoutFile, bool restoreAspect)
         {
             if (layoutFile == null) return;
+            if (!_restoringUndo) AutoSaveSession();
 
             // An undo returns to photos already known, so their thumbnails and details carry over.
             var known = new Dictionary<string, ImageItem>(StringComparer.OrdinalIgnoreCase);

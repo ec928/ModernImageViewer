@@ -937,6 +937,7 @@ namespace ModernImageViewer
             {
                 return;
             }
+            MultiViewControl.AutoSaveSession();
             MultiViewControl.PrepareToLeave();
             MultiViewControl.Visibility = Visibility.Collapsed;
             _multiViewKept = MultiViewControl.ShownSlots > 0;
@@ -970,17 +971,6 @@ namespace ModernImageViewer
             ImageGrid.SelectedItems.Clear();
             ShowAddingMode(true);
             NoteParkedSelection();
-            FocusGrid();
-        }
-
-        private void MultiViewControl_StartOverRequested(object? sender, EventArgs e)
-        {
-            if (MultiViewControl == null) return;
-            EndMultiViewCanvas();
-            MultiViewControl.Visibility = Visibility.Collapsed;
-            MultiViewControl.Clear();
-            _multiViewKept = false;
-            SetMultiModeTip();
             FocusGrid();
         }
 
