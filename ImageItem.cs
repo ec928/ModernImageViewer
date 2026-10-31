@@ -525,11 +525,8 @@ namespace ModernImageViewer
             _cts?.Dispose();
             _cts = null;
 
-            if (Thumbnail is SoftwareBitmapSource softwareSource)
-            {
-                softwareSource.Dispose();
-            }
-
+            // Only let go of it. A Multi-View cell, the viewer or the preview may be showing this source,
+            // and WinUI fails fast if it copies a closed one to the screen.
             Thumbnail = null;
             _isLoadingThumb = false;
         }

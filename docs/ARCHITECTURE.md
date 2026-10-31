@@ -125,6 +125,8 @@ Cells are owned by slot: `_cellRoots[i]` is the cell showing `_items[i]`. A swap
 
 Changing the line count, a line's count or the hero builds a new layout and resets dragged sizes, but keeps the cells (`RelayoutKeepingCells`), so nothing decodes again. The rows/columns switch turns a plain grid or a Rectangle a quarter (`Transpose`) and keeps dragged sizes; beside a Banner or Pair it relays the other photos.
 
+An `ImageItem`'s thumbnail source can be on screen in several places at once: its tile, a cell's placeholder, the viewer and the preview. Never close it. Entering Multi-View resizes the window, the grid recycles tiles, and `ClearThumbnail` used to dispose the source a cell had just taken; WinUI then failed fast in `AsyncCopyToSurfaceTask::CopyOperation` on a background thread, with nothing in `crash.log`. Dropping the reference leaves it to the garbage collector.
+
 A cell's grid thumbnail is only a placeholder: it is removed when the photo loads, and `CellParts.Photo` names the photo's `Image`. Save JPEG takes each photo's native size from that `Image`; reading the first `Image` in the cell found the ~250 px thumbnail and capped the export at thumbnail resolution.
 
 ## Bare Alt
