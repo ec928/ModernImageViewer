@@ -107,7 +107,6 @@ namespace ModernImageViewer
 
         private CanvasDevice? _canvasDevice;
         private CanvasBitmap? _rawGpuBitmap;
-        private ColorManagementProfile? _rawGpuProfile;
 
         private ItemsWrapGrid? _imageWrapGrid;
         private readonly List<string> _recentFolders = [];
@@ -192,6 +191,7 @@ namespace ModernImageViewer
             Microsoft.UI.WindowId wndId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(_hWnd);
             _appWindow = AppWindow.GetFromWindowId(wndId);
             _appWindow.Closing += AppWindow_Closing;
+            ApplyMinimumWindowSize();
 
             this.ExtendsContentIntoTitleBar = true;
             var titleBar = _appWindow.TitleBar;
@@ -239,7 +239,7 @@ namespace ModernImageViewer
                 RootGrid.RemoveHandler(UIElement.KeyDownEvent, _globalKeyDownHandler);
                 RootGrid.RemoveHandler(UIElement.KeyUpEvent, _globalKeyUpHandler);
                 Instance = null;
-                SaveAllSettings();
+                SaveAllSettings(finishNow: true);
                 StopFolderWatcher();
                 _hfPromotionTimer?.Stop();
                 _hfCts?.Cancel();
@@ -302,7 +302,7 @@ namespace ModernImageViewer
                 }
                 else
                 {
-                    await ScanFolder(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures));
+                    await ScanFolder(await StartupFolderAsync());
                 }
             };
         }
@@ -341,6 +341,27 @@ namespace ModernImageViewer
         }
 
         private bool _isMainWindowHidden = false;
+
+        /// <summary>The folder last open, unless it cannot be reached quickly. A folder on a network that has gone can take half a minute to say so.</summary>
+        private async Task<string> StartupFolderAsync()
+        {
+            string pictures = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
+            string? last = _currentSettings.LastFolder;
+            if (string.IsNullOrEmpty(last)) return pictures;
+            var check = Task.Run(() => Directory.Exists(last) || (ComicArchive.IsComicArchivePath(last) && File.Exists(last)));
+            bool answered = await Task.WhenAny(check, Task.Delay(3000)) == check;
+            return answered && check.Result ? last : pictures;
+        }
+
+        /// <summary>Below this the header's controls run into each other.</summary>
+        private void ApplyMinimumWindowSize()
+        {
+            if (_appWindow?.Presenter is not OverlappedPresenter presenter) return;
+            double scale = NativeMethods.GetDpiForWindow(_hWnd) / 96.0;
+            if (scale <= 0) scale = 1;
+            presenter.PreferredMinimumWidth = (int)(720 * scale);
+            presenter.PreferredMinimumHeight = (int)(480 * scale);
+        }
 
         private void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)
         {
@@ -408,6 +429,7 @@ namespace ModernImageViewer
             public bool ListMode { get; set; }
             public double TileSize { get; set; } = 164;
             public string ThemeMode { get; set; } = "System";
+            public string? LastFolder { get; set; }
             public List<WindowPreset?> WindowPresets { get; set; } = new() { null, null, null };
             public List<string> RecentFolders { get; set; } = new();
             public List<string> FavouriteFolders { get; set; } = new();
@@ -429,7 +451,13 @@ namespace ModernImageViewer
                     var loaded = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(json);
                     if (loaded != null) settings = loaded;
                 }
-                catch { /* use defaults */ }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+                {
+                    // Defaults from here on. The next save would overwrite the file, so a copy of it is kept to recover from.
+                    Debug.WriteLine($"[Settings] {ex.Message}");
+                    try { File.Copy(_settingsPath, _settingsPath + ".unreadable", overwrite: true); }
+                    catch (Exception copy) when (copy is IOException or UnauthorizedAccessException) { Debug.WriteLine($"[Settings] {copy.Message}"); }
+                }
             }
 
             // Explicitly target window dimensions for reset, leaving arrays and user preferences intact
@@ -502,13 +530,18 @@ namespace ModernImageViewer
             if (viewChanged && _imageWrapGrid != null)
                 ApplyViewMode();
 
+            // Not asked of the disk here: an unreachable folder would hold up the whole start. The folder menu finds out in the background.
             int w = settings.WindowWidth < 300 ? 1278 : settings.WindowWidth;
             int h = settings.WindowHeight < 300 ? 1350 : settings.WindowHeight;
 
             _appWindow?.Resize(new Windows.Graphics.SizeInt32(w, h));
 
-            if (settings.WindowX != -1 && settings.WindowY != -1)
-                _appWindow?.Move(new Windows.Graphics.PointInt32(settings.WindowX, settings.WindowY));
+            if (settings.WindowX != -1 && settings.WindowY != -1 && _appWindow != null)
+            {
+                var work = Microsoft.UI.Windowing.DisplayArea.GetFromRect(new Windows.Graphics.RectInt32(settings.WindowX, settings.WindowY, w, h), Microsoft.UI.Windowing.DisplayAreaFallback.Nearest).WorkArea;
+                var (x, y) = ViewerMath.KeepOnScreen(settings.WindowX, settings.WindowY, w, h, work.X, work.Y, work.Width, work.Height);
+                _appWindow.Move(new Windows.Graphics.PointInt32(x, y));
+            }
 
             SyncSortChecks(settings.SortOrder);
 
@@ -518,7 +551,7 @@ namespace ModernImageViewer
             _recentFolders.Clear();
             foreach (var folder in settings.RecentFolders)
             {
-                if (Directory.Exists(folder) && !_recentFolders.Contains(folder))
+                if (!string.IsNullOrWhiteSpace(folder) && !_recentFolders.Contains(folder))
                     _recentFolders.Add(folder);
             }
 
@@ -533,7 +566,7 @@ namespace ModernImageViewer
             _multiViewRecentSaveLocations.Clear();
             foreach (var folder in settings.MultiViewRecentSaveLocations)
             {
-                if (Directory.Exists(folder) && !_multiViewRecentSaveLocations.Contains(folder) && _multiViewRecentSaveLocations.Count < 3)
+                if (!string.IsNullOrWhiteSpace(folder) && !_multiViewRecentSaveLocations.Contains(folder) && _multiViewRecentSaveLocations.Count < 3)
                     _multiViewRecentSaveLocations.Add(folder);
             }
 
@@ -607,7 +640,13 @@ namespace ModernImageViewer
             window.Closed += (_, _) => _cinematicWindows.Remove(window);
         }
 
-        private void SaveAllSettings()
+        private readonly object _settingsGate = new();
+        private int _settingsSaveNumber;
+        private int _settingsWritten;
+
+        // Saves run one at a time, and one that started later is never overwritten by an earlier one.
+        // The last save, as the window closes, finishes before returning: a background write can be cut off by the app exiting.
+        private void SaveAllSettings(bool finishNow = false)
         {
             try
             {
@@ -649,20 +688,34 @@ namespace ModernImageViewer
                 });
 
                 string settingsPath = _settingsPath;
-                Task.Run(() =>
+                int number = ++_settingsSaveNumber;
+                void Write()
                 {
-                    try
+                    lock (_settingsGate)
                     {
-                        string? dir = Path.GetDirectoryName(settingsPath);
-                        if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-                            Directory.CreateDirectory(dir);
+                        if (number < _settingsWritten) return;
+                        _settingsWritten = number;
+                        try
+                        {
+                            string? dir = Path.GetDirectoryName(settingsPath);
+                            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                                Directory.CreateDirectory(dir);
 
-                        File.WriteAllText(settingsPath, json);
+                            AtomicFile.WriteAllText(settingsPath, json);
+                        }
+                        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                        {
+                            Debug.WriteLine($"[Settings] {ex.Message}");
+                        }
                     }
-                    catch { }
-                });
+                }
+                if (finishNow) Write();
+                else _ = Task.Run(Write);
             }
-            catch { }
+            catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException or System.Runtime.InteropServices.COMException)
+            {
+                Debug.WriteLine($"[Settings] {ex.Message}");
+            }
         }
         private void PlayCinematicFolder_Click(object sender, RoutedEventArgs e)
         {

@@ -35,7 +35,7 @@ namespace ModernImageViewer
         };
 
         private static readonly ConcurrentDictionary<string, SemaphoreSlim> ArchiveLocks = new(StringComparer.OrdinalIgnoreCase);
-        private static readonly ConcurrentDictionary<string, List<ComicPageInfo>> PageListCache = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly ConcurrentDictionary<string, (DateTime Written, long Length, List<ComicPageInfo> Pages)> PageListCache = new(StringComparer.OrdinalIgnoreCase);
 
         private static readonly object ByteCacheGate = new();
         private static readonly Dictionary<string, byte[]> ByteCache = new(StringComparer.OrdinalIgnoreCase);
@@ -99,8 +99,15 @@ namespace ModernImageViewer
             if (string.IsNullOrEmpty(archivePath) || !File.Exists(archivePath))
                 return [];
 
-            if (PageListCache.TryGetValue(archivePath, out var cached) && cached.Count > 0)
-                return cached;
+            // A file replaced under the same name has different pages, so what was kept from it has to go.
+            var file = new FileInfo(archivePath);
+            if (PageListCache.TryGetValue(archivePath, out var cached))
+            {
+                if (cached.Written == file.LastWriteTimeUtc && cached.Length == file.Length)
+                    return cached.Pages;
+                PageListCache.TryRemove(archivePath, out _);
+                ForgetCachedBytes(archivePath);
+            }
 
             var pages = new List<ComicPageInfo>();
             try
@@ -142,7 +149,7 @@ namespace ModernImageViewer
 
                 pages.Sort((a, b) => NaturalSort.Compare(a.EntryKey.Replace('\\', '/'), b.EntryKey.Replace('\\', '/')));
                 if (pages.Count > 0)
-                    PageListCache[archivePath] = pages;
+                    PageListCache[archivePath] = (file.LastWriteTimeUtc, file.Length, pages);
             }
             catch (Exception ex)
             {
@@ -228,6 +235,20 @@ namespace ModernImageViewer
             finally
             {
                 gate.Release();
+            }
+        }
+
+        private static void ForgetCachedBytes(string archivePath)
+        {
+            string prefix = archivePath + EntrySeparator;
+            lock (ByteCacheGate)
+            {
+                foreach (string key in ByteCache.Keys.Where(k => k.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)).ToList())
+                {
+                    _byteCacheTotalBytes -= ByteCache[key].Length;
+                    ByteCache.Remove(key);
+                    ByteCacheOrder.Remove(key);
+                }
             }
         }
 

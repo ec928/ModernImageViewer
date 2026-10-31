@@ -6,7 +6,7 @@ Authoritative invariants. Consult this before changing decode, cache, or GPU lif
 
 Unpackaged WinUI 3 / Win2D image browser (portable zip). The in-app cinematic director is an in-tree beta surface, not described as a core README feature. Collage work happens in Multi-view. The separate Collage editor was removed on 2026-10-31.
 
-Local state lives under `%LocalAppData%\ModernImageViewer\` (`settings.json`, cinematic window bounds, `CinematicAutoSave.json`). Never `ApplicationData.Current` — this app has no package identity.
+Local state lives under `%LocalAppData%\ModernImageViewer\` (`settings.json`, cinematic window bounds, `CinematicAutoSave.json`). Never `ApplicationData.Current` — this app has no package identity. `settings.json` and the autosaves are written through `AtomicFile`, and saves of `settings.json` run one at a time. A file that cannot be read at start is kept as `settings.json.unreadable` before defaults take over.
 
 UI/UX styling, typography, theme parity, and component specifications are documented in `UI_UX.md`.
 
@@ -14,7 +14,7 @@ UI/UX styling, typography, theme parity, and component specifications are docume
 
 | Tier | Max edge | Who | GPU? |
 |------|----------|-----|------|
-| Thumbnail | ~250 | `ImageItem` (shell thumbnail, WIC fallback) | No |
+| Thumbnail | tile size on screen, 250 to 1024 (`ViewerMath.ThumbnailEdge`) | `ImageItem` (shell thumbnail, WIC fallback) | No |
 | Fast preview | 1200 | `ViewerEngine.DecodeFastPreviewAsync` | Uploaded on UI thread |
 | Viewer, fit | long edge of the view | main window and detached window, after the preview | Yes |
 | Viewer, zoomed past fit | native, capped at 16384 | same windows, one further decode | Yes |
@@ -23,7 +23,7 @@ UI/UX styling, typography, theme parity, and component specifications are docume
 
 `DecodeHighFidelityAsync(path, token, maxEdge)` is the viewer decode past the preview. `maxEdge` is the long edge to produce, never above 16384. At fit that edge is the view. Zoomed past fit it is the file, capped at 16384. The scroll wheel's lower limit stays 0.1 for an ordinary photo. Fit of a wider image may go below 0.1, and that fit becomes the wheel floor for that image only.
 
-WIC color-manages to sRGB. The draw path does **not** use Win2D `ColorManagementEffect`. Do not allocate a `ColorManagementProfile` unless a draw path consumes it.
+WIC color-manages to sRGB, so the draw path has no color management of its own.
 
 `.tif` and `.tiff` use that same decode. A multi-page TIFF shows its first page. A frame count above one is played only for other files, which is the GIF path.
 
@@ -47,13 +47,17 @@ GPU objects (`CanvasBitmap`, `CanvasRenderTarget`, Win2D effects) are created an
 
 The file list is one enumeration. `AddRange` reports each appended item. It does not raise `Reset`, which recycles the visible rows and restarts their thumbnails on every batch.
 
-A debounced `FileSystemWatcher` on `_currentDirectory` re-runs `ScanFolder` when the grid is showing (preview closed). Events while the preview is open or a scan is running set a dirty flag and run when the preview closes / the scan finishes. A rename is dirty if either the old or new extension is supported.
+A scan asks whether the folder exists off the UI thread, because an unreachable network path blocks for about 33 s. The check that follows a click goes through `_scanRequest`, so a later request wins. A scan that fails sets `_scanError`, which the empty state shows. It never lets an exception out, because `App` does not recover from unhandled ones and async void callers would close the app.
+
+A debounced `FileSystemWatcher` on `_currentDirectory` runs `RefreshFolderInPlaceAsync` when the grid is showing (preview closed). It merges the new list into `Images` (`ListMerge`), so the selection, scroll position, cursor and other thumbnails stay. F5 is the full `ScanFolder`. Events while the preview is open or a scan is running set a dirty flag and run when the preview closes / the scan finishes. A rename is dirty if either the old or new extension is supported.
 
 ## GIF compositing
 
 Multi-frame decode reads `/imgdesc/Left`, `/imgdesc/Top`, `/grctlext/Delay`, `/grctlext/Disposal`. Frames are composited onto a canvas sized to the (possibly 16384-clamped) logical screen, not each frame's bitmap size.
 
 Disposal: 0/1 keep, 2 restore background (punch frame rect), 3 restore to previous (snapshot before draw).
+
+Every frame is held whole on the GPU, so `ViewerMath.AnimationBudget` caps an animation at 2 GB: smaller first, down to half size, then the first frames only, with a HUD message. Compositing still runs on the UI thread, so a long animation pauses the window while it does.
 
 ## Threads
 

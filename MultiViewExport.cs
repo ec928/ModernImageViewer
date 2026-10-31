@@ -1536,7 +1536,7 @@ namespace ModernImageViewer
                 var info = new FileInfo(item.Path);
                 if (!info.Exists) return;
                 item.DateModified = info.LastWriteTime;
-                item.SizeString = (info.Length / 1024.0 < 1024) ? $"{info.Length / 1024} KB" : $"{(info.Length / 1048576.0):F2} MB";
+                item.SizeString = ViewerMath.FormatFileSize(info.Length);
             }
             catch (Exception) when (item.Path != null)
             {

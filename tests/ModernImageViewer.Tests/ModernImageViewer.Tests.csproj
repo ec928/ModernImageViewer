@@ -20,5 +20,7 @@
     <Compile Include="..\..\MosaicLayout.cs" Link="MosaicLayout.cs" />
     <Compile Include="..\..\MultiViewLayoutFile.cs" Link="MultiViewLayoutFile.cs" />
     <Compile Include="..\..\NaturalSort.cs" Link="NaturalSort.cs" />
+    <Compile Include="..\..\AtomicFile.cs" Link="AtomicFile.cs" />
+    <Compile Include="..\..\ListMerge.cs" Link="ListMerge.cs" />
   </ItemGroup>
 </Project>

@@ -251,13 +251,13 @@
                     <ThemeShadow/>
                 </Border.Shadow>
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Button x:Name="AnimPrevButton" Click="AnimPrev_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Previous Frame (&lt;)">
+                    <Button x:Name="AnimPrevButton" Click="AnimPrev_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Previous Frame (&lt;)" AutomationProperties.Name="Previous Frame (&lt;)">
                         <SymbolIcon Symbol="Previous"/>
                     </Button>
-                    <Button x:Name="AnimPlayPauseButton" Click="AnimPlayPause_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Play/Pause (Space)">
+                    <Button x:Name="AnimPlayPauseButton" Click="AnimPlayPause_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Play/Pause (Space)" AutomationProperties.Name="Play/Pause (Space)">
                         <SymbolIcon x:Name="AnimPlayPauseIcon" Symbol="Pause"/>
                     </Button>
-                    <Button x:Name="AnimNextButton" Click="AnimNext_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Next Frame (&gt;)">
+                    <Button x:Name="AnimNextButton" Click="AnimNext_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Next Frame (&gt;)" AutomationProperties.Name="Next Frame (&gt;)">
                         <SymbolIcon Symbol="Next"/>
                     </Button>
                     <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,6" Opacity="0.4"/>
@@ -277,39 +277,39 @@
                 </Border.Shadow>
                 <StackPanel Orientation="Horizontal" Spacing="16">
                     <StackPanel Orientation="Horizontal" Spacing="2">
-                        <Button x:Name="ZoomModeButton" Click="ToggleZoomMode_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Toggle Zoom Mode (Mouse Thumb Button)">
+                        <Button x:Name="ZoomModeButton" Click="ToggleZoomMode_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Toggle Zoom Mode (Mouse Thumb Button)" AutomationProperties.Name="Toggle Zoom Mode (Mouse Thumb Button)">
                             <FontIcon x:Name="ZoomModeIcon" Glyph="&#xE71E;"/>
                         </Button>
-                        <Button x:Name="BookSpreadButton" Click="ToggleBookSpread_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Toggle 2-Page Comic Spread (B)" Visibility="Collapsed">
+                        <Button x:Name="BookSpreadButton" Click="ToggleBookSpread_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Toggle 2-Page Comic Spread (B)" Visibility="Collapsed" AutomationProperties.Name="Toggle 2-Page Comic Spread (B)">
                             <FontIcon x:Name="BookSpreadIcon" Glyph="&#xE736;"/>
                         </Button>
 
                         <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="6,6" Opacity="0.4"/>
 
-                        <Button Click="PlayCinematic_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Play Cinematic Slideshow">
+                        <Button Click="PlayCinematic_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Play Cinematic Slideshow" AutomationProperties.Name="Play Cinematic Slideshow">
                             <SymbolIcon Symbol="Play"/>
                         </Button>
 
                         <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="6,6" Opacity="0.4"/>
 
-                        <Button Click="ShowInExplorer_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Show in Explorer">
+                        <Button Click="ShowInExplorer_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Show in Explorer" AutomationProperties.Name="Show in Explorer">
                             <SymbolIcon Symbol="Folder"/>
                         </Button>
 
                         <Rectangle x:Name="WindowActionsSeparator" Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="6,6" Opacity="0.4"/>
 
-                        <Button x:Name="SwitchToMainButton" Click="SwitchToMain_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Switch Focus to Main Preview" Visibility="Collapsed">
+                        <Button x:Name="SwitchToMainButton" Click="SwitchToMain_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Switch Focus to Main Preview" Visibility="Collapsed" AutomationProperties.Name="Switch Focus to Main Preview">
                             <SymbolIcon Symbol="BackToWindow"/>
                         </Button>
-                        <Button x:Name="DetachButton" Click="DetachImage_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Detach">
+                        <Button x:Name="DetachButton" Click="DetachImage_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Detach" AutomationProperties.Name="Detach">
                             <SymbolIcon Symbol="NewWindow"/>
                         </Button>
-                        <Button x:Name="FullscreenButton" Click="ToggleFullscreen_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Fullscreen / Maximize (F11)">
+                        <Button x:Name="FullscreenButton" Click="ToggleFullscreen_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Fullscreen / Maximize (F11)" AutomationProperties.Name="Fullscreen / Maximize (F11)">
                             <SymbolIcon Symbol="FullScreen"/>
                         </Button>
                     </StackPanel>
                     <Rectangle x:Name="CloseSeparator" Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,6" Opacity="0.4"/>
-                    <Button x:Name="CloseButton" Click="ClosePreview_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Close (Esc)">
+                    <Button x:Name="CloseButton" Click="ClosePreview_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Close (Esc)" AutomationProperties.Name="Close (Esc)">
                         <SymbolIcon Symbol="Cancel"/>
                     </Button>
                 </StackPanel>

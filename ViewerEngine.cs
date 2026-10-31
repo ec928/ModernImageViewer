@@ -121,7 +121,15 @@ namespace ModernImageViewer
         public CanvasBitmap? GpuBitmap { get; set; }
         public AnimationFrame[]? AnimationFrames { get; set; }
 
-        public ColorManagementProfile? Profile { get; set; }
+        /// <summary>The scale an animation's frames were decoded at, when its size put it over the memory budget.</summary>
+        public double RawFrameScale { get; set; } = 1;
+
+        /// <summary>The budget limited this animation, so a sharper decode would only come back the same.</summary>
+        public bool AnimationCapped { get; set; }
+
+        /// <summary>Told to the user when not every frame could be kept.</summary>
+        public string? AnimationNote { get; set; }
+
         public double NativeWidth { get; set; }
         public double NativeHeight { get; set; }
         public bool IsHighFidelity { get; set; } = false;
@@ -163,7 +171,6 @@ namespace ModernImageViewer
         {
             Bitmap?.Dispose();
             GpuBitmap?.Dispose();
-            Profile?.Dispose();
 
             if (RawFrames != null)
             {
@@ -183,7 +190,6 @@ namespace ModernImageViewer
     public class EffectStack : IDisposable
     {
         public CropEffect? Crop { get; private set; }
-        public ColorManagementEffect? ColorManagement { get; private set; }
         public GammaTransferEffect? DecodeToLinear { get; private set; }
         public GammaTransferEffect? UserGamma { get; private set; }
         public Transform2DEffect? Transform { get; private set; }
@@ -192,7 +198,6 @@ namespace ModernImageViewer
         public void Initialize()
         {
             Crop = new CropEffect();
-            ColorManagement = new ColorManagementEffect();
             DecodeToLinear = new GammaTransferEffect { RedExponent = 2.2f, GreenExponent = 2.2f, BlueExponent = 2.2f };
             UserGamma = new GammaTransferEffect();
             Transform = new Transform2DEffect { InterpolationMode = CanvasImageInterpolation.HighQualityCubic };
@@ -202,7 +207,6 @@ namespace ModernImageViewer
         public void Dispose()
         {
             Crop?.Dispose();
-            ColorManagement?.Dispose();
             DecodeToLinear?.Dispose();
             UserGamma?.Dispose();
             Transform?.Dispose();
@@ -276,7 +280,6 @@ namespace ModernImageViewer
                     return new ImageCacheEntry
                     {
                         Bitmap = softwareBitmap,
-                        Profile = null,
                         NativeWidth = nativeW,
                         NativeHeight = nativeH,
                         IsHighFidelity = false,
@@ -325,9 +328,10 @@ namespace ModernImageViewer
                     if (frameCount > 1 && !IsTiff(path))
                     {
                         var rawFrames = new List<(SoftwareBitmap Bitmap, TimeSpan Delay, ushort Disposal, float Left, float Top)>();
+                        var (frameScale, framesKept) = ViewerMath.AnimationBudget((int)nativeW, (int)nativeH, (int)frameCount);
                         try
                         {
-                            for (uint i = 0; i < frameCount; i++)
+                            for (uint i = 0; i < framesKept; i++)
                             {
                                 if (token.IsCancellationRequested)
                                 {
@@ -363,10 +367,16 @@ namespace ModernImageViewer
                                 }
                                 catch (Exception ex) { Debug.WriteLine($"[GIF frame props] {ex.Message}"); }
 
+                                var frameTransform = new BitmapTransform { InterpolationMode = BitmapInterpolationMode.Fant };
+                                if (frameScale < 1)
+                                {
+                                    frameTransform.ScaledWidth = (uint)Math.Max(1, frame.PixelWidth * frameScale);
+                                    frameTransform.ScaledHeight = (uint)Math.Max(1, frame.PixelHeight * frameScale);
+                                }
                                 var softwareBitmap = await frame.GetSoftwareBitmapAsync(
                                     format,
                                     BitmapAlphaMode.Premultiplied,
-                                    new BitmapTransform(),
+                                    frameTransform,
                                     ExifOrientationMode.RespectExifOrientation,
                                     ColorManagementMode.ColorManageToSRgb).AsTask(token);
 
@@ -396,14 +406,18 @@ namespace ModernImageViewer
                         if (edge > maxEdge) edge = (int)maxEdge;
                         if (edge > HighFidelityMaxEdge) edge = (int)HighFidelityMaxEdge;
                         int fullest = Math.Min(nativeLong, (int)HighFidelityMaxEdge);
+                        bool capped = frameScale < 1;
+                        if (capped) edge = Math.Min(edge, (int)Math.Ceiling(nativeLong * frameScale));
                         return new ImageCacheEntry
                         {
                             RawFrames = rawFrames,
-                            Profile = null,
+                            RawFrameScale = frameScale,
+                            AnimationCapped = capped,
+                            AnimationNote = framesKept < frameCount ? $"Long animation: showing the first {framesKept} of {frameCount} frames" : null,
                             NativeWidth = nativeW,
                             NativeHeight = nativeH,
                             DecodedLongEdge = Math.Max(1, edge),
-                            IsHighFidelity = edge >= fullest - 1
+                            IsHighFidelity = capped || edge >= fullest - 1
                         };
                     }
                     else
@@ -431,7 +445,6 @@ namespace ModernImageViewer
                         return new ImageCacheEntry
                         {
                             Bitmap = softwareBitmap,
-                            Profile = null,
                             NativeWidth = nativeW,
                             NativeHeight = nativeH,
                             DecodedLongEdge = decoded,
@@ -501,8 +514,8 @@ namespace ModernImageViewer
                             var raw = entry.RawFrames[i];
                             using var deltaBitmap = CanvasBitmap.CreateFromSoftwareBitmap(device, raw.Bitmap);
 
-                            float destW = deltaBitmap.SizeInPixels.Width * pixelScale;
-                            float destH = deltaBitmap.SizeInPixels.Height * pixelScale;
+                            float destW = (float)(deltaBitmap.SizeInPixels.Width / entry.RawFrameScale) * pixelScale;
+                            float destH = (float)(deltaBitmap.SizeInPixels.Height / entry.RawFrameScale) * pixelScale;
                             var destRect = new Windows.Foundation.Rect(raw.Left * pixelScale, raw.Top * pixelScale, destW, destH);
 
                             using (var ds = working.CreateDrawingSession())
@@ -591,10 +604,14 @@ namespace ModernImageViewer
         {
             try
             {
-                var op = new NativeMethods.SHFILEOPSTRUCT { wFunc = NativeMethods.FO_DELETE, pFrom = path + '\0' + '\0', fFlags = NativeMethods.FOF_ALLOWUNDO | NativeMethods.FOF_NOCONFIRMATION | NativeMethods.FOF_SILENT };
+                var op = new NativeMethods.SHFILEOPSTRUCT { wFunc = NativeMethods.FO_DELETE, pFrom = path + '\0' + '\0', fFlags = NativeMethods.FOF_ALLOWUNDO | NativeMethods.FOF_NOCONFIRMATION | NativeMethods.FOF_SILENT | NativeMethods.FOF_WANTNUKEWARNING };
                 return NativeMethods.SHFileOperation(ref op) == 0 && !op.fAnyOperationsAborted;
             }
-            catch { return false; }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[Recycle] {path}: {ex.Message}");
+                return false;
+            }
         }
 
         public static bool RecycleFiles(IReadOnlyList<string> paths)
@@ -607,7 +624,7 @@ namespace ModernImageViewer
                 {
                     wFunc = NativeMethods.FO_DELETE,
                     pFrom = string.Join('\0', paths) + "\0\0",
-                    fFlags = NativeMethods.FOF_ALLOWUNDO | NativeMethods.FOF_NOCONFIRMATION | NativeMethods.FOF_SILENT
+                    fFlags = NativeMethods.FOF_ALLOWUNDO | NativeMethods.FOF_NOCONFIRMATION | NativeMethods.FOF_SILENT | NativeMethods.FOF_WANTNUKEWARNING
                 };
                 return NativeMethods.SHFileOperation(ref op) == 0 && !op.fAnyOperationsAborted;
             }
@@ -622,7 +639,7 @@ namespace ModernImageViewer
             string ext = Path.GetExtension(oldPath);
 
             var input = new TextBox { Text = Path.GetFileNameWithoutExtension(oldPath), SelectionStart = 0, SelectionLength = 999 };
-            var dialog = new ContentDialog { Title = "Rename", Content = input, PrimaryButtonText = "Rename", CloseButtonText = "Cancel", XamlRoot = xamlRoot, RequestedTheme = MainWindow.Instance?.CurrentRequestedTheme ?? ElementTheme.Default };
+            var dialog = new ContentDialog { Title = "Rename", Content = input, PrimaryButtonText = "Rename", CloseButtonText = "Cancel", DefaultButton = ContentDialogButton.Primary, XamlRoot = xamlRoot, RequestedTheme = MainWindow.Instance?.CurrentRequestedTheme ?? ElementTheme.Default };
 
             if (await dialog.ShowAsync() == ContentDialogResult.Primary)
             {
@@ -631,6 +648,16 @@ namespace ModernImageViewer
                 if (newName.EndsWith(ext, StringComparison.OrdinalIgnoreCase)) newName = newName.Substring(0, newName.Length - ext.Length);
                 string newPath = Path.Combine(dir, newName + ext);
                 if (newPath.Equals(oldPath, StringComparison.OrdinalIgnoreCase)) return false;
+                if (newName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+                {
+                    await ShowMessageAsync(xamlRoot, "Rename", "A file name can't contain any of these characters: \\ / : * ? \" < > |");
+                    return false;
+                }
+                if (File.Exists(newPath))
+                {
+                    await ShowMessageAsync(xamlRoot, "Rename", $"There is already a file called {newName + ext} in this folder.");
+                    return false;
+                }
 
                 try
                 {
@@ -640,9 +667,10 @@ namespace ModernImageViewer
                     ImageCache.Rename(oldPath, newPath);
                     return true;
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
-                    await ShowMessageAsync(xamlRoot, "Rename failed", ex.Message);
+                    Debug.WriteLine($"[Rename] {oldPath}: {ex.Message}");
+                    await ShowMessageAsync(xamlRoot, "Rename", "The file could not be renamed. It may be open in another app, or read-only.");
                     return false;
                 }
             }
@@ -692,6 +720,11 @@ namespace ModernImageViewer
         public const ushort FOF_ALLOWUNDO = 0x0040;
         public const ushort FOF_NOCONFIRMATION = 0x0010;
         public const ushort FOF_SILENT = 0x0004;
+        // Without this, a drive with no Recycle Bin deletes for good and says nothing, because of FOF_NOCONFIRMATION.
+        public const ushort FOF_WANTNUKEWARNING = 0x4000;
+
+        [DllImport("user32.dll")]
+        public static extern uint GetDpiForWindow(IntPtr hWnd);
 
         [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
         public static extern int SHFileOperation(ref SHFILEOPSTRUCT lpFileOp);

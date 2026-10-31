@@ -81,7 +81,6 @@ namespace ModernImageViewer
 
                 TryDisposeRawGpuBitmap();
                 _rawGpuBitmap = fastEntry.GpuBitmap;
-                _rawGpuProfile = fastEntry.Profile;
                 _logicalImageWidth = fastEntry.NativeWidth;
                 _logicalImageHeight = fastEntry.NativeHeight;
                 _currentRenderedItem = phantomItem;
@@ -130,8 +129,9 @@ namespace ModernImageViewer
                 ShowDriveList();
                 return;
             }
-            if (string.IsNullOrEmpty(folderPath) || !Directory.Exists(folderPath)) return;
+            if (string.IsNullOrEmpty(folderPath) || !await Task.Run(() => Directory.Exists(folderPath))) return;
 
+            ++_scanRequest;
             int myScanId = ++_currentScanId;
             _isScanning = false;
             _listReturnPath = IsChildOf(_currentDirectory, folderPath) ? _currentDirectory : null;
@@ -189,6 +189,10 @@ namespace ModernImageViewer
             FocusGrid();
         }
 
+        // The folder a scan is asked for may be on a network that has gone, where even asking whether it exists blocks for half a minute.
+        private int _scanRequest;
+        private string? _scanError;
+
         private async Task ScanFolder(string folderPath, bool openFirstPage = false)
         {
             if (folderPath == DriveRootPath)
@@ -196,8 +200,28 @@ namespace ModernImageViewer
                 ShowDriveList();
                 return;
             }
-            bool isComicArchive = ComicArchive.IsComicArchivePath(folderPath) && File.Exists(folderPath);
-            if (string.IsNullOrEmpty(folderPath) || (!Directory.Exists(folderPath) && !isComicArchive)) return;
+            if (string.IsNullOrEmpty(folderPath)) return;
+
+            int request = ++_scanRequest;
+            if (LoadingOverlay != null) LoadingOverlay.Visibility = Visibility.Visible;
+            if (LoadingRing != null) LoadingRing.IsActive = true;
+            var (exists, isComicArchive) = await Task.Run(() =>
+            {
+                bool comic = ComicArchive.IsComicArchivePath(folderPath) && File.Exists(folderPath);
+                return (comic || Directory.Exists(folderPath), comic);
+            });
+            if (request != _scanRequest) return;
+            if (!exists)
+            {
+                if (!_isScanning)
+                {
+                    if (LoadingRing != null) LoadingRing.IsActive = false;
+                    if (LoadingOverlay != null) LoadingOverlay.Visibility = Visibility.Collapsed;
+                }
+                await ShowFolderUnavailableAsync(folderPath);
+                return;
+            }
+            _scanError = null;
 
             if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible && !_isStartupIndexing)
             {
@@ -227,9 +251,6 @@ namespace ModernImageViewer
             ViewerControl?.SetBookSpreadMode(isComicArchive);
 
             UpdateBreadcrumbs(folderPath);
-
-            if (LoadingOverlay != null) LoadingOverlay.Visibility = Visibility.Visible;
-            if (LoadingRing != null) LoadingRing.IsActive = true;
 
             foreach (var item in Images)
             {
@@ -319,6 +340,8 @@ namespace ModernImageViewer
                     if (_listMode) RebuildListEntries();
                     else _listEntriesValid = false;
                     if (items.Count > 0 && !isComicArchive) AddFolderToRecent(folderPath);
+                    if (isComicArchive && items.Count == 0) _scanError = "This comic book can't be read, or has no pages";
+                    _currentSettings.LastFolder = folderPath;
                     bool returnedToItem = TryPlaceTileCursorOnReturnedItem();
                     bool seeded = false;
                     if (!returnedToItem && items.Count > 0 && (_currentIndex < 0 || _currentIndex >= Images.Count))
@@ -344,6 +367,16 @@ namespace ModernImageViewer
                         FocusGrid();
                 }
             }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException or NotSupportedException)
+            {
+                // The folder went away part way through, or could not be read. It says so, rather than looking empty or closing the app.
+                Debug.WriteLine($"[Scan] {folderPath}: {ex.Message}");
+                if (myScanId == _currentScanId)
+                {
+                    _scanError = "This folder can't be read right now";
+                    UpdateHeaderFolderInfo();
+                }
+            }
             finally
             {
                 if (myScanId == _currentScanId)
@@ -359,68 +392,132 @@ namespace ModernImageViewer
 
         private List<ImageItem> BuildFolderImages(string folderPath, int scanId)
         {
-            try
+            var dispatcher = this.DispatcherQueue;
+            if (ComicArchive.IsComicArchivePath(folderPath))
             {
-                var dispatcher = this.DispatcherQueue;
-                if (ComicArchive.IsComicArchivePath(folderPath))
-                {
-                    var pages = ComicArchive.ListPages(folderPath);
-                    var pageItems = new List<ImageItem>(pages.Count);
-                    foreach (var p in pages)
-                    {
-                        if (scanId != _currentScanId) return new List<ImageItem>();
-                        pageItems.Add(new ImageItem
-                        {
-                            Name = p.Name,
-                            Path = ComicArchive.BuildEntryPath(folderPath, p.EntryKey),
-                            DateModified = p.LastModified,
-                            SizeString = (p.Size / 1024.0 < 1024) ? $"{p.Size / 1024} KB" : $"{(p.Size / 1048576.0):F2} MB",
-                            Dispatcher = dispatcher
-                        });
-                    }
-                    return pageItems;
-                }
-
-                var enumOptions = new EnumerationOptions { IgnoreInaccessible = true };
-                var filtered = new List<FileInfo>();
-                foreach (var filePath in Directory.EnumerateFiles(folderPath, "*", enumOptions))
+                var pages = ComicArchive.ListPages(folderPath);
+                var pageItems = new List<ImageItem>(pages.Count);
+                foreach (var p in pages)
                 {
                     if (scanId != _currentScanId) return new List<ImageItem>();
-                    string ext = Path.GetExtension(filePath);
-                    if (SupportedExtensions.Contains(ext))
-                        filtered.Add(new FileInfo(filePath));
-                }
-
-                string sortOrder = _currentSettings.SortOrder;
-                if (sortOrder == "NameDesc")
-                    filtered.Sort((a, b) => NaturalSort.Compare(b.Name, a.Name));
-                else if (sortOrder == "DateDesc")
-                    filtered.Sort((a, b) => b.LastWriteTime.CompareTo(a.LastWriteTime));
-                else if (sortOrder == "DateAsc")
-                    filtered.Sort((a, b) => a.LastWriteTime.CompareTo(b.LastWriteTime));
-                else
-                    filtered.Sort((a, b) => NaturalSort.Compare(a.Name, b.Name));
-
-                var items = new List<ImageItem>(filtered.Count);
-                foreach (var fi in filtered)
-                {
-                    if (scanId != _currentScanId) return new List<ImageItem>();
-                    items.Add(new ImageItem
+                    pageItems.Add(new ImageItem
                     {
-                        Name = fi.Name,
-                        Path = fi.FullName,
-                        DateModified = fi.LastWriteTime,
-                        SizeString = (fi.Length / 1024.0 < 1024) ? $"{fi.Length / 1024} KB" : $"{(fi.Length / 1048576.0):F2} MB",
+                        Name = p.Name,
+                        Path = ComicArchive.BuildEntryPath(folderPath, p.EntryKey),
+                        DateModified = p.LastModified,
+                        SizeString = ViewerMath.FormatFileSize(p.Size),
                         Dispatcher = dispatcher
                     });
                 }
-                return items;
+                return pageItems;
             }
-            catch (Exception ex)
+
+            // Asking the directory for its files brings their size and date with them. Asking for each file again took 1.5 s for 20,000.
+            var enumOptions = new EnumerationOptions { IgnoreInaccessible = true };
+            var filtered = new List<FileInfo>();
+            foreach (var file in new DirectoryInfo(folderPath).EnumerateFiles("*", enumOptions))
             {
-                Debug.WriteLine($"[Scan] {folderPath}: {ex.Message}");
-                return new List<ImageItem>();
+                if (scanId != _currentScanId) return new List<ImageItem>();
+                if (SupportedExtensions.Contains(file.Extension))
+                    filtered.Add(file);
             }
+
+            string sortOrder = _currentSettings.SortOrder;
+            if (sortOrder == "NameDesc")
+                filtered.Sort((a, b) => NaturalSort.Compare(b.Name, a.Name));
+            else if (sortOrder == "DateDesc")
+                filtered.Sort((a, b) => b.LastWriteTime.CompareTo(a.LastWriteTime));
+            else if (sortOrder == "DateAsc")
+                filtered.Sort((a, b) => a.LastWriteTime.CompareTo(b.LastWriteTime));
+            else
+                filtered.Sort((a, b) => NaturalSort.Compare(a.Name, b.Name));
+
+            var items = new List<ImageItem>(filtered.Count);
+            foreach (var fi in filtered)
+            {
+                if (scanId != _currentScanId) return new List<ImageItem>();
+                items.Add(new ImageItem
+                {
+                    Name = fi.Name,
+                    Path = fi.FullName,
+                    DateModified = fi.LastWriteTime,
+                    SizeString = ViewerMath.FormatFileSize(fi.Length),
+                    Dispatcher = dispatcher
+                });
+            }
+            return items;
+        }
+
+        private async Task ShowFolderUnavailableAsync(string folderPath)
+        {
+            try
+            {
+                await ViewerEngine.ShowMessageAsync(RootGrid.XamlRoot, "Folder not available", folderPath);
+            }
+            catch (System.Runtime.InteropServices.COMException)
+            {
+                // Another dialog is already open.
+            }
+        }
+
+        /// <summary>
+        /// A file changed in the folder on show. Only what changed moves, so the selection, the scroll position,
+        /// the cursor and every other thumbnail stay as they are. F5 still reads everything again.
+        /// </summary>
+        private async Task RefreshFolderInPlaceAsync()
+        {
+            string folder = _currentDirectory;
+            if (string.IsNullOrEmpty(folder) || AtDriveRoot || ComicArchive.IsComicArchivePath(folder)) return;
+            int scanId = _currentScanId;
+
+            List<ImageItem> items;
+            try
+            {
+                items = await Task.Run(() => BuildFolderImages(folder, scanId));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+            {
+                // The folder itself has gone, which a full scan reports.
+                Debug.WriteLine($"[Refresh] {folder}: {ex.Message}");
+                if (scanId == _currentScanId) _ = ScanFolder(folder);
+                return;
+            }
+            if (scanId != _currentScanId) return;
+            if (_isScanning || (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible))
+            {
+                _folderWatchDirty = true;
+                return;
+            }
+
+            var cursor = _currentIndex >= 0 && _currentIndex < Images.Count ? Images[_currentIndex] : null;
+            string? listCursorPath = _listMode && _listCursor >= 0 && _listCursor < _listEntries.Count ? _listEntries[_listCursor].Path : null;
+            var gone = Images.Where(i => !items.Any(n => string.Equals(n.Path, i.Path, StringComparison.OrdinalIgnoreCase))).Take(1000).ToList();
+
+            ListMerge.Apply(Images, items, i => i.Path, (kept, fresh) =>
+            {
+                if (kept.DateModified == fresh.DateModified && kept.SizeString == fresh.SizeString) return;
+                ImageCache.Evict(kept.Path);
+                kept.NoteFileChanged(fresh.DateModified, fresh.SizeString);
+            });
+            foreach (var item in gone) ImageCache.Evict(item.Path);
+
+            int index = cursor != null ? Images.IndexOf(cursor) : -1;
+            _currentIndex = index >= 0 ? index : Math.Min(_currentIndex, Images.Count - 1);
+            if (_listMode)
+            {
+                RebuildListEntries();
+                int row = listCursorPath == null ? -1 : _listEntries.ToList().FindIndex(e => string.Equals(e.Path, listCursorPath, StringComparison.OrdinalIgnoreCase));
+                if (row >= 0) _listCursor = row;
+                else PlaceListCursorOnCurrentImage();
+            }
+            else
+            {
+                _listEntriesValid = false;
+            }
+            SyncTileCursor(scroll: false);
+            UpdateHeaderFolderInfo();
+            UpdateEmptyFolderState();
+            NoteParkedSelection();
         }
 
         private void RestartFolderWatcher(string folderPath)
@@ -484,8 +581,7 @@ namespace ModernImageViewer
                             return;
                         }
                         _folderWatchDirty = false;
-                        if (!string.IsNullOrEmpty(_currentDirectory))
-                            _ = ScanFolder(_currentDirectory);
+                        _ = RefreshFolderInPlaceAsync();
                     };
                 }
                 _folderWatchTimer.Stop();
@@ -538,6 +634,8 @@ namespace ModernImageViewer
         private void ShowDriveList(string? keepPath = null)
         {
             ++_currentScanId;
+            ++_scanRequest;
+            _scanError = null;
             _isScanning = false;
             if (keepPath != null)
                 _listReturnPath = keepPath;
@@ -861,7 +959,7 @@ namespace ModernImageViewer
                 RestoreGridKeyFocus(keepDrive);
                 return;
             }
-            if (string.IsNullOrEmpty(_currentDirectory) || (!Directory.Exists(_currentDirectory) && !ComicArchive.IsComicArchivePath(_currentDirectory))) return;
+            if (string.IsNullOrEmpty(_currentDirectory)) return;
             string? keepPath = null;
             if (_listMode && _listCursor >= 0 && _listCursor < _listEntries.Count)
                 keepPath = _listEntries[_listCursor].Path;
@@ -1116,6 +1214,29 @@ namespace ModernImageViewer
             RecentFoldersMenu.Content = panel;
             if (focusTarget != null)
                 focusTarget.Loaded += (s2, ev) => focusTarget.Focus(focusHow);
+            CheckFolderMenuPaths();
+        }
+
+        // Last known answer per folder. Asking on the UI thread froze the window for 33 s per folder on a network that had gone.
+        private readonly Dictionary<string, bool> _folderAvailable = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _folderChecks = new(StringComparer.OrdinalIgnoreCase);
+
+        private void CheckFolderMenuPaths()
+        {
+            foreach (string path in _favouriteFolders.Concat(_recentFolders))
+            {
+                if (_folderChecks.Add(path)) _ = CheckFolderMenuPathAsync(path);
+            }
+        }
+
+        private async Task CheckFolderMenuPathAsync(string path)
+        {
+            bool now = await Task.Run(() => Directory.Exists(path) || (ComicArchive.IsComicArchivePath(path) && File.Exists(path)));
+            _folderChecks.Remove(path);
+            bool was = !_folderAvailable.TryGetValue(path, out bool known) || known;
+            _folderAvailable[path] = now;
+            if (was != now && !_windowClosed && RecentFoldersMenu != null && RecentFoldersMenu.IsOpen)
+                BuildRecentFoldersMenu(null, FocusState.Programmatic);
         }
 
         private void SetFolderMenuHover(Grid? row)
@@ -1126,7 +1247,7 @@ namespace ModernImageViewer
 
         private Grid FolderMenuRow(string path, bool favourite, string? focusStarFor, ref Button? focusTarget)
         {
-            bool available = Directory.Exists(path) || (ComicArchive.IsComicArchivePath(path) && File.Exists(path));
+            bool available = !_folderAvailable.TryGetValue(path, out bool known) || known;
             bool isComic = ComicArchive.IsComicArchivePath(path);
             bool current = string.Equals(path, _currentDirectory, StringComparison.OrdinalIgnoreCase);
 

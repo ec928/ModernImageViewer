@@ -336,7 +336,6 @@ namespace ModernImageViewer
                 TryDisposeRawGpuBitmap();
 
                 _rawGpuBitmap = targetEntry.GpuBitmap;
-                _rawGpuProfile = targetEntry.Profile;
 
                 _logicalImageWidth = targetEntry.NativeWidth;
                 _logicalImageHeight = targetEntry.NativeHeight;
@@ -458,7 +457,10 @@ namespace ModernImageViewer
 
             int have = 0;
             if (ImageCache.TryGet(path, out var cached) && cached != null)
+            {
+                if (cached.AnimationCapped) return;
                 have = cached.DecodedLongEdge;
+            }
 
             int edge = ViewerMath.NextDecodeEdge(nativeW, nativeH, ViewerControl.CurrentZoom, ViewerControl.FitZoom, have, (int)ViewerEngine.HighFidelityMaxEdge);
             if (edge <= 0) return;
@@ -496,12 +498,12 @@ namespace ModernImageViewer
 
             TryDisposeRawGpuBitmap();
             _rawGpuBitmap = published.GpuBitmap;
-            _rawGpuProfile = published.Profile;
             _isHighFidelityActive = published.IsHighFidelity;
 
             if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible)
             {
                 ViewerControl.InjectImage(published, false);
+                if (published.AnimationNote != null) ViewerControl.ShowNotification(published.AnimationNote);
 
                 if (ViewerControl.IsShowingTwoPages && _currentIndex + 1 < Images.Count)
                 {
@@ -733,27 +735,7 @@ namespace ModernImageViewer
 
                 if (folderIdx != -1 && nextFolderIdx >= 0 && nextFolderIdx < _hopFolders.Count)
                 {
-                    string targetFolder = _hopFolders[nextFolderIdx].Path;
-
-                    if (HasSupportedImages(targetFolder))
-                    {
-                        _ = ScanFolder(targetFolder).ContinueWith(_ =>
-                        {
-                            DispatcherQueue.TryEnqueue(() =>
-                            {
-                                if (!string.Equals(_currentDirectory, targetFolder, StringComparison.OrdinalIgnoreCase))
-                                    return;
-                                if (Images.Count > 0)
-                                    LoadFullImage(stepDirection > 0 ? 0 : Images.Count - 1, stepDirection);
-                                else
-                                    ClosePreviewInternal();
-                            });
-                        });
-                    }
-                    else
-                    {
-                        ViewerControl?.ShowNotification($"Directory Empty: {Path.GetFileName(targetFolder)}");
-                    }
+                    _ = HopToFolderAsync(_hopFolders[nextFolderIdx].Path, stepDirection);
                     return;
                 }
             }
@@ -761,6 +743,33 @@ namespace ModernImageViewer
             if (nextIndex >= 0 && nextIndex < Images.Count)
             {
                 LoadFullImage(nextIndex, stepDirection);
+            }
+        }
+
+        private bool _hoppingFolder;
+
+        /// <summary>Past the last picture, on to the next folder. Looking inside it can take a while on a network, so it does not hold up the window.</summary>
+        private async Task HopToFolderAsync(string targetFolder, int stepDirection)
+        {
+            if (_hoppingFolder) return;
+            _hoppingFolder = true;
+            try
+            {
+                if (!await Task.Run(() => HasSupportedImages(targetFolder)))
+                {
+                    ViewerControl?.ShowNotification($"No photos in {Path.GetFileName(targetFolder)}");
+                    return;
+                }
+                await ScanFolder(targetFolder);
+                if (!string.Equals(_currentDirectory, targetFolder, StringComparison.OrdinalIgnoreCase)) return;
+                if (Images.Count > 0)
+                    LoadFullImage(stepDirection > 0 ? 0 : Images.Count - 1, stepDirection);
+                else
+                    ClosePreviewInternal();
+            }
+            finally
+            {
+                _hoppingFolder = false;
             }
         }
 
@@ -977,9 +986,8 @@ namespace ModernImageViewer
             _parkedNote = null;
             // A photo's replacement is most likely beside it. A file that has gone leaves the view where it is.
             string? cellFolder = string.IsNullOrEmpty(cell?.Path) ? null : System.IO.Path.GetDirectoryName(cell.Path);
-            if (cellFolder != null && Directory.Exists(cellFolder)
-                && !string.Equals(cellFolder.TrimEnd('\\'), _currentDirectory?.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
-                _ = ScanFolder(cellFolder);
+            if (cellFolder != null && !string.Equals(cellFolder.TrimEnd('\\'), _currentDirectory?.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+                _ = ScanIfThereAsync(cellFolder);
             MultiViewControl.PrepareToLeave();
             MultiViewControl.Visibility = Visibility.Collapsed;
             _parkKeptSize = true;
@@ -989,6 +997,11 @@ namespace ModernImageViewer
             ShowAddingMode(true);
             NoteParkedSelection();
             FocusGrid();
+        }
+
+        private async Task ScanIfThereAsync(string folder)
+        {
+            if (await Task.Run(() => Directory.Exists(folder))) await ScanFolder(folder);
         }
 
         /// <summary>Back to the session, with whatever pictures were selected as new floating cells.</summary>
@@ -2069,7 +2082,7 @@ namespace ModernImageViewer
                 {
                     if (item.Path == DriveRootPath)
                         ShowDriveList();
-                    else if (!string.IsNullOrEmpty(item.Path) && Directory.Exists(item.Path))
+                    else if (!string.IsNullOrEmpty(item.Path) )
                         _ = ScanFolder(item.Path);
                     return;
                 }
@@ -2154,6 +2167,13 @@ namespace ModernImageViewer
 
         private void RootGrid_PreviewKeyDown(object sender, KeyRoutedEventArgs e)
         {
+            if (e.Key == Windows.System.VirtualKey.F1)
+            {
+                _ = ShowShortcutsAsync();
+                e.Handled = true;
+                return;
+            }
+
             if (TileKeyFocusStays()) return;
 
             if (MultiViewControl != null && MultiViewControl.Visibility == Visibility.Visible)
@@ -2410,6 +2430,7 @@ namespace ModernImageViewer
                 if (_isFullscreen)
                 {
                     appW.SetPresenter(Microsoft.UI.Windowing.AppWindowPresenterKind.Default);
+                    ApplyMinimumWindowSize();
                     this.ExtendsContentIntoTitleBar = true;
                 }
                 else
@@ -2490,7 +2511,7 @@ namespace ModernImageViewer
         private void UpdateEmptyFolderState()
         {
             if (EmptyFolderOverlay == null) return;
-            bool showEmpty = !_listMode && !_isScanning && Images.Count == 0;
+            bool showEmpty = (!_listMode || _scanError != null) && !_isScanning && Images.Count == 0;
             EmptyFolderOverlay.Visibility = showEmpty ? Visibility.Visible : Visibility.Collapsed;
             if (!showEmpty) return;
 
@@ -2502,7 +2523,7 @@ namespace ModernImageViewer
             }
             else
             {
-                if (EmptyFolderTitle != null) EmptyFolderTitle.Text = "No photos in this folder";
+                if (EmptyFolderTitle != null) EmptyFolderTitle.Text = _scanError ?? "No photos in this folder";
                 if (EmptyFolderSubfoldersButton != null)
                 {
                     if (_childFolders.Count > 0)
@@ -3239,7 +3260,7 @@ namespace ModernImageViewer
         {
             if (folder.Path == DriveRootPath)
                 ShowDriveList();
-            else if (!string.IsNullOrEmpty(folder.Path) && Directory.Exists(folder.Path))
+            else if (!string.IsNullOrEmpty(folder.Path) )
                 _ = ScanFolder(folder.Path);
         }
 
@@ -3293,9 +3314,26 @@ namespace ModernImageViewer
             }
         }
 
+        private Microsoft.UI.Dispatching.DispatcherQueueTimer? _thumbnailEdgeTimer;
+
+        /// <summary>Thumbnails follow the tile size on screen. Those showing are asked for again only when tiles grow past them.</summary>
+        private void UpdateThumbnailEdge()
+        {
+            if (ThumbSizeSlider == null) return;
+            int edge = ViewerMath.ThumbnailEdge(ThumbSizeSlider.Value, RootGrid?.XamlRoot?.RasterizationScale ?? 1);
+            bool grew = edge > ImageItem.ThumbnailEdge;
+            ImageItem.ThumbnailEdge = edge;
+            if (!grew || _listMode) return;
+            foreach (var item in Images)
+            {
+                if (item.Thumbnail != null) _ = item.LoadThumbnailAsync();
+            }
+        }
+
         private void ImageWrapGrid_Loaded(object sender, RoutedEventArgs e)
         {
             _imageWrapGrid = sender as ItemsWrapGrid;
+            UpdateThumbnailEdge();
             if (!_applyingViewMode) ApplyViewMode();
         }
 
@@ -3305,6 +3343,15 @@ namespace ModernImageViewer
                 _imageWrapGrid.ItemWidth = _imageWrapGrid.ItemHeight = e.NewValue;
             if (_currentSettings != null)
                 _currentSettings.TileSize = Math.Round(e.NewValue);
+            if (_thumbnailEdgeTimer == null)
+            {
+                _thumbnailEdgeTimer = DispatcherQueue.CreateTimer();
+                _thumbnailEdgeTimer.Interval = TimeSpan.FromMilliseconds(250);
+                _thumbnailEdgeTimer.IsRepeating = false;
+                _thumbnailEdgeTimer.Tick += (_, _) => UpdateThumbnailEdge();
+            }
+            _thumbnailEdgeTimer.Stop();
+            _thumbnailEdgeTimer.Start();
             if (HeaderSettingsFlyout != null && HeaderSettingsFlyout.IsOpen)
                 SyncPresetButtons();
         }
@@ -3475,7 +3522,7 @@ namespace ModernImageViewer
             if (item.IsDirectory)
             {
                 if (item.Path == DriveRootPath) ShowDriveList();
-                else if (!string.IsNullOrEmpty(item.Path) && Directory.Exists(item.Path)) _ = ScanFolder(item.Path);
+                else if (!string.IsNullOrEmpty(item.Path) ) _ = ScanFolder(item.Path);
             }
             else
             {

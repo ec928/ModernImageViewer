@@ -339,7 +339,7 @@
                             Padding="8,5"
                             CornerRadius="12"
                             IsEnabled="False"
-                            ToolTipService.ToolTip="Next position">
+                            ToolTipService.ToolTip="Next position" AutomationProperties.Name="Next position">
                         <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE7AD;" FontSize="14" />
                     </Button>
 
@@ -463,15 +463,15 @@
                         </StackPanel>
                     </Button>
                     <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,4" Opacity="0.4"/>
-                    <Button Click="PrevSolo_Click" Style="{StaticResource QuietButtonStyle}" Padding="6,4" ToolTipService.ToolTip="Previous (Left Arrow)">
+                    <Button Click="PrevSolo_Click" Style="{StaticResource QuietButtonStyle}" Padding="6,4" ToolTipService.ToolTip="Previous (Left Arrow)" AutomationProperties.Name="Previous (Left Arrow)">
                         <SymbolIcon Symbol="Previous" />
                     </Button>
                     <TextBlock x:Name="SoloCounterText" Text="1 of 4" VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold" Margin="4,0" />
-                    <Button Click="NextSolo_Click" Style="{StaticResource QuietButtonStyle}" Padding="6,4" ToolTipService.ToolTip="Next (Right Arrow)">
+                    <Button Click="NextSolo_Click" Style="{StaticResource QuietButtonStyle}" Padding="6,4" ToolTipService.ToolTip="Next (Right Arrow)" AutomationProperties.Name="Next (Right Arrow)">
                         <SymbolIcon Symbol="Next" />
                     </Button>
                     <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,4" Opacity="0.4"/>
-                    <Button Click="ResetSoloZoom_Click" Style="{StaticResource QuietButtonStyle}" Padding="6,4" ToolTipService.ToolTip="Fit to Screen (Middle-Click)">
+                    <Button Click="ResetSoloZoom_Click" Style="{StaticResource QuietButtonStyle}" Padding="6,4" ToolTipService.ToolTip="Fit to Screen (Middle-Click)" AutomationProperties.Name="Fit to Screen (Middle-Click)">
                         <SymbolIcon Symbol="ZoomOut" />
                     </Button>
                 </StackPanel>

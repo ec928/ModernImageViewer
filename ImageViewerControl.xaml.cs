@@ -100,7 +100,6 @@ namespace ModernImageViewer
         // --- Internal State ---
         private CanvasDevice? _canvasDevice;
         private CanvasBitmap? _rawGpuBitmap;
-        private ColorManagementProfile? _rawGpuProfile;
         private ImageCacheEntry? _displayedEntry;
         private ImageCacheEntry? _secondDisplayedEntry;
         private CanvasBitmap? _secondGpuBitmap;
@@ -379,7 +378,6 @@ namespace ModernImageViewer
         {
             _playbackTimer?.Stop();
             ReleaseDisplayedEntry();
-            _rawGpuProfile = null;
             _previewResourcesLoaded = false;
             _isHighFidelityActive = false;
 
@@ -437,7 +435,6 @@ namespace ModernImageViewer
 
             _rawGpuBitmap = entry.GpuBitmap;
             _animationFrames = entry.AnimationFrames;
-            _rawGpuProfile = entry.Profile;
             _logicalImageWidth = entry.NativeWidth > 0 ? entry.NativeWidth : 1;
             _logicalImageHeight = entry.NativeHeight > 0 ? entry.NativeHeight : 1;
             _previewResourcesLoaded = true;
@@ -565,13 +562,12 @@ namespace ModernImageViewer
             if (!_previewResourcesLoaded) return;
 
             var crop = _effectStack.Crop;
-            var colorMgmt = _effectStack.ColorManagement;
             var decode = _effectStack.DecodeToLinear;
             var userGamma = _effectStack.UserGamma;
             var transform = _effectStack.Transform;
             var encode = _effectStack.EncodeToSrgb;
 
-            if (crop == null || colorMgmt == null || decode == null || userGamma == null || transform == null || encode == null) return;
+            if (crop == null || decode == null || userGamma == null || transform == null || encode == null) return;
 
             CanvasBitmap? currentTarget = _rawGpuBitmap;
 
@@ -605,7 +601,7 @@ namespace ModernImageViewer
                 {
                     crop.Source = currentTarget;
                     crop.SourceRectangle = currentTarget.Bounds;
-                    ViewerMath.DrawMappedImage(args.DrawingSession, sender.ActualWidth, sender.ActualHeight, _logicalImageWidth, _logicalImageHeight, panX, panY, _targetZoom, _currentGamma, dpiScale, _isHighFidelityActive, currentTarget, _rawGpuProfile, crop, colorMgmt, decode, userGamma, transform, encode);
+                    ViewerMath.DrawMappedImage(args.DrawingSession, sender.ActualWidth, sender.ActualHeight, _logicalImageWidth, _logicalImageHeight, panX, panY, _targetZoom, _currentGamma, dpiScale, currentTarget, crop, decode, userGamma, transform, encode);
                 }
             }
             catch (Exception ex) { Debug.WriteLine($"[Win2D Draw Error]: {ex.Message}"); }

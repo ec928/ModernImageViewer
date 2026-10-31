@@ -148,7 +148,7 @@ namespace ModernImageViewer
                     if (System.IO.File.Exists(AutoSavePath(age - 1)))
                         System.IO.File.Copy(AutoSavePath(age - 1), AutoSavePath(age), true);
                 }
-                System.IO.File.WriteAllText(last, json);
+                AtomicFile.WriteAllText(last, json);
             }
             catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException or System.Runtime.InteropServices.COMException)
             {

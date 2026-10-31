@@ -58,7 +58,7 @@ Both themes must provide equivalent hierarchy, contrast, and visual polish:
   - In C#: Use escaped Unicode code points (e.g. `Glyph = "\uE735"`), **never** raw multi-byte UTF-8 character literals.
 - **Semantic Icons**:
   - Standard folders: `Symbol.Folder` (`\uE838` / `\uE8B7`).
-  - Comic book archives (`.cbz`, `.cbr`, `.cb7`, `.zip`): `Symbol.Library` (`\uE82D`), distinguishing bundled archives from loose folders across both the sidebar and menus.
+  - Comic book archives (`.cbz`, `.cbr`): `Symbol.Library` (`\uE82D`), distinguishing bundled archives from loose folders across both the sidebar and menus.
 
 ---
 
@@ -204,18 +204,21 @@ In accordance with workspace UX standards:
 
 ## 9. Keyboard Accessibility & Shortcuts
 
-Every major workflow must be accessible without a mouse:
+Pictures can be browsed, viewed and managed without a mouse, and F1 lists every key below. The header (sort, theme, presets) is mouse only for now, because Tab opens the sidebar.
 
 | Category | Shortcut | Function |
 | :--- | :--- | :--- |
 | **Navigation** | `Left` / `Right` | Previous / Next photo |
-| | `Up` / `Down` | Grid row traversal / list navigation |
+| | `Up` / `Down` / `Page Up` / `Page Down` / `Home` / `End` | Grid and list cursor |
+| | `Backspace` | Up one folder |
 | | `Ctrl+B` or `Tab` | Toggle navigation sidebar |
-| **Viewing** | `Enter` / `Space` | Open Single Viewer / toggle slideshow playback |
+| **Folder view** | `Enter` | Open the picture, or view the selection together |
+| | `Space` | Select or deselect the picture |
+| | `F2` / `F5` / `Delete` | Rename / refresh / Recycle Bin |
+| **Viewing** | `Space` / `,` / `.` | Play or pause an animation / previous and next frame |
+| | `F1` | Keyboard shortcuts |
 | | `F11` | Toggle borderless fullscreen |
-| | `0` | Fit to window |
-| | `1` | 100% native 1:1 pixel zoom |
-| | `Ctrl + Wheel` / `+` / `-` | Smooth zoom in / out |
+| | `Ctrl + Wheel` | Zoom in / out |
 | | `B` | Toggle 2-page comic book spread mode |
 | **Multi-View** | `Alt + Drag` | Drag and swap photo cells |
 | | `Ctrl + Z` / `Ctrl + Y` | Undo / redo |

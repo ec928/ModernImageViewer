@@ -4,6 +4,43 @@ namespace ModernImageViewer
 {
     public static partial class ViewerMath
     {
+        public const long AnimationBudgetBytes = 2L * 1024 * 1024 * 1024;
+        private const double AnimationMinScale = 0.5;
+
+        /// <summary>
+        /// Every frame of an animation is held whole on the GPU, so a long one could take all of its memory.
+        /// Past the budget it is drawn smaller, down to half size, and only then does it stop early.
+        /// </summary>
+        public static (double Scale, int Frames) AnimationBudget(int width, int height, int frames)
+        {
+            double perFrame = Math.Max(1.0, width) * Math.Max(1.0, height) * 4;
+            if (perFrame * frames <= AnimationBudgetBytes) return (1, frames);
+            double scale = Math.Sqrt(AnimationBudgetBytes / (perFrame * frames));
+            if (scale >= AnimationMinScale) return (scale, frames);
+            double smallest = perFrame * AnimationMinScale * AnimationMinScale;
+            return (AnimationMinScale, Math.Max(1, (int)(AnimationBudgetBytes / smallest)));
+        }
+
+        /// <summary>A window saved on a monitor that has since gone is brought back to where its title bar can be reached.</summary>
+        public static (int X, int Y) KeepOnScreen(int x, int y, int width, int height, int areaX, int areaY, int areaWidth, int areaHeight)
+        {
+            const int keepWide = 120, keepTall = 40;
+            int minX = areaX - width + keepWide;
+            int maxX = areaX + areaWidth - keepWide;
+            int maxY = areaY + areaHeight - keepTall;
+            return (Math.Clamp(x, Math.Min(minX, maxX), Math.Max(minX, maxX)), Math.Clamp(y, areaY, Math.Max(areaY, maxY)));
+        }
+
+        /// <summary>The thumbnail size for a tile on screen, in steps so a small change of tile size does not reload them all.</summary>
+        public static int ThumbnailEdge(double tileSize, double rasterScale)
+        {
+            int wanted = (int)Math.Ceiling(Math.Max(1, tileSize) * Math.Max(1, rasterScale) / 50) * 50;
+            return Math.Clamp(wanted, 250, 1024);
+        }
+
+        public static string FormatFileSize(long bytes) =>
+            bytes / 1024.0 < 1024 ? $"{bytes / 1024} KB" : $"{bytes / 1048576.0:F2} MB";
+
         /// <summary>Lowest zoom the wheel can reach on an ordinary photo.</summary>
         public const float WheelMinZoom = 0.1f;
 

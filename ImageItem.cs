@@ -1,5 +1,3 @@
-using Microsoft.Graphics.Canvas;
-using Microsoft.Graphics.Canvas.Effects;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
@@ -7,7 +5,6 @@ using Microsoft.UI.Xaml.Media.Imaging;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,107 +14,6 @@ using Windows.Graphics.Imaging;
 
 namespace ModernImageViewer
 {
-    public static partial class ViewerMath
-    {
-        public static void DrawMappedImage(
-    CanvasDrawingSession session,
-    double viewW, double viewH,
-    double logicalW, double logicalH,
-    double panX, double panY,
-    float zoom, float gamma, float dpiScale,
-    bool isHighFidelity,
-    CanvasBitmap bitmap,
-    ColorManagementProfile? profile,
-    CropEffect crop,
-    ColorManagementEffect colorMgmt, // Kept in signature to avoid breaking callers
-    GammaTransferEffect decode,
-    GammaTransferEffect userGamma,
-    Transform2DEffect transform,
-    GammaTransferEffect encode)
-        {
-            if (zoom <= 0) zoom = 1.0f;
-            double imgW = (logicalW / dpiScale) * zoom;
-            double imgH = (logicalH / dpiScale) * zoom;
-
-            if (imgW <= 0 || imgH <= 0) return;
-
-            double drawX = imgW <= viewW + 1.0 ? (viewW - imgW) / 2.0 : panX;
-            double drawY = imgH <= viewH + 1.0 ? (viewH - imgH) / 2.0 : panY;
-
-            // Both LF and HF now arrive perfectly color-managed by WIC.
-            // We bypass Win2D's ColorManagementEffect completely.
-            decode.Source = crop;
-
-            userGamma.Source = decode;
-            userGamma.RedExponent = gamma / 2.2f;
-            userGamma.GreenExponent = gamma / 2.2f;
-            userGamma.BlueExponent = gamma / 2.2f;
-
-            transform.Source = userGamma;
-            transform.TransformMatrix = Matrix3x2.CreateScale((float)(imgW / bitmap.SizeInPixels.Width), (float)(imgH / bitmap.SizeInPixels.Height));
-
-            encode.Source = transform;
-            session.DrawImage(encode, new Vector2((float)drawX, (float)drawY));
-        }
-
-        public static void DrawDualMappedImages(
-            CanvasDrawingSession session,
-            double viewW, double viewH,
-            double leftLogicalW, double leftLogicalH,
-            double rightLogicalW, double rightLogicalH,
-            double panX, double panY,
-            float zoom, float gamma, float dpiScale,
-            CanvasBitmap leftBitmap,
-            CanvasBitmap rightBitmap,
-            CropEffect crop,
-            GammaTransferEffect decode,
-            GammaTransferEffect userGamma,
-            Transform2DEffect transform,
-            GammaTransferEffect encode)
-        {
-            if (zoom <= 0) zoom = 1.0f;
-            if (leftLogicalW <= 0 || leftLogicalH <= 0 || rightLogicalW <= 0 || rightLogicalH <= 0) return;
-
-            double spreadLogicalH = Math.Max(leftLogicalH, rightLogicalH);
-            double leftNormW = leftLogicalW * (spreadLogicalH / leftLogicalH);
-            double rightNormW = rightLogicalW * (spreadLogicalH / rightLogicalH);
-
-            double leftDrawW = (leftNormW / dpiScale) * zoom;
-            double rightDrawW = (rightNormW / dpiScale) * zoom;
-            double totalW = leftDrawW + rightDrawW;
-            double totalH = (spreadLogicalH / dpiScale) * zoom;
-
-            if (totalW <= 0 || totalH <= 0) return;
-
-            double startX = totalW <= viewW + 1.0 ? (viewW - totalW) / 2.0 : panX;
-            double drawY = totalH <= viewH + 1.0 ? (viewH - totalH) / 2.0 : panY;
-
-            userGamma.RedExponent = gamma / 2.2f;
-            userGamma.GreenExponent = gamma / 2.2f;
-            userGamma.BlueExponent = gamma / 2.2f;
-
-            // Draw Left Page
-            crop.Source = leftBitmap;
-            crop.SourceRectangle = leftBitmap.Bounds;
-            decode.Source = crop;
-            userGamma.Source = decode;
-            transform.Source = userGamma;
-            transform.TransformMatrix = Matrix3x2.CreateScale(
-                (float)(leftDrawW / leftBitmap.SizeInPixels.Width),
-                (float)(totalH / leftBitmap.SizeInPixels.Height));
-            encode.Source = transform;
-            session.DrawImage(encode, new Vector2((float)startX, (float)drawY));
-
-            // Draw Right Page
-            crop.Source = rightBitmap;
-            crop.SourceRectangle = rightBitmap.Bounds;
-            transform.TransformMatrix = Matrix3x2.CreateScale(
-                (float)(rightDrawW / rightBitmap.SizeInPixels.Width),
-                (float)(totalH / rightBitmap.SizeInPixels.Height));
-            session.DrawImage(encode, new Vector2((float)(startX + leftDrawW), (float)drawY));
-        }
-    }
-
     public partial class ImageItem : INotifyPropertyChanged
     {
         private string _name = string.Empty;
@@ -283,6 +179,10 @@ namespace ModernImageViewer
         public double HoverCheckOpacity => (!_isGridSelected && _isPointerHovered && !IsDirectory && !IsComicEntry) ? 1 : 0;
         public double ListHoverOpacity => (!_isGridSelected && _isPointerHovered) ? 1 : 0;
 
+        // The size wanted for a tile on screen, and the size this one was loaded at. A larger tile asks again.
+        public static int ThumbnailEdge { get; set; } = 250;
+        private int _loadedEdge;
+
         private bool _isLoadingThumb = false;
         private static readonly SemaphoreSlim _thumbSemaphore = new(4);
         private CancellationTokenSource? _cts;
@@ -382,7 +282,8 @@ namespace ModernImageViewer
 
         private async Task InternalLoadThumbnailAsync()
         {
-            if (Thumbnail != null || string.IsNullOrEmpty(Path) || _isLoadingThumb) return;
+            int edge = ThumbnailEdge;
+            if ((Thumbnail != null && _loadedEdge >= edge) || string.IsNullOrEmpty(Path) || _isLoadingThumb) return;
             if (Dispatcher == null) return;
 
             _isLoadingThumb = true;
@@ -411,7 +312,7 @@ namespace ModernImageViewer
                     try
                     {
                         var file = await StorageFile.GetFileFromPathAsync(Path).AsTask(token);
-                        using StorageItemThumbnail storageThumbnail = await file.GetThumbnailAsync(ThumbnailMode.PicturesView, 250, ThumbnailOptions.UseCurrentScale).AsTask(token);
+                        using StorageItemThumbnail storageThumbnail = await file.GetThumbnailAsync(ThumbnailMode.PicturesView, (uint)edge, ThumbnailOptions.ResizeThumbnail).AsTask(token);
 
                         if (storageThumbnail != null && !token.IsCancellationRequested)
                         {
@@ -442,7 +343,11 @@ namespace ModernImageViewer
                             newThumb = await tcs.Task;
                         }
                     }
-                    catch { }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        // Windows has no thumbnail for it, so it is decoded below.
+                        System.Diagnostics.Debug.WriteLine($"Shell thumbnail failed for {Path}: {ex.Message}");
+                    }
                 }
 
                 if (newThumb == null && !token.IsCancellationRequested)
@@ -461,7 +366,7 @@ namespace ModernImageViewer
 
                             uint w = decoder.PixelWidth;
                             uint h = decoder.PixelHeight;
-                            double ratio = Math.Min(250.0 / w, 250.0 / h);
+                            double ratio = Math.Min(1.0, Math.Min((double)edge / w, (double)edge / h));
                             uint scaledW = (uint)Math.Max(1, w * ratio);
                             uint scaledH = (uint)Math.Max(1, h * ratio);
 
@@ -504,7 +409,11 @@ namespace ModernImageViewer
 
                 if (newThumb != null && !token.IsCancellationRequested)
                 {
-                    Dispatcher.TryEnqueue(() => Thumbnail = newThumb);
+                    Dispatcher.TryEnqueue(() =>
+                    {
+                        Thumbnail = newThumb;
+                        _loadedEdge = edge;
+                    });
                 }
             }
             catch (OperationCanceledException) { }
@@ -519,6 +428,17 @@ namespace ModernImageViewer
             }
         }
 
+        /// <summary>The file changed on disk. The old thumbnail stays up until the new one is ready.</summary>
+        public void NoteFileChanged(DateTime modified, string size)
+        {
+            DateModified = modified;
+            SizeString = size;
+            OnPropertyChanged(nameof(DateText));
+            OnPropertyChanged(nameof(SizeString));
+            _loadedEdge = 0;
+            if (Thumbnail != null) _ = LoadThumbnailAsync();
+        }
+
         public void ClearThumbnail()
         {
             _cts?.Cancel();
@@ -527,6 +447,7 @@ namespace ModernImageViewer
 
             // Only let go of it. A Multi-View cell, the viewer or the preview may be showing this source.
             Thumbnail = null;
+            _loadedEdge = 0;
             _isLoadingThumb = false;
         }
     }

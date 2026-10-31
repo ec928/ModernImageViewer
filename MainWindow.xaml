@@ -94,10 +94,10 @@
                         </Grid.ColumnDefinitions>
 
                         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center" Margin="6,0,0,0">
-                            <Button Style="{StaticResource HeaderButtonStyle}" Click="SidebarToggle_Click" ToolTipService.ToolTip="Navigation Sidebar (Ctrl+B or Tab)">
+                            <Button Style="{StaticResource HeaderButtonStyle}" Click="SidebarToggle_Click" ToolTipService.ToolTip="Navigation Sidebar (Ctrl+B or Tab)" AutomationProperties.Name="Navigation Sidebar (Ctrl+B or Tab)">
                                 <FontIcon Glyph="&#xE700;" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             </Button>
-                            <Button Style="{StaticResource HeaderButtonStyle}" Click="BrowseButton_Click" ToolTipService.ToolTip="Browse Folders">
+                            <Button Style="{StaticResource HeaderButtonStyle}" Click="BrowseButton_Click" ToolTipService.ToolTip="Browse Folders" AutomationProperties.Name="Browse Folders">
                                 <FontIcon x:Name="HeaderFolderIcon" Glyph="&#xE8B7;" FontFamily="Segoe Fluent Icons" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             </Button>
                             <Button Style="{StaticResource HeaderButtonStyle}" ToolTipService.ToolTip="Favourites and Recent Folders" AutomationProperties.Name="Favourites and Recent Folders">
@@ -170,10 +170,10 @@
                         <Border x:Name="HeaderDragRegion" Grid.Column="1" Background="Transparent"/>
 
                         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center" Margin="0,0,4,0">
-                            <Button Style="{StaticResource HeaderButtonStyle}" Click="RefreshFolder_Click" ToolTipService.ToolTip="Refresh Current Folder (F5)">
+                            <Button Style="{StaticResource HeaderButtonStyle}" Click="RefreshFolder_Click" ToolTipService.ToolTip="Refresh Current Folder (F5)" AutomationProperties.Name="Refresh Current Folder (F5)">
                                 <FontIcon Glyph="&#xE72C;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             </Button>
-                            <Button Style="{StaticResource HeaderButtonStyle}" ToolTipService.ToolTip="Sort Images">
+                            <Button Style="{StaticResource HeaderButtonStyle}" ToolTipService.ToolTip="Sort Images" AutomationProperties.Name="Sort Images">
                                 <FontIcon Glyph="&#xE8CB;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 <Button.Flyout>
                                     <MenuFlyout x:Name="HeaderSortFlyout" Opening="HeaderSortFlyout_Opening" Closed="HeaderFlyout_Closed">
@@ -193,19 +193,19 @@
                             <Rectangle Width="1" Height="16" Margin="6,0" VerticalAlignment="Center" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"/>
                             <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="6" Padding="2" VerticalAlignment="Center">
                                 <StackPanel Orientation="Horizontal" Spacing="1">
-                                    <Button x:Name="TilesModeButton" Style="{StaticResource HeaderButtonStyle}" Width="28" Height="22" CornerRadius="4" Click="TilesMode_Click" ToolTipService.ToolTip="Tile View">
+                                    <Button x:Name="TilesModeButton" Style="{StaticResource HeaderButtonStyle}" Width="28" Height="22" CornerRadius="4" Click="TilesMode_Click" ToolTipService.ToolTip="Tile View" AutomationProperties.Name="Tile View">
                                         <FontIcon x:Name="TilesModeIcon" Glyph="&#xE8A9;" FontSize="13"/>
                                     </Button>
-                                    <Button x:Name="ListModeButton" Style="{StaticResource HeaderButtonStyle}" Width="28" Height="22" CornerRadius="4" Click="ListMode_Click" ToolTipService.ToolTip="List View">
+                                    <Button x:Name="ListModeButton" Style="{StaticResource HeaderButtonStyle}" Width="28" Height="22" CornerRadius="4" Click="ListMode_Click" ToolTipService.ToolTip="List View" AutomationProperties.Name="List View">
                                         <FontIcon x:Name="ListModeIcon" Glyph="&#xE8FD;" FontSize="13"/>
                                     </Button>
-                                    <Button x:Name="MultiModeButton" Style="{StaticResource HeaderButtonStyle}" Width="28" Height="22" CornerRadius="4" Click="MultiMode_Click" ToolTipService.ToolTip="Multi-View / Layout (Enter)">
+                                    <Button x:Name="MultiModeButton" Style="{StaticResource HeaderButtonStyle}" Width="28" Height="22" CornerRadius="4" Click="MultiMode_Click" ToolTipService.ToolTip="Multi-View / Layout (Enter)" AutomationProperties.Name="Multi-View / Layout (Enter)">
                                         <FontIcon x:Name="MultiModeIcon" Glyph="&#xEE49;" FontSize="13"/>
                                     </Button>
                                 </StackPanel>
                             </Border>
                             <Rectangle Width="1" Height="16" Margin="6,0,2,0" VerticalAlignment="Center" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"/>
-                            <Button Style="{StaticResource HeaderButtonStyle}" ToolTipService.ToolTip="View &amp; Window Options">
+                            <Button Style="{StaticResource HeaderButtonStyle}" ToolTipService.ToolTip="View &amp; Window Options" AutomationProperties.Name="View &amp; Window Options">
                                 <FontIcon Glyph="&#xE713;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 <Button.Flyout>
                                     <Flyout x:Name="HeaderSettingsFlyout" Placement="BottomEdgeAlignedRight" Opening="HeaderSettingsFlyout_Opening" Closed="HeaderFlyout_Closed">
@@ -225,7 +225,7 @@
                                                 <TextBlock Text="Tile Size" Width="56" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
                                                 <Slider x:Name="ThumbSizeSlider" Minimum="100" Maximum="400" Value="164" Width="136" VerticalAlignment="Center" IsTabStop="False" ValueChanged="ThumbSizeSlider_ValueChanged" ToolTipService.ToolTip="Adjust Tile Size"/>
                                                 <Rectangle Width="1" Height="18" Margin="4,0,2,0" VerticalAlignment="Center" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"/>
-                                                <Button Style="{StaticResource HeaderButtonStyle}" Click="ResetWindow_Click" ToolTipService.ToolTip="Reset Window &amp; Tile Size">
+                                                <Button Style="{StaticResource HeaderButtonStyle}" Click="ResetWindow_Click" ToolTipService.ToolTip="Reset Window &amp; Tile Size" AutomationProperties.Name="Reset Window &amp; Tile Size">
                                                     <FontIcon Glyph="&#xE923;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                                 </Button>
                                             </StackPanel>
@@ -260,7 +260,7 @@
                                                     </Grid>
                                                 </Border>
                                                 <Rectangle Width="1" Height="18" Margin="4,0,2,0" VerticalAlignment="Center" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"/>
-                                                <Button x:Name="PresetSaveModeButton" Style="{StaticResource HeaderButtonStyle}" Click="PresetSaveMode_Click" ToolTipService.ToolTip="Save Current Window &amp; Tile Size to a Preset Slot">
+                                                <Button x:Name="PresetSaveModeButton" Style="{StaticResource HeaderButtonStyle}" Click="PresetSaveMode_Click" ToolTipService.ToolTip="Save Current Window &amp; Tile Size to a Preset Slot" AutomationProperties.Name="Save Current Window &amp; Tile Size to a Preset Slot">
                                                     <FontIcon x:Name="PresetSaveModeIcon" Glyph="&#xE74E;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                                 </Button>
                                             </StackPanel>
@@ -288,7 +288,7 @@
                                                     </Grid>
                                                 </Border>
                                                 <Rectangle Width="1" Height="18" Margin="4,0,2,0" VerticalAlignment="Center" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"/>
-                                                <Button x:Name="ThemeSystemButton" Style="{StaticResource HeaderButtonStyle}" Tag="System" Click="ThemeMode_Click" ToolTipService.ToolTip="Use Windows System Theme">
+                                                <Button x:Name="ThemeSystemButton" Style="{StaticResource HeaderButtonStyle}" Tag="System" Click="ThemeMode_Click" ToolTipService.ToolTip="Use Windows System Theme" AutomationProperties.Name="Use Windows System Theme">
                                                     <FontIcon x:Name="ThemeSystemIcon" Glyph="&#xE770;" FontFamily="Segoe Fluent Icons" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                                 </Button>
                                             </StackPanel>
@@ -638,16 +638,16 @@
                                 
                                 <Rectangle x:Name="MultiSelectPlayRule" Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,0" Opacity="0.5"/>
 
-                                <Button x:Name="MultiSelectPlayButton" Click="MultiSelectCinematic_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" ToolTipService.ToolTip="Play Cinematic Slideshow">
+                                <Button x:Name="MultiSelectPlayButton" Click="MultiSelectCinematic_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" ToolTipService.ToolTip="Play Cinematic Slideshow" AutomationProperties.Name="Play Cinematic Slideshow">
                                     <SymbolIcon Symbol="Play" />
                                 </Button>
 
                                 <Rectangle x:Name="MultiSelectDeleteRule" Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,0" Opacity="0.5"/>
 
-                                <Button x:Name="MultiSelectDeleteButton" Click="MultiSelectDelete_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" ToolTipService.ToolTip="Delete Selected (Del)">
+                                <Button x:Name="MultiSelectDeleteButton" Click="MultiSelectDelete_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" ToolTipService.ToolTip="Delete Selected (Del)" AutomationProperties.Name="Delete Selected (Del)">
                                     <SymbolIcon Symbol="Delete" Foreground="#FFFF6B68" />
                                 </Button>
-                                <Button x:Name="MultiSelectCloseButton" Click="MultiSelectClear_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" ToolTipService.ToolTip="Clear Selection (Esc)">
+                                <Button x:Name="MultiSelectCloseButton" Click="MultiSelectClear_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" ToolTipService.ToolTip="Clear Selection (Esc)" AutomationProperties.Name="Clear Selection (Esc)">
                                     <SymbolIcon Symbol="Cancel" />
                                 </Button>
                             </StackPanel>
