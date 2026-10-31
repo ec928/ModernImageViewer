@@ -327,7 +327,7 @@
                             Style="{StaticResource QuietButtonStyle}"
                             Padding="8,5"
                             CornerRadius="12"
-                            ToolTipService.ToolTip="Arrange these pictures in a new designed layout, keeping faces clear. Click again for another. Undo goes back.">
+                            ToolTipService.ToolTip="Arrange these pictures in a new designed layout. Click again for another. Undo goes back.">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8B1;" FontSize="14" />
                             <TextBlock Text="Surprise me" VerticalAlignment="Center" FontSize="13" />

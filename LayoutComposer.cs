@@ -625,7 +625,7 @@ namespace ModernImageViewer
             return (cx + (x - cx) * cos - (y - cy) * sin, cy + (x - cx) * sin + (y - cy) * cos);
         }
 
-        /// <summary>Whether this cell draws at this point of the canvas. Its gutter is clear unless it has a mat, which still hides nothing of a face behind it only when clear.</summary>
+        /// <summary>Whether this cell's picture draws at this point of the canvas. Its gutter does not count.</summary>
         private static bool Shows(ComposedCell cell, (double X, double Y) point)
         {
             double cx = cell.X + cell.W / 2, cy = cell.Y + cell.H / 2;
