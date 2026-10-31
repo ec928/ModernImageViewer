@@ -83,7 +83,7 @@ The bar appears when you move the mouse:
 | **Save/Load** (**Ctrl+S**) | Copy the canvas to the clipboard (**Ctrl+C**), or save it as a JPEG or PNG at 720p to 4320p, at the window's size, or at a custom size. Save the layout as a `.mivlayout` file and reopen it later. Image sizes are on the left of the menu, layouts on the right, with your favourite and recent folders. A folder with more layouts than fit shows **+N**, which opens the file picker |
 | **Wheel** (advanced) | **Undo** (**Ctrl+Z**), **Redo** (**Ctrl+Y**), and **Fit whole photos** or **Fill cells**: Fit shows the whole of each photo, Fill crops each photo to its cell. **Reset canvas and images** starts again with four empty cells and a plain canvas; Undo brings your layout back, and it is also kept under **Autosaved** in Save/Load |
 
-With a Banner or Pair, the rows, columns and per-line counts arrange the other photos. A Rectangle does not follow those lines. Changing the line count or a line's count turns that hero off.
+With a Banner or Pair, the rows, columns and per-line counts arrange the other photos. A Rectangle does not follow those lines, so changing the line count or a line's count turns it off.
 
 On the photos themselves:
 
@@ -125,12 +125,18 @@ Floating cells keep their share of the canvas when the window changes size. Save
 
 | | |
 |---|---|
+| **F1** | Every keyboard shortcut |
+| **F6** | Move to the header buttons: **←** / **→** or **Tab** move along, **Enter** presses, **Esc** returns |
 | **Ctrl+1 / 2 / 3** | Recall saved window & tile size preset 1, 2, or 3 |
+| **Enter** | Open the picture, or view the selected pictures together |
+| **Space** | Select or deselect the picture in the folder view; play or pause an animation in the viewer |
 | **B** | Toggle 2-page comic spread in the viewer |
+| **F2** / **F5** | Rename / refresh |
+| **Backspace** | Up one folder |
 | **F11** | Fullscreen |
 | **← / →** | Previous / next image |
 | **Home / End** | First / last image |
-| **Delete** | Send to the Recycle Bin |
+| **Delete** | Send to the Recycle Bin, or warn first where that isn't possible |
 | **Esc** | Close the preview |
 | **Tab** | Show or hide the sidebar (tile grid and multi-view) |
 

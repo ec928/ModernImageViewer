@@ -8,14 +8,14 @@ How it is built is in `ARCHITECTURE.md`, under Multi-view. How it looks and beha
 
 - Grid layout tool, heroes and draggable edges
 - Per-cell frames: stroke, corner radius, gutter, mat and shadow, with Flush and three saved presets
-- Swap, copy, clear and move, with parameters staying on the cell, and swap and copy that can bring the cell's attributes too
-- Rotate, mirror and flip the image on any cell, and replace it from a file
+- Swap, copy, move and clear, with parameters staying on the cell, and swap, copy and move that can bring the cell's attributes too
+- Rotate, mirror and flip the image on any cell, and replace it with a picture found in the app
 - Floating cells: move, resize, snap, layer, and Dock back into the grid
 - Pictures from the app (Add images) or dropped from Explorer become new floating cells; an empty cell takes one from the app (Add image) or from a drop onto it
 - Shapes on every cell: rectangle, squircle, circle or oval, arch, L-shape, triangle, right triangle, rhombus, trapezoid, parallelogram, hexagon and organic blob, with mirroring, and on floating cells rotation and shape-only rotation
 - Canvas surface and color, including custom colors
 - Frame & Border for the whole canvas
-- Undo and redo
+- Undo and redo, three autosaved sessions, and Reset canvas and images
 - Save and load `.mivlayout` layouts
 - Export to JPEG or PNG, and copy to the clipboard
 
@@ -24,4 +24,4 @@ How it is built is in `ARCHITECTURE.md`, under Multi-view. How it looks and beha
 - Select several cells to move or align together.
 - Text as cell content.
 - Layouts as templates, applied to any selection of photos.
-- Revisit the canvas beyond its surface and color.
+- Revisit the canvas beyond its surface, color and frame.

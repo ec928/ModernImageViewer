@@ -149,6 +149,6 @@ Anything that orders file or folder names for display goes through `NaturalSort`
 
 ## Known remaining debt
 
-- The cinematic window is still a large code-behind. Further splits (`FolderScanService`, director UI vs playback) are welcome but not required for correctness. Tracked as improvement I3 in `REVIEW.md`.
+- Cinematic is due to be largely redone, so it has not been audited with the rest of the app. Tracked as improvement I3 in `REVIEW.md`.
 - HEIC/AVIF need the Windows codecs pack. Decode failure shows a HUD.
 - Unsigned portable zip: SmartScreen warning is expected.
