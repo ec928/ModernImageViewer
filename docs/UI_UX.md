@@ -130,14 +130,17 @@ Copy to...                >   Position 1    | Position 1
 Move to...                >   Position 2... | Position 2...
 --------------------------
 Frame & Border...
-Replace image...  (or Add image... on an empty cell)
-Advanced                  >   Rotate image left / right, Mirror image, Flip image
---------------------------    -----------
-Solo / Maximize               Window  >   Rectangle, Squircle, Circle / Oval, Arch / Tombstone,
-Freeform  (or Dock to Grid)               L-shape, Triangle, Right triangle, Rhombus / Diamond,
-Clear cell                                Trapezoid, Parallelogram, Hexagon, Organic blob
---------------------------                Mirror shape, Flip shape, Reset window
-Remove cell                   Layer   >   Bring to front, Bring forward, Send backward, Send to back (floating cells only)
+Window                    >   Rectangle, Squircle, Circle / Oval, Arch / Tombstone, L-shape, Triangle,
+Add image...  (empty cell)    Right triangle, Rhombus / Diamond, Trapezoid, Parallelogram, Hexagon, Organic blob,
+                              Mirror shape, Flip shape, Reset window
+Advanced                  >   Replace image..., Clear cell,
+                              Rotate image left / right, Mirror image, Flip image,
+                              Layer  >  Bring to front, Bring forward, Send backward, Send to back (floating cells only)
+--------------------------
+Solo / Maximize
+Freeform  (or Dock to Grid)
+--------------------------
+Remove cell
 ```
 
 The playbar's wheel holds Undo, Redo and one Fill or Fit row, which names what it will switch to and has no shortcut. Add images sends the user to the folders to pick pictures, each of which comes back as a floating cell. The Canvas button holds Shape, Surface, Color and Frame & Border, which is the cell card without Apply to all cells. Save/Load holds Copy to clipboard and the last three autosaved sessions, timed to the second. Replacing a session never asks, because it can be had back from there. Back, Esc and the tile and list buttons leave the session waiting, and the Multi-View button returns to it.

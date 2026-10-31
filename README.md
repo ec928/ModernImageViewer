@@ -91,7 +91,7 @@ On the photos themselves:
 - Scroll to zoom, drag to pan, middle-click to reset, double-click to zoom in or back out.
 - Hover over a photo to show its buttons at the top right: view it on its own, or remove the cell.
 - **Alt+drag** a photo onto another to swap the two.
-- Right-click a cell to swap, copy or move its photo to another cell, replace it from a file, set its frame, view it on its own, clear it, or remove it. **Clear cell** takes the photo out and keeps the cell, so its space stays empty on the canvas and in an export. **Replace image** also recovers a cell whose file is missing. **Advanced** rotates, mirrors and flips the photo, and **Window** gives the cell a shape. The corners a shape leaves show the canvas, and a click there still reaches the cell.
+- Right-click a cell to swap, copy or move its photo to another cell, replace it from a file, set its frame, view it on its own, clear it, or remove it. **Clear cell** takes the photo out and keeps the cell, so its space stays empty on the canvas and in an export. **Replace image** also recovers a cell whose file is missing. **Window** gives the cell a shape. **Replace image** and **Clear cell** are under **Advanced**, which also rotates, mirrors and flips the photo. The corners a shape leaves show the canvas, and a click there still reaches the cell.
 - The maximise button at the top right shows one photo on its own. **←** / **→** step through the photos, skipping empty cells; **Esc** returns to the grid.
 
 A cell keeps its own settings. **Swap with**, **Copy to** and **Move to** each open a table of the other positions, with two columns:
@@ -114,7 +114,7 @@ Right-click a cell and choose **Freeform** to float its photo above the grid. Th
 Drag pictures in from File Explorer to add them: each one becomes a new floating cell where you drop it, up to 16 at a time, in front of the others and with no frame. No other cell changes. Folders, comic books and saved layouts open as they do from anywhere else.
 
 - Drag to move, and drag the edges or corners to resize. A cell can hang over the edge of the canvas as long as its centre stays on it, and whatever hangs over is left out of an export. **Ctrl+drag** pans the photo inside the cell. Dragged cells snap to the canvas, each other and the grid; hold **Alt** to move freely.
-- **Advanced > Window** sets the shape: rectangle, squircle, circle or oval, arch (tombstone), L-shape, triangle, right triangle, rhombus (diamond), trapezoid, parallelogram, hexagon, or organic blob. It also mirrors and flips the shape.
+- **Window** sets the shape: rectangle, squircle, circle or oval, arch (tombstone), L-shape, triangle, right triangle, rhombus (diamond), trapezoid, parallelogram, hexagon, or organic blob. It also mirrors and flips the shape.
 - Hover over a floating cell for its handles. A dashed outline shows the rectangle that resizes, whatever the shape, with a white square at each corner to drag. The round handle at the top rotates it: hold **Shift** for 15 degree steps, or **Ctrl** to turn the shape and keep the photo still. On an L-shape, the small handle moves the inner corner.
 - **Advanced > Layer** sets which floating cell is in front. Floating cells stay above the grid.
 - **Dock to Grid** puts the photo back into its original cell, or a new cell if that one is gone or in use. Closing a floating cell removes its photo; Undo brings it back.

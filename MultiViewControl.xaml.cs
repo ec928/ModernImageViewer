@@ -2001,7 +2001,10 @@ namespace ModernImageViewer
             borderItem.Click += (s, e) => OpenCellBorderFlyout(item);
             menu.Items.Add(borderItem);
 
-            menu.Items.Add(MakeAdvancedItem(IsEmptyCell(item) ? "Add image\u2026" : "Replace image\u2026", "\uE8E5", () => PickReplacementImage(item)));
+            menu.Items.Add(MakeWindowMenu(item));
+            // An empty cell's label says to right-click to add an image, so that stays on the top level.
+            if (IsEmptyCell(item))
+                menu.Items.Add(MakeAdvancedItem("Add image\u2026", "\uE8E5", () => PickReplacementImage(item)));
             AddCellAdvancedMenu(menu, item);
             menu.Items.Add(new MenuFlyoutSeparator());
 
@@ -2038,12 +2041,6 @@ namespace ModernImageViewer
                 menu.Items.Add(freeformItem);
             }
 
-            if (!IsEmptyCell(item))
-            {
-                var clearItem = new MenuFlyoutItem { Text = "Clear cell", Icon = new FontIcon { Glyph = "\uE894" } };
-                clearItem.Click += (s, e) => EmptyCell(Slot(item));
-                menu.Items.Add(clearItem);
-            }
             menu.Items.Add(new MenuFlyoutSeparator());
 
             var removeItem = new MenuFlyoutItem { Text = "Remove cell", Icon = new FontIcon { Glyph = "\uE8BB" } };
