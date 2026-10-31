@@ -1595,7 +1595,11 @@ namespace ModernImageViewer
         private void ApplyLayoutFile(MultiViewLayoutFile layoutFile, bool restoreAspect)
         {
             if (layoutFile == null) return;
-            if (!_restoringUndo) AutoSaveSession();
+            if (!_restoringUndo)
+            {
+                AutoSaveSession();
+                ForgetSurprise();
+            }
 
             // An undo returns to photos already known, so their thumbnails and details carry over.
             var known = new Dictionary<string, ImageItem>(StringComparer.OrdinalIgnoreCase);

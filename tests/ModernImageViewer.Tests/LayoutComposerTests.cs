@@ -87,6 +87,39 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
+        public void A_deck_shows_every_picture_before_any_comes_round_again()
+        {
+            var all = Enumerable.Range(0, 268).Select(n => $@"C:\p\{n}.jpg").ToList();
+            var deck = new PictureDeck(all, new Random(3));
+            var seen = new HashSet<string>();
+            var random = new Random(4);
+            while (seen.Count < all.Count)
+            {
+                var hand = deck.Deal(random.Next(9, 17));
+                Assert.Equal(hand.Count, hand.Distinct().Count());
+                int fresh = hand.Count(seen.Add);
+                // Only the hand that finishes the round may hold pictures already seen.
+                if (seen.Count < all.Count) Assert.Equal(hand.Count, fresh);
+            }
+            for (int i = 0; i < 200; i++)
+            {
+                var hand = deck.Deal(random.Next(9, 17));
+                Assert.Equal(hand.Count, hand.Distinct().Count());
+                Assert.InRange(hand.Count, 9, 16);
+            }
+        }
+
+        [Fact]
+        public void A_picture_added_to_a_deck_comes_up_next()
+        {
+            var deck = new PictureDeck(Enumerable.Range(0, 40).Select(n => $@"C:\p\{n}.jpg"), new Random(3));
+            deck.Deal(12);
+            deck.Include(new[] { @"C:\new.jpg", @"C:\p\0.jpg" });
+            Assert.Equal(41, deck.Count);
+            Assert.Contains(@"C:\new.jpg", deck.Deal(9));
+        }
+
+        [Fact]
         public void Hero_shape_is_not_decided_by_the_score()
         {
             var shapes = Enumerable.Range(0, 80)

@@ -117,6 +117,7 @@ namespace ModernImageViewer
 
         public void LoadImages(IEnumerable<ImageItem> items)
         {
+            ForgetSurprise();
             ClearAllFreeformCards();
             _itemBorders.Clear();
             _cellGeometry.Clear();
@@ -151,6 +152,7 @@ namespace ModernImageViewer
 
         public void Clear()
         {
+            ForgetSurprise();
             CloseCountsCard();
             _hudTimer.Stop();
             ClearUndo();

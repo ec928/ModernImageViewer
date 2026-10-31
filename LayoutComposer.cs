@@ -114,6 +114,50 @@ namespace ModernImageViewer
         }
     }
 
+    /// <summary>Hands out a large set of pictures a few at a time, every one of them before any comes round again.</summary>
+    public sealed class PictureDeck
+    {
+        private readonly HashSet<string> _known = new(StringComparer.OrdinalIgnoreCase);
+        private readonly List<string> _waiting = new();
+        private readonly Random _random;
+
+        public PictureDeck(IEnumerable<string> pictures, Random random)
+        {
+            _random = random;
+            Include(pictures);
+        }
+
+        public int Count => _known.Count;
+
+        /// <summary>Pictures not seen before go first, so one just added shows up soon.</summary>
+        public void Include(IEnumerable<string> pictures)
+        {
+            var added = pictures.Where(_known.Add).OrderBy(_ => _random.Next()).ToList();
+            _waiting.InsertRange(0, added);
+        }
+
+        public List<string> Deal(int count)
+        {
+            var dealt = new List<string>();
+            Take(dealt, count);
+            if (dealt.Count < count)
+            {
+                // Round again, leaving out this hand so no picture is in it twice.
+                _waiting.AddRange(_known.Except(dealt, StringComparer.OrdinalIgnoreCase).OrderBy(_ => _random.Next()));
+                Take(dealt, count - dealt.Count);
+                _waiting.AddRange(dealt.Where(d => !_waiting.Contains(d, StringComparer.OrdinalIgnoreCase)));
+            }
+            return dealt;
+        }
+
+        private void Take(List<string> into, int count)
+        {
+            int taking = Math.Min(count, _waiting.Count);
+            into.AddRange(_waiting.Take(taking));
+            _waiting.RemoveRange(0, taking);
+        }
+    }
+
     /// <summary>
     /// Makes something worth looking at from a set of pictures. Nothing here picks settings at random: each recipe is one
     /// designed idea with its own rules, the random part only decides which version of it, and every version is scored

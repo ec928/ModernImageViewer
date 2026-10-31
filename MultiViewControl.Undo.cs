@@ -130,6 +130,7 @@ namespace ModernImageViewer
         {
             AutoSaveSession();
             CaptureUndoPoint();
+            ForgetSurprise();
             var blank = new MultiViewLayoutFile { State = new LayoutStateDto { Lines = 2, IsFillMode = true } };
             for (int i = 0; i < 4; i++)
                 blank.Photos.Add(new PhotoSlotDto { Slot = i, Path = string.Empty });

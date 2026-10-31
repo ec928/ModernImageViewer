@@ -9,7 +9,7 @@ namespace ModernImageViewer
 {
     /// <summary>
     /// Surprise me: arranges the session's pictures with LayoutComposer. The result is an ordinary layout, so it can be
-    /// edited, saved and undone like any other. Clicking again keeps to the same pictures while nothing else has changed.
+    /// edited, saved and undone like any other. The pictures it draws from stay until the session is replaced or reset.
     /// </summary>
     public sealed partial class MultiViewControl
     {
@@ -17,20 +17,21 @@ namespace ModernImageViewer
         private const int FewestFromLargeSet = 9;
 
         private readonly ConcurrentDictionary<string, PhotoFacts> _photoFacts = new(StringComparer.OrdinalIgnoreCase);
-        private List<string>? _surprisePool;
-        private string? _surpriseResult;
+        // Only set while the session started with more pictures than a layout can show.
+        private PictureDeck? _surpriseDeck;
+        private bool _surpriseRun;
         private string? _surpriseRecipe;
         private bool _surpriseBusy;
 
         private async void SurpriseButton_Click(object sender, RoutedEventArgs e)
         {
             if (_surpriseBusy) return;
-            string before = UndoSnapshot();
-            bool sameRun = _surprisePool != null && before == _surpriseResult;
-            var pool = sameRun
-                ? _surprisePool!
-                : _items.Where(i => !IsEmptyCell(i)).Select(i => i.Path).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-            if (pool.Count < 2)
+            bool sameRun = _surpriseRun;
+            var pictures = SessionPictures();
+            if (pictures.Count > MosaicLayout.MaxShown && _surpriseDeck == null)
+                _surpriseDeck = new PictureDeck(pictures, new Random());
+            _surpriseDeck?.Include(pictures);
+            if ((_surpriseDeck?.Count ?? pictures.Count) < 2)
             {
                 AddImagesRequested?.Invoke(this, EventArgs.Empty);
                 return;
@@ -41,21 +42,19 @@ namespace ModernImageViewer
             try
             {
                 // More than a layout can show: a different set each time, so all of them get a turn.
-                var chosen = pool.Count <= MosaicLayout.MaxShown
-                    ? pool
-                    : pool.OrderBy(_ => Random.Shared.Next()).Take(Random.Shared.Next(FewestFromLargeSet, MosaicLayout.MaxShown + 1)).ToList();
+                var chosen = _surpriseDeck?.Deal(Random.Shared.Next(FewestFromLargeSet, MosaicLayout.MaxShown + 1)) ?? pictures;
                 var ready = DecodedBitmaps();
                 // A picture already showing as failed would only put its message into the design.
                 var failed = _cellRoots.Select(root => root?.Tag as CellParts).Where(parts => parts?.Bound.Failed == true)
                     .Select(parts => parts!.Bound.Item.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
                 var facts = await ReadFactsAsync(chosen.Where(path => !failed.Contains(path)).ToList(), path => ready.TryGetValue(path, out var bitmap) ? (bitmap.PixelWidth, bitmap.PixelHeight) : null);
 
-                // Something else was done while the pictures were being read, and that wins.
                 double scale = XamlRoot?.RasterizationScale ?? 1;
                 double width = RootGrid.ActualWidth, height = RootGrid.ActualHeight;
                 string? avoid = sameRun ? _surpriseRecipe : null;
                 var composition = await Task.Run(() => LayoutComposer.Compose(facts, width, height, Random.Shared.Next(), avoid, scale));
-                if (composition == null || UndoSnapshot() != before) return;
+                // The session was changed for other pictures while these were being read, and that wins.
+                if (composition == null || !SessionPictures().SequenceEqual(pictures)) return;
 
                 if (!sameRun) AutoSaveSession();
                 CaptureUndoPoint();
@@ -72,15 +71,25 @@ namespace ModernImageViewer
                     _restoringUndo = false;
                 }
                 CaptureUndoPoint();
-                _surprisePool = pool;
+                _surpriseRun = true;
                 _surpriseRecipe = composition.Recipe;
-                _surpriseResult = UndoSnapshot();
             }
             finally
             {
                 _surpriseBusy = false;
                 SurpriseButton.IsEnabled = true;
             }
+        }
+
+        private List<string> SessionPictures() =>
+            _items.Where(i => !IsEmptyCell(i)).Select(i => i.Path).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+        /// <summary>A different session has different pictures to draw from.</summary>
+        private void ForgetSurprise()
+        {
+            _surpriseDeck = null;
+            _surpriseRun = false;
+            _surpriseRecipe = null;
         }
 
         /// <summary>A picture the reader cannot open is still arranged, by the size it shows at or as a plain photo shape, rather than dropped from the session.</summary>
