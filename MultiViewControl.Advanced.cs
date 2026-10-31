@@ -17,7 +17,7 @@ namespace ModernImageViewer
     /// <summary>The Advanced menus: image rotation and mirroring on every cell, window shape on freeform cells, and the canvas.</summary>
     public sealed partial class MultiViewControl
     {
-        private const string SettingsGlyph = "";
+        private const string SettingsGlyph = "\uE713";
         private const double WindowRotationStep = 15;
 
         private readonly Dictionary<ImageItem, CellGeometryDto> _cellGeometry = new();
@@ -44,7 +44,7 @@ namespace ModernImageViewer
         /// <summary>Marks the current choice the way the canvas shape menu does.</summary>
         private static MenuFlyoutItem MakeChoiceItem(string text, bool chosen, Action click)
         {
-            var item = new MenuFlyoutItem { Text = (chosen ? "✓  " : "    ") + text };
+            var item = new MenuFlyoutItem { Text = (chosen ? "\u2713  " : "    ") + text };
             item.Click += (_, _) => click();
             return item;
         }
@@ -59,10 +59,10 @@ namespace ModernImageViewer
                 ShowHiddenState(Slot(item));
             }
 
-            advanced.Items.Add(MakeAdvancedItem("Rotate image left", "", () => ChangeImage(g => g.TurnImage(-90))));
-            advanced.Items.Add(MakeAdvancedItem("Rotate image right", "", () => ChangeImage(g => g.TurnImage(90))));
-            advanced.Items.Add(MakeAdvancedItem("Mirror image left to right", "", () => ChangeImage(g => g.ImageFlipH = !g.ImageFlipH)));
-            advanced.Items.Add(MakeAdvancedItem("Flip image top to bottom", "", () => ChangeImage(g => g.ImageFlipV = !g.ImageFlipV)));
+            advanced.Items.Add(MakeAdvancedItem("Rotate image left", "\uE7AD", () => ChangeImage(g => g.TurnImage(-90))));
+            advanced.Items.Add(MakeAdvancedItem("Rotate image right", "\uE7AD", () => ChangeImage(g => g.TurnImage(90))));
+            advanced.Items.Add(MakeAdvancedItem("Mirror image left to right", "\uE8AB", () => ChangeImage(g => g.ImageFlipH = !g.ImageFlipH)));
+            advanced.Items.Add(MakeAdvancedItem("Flip image top to bottom", "\uE8CB", () => ChangeImage(g => g.ImageFlipV = !g.ImageFlipV)));
 
             var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, item));
             if (card != null)
@@ -72,11 +72,11 @@ namespace ModernImageViewer
                 void ChangeWindow(Action<CellGeometryDto> change)
                 {
                     change(GetGeometry(item));
-                    ApplyWindowGeometry(card);
+                    ShowHiddenState(Slot(item));
                 }
 
                 var geometry = GetGeometry(item);
-                var shapes = new MenuFlyoutSubItem { Text = "Window shape", Icon = new FontIcon { Glyph = "" } };
+                var shapes = new MenuFlyoutSubItem { Text = "Window shape", Icon = new FontIcon { Glyph = "\uE7C5" } };
                 foreach (string shape in WindowShapes.All)
                 {
                     string chosen = shape;
@@ -84,25 +84,36 @@ namespace ModernImageViewer
                 }
                 advanced.Items.Add(shapes);
 
-                advanced.Items.Add(MakeAdvancedItem("Mirror window left to right", "", () => ChangeWindow(g => g.ShapeFlipH = !g.ShapeFlipH)));
-                advanced.Items.Add(MakeAdvancedItem("Flip window top to bottom", "", () => ChangeWindow(g => g.ShapeFlipV = !g.ShapeFlipV)));
-                advanced.Items.Add(MakeAdvancedItem("Rotate window left", "", () => ChangeWindow(g => g.WindowRotation -= WindowRotationStep)));
-                advanced.Items.Add(MakeAdvancedItem("Rotate window right", "", () => ChangeWindow(g => g.WindowRotation += WindowRotationStep)));
-                advanced.Items.Add(MakeAdvancedItem("Reset window", "", () => ChangeWindow(g =>
+                // The shape turns and the photo holds still, by turning the window and the photo opposite ways.
+                var shapeLeft = new MenuFlyoutItem { Text = "Rotate shape left" };
+                shapeLeft.Click += (_, _) => ChangeWindow(g => { g.WindowRotation -= WindowRotationStep; g.ImageCounter += WindowRotationStep; });
+                ToolTipService.SetToolTip(shapeLeft, "The photo stays still. Or hold Ctrl and drag the rotate handle.");
+                advanced.Items.Add(shapeLeft);
+                var shapeRight = new MenuFlyoutItem { Text = "Rotate shape right" };
+                shapeRight.Click += (_, _) => ChangeWindow(g => { g.WindowRotation += WindowRotationStep; g.ImageCounter -= WindowRotationStep; });
+                ToolTipService.SetToolTip(shapeRight, "The photo stays still. Or hold Ctrl and drag the rotate handle.");
+                advanced.Items.Add(shapeRight);
+
+                advanced.Items.Add(MakeAdvancedItem("Mirror window left to right", "\uE8AB", () => ChangeWindow(g => g.ShapeFlipH = !g.ShapeFlipH)));
+                advanced.Items.Add(MakeAdvancedItem("Flip window top to bottom", "\uE8CB", () => ChangeWindow(g => g.ShapeFlipV = !g.ShapeFlipV)));
+                advanced.Items.Add(MakeAdvancedItem("Rotate window left", "\uE7AD", () => ChangeWindow(g => g.WindowRotation -= WindowRotationStep)));
+                advanced.Items.Add(MakeAdvancedItem("Rotate window right", "\uE7AD", () => ChangeWindow(g => g.WindowRotation += WindowRotationStep)));
+                advanced.Items.Add(MakeAdvancedItem("Reset window", "\uE72C", () => ChangeWindow(g =>
                 {
                     g.Shape = WindowShapes.Rectangle;
                     g.ShapeFlipH = false;
                     g.ShapeFlipV = false;
                     g.WindowRotation = 0;
+                    g.ImageCounter = 0;
                     g.NotchX = 0.5;
                     g.NotchY = 0.5;
                 })));
 
                 advanced.Items.Add(new MenuFlyoutSeparator());
-                advanced.Items.Add(MakeAdvancedItem("Bring to front", "", () => MoveCardLayer(card, int.MaxValue)));
-                advanced.Items.Add(MakeAdvancedItem("Bring forward", "", () => MoveCardLayer(card, 1)));
-                advanced.Items.Add(MakeAdvancedItem("Send backward", "", () => MoveCardLayer(card, -1)));
-                advanced.Items.Add(MakeAdvancedItem("Send to back", "", () => MoveCardLayer(card, int.MinValue)));
+                advanced.Items.Add(MakeAdvancedItem("Bring to front", "\uE74A", () => MoveCardLayer(card, int.MaxValue)));
+                advanced.Items.Add(MakeAdvancedItem("Bring forward", "\uE74A", () => MoveCardLayer(card, 1)));
+                advanced.Items.Add(MakeAdvancedItem("Send backward", "\uE74B", () => MoveCardLayer(card, -1)));
+                advanced.Items.Add(MakeAdvancedItem("Send to back", "\uE74B", () => MoveCardLayer(card, int.MinValue)));
             }
 
             menu.Items.Add(advanced);
@@ -146,10 +157,19 @@ namespace ModernImageViewer
                 return;
             }
 
+            // The gutter insets the whole shape, as it insets a rectangle: the mat fills the outer outline, the photo and frame sit on the inner one.
+            var shapedCard = CardBorder(window);
+            var frame = GetBorderForItem(card.Item);
+            double gutter = shapedCard?.Margin.Left ?? 0;
+            double cardW = Math.Max(1, width - 2 * gutter);
+            double cardH = Math.Max(1, height - 2 * gutter);
+            double radius = frame.CornerRadius;
+            var cardOutline = WindowShapes.Placed(geometry, 0, 0, cardW, cardH, radius)!;
+            var matOutline = WindowShapes.Placed(geometry, 0, 0, width, height, radius > 0 ? radius + gutter : 0)!;
+
             // Pointers follow the outline: the empty part of the window has nothing to hit, so clicks reach what is behind.
             if (photoGrid != null)
             {
-                var inset = CardBorder(window)!.Margin;
                 photoGrid.Background = null;
                 if (hitArea == null)
                 {
@@ -158,7 +178,7 @@ namespace ModernImageViewer
                 }
                 hitArea.Visibility = Visibility.Visible;
                 var hitPoints = new PointCollection();
-                foreach (var p in outline) hitPoints.Add(new Point(p.X * width - inset.Left, p.Y * height - inset.Top));
+                foreach (var p in cardOutline) hitPoints.Add(new Point(p.X, p.Y));
                 hitArea.Points = hitPoints;
             }
 
@@ -166,18 +186,16 @@ namespace ModernImageViewer
             {
                 double nx = geometry.ShapeFlipH ? 1 - geometry.NotchX : geometry.NotchX;
                 double ny = geometry.ShapeFlipV ? 1 - geometry.NotchY : geometry.NotchY;
-                card.NotchHandle.Margin = new Thickness(nx * width - card.NotchHandle.Width / 2, ny * height - card.NotchHandle.Height / 2, 0, 0);
+                card.NotchHandle.Margin = new Thickness(gutter + nx * cardW - card.NotchHandle.Width / 2, gutter + ny * cardH - card.NotchHandle.Height / 2, 0, 0);
             }
 
             // The clip goes on the parts inside the window. A composition visual on the window itself stops it taking pointer input.
-            var points = outline.Select(p => new Vector2((float)(p.X * width), (float)(p.Y * height))).ToArray();
-            foreach (var part in ShapedParts(window))
+            if (window.Tag is CellParts { GutterHost: not null } clippedParts)
+                ClipToOutline(clippedParts.GutterHost, matOutline);
+            if (shapedCard != null)
             {
-                var visual = ElementCompositionPreview.GetElementVisual(part);
-                var partInset = new Vector2((float)part.Margin.Left, (float)part.Margin.Top);
-                using var shape = CanvasGeometry.CreatePolygon(CanvasDevice.GetSharedDevice(), points.Select(p => p - partInset).ToArray());
-                var compositor = visual.Compositor;
-                visual.Clip = compositor.CreateGeometricClip(compositor.CreatePathGeometry(new CompositionPath(shape)));
+                ClipToOutline(shapedCard, cardOutline);
+                shapedCard.CornerRadius = new CornerRadius(0);
             }
 
             if (outlineElement == null)
@@ -187,9 +205,7 @@ namespace ModernImageViewer
                 window.Children.Add(outlineElement);
             }
             // The frame follows the outline. The card's own rectangular stroke would only show where the shape meets it.
-            var frame = GetBorderForItem(card.Item);
             bool dashed = string.Equals(frame.StrokeStyle, "Dashed", StringComparison.OrdinalIgnoreCase);
-            var shapedCard = CardBorder(window);
             outlineElement.Stroke = dashed ? ParseBorderBrush(frame.Color) : shapedCard?.BorderBrush ?? ParseBorderBrush(frame.Color);
             outlineElement.StrokeDashArray = dashed ? new DoubleCollection { 3, 2 } : new DoubleCollection();
             outlineElement.Visibility = frame.Thickness > 0 && !_hiddenItems.Contains(card.Item) ? Visibility.Visible : Visibility.Collapsed;
@@ -200,13 +216,22 @@ namespace ModernImageViewer
                 shapedParts.DashedStroke.Visibility = Visibility.Collapsed;
                 if (shapedParts.RimGlowStroke != null) shapedParts.RimGlowStroke.Visibility = Visibility.Collapsed;
             }
-            // Pulled in by half the stroke, so its outer edge meets the window's edge and is not cut off there.
-            double insetX = (width - frame.Thickness) / width;
-            double insetY = (height - frame.Thickness) / height;
+            // Pulled in by half the stroke, so its outer edge meets the photo's edge and is not cut off there.
+            double half = frame.Thickness / 2;
+            var strokeOutline = WindowShapes.Placed(geometry, gutter + half, gutter + half,
+                Math.Max(1, cardW - frame.Thickness), Math.Max(1, cardH - frame.Thickness), Math.Max(0, radius - half))!;
             var drawn = new PointCollection();
-            foreach (var p in points)
-                drawn.Add(new Point(width / 2 + (p.X - width / 2) * insetX, height / 2 + (p.Y - height / 2) * insetY));
+            foreach (var p in strokeOutline) drawn.Add(new Point(p.X, p.Y));
             outlineElement.Points = drawn;
+        }
+
+        private static void ClipToOutline(FrameworkElement part, (double X, double Y)[] outline)
+        {
+            var visual = ElementCompositionPreview.GetElementVisual(part);
+            var points = outline.Select(p => new Vector2((float)p.X, (float)p.Y)).ToArray();
+            using var shape = CanvasGeometry.CreatePolygon(CanvasDevice.GetSharedDevice(), points);
+            var compositor = visual.Compositor;
+            visual.Clip = compositor.CreateGeometricClip(compositor.CreatePathGeometry(new CompositionPath(shape)));
         }
 
         /// <summary>Move a floating cell among the floating cells. They all stay above the grid.</summary>
@@ -259,15 +284,16 @@ namespace ModernImageViewer
         {
             if (card.Container is not Grid window) return;
 
-            var rotate = MakeWindowHandle(28, "");
+            var rotate = MakeWindowHandle(28, "\uE7AD");
             rotate.HorizontalAlignment = HorizontalAlignment.Center;
             rotate.VerticalAlignment = VerticalAlignment.Top;
             rotate.Margin = new Thickness(0, 12, 0, 0);
-            ToolTipService.SetToolTip(rotate, "Drag to rotate the window. Hold Shift for 15 degree steps.");
+            ToolTipService.SetToolTip(rotate, "Drag to rotate the window. Hold Ctrl to rotate the shape and keep the photo still. Hold Shift for 15 degree steps.");
 
             bool turning = false;
             double startPointer = 0;
             double startRotation = 0;
+            double startCounter = 0;
             double PointerAngle(Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
             {
                 var p = e.GetCurrentPoint(RootGrid).Position;
@@ -280,6 +306,7 @@ namespace ModernImageViewer
                 turning = true;
                 startPointer = PointerAngle(e);
                 startRotation = GetGeometry(card.Item).WindowRotation;
+                startCounter = GetGeometry(card.Item).ImageCounter;
                 rotate.CapturePointer(e.Pointer);
                 e.Handled = true;
             };
@@ -290,8 +317,13 @@ namespace ModernImageViewer
                 bool shift = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
                     .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
                 if (shift) angle = Math.Round(angle / WindowRotationStep) * WindowRotationStep;
-                GetGeometry(card.Item).WindowRotation = angle;
-                ApplyWindowGeometry(card);
+                bool ctrl = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control)
+                    .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+                var geometry = GetGeometry(card.Item);
+                geometry.WindowRotation = angle;
+                // With Ctrl the photo turns back by the same amount, so only the shape moves on screen.
+                geometry.ImageCounter = ctrl ? startCounter - (angle - startRotation) : startCounter;
+                ShowHiddenState(Slot(card.Item));
                 e.Handled = true;
             };
             void EndTurn(object _, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
@@ -323,8 +355,9 @@ namespace ModernImageViewer
                 // Measured against the window, so its rotation is already taken out.
                 var p = e.GetCurrentPoint(window).Position;
                 var geometry = GetGeometry(card.Item);
-                double fx = Math.Clamp(p.X / window.Width, 0.15, 0.85);
-                double fy = Math.Clamp(p.Y / window.Height, 0.15, 0.85);
+                double gutter = CardBorder(window)?.Margin.Left ?? 0;
+                double fx = Math.Clamp((p.X - gutter) / Math.Max(1, window.Width - 2 * gutter), 0.15, 0.85);
+                double fy = Math.Clamp((p.Y - gutter) / Math.Max(1, window.Height - 2 * gutter), 0.15, 0.85);
                 geometry.NotchX = geometry.ShapeFlipH ? 1 - fx : fx;
                 geometry.NotchY = geometry.ShapeFlipV ? 1 - fy : fy;
                 ApplyWindowGeometry(card);
@@ -436,13 +469,13 @@ namespace ModernImageViewer
             AdvancedMenuFlyout.Items.Clear();
             CaptureUndoPoint();
 
-            var undo = MakeAdvancedItem("Undo", "", Undo);
+            var undo = MakeAdvancedItem("Undo", "\uE7A7", Undo);
             undo.KeyboardAcceleratorTextOverride = "Ctrl+Z";
             undo.IsEnabled = CanUndo;
             ToolTipService.SetToolTip(undo, "Undo (Ctrl+Z)");
             AdvancedMenuFlyout.Items.Add(undo);
 
-            var redo = MakeAdvancedItem("Redo", "", Redo);
+            var redo = MakeAdvancedItem("Redo", "\uE7A6", Redo);
             redo.KeyboardAcceleratorTextOverride = "Ctrl+Y";
             redo.IsEnabled = CanRedo;
             ToolTipService.SetToolTip(redo, "Redo (Ctrl+Y)");
@@ -450,12 +483,12 @@ namespace ModernImageViewer
 
             AdvancedMenuFlyout.Items.Add(new MenuFlyoutSeparator());
 
-            var copy = MakeAdvancedItem("Copy to clipboard", "", () => _ = CopyCanvasToClipboardAsync());
+            var copy = MakeAdvancedItem("Copy to clipboard", "\uE8C8", () => _ = CopyCanvasToClipboardAsync());
             copy.KeyboardAcceleratorTextOverride = "Ctrl+C";
             ToolTipService.SetToolTip(copy, "Copy the canvas as an image (Ctrl+C)");
             AdvancedMenuFlyout.Items.Add(copy);
 
-            AdvancedMenuFlyout.Items.Add(MakeAdvancedItem("Save as PNG…", "", () =>
+            AdvancedMenuFlyout.Items.Add(MakeAdvancedItem("Save as PNG\u2026", "\uE74E", () =>
             {
                 var (width, height) = CanvasPixels();
                 _ = SavePixelsAsync(width, height, preferPng: true);
@@ -463,7 +496,7 @@ namespace ModernImageViewer
 
             AdvancedMenuFlyout.Items.Add(new MenuFlyoutSeparator());
 
-            var canvas = new MenuFlyoutSubItem { Text = "Canvas", Icon = new FontIcon { Glyph = "" } };
+            var canvas = new MenuFlyoutSubItem { Text = "Canvas", Icon = new FontIcon { Glyph = "\uE7F4" } };
 
             var surface = new MenuFlyoutSubItem { Text = "Surface" };
             foreach (string name in CanvasLook.Surfaces)

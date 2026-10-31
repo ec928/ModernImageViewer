@@ -1331,8 +1331,12 @@ namespace ModernImageViewer
                 GetDimensions = () => (naturalWidth, naturalHeight)
             };
 
-            // A quarter turn swaps the box the photo needs. The container stays unturned and its transform turns it.
-            bool ImageTurned() => GetGeometry(photo.Item).ImageRotation % 180 != 0;
+            // A turned photo needs a different box. The container stays unturned and its transform turns it.
+            (double Cos, double Sin) ImageTurn()
+            {
+                double radians = GetGeometry(photo.Item).ImageAngle * Math.PI / 180;
+                return (Math.Abs(Math.Cos(radians)), Math.Abs(Math.Sin(radians)));
+            }
 
             // Layout & Clamping helpers for this cell
             void ClampTranslation()
@@ -1341,9 +1345,9 @@ namespace ModernImageViewer
                 double cellH = cellGrid.ActualHeight;
                 if (cellW <= 0 || cellH <= 0 || imgContainer.Width <= 0 || imgContainer.Height <= 0) return;
 
-                bool turned = ImageTurned();
-                double effW = (turned ? imgContainer.Height : imgContainer.Width) * transform.ScaleX;
-                double effH = (turned ? imgContainer.Width : imgContainer.Height) * transform.ScaleY;
+                var turn = ImageTurn();
+                double effW = (imgContainer.Width * turn.Cos + imgContainer.Height * turn.Sin) * transform.ScaleX;
+                double effH = (imgContainer.Width * turn.Sin + imgContainer.Height * turn.Cos) * transform.ScaleY;
 
                 if (effW > cellW)
                 {
@@ -1386,45 +1390,15 @@ namespace ModernImageViewer
 
                 cellGrid.Clip = new RectangleGeometry { Rect = new Rect(0, 0, cellW, cellH) };
 
-                bool turned = ImageTurned();
-                double imgAspect = turned ? naturalHeight / naturalWidth : naturalWidth / naturalHeight;
-                double cellAspect = cellW / cellH;
+                // Fill covers the whole cell with no bars, at any turn. Fit keeps the whole photo inside it.
+                var turn = ImageTurn();
+                var cover = WindowShapes.CoverBox(GetGeometry(photo.Item), cellW, cellH);
+                double scale = _isFillMode
+                    ? Math.Max(cover.Width / naturalWidth, cover.Height / naturalHeight)
+                    : Math.Min(cellW / (naturalWidth * turn.Cos + naturalHeight * turn.Sin), cellH / (naturalWidth * turn.Sin + naturalHeight * turn.Cos));
 
-                double targetW, targetH;
-
-                if (_isFillMode)
-                {
-                    // Crop to Fill: cover entire cell with zero black bars
-                    if (imgAspect > cellAspect)
-                    {
-                        // Image is wider than cell -> fill cell height, let width expand proportionally
-                        targetH = cellH;
-                        targetW = cellH * imgAspect;
-                    }
-                    else
-                    {
-                        // Image is taller than cell -> fill cell width, let height expand proportionally
-                        targetW = cellW;
-                        targetH = cellW / imgAspect;
-                    }
-                }
-                else
-                {
-                    // Fit: fit whole image inside cell
-                    if (imgAspect > cellAspect)
-                    {
-                        targetW = cellW;
-                        targetH = cellW / imgAspect;
-                    }
-                    else
-                    {
-                        targetH = cellH;
-                        targetW = cellH * imgAspect;
-                    }
-                }
-
-                imgContainer.Width = turned ? targetH : targetW;
-                imgContainer.Height = turned ? targetW : targetH;
+                imgContainer.Width = naturalWidth * scale;
+                imgContainer.Height = naturalHeight * scale;
                 ClampTranslation();
             }
 
@@ -1489,7 +1463,7 @@ namespace ModernImageViewer
             photo.ApplyGeometry = () =>
             {
                 var geometry = GetGeometry(photo.Item);
-                transform.Rotation = geometry.ImageRotation;
+                transform.Rotation = geometry.ImageAngle;
                 double flipX = geometry.ImageFlipH ? -1 : 1;
                 double flipY = geometry.ImageFlipV ? -1 : 1;
                 fullImg.RenderTransformOrigin = new Point(0.5, 0.5);
@@ -1676,8 +1650,9 @@ namespace ModernImageViewer
 
                 double cellW = cellGrid.ActualWidth;
                 double cellH = cellGrid.ActualHeight;
-                double baseW = ImageTurned() ? imgContainer.Height : imgContainer.Width;
-                double baseH = ImageTurned() ? imgContainer.Width : imgContainer.Height;
+                var wheelTurn = ImageTurn();
+                double baseW = imgContainer.Width * wheelTurn.Cos + imgContainer.Height * wheelTurn.Sin;
+                double baseH = imgContainer.Width * wheelTurn.Sin + imgContainer.Height * wheelTurn.Cos;
 
                 // Scale factor where whole picture fits into cell (unlock zoom out in fill mode!)
                 double fitScale = 1.0;

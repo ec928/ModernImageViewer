@@ -836,10 +836,13 @@ namespace ModernImageViewer
                 var cellRect = new Rect(shot.Cell.X * scaleX, shot.Cell.Y * scaleY, shot.Cell.Width * scaleX, shot.Cell.Height * scaleY);
                 var cellCenter = new System.Numerics.Vector2((float)(cellRect.X + cellRect.Width / 2), (float)(cellRect.Y + cellRect.Height / 2));
                 var windowTurn = System.Numerics.Matrix3x2.CreateRotation((float)((shot.Geometry?.WindowRotation ?? 0) * Math.PI / 180), cellCenter);
-                var outline = WindowShapes.Outline(shot.Geometry);
-                using CanvasGeometry? shape = outline == null ? null : CanvasGeometry.CreatePolygon(device, outline
-                    .Select(p => new System.Numerics.Vector2((float)(cellRect.X + p.X * cellRect.Width), (float)(cellRect.Y + p.Y * cellRect.Height)))
-                    .ToArray());
+                CanvasGeometry? Polygon((double X, double Y)[]? points) => points == null ? null : CanvasGeometry.CreatePolygon(device,
+                    points.Select(p => new System.Numerics.Vector2((float)p.X, (float)p.Y)).ToArray());
+
+                // The mat fills the outer outline. The gutter insets the photo and frame onto the inner one.
+                double gutterPixels = cardX - cellRect.X;
+                using CanvasGeometry? shape = Polygon(WindowShapes.Placed(shot.Geometry, cellRect.X, cellRect.Y, cellRect.Width, cellRect.Height, rx > 0 ? rx + gutterPixels : 0));
+                using CanvasGeometry? cardShape = Polygon(WindowShapes.Placed(shot.Geometry, cardX, cardY, cardW, cardH, rx));
 
                 // The mat is the cell around the photo. The photo is drawn inside the card, so it does not cover the gutter.
                 var mat = FrameColor.MatFill(shot.Border?.GutterMaterial, shot.Border?.GutterColor);
@@ -932,13 +935,13 @@ namespace ModernImageViewer
                             shot.Geometry?.ImageFlipH == true ? -1f : 1f,
                             shot.Geometry?.ImageFlipV == true ? -1f : 1f,
                             center);
-                        var turn = System.Numerics.Matrix3x2.CreateRotation((float)((shot.Geometry?.ImageRotation ?? 0) * Math.PI / 180), center);
+                        var turn = System.Numerics.Matrix3x2.CreateRotation((float)((shot.Geometry?.ImageAngle ?? 0) * Math.PI / 180), center);
                         session.Transform = flip * turn * windowTurn;
                         session.DrawImage(bitmap, dest);
                         session.Transform = windowTurn;
                     }
 
-                    using (shape == null ? null : session.CreateLayer(1f, shape))
+                    using (cardShape == null ? null : session.CreateLayer(1f, cardShape))
                     {
                         if (rx > 0 && ry > 0)
                         {
@@ -962,11 +965,9 @@ namespace ModernImageViewer
                     // 3. Draw Stroke (Solid, Dashed, InnerMuted, Gradient)
                     if (shape != null)
                     {
-                        // Pulled in by half the stroke, as on screen, so its outer edge meets the window's edge.
-                        using var strokeShape = shape.Transform(System.Numerics.Matrix3x2.CreateScale(
-                            (float)Math.Max(0.01, (cellRect.Width - strokeW) / cellRect.Width),
-                            (float)Math.Max(0.01, (cellRect.Height - strokeW) / cellRect.Height),
-                            cellCenter));
+                        // Pulled in by half the stroke, as on screen, so its outer edge meets the photo's edge.
+                        using var strokeShape = Polygon(WindowShapes.Placed(shot.Geometry, cardX + strokeW / 2, cardY + strokeW / 2,
+                            Math.Max(1, cardW - strokeW), Math.Max(1, cardH - strokeW), Math.Max(0, rx - strokeW / 2)))!;
                         if (strokeW > 0 && string.Equals(strokeStyle, "Gradient", StringComparison.OrdinalIgnoreCase))
                         {
                             var start = FrameColor.Parse(shot.Border?.Color);

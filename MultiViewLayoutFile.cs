@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -577,6 +578,13 @@ namespace ModernImageViewer
         public double WindowRotation { get; set; }
 
         /// <summary>Where the L's inner corner sits, as a share of the window, before any flip.</summary>
+        [JsonPropertyName("imageCounter")]
+        public double ImageCounter { get; set; }
+
+        /// <summary>The photo's turn inside its window: its quarter turns, less any turn of the shape alone.</summary>
+        [JsonIgnore]
+        public double ImageAngle => ImageRotation + ImageCounter;
+
         [JsonPropertyName("notchX")]
         public double NotchX { get; set; } = 0.5;
 
@@ -617,6 +625,66 @@ namespace ModernImageViewer
                 points[i] = (flipH ? 1 - points[i].X : points[i].X, flipV ? 1 - points[i].Y : points[i].Y);
             }
             return points;
+        }
+
+        /// <summary>The outline placed in a rectangle, with its corners rounded. An oval has no corners to round. Null for a rectangle.</summary>
+        public static (double X, double Y)[]? Placed(CellGeometryDto? geometry, double x, double y, double width, double height, double radius = 0)
+        {
+            var unit = Outline(geometry);
+            if (unit == null) return null;
+            var points = unit.Select(p => (X: x + p.X * width, Y: y + p.Y * height)).ToArray();
+            return radius > 0 && geometry!.Shape != Oval ? Rounded(points, radius) : points;
+        }
+
+        /// <summary>
+        /// The size the photo needs, along its own axes, to cover the window's shape.
+        /// Only the shape has to be covered, so an oval needs less zoom than its rectangle would.
+        /// </summary>
+        public static (double Width, double Height) CoverBox(CellGeometryDto geometry, double width, double height)
+        {
+            var points = Outline(geometry) ?? new (double X, double Y)[] { (0, 0), (1, 0), (1, 1), (0, 1) };
+            double radians = geometry.ImageAngle * Math.PI / 180;
+            double cos = Math.Cos(radians);
+            double sin = Math.Sin(radians);
+            double reachX = 0;
+            double reachY = 0;
+            foreach (var p in points)
+            {
+                double x = (p.X - 0.5) * width;
+                double y = (p.Y - 0.5) * height;
+                reachX = Math.Max(reachX, Math.Abs(x * cos + y * sin));
+                reachY = Math.Max(reachY, Math.Abs(-x * sin + y * cos));
+            }
+            return (reachX * 2, reachY * 2);
+        }
+
+        private static (double X, double Y)[] Rounded((double X, double Y)[] points, double radius)
+        {
+            const int steps = 8;
+            var result = new List<(double X, double Y)>(points.Length * (steps + 1));
+            for (int i = 0; i < points.Length; i++)
+            {
+                var prev = points[(i + points.Length - 1) % points.Length];
+                var at = points[i];
+                var next = points[(i + 1) % points.Length];
+                double toPrev = Math.Sqrt((prev.X - at.X) * (prev.X - at.X) + (prev.Y - at.Y) * (prev.Y - at.Y));
+                double toNext = Math.Sqrt((next.X - at.X) * (next.X - at.X) + (next.Y - at.Y) * (next.Y - at.Y));
+                double cut = Math.Min(radius, Math.Min(toPrev, toNext) / 2);
+                if (cut < 0.01)
+                {
+                    result.Add(at);
+                    continue;
+                }
+                var start = (X: at.X + (prev.X - at.X) / toPrev * cut, Y: at.Y + (prev.Y - at.Y) / toPrev * cut);
+                var end = (X: at.X + (next.X - at.X) / toNext * cut, Y: at.Y + (next.Y - at.Y) / toNext * cut);
+                for (int s = 0; s <= steps; s++)
+                {
+                    double t = s / (double)steps;
+                    double a = (1 - t) * (1 - t), b = 2 * (1 - t) * t, c = t * t;
+                    result.Add((a * start.X + b * at.X + c * end.X, a * start.Y + b * at.Y + c * end.Y));
+                }
+            }
+            return result.ToArray();
         }
 
         private static (double X, double Y)[] OvalPoints(int count)
