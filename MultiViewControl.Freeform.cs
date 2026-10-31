@@ -135,6 +135,15 @@ namespace ModernImageViewer
             int zIndex = restoreDto?.ZIndex ?? (++_maxFreeformZIndex);
             if (zIndex > _maxFreeformZIndex) _maxFreeformZIndex = zIndex;
 
+            // The new cell clones the source cell's image turn. The window itself starts plain.
+            var geometry = restoreDto?.Geometry?.Clone() ?? new CellGeometryDto
+            {
+                ImageRotation = GetGeometry(item).ImageRotation,
+                ImageFlipH = GetGeometry(item).ImageFlipH,
+                ImageFlipV = GetGeometry(item).ImageFlipV
+            };
+            _cellGeometry[freeformItem] = geometry;
+
             // Add freeformItem to _items (so if there were 4 images, total cells increases to 5!)
             _items.Add(freeformItem);
             int newSlot = _items.Count - 1;
@@ -181,6 +190,8 @@ namespace ModernImageViewer
 
             _freeformCards.Add(card);
             FreeformCanvas.Children.Add(freeformCell);
+            ApplyWindowGeometry(card);
+            freeformCell.SizeChanged += (_, _) => ApplyWindowGeometry(card);
 
             EnsureCellRootsCapacity(_items.Count);
             _cellRoots[newSlot] = freeformCell;
@@ -270,6 +281,7 @@ namespace ModernImageViewer
             {
                 _hiddenItems.Remove(card.Item);
                 _itemBorders.Remove(card.Item);
+                _cellGeometry.Remove(card.Item);
                 ForgetCell(card.Container);
                 _items.RemoveAt(index);
                 var roots = new List<FrameworkElement?>(_cellRoots);

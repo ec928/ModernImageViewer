@@ -652,7 +652,7 @@ namespace ModernImageViewer
             SaveText.Text = "Saving\u2026";
             try
             {
-                await RenderJpegAsync(file, shots, width, height);
+                await RenderJpegAsync(file, shots, width, height, _canvasColor, _canvasSurface);
                 string? savedDir = Path.GetDirectoryName(file.Path);
                 if (!string.IsNullOrEmpty(savedDir)) MainWindow.Instance?.AddMultiViewSaveLocation(savedDir);
             }
@@ -718,9 +718,19 @@ namespace ModernImageViewer
                 int nativeW = bitmap.PixelWidth;
                 int nativeH = bitmap.PixelHeight;
 
-                Rect bounds = rootElem.TransformToVisual(CellsGrid).TransformBounds(new Rect(0, 0, rootElem.ActualWidth, rootElem.ActualHeight));
-                Rect cardBounds = root.TransformToVisual(CellsGrid).TransformBounds(new Rect(0, 0, root.ActualWidth, root.ActualHeight));
-                Rect photoBounds = cell.TransformToVisual(CellsGrid).TransformBounds(new Rect(0, 0, cell.ActualWidth, cell.ActualHeight));
+                // Measured inside the cell, then placed, so a turned window gives its own rectangle and not the box around it.
+                var floating = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Container, rootElem));
+                Point origin = floating != null
+                    ? new Point(Canvas.GetLeft(rootElem), Canvas.GetTop(rootElem))
+                    : rootElem.TransformToVisual(CellsGrid).TransformPoint(new Point(0, 0));
+                Rect Placed(FrameworkElement element)
+                {
+                    Rect local = element.TransformToVisual(rootElem).TransformBounds(new Rect(0, 0, element.ActualWidth, element.ActualHeight));
+                    return new Rect(origin.X + local.X, origin.Y + local.Y, local.Width, local.Height);
+                }
+                Rect bounds = new Rect(origin.X, origin.Y, rootElem.ActualWidth, rootElem.ActualHeight);
+                Rect cardBounds = Placed(root);
+                Rect photoBounds = Placed(cell);
                 if (container.RenderTransform is not CompositeTransform transform) continue;
                 shots.Add(new CellShot
                 {
@@ -738,19 +748,43 @@ namespace ModernImageViewer
                     CanvasW = canvasW,
                     CanvasH = canvasH,
                     Border = GetBorderForItem(_items[i]).Clone(),
-                    IsHidden = _hiddenItems.Contains(_items[i])
+                    IsHidden = _hiddenItems.Contains(_items[i]),
+                    Geometry = GetGeometry(_items[i]).Clone()
                 });
             }
 
             return shots;
         }
 
-        private static async Task RenderJpegAsync(StorageFile file, List<CellShot> shots, int width, int height)
+        private static async Task RenderJpegAsync(StorageFile file, List<CellShot> shots, int width, int height, string canvasColor, string canvasSurface)
         {
             var device = CanvasDevice.GetSharedDevice();
             using var target = new CanvasRenderTarget(device, width, height, 96);
             using (var clear = target.CreateDrawingSession())
-                clear.Clear(Color.FromArgb(255, 10, 10, 10));
+            {
+                var near = ToColor(FrameColor.Parse(canvasColor));
+                var far = ToColor(CanvasLook.FarColor(canvasColor));
+                clear.Clear(near);
+                if (canvasSurface == CanvasLook.Gradient)
+                {
+                    using var brush = new CanvasLinearGradientBrush(device, near, far)
+                    {
+                        StartPoint = new System.Numerics.Vector2(0, 0),
+                        EndPoint = new System.Numerics.Vector2(width, height)
+                    };
+                    clear.FillRectangle(0, 0, width, height, brush);
+                }
+                else if (canvasSurface == CanvasLook.Vignette)
+                {
+                    using var brush = new CanvasRadialGradientBrush(device, near, far)
+                    {
+                        Center = new System.Numerics.Vector2(width / 2f, height / 2f),
+                        RadiusX = width * 0.75f,
+                        RadiusY = height * 0.75f
+                    };
+                    clear.FillRectangle(0, 0, width, height, brush);
+                }
+            }
 
             foreach (var shot in shots)
             {
@@ -789,22 +823,36 @@ namespace ModernImageViewer
                 double cardW = shot.Card.Width * scaleX;
                 double cardH = shot.Card.Height * scaleY;
 
+                // A freeform window turns as a whole and may have an outline of its own.
+                var cellRect = new Rect(shot.Cell.X * scaleX, shot.Cell.Y * scaleY, shot.Cell.Width * scaleX, shot.Cell.Height * scaleY);
+                var cellCenter = new System.Numerics.Vector2((float)(cellRect.X + cellRect.Width / 2), (float)(cellRect.Y + cellRect.Height / 2));
+                var windowTurn = System.Numerics.Matrix3x2.CreateRotation((float)((shot.Geometry?.WindowRotation ?? 0) * Math.PI / 180), cellCenter);
+                var outline = WindowShapes.Outline(shot.Geometry?.Shape, shot.Geometry?.ShapeFlipH == true, shot.Geometry?.ShapeFlipV == true);
+                using CanvasGeometry? shape = outline == null ? null : CanvasGeometry.CreatePolygon(device, outline
+                    .Select(p => new System.Numerics.Vector2((float)(cellRect.X + p.X * cellRect.Width), (float)(cellRect.Y + p.Y * cellRect.Height)))
+                    .ToArray());
+
                 // The mat is the cell around the photo. The photo is drawn inside the card, so it does not cover the gutter.
                 var mat = FrameColor.MatFill(shot.Border?.GutterMaterial, shot.Border?.GutterColor);
                 if (mat.A > 0)
                 {
                     using var matSession = target.CreateDrawingSession();
+                    matSession.Transform = windowTurn;
                     float slotX = (float)(shot.Cell.X * scaleX);
                     float slotY = (float)(shot.Cell.Y * scaleY);
                     float slotW = (float)(shot.Cell.Width * scaleX);
                     float slotH = (float)(shot.Cell.Height * scaleY);
-                    matSession.FillRectangle(slotX, slotY, slotW, slotH, Color.FromArgb(mat.A, mat.R, mat.G, mat.B));
+                    if (shape != null)
+                        matSession.FillGeometry(shape, Color.FromArgb(mat.A, mat.R, mat.G, mat.B));
+                    else
+                        matSession.FillRectangle(slotX, slotY, slotW, slotH, Color.FromArgb(mat.A, mat.R, mat.G, mat.B));
                 }
 
                 // 1. Draw Drop Shadow or Ambient Rim Glow
-                if (shot.Border != null && shot.Border.ShadowIntensity > 0)
+                if (shape == null && shot.Border != null && shot.Border.ShadowIntensity > 0)
                 {
                     using var shadowSession = target.CreateDrawingSession();
+                    shadowSession.Transform = windowTurn;
                     if (shot.Border.RimGlow)
                     {
                         byte baseAlpha = (byte)Math.Clamp(shot.Border.ShadowIntensity * 1.6, 12, 190);
@@ -864,29 +912,52 @@ namespace ModernImageViewer
                 // 2. Draw Image with Rounded or Sharp Clipping
                 using (var session = target.CreateDrawingSession())
                 {
+                    session.Transform = windowTurn;
                     string strokeStyle = shot.Border?.StrokeStyle ?? "Solid";
                     float strokeW = (float)(Math.Max(0, shot.Border?.Thickness ?? 0) * scaleX);
 
-                    if (rx > 0 && ry > 0)
+                    void DrawPhoto()
                     {
-                        float innerRx = Math.Max(0, rx - strokeW / 2.0f);
-                        float innerRy = Math.Max(0, ry - strokeW / 2.0f);
-                        using var clip = CanvasGeometry.CreateRoundedRectangle(device, (float)x0, (float)y0, (float)(x1 - x0), (float)(y1 - y0), innerRx, innerRy);
-                        using (session.CreateLayer(1f, clip))
-                        {
-                            session.DrawImage(bitmap, dest);
-                        }
+                        var center = new System.Numerics.Vector2((float)(dest.X + dest.Width / 2), (float)(dest.Y + dest.Height / 2));
+                        var flip = System.Numerics.Matrix3x2.CreateScale(
+                            shot.Geometry?.ImageFlipH == true ? -1f : 1f,
+                            shot.Geometry?.ImageFlipV == true ? -1f : 1f,
+                            center);
+                        var turn = System.Numerics.Matrix3x2.CreateRotation((float)((shot.Geometry?.ImageRotation ?? 0) * Math.PI / 180), center);
+                        session.Transform = flip * turn * windowTurn;
+                        session.DrawImage(bitmap, dest);
+                        session.Transform = windowTurn;
                     }
-                    else
+
+                    using (shape == null ? null : session.CreateLayer(1f, shape))
                     {
-                        using (session.CreateLayer(1f, new Rect(x0, y0, x1 - x0, y1 - y0)))
+                        if (rx > 0 && ry > 0)
                         {
-                            session.DrawImage(bitmap, dest);
+                            float innerRx = Math.Max(0, rx - strokeW / 2.0f);
+                            float innerRy = Math.Max(0, ry - strokeW / 2.0f);
+                            using var clip = CanvasGeometry.CreateRoundedRectangle(device, (float)x0, (float)y0, (float)(x1 - x0), (float)(y1 - y0), innerRx, innerRy);
+                            using (session.CreateLayer(1f, clip))
+                            {
+                                DrawPhoto();
+                            }
+                        }
+                        else
+                        {
+                            using (session.CreateLayer(1f, new Rect(x0, y0, x1 - x0, y1 - y0)))
+                            {
+                                DrawPhoto();
+                            }
                         }
                     }
 
                     // 3. Draw Stroke (Solid, Dashed, InnerMuted, Gradient)
-                    if (string.Equals(strokeStyle, "InnerMuted", StringComparison.OrdinalIgnoreCase))
+                    if (shape != null)
+                    {
+                        var outlineColor = ParseColor(shot.Border?.Color);
+                        if (strokeW > 0 && outlineColor.A > 0)
+                            session.DrawGeometry(shape, outlineColor, strokeW);
+                    }
+                    else if (string.Equals(strokeStyle, "InnerMuted", StringComparison.OrdinalIgnoreCase))
                     {
                         if (strokeW <= 0) { }
                         else
@@ -1049,7 +1120,8 @@ namespace ModernImageViewer
                 Canvas = new CanvasLayoutDto
                 {
                     Aspect = AspectText?.Text,
-                    BackgroundColor = null
+                    BackgroundColor = _canvasColor,
+                    Surface = _canvasSurface
                 },
                 State = new LayoutStateDto
                 {
@@ -1074,7 +1146,8 @@ namespace ModernImageViewer
                     Path = item.Path ?? string.Empty,
                     Name = item.Name,
                     Hidden = _hiddenItems.Contains(item),
-                    Border = GetBorderForItem(item).Clone()
+                    Border = GetBorderForItem(item).Clone(),
+                    Geometry = GetGeometry(item).Clone()
                 };
 
                 if (i < _cellRoots.Length && _cellRoots[i]?.Tag is CellParts parts)
@@ -1106,7 +1179,8 @@ namespace ModernImageViewer
                         Zoom = (card.Container.Tag as CellParts)?.Transform?.ScaleX,
                         PanX = (card.Container.Tag as CellParts)?.Transform?.TranslateX,
                         PanY = (card.Container.Tag as CellParts)?.Transform?.TranslateY,
-                        Border = GetBorderForItem(card.Item).Clone()
+                        Border = GetBorderForItem(card.Item).Clone(),
+                        Geometry = GetGeometry(card.Item).Clone()
                     });
                 }
             }
@@ -1175,11 +1249,13 @@ namespace ModernImageViewer
 
             // Clear the cells of the session being replaced before anything counts them.
             ClearAllFreeformCards();
+            SetCanvas(layoutFile.Canvas?.BackgroundColor, layoutFile.Canvas?.Surface);
 
             if (layoutFile.Photos != null && layoutFile.Photos.Count > 0)
             {
                 _hiddenItems.Clear();
                 _itemBorders.Clear();
+                _cellGeometry.Clear();
                 var items = new List<ImageItem>();
                 foreach (var photo in layoutFile.Photos)
                 {
@@ -1196,6 +1272,8 @@ namespace ModernImageViewer
                     }
                     if (photo.Hidden)
                         _hiddenItems.Add(it);
+                    if (photo.Geometry != null)
+                        _cellGeometry[it] = photo.Geometry.Clone();
                 }
                 _items.Clear();
                 _items.AddRange(items);
@@ -1325,6 +1403,7 @@ namespace ModernImageViewer
             public double CanvasW;
             public double CanvasH;
             public CellBorderDto? Border;
+            public CellGeometryDto? Geometry;
         }
     }
 }

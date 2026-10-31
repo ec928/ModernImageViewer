@@ -54,6 +54,9 @@ namespace ModernImageViewer
 
         [JsonPropertyName("backgroundColor")]
         public string? BackgroundColor { get; set; }
+
+        [JsonPropertyName("surface")]
+        public string? Surface { get; set; }
     }
 
     public sealed class LayoutStateDto
@@ -105,6 +108,9 @@ namespace ModernImageViewer
 
         [JsonPropertyName("border")]
         public CellBorderDto? Border { get; set; }
+
+        [JsonPropertyName("geometry")]
+        public CellGeometryDto? Geometry { get; set; }
     }
 
     public sealed class FreeformCellDto
@@ -147,6 +153,9 @@ namespace ModernImageViewer
 
         [JsonPropertyName("border")]
         public CellBorderDto? Border { get; set; }
+
+        [JsonPropertyName("geometry")]
+        public CellGeometryDto? Geometry { get; set; }
     }
 
     public sealed class CellBorderDto
@@ -537,6 +546,107 @@ namespace ModernImageViewer
             if (value < min) return min;
             if (value > max) return max;
             return value;
+        }
+    }
+
+    /// <summary>How a cell turns its image, and on a freeform cell the shape and turn of the window itself.</summary>
+    public sealed class CellGeometryDto
+    {
+        [JsonPropertyName("imageRotation")]
+        public int ImageRotation { get; set; }
+
+        [JsonPropertyName("imageFlipH")]
+        public bool ImageFlipH { get; set; }
+
+        [JsonPropertyName("imageFlipV")]
+        public bool ImageFlipV { get; set; }
+
+        [JsonPropertyName("shape")]
+        public string Shape { get; set; } = WindowShapes.Rectangle;
+
+        [JsonPropertyName("shapeFlipH")]
+        public bool ShapeFlipH { get; set; }
+
+        [JsonPropertyName("shapeFlipV")]
+        public bool ShapeFlipV { get; set; }
+
+        [JsonPropertyName("windowRotation")]
+        public double WindowRotation { get; set; }
+
+        public void TurnImage(int degrees) => ImageRotation = ((ImageRotation + degrees) % 360 + 360) % 360;
+
+        public CellGeometryDto Clone() => (CellGeometryDto)MemberwiseClone();
+    }
+
+    /// <summary>Freeform window outlines, as corners in a unit square. A rectangle has no outline.</summary>
+    public static class WindowShapes
+    {
+        public const string Rectangle = "Rectangle";
+        public const string LShape = "L-shape";
+        public const string Oval = "Circle / Oval";
+        public const string Triangle = "Triangle";
+
+        public static readonly string[] All = { Rectangle, LShape, Oval, Triangle };
+
+        public static (double X, double Y)[]? Outline(string? shape, bool flipH = false, bool flipV = false)
+        {
+            (double X, double Y)[]? points = shape switch
+            {
+                LShape => new (double, double)[] { (0, 0), (0.5, 0), (0.5, 0.5), (1, 0.5), (1, 1), (0, 1) },
+                Triangle => new (double, double)[] { (0.5, 0), (1, 1), (0, 1) },
+                Oval => OvalPoints(72),
+                _ => null
+            };
+            if (points == null) return null;
+            for (int i = 0; i < points.Length; i++)
+            {
+                points[i] = (flipH ? 1 - points[i].X : points[i].X, flipV ? 1 - points[i].Y : points[i].Y);
+            }
+            return points;
+        }
+
+        private static (double X, double Y)[] OvalPoints(int count)
+        {
+            var points = new (double X, double Y)[count];
+            for (int i = 0; i < count; i++)
+            {
+                double a = 2 * Math.PI * i / count;
+                points[i] = (0.5 + 0.5 * Math.Cos(a), 0.5 + 0.5 * Math.Sin(a));
+            }
+            return points;
+        }
+    }
+
+    /// <summary>What the canvas shows behind the cells, on screen and in the export.</summary>
+    public static class CanvasLook
+    {
+        public const string Solid = "Solid";
+        public const string Gradient = "Gradient";
+        public const string Vignette = "Vignette";
+        public const string DefaultColor = "#FF0A0A0A";
+
+        public static readonly string[] Surfaces = { Solid, Gradient, Vignette };
+
+        public static readonly (string Name, string Hex)[] Colors =
+        {
+            ("Near black", DefaultColor),
+            ("Black", "#FF000000"),
+            ("White", "#FFFFFFFF"),
+            ("Warm white", "#FFF4EFE6"),
+            ("Grey", "#FF808080"),
+            ("Slate", "#FF2F3B47"),
+            ("Navy", "#FF14213D"),
+            ("Forest", "#FF1F3A2D"),
+            ("Burgundy", "#FF4A1525")
+        };
+
+        /// <summary>The far colour of a gradient or vignette: darker, or lighter when the colour is already black.</summary>
+        public static FrameColor.Rgba FarColor(string? hex)
+        {
+            var c = FrameColor.Parse(hex);
+            if (c.R < 24 && c.G < 24 && c.B < 24)
+                return new FrameColor.Rgba(c.A, 48, 48, 48);
+            return new FrameColor.Rgba(c.A, (byte)(c.R * 0.45), (byte)(c.G * 0.45), (byte)(c.B * 0.45));
         }
     }
 

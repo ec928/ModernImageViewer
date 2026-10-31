@@ -56,6 +56,10 @@ namespace ModernImageViewer
                 _hiddenItems.Add(to);
             else
                 _hiddenItems.Remove(to);
+            if (_cellGeometry.Remove(from, out var geometry))
+                _cellGeometry[to] = geometry;
+            else
+                _cellGeometry.Remove(to);
         }
 
         /// <summary>Two cells are exchanging content. Each keeps its own frame and hidden state.</summary>
@@ -69,6 +73,10 @@ namespace ModernImageViewer
             bool hiddenB = _hiddenItems.Remove(b);
             if (hiddenA) _hiddenItems.Add(b);
             if (hiddenB) _hiddenItems.Add(a);
+            bool turnedA = _cellGeometry.Remove(a, out var geometryA);
+            bool turnedB = _cellGeometry.Remove(b, out var geometryB);
+            if (turnedA) _cellGeometry[b] = geometryA!;
+            if (turnedB) _cellGeometry[a] = geometryB!;
         }
 
         /// <summary>Show this cell's hidden state: the placeholder alone, or the image with its frame.</summary>
@@ -81,6 +89,7 @@ namespace ModernImageViewer
                 parts.ImageContainer.Visibility = hidden ? Visibility.Collapsed : Visibility.Visible;
             if (parts.HiddenPlaceholder != null)
                 parts.HiddenPlaceholder.Visibility = hidden ? Visibility.Visible : Visibility.Collapsed;
+            parts.Bound.ApplyGeometry?.Invoke();
             ApplyBorderToCell(slot);
         }
 
@@ -133,7 +142,6 @@ namespace ModernImageViewer
                 cellBorder.BorderBrush = null;
                 cellBorder.CornerRadius = new CornerRadius(0);
                 cellBorder.Shadow = null;
-                cellBorder.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 10, 10, 10));
 
                 if (dashedRect != null) dashedRect.Visibility = Visibility.Collapsed;
                 if (rimGlowRect != null) rimGlowRect.Visibility = Visibility.Collapsed;

@@ -204,7 +204,7 @@
         </Style>
     </UserControl.Resources>
 
-    <Grid x:Name="RootGrid" Background="#FF080808" RequestedTheme="Dark" PointerMoved="RootGrid_PointerMoved"
+    <Grid x:Name="RootGrid" Background="#FF0A0A0A" RequestedTheme="Dark" PointerMoved="RootGrid_PointerMoved"
           IsTabStop="True" UseSystemFocusVisuals="False" FocusVisualPrimaryThickness="0" FocusVisualSecondaryThickness="0">
         <!-- Main Tiled Layout Container (Zero wasted space: edge to edge) -->
         <Grid x:Name="CellsGrid" Margin="0" Canvas.ZIndex="10">
@@ -422,6 +422,20 @@
                             <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE74E;" FontSize="14" />
                             <TextBlock x:Name="SaveText" Text="Save/Load" VerticalAlignment="Center" FontSize="13" />
                         </StackPanel>
+                    </Button>
+
+                    <Button x:Name="AdvancedButton"
+                            Style="{StaticResource QuietButtonStyle}"
+                            Padding="8,5"
+                            CornerRadius="12"
+                            AutomationProperties.Name="Advanced options"
+                            ToolTipService.ToolTip="Advanced options">
+                        <Button.Flyout>
+                            <MenuFlyout x:Name="AdvancedMenuFlyout"
+                                        MenuFlyoutPresenterStyle="{StaticResource MultiViewMenuFlyoutPresenterStyle}"
+                                        Opening="AdvancedFlyout_Opening" Opened="HudMenu_Opened" Closed="HudMenu_Closed"/>
+                        </Button.Flyout>
+                        <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE713;" FontSize="14" />
                     </Button>
                 </StackPanel>
             </Border>

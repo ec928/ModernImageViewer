@@ -113,6 +113,8 @@ namespace ModernImageViewer
             ClearAllFreeformCards();
             _hiddenItems.Clear();
             _itemBorders.Clear();
+            _cellGeometry.Clear();
+            SetCanvas(null, null);
             _lastBorderSettings = null;
             _cellRoots = Array.Empty<FrameworkElement?>();
 
@@ -140,6 +142,8 @@ namespace ModernImageViewer
             ClearAllFreeformCards();
             _hiddenItems.Clear();
             _itemBorders.Clear();
+            _cellGeometry.Clear();
+            SetCanvas(null, null);
             _lastBorderSettings = null;
             _cellRoots = Array.Empty<FrameworkElement?>();
             _items.Clear();
@@ -1241,7 +1245,6 @@ namespace ModernImageViewer
 
             var cellBorder = new Border
             {
-                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 10, 10, 10)),
                 BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 28, 28, 28)),
                 BorderThickness = new Thickness(0),
                 Margin = new Thickness(0)
@@ -1294,6 +1297,15 @@ namespace ModernImageViewer
                 VerticalAlignment = VerticalAlignment.Stretch
             };
 
+            var photo = new CellPhoto(item)
+            {
+                SetDimensions = (w, h) => { naturalWidth = w; naturalHeight = h; },
+                GetDimensions = () => (naturalWidth, naturalHeight)
+            };
+
+            // A quarter turn swaps the box the photo needs. The container stays unturned and its transform turns it.
+            bool ImageTurned() => GetGeometry(photo.Item).ImageRotation % 180 != 0;
+
             // Layout & Clamping helpers for this cell
             void ClampTranslation()
             {
@@ -1301,8 +1313,9 @@ namespace ModernImageViewer
                 double cellH = cellGrid.ActualHeight;
                 if (cellW <= 0 || cellH <= 0 || imgContainer.Width <= 0 || imgContainer.Height <= 0) return;
 
-                double effW = imgContainer.Width * transform.ScaleX;
-                double effH = imgContainer.Height * transform.ScaleY;
+                bool turned = ImageTurned();
+                double effW = (turned ? imgContainer.Height : imgContainer.Width) * transform.ScaleX;
+                double effH = (turned ? imgContainer.Width : imgContainer.Height) * transform.ScaleY;
 
                 if (effW > cellW)
                 {
@@ -1345,7 +1358,8 @@ namespace ModernImageViewer
 
                 cellGrid.Clip = new RectangleGeometry { Rect = new Rect(0, 0, cellW, cellH) };
 
-                double imgAspect = naturalWidth / naturalHeight;
+                bool turned = ImageTurned();
+                double imgAspect = turned ? naturalHeight / naturalWidth : naturalWidth / naturalHeight;
                 double cellAspect = cellW / cellH;
 
                 double targetW, targetH;
@@ -1381,8 +1395,8 @@ namespace ModernImageViewer
                     }
                 }
 
-                imgContainer.Width = targetW;
-                imgContainer.Height = targetH;
+                imgContainer.Width = turned ? targetH : targetW;
+                imgContainer.Height = turned ? targetW : targetH;
                 ClampTranslation();
             }
 
@@ -1397,11 +1411,6 @@ namespace ModernImageViewer
                 }
             };
 
-            var photo = new CellPhoto(item)
-            {
-                SetDimensions = (w, h) => { naturalWidth = w; naturalHeight = h; },
-                GetDimensions = () => (naturalWidth, naturalHeight)
-            };
             void LoadPhoto()
             {
                 var current = photo.Item;
@@ -1436,6 +1445,21 @@ namespace ModernImageViewer
                 catch { }
             }
             photo.Reload = LoadPhoto;
+            photo.ApplyGeometry = () =>
+            {
+                var geometry = GetGeometry(photo.Item);
+                transform.Rotation = geometry.ImageRotation;
+                double flipX = geometry.ImageFlipH ? -1 : 1;
+                double flipY = geometry.ImageFlipV ? -1 : 1;
+                fullImg.RenderTransformOrigin = new Point(0.5, 0.5);
+                fullImg.RenderTransform = new ScaleTransform { ScaleX = flipX, ScaleY = flipY };
+                if (thumb != null)
+                {
+                    thumb.RenderTransformOrigin = new Point(0.5, 0.5);
+                    thumb.RenderTransform = new ScaleTransform { ScaleX = flipX, ScaleY = flipY };
+                }
+                UpdateImageLayout();
+            };
             LoadPhoto();
 
             imgContainer.Children.Add(fullImg);
@@ -1609,8 +1633,8 @@ namespace ModernImageViewer
 
                 double cellW = cellGrid.ActualWidth;
                 double cellH = cellGrid.ActualHeight;
-                double baseW = imgContainer.Width;
-                double baseH = imgContainer.Height;
+                double baseW = ImageTurned() ? imgContainer.Height : imgContainer.Width;
+                double baseH = ImageTurned() ? imgContainer.Width : imgContainer.Height;
 
                 // Scale factor where whole picture fits into cell (unlock zoom out in fill mode!)
                 double fitScale = 1.0;
@@ -1911,6 +1935,7 @@ namespace ModernImageViewer
 
             cellBorder.Child = cellGrid;
             ApplyBorderToCellBorder(cellBorder, cellGrid, photo.Item);
+            photo.ApplyGeometry?.Invoke();
             return slotGrid;
         }
 
@@ -2070,6 +2095,8 @@ namespace ModernImageViewer
             borderItem.Click += (s, e) => OpenCellBorderFlyout(item);
             menu.Items.Add(borderItem);
 
+            AddCellAdvancedMenu(menu, item);
+
             var removeItem = new MenuFlyoutItem { Text = "Remove from View", Icon = new FontIcon { Glyph = "\uE8BB" } };
             removeItem.Click += (s, e) => RemoveItem(item);
             menu.Items.Add(removeItem);
@@ -2158,6 +2185,7 @@ namespace ModernImageViewer
         {
             public ImageItem Item { get; set; }
             public Action? Reload { get; set; }
+            public Action? ApplyGeometry { get; set; }
             public Action<double, double>? SetDimensions { get; set; }
             public Func<(double Width, double Height)>? GetDimensions { get; set; }
             public CellPhoto(ImageItem item) { Item = item; }
@@ -2181,6 +2209,7 @@ namespace ModernImageViewer
             if (index < 0) return;
             _hiddenItems.Remove(item);
             _itemBorders.Remove(item);
+            _cellGeometry.Remove(item);
             int visibleBefore = VisibleCount(GridCellCount);
             bool cellsReady = CellRootsReady();
             _items.RemoveAt(index);
@@ -2694,16 +2723,19 @@ namespace ModernImageViewer
 
             // Each on-screen cell keeps its frame and hidden state, whatever image it now shows.
             var frames = new CellBorderDto?[slots];
+            var turns = new CellGeometryDto?[slots];
             var hidden = new bool[slots];
             for (int i = 0; i < slots; i++)
             {
                 _itemBorders.TryGetValue(_items[i], out frames[i]);
+                _cellGeometry.TryGetValue(_items[i], out turns[i]);
                 hidden[i] = _hiddenItems.Contains(_items[i]);
             }
             int oldGrid = GridCellCount;
             for (int i = 0; i < oldGrid; i++)
             {
                 _itemBorders.Remove(_items[i]);
+                _cellGeometry.Remove(_items[i]);
                 _hiddenItems.Remove(_items[i]);
             }
 
@@ -2721,6 +2753,7 @@ namespace ModernImageViewer
             for (int i = 0; i < slots; i++)
             {
                 if (frames[i] != null) _itemBorders[_items[i]] = frames[i]!;
+                if (turns[i] != null) _cellGeometry[_items[i]] = turns[i]!;
                 if (hidden[i]) _hiddenItems.Add(_items[i]);
                 if (_cellRoots[i]?.Tag is CellParts parts)
                 {
