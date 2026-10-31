@@ -311,19 +311,15 @@ namespace ModernImageViewer
             bool show = shown > 1;
             if (!show)
             {
-                CountsButton.Visibility = Visibility.Collapsed;
+                CountsSwitch.Visibility = Visibility.Collapsed;
                 return;
             }
 
             int lines = EffectiveLines();
-            bool rows = !_flipped;
-            string noun = rows ? (lines == 1 ? "Row" : "Rows") : (lines == 1 ? "Column" : "Columns");
-
-            CountsButton.Visibility = Visibility.Visible;
-            CountsText.Text = $"{lines} {noun}";
-
-            ToolTipService.SetToolTip(CountsButton,
-                "Edit the lines. Choose rows or columns, or press R. Plus and minus change how many.");
+            CountsSwitch.Visibility = Visibility.Visible;
+            RowsSideText.Text = _flipped ? "Rows" : lines + (lines == 1 ? " Row" : " Rows");
+            ColumnsSideText.Text = _flipped ? lines + (lines == 1 ? " Column" : " Columns") : "Columns";
+            ShowCountsSides();
             RefreshGridLayoutEnabled();
         }
 
@@ -345,8 +341,9 @@ namespace ModernImageViewer
         private void RefreshGridLayoutEnabled()
         {
             bool enabled = CanEditGridLayout;
-            CountsButton.IsEnabled = enabled;
-            if (!enabled) CountsButton.Flyout?.Hide();
+            RowsSide.IsEnabled = enabled;
+            ColumnsSide.IsEnabled = enabled;
+            if (!enabled) CountsFlyout.Hide();
         }
 
         private static double WeightAt(MosaicLayout node, int index)

@@ -41,6 +41,12 @@ namespace ModernImageViewer
         private int _soloIndex = -1;
         private int _lines = 1;
         private int[]? _lineCounts;
+        private const int CountsCardDismissGraceMs = 500;
+        private const int CountsCardOpenDelayMs = 60;
+        private long _countsCardClosedAt;
+        private bool _countsCardClosing;
+        private bool _reopenCountsCard;
+        private TextBlock? _lineCountLabel;
         private ScrollViewer? _countsScroll;
         private double _countsScrollOffset;
         private double _countsScrollAcross;
@@ -86,6 +92,13 @@ namespace ModernImageViewer
             RootGrid.PointerReleased += SegmentGesture_PointerReleased;
             RootGrid.PointerCaptureLost += SegmentGesture_PointerReleased;
             AttachUndoWatchers();
+            // Clicks on the switch reach it while the card is open, so one click can change sides.
+            CountsFlyout.OverlayInputPassThroughElement = CountsSwitch;
+            CountsFlyout.Closing += (_, _) =>
+            {
+                _countsCardClosing = true;
+                _countsCardClosedAt = Environment.TickCount64;
+            };
             SizeChanged += (_, e) =>
             {
                 RefreshCanvasLabel();
@@ -220,14 +233,61 @@ namespace ModernImageViewer
         private void CountsFlyout_Opened(object sender, object e)
         {
             HudMenu_Opened(sender, e);
-            HoldFlyoutSource(CountsButton, true);
+            ShowCountsSides();
             DispatcherQueue.TryEnqueue(ApplyGridLayoutTheme);
         }
 
         private void CountsFlyout_Closed(object sender, object e)
         {
-            HoldFlyoutSource(CountsButton, false);
+            _countsCardClosing = false;
+            ShowCountsSides();
             HudMenu_Closed(sender, e);
+            if (_reopenCountsCard) ShowCountsCard();
+        }
+
+        private void RowsSide_Click(object sender, RoutedEventArgs e) => CountsSide_Click(wantRows: true);
+
+        private void ColumnsSide_Click(object sender, RoutedEventArgs e) => CountsSide_Click(wantRows: false);
+
+        /// <summary>The other side switches and opens the card. The chosen side opens the card, or closes it.</summary>
+        private void CountsSide_Click(bool wantRows)
+        {
+            if (wantRows == _flipped)
+            {
+                ToggleRowsColumns();
+                ShowCountsCard();
+                return;
+            }
+            // A press on the switch has already dismissed an open card by the time the click arrives.
+            bool wasOpen = IsLayoutFlyoutOpen || _countsCardClosing || Environment.TickCount64 - _countsCardClosedAt < CountsCardDismissGraceMs;
+            if (wasOpen) CountsFlyout.Hide();
+            else ShowCountsCard();
+        }
+
+        /// <summary>Waits out the click that asked for it, whose pointer release would dismiss a card opened any sooner.</summary>
+        private void ShowCountsCard()
+        {
+            _reopenCountsCard = _countsCardClosing;
+            if (_reopenCountsCard) return;
+            var wait = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(CountsCardOpenDelayMs) };
+            wait.Tick += (_, _) =>
+            {
+                wait.Stop();
+                if (CountsSwitch.Visibility == Visibility.Visible && !IsLayoutFlyoutOpen)
+                    CountsFlyout.ShowAt(CountsSwitch);
+            };
+            wait.Start();
+        }
+
+        /// <summary>The chosen side carries a plate, and a brighter one while the card is open.</summary>
+        private void ShowCountsSides()
+        {
+            var chosen = _flipped ? ColumnsSide : RowsSide;
+            var other = _flipped ? RowsSide : ColumnsSide;
+            HoldFlyoutSource(other, false);
+            HoldFlyoutSource(chosen, IsLayoutFlyoutOpen);
+            if (!IsLayoutFlyoutOpen)
+                chosen.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF));
         }
 
         /// <summary>
@@ -281,7 +341,7 @@ namespace ModernImageViewer
             return null;
         }
 
-        private bool IsLayoutFlyoutOpen => CountsButton?.Flyout?.IsOpen == true;
+        private bool IsLayoutFlyoutOpen => CountsFlyout?.IsOpen == true;
 
         /// <summary>
         /// The steppers are RepeatButtons. Rebuilding the card on a click destroys the
@@ -366,6 +426,7 @@ namespace ModernImageViewer
             bool canMore = lines < total;
             ApplyStepState(_lineLess, canLess, canLess ? "Fewer " + noun : "Minimum reached");
             ApplyStepState(_lineMore, canMore, canMore ? "More " + noun : "Maximum reached");
+            if (_lineCountLabel != null) _lineCountLabel.Text = LineCountText(lines, rows);
         }
 
         private static void ApplyStepState(RepeatButton button, bool enabled, string tip)
@@ -403,6 +464,9 @@ namespace ModernImageViewer
             });
             CountsPanel.Children.Add(BuildLayoutLines(counts, rows));
         }
+
+        private static string LineCountText(int lines, bool rows) =>
+            lines + " " + (rows ? (lines == 1 ? "row" : "rows") : (lines == 1 ? "column" : "columns"));
 
         private string LayoutSubtitle(int lines, bool rows)
         {
@@ -510,44 +574,14 @@ namespace ModernImageViewer
             grid.Children.Add(leftRule);
             grid.Children.Add(rightRule);
 
-            var choice = BuildOrientationChoice(rows);
-            Grid.SetColumn(choice, 2);
-            grid.Children.Add(choice);
+            _lineCountLabel = new TextBlock { Text = LineCountText(lines, rows), Style = LayoutStyle("LayoutLineCountTextStyle") };
+            Grid.SetColumn(_lineCountLabel, 2);
+            grid.Children.Add(_lineCountLabel);
 
             _lineLess = less;
             _lineMore = more;
             host.Child = grid;
             return host;
-        }
-
-        /// <summary>
-        /// The Rows | Columns switch, inset between the steppers. The selected half is its own
-        /// rounded box. Minus and plus stay outside this track so they do not eat that box.
-        /// </summary>
-        private FrameworkElement BuildOrientationChoice(bool rows)
-        {
-            var track = new Border { Style = LayoutStyle("LayoutChoiceTrackStyle") };
-            var grid = new Grid();
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-            var selected = new Border { Style = LayoutStyle("LayoutChoiceSelectedStyle") };
-            Grid.SetColumn(selected, rows ? 0 : 1);
-            grid.Children.Add(selected);
-
-            grid.Children.Add(MakeChoiceButton("Rows", "\uEA37", rows, 0, () =>
-            {
-                if (!rows)
-                    ToggleRowsColumns();
-            }));
-            grid.Children.Add(MakeChoiceButton("Columns", "\uE8C0", !rows, 1, () =>
-            {
-                if (rows)
-                    ToggleRowsColumns();
-            }));
-
-            track.Child = grid;
-            return track;
         }
 
         /// <summary>
@@ -867,35 +901,6 @@ namespace ModernImageViewer
             double target = fits ? view : 0;
             if (Math.Abs(_columnChartHost.MinWidth - target) > 0.5)
                 _columnChartHost.MinWidth = target;
-        }
-
-        private Button MakeChoiceButton(string label, string glyph, bool selected, int column, Action onClick)
-        {
-            var content = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 6,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            content.Children.Add(new FontIcon
-            {
-                Glyph = glyph,
-                Style = LayoutStyle(selected ? "LayoutChoiceIconSelectedStyle" : "LayoutChoiceIconStyle")
-            });
-            content.Children.Add(new TextBlock
-            {
-                Text = label,
-                Style = LayoutStyle(selected ? "LayoutChoiceTextSelectedStyle" : "LayoutChoiceTextStyle")
-            });
-            var button = new Button
-            {
-                Style = LayoutStyle("LayoutChoiceButtonStyle"),
-                Content = content
-            };
-            Grid.SetColumn(button, column);
-            button.Click += (_, _) => onClick();
-            return button;
         }
 
         /// <summary>

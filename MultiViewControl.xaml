@@ -119,45 +119,13 @@
             <Setter Property="Padding" Value="2"/>
             <Setter Property="HorizontalAlignment" Value="Center"/>
         </Style>
-        <!-- The choice pair sits in its own inset so the selected half is a closed box, the way the standalone switch was. -->
-        <Style x:Key="LayoutChoiceTrackStyle" TargetType="Border">
-            <Setter Property="Padding" Value="2"/>
-            <Setter Property="Background" Value="Transparent"/>
-        </Style>
-        <!-- LayerFillColorDefault is a 30% wash and reads as the track once minus and plus share the bar. A solid control fill stays visible in light and dark. -->
-        <Style x:Key="LayoutChoiceSelectedStyle" TargetType="Border">
-            <Setter Property="Background" Value="{ThemeResource ControlSolidFillColorDefaultBrush}"/>
-            <Setter Property="BorderBrush" Value="{ThemeResource ControlStrokeColorSecondaryBrush}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="4"/>
-        </Style>
-        <Style x:Key="LayoutChoiceButtonStyle" TargetType="Button" BasedOn="{StaticResource SubtleButtonStyle}">
-            <Setter Property="MinWidth" Value="108"/>
-            <Setter Property="MinHeight" Value="32"/>
-            <Setter Property="Height" Value="32"/>
-            <Setter Property="Padding" Value="10,0"/>
-            <Setter Property="CornerRadius" Value="4"/>
-            <Setter Property="HorizontalAlignment" Value="Stretch"/>
-            <Setter Property="HorizontalContentAlignment" Value="Center"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-        </Style>
-        <Style x:Key="LayoutChoiceTextStyle" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}"/>
-        </Style>
-        <Style x:Key="LayoutChoiceTextSelectedStyle" TargetType="TextBlock" BasedOn="{StaticResource LayoutChoiceTextStyle}">
+        <Style x:Key="LayoutLineCountTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="MinWidth" Value="200"/>
+            <Setter Property="TextAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}"/>
-        </Style>
-        <Style x:Key="LayoutChoiceIconStyle" TargetType="FontIcon">
-            <Setter Property="FontFamily" Value="Segoe Fluent Icons"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}"/>
-        </Style>
-        <Style x:Key="LayoutChoiceIconSelectedStyle" TargetType="FontIcon" BasedOn="{StaticResource LayoutChoiceIconStyle}">
-            <Setter Property="Foreground" Value="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
         </Style>
         <Style x:Key="LayoutLineLabelStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
             <Setter Property="VerticalAlignment" Value="Center"/>
@@ -296,13 +264,9 @@
                     <Rectangle Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,0" Opacity="0.5"/>
 
                     <!-- Group 2: Layout & Composition -->
-                    <Button x:Name="CountsButton"
-                            Style="{StaticResource QuietButtonStyle}"
-                            Padding="8,5"
-                            CornerRadius="12"
-                            ToolTipService.ToolTip="Edit the lines. Choose rows or columns, or press R. Plus and minus change how many.">
-                        <Button.Flyout>
-                            <Flyout Opening="CountsFlyout_Opening" Opened="CountsFlyout_Opened" Closed="CountsFlyout_Closed" Placement="Top">
+                    <Border x:Name="CountsSwitch" CornerRadius="12" Background="#14FFFFFF" VerticalAlignment="Center">
+                        <primitives:FlyoutBase.AttachedFlyout>
+                            <Flyout x:Name="CountsFlyout" Opening="CountsFlyout_Opening" Opened="CountsFlyout_Opened" Closed="CountsFlyout_Closed" Placement="Top">
                                 <Flyout.FlyoutPresenterStyle>
                                     <Style TargetType="FlyoutPresenter">
                                         <Setter Property="MinWidth" Value="0" />
@@ -326,12 +290,32 @@
                                     <StackPanel x:Name="CountsPanel" Spacing="0" MinWidth="320" />
                                 </Border>
                             </Flyout>
-                        </Button.Flyout>
-                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xECA5;" FontSize="14" />
-                            <TextBlock x:Name="CountsText" Text="2 Rows" VerticalAlignment="Center" FontSize="13" />
+                        </primitives:FlyoutBase.AttachedFlyout>
+                        <StackPanel Orientation="Horizontal">
+                            <Button x:Name="RowsSide"
+                                    Click="RowsSide_Click"
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    Padding="8,5"
+                                    CornerRadius="12"
+                                    ToolTipService.ToolTip="Arrange in rows (R). Opens the grid layout.">
+                                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                    <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xEA37;" FontSize="14" />
+                                    <TextBlock x:Name="RowsSideText" Text="Rows" VerticalAlignment="Center" FontSize="13" />
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="ColumnsSide"
+                                    Click="ColumnsSide_Click"
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    Padding="8,5"
+                                    CornerRadius="12"
+                                    ToolTipService.ToolTip="Arrange in columns (R). Opens the grid layout.">
+                                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                    <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8C0;" FontSize="14" />
+                                    <TextBlock x:Name="ColumnsSideText" Text="Columns" VerticalAlignment="Center" FontSize="13" />
+                                </StackPanel>
+                            </Button>
                         </StackPanel>
-                    </Button>
+                    </Border>
 
                     <Button x:Name="HeroButton"
                             Click="HeroButton_Click"
