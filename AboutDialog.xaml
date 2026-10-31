@@ -62,7 +62,7 @@
                     <Run Text="&#x2022;  "/><Run Text="Multi-View" FontWeight="SemiBold"/><Run Text=" &#x2014; compare up to 16 photos in rows or columns of your choosing, with hero layouts, draggable edges, and Alt+drag to swap."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Collages" FontWeight="SemiBold"/><Run Text=" &#x2014; frame each cell, rotate and mirror photos, float cells above the grid in shapes, choose the canvas, undo and redo, save layouts, and export to JPEG, PNG, or the clipboard."/>
+                    <Run Text="&#x2022;  "/><Run Text="Collages" FontWeight="SemiBold"/><Run Text=" &#x2014; frame each cell, rotate and mirror photos, float cells above the grid in shapes, drop in pictures from File Explorer, choose the canvas, undo and redo, save layouts, and export to JPEG, PNG, or the clipboard."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
                     <Run Text="&#x2022;  "/><Run Text="Window &amp; Tile Size presets" FontWeight="SemiBold"/><Run Text=" &#x2014; save up to three window and tile size states (Ctrl+1, Ctrl+2, Ctrl+3) to jump between compact browsing and wide two-page layouts."/>
