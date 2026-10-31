@@ -620,6 +620,10 @@ namespace ModernImageViewer
             return chosen;
         }
 
+        /// <summary>A photo waiting off screen has no cell, and a missing file will never finish.</summary>
+        private bool AnyPhotoLoading() =>
+            _cellRoots.Any(root => root?.Tag is CellParts parts && !parts.Bound.Failed && !CellImageReady(parts));
+
         private async Task SavePixelsAsync(int width, int height, bool preferPng = false)
         {
             if (_savingGrid) return;
@@ -629,7 +633,7 @@ namespace ModernImageViewer
                 await ShowExportMessageAsync("Nothing to save.");
                 return;
             }
-            if (shots.Count < Math.Min(_items.Count, _cellRoots.Length))
+            if (AnyPhotoLoading())
             {
                 await ShowExportMessageAsync("A photo is still loading.");
                 return;
@@ -862,11 +866,11 @@ namespace ModernImageViewer
                 }
 
                 // 1. Draw Drop Shadow or Ambient Rim Glow
-                if (shot.Border != null && shot.Border.ShadowIntensity > 0 && (shape == null || !shot.Border.RimGlow))
+                if (shot.Border != null && shot.Border.ShadowIntensity > 0)
                 {
                     using var shadowSession = target.CreateDrawingSession();
                     shadowSession.Transform = windowTurn;
-                    if (shot.Border.RimGlow)
+                    if (shape == null && shot.Border.RimGlow)
                     {
                         byte baseAlpha = (byte)Math.Clamp(shot.Border.ShadowIntensity * 1.6, 12, 190);
                         int steps = 4;
@@ -1103,6 +1107,11 @@ namespace ModernImageViewer
             if (_savingGrid) return;
             var shots = CaptureCells();
             if (shots.Count == 0) return;
+            if (AnyPhotoLoading())
+            {
+                await ShowExportMessageAsync("A photo is still loading.");
+                return;
+            }
             var (width, height) = CanvasPixels();
             if (width < 1 || height < 1) return;
 
@@ -1201,7 +1210,9 @@ namespace ModernImageViewer
                 {
                     Aspect = AspectText?.Text,
                     BackgroundColor = _canvasColor,
-                    Surface = _canvasSurface
+                    Surface = _canvasSurface,
+                    Width = RootGrid.ActualWidth,
+                    Height = RootGrid.ActualHeight
                 },
                 State = new LayoutStateDto
                 {
@@ -1252,10 +1263,10 @@ namespace ModernImageViewer
                         Path = card.Item.Path ?? string.Empty,
                         Name = card.Item.Name,
                         Hidden = _hiddenItems.Contains(card.Item),
-                        X = double.IsNaN(Canvas.GetLeft(card.Container)) ? card.X : Canvas.GetLeft(card.Container),
-                        Y = double.IsNaN(Canvas.GetTop(card.Container)) ? card.Y : Canvas.GetTop(card.Container),
-                        Width = card.Container.Width > 0 ? card.Container.Width : (card.Container.ActualWidth > 0 ? card.Container.ActualWidth : card.Width),
-                        Height = card.Container.Height > 0 ? card.Container.Height : (card.Container.ActualHeight > 0 ? card.Container.ActualHeight : card.Height),
+                        X = Canvas.GetLeft(card.Container),
+                        Y = Canvas.GetTop(card.Container),
+                        Width = card.Container.Width,
+                        Height = card.Container.Height,
                         ZIndex = Canvas.GetZIndex(card.Container),
                         Zoom = (card.Container.Tag as CellParts)?.Transform?.ScaleX,
                         PanX = (card.Container.Tag as CellParts)?.Transform?.TranslateX,
@@ -1329,6 +1340,22 @@ namespace ModernImageViewer
             await LoadLayoutFromPathAsync(file.Path);
         }
 
+        /// <summary>A layout file holds only the path, and Solo's details line needs the date and size.</summary>
+        private static void FillFileDetails(ImageItem item)
+        {
+            try
+            {
+                var info = new FileInfo(item.Path);
+                if (!info.Exists) return;
+                item.DateModified = info.LastWriteTime;
+                item.SizeString = (info.Length / 1024.0 < 1024) ? $"{info.Length / 1024} KB" : $"{(info.Length / 1048576.0):F2} MB";
+            }
+            catch (Exception) when (item.Path != null)
+            {
+                // An unusable path shows as File not found on its cell.
+            }
+        }
+
         public void ApplyLayoutFile(MultiViewLayoutFile layoutFile) => ApplyLayoutFile(layoutFile, restoreAspect: true);
 
         private void ApplyLayoutFile(MultiViewLayoutFile layoutFile, bool restoreAspect)
@@ -1366,6 +1393,10 @@ namespace ModernImageViewer
                         it.DateModified = seen.DateModified;
                         it.SizeString = seen.SizeString;
                     }
+                    else
+                    {
+                        FillFileDetails(it);
+                    }
                     items.Add(it);
                     if (photo.Border != null && !string.IsNullOrEmpty(it.Path))
                     {
@@ -1397,7 +1428,8 @@ namespace ModernImageViewer
                 _framedSlots = layoutFile.State.FramedSlots;
             }
 
-            if (layoutFile.Mosaic != null)
+            // A hand-edited or damaged tree falls back to the plain layout, rather than leaving empty cells.
+            if (layoutFile.Mosaic != null && layoutFile.Mosaic.FitsPhotos(VisibleCount(_items.Count)))
             {
                 _mosaic = layoutFile.Mosaic.ToMosaicLayout();
                 _mosaicCustom = true;
@@ -1434,6 +1466,14 @@ namespace ModernImageViewer
                         SpawnFreeformCell(sourceItem, dto);
                 }
             }
+
+            // The saved cells are in the units of the canvas they were saved on. A file with no size is taken as this canvas.
+            double liveW = RootGrid.ActualWidth;
+            double liveH = RootGrid.ActualHeight;
+            double savedW = layoutFile.Canvas?.Width ?? 0;
+            double savedH = layoutFile.Canvas?.Height ?? 0;
+            _freeformBasis = savedW > 0 && savedH > 0 ? new Size(savedW, savedH) : new Size(liveW, liveH);
+            RescaleFreeformCards(liveW, liveH);
 
             for (int i = 0; i < _cellRoots.Length; i++)
                 ShowHiddenState(i);

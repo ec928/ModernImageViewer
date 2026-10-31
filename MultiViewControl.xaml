@@ -444,11 +444,17 @@
         <!-- Solo View Container (shown when user double-clicks or clicks Solo on a photo) -->
         <Grid x:Name="SoloContainer" Visibility="Collapsed" Canvas.ZIndex="150" Background="#FF080808">
             <Grid x:Name="SoloImageContainer" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#01000000">
-                <Image x:Name="SoloImage" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <Image.RenderTransform>
+                <!-- Zoom and pan are on the host, so they follow the screen whichever way the photo is turned. -->
+                <Grid IsHitTestVisible="False">
+                    <Grid.RenderTransform>
                         <CompositeTransform x:Name="SoloTransform" ScaleX="1" ScaleY="1" TranslateX="0" TranslateY="0"/>
-                    </Image.RenderTransform>
-                </Image>
+                    </Grid.RenderTransform>
+                    <Image x:Name="SoloImage" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
+                        <Image.RenderTransform>
+                            <CompositeTransform x:Name="SoloTurn" ScaleX="1" ScaleY="1"/>
+                        </Image.RenderTransform>
+                    </Image>
+                </Grid>
             </Grid>
 
             <!-- Solo Top-Left Info Overlay (auto-hides with HUD, identical to single viewer HUD) -->
@@ -510,8 +516,7 @@
             </Grid>
         </Grid>
 
-        <!-- Freeform Floating Canvas (Phase 3: Drag-to-move floating photo cells)
-             Maximum Z-Index (5000) and Translation Z (256) so floating cards float above all grid cells and layers -->
+        <!-- Floating cells sit above every grid cell, below the playbar. -->
         <Canvas x:Name="FreeformCanvas" 
                 Canvas.ZIndex="5000" 
                 Translation="0,0,256" 

@@ -19,6 +19,9 @@ namespace ModernImageViewer
     {
         private const string SettingsGlyph = "\uE713";
         private const double WindowRotationStep = 15;
+        private const int WindowHoverGraceMs = 400;
+        // The shadow is soft, so half size looks the same on screen at about an eighth of the cost.
+        private const int ShadowPreviewDivisor = 2;
 
         private readonly Dictionary<ImageItem, CellGeometryDto> _cellGeometry = new();
         private string _canvasColor = CanvasLook.DefaultColor;
@@ -34,9 +37,15 @@ namespace ModernImageViewer
             return geometry;
         }
 
-        private static MenuFlyoutItem MakeAdvancedItem(string text, string glyph, Action click)
+        private static MenuFlyoutItem MakeAdvancedItem(string text, string glyph, Action click, bool mirrorIcon = false)
         {
-            var item = new MenuFlyoutItem { Text = text, Icon = new FontIcon { Glyph = glyph } };
+            var icon = new FontIcon { Glyph = glyph };
+            if (mirrorIcon)
+            {
+                icon.RenderTransformOrigin = new Point(0.5, 0.5);
+                icon.RenderTransform = new ScaleTransform { ScaleX = -1 };
+            }
+            var item = new MenuFlyoutItem { Text = text, Icon = icon };
             item.Click += (_, _) => click();
             return item;
         }
@@ -59,64 +68,85 @@ namespace ModernImageViewer
                 ShowHiddenState(Slot(item));
             }
 
-            advanced.Items.Add(MakeAdvancedItem("Rotate image left", "\uE7AD", () => ChangeImage(g => g.TurnImage(-90))));
+            advanced.Items.Add(MakeAdvancedItem("Rotate image left", "\uE7AD", () => ChangeImage(g => g.TurnImage(-90)), mirrorIcon: true));
             advanced.Items.Add(MakeAdvancedItem("Rotate image right", "\uE7AD", () => ChangeImage(g => g.TurnImage(90))));
-            advanced.Items.Add(MakeAdvancedItem("Mirror image left to right", "\uE8AB", () => ChangeImage(g => g.ImageFlipH = !g.ImageFlipH)));
-            advanced.Items.Add(MakeAdvancedItem("Flip image top to bottom", "\uE8CB", () => ChangeImage(g => g.ImageFlipV = !g.ImageFlipV)));
+            advanced.Items.Add(MakeAdvancedItem("Mirror image", "\uE8AB", () => ChangeImage(g => g.ImageFlipH = !g.ImageFlipH)));
+            advanced.Items.Add(MakeAdvancedItem("Flip image", "\uE8CB", () => ChangeImage(g => g.ImageFlipV = !g.ImageFlipV)));
 
             var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, item));
             if (card != null)
             {
                 advanced.Items.Add(new MenuFlyoutSeparator());
-
-                void ChangeWindow(Action<CellGeometryDto> change)
-                {
-                    change(GetGeometry(item));
-                    ShowHiddenState(Slot(item));
-                }
-
-                var geometry = GetGeometry(item);
-                var shapes = new MenuFlyoutSubItem { Text = "Window shape", Icon = new FontIcon { Glyph = "\uE7C5" } };
-                foreach (string shape in WindowShapes.All)
-                {
-                    string chosen = shape;
-                    shapes.Items.Add(MakeChoiceItem(shape, geometry.Shape == shape, () => ChangeWindow(g => g.Shape = chosen)));
-                }
-                advanced.Items.Add(shapes);
-
-                // The shape turns and the photo holds still, by turning the window and the photo opposite ways.
-                var shapeLeft = new MenuFlyoutItem { Text = "Rotate shape left" };
-                shapeLeft.Click += (_, _) => ChangeWindow(g => { g.WindowRotation -= WindowRotationStep; g.ImageCounter += WindowRotationStep; });
-                ToolTipService.SetToolTip(shapeLeft, "The photo stays still. Or hold Ctrl and drag the rotate handle.");
-                advanced.Items.Add(shapeLeft);
-                var shapeRight = new MenuFlyoutItem { Text = "Rotate shape right" };
-                shapeRight.Click += (_, _) => ChangeWindow(g => { g.WindowRotation += WindowRotationStep; g.ImageCounter -= WindowRotationStep; });
-                ToolTipService.SetToolTip(shapeRight, "The photo stays still. Or hold Ctrl and drag the rotate handle.");
-                advanced.Items.Add(shapeRight);
-
-                advanced.Items.Add(MakeAdvancedItem("Mirror window left to right", "\uE8AB", () => ChangeWindow(g => g.ShapeFlipH = !g.ShapeFlipH)));
-                advanced.Items.Add(MakeAdvancedItem("Flip window top to bottom", "\uE8CB", () => ChangeWindow(g => g.ShapeFlipV = !g.ShapeFlipV)));
-                advanced.Items.Add(MakeAdvancedItem("Rotate window left", "\uE7AD", () => ChangeWindow(g => g.WindowRotation -= WindowRotationStep)));
-                advanced.Items.Add(MakeAdvancedItem("Rotate window right", "\uE7AD", () => ChangeWindow(g => g.WindowRotation += WindowRotationStep)));
-                advanced.Items.Add(MakeAdvancedItem("Reset window", "\uE72C", () => ChangeWindow(g =>
-                {
-                    g.Shape = WindowShapes.Rectangle;
-                    g.ShapeFlipH = false;
-                    g.ShapeFlipV = false;
-                    g.WindowRotation = 0;
-                    g.ImageCounter = 0;
-                    g.NotchX = 0.5;
-                    g.NotchY = 0.5;
-                })));
-
-                advanced.Items.Add(new MenuFlyoutSeparator());
-                advanced.Items.Add(MakeAdvancedItem("Bring to front", "\uE74A", () => MoveCardLayer(card, int.MaxValue)));
-                advanced.Items.Add(MakeAdvancedItem("Bring forward", "\uE74A", () => MoveCardLayer(card, 1)));
-                advanced.Items.Add(MakeAdvancedItem("Send backward", "\uE74B", () => MoveCardLayer(card, -1)));
-                advanced.Items.Add(MakeAdvancedItem("Send to back", "\uE74B", () => MoveCardLayer(card, int.MinValue)));
+                advanced.Items.Add(MakeWindowMenu(card));
+                advanced.Items.Add(MakeLayerMenu(card));
             }
 
             menu.Items.Add(advanced);
+        }
+
+        private MenuFlyoutSubItem MakeWindowMenu(FreeformCard card)
+        {
+            void Change(Action<CellGeometryDto> change)
+            {
+                change(GetGeometry(card.Item));
+                ShowHiddenState(Slot(card.Item));
+            }
+
+            var window = new MenuFlyoutSubItem { Text = "Window", Icon = new FontIcon { Glyph = "\uE7C5" } };
+            string current = GetGeometry(card.Item).Shape;
+            foreach (string shape in WindowShapes.All)
+            {
+                string chosen = shape;
+                window.Items.Add(MakeChoiceItem(shape, current == shape, () => Change(g => g.Shape = chosen)));
+            }
+
+            window.Items.Add(new MenuFlyoutSeparator());
+            window.Items.Add(MakeAdvancedItem("Rotate left", "\uE7AD", () => Change(g => g.WindowRotation -= WindowRotationStep), mirrorIcon: true));
+            window.Items.Add(MakeAdvancedItem("Rotate right", "\uE7AD", () => Change(g => g.WindowRotation += WindowRotationStep)));
+            // The shape turns and the photo holds still, by turning the window and the photo opposite ways.
+            window.Items.Add(MakeAdvancedItem("Rotate shape only, left", "\uE7AD", () => Change(g => { g.WindowRotation -= WindowRotationStep; g.ImageCounter += WindowRotationStep; }), mirrorIcon: true));
+            window.Items.Add(MakeAdvancedItem("Rotate shape only, right", "\uE7AD", () => Change(g => { g.WindowRotation += WindowRotationStep; g.ImageCounter -= WindowRotationStep; })));
+
+            window.Items.Add(new MenuFlyoutSeparator());
+            window.Items.Add(MakeAdvancedItem("Mirror shape", "\uE8AB", () => Change(g => g.ShapeFlipH = !g.ShapeFlipH)));
+            window.Items.Add(MakeAdvancedItem("Flip shape", "\uE8CB", () => Change(g => g.ShapeFlipV = !g.ShapeFlipV)));
+
+            window.Items.Add(new MenuFlyoutSeparator());
+            window.Items.Add(MakeAdvancedItem("Reset window", "\uE72C", () => Change(g =>
+            {
+                g.Shape = WindowShapes.Rectangle;
+                g.ShapeFlipH = false;
+                g.ShapeFlipV = false;
+                g.WindowRotation = 0;
+                g.ImageCounter = 0;
+                g.NotchX = 0.5;
+                g.NotchY = 0.5;
+            })));
+            return window;
+        }
+
+        private MenuFlyoutSubItem MakeLayerMenu(FreeformCard card)
+        {
+            var layer = new MenuFlyoutSubItem { Text = "Layer", Icon = new FontIcon { Glyph = "\uE81E" } };
+            layer.Items.Add(MakeAdvancedItem("Bring to front", "\uE74A", () => MoveCardLayer(card, int.MaxValue)));
+            layer.Items.Add(MakeAdvancedItem("Bring forward", "\uE74A", () => MoveCardLayer(card, 1)));
+            layer.Items.Add(MakeAdvancedItem("Send backward", "\uE74B", () => MoveCardLayer(card, -1)));
+            layer.Items.Add(MakeAdvancedItem("Send to back", "\uE74B", () => MoveCardLayer(card, int.MinValue)));
+            return layer;
+        }
+
+        /// <summary>Turn the window. Its position label stays upright, so it can always be read.</summary>
+        private void ApplyWindowTurn(FreeformCard card)
+        {
+            if (card.Container is not Grid window) return;
+            double angle = GetGeometry(card.Item).WindowRotation;
+            if (angle != 0 || window.RenderTransform is RotateTransform)
+            {
+                window.RenderTransformOrigin = new Point(0.5, 0.5);
+                window.RenderTransform = new RotateTransform { Angle = angle };
+            }
+            if (window.Tag is CellParts parts)
+                parts.PositionBadge.RenderTransform = new RotateTransform { Angle = -angle };
         }
 
         /// <summary>Turn and clip the floating window to its shape. Called again when the window changes size.</summary>
@@ -125,11 +155,7 @@ namespace ModernImageViewer
             if (card.Container is not Grid window) return;
             var geometry = GetGeometry(card.Item);
 
-            if (geometry.WindowRotation != 0 || window.RenderTransform is RotateTransform)
-            {
-                window.RenderTransformOrigin = new Point(0.5, 0.5);
-                window.RenderTransform = new RotateTransform { Angle = geometry.WindowRotation };
-            }
+            ApplyWindowTurn(card);
 
             var outlineElement = window.Children.OfType<Polygon>().FirstOrDefault();
             var outline = WindowShapes.Outline(geometry);
@@ -233,7 +259,8 @@ namespace ModernImageViewer
 
             int w = (int)Math.Round(width);
             int h = (int)Math.Round(height);
-            bool drop = frame.ShadowIntensity > 0 && !frame.RimGlow && !_hiddenItems.Contains(card.Item) && w >= 2 && h >= 2;
+            // Rim glow is a rectangle's effect, so a shape keeps its shadow whichever is chosen.
+            bool drop = frame.ShadowIntensity > 0 && !_hiddenItems.Contains(card.Item) && w >= 2 && h >= 2;
             if (!drop)
             {
                 image.Source = null;
@@ -247,9 +274,12 @@ namespace ModernImageViewer
             if (key == card.ShadowKey && image.Source != null) return;
             card.ShadowKey = key;
 
-            var outline = WindowShapes.Placed(geometry, 0, 0, w, h, frame.CornerRadius, gutter);
+            int previewW = Math.Max(1, w / ShadowPreviewDivisor);
+            int previewH = Math.Max(1, h / ShadowPreviewDivisor);
+            double scale = 1.0 / ShadowPreviewDivisor;
+            var outline = WindowShapes.Placed(geometry, 0, 0, previewW, previewH, frame.CornerRadius * scale, gutter * scale);
             if (outline == null) return;
-            WriteShadow(image, FrameShadow.RenderAlpha(w, h, outline, frame.ShadowIntensity), w, h);
+            WriteShadow(image, FrameShadow.RenderAlpha(previewW, previewH, outline, frame.ShadowIntensity, scale, scale), previewW, previewH);
         }
 
         private static void ClipToOutline(FrameworkElement part, (double X, double Y)[] outline)
@@ -315,6 +345,7 @@ namespace ModernImageViewer
             rotate.HorizontalAlignment = HorizontalAlignment.Center;
             rotate.VerticalAlignment = VerticalAlignment.Top;
             rotate.Margin = new Thickness(0, 12, 0, 0);
+            rotate.IsHitTestVisible = false;
             ToolTipService.SetToolTip(rotate, "Drag to rotate the window. Hold Ctrl to rotate the shape and keep the photo still. Hold Shift for 15 degree steps.");
 
             bool turning = false;
@@ -350,7 +381,9 @@ namespace ModernImageViewer
                 geometry.WindowRotation = angle;
                 // With Ctrl the photo turns back by the same amount, so only the shape moves on screen.
                 geometry.ImageCounter = ctrl ? startCounter - (angle - startRotation) : startCounter;
-                ShowHiddenState(Slot(card.Item));
+                // Only the turn changes during the drag, so the frame and its shadow are not drawn again.
+                ApplyWindowTurn(card);
+                if (window.Tag is CellParts parts) parts.Bound.ApplyGeometry?.Invoke();
                 e.Handled = true;
             };
             void EndTurn(object _, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
@@ -368,6 +401,7 @@ namespace ModernImageViewer
             notch.HorizontalAlignment = HorizontalAlignment.Left;
             notch.VerticalAlignment = VerticalAlignment.Top;
             notch.Visibility = Visibility.Collapsed;
+            notch.IsHitTestVisible = false;
             ToolTipService.SetToolTip(notch, "Drag to change the shape of the L");
             bool moving = false;
             notch.PointerPressed += (_, e) =>
@@ -401,13 +435,27 @@ namespace ModernImageViewer
             window.Children.Add(notch);
             card.NotchHandle = notch;
 
-            window.PointerEntered += (_, _) => { rotate.Opacity = 1; notch.Opacity = 1; };
-            window.PointerExited += (_, _) =>
+            // The handles can sit outside a shape, so they stay a moment for the pointer to reach them.
+            void ShowHandles(bool show)
+            {
+                rotate.Opacity = show ? 1 : 0;
+                notch.Opacity = show ? 1 : 0;
+                rotate.IsHitTestVisible = show;
+                notch.IsHitTestVisible = show;
+            }
+            var hideHandles = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(WindowHoverGraceMs) };
+            hideHandles.Tick += (_, _) =>
             {
                 if (turning || moving) return;
-                rotate.Opacity = 0;
-                notch.Opacity = 0;
+                hideHandles.Stop();
+                ShowHandles(false);
             };
+            window.PointerEntered += (_, _) =>
+            {
+                hideHandles.Stop();
+                ShowHandles(true);
+            };
+            window.PointerExited += (_, _) => hideHandles.Start();
         }
 
         private Microsoft.UI.Xaml.Shapes.Rectangle? _guideX;
@@ -535,7 +583,7 @@ namespace ModernImageViewer
             ToolTipService.SetToolTip(surface, "Shows where no cell covers the canvas: hidden cells, and around photos in Fit");
             canvas.Items.Add(surface);
 
-            var color = new MenuFlyoutSubItem { Text = "Colour" };
+            var color = new MenuFlyoutSubItem { Text = "Color" };
             foreach (var (name, hex) in CanvasLook.Colors)
             {
                 string chosen = hex;

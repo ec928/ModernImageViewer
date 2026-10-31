@@ -29,7 +29,6 @@ namespace ModernImageViewer
         private readonly List<ImageItem> _items = new();
         private readonly HashSet<ImageItem> _hiddenItems = new();
 
-        public bool IsImageHidden(ImageItem item) => _hiddenItems.Contains(item);
         private readonly List<CompositeTransform> _cellTransforms = new();
         private readonly List<Action> _layoutUpdaters = new();
         private readonly List<UIElement> _cellTopControls = new();
@@ -94,6 +93,8 @@ namespace ModernImageViewer
                 {
                     FreeformCanvas.Width = e.NewSize.Width;
                     FreeformCanvas.Height = e.NewSize.Height;
+                    RescaleFreeformCards(e.NewSize.Width, e.NewSize.Height);
+                    DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, RebaseUntouchedUndo);
                 }
             };
 
@@ -267,21 +268,6 @@ namespace ModernImageViewer
             FlyoutPresenter? presenter = FindFlyoutPresenter(CountsCard);
             if (presenter != null)
                 presenter.RequestedTheme = theme;
-        }
-
-        private ElementTheme WindowTheme()
-        {
-            DependencyObject? node = VisualTreeHelper.GetParent(this);
-            while (node != null)
-            {
-                if (node is FrameworkElement el && el.RequestedTheme != ElementTheme.Default)
-                    return el.RequestedTheme;
-                node = VisualTreeHelper.GetParent(node);
-            }
-
-            return Application.Current.RequestedTheme == ApplicationTheme.Dark
-                ? ElementTheme.Dark
-                : ElementTheme.Light;
         }
 
         private static FlyoutPresenter? FindFlyoutPresenter(DependencyObject? start)
@@ -1015,7 +1001,8 @@ namespace ModernImageViewer
             if (HeroButton == null || RotateHeroButton == null || HeroText == null) return;
             bool show = count > 1;
             HeroButton.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-            RotateHeroButton.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            // Next position means nothing until there is a hero to move.
+            RotateHeroButton.Visibility = show && _heroActive ? Visibility.Visible : Visibility.Collapsed;
             RotateHeroButton.IsEnabled = _heroActive;
             string kind = MosaicLayout.HeroTitle(_heroKind);
             HeroText.Text = _heroActive ? "Hero: " + kind : "Hero";
@@ -1047,9 +1034,7 @@ namespace ModernImageViewer
             ToolTipService.SetToolTip(HeroButton, _heroActive
                 ? "Hero: " + kind + ". Click for the next kind, or off (H)"
                 : "Hero (H). Click for a large photo.");
-            ToolTipService.SetToolTip(RotateHeroButton, _heroActive
-                ? "Next position"
-                : "Turn the hero on first");
+            ToolTipService.SetToolTip(RotateHeroButton, "Next position");
         }
 
         public bool HandleKeyDown(VirtualKey key)
@@ -1170,6 +1155,17 @@ namespace ModernImageViewer
                 SoloBottomBar.IsHitTestVisible = true;
                 SoloTopRightControls.Opacity = 1.0;
                 SoloTopRightControls.IsHitTestVisible = true;
+                SetPlaceholderOpacity(1.0);
+            }
+        }
+
+        /// <summary>A hidden cell's label fades with the bar, so the composition can be seen without it.</summary>
+        private void SetPlaceholderOpacity(double opacity)
+        {
+            foreach (var root in _cellRoots)
+            {
+                if (root?.Tag is CellParts { HiddenPlaceholder: not null } parts)
+                    parts.HiddenPlaceholder.Opacity = opacity;
             }
         }
 
@@ -1227,6 +1223,7 @@ namespace ModernImageViewer
             SoloBottomBar.IsHitTestVisible = false;
             SoloTopRightControls.Opacity = 0.0;
             SoloTopRightControls.IsHitTestVisible = false;
+            SetPlaceholderOpacity(0.0);
 
             foreach (var ctrl in _cellTopControls)
             {
@@ -1243,11 +1240,6 @@ namespace ModernImageViewer
         #endregion
 
         #region Layout & Cell Construction
-
-        private void AddCell(ImageItem item, int row, int col, int rowSpan, int colSpan, int index)
-        {
-            AddCell(CellsGrid, item, row, col, rowSpan, colSpan, index);
-        }
 
         private void AddCell(Grid targetGrid, ImageItem item, int row, int col, int rowSpan, int colSpan, int index)
         {
@@ -1411,9 +1403,17 @@ namespace ModernImageViewer
                 }
             };
 
+            void MarkFailed(ImageItem failedItem)
+            {
+                if (!ReferenceEquals(photo.Item, failedItem)) return;
+                photo.Failed = true;
+                ShowHiddenState(Slot(failedItem));
+            }
+
             void LoadPhoto()
             {
                 var current = photo.Item;
+                photo.Failed = false;
                 if (_reuseBitmaps != null && _reuseBitmaps.TryGetValue(current.Path, out var decoded))
                 {
                     naturalWidth = decoded.PixelWidth;
@@ -1453,9 +1453,14 @@ namespace ModernImageViewer
                             thumb = null;
                         }
                     };
+                    bmp.ImageFailed += (_, _) => MarkFailed(current);
                     fullImg.Source = bmp;
                 }
-                catch { }
+                catch
+                {
+                    // A path that is not a valid address never reaches ImageFailed.
+                    MarkFailed(current);
+                }
             }
             photo.Reload = LoadPhoto;
             photo.ApplyGeometry = () =>
@@ -1581,8 +1586,6 @@ namespace ModernImageViewer
 
                     Canvas.SetLeft(slotGrid, newX);
                     Canvas.SetTop(slotGrid, newY);
-                    var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Container, slotGrid));
-                    if (card != null) { card.X = newX; card.Y = newY; }
                     e.Handled = true;
                     return;
                 }
@@ -1718,7 +1721,7 @@ namespace ModernImageViewer
                 Opacity = 0.0,
                 IsHitTestVisible = false
             };
-            Canvas.SetZIndex(topControls, 60);
+            Canvas.SetZIndex(topControls, isFreeform ? 205 : 60);
             topControls.PointerEntered += Hud_PointerEntered;
             topControls.PointerExited += Hud_PointerExited;
             _cellTopControls.Add(topControls);
@@ -1731,8 +1734,28 @@ namespace ModernImageViewer
                 topControls.Opacity = show ? 1.0 : 0.0;
                 topControls.IsHitTestVisible = show;
             }
-            cellGrid.PointerEntered += (s, e) => SetCellHover(true);
-            cellGrid.PointerExited += (s, e) => SetCellHover(false);
+            // A floating cell's buttons sit on the window, which a shape may not fill, so they wait for the pointer to arrive.
+            DispatcherTimer? hoverOff = null;
+            if (isFreeform)
+            {
+                hoverOff = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(WindowHoverGraceMs) };
+                hoverOff.Tick += (s, e) =>
+                {
+                    hoverOff.Stop();
+                    SetCellHover(false);
+                };
+            }
+            FrameworkElement hoverHost = isFreeform ? slotGrid : cellGrid;
+            hoverHost.PointerEntered += (s, e) =>
+            {
+                hoverOff?.Stop();
+                SetCellHover(true);
+            };
+            hoverHost.PointerExited += (s, e) =>
+            {
+                if (hoverOff != null) hoverOff.Start();
+                else SetCellHover(false);
+            };
             cellGrid.PointerMoved += (s, e) =>
             {
                 if (_isHudVisible && !topControls.IsHitTestVisible)
@@ -1749,7 +1772,7 @@ namespace ModernImageViewer
                     () => (Slot(photo.Item) == 0 ? "Move to last position" : "Move to previous position") + " (or Alt+drag onto another photo to swap)",
                     () => MovePhoto(Slot(photo.Item), -1));
                 moveRightBtn = CreateNudgeButton("\uE76C",
-                    () => (Slot(photo.Item) == VisibleCount(_items.Count) - 1 ? "Move to first position" : "Move to next position") + " (or Alt+drag onto another photo to swap)",
+                    () => (Slot(photo.Item) == _items.Count - 1 ? "Move to first position" : "Move to next position") + " (or Alt+drag onto another photo to swap)",
                     () => MovePhoto(Slot(photo.Item), 1));
                 topStack.Children.Add(moveLeftBtn);
                 topStack.Children.Add(moveRightBtn);
@@ -1810,7 +1833,8 @@ namespace ModernImageViewer
             topStack.Children.Add(closeBtn);
 
             topControls.Children.Add(topStack);
-            cellGrid.Children.Add(topControls);
+            // On a floating cell these sit on the window, outside the shape's clip.
+            (isFreeform ? slotGrid : cellGrid).Children.Add(topControls);
 
             // Top-Left Position Badge (for right-click Swap / Move target indication)
             var positionBadge = new Border
@@ -1837,7 +1861,20 @@ namespace ModernImageViewer
                 HorizontalAlignment = HorizontalAlignment.Center
             };
             positionBadge.Child = badgeText;
-            cellGrid.Children.Add(positionBadge);
+            if (isFreeform)
+            {
+                // Centred and outside the clip, so a shape or a turn cannot cut it off. ApplyWindowTurn keeps it upright.
+                positionBadge.HorizontalAlignment = HorizontalAlignment.Center;
+                positionBadge.VerticalAlignment = VerticalAlignment.Center;
+                positionBadge.Margin = new Thickness(0);
+                positionBadge.RenderTransformOrigin = new Point(0.5, 0.5);
+                Canvas.SetZIndex(positionBadge, 206);
+                slotGrid.Children.Add(positionBadge);
+            }
+            else
+            {
+                cellGrid.Children.Add(positionBadge);
+            }
 
             // Right-Click Context Menu, filled when it opens so it names the photo's current place
             var menu = new MenuFlyout
@@ -2069,9 +2106,15 @@ namespace ModernImageViewer
                     menu.Items.Add(copySub);
                 }
 
-                menu.Items.Add(new MenuFlyoutItem { Text = "Tip: Alt+drag a photo onto another to swap", IsEnabled = false });
                 menu.Items.Add(new MenuFlyoutSeparator());
             }
+
+            var borderItem = new MenuFlyoutItem { Text = "Frame & Border\u2026", Icon = new FontIcon { Glyph = "\uE790" } };
+            borderItem.Click += (s, e) => OpenCellBorderFlyout(item);
+            menu.Items.Add(borderItem);
+
+            AddCellAdvancedMenu(menu, item);
+            menu.Items.Add(new MenuFlyoutSeparator());
 
             var soloItem = new MenuFlyoutItem { Text = "Solo / Maximize", Icon = new FontIcon { Glyph = "\uE922" } };
             soloItem.Click += (s, e) => EnterSolo(curSlot);
@@ -2111,12 +2154,7 @@ namespace ModernImageViewer
             };
             hideItem.Click += (s, e) => ToggleHideImage(item);
             menu.Items.Add(hideItem);
-
-            var borderItem = new MenuFlyoutItem { Text = "Frame & Border\u2026", Icon = new FontIcon { Glyph = "\uE790" } };
-            borderItem.Click += (s, e) => OpenCellBorderFlyout(item);
-            menu.Items.Add(borderItem);
-
-            AddCellAdvancedMenu(menu, item);
+            menu.Items.Add(new MenuFlyoutSeparator());
 
             var removeItem = new MenuFlyoutItem { Text = "Remove from View", Icon = new FontIcon { Glyph = "\uE8BB" } };
             removeItem.Click += (s, e) => RemoveItem(item);
@@ -2207,6 +2245,7 @@ namespace ModernImageViewer
             public ImageItem Item { get; set; }
             public Action? Reload { get; set; }
             public Action? ApplyGeometry { get; set; }
+            public bool Failed { get; set; }
             public Action<double, double>? SetDimensions { get; set; }
             public Func<(double Width, double Height)>? GetDimensions { get; set; }
             public CellPhoto(ImageItem item) { Item = item; }
@@ -2314,7 +2353,7 @@ namespace ModernImageViewer
                 if (i < _cellRoots.Length && _cellRoots[i]?.Tag is CellParts parts)
                 {
                     bool isSource = (i == sourceIndex);
-                    bool compact = (_cellRoots[i] is FrameworkElement fe && fe.ActualWidth < 140);
+                    bool compact = (_cellRoots[i] is FrameworkElement fe && fe.ActualWidth < 220);
 
                     if (isSource)
                     {
@@ -2341,7 +2380,7 @@ namespace ModernImageViewer
             if (_cellRoots[targetIndex]?.Tag is CellParts parts)
             {
                 var accent = GetMultiViewAccentColor();
-                bool compact = (_cellRoots[targetIndex] is FrameworkElement fe && fe.ActualWidth < 140);
+                bool compact = (_cellRoots[targetIndex] is FrameworkElement fe && fe.ActualWidth < 220);
                 string symbol = action == "Copy to" ? "\u2398" : "\u279C";
                 parts.BadgeText.Text = compact ? $"{symbol} #{targetIndex + 1}" : $"{symbol} {action} Position {targetIndex + 1}";
                 parts.PositionBadge.Background = new SolidColorBrush(accent);
@@ -2357,7 +2396,7 @@ namespace ModernImageViewer
             if (_cellRoots[targetIndex]?.Tag is CellParts parts)
             {
                 bool isSource = (targetIndex == sourceIndex);
-                bool compact = (_cellRoots[targetIndex] is FrameworkElement fe && fe.ActualWidth < 140);
+                bool compact = (_cellRoots[targetIndex] is FrameworkElement fe && fe.ActualWidth < 220);
                 if (isSource)
                 {
                     var accent = GetMultiViewAccentColor();
@@ -2393,7 +2432,12 @@ namespace ModernImageViewer
 
         private void SetupSoloInteractions()
         {
-            SoloImageContainer.SizeChanged += (s, e) => { if (_soloIndex >= 0) UpdateSoloHud(); };
+            SoloImageContainer.SizeChanged += (s, e) =>
+            {
+                if (_soloIndex < 0) return;
+                UpdateSoloHud();
+                ApplySoloTurn();
+            };
             SoloImageContainer.PointerPressed += (s, e) =>
             {
                 ShowHudAndOverlays();
@@ -2617,7 +2661,8 @@ namespace ModernImageViewer
             double zoomRatio = 1.0;
             if (w > 0 && h > 0 && viewW > 0 && viewH > 0)
             {
-                double fit = Math.Min(viewW / w, viewH / h);
+                bool quarterTurn = GetGeometry(item).ImageRotation % 180 != 0;
+                double fit = quarterTurn ? Math.Min(viewW / h, viewH / w) : Math.Min(viewW / w, viewH / h);
                 zoomRatio = fit * SoloTransform.ScaleX;
             }
             else
@@ -2641,17 +2686,43 @@ namespace ModernImageViewer
             {
                 var bmp = new BitmapImage();
                 bmp.UriSource = new Uri(item.Path, UriKind.Absolute);
-                bmp.ImageOpened += (_, _) => UpdateSoloHud();
+                bmp.ImageOpened += (_, _) =>
+                {
+                    UpdateSoloHud();
+                    ApplySoloTurn();
+                };
                 SoloImage.Source = bmp;
             }
             catch { }
 
+            ApplySoloTurn();
             ResetSoloZoom();
             UpdateSoloHud();
             SoloContainer.Visibility = Visibility.Visible;
             UnifiedHud.Visibility = Visibility.Collapsed;
             if (FreeformCanvas != null) FreeformCanvas.Visibility = Visibility.Collapsed;
             ShowHudAndOverlays();
+        }
+
+        /// <summary>Solo shows the photo the way its cell turns and mirrors it. A quarter turn is scaled to fit the other way round.</summary>
+        private void ApplySoloTurn()
+        {
+            if (_soloIndex < 0 || _soloIndex >= _items.Count) return;
+            var geometry = GetGeometry(_items[_soloIndex]);
+            double scale = 1;
+            if (geometry.ImageRotation % 180 != 0 && SoloImage.Source is BitmapSource bitmap
+                && bitmap.PixelWidth > 0 && bitmap.PixelHeight > 0
+                && SoloImageContainer.ActualWidth > 0 && SoloImageContainer.ActualHeight > 0)
+            {
+                double viewW = SoloImageContainer.ActualWidth;
+                double viewH = SoloImageContainer.ActualHeight;
+                double upright = Math.Min(viewW / bitmap.PixelWidth, viewH / bitmap.PixelHeight);
+                double turned = Math.Min(viewW / bitmap.PixelHeight, viewH / bitmap.PixelWidth);
+                scale = turned / upright;
+            }
+            SoloTurn.Rotation = geometry.ImageRotation;
+            SoloTurn.ScaleX = (geometry.ImageFlipH ? -1 : 1) * scale;
+            SoloTurn.ScaleY = (geometry.ImageFlipV ? -1 : 1) * scale;
         }
 
         private void ExitSolo()
@@ -2674,20 +2745,21 @@ namespace ModernImageViewer
             UpdateSoloHud();
         }
 
-        private void PrevSolo()
-        {
-            if (_items.Count == 0) return;
-            int prev = _soloIndex - 1;
-            if (prev < 0) prev = _items.Count - 1;
-            EnterSolo(prev);
-        }
+        private void PrevSolo() => StepSolo(-1);
 
-        private void NextSolo()
+        private void NextSolo() => StepSolo(1);
+
+        /// <summary>The next photo that is not hidden, wrapping round. Stays put when there is no other.</summary>
+        private void StepSolo(int direction)
         {
-            if (_items.Count == 0) return;
-            int next = _soloIndex + 1;
-            if (next >= _items.Count) next = 0;
-            EnterSolo(next);
+            int total = _items.Count;
+            for (int step = 1; step < total; step++)
+            {
+                int slot = ((_soloIndex + direction * step) % total + total) % total;
+                if (_hiddenItems.Contains(_items[slot])) continue;
+                EnterSolo(slot);
+                return;
+            }
         }
 
         private void ExitSolo_Click(object sender, RoutedEventArgs e) => ExitSolo();

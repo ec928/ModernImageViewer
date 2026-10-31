@@ -58,6 +58,13 @@ namespace ModernImageViewer
 
         [JsonPropertyName("surface")]
         public string? Surface { get; set; }
+
+        /// <summary>The canvas size the floating cells were saved on, so they can be placed on one of another size.</summary>
+        [JsonPropertyName("width")]
+        public double? Width { get; set; }
+
+        [JsonPropertyName("height")]
+        public double? Height { get; set; }
     }
 
     public sealed class LayoutStateDto
@@ -238,52 +245,9 @@ namespace ModernImageViewer
         private static bool Nearly(double a, double b) => Math.Abs(a - b) < 0.01;
     }
 
-    /// <summary>The four frames the multi-view menu applies in one click.</summary>
     public static class FrameLooks
     {
-        public static CellBorderDto Card() => new()
-        {
-            Thickness = 1,
-            Padding = 8,
-            CornerRadius = 12,
-            Color = "#FFFFFFFF",
-            StrokeStyle = "InnerMuted",
-            ShadowIntensity = 40,
-            Shadow = true,
-            RimGlow = true,
-            GutterMaterial = "None",
-            GutterColor = "#00000000"
-        };
-
-        public static CellBorderDto Mat() => new()
-        {
-            Thickness = 1,
-            Padding = 18,
-            CornerRadius = 0,
-            Color = "#FF000000",
-            StrokeStyle = "Solid",
-            ShadowIntensity = 45,
-            Shadow = true,
-            RimGlow = false,
-            GutterMaterial = "Solid",
-            GutterColor = "#FFF8F8F8"
-        };
-
-        public static CellBorderDto Round() => new()
-        {
-            Thickness = 2,
-            Padding = 8,
-            CornerRadius = 16,
-            Color = "#FFFFFFFF",
-            SecondaryColor = "#FFFFC83B",
-            StrokeStyle = "Gradient",
-            ShadowIntensity = 30,
-            Shadow = true,
-            RimGlow = true,
-            GutterMaterial = "Acrylic",
-            GutterColor = "#FFF8F8F8"
-        };
-
+        /// <summary>No line, mat or shadow.</summary>
         public static CellBorderDto Flush() => new()
         {
             Thickness = 0,
@@ -297,16 +261,6 @@ namespace ModernImageViewer
             GutterMaterial = "None",
             GutterColor = "#00000000"
         };
-
-        public static int Match(CellBorderDto? value)
-        {
-            if (value == null) return -1;
-            if (value.SameLook(Card())) return 0;
-            if (value.SameLook(Mat())) return 1;
-            if (value.SameLook(Round())) return 2;
-            if (value.SameLook(Flush())) return 3;
-            return -1;
-        }
     }
 
     /// <summary>Shared colour rules for the on-screen frame and the JPEG export.</summary>
@@ -868,7 +822,7 @@ namespace ModernImageViewer
             ("Purple", "#FF8764B8")
         };
 
-        /// <summary>The same set, with the white a new solid mat starts on, so it shows as chosen.</summary>
+        /// <summary>The same set, with the white a new mat starts on, so it shows as chosen.</summary>
         public static readonly (string Label, string Hex)[] MatColors =
             Colors.Select(c => c.Label == "White" ? (c.Label, "#FFF8F8F8") : c).ToArray();
 
@@ -942,6 +896,21 @@ namespace ModernImageViewer
 
         [JsonPropertyName("children")]
         public List<MosaicNodeDto>? Children { get; set; }
+
+        /// <summary>True when the tree places each of these photos exactly once, and every split has a weight for each part.</summary>
+        public bool FitsPhotos(int count)
+        {
+            var seen = new HashSet<int>();
+            return Check(this, seen, count) && seen.Count == count;
+        }
+
+        private static bool Check(MosaicNodeDto node, HashSet<int> seen, int count)
+        {
+            if (node.Leaf >= 0) return node.Leaf < count && seen.Add(node.Leaf);
+            if (node.Children == null || node.Children.Count == 0) return false;
+            if (node.Weights == null || node.Weights.Count != node.Children.Count) return false;
+            return node.Children.All(child => child != null && Check(child, seen, count));
+        }
 
         public static MosaicNodeDto FromMosaicLayout(MosaicLayout node)
         {

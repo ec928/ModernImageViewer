@@ -112,7 +112,7 @@ namespace ModernImageViewer.Tests
                         PanX = 15.0,
                         PanY = -10.0,
                         Hidden = true,
-                        Border = FrameLooks.Card()
+                        Border = new CellBorderDto { Thickness = 1, StrokeStyle = "InnerMuted" }
                     }
                 }
             };
@@ -248,21 +248,38 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
-        public void FrameLooks_MatchOnlyThePresetTheyName()
+        public void SameLook_IgnoresTheShadowFlagButNotTheFrame()
         {
-            Assert.Equal(0, FrameLooks.Match(FrameLooks.Card()));
-            Assert.Equal(1, FrameLooks.Match(FrameLooks.Mat()));
-            Assert.Equal(2, FrameLooks.Match(FrameLooks.Round()));
-            Assert.Equal(3, FrameLooks.Match(FrameLooks.Flush()));
-
-            var card = FrameLooks.Card();
-            var same = card.Clone();
-            same.Shadow = !card.Shadow;
-            Assert.True(card.SameLook(same));
+            var frame = new CellBorderDto { Thickness = 2, Padding = 8, ShadowIntensity = 40, Shadow = true };
+            var same = frame.Clone();
+            same.Shadow = !frame.Shadow;
+            Assert.True(frame.SameLook(same));
 
             same.Thickness = 9;
-            Assert.Equal(-1, FrameLooks.Match(same));
-            Assert.Equal(-1, FrameLooks.Match(new CellBorderDto()));
+            Assert.False(frame.SameLook(same));
+            Assert.True(FrameLooks.Flush().SameLook(FrameLooks.Flush()));
+        }
+
+        [Fact]
+        public void Mosaic_FitsOnlyATreeThatPlacesEachPhotoOnce()
+        {
+            var good = MosaicNodeDto.FromMosaicLayout(MosaicLayout.FromCounts(new[] { 2, 2 }, rows: true));
+            Assert.True(good.FitsPhotos(4));
+            Assert.False(good.FitsPhotos(5));
+            Assert.False(good.FitsPhotos(3));
+
+            var duplicate = new MosaicNodeDto
+            {
+                Weights = new List<double> { 1, 1 },
+                Children = new List<MosaicNodeDto> { new() { Leaf = 0 }, new() { Leaf = 0 } }
+            };
+            Assert.False(duplicate.FitsPhotos(2));
+
+            var missingWeights = new MosaicNodeDto
+            {
+                Children = new List<MosaicNodeDto> { new() { Leaf = 0 }, new() { Leaf = 1 } }
+            };
+            Assert.False(missingWeights.FitsPhotos(2));
         }
 
         [Fact]

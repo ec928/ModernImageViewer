@@ -49,6 +49,22 @@ namespace ModernImageViewer
             var file = BuildLayoutFile();
             file.Created = default;
             file.Canvas.Aspect = null;
+
+            // Floating cells as shares of the canvas, so resizing the window is not a change to undo.
+            double width = file.Canvas.Width ?? 0;
+            double height = file.Canvas.Height ?? 0;
+            if (width >= 1 && height >= 1)
+            {
+                foreach (var cell in file.Freeform ?? new List<FreeformCellDto>())
+                {
+                    cell.X = Math.Round(cell.X / width, 6);
+                    cell.Y = Math.Round(cell.Y / height, 6);
+                    cell.Width = Math.Round(cell.Width / width, 6);
+                    cell.Height = Math.Round(cell.Height / height, 6);
+                }
+                file.Canvas.Width = 1;
+                file.Canvas.Height = 1;
+            }
             return file.ToJson();
         }
 
@@ -61,6 +77,16 @@ namespace ModernImageViewer
             _undoStack.Add(now);
             if (_undoStack.Count > MaxUndoSteps + 1) _undoStack.RemoveAt(0);
             _redoStack.Clear();
+        }
+
+        /// <summary>
+        /// A session can open before the canvas has its size, and settling into it is not a change.
+        /// While nothing has been done yet, the starting point follows the canvas.
+        /// </summary>
+        private void RebaseUntouchedUndo()
+        {
+            if (_restoringUndo || _undoStack.Count != 1 || _redoStack.Count != 0) return;
+            _undoStack[0] = UndoSnapshot();
         }
 
         private void ResetUndo()
@@ -101,6 +127,9 @@ namespace ModernImageViewer
         {
             var file = MultiViewLayoutFile.FromJson(json);
             if (file == null) return;
+
+            // The open card edits a frame object the restore is about to replace.
+            _cellBorderFlyout?.Hide();
 
             // The rebuilt cells take the images already decoded, so an undo does not flash or decode again.
             var ready = new Dictionary<string, BitmapSource>(StringComparer.OrdinalIgnoreCase);

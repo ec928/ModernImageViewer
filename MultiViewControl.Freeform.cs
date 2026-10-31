@@ -1,5 +1,4 @@
 using Microsoft.UI.Input;
-using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -19,8 +18,29 @@ namespace ModernImageViewer
     {
         private readonly List<FreeformCard> _freeformCards = new();
         private int _maxFreeformZIndex = 5000;
+        // The canvas size the floating cells are currently laid out for.
+        private Size _freeformBasis;
 
-        public IReadOnlyList<FreeformCard> ActiveFreeformCards => _freeformCards;
+        /// <summary>Floating cells keep their place and share of the canvas when it changes size, as grid cells do.</summary>
+        private void RescaleFreeformCards(double width, double height)
+        {
+            if (width < 1 || height < 1) return;
+            if (_freeformBasis.Width >= 1e-6 && _freeformBasis.Height >= 1e-6
+                && (width != _freeformBasis.Width || height != _freeformBasis.Height))
+            {
+                double scaleX = width / _freeformBasis.Width;
+                double scaleY = height / _freeformBasis.Height;
+                foreach (var card in _freeformCards)
+                {
+                    var window = card.Container;
+                    Canvas.SetLeft(window, Canvas.GetLeft(window) * scaleX);
+                    Canvas.SetTop(window, Canvas.GetTop(window) * scaleY);
+                    window.Width *= scaleX;
+                    window.Height *= scaleY;
+                }
+            }
+            _freeformBasis = new Size(width, height);
+        }
 
         public sealed class FreeformCard
         {
@@ -30,10 +50,6 @@ namespace ModernImageViewer
             public Border? NotchHandle { get; set; }
             public string? ShadowKey { get; set; }
             public int ZIndex { get; set; } = 5000;
-            public double X { get; set; }
-            public double Y { get; set; }
-            public double Width { get; set; }
-            public double Height { get; set; }
         }
 
         public void SpawnFreeformCell(ImageItem item, FreeformCellDto? restoreDto = null)
@@ -63,6 +79,7 @@ namespace ModernImageViewer
                 Thumbnail = sameAsSource ? item.Thumbnail : null,
                 Dispatcher = item.Dispatcher
             };
+            if (!sameAsSource) FillFileDetails(freeformItem);
             if (restoreDto?.Hidden == true)
                 _hiddenItems.Add(freeformItem);
 
@@ -129,10 +146,14 @@ namespace ModernImageViewer
                 }
             }
 
-            w = Math.Clamp(w, 100, maxBoundW);
-            h = Math.Clamp(h, 80, maxBoundH);
-            x = Math.Clamp(x, 0, Math.Max(0, maxBoundW - w));
-            y = Math.Clamp(y, 0, Math.Max(0, maxBoundH - h));
+            // A saved cell is in the units of the canvas it was saved on, and is scaled to this one after loading.
+            if (restoreDto == null)
+            {
+                w = Math.Clamp(w, 100, maxBoundW);
+                h = Math.Clamp(h, 80, maxBoundH);
+                x = Math.Clamp(x, 0, Math.Max(0, maxBoundW - w));
+                y = Math.Clamp(y, 0, Math.Max(0, maxBoundH - h));
+            }
 
             int zIndex = restoreDto?.ZIndex ?? (++_maxFreeformZIndex);
             if (zIndex > _maxFreeformZIndex) _maxFreeformZIndex = zIndex;
@@ -183,11 +204,7 @@ namespace ModernImageViewer
                 Item = freeformItem,
                 SourceSlot = sourceSlot,
                 Container = freeformCell,
-                ZIndex = zIndex,
-                X = x,
-                Y = y,
-                Width = w,
-                Height = h
+                ZIndex = zIndex
             };
 
             _freeformCards.Add(card);
@@ -200,14 +217,6 @@ namespace ModernImageViewer
             _cellRoots[newSlot] = freeformCell;
 
             ShowHudAndOverlays();
-        }
-
-        public void BringFreeformCardToFront(FreeformCard card)
-        {
-            if (card?.Container == null) return;
-            card.ZIndex = ++_maxFreeformZIndex;
-            Canvas.SetZIndex(card.Container, card.ZIndex);
-            card.Container.Translation = new Vector3(0, 0, 256 + ((_maxFreeformZIndex - 5000) * 8));
         }
 
         public void DockFreeformCard(FreeformCard card)
@@ -477,14 +486,6 @@ namespace ModernImageViewer
                         slotGrid.Height = curH;
                         Canvas.SetLeft(slotGrid, curX);
                         Canvas.SetTop(slotGrid, curY);
-
-                        if (card != null)
-                        {
-                            card.X = curX;
-                            card.Y = curY;
-                            card.Width = curW;
-                            card.Height = curH;
-                        }
 
                         updateLayout();
                         e.Handled = true;

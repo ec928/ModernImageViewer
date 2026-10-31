@@ -35,14 +35,6 @@ namespace ModernImageViewer
             return border;
         }
 
-        public void SetBorderForItem(ImageItem item, CellBorderDto border)
-        {
-            if (item == null || string.IsNullOrEmpty(item.Path)) return;
-            _itemBorders[item] = border.Clone();
-            int slot = Slot(item);
-            if (slot >= 0) ApplyBorderToCell(slot);
-        }
-
         /// <summary>A cell's content is changing from one item to another. The cell keeps its frame and hidden state.</summary>
         private void MoveCellParameters(ImageItem from, ImageItem to)
         {
@@ -85,10 +77,22 @@ namespace ModernImageViewer
             if ((uint)slot >= (uint)_cellRoots.Length || (uint)slot >= (uint)_items.Count) return;
             if (_cellRoots[slot]?.Tag is not CellParts parts) return;
             bool hidden = _hiddenItems.Contains(_items[slot]);
+            bool failed = parts.Bound.Failed;
             if (parts.ImageContainer != null)
-                parts.ImageContainer.Visibility = hidden ? Visibility.Collapsed : Visibility.Visible;
-            if (parts.HiddenPlaceholder != null)
-                parts.HiddenPlaceholder.Visibility = hidden ? Visibility.Visible : Visibility.Collapsed;
+                parts.ImageContainer.Visibility = hidden || failed ? Visibility.Collapsed : Visibility.Visible;
+            if (parts.HiddenPlaceholder is StackPanel placeholder)
+            {
+                placeholder.Visibility = hidden || failed ? Visibility.Visible : Visibility.Collapsed;
+                if (placeholder.Children.Count >= 3
+                    && placeholder.Children[0] is FontIcon icon
+                    && placeholder.Children[1] is TextBlock title
+                    && placeholder.Children[2] is TextBlock detail)
+                {
+                    icon.Glyph = failed && !hidden ? "" : "";
+                    title.Text = failed && !hidden ? "File not found" : "Image hidden";
+                    detail.Text = failed && !hidden ? _items[slot].Name ?? string.Empty : "Right-click to show";
+                }
+            }
             parts.Bound.ApplyGeometry?.Invoke();
             ApplyBorderToCell(slot);
         }
@@ -402,6 +406,8 @@ namespace ModernImageViewer
                     ToolTipService.SetToolTip(button, saved
                         ? "Click to use this frame. Hold to save the current frame here."
                         : "Empty. Hold to save the current frame here.");
+                    // An empty preset reads as empty before anyone tries it.
+                    if (button.Content is TextBlock caption) caption.Opacity = saved ? 1 : 0.5;
                 }
                 ShowPresetTip();
                 AttachLongPress(button, () =>
@@ -488,8 +494,8 @@ namespace ModernImageViewer
             var matTrack = MakeSegment(new[] { "None", "Solid", "Frosted" }, new[]
             {
                 "No mat. The gutter shows the dark canvas",
-                "Flat colour in the gutter",
-                "The mat colour, translucent"
+                "Flat color in the gutter",
+                "The mat color, translucent"
             }, index =>
             {
                 border.GutterMaterial = matStyles[index];
@@ -508,15 +514,13 @@ namespace ModernImageViewer
             showMat = matShow;
             body.Children.Add(matTrack);
 
-            var matColors = FramePalette.WithClear("None", FramePalette.MatColors);
-            var matRow = MakeSwatches(matColors, () => border.GutterColor, hex =>
+            // None above already clears the mat, so this row is colors only.
+            var matRow = MakeSwatches(FramePalette.MatColors, () => border.GutterColor, hex =>
             {
                 border.GutterColor = hex;
-                if (string.Equals(hex, "#00000000", StringComparison.OrdinalIgnoreCase))
-                    border.GutterMaterial = "None";
-                else if (string.Equals(border.GutterMaterial, "None", StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(border.GutterMaterial, "None", StringComparison.OrdinalIgnoreCase))
                     border.GutterMaterial = "Solid";
-                if (border.Padding <= 0 && !string.Equals(hex, "#00000000", StringComparison.OrdinalIgnoreCase))
+                if (border.Padding <= 0)
                 {
                     border.Padding = 16;
                     syncing = true;
@@ -653,7 +657,7 @@ namespace ModernImageViewer
                         },
                         new TextBlock
                         {
-                            Text = "Apply to all photos",
+                            Text = "Apply to all cells",
                             FontSize = 12,
                             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                             Foreground = _menuWhitePrimary,
@@ -663,7 +667,7 @@ namespace ModernImageViewer
                 }
             };
             PaintButton(apply, Color.FromArgb(36, 255, 255, 255), Color.FromArgb(56, 255, 255, 255), Color.FromArgb(24, 255, 255, 255));
-            ToolTipService.SetToolTip(apply, "Copy this frame onto every photo in the comparison");
+            ToolTipService.SetToolTip(apply, "Copy this frame onto every cell");
             apply.Click += (_, _) =>
             {
                 var proto = border.Clone();
@@ -686,7 +690,7 @@ namespace ModernImageViewer
             var root = new StackPanel { Spacing = 10, Width = 328 };
             var title = new TextBlock
             {
-                Text = "Frame & Border \u2014 Photo " + (slot + 1),
+                Text = "Frame & Border \u2014 Position " + (slot + 1),
                 FontSize = 14,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                 Foreground = _menuWhitePrimary
@@ -695,7 +699,7 @@ namespace ModernImageViewer
             root.Children.Add(scroll);
             root.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle { Height = 1, Fill = _menuDividerBrush });
             root.Children.Add(apply);
-            AutomationProperties.SetName(root, "Frame and border for photo " + (slot + 1));
+            AutomationProperties.SetName(root, "Frame and border for position " + (slot + 1));
 
             var flyout = new Flyout
             {
@@ -799,8 +803,11 @@ namespace ModernImageViewer
                 return;
             }
 
-            var alpha = FrameShadow.RenderAlpha(width, height, pad, pad, cardW, cardH, border.CornerRadius, border.ShadowIntensity);
-            WriteShadow(image, alpha, width, height);
+            int previewW = Math.Max(1, width / ShadowPreviewDivisor);
+            int previewH = Math.Max(1, height / ShadowPreviewDivisor);
+            double scale = 1.0 / ShadowPreviewDivisor;
+            var alpha = FrameShadow.RenderAlpha(previewW, previewH, pad * scale, pad * scale, cardW * scale, cardH * scale, border.CornerRadius * scale, border.ShadowIntensity, scale, scale);
+            WriteShadow(image, alpha, previewW, previewH);
         }
 
         private static void WriteShadow(Image image, byte[] alpha, int width, int height)
