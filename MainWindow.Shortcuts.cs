@@ -14,6 +14,7 @@ namespace ModernImageViewer
             ("Anywhere", new[]
             {
                 ("F1", "This list"),
+                ("F6", "Move to the header buttons. Left, Right or Tab moves along, Enter presses, Esc returns"),
                 ("F11", "Full screen"),
                 ("Ctrl+1, 2, 3", "Window and tile size presets"),
             }),

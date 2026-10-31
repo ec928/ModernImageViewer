@@ -204,7 +204,7 @@ In accordance with workspace UX standards:
 
 ## 9. Keyboard Accessibility & Shortcuts
 
-Pictures can be browsed, viewed and managed without a mouse, and F1 lists every key below. The header (sort, theme, presets) is mouse only for now, because Tab opens the sidebar.
+Pictures can be browsed, viewed and managed without a mouse, and F1 lists the keys. Tab opens the sidebar, so F6 is the way into the header: Left, Right or Tab moves along it, Enter presses, Esc returns to the grid.
 
 | Category | Shortcut | Function |
 | :--- | :--- | :--- |
@@ -216,7 +216,7 @@ Pictures can be browsed, viewed and managed without a mouse, and F1 lists every 
 | | `Space` | Select or deselect the picture |
 | | `F2` / `F5` / `Delete` | Rename / refresh / Recycle Bin |
 | **Viewing** | `Space` / `,` / `.` | Play or pause an animation / previous and next frame |
-| | `F1` | Keyboard shortcuts |
+| | `F1` / `F6` | Keyboard shortcuts / move to the header buttons |
 | | `F11` | Toggle borderless fullscreen |
 | | `Ctrl + Wheel` | Zoom in / out |
 | | `B` | Toggle 2-page comic book spread mode |

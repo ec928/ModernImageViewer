@@ -1271,7 +1271,83 @@ namespace ModernImageViewer
 
         private void HeaderFlyout_Closed(object sender, object e)
         {
+            // Someone working through the header by keyboard carries on from the button they were on.
+            if (_headerNavigating && _headerButtonIndex < _headerButtons.Count)
+            {
+                _headerButtons[_headerButtonIndex].Focus(FocusState.Keyboard);
+                return;
+            }
             FocusGrid();
+        }
+
+        // F6 walks the header. Its buttons are not tab stops the rest of the time, so Tab and the arrow keys stay with the sidebar and the grid.
+        private bool _headerNavigating;
+        private int _headerButtonIndex;
+        private readonly List<Button> _headerButtons = new();
+
+        private void EnterHeader()
+        {
+            if (TileHeader == null || TileHeader.ActualHeight <= 0) return;
+            if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible) return;
+            _headerButtons.Clear();
+            CollectHeaderButtons(TileHeader);
+            if (_headerButtons.Count == 0) return;
+            foreach (var button in _headerButtons) button.IsTabStop = true;
+            _headerNavigating = true;
+            _headerButtonIndex = 0;
+            _headerButtons[0].Focus(FocusState.Keyboard);
+        }
+
+        private void CollectHeaderButtons(DependencyObject parent)
+        {
+            int count = VisualTreeHelper.GetChildrenCount(parent);
+            for (int i = 0; i < count; i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                if (child is Button { IsEnabled: true, Visibility: Visibility.Visible } button) _headerButtons.Add(button);
+                else CollectHeaderButtons(child);
+            }
+        }
+
+        private void LeaveHeader()
+        {
+            _headerNavigating = false;
+            foreach (var button in _headerButtons) button.ClearValue(Control.IsTabStopProperty);
+            _headerButtons.Clear();
+            FocusGrid();
+        }
+
+        /// <summary>Left, Right and Tab move along the header, and Esc leaves. Enter and Space belong to the button. True when the key was dealt with.</summary>
+        private bool HandleHeaderKey(KeyRoutedEventArgs e)
+        {
+            if (!FocusIsInside(TileHeader))
+            {
+                // A click elsewhere has already left the header.
+                LeaveHeader();
+                return false;
+            }
+            bool shift = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+            int step = e.Key switch
+            {
+                Windows.System.VirtualKey.Right => 1,
+                Windows.System.VirtualKey.Left => -1,
+                Windows.System.VirtualKey.Tab => shift ? -1 : 1,
+                _ => 0
+            };
+            if (step != 0)
+            {
+                _headerButtonIndex = (_headerButtonIndex + step + _headerButtons.Count) % _headerButtons.Count;
+                _headerButtons[_headerButtonIndex].Focus(FocusState.Keyboard);
+                e.Handled = true;
+                return true;
+            }
+            if (e.Key == Windows.System.VirtualKey.Escape)
+            {
+                LeaveHeader();
+                e.Handled = true;
+                return true;
+            }
+            return true;
         }
 
         private void SidebarView_PaneClosed(SplitView sender, object args)
@@ -2143,7 +2219,7 @@ namespace ModernImageViewer
                 return true;
             while (node != null)
             {
-                if (node is ContentDialog || node.GetType().Name == "MenuFlyoutPresenter")
+                if (node is ContentDialog || node.GetType().Name is "MenuFlyoutPresenter" or "FlyoutPresenter")
                     return true;
                 node = VisualTreeHelper.GetParent(node);
             }
@@ -2174,7 +2250,20 @@ namespace ModernImageViewer
                 return;
             }
 
+            if (e.Key == Windows.System.VirtualKey.F6 && !TileKeyFocusStays())
+            {
+                if (_headerNavigating) LeaveHeader();
+                else EnterHeader();
+                e.Handled = true;
+                return;
+            }
+
             if (TileKeyFocusStays()) return;
+
+            if (_headerNavigating)
+            {
+                if (HandleHeaderKey(e)) return;
+            }
 
             if (MultiViewControl != null && MultiViewControl.Visibility == Visibility.Visible)
             {

@@ -14,7 +14,7 @@ A high-performance, hardware-accelerated image viewer built for creators, 3D art
 
 **Comic Book Reader (`.cbz` / `.cbr`) & Dual View Modes** — Browse folders in responsive Tile View or high-density multi-column List View with an instant metadata/thumbnail inspector, and read `.cbz`/`.cbr` comic archives natively with 2-page spread mode (`B`).
 
-**Picks up where you left off** — The app reopens the folder you last had open, or Pictures if that folder can't be reached. When a file changes in the folder you're viewing, only that tile changes. Press **F1** for the keyboard shortcuts.
+**Picks up where you left off** — The app reopens the folder you last had open, or Pictures if that folder can't be reached. When a file changes in the folder you're viewing, only that tile changes. Press **F1** for the keyboard shortcuts, and **F6** to reach the header buttons from the keyboard.
 
 **Favourite Folders** — Star up to 10 folders in the Favourites and Recent Folders menu to keep them above your 10 most recent folders. A favourite stays until you remove it, even when its drive is unplugged, and Clear Recent Folders leaves favourites alone.
 

@@ -223,9 +223,9 @@
                                         <StackPanel Spacing="6">
                                             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                                                 <TextBlock Text="Tile Size" Width="56" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
-                                                <Slider x:Name="ThumbSizeSlider" Minimum="100" Maximum="400" Value="164" Width="136" VerticalAlignment="Center" IsTabStop="False" ValueChanged="ThumbSizeSlider_ValueChanged" ToolTipService.ToolTip="Adjust Tile Size"/>
+                                                <Slider x:Name="ThumbSizeSlider" Minimum="100" Maximum="400" Value="164" Width="136" VerticalAlignment="Center" IsTabStop="True" ValueChanged="ThumbSizeSlider_ValueChanged" ToolTipService.ToolTip="Adjust Tile Size"/>
                                                 <Rectangle Width="1" Height="18" Margin="4,0,2,0" VerticalAlignment="Center" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"/>
-                                                <Button Style="{StaticResource HeaderButtonStyle}" Click="ResetWindow_Click" ToolTipService.ToolTip="Reset Window &amp; Tile Size" AutomationProperties.Name="Reset Window &amp; Tile Size">
+                                                <Button Style="{StaticResource HeaderButtonStyle}" IsTabStop="True" Click="ResetWindow_Click" ToolTipService.ToolTip="Reset Window &amp; Tile Size" AutomationProperties.Name="Reset Window &amp; Tile Size">
                                                     <FontIcon Glyph="&#xE923;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                                 </Button>
                                             </StackPanel>
@@ -239,19 +239,19 @@
                                                             <ColumnDefinition Width="*"/>
                                                             <ColumnDefinition Width="*"/>
                                                         </Grid.ColumnDefinitions>
-                                                        <Button x:Name="Preset1Button" Grid.Column="0" Style="{StaticResource HeaderButtonStyle}" Width="42" Height="22" CornerRadius="4" Tag="0" Click="PresetSlot_Click" RightTapped="PresetSlot_RightTapped">
+                                                        <Button x:Name="Preset1Button" Grid.Column="0" Style="{StaticResource HeaderButtonStyle}" IsTabStop="True" Width="42" Height="22" CornerRadius="4" Tag="0" Click="PresetSlot_Click" RightTapped="PresetSlot_RightTapped">
                                                             <Grid Width="36" Height="20">
                                                                 <TextBlock x:Name="Preset1Text" Text="1" FontSize="11.5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                                 <Ellipse x:Name="Preset1Dot" Width="4" Height="4" Fill="{ThemeResource AccentTextFillColorPrimaryBrush}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,2,0" Visibility="Collapsed"/>
                                                             </Grid>
                                                         </Button>
-                                                        <Button x:Name="Preset2Button" Grid.Column="1" Style="{StaticResource HeaderButtonStyle}" Width="42" Height="22" CornerRadius="4" Tag="1" Click="PresetSlot_Click" RightTapped="PresetSlot_RightTapped">
+                                                        <Button x:Name="Preset2Button" Grid.Column="1" Style="{StaticResource HeaderButtonStyle}" IsTabStop="True" Width="42" Height="22" CornerRadius="4" Tag="1" Click="PresetSlot_Click" RightTapped="PresetSlot_RightTapped">
                                                             <Grid Width="36" Height="20">
                                                                 <TextBlock x:Name="Preset2Text" Text="2" FontSize="11.5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                                 <Ellipse x:Name="Preset2Dot" Width="4" Height="4" Fill="{ThemeResource AccentTextFillColorPrimaryBrush}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,2,0" Visibility="Collapsed"/>
                                                             </Grid>
                                                         </Button>
-                                                        <Button x:Name="Preset3Button" Grid.Column="2" Style="{StaticResource HeaderButtonStyle}" Width="42" Height="22" CornerRadius="4" Tag="2" Click="PresetSlot_Click" RightTapped="PresetSlot_RightTapped">
+                                                        <Button x:Name="Preset3Button" Grid.Column="2" Style="{StaticResource HeaderButtonStyle}" IsTabStop="True" Width="42" Height="22" CornerRadius="4" Tag="2" Click="PresetSlot_Click" RightTapped="PresetSlot_RightTapped">
                                                             <Grid Width="36" Height="20">
                                                                 <TextBlock x:Name="Preset3Text" Text="3" FontSize="11.5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                                 <Ellipse x:Name="Preset3Dot" Width="4" Height="4" Fill="{ThemeResource AccentTextFillColorPrimaryBrush}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,2,0" Visibility="Collapsed"/>
@@ -260,7 +260,7 @@
                                                     </Grid>
                                                 </Border>
                                                 <Rectangle Width="1" Height="18" Margin="4,0,2,0" VerticalAlignment="Center" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"/>
-                                                <Button x:Name="PresetSaveModeButton" Style="{StaticResource HeaderButtonStyle}" Click="PresetSaveMode_Click" ToolTipService.ToolTip="Save Current Window &amp; Tile Size to a Preset Slot" AutomationProperties.Name="Save Current Window &amp; Tile Size to a Preset Slot">
+                                                <Button x:Name="PresetSaveModeButton" Style="{StaticResource HeaderButtonStyle}" IsTabStop="True" Click="PresetSaveMode_Click" ToolTipService.ToolTip="Save Current Window &amp; Tile Size to a Preset Slot" AutomationProperties.Name="Save Current Window &amp; Tile Size to a Preset Slot">
                                                     <FontIcon x:Name="PresetSaveModeIcon" Glyph="&#xE74E;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                                 </Button>
                                             </StackPanel>
@@ -273,13 +273,13 @@
                                                             <ColumnDefinition Width="*"/>
                                                             <ColumnDefinition Width="*"/>
                                                         </Grid.ColumnDefinitions>
-                                                        <Button x:Name="ThemeLightButton" Grid.Column="0" Style="{StaticResource HeaderButtonStyle}" Width="64" Height="22" CornerRadius="4" Tag="Light" Click="ThemeMode_Click" ToolTipService.ToolTip="Light Theme">
+                                                        <Button x:Name="ThemeLightButton" Grid.Column="0" Style="{StaticResource HeaderButtonStyle}" IsTabStop="True" Width="64" Height="22" CornerRadius="4" Tag="Light" Click="ThemeMode_Click" ToolTipService.ToolTip="Light Theme">
                                                             <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" HorizontalAlignment="Center">
                                                                 <FontIcon x:Name="ThemeLightIcon" Glyph="&#xE706;" FontFamily="Segoe Fluent Icons" FontSize="11.5"/>
                                                                 <TextBlock x:Name="ThemeLightText" Text="Light" FontSize="11.5"/>
                                                             </StackPanel>
                                                         </Button>
-                                                        <Button x:Name="ThemeDarkButton" Grid.Column="1" Style="{StaticResource HeaderButtonStyle}" Width="64" Height="22" CornerRadius="4" Tag="Dark" Click="ThemeMode_Click" ToolTipService.ToolTip="Dark Theme">
+                                                        <Button x:Name="ThemeDarkButton" Grid.Column="1" Style="{StaticResource HeaderButtonStyle}" IsTabStop="True" Width="64" Height="22" CornerRadius="4" Tag="Dark" Click="ThemeMode_Click" ToolTipService.ToolTip="Dark Theme">
                                                             <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" HorizontalAlignment="Center">
                                                                 <FontIcon x:Name="ThemeDarkIcon" Glyph="&#xE708;" FontFamily="Segoe Fluent Icons" FontSize="11.5"/>
                                                                 <TextBlock x:Name="ThemeDarkText" Text="Dark" FontSize="11.5"/>
@@ -288,12 +288,12 @@
                                                     </Grid>
                                                 </Border>
                                                 <Rectangle Width="1" Height="18" Margin="4,0,2,0" VerticalAlignment="Center" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"/>
-                                                <Button x:Name="ThemeSystemButton" Style="{StaticResource HeaderButtonStyle}" Tag="System" Click="ThemeMode_Click" ToolTipService.ToolTip="Use Windows System Theme" AutomationProperties.Name="Use Windows System Theme">
+                                                <Button x:Name="ThemeSystemButton" Style="{StaticResource HeaderButtonStyle}" IsTabStop="True" Tag="System" Click="ThemeMode_Click" ToolTipService.ToolTip="Use Windows System Theme" AutomationProperties.Name="Use Windows System Theme">
                                                     <FontIcon x:Name="ThemeSystemIcon" Glyph="&#xE770;" FontFamily="Segoe Fluent Icons" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                                 </Button>
                                             </StackPanel>
                                             <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.5"/>
-                                            <Button Style="{StaticResource SubtleButtonStyle}" Click="About_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Height="28" Padding="8,0" CornerRadius="4" IsTabStop="False" AutomationProperties.Name="About" ToolTipService.ToolTip="About Modern Image Viewer">
+                                            <Button Style="{StaticResource SubtleButtonStyle}" Click="About_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Height="28" Padding="8,0" CornerRadius="4" IsTabStop="True" AutomationProperties.Name="About" ToolTipService.ToolTip="About Modern Image Viewer">
                                                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                                                     <FontIcon Glyph="&#xE946;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                                     <TextBlock Text="About Modern Image Viewer" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
