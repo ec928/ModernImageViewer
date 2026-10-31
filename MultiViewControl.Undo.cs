@@ -125,6 +125,27 @@ namespace ModernImageViewer
             RestoreSnapshot(next);
         }
 
+        /// <summary>Start again in place: four empty cells, no floating cells, default frames and canvas. It is one undo step.</summary>
+        private void ResetCanvasAndImages()
+        {
+            AutoSaveSession();
+            CaptureUndoPoint();
+            var blank = new MultiViewLayoutFile { State = new LayoutStateDto { Lines = 2, IsFillMode = true } };
+            for (int i = 0; i < 4; i++)
+                blank.Photos.Add(new PhotoSlotDto { Slot = i, Path = string.Empty });
+            _cellBorderFlyout?.Hide();
+            _restoringUndo = true;
+            try
+            {
+                ApplyLayoutFile(blank, restoreAspect: false);
+            }
+            finally
+            {
+                _restoringUndo = false;
+            }
+            CaptureUndoPoint();
+        }
+
         private const int AutoSaveCount = 3;
 
         private static string AutoSavePath(int age) =>

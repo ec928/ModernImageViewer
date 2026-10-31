@@ -70,7 +70,7 @@ Exit codes: `0` success, `1` publish failed, `2` output looks wrong, `3` app cra
 
 ## 🖼 Multi-View
 
-Select two or more photos in the tile grid (Ctrl+click or Shift+click), then click one of them or press **Enter**. Multi-view shows up to 16 photos. When more are selected, the bar shows how many are on screen, for example **16 of 23 shown**. The multi-view window keeps its own size, separate from the normal window.
+Select two or more photos in the tile grid (Ctrl+click or Shift+click), then click one of them or press **Enter**. Clicking a photo outside the selection opens that photo on its own. Multi-view shows up to 16 photos. When more are selected, the bar shows how many are on screen, for example **16 of 23 shown**. The multi-view window keeps its own size, separate from the normal window.
 
 The bar appears when you move the mouse:
 
@@ -81,7 +81,7 @@ The bar appears when you move the mouse:
 | **3 Rows** / **Columns** | The switch on the bar turns the grid, and the side in use shows how many lines. Either side opens the grid layout card, and the side in use closes it again. The layout inspector and playbar stay as an immersive dark glass HUD over the photos. **−** and **+** at the top of the card set how many lines. Each line is drawn as that many photos, with the count on the bar: rows are bands, columns are stacks from the left. A line's **−** and **+** move one photo. **+** takes it from the last other line that has more than one, and **−** moves it to the last line, or to the line before when that line is already the last. **Even out** puts the lines back to an even split when they differ. **R** flips rows and columns. The **−** and **+** keys change how many lines. **Hero** in the card picks **Off**, **Banner**, **Rectangle** or **Pair**, and **↻** moves it while one is on: a banner or pair goes round the top, right, bottom and left sides. **Banner** is one large photo along a side. **Rectangle** is one large photo in a corner block, with 4, 5, 6, 7 or 9 photos. **Pair** is the first two photos large, with 3 or more. **H** steps through them. |
 | **Canvas** | Aspect ratio: 16:9, 16:10, 21:9, 4:3, 1:1 or 3:4, or resize the window for any other. Surface and color: what shows behind the cells. **Frame & Border**: a line, rounded corners, a margin and a shadow around the whole canvas |
 | **Save/Load** (**Ctrl+S**) | Copy the canvas to the clipboard (**Ctrl+C**), or save it as a JPEG or PNG at 720p to 4320p, at the window's size, or at a custom size. Save the layout as a `.mivlayout` file and reopen it later. Image sizes are on the left of the menu, layouts on the right, with your favourite and recent folders. A folder with more layouts than fit shows **+N**, which opens the file picker |
-| **Wheel** (advanced) | **Undo** (**Ctrl+Z**), **Redo** (**Ctrl+Y**), and **Fit whole photos** or **Fill cells**: Fit shows the whole of each photo, Fill crops each photo to its cell |
+| **Wheel** (advanced) | **Undo** (**Ctrl+Z**), **Redo** (**Ctrl+Y**), and **Fit whole photos** or **Fill cells**: Fit shows the whole of each photo, Fill crops each photo to its cell. **Reset canvas and images** starts again with four empty cells and a plain canvas; Undo brings your layout back, and it is also kept under **Autosaved** in Save/Load |
 
 With a Banner or Pair, the rows, columns and per-line counts arrange the other photos. A Rectangle does not follow those lines. Changing the line count or a line's count turns that hero off.
 

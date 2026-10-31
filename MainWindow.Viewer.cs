@@ -3364,7 +3364,8 @@ namespace ModernImageViewer
             {
                 selected = ImageGrid.SelectedItems.OfType<ImageItem>().Where(img => !img.IsDirectory).ToList();
             }
-            if (CanViewTogether(selected.Count))
+            // Only a click on one of the selected pictures views them together. Any other click is about the thing clicked.
+            if (CanViewTogether(selected.Count) && e.ClickedItem is ImageItem clicked && selected.Contains(clicked))
             {
                 OpenMultiView(selected);
                 return;

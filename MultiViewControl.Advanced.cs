@@ -633,6 +633,11 @@ namespace ModernImageViewer
             });
             ToolTipService.SetToolTip(fillFit, _isFillMode ? "Show the whole of each photo" : "Crop each photo to fill its cell");
             AdvancedMenuFlyout.Items.Add(fillFit);
+
+            AdvancedMenuFlyout.Items.Add(new MenuFlyoutSeparator());
+            var reset = MakeAdvancedItem("Reset canvas and images", "\uE72C", ResetCanvasAndImages);
+            ToolTipService.SetToolTip(reset, "Start again with four empty cells and a plain canvas. Undo brings it back.");
+            AdvancedMenuFlyout.Items.Add(reset);
         }
 
         /// <summary>The surface and color behind the cells, under the canvas shape.</summary>
