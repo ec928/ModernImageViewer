@@ -467,17 +467,7 @@ namespace ModernImageViewer
 
             colorLabel = SectionLabel("Color");
             body.Children.Add(colorLabel);
-            (string Label, string Hex)[] lineColors =
-            {
-                ("Clear", "#00000000"),
-                ("White", "#FFFFFFFF"),
-                ("Black", "#FF000000"),
-                ("Charcoal", "#FF252525"),
-                ("Gold", "#FFFFC83B"),
-                ("Blue", "#FF0078D4"),
-                ("Red", "#FFD13438"),
-                ("Cyan", "#FF00B7C3")
-            };
+            var lineColors = FramePalette.WithClear("Clear", FramePalette.Colors);
             var colorRow = MakeSwatches(lineColors, () => border.Color, hex =>
             {
                 border.Color = hex;
@@ -495,17 +485,7 @@ namespace ModernImageViewer
 
             endBlock = new StackPanel { Spacing = 6 };
             endBlock.Children.Add(SectionLabel("End color"));
-            (string Label, string Hex)[] endColors =
-            {
-                ("Fade", "#00000000"),
-                ("White", "#FFFFFFFF"),
-                ("Black", "#FF000000"),
-                ("Charcoal", "#FF252525"),
-                ("Gold", "#FFFFC83B"),
-                ("Blue", "#FF0078D4"),
-                ("Red", "#FFD13438"),
-                ("Cyan", "#FF00B7C3")
-            };
+            var endColors = FramePalette.WithClear("Fade", FramePalette.Colors);
             var endRow = MakeSwatches(endColors, () => border.SecondaryColor, hex =>
             {
                 border.SecondaryColor = hex;
@@ -544,17 +524,7 @@ namespace ModernImageViewer
             showMat = matShow;
             body.Children.Add(matTrack);
 
-            (string Label, string Hex)[] matColors =
-            {
-                ("None", "#00000000"),
-                ("Gallery white", "#FFF8F8F8"),
-                ("Warm cream", "#FFF3EFE6"),
-                ("Studio gray", "#FFE0E0E0"),
-                ("Charcoal", "#FF262626"),
-                ("Black", "#FF000000"),
-                ("Navy", "#FF182230"),
-                ("Gold", "#FFFFC83B")
-            };
+            var matColors = FramePalette.WithClear("None", FramePalette.MatColors);
             var matRow = MakeSwatches(matColors, () => border.GutterColor, hex =>
             {
                 border.GutterColor = hex;

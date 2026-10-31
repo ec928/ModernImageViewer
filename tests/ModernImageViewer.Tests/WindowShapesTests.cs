@@ -113,6 +113,25 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
+        public void NoTwoSwatchesLookAlike()
+        {
+            var lists = new[]
+            {
+                FramePalette.Colors.Select(c => c.Hex).ToArray(),
+                FramePalette.MatColors.Select(c => c.Hex).ToArray(),
+                CanvasLook.Colors.Select(c => c.Hex).ToArray()
+            };
+            foreach (var list in lists)
+            {
+                for (int i = 0; i < list.Length; i++)
+                {
+                    for (int j = i + 1; j < list.Length; j++)
+                        Assert.True(FramePalette.Distance(list[i], list[j]) >= 60, list[i] + " is too close to " + list[j]);
+                }
+            }
+        }
+
+        [Fact]
         public void SnapPullsTheNearestEdgeOrCentreOntoALine()
         {
             Assert.Equal((100.0, (double?)100), FreeformSnap.Snap(104, 50, new[] { 100.0 }));

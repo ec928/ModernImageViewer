@@ -853,6 +853,38 @@ namespace ModernImageViewer
         }
     }
 
+    /// <summary>The one set of swatches for strokes, gradient ends and mats. Each must read as its own colour.</summary>
+    public static class FramePalette
+    {
+        public static readonly (string Label, string Hex)[] Colors =
+        {
+            ("White", "#FFFFFFFF"),
+            ("Black", "#FF000000"),
+            ("Grey", "#FF808080"),
+            ("Gold", "#FFFFC83B"),
+            ("Red", "#FFD13438"),
+            ("Green", "#FF2E9E5B"),
+            ("Blue", "#FF0078D4"),
+            ("Purple", "#FF8764B8")
+        };
+
+        /// <summary>The same set, with the white the Mat and Round presets use, so those presets mark it as chosen.</summary>
+        public static readonly (string Label, string Hex)[] MatColors =
+            Colors.Select(c => c.Label == "White" ? (c.Label, "#FFF8F8F8") : c).ToArray();
+
+        public static (string Label, string Hex)[] WithClear(string label, (string Label, string Hex)[] colors) =>
+            new[] { (label, "#00000000") }.Concat(colors).ToArray();
+
+        /// <summary>Straight-line distance between two colours. Black to white is about 442.</summary>
+        public static double Distance(string a, string b)
+        {
+            var x = FrameColor.Parse(a);
+            var y = FrameColor.Parse(b);
+            double dr = x.R - y.R, dg = x.G - y.G, db = x.B - y.B;
+            return Math.Sqrt(dr * dr + dg * dg + db * db);
+        }
+    }
+
     /// <summary>What the canvas shows behind the cells, on screen and in the export.</summary>
     public static class CanvasLook
     {
@@ -865,15 +897,14 @@ namespace ModernImageViewer
 
         public static readonly (string Name, string Hex)[] Colors =
         {
-            ("Near black", DefaultColor),
-            ("Black", "#FF000000"),
+            ("Black", DefaultColor),
             ("White", "#FFFFFFFF"),
-            ("Warm white", "#FFF4EFE6"),
             ("Grey", "#FF808080"),
-            ("Slate", "#FF2F3B47"),
-            ("Navy", "#FF14213D"),
-            ("Forest", "#FF1F3A2D"),
-            ("Burgundy", "#FF4A1525")
+            ("Sand", "#FFC8B08A"),
+            ("Slate", "#FF46586B"),
+            ("Navy", "#FF14306B"),
+            ("Forest", "#FF1F5A3D"),
+            ("Burgundy", "#FF6E1F35")
         };
 
         public static string Describe(string surface) => surface switch
