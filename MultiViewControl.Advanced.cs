@@ -11,7 +11,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using Windows.Foundation;
-using Windows.Storage.Pickers;
 
 namespace ModernImageViewer
 {
@@ -71,7 +70,7 @@ namespace ModernImageViewer
 
             if (!IsEmptyCell(item))
             {
-                image.Items.Add(MakeAdvancedItem("Replace image\u2026", "\uE8E5", () => PickReplacementImage(item)));
+                image.Items.Add(MakeAdvancedItem("Replace image\u2026", "\uE8E5", () => AddImageRequested?.Invoke(this, item)));
                 image.Items.Add(MakeAdvancedItem("Clear cell", "\uE894", () => EmptyCell(Slot(item))));
                 image.Items.Add(new MenuFlyoutSeparator());
                 image.Items.Add(MakeAdvancedItem("Rotate image left", "\uE7AD", () => ChangeImage(g => g.TurnImage(-90)), mirrorIcon: true));
@@ -81,22 +80,6 @@ namespace ModernImageViewer
             }
 
             if (image.Items.Count > 0) menu.Items.Add(image);
-        }
-
-        /// <summary>Choose a file to show in this cell. The cell keeps its parameters, as with any change of content.</summary>
-        private async void PickReplacementImage(ImageItem item)
-        {
-            if (MainWindow.Instance == null) return;
-            var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.PicturesLibrary };
-            foreach (string extension in MainWindow.PictureExtensions)
-                picker.FileTypeFilter.Add(extension);
-            WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(MainWindow.Instance));
-
-            var file = await picker.PickSingleFileAsync();
-            if (file == null) return;
-            // The session may have moved on while the dialog was open.
-            int slot = Slot(item);
-            if (slot >= 0) ReplaceCellImage(slot, file.Path);
         }
 
         /// <summary>A picture chosen for this cell in the app.</summary>
