@@ -950,7 +950,7 @@ namespace ModernImageViewer
         {
             if (MultiViewControl == null) return;
             var picked = Images.Where(img => img.IsGridSelected && !img.IsDirectory).ToList();
-            if (picked.Count < MultiViewControl.ShownSlots || !MultiViewControl.TryReplacePhotos(picked))
+            if (!MultiViewControl.TryReplacePhotos(picked, FolderPaths()))
             {
                 NoteParkedSelection();
                 return;
@@ -986,12 +986,16 @@ namespace ModernImageViewer
         private void NoteParkedSelection()
         {
             if (!_multiViewParked || MultiViewControl == null || MultiSelectCountText == null) return;
-            int slots = MultiViewControl.ShownSlots;
-            int count = Images.Count(img => img.IsGridSelected && !img.IsDirectory);
-            if (count <= 0) return;
-            string frames = slots == 1 ? "1 photo" : slots + " photos";
-            MultiSelectCountText.Text = count + " selected. The layout has " + frames + " on screen.";
+            var picked = Images.Where(img => img.IsGridSelected && !img.IsDirectory).ToList();
+            if (picked.Count <= 0) return;
+            int missing = MultiViewControl.PhotosStillNeeded(picked, FolderPaths());
+            MultiSelectCountText.Text = picked.Count + " selected." + (missing > 0 ? " Pick " + missing + " more for the layout." : " Ready for the layout.");
         }
+
+        private HashSet<string> FolderPaths() =>
+            new(Images.Where(img => !img.IsDirectory && !string.IsNullOrEmpty(img.Path)).Select(img => img.Path), StringComparer.OrdinalIgnoreCase);
+
+        private bool CanViewTogether(int selected) => selected > 1 || (_multiViewParked && selected > 0);
 
         private void RestoreViewTogetherTip()
         {
@@ -1958,7 +1962,7 @@ namespace ModernImageViewer
                 {
                     selected = ImageGrid.SelectedItems.OfType<ImageItem>().Where(img => !img.IsDirectory).ToList();
                 }
-                if (selected.Count > 1)
+                if (CanViewTogether(selected.Count))
                 {
                     OpenMultiView(selected);
                     e.Handled = true;
@@ -1974,7 +1978,7 @@ namespace ModernImageViewer
             {
                 selected = ImageGrid.SelectedItems.OfType<ImageItem>().Where(img => !img.IsDirectory).ToList();
             }
-            if (selected.Count > 1)
+            if (CanViewTogether(selected.Count))
             {
                 OpenMultiView(selected);
                 return;
@@ -2117,7 +2121,7 @@ namespace ModernImageViewer
                 {
                     selected = ImageGrid.SelectedItems.OfType<ImageItem>().Where(img => !img.IsDirectory).ToList();
                 }
-                if (selected.Count > 1)
+                if (CanViewTogether(selected.Count))
                 {
                     OpenMultiView(selected);
                     e.Handled = true;
@@ -2240,7 +2244,7 @@ namespace ModernImageViewer
                         }
                         {
                             var selectedNonDirs = ImageGrid.SelectedItems.OfType<ImageItem>().Where(i => !i.IsDirectory).ToList();
-                            if (selectedNonDirs.Count > 1)
+                            if (CanViewTogether(selectedNonDirs.Count))
                             {
                                 OpenMultiView(selectedNonDirs);
                                 e.Handled = true;
@@ -3151,7 +3155,7 @@ namespace ModernImageViewer
             {
                 selected = ImageGrid.SelectedItems.OfType<ImageItem>().Where(img => !img.IsDirectory).ToList();
             }
-            if (selected.Count > 1)
+            if (CanViewTogether(selected.Count))
             {
                 OpenMultiView(selected);
                 return;

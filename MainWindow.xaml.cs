@@ -711,7 +711,7 @@ namespace ModernImageViewer
         private void MultiSelectViewTogether_Click(object sender, RoutedEventArgs e)
         {
             var selectedItems = ImageGrid.SelectedItems.OfType<ImageItem>().Where(i => !i.IsDirectory).ToList();
-            if (selectedItems.Count > 1)
+            if (CanViewTogether(selectedItems.Count))
             {
                 OpenMultiView(selectedItems);
             }
@@ -720,7 +720,7 @@ namespace ModernImageViewer
         private void GridMenuMultiView_Click(object sender, RoutedEventArgs e)
         {
             var selectedItems = ImageGrid.SelectedItems.OfType<ImageItem>().Where(i => !i.IsDirectory).ToList();
-            if (selectedItems.Count > 1)
+            if (CanViewTogether(selectedItems.Count))
             {
                 OpenMultiView(selectedItems);
             }

@@ -2839,59 +2839,81 @@ namespace ModernImageViewer
             return paths;
         }
 
-        /// <summary>
-        /// Put these photos into the frames already on screen. The first frames keep
-        /// their edges, hero, and zoom. Later photos wait off screen.
-        /// </summary>
-        public bool TryReplacePhotos(IReadOnlyList<ImageItem> incoming)
+        private List<string> ShownCellPaths()
         {
             int slots = ShownSlots;
-            if (slots < 2 || !CellRootsReady()) return false;
-            var photos = new List<ImageItem>(incoming.Count);
-            foreach (var item in incoming)
-            {
-                if (item != null && !item.IsDirectory)
-                    photos.Add(item);
-            }
-            if (photos.Count < slots) return false;
+            var paths = new List<string>(slots);
+            for (int i = 0; i < slots; i++) paths.Add(_items[i].Path);
+            return paths;
+        }
+
+        private static List<string> PickedPaths(IReadOnlyList<ImageItem> picked) =>
+            picked.Where(p => p != null && !p.IsDirectory && !string.IsNullOrEmpty(p.Path)).Select(p => p.Path).ToList();
+
+        public int PhotosStillNeeded(IReadOnlyList<ImageItem> picked, ISet<string> folderPaths) =>
+            CellPhotoPick.StillNeeded(ShownCellPaths(), PickedPaths(picked), folderPaths);
+
+        /// <summary>
+        /// Apply a selection to the cells on screen. A cell whose photo is still selected keeps it, and the
+        /// newly selected photos go into the others (see <see cref="CellPhotoPick"/>). Each cell keeps its parameters.
+        /// Later photos wait off screen. False when the selection leaves a cell with nothing to show.
+        /// </summary>
+        public bool TryReplacePhotos(IReadOnlyList<ImageItem> picked, ISet<string> folderPaths)
+        {
+            int slots = ShownSlots;
+            if (slots < 1 || !CellRootsReady()) return false;
+            var cells = ShownCellPaths();
+            var plan = CellPhotoPick.Assign(cells, PickedPaths(picked), folderPaths);
+            if (plan == null) return false;
 
             ExitSolo();
             _framedSlots = slots;
 
-            // Each on-screen cell keeps its frame and hidden state, whatever image it now shows.
-            var frames = new CellBorderDto?[slots];
-            var turns = new CellGeometryDto?[slots];
-            var hidden = new bool[slots];
-            for (int i = 0; i < slots; i++)
+            // One item for each new path: its ImageItem holds the cell's parameters once it is on a cell.
+            var incoming = new List<ImageItem>();
+            var seen = new HashSet<string>(cells, StringComparer.OrdinalIgnoreCase);
+            foreach (var photo in picked)
             {
-                _itemBorders.TryGetValue(_items[i], out frames[i]);
-                _cellGeometry.TryGetValue(_items[i], out turns[i]);
-                hidden[i] = _hiddenItems.Contains(_items[i]);
+                if (photo != null && !photo.IsDirectory && !string.IsNullOrEmpty(photo.Path) && seen.Add(photo.Path))
+                    incoming.Add(photo);
             }
+
             int oldGrid = GridCellCount;
-            for (int i = 0; i < oldGrid; i++)
+            for (int i = slots; i < oldGrid; i++)
             {
                 _itemBorders.Remove(_items[i]);
                 _cellGeometry.Remove(_items[i]);
                 _hiddenItems.Remove(_items[i]);
             }
 
-            // Freeform cells are not part of the selection. They stay, after the new photos.
+            var changed = new List<int>();
+            var used = new HashSet<int>();
+            var shown = _items.Take(slots).ToList();
+            for (int i = 0; i < slots; i++)
+            {
+                if (plan[i] < 0) continue;
+                var photo = incoming[plan[i]];
+                MoveCellParameters(shown[i], photo);
+                shown[i] = photo;
+                used.Add(plan[i]);
+                changed.Add(i);
+            }
+
+            // Floating cells are not part of the selection. They stay, after the waiting photos.
             var freeformRoots = _freeformCards.Select(c => c.Container).ToList();
             var gridRoots = _cellRoots.Take(slots).ToList();
+            var waiting = incoming.Where((_, index) => !used.Contains(index)).ToList();
             _items.Clear();
-            _items.AddRange(photos);
+            _items.AddRange(shown);
+            _items.AddRange(waiting);
             _items.AddRange(_freeformCards.Select(c => c.Item));
             var roots = new FrameworkElement?[_items.Count];
             for (int i = 0; i < slots; i++) roots[i] = gridRoots[i];
-            for (int i = 0; i < freeformRoots.Count; i++) roots[photos.Count + i] = freeformRoots[i];
+            for (int i = 0; i < freeformRoots.Count; i++) roots[slots + waiting.Count + i] = freeformRoots[i];
             _cellRoots = roots;
 
-            for (int i = 0; i < slots; i++)
+            foreach (int i in changed)
             {
-                if (frames[i] != null) _itemBorders[_items[i]] = frames[i]!;
-                if (turns[i] != null) _cellGeometry[_items[i]] = turns[i]!;
-                if (hidden[i]) _hiddenItems.Add(_items[i]);
                 if (_cellRoots[i]?.Tag is CellParts parts)
                 {
                     parts.Bound.Item = _items[i];
