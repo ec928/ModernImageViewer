@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using Windows.Foundation;
+using Windows.Storage.Pickers;
 
 namespace ModernImageViewer
 {
@@ -68,6 +69,8 @@ namespace ModernImageViewer
                 ShowHiddenState(Slot(item));
             }
 
+            advanced.Items.Add(MakeAdvancedItem("Replace image\u2026", "\uE8E5", () => PickReplacementImage(item)));
+            advanced.Items.Add(new MenuFlyoutSeparator());
             advanced.Items.Add(MakeAdvancedItem("Rotate image left", "\uE7AD", () => ChangeImage(g => g.TurnImage(-90)), mirrorIcon: true));
             advanced.Items.Add(MakeAdvancedItem("Rotate image right", "\uE7AD", () => ChangeImage(g => g.TurnImage(90))));
             advanced.Items.Add(MakeAdvancedItem("Mirror image", "\uE8AB", () => ChangeImage(g => g.ImageFlipH = !g.ImageFlipH)));
@@ -82,6 +85,39 @@ namespace ModernImageViewer
             }
 
             menu.Items.Add(advanced);
+        }
+
+        /// <summary>Choose a file to show in this cell. The cell keeps its parameters, as with any change of content.</summary>
+        private async void PickReplacementImage(ImageItem item)
+        {
+            if (MainWindow.Instance == null) return;
+            var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.PicturesLibrary };
+            foreach (string extension in MainWindow.PictureExtensions)
+                picker.FileTypeFilter.Add(extension);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(MainWindow.Instance));
+
+            var file = await picker.PickSingleFileAsync();
+            if (file == null) return;
+            // The session may have moved on while the dialog was open.
+            int slot = Slot(item);
+            if (slot >= 0) ReplaceCellImage(slot, file.Path);
+        }
+
+        private void ReplaceCellImage(int slot, string path)
+        {
+            var replacement = new ImageItem { Path = path, Name = System.IO.Path.GetFileName(path), Dispatcher = DispatcherQueue };
+            FillFileDetails(replacement);
+            var root = (uint)slot < (uint)_cellRoots.Length ? _cellRoots[slot] : null;
+
+            MoveCellParameters(_items[slot], replacement);
+            _items[slot] = replacement;
+            var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(root, c.Container));
+            if (card != null) card.Item = replacement;
+
+            RebindCell(slot);
+            ShowHiddenState(slot);
+            ShowHudAndOverlays();
+            NoteUserAction();
         }
 
         private MenuFlyoutSubItem MakeWindowMenu(FreeformCard card)

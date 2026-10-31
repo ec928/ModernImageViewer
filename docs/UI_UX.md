@@ -131,8 +131,9 @@ Swap with...              >   Contents only | With attributes
 Copy to...                >   Position 1    | Position 1
 --------------------------    Position 2... | Position 2...
 Frame & Border...
-Advanced                  >   Rotate image left / right
---------------------------    Mirror image, Flip image
+Advanced                  >   Replace image...
+--------------------------    Rotate image left / right
+                              Mirror image, Flip image
 Solo / Maximize               ----------- floating cells only
 Freeform  (or Dock to Grid)   Window  >   Rectangle, Squircle, Circle / Oval, Arch / Tombstone,
 Hide image                                L-shape, Triangle, Right triangle, Rhombus / Diamond,

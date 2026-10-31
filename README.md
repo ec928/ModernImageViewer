@@ -93,7 +93,7 @@ On the photos themselves:
 - Scroll to zoom, drag to pan, middle-click to reset, double-click to zoom in or back out.
 - Hover over a photo to show its buttons at the top right. The move arrows move it one place earlier or later; they are left out on a very small photo.
 - **Alt+drag** a photo onto another to swap the two.
-- Right-click a cell to move it, swap or copy its photo to another cell, set its frame, view it on its own, hide it, or remove it. **Advanced** rotates, mirrors and flips the photo.
+- Right-click a cell to move it, swap or copy its photo to another cell, set its frame, view it on its own, hide it, or remove it. **Advanced** replaces the photo with a file you choose, which also recovers a cell whose file is missing, and rotates, mirrors and flips the photo.
 - The maximise button at the top right shows one photo on its own. **←** / **→** step through the photos, skipping hidden ones; **Esc** returns to the grid.
 
 A cell keeps its own settings. **Swap with** and **Copy to** each open a table of the other positions, with two columns:
@@ -101,7 +101,7 @@ A cell keeps its own settings. **Swap with** and **Copy to** each open a table o
 - **Contents only** changes just the photo a cell shows. Its frame, zoom and rotation stay, and the new photo takes them on. The move arrows and **Alt+drag** work this way too.
 - **With attributes** brings the source cell's frame, image rotation and mirroring, and zoom and pan along with the photo. Between two floating cells it brings the window shape and its rotation as well; a grid cell has no window shape, so with a grid cell on either side the floating cell keeps its own.
 
-Either way, each cell stays where it is at its own size and layer, and a hidden cell stays hidden.
+Either way, each cell stays where it is at its own size and layer, and a hidden cell stays hidden. **Advanced > Replace image** works like Contents only: the cell keeps its settings and shows the new file.
 
 **Frame & Border** opens beside the cell, or against the window's far edge when the cell is too big to sit beside. It sets the line, corners, gutter, mat and shadow. Flush removes them all. Hold a preset button to save the current frame there, and click it to use it again. The last swatch in each color row opens the Windows color picker.
 

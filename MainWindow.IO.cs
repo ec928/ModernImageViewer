@@ -1276,13 +1276,10 @@ namespace ModernImageViewer
         }
 
         /// <summary>A still picture, as opposed to a comic archive, which opens as a book.</summary>
-        internal static bool IsPictureFile(string path)
-        {
-            string extension = Path.GetExtension(path);
-            return SupportedExtensions.Contains(extension)
-                && !extension.Equals(".cbz", StringComparison.OrdinalIgnoreCase)
-                && !extension.Equals(".cbr", StringComparison.OrdinalIgnoreCase);
-        }
+        internal static bool IsPictureFile(string path) => PictureExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);
+
+        internal static IEnumerable<string> PictureExtensions =>
+            SupportedExtensions.Where(e => !e.Equals(".cbz", StringComparison.OrdinalIgnoreCase) && !e.Equals(".cbr", StringComparison.OrdinalIgnoreCase));
 
         internal async Task OpenDroppedItemsAsync(IReadOnlyList<IStorageItem> items)
         {
