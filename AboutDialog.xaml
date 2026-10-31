@@ -65,7 +65,7 @@
                     <Run Text="&#x2022;  "/><Run Text="Collages" FontWeight="SemiBold"/><Run Text=" &#x2014; frame each cell, rotate and mirror photos, float cells above the grid in shapes, drop in pictures from File Explorer, choose the canvas, undo and redo, save layouts, and export to JPEG, PNG, or the clipboard."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Surprise me" FontWeight="SemiBold"/><Run Text=" &#x2014; one click arranges your pictures into a new designed layout, avoiding cutting or covering the faces it finds; click again for another."/>
+                    <Run Text="&#x2022;  "/><Run Text="Surprise me" FontWeight="SemiBold"/><Run Text=" &#x2014; one click arranges your pictures into a new designed layout, avoiding cutting or covering the faces it finds. Click again for another, set an interval for auto-play, and shape the odds in its options."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
                     <Run Text="&#x2022;  "/><Run Text="Window &amp; Tile Size presets" FontWeight="SemiBold"/><Run Text=" &#x2014; save up to three window and tile size states (Ctrl+1, Ctrl+2, Ctrl+3) to jump between compact browsing and wide two-page layouts."/>
