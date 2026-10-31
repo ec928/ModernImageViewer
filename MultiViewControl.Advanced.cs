@@ -372,7 +372,7 @@ namespace ModernImageViewer
             return handle;
         }
 
-        /// <summary>The rotate handle and the L's inner-corner handle. Both show while the pointer is over the window.</summary>
+        /// <summary>The rotate handle, the L's inner-corner handle, and the resize corners and outline. All show while the pointer is over the window.</summary>
         private void AttachWindowHandles(FreeformCard card)
         {
             if (card.Container is not Grid window) return;
@@ -471,11 +471,33 @@ namespace ModernImageViewer
             window.Children.Add(notch);
             card.NotchHandle = notch;
 
+            // The window's rectangle, which is what resizes. Dark under light dashes, to read on any photo.
+            Microsoft.UI.Xaml.Shapes.Rectangle MakeBounds(Windows.UI.Color color, DoubleCollection? dashes)
+            {
+                var bounds = new Microsoft.UI.Xaml.Shapes.Rectangle
+                {
+                    Stroke = new SolidColorBrush(color),
+                    StrokeThickness = 1,
+                    StrokeDashArray = dashes,
+                    IsHitTestVisible = false,
+                    Opacity = 0
+                };
+                Canvas.SetZIndex(bounds, 195);
+                window.Children.Add(bounds);
+                return bounds;
+            }
+            var boundsDark = MakeBounds(Windows.UI.Color.FromArgb(170, 0, 0, 0), null);
+            var boundsLight = MakeBounds(Windows.UI.Color.FromArgb(240, 255, 255, 255), new DoubleCollection { 4, 3 });
+            var grips = window.Children.OfType<FreeformResizeHandle>().Select(h => h.Grip).OfType<Border>().ToList();
+
             // The handles can sit outside a shape, so they stay a moment for the pointer to reach them.
             void ShowHandles(bool show)
             {
                 rotate.Opacity = show ? 1 : 0;
                 notch.Opacity = show ? 1 : 0;
+                boundsDark.Opacity = show ? 1 : 0;
+                boundsLight.Opacity = show ? 1 : 0;
+                foreach (var grip in grips) grip.Opacity = show ? 1 : 0;
                 rotate.IsHitTestVisible = show;
                 notch.IsHitTestVisible = show;
             }

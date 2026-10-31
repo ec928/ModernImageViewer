@@ -25,6 +25,8 @@ namespace ModernImageViewer
         private const int MaxDroppedCells = 16;
         private const double DroppedCellShare = 0.45;
         private const double DroppedCellCascade = 28;
+        private const double ResizeCornerSize = 22;
+        private const double ResizeGripSize = 12;
 
         private readonly List<FreeformCard> _freeformCards = new();
         private int _maxFreeformZIndex = 5000;
@@ -466,46 +468,52 @@ namespace ModernImageViewer
                         handle.Height = 8;
                         handle.VerticalAlignment = VerticalAlignment.Top;
                         handle.HorizontalAlignment = HorizontalAlignment.Stretch;
-                        handle.Margin = new Thickness(14, 0, 14, 0);
+                        handle.Margin = new Thickness(ResizeCornerSize, 0, ResizeCornerSize, 0);
                         break;
                     case WindowResizeDirection.Bottom:
                         handle.Height = 8;
                         handle.VerticalAlignment = VerticalAlignment.Bottom;
                         handle.HorizontalAlignment = HorizontalAlignment.Stretch;
-                        handle.Margin = new Thickness(14, 0, 14, 0);
+                        handle.Margin = new Thickness(ResizeCornerSize, 0, ResizeCornerSize, 0);
                         break;
                     case WindowResizeDirection.Left:
                         handle.Width = 8;
                         handle.HorizontalAlignment = HorizontalAlignment.Left;
                         handle.VerticalAlignment = VerticalAlignment.Stretch;
-                        handle.Margin = new Thickness(0, 14, 0, 14);
+                        handle.Margin = new Thickness(0, ResizeCornerSize, 0, ResizeCornerSize);
                         break;
                     case WindowResizeDirection.Right:
                         handle.Width = 8;
                         handle.HorizontalAlignment = HorizontalAlignment.Right;
                         handle.VerticalAlignment = VerticalAlignment.Stretch;
-                        handle.Margin = new Thickness(0, 14, 0, 14);
+                        handle.Margin = new Thickness(0, ResizeCornerSize, 0, ResizeCornerSize);
                         break;
                     case WindowResizeDirection.TopLeft:
-                        handle.Width = 14; handle.Height = 14;
+                        handle.Width = ResizeCornerSize; handle.Height = ResizeCornerSize;
                         handle.HorizontalAlignment = HorizontalAlignment.Left;
                         handle.VerticalAlignment = VerticalAlignment.Top;
                         break;
                     case WindowResizeDirection.TopRight:
-                        handle.Width = 14; handle.Height = 14;
+                        handle.Width = ResizeCornerSize; handle.Height = ResizeCornerSize;
                         handle.HorizontalAlignment = HorizontalAlignment.Right;
                         handle.VerticalAlignment = VerticalAlignment.Top;
                         break;
                     case WindowResizeDirection.BottomLeft:
-                        handle.Width = 14; handle.Height = 14;
+                        handle.Width = ResizeCornerSize; handle.Height = ResizeCornerSize;
                         handle.HorizontalAlignment = HorizontalAlignment.Left;
                         handle.VerticalAlignment = VerticalAlignment.Bottom;
                         break;
                     case WindowResizeDirection.BottomRight:
-                        handle.Width = 14; handle.Height = 14;
+                        handle.Width = ResizeCornerSize; handle.Height = ResizeCornerSize;
                         handle.HorizontalAlignment = HorizontalAlignment.Right;
                         handle.VerticalAlignment = VerticalAlignment.Bottom;
                         break;
+                }
+
+                if (dir is WindowResizeDirection.TopLeft or WindowResizeDirection.TopRight or WindowResizeDirection.BottomLeft or WindowResizeDirection.BottomRight)
+                {
+                    handle.Grip = MakeResizeGrip(handle.HorizontalAlignment, handle.VerticalAlignment);
+                    handle.Children.Add(handle.Grip);
                 }
 
                 bool isResizing = false;
@@ -620,8 +628,25 @@ namespace ModernImageViewer
                 slotGrid.Children.Add(handle);
             }
         }
+        /// <summary>The square that shows where a corner can be dragged. A shape can leave its corners in empty space, so the grip marks them.</summary>
+        private static Border MakeResizeGrip(HorizontalAlignment horizontal, VerticalAlignment vertical) => new()
+        {
+            Width = ResizeGripSize,
+            Height = ResizeGripSize,
+            HorizontalAlignment = horizontal,
+            VerticalAlignment = vertical,
+            CornerRadius = new CornerRadius(2),
+            Background = new SolidColorBrush(Microsoft.UI.Colors.White),
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(230, 20, 20, 20)),
+            BorderThickness = new Thickness(1.5),
+            IsHitTestVisible = false,
+            Opacity = 0
+        };
+
         public sealed class FreeformResizeHandle : Grid
         {
+            public Border? Grip { get; set; }
+
             public void SetCursor(InputSystemCursorShape shape)
             {
                 try { ProtectedCursor = InputSystemCursor.Create(shape); } catch { }

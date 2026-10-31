@@ -113,7 +113,7 @@ Drag pictures in from File Explorer to add them: each one becomes a new floating
 
 - Drag to move, and drag the edges or corners to resize. **Ctrl+drag** pans the photo inside the cell. Dragged cells snap to the canvas, each other and the grid; hold **Alt** to move freely.
 - **Advanced > Window** sets the shape: rectangle, squircle, circle or oval, arch (tombstone), L-shape, triangle, right triangle, rhombus (diamond), trapezoid, hexagon, or organic blob. It also rotates, mirrors and flips the shape. **Rotate shape only** keeps the photo still.
-- Hover over a floating cell for its handles. The round handle at the top rotates it: hold **Shift** for 15 degree steps, or **Ctrl** to turn the shape and keep the photo still. On an L-shape, the small handle moves the inner corner.
+- Hover over a floating cell for its handles. A dashed outline shows the rectangle that resizes, whatever the shape, with a white square at each corner to drag. The round handle at the top rotates it: hold **Shift** for 15 degree steps, or **Ctrl** to turn the shape and keep the photo still. On an L-shape, the small handle moves the inner corner.
 - **Advanced > Layer** sets which floating cell is in front. Floating cells stay above the grid.
 - **Dock to Grid** puts the photo back into its hidden cell, or a new cell if that one is gone or in use.
 

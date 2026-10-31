@@ -149,6 +149,8 @@ The playbar's wheel holds Undo, Redo, Copy to clipboard, Save as PNG, and Canvas
 
 Swap with and Copy to name positions only, never file names, so the two columns stay about the width of a single column of named entries. Each row is one menu entry, and the side of the row under the pointer is the column chosen, shown by a highlight on that half. Pointing at a target marks its cell's badge, with "+ attributes" for the second column. The same layout appears with any number of cells, down to one row with two photos.
 
+Hovering a floating cell shows its resize rectangle as a dashed outline with a white square grip at each corner. This is the same for every shape, because the corners of an irregular shape's rectangle are otherwise empty space with nothing to show they can be dragged.
+
 The Frame & Border card always shows at full height for the window, in front of every cell. It opens beside its cell, or against the window edge farther from a cell too big to sit beside, and scrolls only when the window is too short.
 
 ### Invariants:

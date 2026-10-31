@@ -94,3 +94,4 @@ The Win2D viewer core is real, but GPU lifetime was not reference-counted end-to
 - 2026-10-31: Multi-View, not released. Swap and Copy rows are ordinary menu entries, after buttons inside an entry failed for the mouse; the pointer's side of the row picks the column. Pictures dropped from Explorer become new floating cells.
 - 2026-10-31: v0.20.0, released. Multi-View as the collage mode: everything in the internal v0.19.0, plus swap and copy with or without cell attributes, seven more window shapes, pictures dropped from Explorer as floating cells, and the fixes to copy on floating cells and the frame card.
 - 2026-10-31: Multi-View, not released. Advanced > Replace image picks a file for the cell, which keeps its parameters and recovers a missing file.
+- 2026-10-31: Multi-View, not released. Hovering a floating cell shows corner grips and a dashed outline of its resize rectangle, and the corner grab areas are larger.
