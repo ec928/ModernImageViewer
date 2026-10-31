@@ -111,7 +111,7 @@ namespace ModernImageViewer
                 ShowEmptyState(Slot(item));
             }
 
-            var window = new MenuFlyoutSubItem { Text = "Window", Icon = new FontIcon { Glyph = "\uE7C5" } };
+            var window = new MenuFlyoutSubItem { Text = "Shape", Icon = new FontIcon { Glyph = "\uE7C5" } };
             string current = GetGeometry(item).Shape;
             foreach (string shape in WindowShapes.All)
             {
@@ -132,7 +132,7 @@ namespace ModernImageViewer
             window.Items.Add(flip);
 
             window.Items.Add(new MenuFlyoutSeparator());
-            var reset = MakeAdvancedItem("Reset window", "\uE72C", () => Change(g =>
+            var reset = MakeAdvancedItem("Reset shape", "\uE72C", () => Change(g =>
             {
                 g.Shape = WindowShapes.Rectangle;
                 g.ShapeFlipH = false;
@@ -394,7 +394,7 @@ namespace ModernImageViewer
             rotate.VerticalAlignment = VerticalAlignment.Top;
             rotate.Margin = new Thickness(0, 12, 0, 0);
             rotate.IsHitTestVisible = false;
-            ToolTipService.SetToolTip(rotate, "Drag to rotate the window. Hold Ctrl to rotate the shape and keep the photo still. Hold Shift for 15 degree steps.");
+            ToolTipService.SetToolTip(rotate, "Drag to rotate the cell. Hold Ctrl to rotate the shape and keep the photo still. Hold Shift for 15 degree steps.");
 
             bool turning = false;
             double startPointer = 0;

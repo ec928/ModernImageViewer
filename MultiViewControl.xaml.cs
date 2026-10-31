@@ -1600,6 +1600,14 @@ namespace ModernImageViewer
                 }
             };
 
+            // A tap, so a drag on an empty floating cell still moves it.
+            cellGrid.Tapped += (s, e) =>
+            {
+                if (!IsEmptyCell(photo.Item)) return;
+                e.Handled = true;
+                AddImageRequested?.Invoke(this, photo.Item);
+            };
+
             cellGrid.PointerReleased += (s, e) =>
             {
                 if (isFreeform && isMovingCard && e.Pointer.PointerId == movePointerId)
@@ -1956,7 +1964,7 @@ namespace ModernImageViewer
             });
             placeholder.Children.Add(new TextBlock
             {
-                Text = "Right-click to add an image",
+                Text = "Click to add an image",
                 FontSize = 11,
                 Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(170, 255, 255, 255)),
                 HorizontalAlignment = HorizontalAlignment.Center
@@ -2087,8 +2095,8 @@ namespace ModernImageViewer
             }
 
             var (header, headerCells) = MakeRow("Contents only", "With attributes", 12, _menuWhiteSecondary);
-            ToolTipService.SetToolTip(headerCells[0], "The image alone. Each cell keeps its frame, image rotation and zoom, and its window shape.");
-            ToolTipService.SetToolTip(headerCells[1], "The image with its frame, image rotation, zoom and window shape. Window rotation too, between floating cells.");
+            ToolTipService.SetToolTip(headerCells[0], "The image alone. Each cell keeps its frame, image rotation and zoom, and its shape.");
+            ToolTipService.SetToolTip(headerCells[1], "The image with its frame, image rotation, zoom and shape. The cell's own rotation too, between floating cells.");
             sub.Items.Add(new MenuFlyoutItem { Tag = header, Template = template, IsEnabled = false });
 
             for (int i = 0; i < _items.Count; i++)

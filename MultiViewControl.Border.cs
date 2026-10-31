@@ -165,7 +165,7 @@ namespace ModernImageViewer
                 {
                     icon.Glyph = failed ? "" : "\uE739";
                     title.Text = empty ? "Empty cell" : System.IO.File.Exists(_items[slot].Path) ? "Can't open this file" : "File not found";
-                    detail.Text = empty ? "Right-click to add an image" : _items[slot].Name ?? string.Empty;
+                    detail.Text = empty ? "Click to add an image" : _items[slot].Name ?? string.Empty;
                 }
             }
             parts.Bound.ApplyGeometry?.Invoke();
@@ -573,11 +573,11 @@ namespace ModernImageViewer
 
             body.Children.Add(SectionLabel("Mat"));
             string[] matStyles = { "None", "Solid", "Acrylic" };
-            var matTrack = MakeSegment(new[] { "None", "Solid", "Frosted" }, new[]
+            var matTrack = MakeSegment(new[] { "None", "Solid", "Translucent" }, new[]
             {
                 "No mat. The gutter shows the canvas",
                 "Flat color in the gutter",
-                "The mat color, translucent"
+                "The mat color, partly see-through"
             }, index =>
             {
                 border.GutterMaterial = matStyles[index];

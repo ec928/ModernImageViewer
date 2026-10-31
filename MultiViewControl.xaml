@@ -351,7 +351,7 @@
                             Style="{StaticResource QuietButtonStyle}"
                             Padding="8,5"
                             CornerRadius="12"
-                            ToolTipService.ToolTip="Canvas: its shape, surface and color">
+                            ToolTipService.ToolTip="Canvas: its aspect ratio, surface, color and frame">
                         <Button.Flyout>
                             <MenuFlyout x:Name="AspectMenuFlyout" 
                                         MenuFlyoutPresenterStyle="{StaticResource MultiViewMenuFlyoutPresenterStyle}"

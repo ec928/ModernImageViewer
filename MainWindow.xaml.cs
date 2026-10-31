@@ -56,6 +56,8 @@ namespace ModernImageViewer
         private bool _multiViewParked;
         // The cell waiting for one picture. Null when pictures are being added as floating cells.
         private ImageItem? _parkedCell;
+        // While pictures are chosen the window stays at the layout's size, and the gallery's own size waits to come back.
+        private bool _parkKeptSize;
         private string? _parkedNote;
         private bool _multiViewKept;
         private int _stashedGridWidth;
@@ -613,7 +615,7 @@ namespace ModernImageViewer
 
                 if (_appWindow.Presenter is OverlappedPresenter p && p.State == OverlappedPresenterState.Minimized) return;
 
-                if (_multiViewCanvasActive)
+                if (_multiViewCanvasActive || _parkKeptSize)
                 {
                     _currentSettings.MultiViewWindowWidth = _appWindow.Size.Width;
                     _currentSettings.MultiViewWindowHeight = _appWindow.Size.Height;

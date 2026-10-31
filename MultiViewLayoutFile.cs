@@ -318,7 +318,7 @@ namespace ModernImageViewer
             return Parse(secondary);
         }
 
-        /// <summary>Frosted uses the mat colour at a fixed translucency. Solid uses it opaque. None draws nothing.</summary>
+        /// <summary>Translucent, saved as Acrylic, uses the mat colour at a fixed translucency. Solid uses it opaque. None draws nothing.</summary>
         public static Rgba MatFill(string? material, string? color)
         {
             if (string.Equals(Token(material, "None"), "Acrylic", StringComparison.OrdinalIgnoreCase))

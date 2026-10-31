@@ -36,7 +36,7 @@ namespace ModernImageViewer
         {
             AspectMenuFlyout.Items.Clear();
             string current = AspectText.Text;
-            var shape = new MenuFlyoutSubItem { Text = "Shape" };
+            var shape = new MenuFlyoutSubItem { Text = "Aspect ratio" };
             foreach (var aspect in GridCanvasMath.Aspects)
             {
                 double ratio = aspect.WidthOverHeight;
@@ -47,7 +47,7 @@ namespace ModernImageViewer
                 item.Click += (_, _) => CanvasAspectChosen?.Invoke(ratio);
                 shape.Items.Add(item);
             }
-            ToolTipService.SetToolTip(shape, "Drag the window for any other shape");
+            ToolTipService.SetToolTip(shape, "Drag the window for any other ratio");
             AspectMenuFlyout.Items.Add(shape);
             AddCanvasLookMenus(AspectMenuFlyout);
         }

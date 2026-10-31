@@ -12,7 +12,7 @@ How it is built is in `ARCHITECTURE.md`, under Multi-view. How it looks and beha
 - Rotate, mirror and flip the image on any cell, and replace it from a file
 - Floating cells: move, resize, snap, layer, and Dock back into the grid
 - Pictures from the app (Add images) or dropped from Explorer become new floating cells; an empty cell takes one from the app (Add image) or from a drop onto it
-- Window shapes on every cell: rectangle, squircle, circle or oval, arch, L-shape, triangle, right triangle, rhombus, trapezoid, parallelogram, hexagon and organic blob, with mirroring, and on floating cells rotation and shape-only rotation
+- Shapes on every cell: rectangle, squircle, circle or oval, arch, L-shape, triangle, right triangle, rhombus, trapezoid, parallelogram, hexagon and organic blob, with mirroring, and on floating cells rotation and shape-only rotation
 - Canvas surface and color, including custom colors
 - Frame & Border for the whole canvas
 - Undo and redo

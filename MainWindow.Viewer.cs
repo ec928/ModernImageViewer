@@ -930,6 +930,8 @@ namespace ModernImageViewer
                 _multiViewParked = false;
                 _parkedCell = null;
                 ShowAddingMode(false);
+                _parkKeptSize = false;
+                RestoreGridWindowSize();
             }
             else if (MultiViewControl.Visibility == Visibility.Visible)
             {
@@ -980,6 +982,7 @@ namespace ModernImageViewer
                 _ = ScanFolder(cellFolder);
             MultiViewControl.PrepareToLeave();
             MultiViewControl.Visibility = Visibility.Collapsed;
+            _parkKeptSize = true;
             EndMultiViewCanvas();
             _multiViewParked = true;
             ImageGrid.SelectedItems.Clear();
@@ -1066,8 +1069,12 @@ namespace ModernImageViewer
         private bool BeginMultiViewCanvas()
         {
             if (_multiViewCanvasActive || _appWindow == null) return false;
-            _stashedGridWidth = _appWindow.Size.Width;
-            _stashedGridHeight = _appWindow.Size.Height;
+            if (!_parkKeptSize)
+            {
+                _stashedGridWidth = _appWindow.Size.Width;
+                _stashedGridHeight = _appWindow.Size.Height;
+            }
+            _parkKeptSize = false;
             _multiViewCanvasActive = true;
             SyncViewModeButtons();
 
@@ -1090,9 +1097,14 @@ namespace ModernImageViewer
             _currentSettings.MultiViewWindowHeight = _appWindow.Size.Height;
             _multiViewCanvasActive = false;
             SyncViewModeButtons();
-            if (_stashedGridWidth >= 300 && _stashedGridHeight >= 300)
-                _appWindow.Resize(new Windows.Graphics.SizeInt32(_stashedGridWidth, _stashedGridHeight));
+            if (!_parkKeptSize) RestoreGridWindowSize();
             SaveAllSettings();
+        }
+
+        private void RestoreGridWindowSize()
+        {
+            if (_appWindow != null && _stashedGridWidth >= 300 && _stashedGridHeight >= 300)
+                _appWindow.Resize(new Windows.Graphics.SizeInt32(_stashedGridWidth, _stashedGridHeight));
         }
 
         private void ApplyMultiViewAspect(double widthOverHeight)
