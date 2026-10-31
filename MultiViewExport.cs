@@ -36,6 +36,7 @@ namespace ModernImageViewer
         {
             AspectMenuFlyout.Items.Clear();
             string current = AspectText.Text;
+            var shape = new MenuFlyoutSubItem { Text = "Shape" };
             foreach (var aspect in GridCanvasMath.Aspects)
             {
                 double ratio = aspect.WidthOverHeight;
@@ -44,8 +45,11 @@ namespace ModernImageViewer
                     Text = (aspect.Label == current ? "\u2713  " : "    ") + aspect.Label
                 };
                 item.Click += (_, _) => CanvasAspectChosen?.Invoke(ratio);
-                AspectMenuFlyout.Items.Add(item);
+                shape.Items.Add(item);
             }
+            ToolTipService.SetToolTip(shape, "Drag the window for any other shape");
+            AspectMenuFlyout.Items.Add(shape);
+            AddCanvasLookMenus(AspectMenuFlyout);
         }
 
         private static readonly SolidColorBrush _menuWhitePrimary = new(Windows.UI.Color.FromArgb(245, 255, 255, 255));
@@ -112,6 +116,15 @@ namespace ModernImageViewer
                 if (height != null) await SaveAtHeightAsync(height.Value);
             };
             panel.Children.Add(custom);
+
+            panel.Children.Add(CreateMenuDivider());
+            var copyItem = CreateMenuItemButton("Copy to clipboard", "Ctrl+C");
+            copyItem.Click += (_, _) =>
+            {
+                SaveFlyout.Hide();
+                _ = CopyCanvasToClipboardAsync();
+            };
+            panel.Children.Add(copyItem);
 
             // Layout Save & Load
             var imageColumn = panel;

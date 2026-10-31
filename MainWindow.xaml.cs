@@ -54,6 +54,7 @@ namespace ModernImageViewer
         private AppSettings _currentSettings = new AppSettings();
         private bool _multiViewCanvasActive;
         private bool _multiViewParked;
+        private bool _multiViewKept;
         private int _stashedGridWidth;
         private int _stashedGridHeight;
         private readonly IntPtr _hWnd;

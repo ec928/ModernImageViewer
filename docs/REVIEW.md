@@ -105,3 +105,4 @@ The Win2D viewer core is real, but GPU lifetime was not reference-counted end-to
 - 2026-10-31: Crash switching between the tile grid and Multi-View fixed: thumbnail bitmaps are no longer closed after SetBitmapAsync, and thumbnail sources are no longer disposed.
 - 2026-10-31: v0.22.0, internal. Crash switching between tiles and Multi-View fixed. Rows and Columns switch on the bar with a plain Grid layout panel, Save/Load as one two-column menu, and Freeform leaving its source cell empty.
 - 2026-10-31: Multi-View, not released. Clear cell replaces Hide image, so a cell with no image has one meaning. Layouts with hidden cells load them as empty.
+- 2026-10-31: Multi-View, not released. Controls audit: leaving keeps the session; Reset, move arrows and items, Save as PNG in the wheel and menu rotate items removed; Canvas menu on the bar; Replace image at the top level; Shape submenu; Back and Remove cell wording.

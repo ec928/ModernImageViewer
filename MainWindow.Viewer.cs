@@ -866,6 +866,8 @@ namespace ModernImageViewer
                 if (MultiViewControl != null)
                 {
                     _multiViewParked = false;
+                    _multiViewKept = false;
+                    SetMultiModeTip();
                     BeginMultiViewCanvas();
                     MultiViewControl.ApplyLayoutFile(layoutFile);
                     MultiViewControl.Visibility = Visibility.Visible;
@@ -886,6 +888,13 @@ namespace ModernImageViewer
                 return;
             }
             items ??= Array.Empty<ImageItem>();
+            // New photos chosen on purpose replace a session left waiting.
+            if (_multiViewKept)
+            {
+                _multiViewKept = false;
+                MultiViewControl?.Clear();
+                SetMultiModeTip();
+            }
 
             if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible)
             {
@@ -911,28 +920,44 @@ namespace ModernImageViewer
             }
         }
 
+        /// <summary>Leaving keeps the session, so a stray Esc cannot lose a collage. The Multi-View button returns to it.</summary>
         public void CloseMultiView()
         {
+            if (MultiViewControl == null) return;
             if (_multiViewParked)
             {
                 _multiViewParked = false;
-                if (MultiViewControl != null)
-                {
-                    MultiViewControl.Visibility = Visibility.Collapsed;
-                    MultiViewControl.Clear();
-                }
                 RestoreViewTogetherTip();
-                FocusGrid();
-                return;
             }
-            if (MultiViewControl != null && MultiViewControl.Visibility == Visibility.Visible)
+            else if (MultiViewControl.Visibility == Visibility.Visible)
             {
                 EndMultiViewCanvas();
-                MultiViewControl.Visibility = Visibility.Collapsed;
-                MultiViewControl.Clear();
-                FocusGrid();
             }
+            else
+            {
+                return;
+            }
+            MultiViewControl.PrepareToLeave();
+            MultiViewControl.Visibility = Visibility.Collapsed;
+            _multiViewKept = MultiViewControl.ShownSlots > 0;
+            SetMultiModeTip();
+            FocusGrid();
         }
+
+        private void ResumeKeptMultiView()
+        {
+            _multiViewKept = false;
+            SetMultiModeTip();
+            BeginMultiViewCanvas();
+            MultiViewControl.Visibility = Visibility.Visible;
+            MultiViewControl.FocusView();
+            MultiViewControl.DispatcherQueue.TryEnqueue(
+                Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
+                MultiViewControl.ReflowFrames);
+        }
+
+        private void SetMultiModeTip() =>
+            ToolTipService.SetToolTip(MultiModeButton, _multiViewKept ? "Back to your Multi-View layout" : "Multi-View / Layout (Enter)");
 
         private void MultiViewControl_ChangePhotosRequested(object? sender, EventArgs e)
         {
@@ -2611,6 +2636,12 @@ namespace ModernImageViewer
             if (_multiViewParked)
             {
                 ApplyParkedPhotos();
+                return;
+            }
+
+            if (_multiViewKept)
+            {
+                ResumeKeptMultiView();
                 return;
             }
 

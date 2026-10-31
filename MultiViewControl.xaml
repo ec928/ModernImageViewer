@@ -253,10 +253,10 @@
                             Style="{StaticResource QuietButtonStyle}" 
                             Padding="8,5" 
                             CornerRadius="12" 
-                            ToolTipService.ToolTip="Back to Grid (Esc)">
+                            ToolTipService.ToolTip="Back to the tiles (Esc). Your layout stays, and the Multi-View button returns to it.">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE72B;" FontSize="14" />
-                            <TextBlock Text="Grid" VerticalAlignment="Center" FontSize="13" />
+                            <TextBlock Text="Back" VerticalAlignment="Center" FontSize="13" />
                         </StackPanel>
                     </Button>
                     <Button Click="ChangePhotosButton_Click"
@@ -351,29 +351,20 @@
                         </StackPanel>
                     </Button>
 
-                    <Button Click="ResetZoom_Click" 
-                            Style="{StaticResource QuietButtonStyle}" 
-                            Padding="8,5" 
-                            CornerRadius="12" 
-                            ToolTipService.ToolTip="Reset Pan &amp; Zoom (Middle-Click)">
-                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE71F;" FontSize="14" />
-                            <TextBlock Text="Reset" VerticalAlignment="Center" FontSize="13" />
-                        </StackPanel>
-                    </Button>
-
                     <Button x:Name="AspectButton"
                             Style="{StaticResource QuietButtonStyle}"
                             Padding="8,5"
                             CornerRadius="12"
-                            ToolTipService.ToolTip="Canvas shape. Drag the window for a custom shape.">
+                            ToolTipService.ToolTip="Canvas: its shape, surface and color">
                         <Button.Flyout>
                             <MenuFlyout x:Name="AspectMenuFlyout" 
                                         MenuFlyoutPresenterStyle="{StaticResource MultiViewMenuFlyoutPresenterStyle}"
                                         Opening="AspectFlyout_Opening" Opened="HudMenu_Opened" Closed="HudMenu_Closed"/>
                         </Button.Flyout>
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBlock x:Name="AspectText" Text="16:9" VerticalAlignment="Center" FontSize="13" />
+                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE7F4;" FontSize="14" />
+                            <TextBlock Text="Canvas" VerticalAlignment="Center" FontSize="13" />
+                            <TextBlock x:Name="AspectText" Text="16:9" Visibility="Collapsed" />
                             <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE70D;" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>

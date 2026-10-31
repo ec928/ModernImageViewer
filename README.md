@@ -74,16 +74,15 @@ The bar appears when you move the mouse:
 
 | Control | What it does |
 |---|---|
-| **Grid** / **Esc** | Back to the tile grid. From the comparison this drops the layout. **Esc** in the folder, after **Photos**, returns the photos you left |
+| **Back** / **Esc** | Back to the tiles. Your layout stays while the app is open: the Multi-View button at the top returns to it. Choosing photos and **View Together**, or opening a layout, replaces it. **Esc** in the folder, after **Photos**, returns the photos you left |
 | **Photos** | Pick different photos. The layout stays, including dragged edges, the hero, the line counts, Fill or Fit, and each frame's zoom and pan. Your cells' photos start selected. A cell whose photo stays selected keeps it, so your arrangement survives. Deselect a photo and select a new one, and **Enter** or **View Together** puts the new one in that cell. Extra photos wait off screen. If you deselect more than you add, the bar says how many more to pick and you stay in the folder |
 | **Fill / Fit** (**F**) | Fill crops each photo to its frame; Fit shows the whole photo |
 | **3 Rows** / **Columns** | The switch on the bar turns the grid, and the side in use shows how many lines. Either side opens the grid layout card, and the side in use closes it again. The layout inspector and playbar stay as an immersive dark glass HUD over the photos. **−** and **+** at the top of the card set how many lines. Each line is drawn as that many photos, with the count on the bar: rows are bands, columns are stacks from the left. A line's **−** and **+** move one photo. **+** takes it from the last other line that has more than one, and **−** moves it to the last line, or to the line before when that line is already the last. **Even out** puts the lines back to an even split when they differ. **R** flips rows and columns. The **−** and **+** keys change how many lines. |
 | **Hero** (**H**) | The button reads **Hero** when it is off, and **Hero: Banner**, **Hero: Rectangle**, or **Hero: Pair** while that kind is on. Click for the next kind, and again after the last to turn it off. **Banner** is one large photo along a side. **Rectangle** is one large photo in a corner block, with 4, 5, 6, 7 or 9 photos. **Pair** is the first two photos large, with 3 or more |
 | **↻** (next position) | Shown while a hero is on. Moves it: a banner or pair goes round the top, right, bottom and left sides |
-| **Reset** | Undo the zoom and pan of every photo |
-| **16:9** | Canvas shape: 16:9, 16:10, 21:9, 4:3, 1:1 or 3:4. Resize the window for any other shape |
-| **Save/Load** (**Ctrl+S**) | Save the canvas as a JPEG or PNG at 720p to 4320p, at the window's size, or at a custom size. Save the layout as a `.mivlayout` file and reopen it later. Image sizes are on the left of the menu, layouts on the right, with your favourite and recent folders. A folder with more layouts than fit shows **+N**, which opens the file picker |
-| **Wheel** (advanced) | **Undo** (**Ctrl+Z**), **Redo** (**Ctrl+Y**), **Copy to clipboard** (**Ctrl+C**), **Save as PNG**, and **Canvas**: the surface and color behind the cells |
+| **Canvas** | Shape: 16:9, 16:10, 21:9, 4:3, 1:1 or 3:4, or resize the window for any other. Surface and color: what shows behind the cells |
+| **Save/Load** (**Ctrl+S**) | Copy the canvas to the clipboard (**Ctrl+C**), or save it as a JPEG or PNG at 720p to 4320p, at the window's size, or at a custom size. Save the layout as a `.mivlayout` file and reopen it later. Image sizes are on the left of the menu, layouts on the right, with your favourite and recent folders. A folder with more layouts than fit shows **+N**, which opens the file picker |
+| **Wheel** (advanced) | **Undo** (**Ctrl+Z**) and **Redo** (**Ctrl+Y**) |
 
 With a Banner or Pair, the rows, columns and per-line counts arrange the other photos. A Rectangle does not follow those lines. Changing the line count or a line's count turns that hero off.
 
@@ -91,17 +90,17 @@ On the photos themselves:
 
 - Drag the edge between two photos to resize them; double-click an edge to make the photos on either side equal. Changing how many lines there are, or how many photos are in a line, puts those sizes back to even. Switching between rows and columns keeps them, except beside a banner or pair, where the other photos are laid out again.
 - Scroll to zoom, drag to pan, middle-click to reset, double-click to zoom in or back out.
-- Hover over a photo to show its buttons at the top right. The move arrows move it one place earlier or later; they are left out on a very small photo.
+- Hover over a photo to show its buttons at the top right: view it on its own, or remove the cell.
 - **Alt+drag** a photo onto another to swap the two.
-- Right-click a cell to move it, swap or copy its photo to another cell, set its frame, view it on its own, clear it, or remove it. **Clear cell** takes the photo out and keeps the cell, so its space stays empty on the canvas and in an export. **Advanced** replaces the photo with a file you choose, which also recovers a cell whose file is missing, and rotates, mirrors and flips the photo.
+- Right-click a cell to swap or copy its photo to another cell, replace it from a file, set its frame, view it on its own, clear it, or remove it. **Clear cell** takes the photo out and keeps the cell, so its space stays empty on the canvas and in an export. **Replace image** also recovers a cell whose file is missing. **Advanced** rotates, mirrors and flips the photo, and resets its zoom.
 - The maximise button at the top right shows one photo on its own. **←** / **→** step through the photos, skipping empty cells; **Esc** returns to the grid.
 
 A cell keeps its own settings. **Swap with** and **Copy to** each open a table of the other positions, with two columns:
 
-- **Contents only** changes just the photo a cell shows. Its frame, zoom and rotation stay, and the new photo takes them on. The move arrows and **Alt+drag** work this way too.
+- **Contents only** changes just the photo a cell shows. Its frame, zoom and rotation stay, and the new photo takes them on. **Alt+drag** works this way too.
 - **With attributes** brings the source cell's frame, image rotation and mirroring, and zoom and pan along with the photo. Between two floating cells it brings the window shape and its rotation as well; a grid cell has no window shape, so with a grid cell on either side the floating cell keeps its own.
 
-Either way, each cell stays where it is at its own size and layer. **Advanced > Replace image** works like Contents only: the cell keeps its settings and shows the new file.
+Either way, each cell stays where it is at its own size and layer. **Replace image** works like Contents only: the cell keeps its settings and shows the new file.
 
 **Frame & Border** opens beside the cell, or against the window's far edge when the cell is too big to sit beside. It sets the line, corners, gutter, mat and shadow. Flush removes them all. Hold a preset button to save the current frame there, and click it to use it again. The last swatch in each color row opens the Windows color picker.
 
@@ -112,12 +111,12 @@ Right-click a cell and choose **Freeform** to float its photo above the grid. Th
 Drag pictures in from File Explorer to add them: each one becomes a new floating cell where you drop it, up to 16 at a time, in front of the others and with no frame. No other cell changes. Folders, comic books and saved layouts open as they do from anywhere else.
 
 - Drag to move, and drag the edges or corners to resize. A cell can hang over the edge of the canvas as long as its centre stays on it, and whatever hangs over is left out of an export. **Ctrl+drag** pans the photo inside the cell. Dragged cells snap to the canvas, each other and the grid; hold **Alt** to move freely.
-- **Advanced > Window** sets the shape: rectangle, squircle, circle or oval, arch (tombstone), L-shape, triangle, right triangle, rhombus (diamond), trapezoid, hexagon, or organic blob. It also rotates, mirrors and flips the shape. **Rotate shape only** keeps the photo still.
+- **Advanced > Window** sets the shape: rectangle, squircle, circle or oval, arch (tombstone), L-shape, triangle, right triangle, rhombus (diamond), trapezoid, hexagon, or organic blob. It also mirrors and flips the shape.
 - Hover over a floating cell for its handles. A dashed outline shows the rectangle that resizes, whatever the shape, with a white square at each corner to drag. The round handle at the top rotates it: hold **Shift** for 15 degree steps, or **Ctrl** to turn the shape and keep the photo still. On an L-shape, the small handle moves the inner corner.
 - **Advanced > Layer** sets which floating cell is in front. Floating cells stay above the grid.
 - **Dock to Grid** puts the photo back into its original cell, or a new cell if that one is gone or in use. Closing a floating cell removes its photo; Undo brings it back.
 
-Floating cells keep their share of the canvas when the window changes size. **Grid** at the bottom left of the bar ends the session and clears them, along with any frames and settings, so save the layout first to keep your work.
+Floating cells keep their share of the canvas when the window changes size. Your work is kept only while the app is open, so save the layout to keep it for later.
 
 ## ⌨️ Shortcuts
 

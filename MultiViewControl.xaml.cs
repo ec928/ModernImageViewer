@@ -141,6 +141,13 @@ namespace ModernImageViewer
             ResetUndo();
         }
 
+        /// <summary>The session stays as it is, ready to come back to.</summary>
+        public void PrepareToLeave()
+        {
+            CloseCountsCard();
+            _hudTimer.Stop();
+        }
+
         public void Clear()
         {
             CloseCountsCard();
@@ -1751,28 +1758,6 @@ namespace ModernImageViewer
 
             var topStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 0 };
 
-            Button? moveLeftBtn = null;
-            Button? moveRightBtn = null;
-            if (_items.Count > 1)
-            {
-                moveLeftBtn = CreateNudgeButton("\uE76B",
-                    () => (Slot(photo.Item) == 0 ? "Move to last position" : "Move to previous position") + " (or Alt+drag onto another photo to swap)",
-                    () => MovePhoto(Slot(photo.Item), -1));
-                moveRightBtn = CreateNudgeButton("\uE76C",
-                    () => (Slot(photo.Item) == _items.Count - 1 ? "Move to first position" : "Move to next position") + " (or Alt+drag onto another photo to swap)",
-                    () => MovePhoto(Slot(photo.Item), 1));
-                topStack.Children.Add(moveLeftBtn);
-                topStack.Children.Add(moveRightBtn);
-            }
-
-            void UpdateTopControlsDensity()
-            {
-                bool compact = cellGrid.ActualHeight < 80 || cellGrid.ActualWidth < 150;
-                if (moveLeftBtn != null) moveLeftBtn.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-                if (moveRightBtn != null) moveRightBtn.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-            }
-            cellGrid.SizeChanged += (s, e) => UpdateTopControlsDensity();
-
             // Maximize / Solo Button (Matches app's TopMaxButton style)
             var maxBtn = new Button
             {
@@ -1815,7 +1800,7 @@ namespace ModernImageViewer
             closeBtn.Resources["ButtonBackgroundPressed"] = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 153, 27, 16));
             closeBtn.Resources["ButtonForegroundPointerOver"] = new SolidColorBrush(Microsoft.UI.Colors.White);
             closeBtn.Resources["ButtonForegroundPressed"] = new SolidColorBrush(Microsoft.UI.Colors.White);
-            ToolTipService.SetToolTip(closeBtn, "Remove Photo");
+            ToolTipService.SetToolTip(closeBtn, "Remove cell");
             closeBtn.Click += (s, e) => RemoveItem(photo.Item);
             topStack.Children.Add(closeBtn);
 
@@ -1948,7 +1933,7 @@ namespace ModernImageViewer
             };
             placeholder.Children.Add(new FontIcon
             {
-                Glyph = "\uED1A",
+                Glyph = "\uE739",
                 FontSize = 26,
                 FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
                 Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(120, 255, 255, 255)),
@@ -1988,39 +1973,6 @@ namespace ModernImageViewer
             return slotGrid;
         }
 
-        private Button CreateNudgeButton(string glyph, Func<string> tip, Action move)
-        {
-            var btn = new Button
-            {
-                Width = 32,
-                Height = 32,
-                Padding = new Thickness(0),
-                Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
-                BorderThickness = new Thickness(0),
-                CornerRadius = new CornerRadius(0),
-                IsTabStop = false,
-                UseSystemFocusVisuals = false,
-                FocusVisualPrimaryThickness = new Thickness(0),
-                FocusVisualSecondaryThickness = new Thickness(0),
-                Content = new FontIcon
-                {
-                    FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
-                    Glyph = glyph,
-                    FontSize = 12,
-                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(240, 255, 255, 255))
-                }
-            };
-            btn.Resources["ButtonBackgroundPointerOver"] = new SolidColorBrush(Windows.UI.Color.FromArgb(24, 255, 255, 255));
-            btn.Resources["ButtonBackgroundPressed"] = new SolidColorBrush(Windows.UI.Color.FromArgb(16, 255, 255, 255));
-            btn.Resources["ButtonForegroundPointerOver"] = new SolidColorBrush(Microsoft.UI.Colors.White);
-            btn.Resources["ButtonForegroundPressed"] = new SolidColorBrush(Windows.UI.Color.FromArgb(200, 255, 255, 255));
-            var toolTip = new ToolTip { Content = tip() };
-            toolTip.Opened += (_, _) => toolTip.Content = tip();
-            ToolTipService.SetToolTip(btn, toolTip);
-            btn.Click += (s, e) => move();
-            return btn;
-        }
-
         private int Slot(ImageItem item)
         {
             if (item == null) return -1;
@@ -2036,20 +1988,6 @@ namespace ModernImageViewer
 
             if (_items.Count > 1)
             {
-                var moveLeftItem = new MenuFlyoutItem { Text = "Move Left / Up", Icon = new FontIcon { Glyph = "\uE76B" } };
-                moveLeftItem.Click += (s, e) => MovePhoto(curSlot, -1);
-                int prevSlot = ((curSlot - 1) % _items.Count + _items.Count) % _items.Count;
-                moveLeftItem.PointerEntered += (s, e) => HighlightPositionBadge(prevSlot);
-                moveLeftItem.PointerExited += (s, e) => ClearHighlightPositionBadge(prevSlot, curSlot);
-                menu.Items.Add(moveLeftItem);
-
-                var moveRightItem = new MenuFlyoutItem { Text = "Move Right / Down", Icon = new FontIcon { Glyph = "\uE76C" } };
-                moveRightItem.Click += (s, e) => MovePhoto(curSlot, 1);
-                int nextSlot = ((curSlot + 1) % _items.Count + _items.Count) % _items.Count;
-                moveRightItem.PointerEntered += (s, e) => HighlightPositionBadge(nextSlot);
-                moveRightItem.PointerExited += (s, e) => ClearHighlightPositionBadge(nextSlot, curSlot);
-                menu.Items.Add(moveRightItem);
-
                 menu.Items.Add(MakeCellTargetMenu("Swap with...", "\uE8AB", "Swap with", curSlot,
                     (target, withAttributes) => SwapItems(curSlot, target, withAttributes)));
                 if (!IsEmptyCell(item))
@@ -2063,14 +2001,11 @@ namespace ModernImageViewer
             borderItem.Click += (s, e) => OpenCellBorderFlyout(item);
             menu.Items.Add(borderItem);
 
+            menu.Items.Add(MakeAdvancedItem(IsEmptyCell(item) ? "Add image\u2026" : "Replace image\u2026", "\uE8E5", () => PickReplacementImage(item)));
             AddCellAdvancedMenu(menu, item);
             menu.Items.Add(new MenuFlyoutSeparator());
 
-            if (IsEmptyCell(item))
-            {
-                menu.Items.Add(MakeAdvancedItem("Add image\u2026", "\uE8E5", () => PickReplacementImage(item)));
-            }
-            else
+            if (!IsEmptyCell(item))
             {
                 var soloItem = new MenuFlyoutItem { Text = "Solo / Maximize", Icon = new FontIcon { Glyph = "\uE922" } };
                 soloItem.Click += (s, e) => EnterSolo(curSlot);
@@ -2111,19 +2046,9 @@ namespace ModernImageViewer
             }
             menu.Items.Add(new MenuFlyoutSeparator());
 
-            var removeItem = new MenuFlyoutItem { Text = "Remove from View", Icon = new FontIcon { Glyph = "\uE8BB" } };
+            var removeItem = new MenuFlyoutItem { Text = "Remove cell", Icon = new FontIcon { Glyph = "\uE8BB" } };
             removeItem.Click += (s, e) => RemoveItem(item);
             menu.Items.Add(removeItem);
-        }
-
-        /// <summary>Swap this photo with the neighbor in the layout order, wrapping around the photos on screen.</summary>
-        private void MovePhoto(int index, int delta)
-        {
-            int total = _items.Count;
-            if (total < 2 || (uint)index >= (uint)total) return;
-            int target = index + delta;
-            target = ((target % total) + total) % total;
-            SwapItems(index, target);
         }
 
         /// <summary>
@@ -3101,6 +3026,17 @@ namespace ModernImageViewer
             }
         }
 
+        private void ResetCellZoom(ImageItem item)
+        {
+            int slot = Slot(item);
+            if ((uint)slot >= (uint)_cellRoots.Length || _cellRoots[slot]?.Tag is not CellParts parts) return;
+            parts.Transform.ScaleX = 1.0;
+            parts.Transform.ScaleY = 1.0;
+            parts.Transform.TranslateX = 0;
+            parts.Transform.TranslateY = 0;
+            parts.UpdateLayout?.Invoke();
+        }
+
         private void ResetAllZooms()
         {
             foreach (var tr in _cellTransforms)
@@ -3110,11 +3046,6 @@ namespace ModernImageViewer
                 tr.TranslateX = 0;
                 tr.TranslateY = 0;
             }
-        }
-
-        private void ResetZoom_Click(object sender, RoutedEventArgs e)
-        {
-            ResetAllZooms();
         }
 
         #endregion

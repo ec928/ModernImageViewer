@@ -156,7 +156,7 @@ namespace ModernImageViewer
                     && placeholder.Children[1] is TextBlock title
                     && placeholder.Children[2] is TextBlock detail)
                 {
-                    icon.Glyph = failed ? "" : "";
+                    icon.Glyph = failed ? "" : "\uE739";
                     title.Text = empty ? "Empty cell" : System.IO.File.Exists(_items[slot].Path) ? "Can't open this file" : "File not found";
                     detail.Text = empty ? "Right-click to add an image" : _items[slot].Name ?? string.Empty;
                 }
@@ -663,6 +663,8 @@ namespace ModernImageViewer
                 Touch();
             };
             Grid.SetColumn(glowToggle, 3);
+            // Rim glow belongs to rectangles, so a shape does not offer it.
+            glowToggle.Visibility = GetGeometry(item).Shape == WindowShapes.Rectangle ? Visibility.Visible : Visibility.Collapsed;
             shadowHeader.Children.Add(glowToggle);
             body.Children.Add(shadowHeader);
 

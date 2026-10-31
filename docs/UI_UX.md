@@ -125,27 +125,21 @@ The Single Viewer and Multi-View Solo/Maximize modes share an **identical** HUD 
 Multi-View shows up to 16 grid cells in fluid mosaics, with floating cells above them. Its right-click menu is grouped by what the user is doing:
 
 ```
-Move Left / Up
-Move Right / Down
 Swap with...              >   Contents only | With attributes
 Copy to...                >   Position 1    | Position 1
 --------------------------    Position 2... | Position 2...
 Frame & Border...
-Advanced                  >   Replace image...
---------------------------    Rotate image left / right
-                              Mirror image, Flip image
-Solo / Maximize               ----------- floating cells only
-Freeform  (or Dock to Grid)   Window  >   Rectangle, Squircle, Circle / Oval, Arch / Tombstone,
-Clear cell                                L-shape, Triangle, Right triangle, Rhombus / Diamond,
-                                          Trapezoid, Hexagon, Organic blob
-                                          Rotate left / right
---------------------------                Rotate shape only, left / right
-Remove from View                          Mirror shape, Flip shape, Reset window
-                              Layer   >   Bring to front, Bring forward,
-                                          Send backward, Send to back
+Replace image...  (or Add image... on an empty cell)
+Advanced                  >   Rotate image left / right, Mirror image, Flip image, Reset zoom
+--------------------------    ----------- floating cells only
+Solo / Maximize               Window  >   Shape  > Rectangle, Squircle, Circle / Oval, Arch / Tombstone,
+Freeform  (or Dock to Grid)                        L-shape, Triangle, Right triangle, Rhombus / Diamond,
+Clear cell                                         Trapezoid, Hexagon, Organic blob
+--------------------------                Mirror shape, Flip shape, Reset window
+Remove cell                   Layer   >   Bring to front, Bring forward, Send backward, Send to back
 ```
 
-The playbar's wheel holds Undo, Redo, Copy to clipboard, Save as PNG, and Canvas (Surface, Color).
+The playbar's wheel holds Undo and Redo. The Canvas button holds Shape, Surface and Color. Save/Load holds Copy to clipboard. Back, Esc and the tile and list buttons leave the session waiting, and the Multi-View button returns to it.
 
 Swap with and Copy to name positions only, never file names, so the two columns stay about the width of a single column of named entries. Each row is one menu entry, and the side of the row under the pointer is the column chosen, shown by a highlight on that half. Pointing at a target marks its cell's badge, with "+ attributes" for the second column. The same layout appears with any number of cells, down to one row with two photos.
 

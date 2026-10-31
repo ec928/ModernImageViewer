@@ -69,22 +69,24 @@ namespace ModernImageViewer
                 ShowEmptyState(Slot(item));
             }
 
-            advanced.Items.Add(MakeAdvancedItem("Replace image\u2026", "\uE8E5", () => PickReplacementImage(item)));
-            advanced.Items.Add(new MenuFlyoutSeparator());
-            advanced.Items.Add(MakeAdvancedItem("Rotate image left", "\uE7AD", () => ChangeImage(g => g.TurnImage(-90)), mirrorIcon: true));
-            advanced.Items.Add(MakeAdvancedItem("Rotate image right", "\uE7AD", () => ChangeImage(g => g.TurnImage(90))));
-            advanced.Items.Add(MakeAdvancedItem("Mirror image", "\uE8AB", () => ChangeImage(g => g.ImageFlipH = !g.ImageFlipH)));
-            advanced.Items.Add(MakeAdvancedItem("Flip image", "\uE8CB", () => ChangeImage(g => g.ImageFlipV = !g.ImageFlipV)));
+            if (!IsEmptyCell(item))
+            {
+                advanced.Items.Add(MakeAdvancedItem("Rotate image left", "\uE7AD", () => ChangeImage(g => g.TurnImage(-90)), mirrorIcon: true));
+                advanced.Items.Add(MakeAdvancedItem("Rotate image right", "\uE7AD", () => ChangeImage(g => g.TurnImage(90))));
+                advanced.Items.Add(MakeAdvancedItem("Mirror image", "\uE8AB", () => ChangeImage(g => g.ImageFlipH = !g.ImageFlipH)));
+                advanced.Items.Add(MakeAdvancedItem("Flip image", "\uE8CB", () => ChangeImage(g => g.ImageFlipV = !g.ImageFlipV)));
+                advanced.Items.Add(MakeAdvancedItem("Reset zoom", "\uE71F", () => ResetCellZoom(item)));
+            }
 
             var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, item));
             if (card != null)
             {
-                advanced.Items.Add(new MenuFlyoutSeparator());
+                if (advanced.Items.Count > 0) advanced.Items.Add(new MenuFlyoutSeparator());
                 advanced.Items.Add(MakeWindowMenu(card));
                 advanced.Items.Add(MakeLayerMenu(card));
             }
 
-            menu.Items.Add(advanced);
+            if (advanced.Items.Count > 0) menu.Items.Add(advanced);
         }
 
         /// <summary>Choose a file to show in this cell. The cell keeps its parameters, as with any change of content.</summary>
@@ -130,18 +132,13 @@ namespace ModernImageViewer
 
             var window = new MenuFlyoutSubItem { Text = "Window", Icon = new FontIcon { Glyph = "\uE7C5" } };
             string current = GetGeometry(card.Item).Shape;
+            var shapes = new MenuFlyoutSubItem { Text = "Shape" };
             foreach (string shape in WindowShapes.All)
             {
                 string chosen = shape;
-                window.Items.Add(MakeChoiceItem(shape, current == shape, () => Change(g => g.Shape = chosen)));
+                shapes.Items.Add(MakeChoiceItem(shape, current == shape, () => Change(g => g.Shape = chosen)));
             }
-
-            window.Items.Add(new MenuFlyoutSeparator());
-            window.Items.Add(MakeAdvancedItem("Rotate left", "\uE7AD", () => Change(g => g.WindowRotation -= WindowRotationStep), mirrorIcon: true));
-            window.Items.Add(MakeAdvancedItem("Rotate right", "\uE7AD", () => Change(g => g.WindowRotation += WindowRotationStep)));
-            // The shape turns and the photo holds still, by turning the window and the photo opposite ways.
-            window.Items.Add(MakeAdvancedItem("Rotate shape only, left", "\uE7AD", () => Change(g => { g.WindowRotation -= WindowRotationStep; g.ImageCounter += WindowRotationStep; }), mirrorIcon: true));
-            window.Items.Add(MakeAdvancedItem("Rotate shape only, right", "\uE7AD", () => Change(g => { g.WindowRotation += WindowRotationStep; g.ImageCounter -= WindowRotationStep; })));
+            window.Items.Add(shapes);
 
             window.Items.Add(new MenuFlyoutSeparator());
             window.Items.Add(MakeAdvancedItem("Mirror shape", "\uE8AB", () => Change(g => g.ShapeFlipH = !g.ShapeFlipH)));
@@ -613,23 +610,11 @@ namespace ModernImageViewer
             ToolTipService.SetToolTip(redo, "Redo (Ctrl+Y)");
             AdvancedMenuFlyout.Items.Add(redo);
 
-            AdvancedMenuFlyout.Items.Add(new MenuFlyoutSeparator());
+        }
 
-            var copy = MakeAdvancedItem("Copy to clipboard", "\uE8C8", () => _ = CopyCanvasToClipboardAsync());
-            copy.KeyboardAcceleratorTextOverride = "Ctrl+C";
-            ToolTipService.SetToolTip(copy, "Copy the canvas as an image (Ctrl+C)");
-            AdvancedMenuFlyout.Items.Add(copy);
-
-            AdvancedMenuFlyout.Items.Add(MakeAdvancedItem("Save as PNG\u2026", "\uE74E", () =>
-            {
-                var (width, height) = CanvasPixels();
-                _ = SavePixelsAsync(width, height, preferPng: true);
-            }));
-
-            AdvancedMenuFlyout.Items.Add(new MenuFlyoutSeparator());
-
-            var canvas = new MenuFlyoutSubItem { Text = "Canvas", Icon = new FontIcon { Glyph = "\uE7F4" } };
-
+        /// <summary>The surface and color behind the cells, under the canvas shape.</summary>
+        private void AddCanvasLookMenus(MenuFlyout menu)
+        {
             var surface = new MenuFlyoutSubItem { Text = "Surface" };
             foreach (string name in CanvasLook.Surfaces)
             {
@@ -638,8 +623,8 @@ namespace ModernImageViewer
                 ToolTipService.SetToolTip(choice, CanvasLook.Describe(name));
                 surface.Items.Add(choice);
             }
-            ToolTipService.SetToolTip(surface, "Shows where no cell covers the canvas: hidden cells, and around photos in Fit");
-            canvas.Items.Add(surface);
+            ToolTipService.SetToolTip(surface, "Shows where no cell covers the canvas: empty cells, and around photos in Fit");
+            menu.Items.Add(surface);
 
             var color = new MenuFlyoutSubItem { Text = "Color" };
             foreach (var (name, hex) in CanvasLook.Colors)
@@ -655,9 +640,7 @@ namespace ModernImageViewer
                 SetCanvas(hex, _canvasSurface);
                 NoteUserAction();
             })));
-            canvas.Items.Add(color);
-
-            AdvancedMenuFlyout.Items.Add(canvas);
+            menu.Items.Add(color);
         }
 
         private void SetCanvas(string? color, string? surface)
