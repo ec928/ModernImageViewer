@@ -137,9 +137,12 @@ namespace ModernImageViewer
                         ElementCompositionPreview.GetElementVisual(part).Clip = null;
                     outlineElement.Visibility = Visibility.Collapsed;
                 }
+                bool wasShaped = hitArea != null && hitArea.Visibility == Visibility.Visible;
                 if (hitArea != null) hitArea.Visibility = Visibility.Collapsed;
                 if (photoGrid != null)
                     photoGrid.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(1, 0, 0, 0));
+                if (wasShaped && CardBorder(window) is Border plainCard)
+                    ApplyBorderToCellBorder(plainCard, photoGrid, card.Item);
                 return;
             }
 
@@ -183,12 +186,26 @@ namespace ModernImageViewer
                 Canvas.SetZIndex(outlineElement, 90);
                 window.Children.Add(outlineElement);
             }
+            // The frame follows the outline. The card's own rectangular stroke would only show where the shape meets it.
             var frame = GetBorderForItem(card.Item);
-            outlineElement.Visibility = frame.Thickness > 0 ? Visibility.Visible : Visibility.Collapsed;
-            outlineElement.Stroke = ParseBorderBrush(frame.Color);
+            bool dashed = string.Equals(frame.StrokeStyle, "Dashed", StringComparison.OrdinalIgnoreCase);
+            var shapedCard = CardBorder(window);
+            outlineElement.Stroke = dashed ? ParseBorderBrush(frame.Color) : shapedCard?.BorderBrush ?? ParseBorderBrush(frame.Color);
+            outlineElement.StrokeDashArray = dashed ? new DoubleCollection { 3, 2 } : new DoubleCollection();
+            outlineElement.Visibility = frame.Thickness > 0 && !_hiddenItems.Contains(card.Item) ? Visibility.Visible : Visibility.Collapsed;
             outlineElement.StrokeThickness = frame.Thickness;
+            if (shapedCard != null) shapedCard.BorderThickness = new Thickness(0);
+            if (window.Tag is CellParts shapedParts)
+            {
+                shapedParts.DashedStroke.Visibility = Visibility.Collapsed;
+                if (shapedParts.RimGlowStroke != null) shapedParts.RimGlowStroke.Visibility = Visibility.Collapsed;
+            }
+            // Pulled in by half the stroke, so its outer edge meets the window's edge and is not cut off there.
+            double insetX = (width - frame.Thickness) / width;
+            double insetY = (height - frame.Thickness) / height;
             var drawn = new PointCollection();
-            foreach (var p in points) drawn.Add(new Point(p.X, p.Y));
+            foreach (var p in points)
+                drawn.Add(new Point(width / 2 + (p.X - width / 2) * insetX, height / 2 + (p.Y - height / 2) * insetY));
             outlineElement.Points = drawn;
         }
 
@@ -452,8 +469,11 @@ namespace ModernImageViewer
             foreach (string name in CanvasLook.Surfaces)
             {
                 string chosen = name;
-                surface.Items.Add(MakeChoiceItem(name, _canvasSurface == name, () => SetCanvas(_canvasColor, chosen)));
+                var choice = MakeChoiceItem(name, _canvasSurface == name, () => SetCanvas(_canvasColor, chosen));
+                ToolTipService.SetToolTip(choice, CanvasLook.Describe(name));
+                surface.Items.Add(choice);
             }
+            ToolTipService.SetToolTip(surface, "Shows where no cell covers the canvas: hidden cells, and around photos in Fit");
             canvas.Items.Add(surface);
 
             var color = new MenuFlyoutSubItem { Text = "Colour" };

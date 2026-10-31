@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
 using Microsoft.UI.Xaml.Automation;
 using Windows.Foundation;
@@ -118,6 +119,10 @@ namespace ModernImageViewer
 
             var item = _items[index];
             ApplyBorderToCellBorder(cellBorder, cellBorder.Child as Grid, item);
+
+            // A shaped window draws its frame along its outline, so the outline follows every frame change.
+            var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Container, root));
+            if (card != null) ApplyWindowGeometry(card);
         }
 
         public void ApplyBorderToCellBorder(Border cellBorder, Grid? cellGrid, ImageItem item)

@@ -682,14 +682,26 @@ namespace ModernImageViewer
             ("Burgundy", "#FF4A1525")
         };
 
-        /// <summary>The far colour of a gradient or vignette: darker, or lighter when the colour is already black.</summary>
+        public static string Describe(string surface) => surface switch
+        {
+            Gradient => "The colour fades from corner to corner",
+            Vignette => "The colour fades from the middle to the edges",
+            _ => "One flat colour"
+        };
+
+        /// <summary>The far colour of a gradient or vignette: much darker, or much lighter when the colour is already dark.</summary>
         public static FrameColor.Rgba FarColor(string? hex)
         {
             var c = FrameColor.Parse(hex);
-            if (c.R < 24 && c.G < 24 && c.B < 24)
-                return new FrameColor.Rgba(c.A, 48, 48, 48);
-            return new FrameColor.Rgba(c.A, (byte)(c.R * 0.45), (byte)(c.G * 0.45), (byte)(c.B * 0.45));
+            double luminance = (0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B) / 255;
+            if (luminance < 0.25)
+            {
+                return new FrameColor.Rgba(c.A, Mix(c.R, 255, 0.45), Mix(c.G, 255, 0.45), Mix(c.B, 255, 0.45));
+            }
+            return new FrameColor.Rgba(c.A, Mix(c.R, 0, 0.7), Mix(c.G, 0, 0.7), Mix(c.B, 0, 0.7));
         }
+
+        private static byte Mix(byte from, byte to, double amount) => (byte)Math.Round(from + (to - from) * amount);
     }
 
     public sealed class MosaicNodeDto

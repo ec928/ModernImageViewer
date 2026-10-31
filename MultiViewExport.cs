@@ -962,9 +962,35 @@ namespace ModernImageViewer
                     // 3. Draw Stroke (Solid, Dashed, InnerMuted, Gradient)
                     if (shape != null)
                     {
-                        var outlineColor = ParseColor(shot.Border?.Color);
-                        if (strokeW > 0 && outlineColor.A > 0)
-                            session.DrawGeometry(shape, outlineColor, strokeW);
+                        // Pulled in by half the stroke, as on screen, so its outer edge meets the window's edge.
+                        using var strokeShape = shape.Transform(System.Numerics.Matrix3x2.CreateScale(
+                            (float)Math.Max(0.01, (cellRect.Width - strokeW) / cellRect.Width),
+                            (float)Math.Max(0.01, (cellRect.Height - strokeW) / cellRect.Height),
+                            cellCenter));
+                        if (strokeW > 0 && string.Equals(strokeStyle, "Gradient", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var start = FrameColor.Parse(shot.Border?.Color);
+                            var end = FrameColor.GradientEnd(shot.Border?.SecondaryColor, start);
+                            using var outlineBrush = new CanvasLinearGradientBrush(device, ToColor(start), ToColor(end))
+                            {
+                                StartPoint = new System.Numerics.Vector2((float)cardX, (float)cardY),
+                                EndPoint = new System.Numerics.Vector2((float)(cardX + cardW), (float)(cardY + cardH))
+                            };
+                            session.DrawGeometry(strokeShape, outlineBrush, strokeW);
+                        }
+                        else
+                        {
+                            var outlineColor = string.Equals(strokeStyle, "InnerMuted", StringComparison.OrdinalIgnoreCase)
+                                ? ToColor(FrameColor.MutedStroke(shot.Border?.Color))
+                                : ParseColor(shot.Border?.Color);
+                            if (strokeW > 0 && outlineColor.A > 0)
+                            {
+                                if (string.Equals(strokeStyle, "Dashed", StringComparison.OrdinalIgnoreCase))
+                                    session.DrawGeometry(strokeShape, outlineColor, strokeW, new CanvasStrokeStyle { DashStyle = CanvasDashStyle.Dash });
+                                else
+                                    session.DrawGeometry(strokeShape, outlineColor, strokeW);
+                            }
+                        }
                     }
                     else if (string.Equals(strokeStyle, "InnerMuted", StringComparison.OrdinalIgnoreCase))
                     {
