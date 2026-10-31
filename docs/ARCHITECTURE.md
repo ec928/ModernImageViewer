@@ -79,6 +79,8 @@ A new Play from the grid or viewer starts from the launch list. `CinematicAutoSa
 
 ## Multi-view
 
+Multi-view is cell based, not multi-image. A freeform cell is a cell that can also be moved and resized and sits at a high z-index. `CreateCell` builds both kinds, and both are indexed by `_items` and `_cellRoots`. A freeform cell is hosted on `FreeformCanvas` and is not in the `MosaicLayout` tree, so `GridCellCount` leaves it out. Some state is still held by photo or by index rather than by cell: `_itemBorders` by file path, `_hiddenItems` by `ImageItem`, and `FreeformCard.SourceSlot` by index.
+
 The layout is a `MosaicLayout` tree of row and column splits; a leaf is a photo's index in `_items`. `MosaicLayout.ShownCount` is the one place the 16-photo limit lives. When the selection is larger, the playbar reads `16 of 23 shown`. Grids come from `FromCounts` (photos per line), Banner and Pair from `CreateHeroLines` (the hero plus the other photos in lines), and Rectangle from `CreateRectangleHero`, which is drawn by hand for 4, 5, 6, 7 and 9 photos only.
 
 The multi-view root forces Dark, so the photo canvas and playbar stay dark in a light window. The grid-layout card does not inherit that. `WindowTheme` reads the window theme from an ancestor above this control and sets it on the card and its flyout presenter.
