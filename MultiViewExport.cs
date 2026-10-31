@@ -165,7 +165,8 @@ namespace ModernImageViewer
 
                 // Every folder always shows. Its layouts take whatever height the window has left.
                 var folders = favs.Concat(recents).ToList();
-                var files = folders.Select(LayoutFilesIn).ToList();
+                ReadSaveFolders(folders);
+                var files = folders.Select(p => _saveFolders.TryGetValue(p, out var known) ? known.Layouts : new List<string>()).ToList();
                 double taken = MenuHeaderHeight + 2 * MenuRowHeight + autosaveHeight + folders.Count * MenuFolderHeight;
                 if (favs.Count > 0) taken += MenuDividerHeight + MenuHeaderHeight;
                 if (recents.Count > 0) taken += 2 * MenuDividerHeight + MenuHeaderHeight + MenuRowHeight;
@@ -349,17 +350,80 @@ namespace ModernImageViewer
             };
         }
 
-        private static List<string> LayoutFilesIn(string path)
+        private sealed record SaveFolderInfo(bool Available, List<string> Layouts);
+
+        // What each save folder last held. Reading one on a network that has gone blocks for about 33 s, so the UI thread never waits for it.
+        private readonly Dictionary<string, SaveFolderInfo> _saveFolders = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Task<SaveFolderInfo>> _saveFolderReads = new(StringComparer.OrdinalIgnoreCase);
+        private const int SaveFolderWaitMs = 60;
+
+        private static SaveFolderInfo ReadSaveFolder(string path)
         {
             try
             {
-                if (Directory.Exists(path))
-                    return Directory.GetFiles(path, "*.mivlayout").OrderByDescending(File.GetLastWriteTimeUtc).ToList();
+                if (!Directory.Exists(path)) return new SaveFolderInfo(false, new List<string>());
+                return new SaveFolderInfo(true, Directory.GetFiles(path, "*.mivlayout").OrderByDescending(File.GetLastWriteTimeUtc).ToList());
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
+                return new SaveFolderInfo(true, new List<string>());
             }
-            return new List<string>();
+        }
+
+        /// <summary>
+        /// A folder that answers at once shows its layouts as the menu opens, with no jump. One that does not shows what was
+        /// last known, and the menu redraws if the answer turns out different.
+        /// </summary>
+        private void ReadSaveFolders(List<string> folders)
+        {
+            var started = new List<string>();
+            foreach (string path in folders)
+            {
+                if (_saveFolderReads.ContainsKey(path)) continue;
+                _saveFolderReads[path] = Task.Run(() => ReadSaveFolder(path));
+                started.Add(path);
+            }
+            Task.WaitAll(_saveFolderReads.Values.ToArray<Task>(), SaveFolderWaitMs);
+
+            foreach (string path in _saveFolderReads.Keys.ToList())
+            {
+                var read = _saveFolderReads[path];
+                if (read.IsCompleted)
+                {
+                    _saveFolders[path] = read.Result;
+                    _saveFolderReads.Remove(path);
+                }
+                else if (started.Contains(path))
+                {
+                    _ = FinishSaveFolderReadAsync(path, read);
+                }
+            }
+        }
+
+        private async Task FinishSaveFolderReadAsync(string path, Task<SaveFolderInfo> read)
+        {
+            var info = await read;
+            _saveFolderReads.Remove(path);
+            bool same = _saveFolders.TryGetValue(path, out var known) && known.Available == info.Available && known.Layouts.SequenceEqual(info.Layouts);
+            _saveFolders[path] = info;
+            if (!same && SaveFlyout.IsOpen) BuildSaveFlyoutMenu();
+        }
+
+        /// <summary>Off the UI thread, because the folder may be on a network that has gone.</summary>
+        private static void OpenFolderInExplorer(string path)
+        {
+            _ = Task.Run(() =>
+            {
+                if (!Directory.Exists(path)) return;
+                try
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = path, UseShellExecute = true });
+                }
+                catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Open folder] {path}: {ex.Message}");
+                }
+            });
         }
 
         private void AddFolderAndLayouts(StackPanel panel, string path, bool isFavourite, List<string> layoutFiles, int shown)
@@ -466,7 +530,7 @@ namespace ModernImageViewer
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-            bool available = Directory.Exists(path);
+            bool available = !_saveFolders.TryGetValue(path, out var known) || known.Available;
 
             var content = new Grid { ColumnSpacing = 10 };
             content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -511,18 +575,7 @@ namespace ModernImageViewer
             openBtn.Click += (_, _) =>
             {
                 SaveFlyout.Hide();
-                if (Directory.Exists(path))
-                {
-                    try
-                    {
-                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                        {
-                            FileName = path,
-                            UseShellExecute = true
-                        });
-                    }
-                    catch { }
-                }
+                OpenFolderInExplorer(path);
             };
             Grid.SetColumn(openBtn, 0);
             row.Children.Add(openBtn);
@@ -603,14 +656,7 @@ namespace ModernImageViewer
             openExpItem.Click += (_, _) =>
             {
                 SaveFlyout.Hide();
-                if (Directory.Exists(path))
-                {
-                    try
-                    {
-                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = path, UseShellExecute = true });
-                    }
-                    catch { }
-                }
+                OpenFolderInExplorer(path);
             };
             contextMenu.Items.Add(openExpItem);
             openBtn.ContextFlyout = contextMenu;

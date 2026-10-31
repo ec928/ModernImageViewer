@@ -47,7 +47,7 @@ GPU objects (`CanvasBitmap`, `CanvasRenderTarget`, Win2D effects) are created an
 
 The file list is one enumeration. `AddRange` reports each appended item. It does not raise `Reset`, which recycles the visible rows and restarts their thumbnails on every batch.
 
-A scan asks whether the folder exists off the UI thread, because an unreachable network path blocks for about 33 s. The check that follows a click goes through `_scanRequest`, so a later request wins. A scan that fails sets `_scanError`, which the empty state shows. It never lets an exception out, because `App` does not recover from unhandled ones and async void callers would close the app.
+A scan asks whether the folder exists off the UI thread, because an unreachable network path blocks for about 33 s. The Recent menu and the Save/Load menu do the same and redraw when the answer changes; Save/Load waits at most 60 ms first, so a folder that answers at once shows its layouts without a jump. The check that follows a click goes through `_scanRequest`, so a later request wins. A scan that fails sets `_scanError`, which the empty state shows. It never lets an exception out, because `App` does not recover from unhandled ones and async void callers would close the app.
 
 A debounced `FileSystemWatcher` on `_currentDirectory` runs `RefreshFolderInPlaceAsync` when the grid is showing (preview closed). It merges the new list into `Images` (`ListMerge`), so the selection, scroll position, cursor and other thumbnails stay. F5 is the full `ScanFolder`. Events while the preview is open or a scan is running set a dirty flag and run when the preview closes / the scan finishes. A rename is dirty if either the old or new extension is supported.
 
