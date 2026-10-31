@@ -133,9 +133,9 @@ Frame & Border...
 Replace image...  (or Add image... on an empty cell)
 Advanced                  >   Rotate image left / right, Mirror image, Flip image
 --------------------------    ----------- floating cells only
-Solo / Maximize               Window  >   Shape  > Rectangle, Squircle, Circle / Oval, Arch / Tombstone,
-Freeform  (or Dock to Grid)                        L-shape, Triangle, Right triangle, Rhombus / Diamond,
-Clear cell                                         Trapezoid, Hexagon, Organic blob
+Solo / Maximize               Window  >   Rectangle, Squircle, Circle / Oval, Arch / Tombstone,
+Freeform  (or Dock to Grid)               L-shape, Triangle, Right triangle, Rhombus / Diamond,
+Clear cell                                Trapezoid, Parallelogram, Hexagon, Organic blob
 --------------------------                Mirror shape, Flip shape, Reset window
 Remove cell                   Layer   >   Bring to front, Bring forward, Send backward, Send to back
 ```

@@ -20,6 +20,7 @@ namespace ModernImageViewer.Tests
         [InlineData(WindowShapes.Hexagon)]
         [InlineData(WindowShapes.Trapezoid)]
         [InlineData(WindowShapes.Rhombus)]
+        [InlineData(WindowShapes.Parallelogram)]
         [InlineData(WindowShapes.RightTriangle)]
         [InlineData(WindowShapes.Squircle)]
         [InlineData(WindowShapes.Blob)]

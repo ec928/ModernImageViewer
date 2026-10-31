@@ -131,13 +131,15 @@ namespace ModernImageViewer
 
             var window = new MenuFlyoutSubItem { Text = "Window", Icon = new FontIcon { Glyph = "\uE7C5" } };
             string current = GetGeometry(card.Item).Shape;
-            var shapes = new MenuFlyoutSubItem { Text = "Shape" };
             foreach (string shape in WindowShapes.All)
             {
                 string chosen = shape;
-                shapes.Items.Add(MakeChoiceItem(shape, current == shape, () => Change(g => g.Shape = chosen)));
+                // The tick sits in the icon column, so the shape names line up with the commands below them.
+                var choice = new MenuFlyoutItem { Text = shape };
+                if (current == shape) choice.Icon = new FontIcon { Glyph = "\uE73E" };
+                choice.Click += (_, _) => Change(g => g.Shape = chosen);
+                window.Items.Add(choice);
             }
-            window.Items.Add(shapes);
 
             window.Items.Add(new MenuFlyoutSeparator());
             window.Items.Add(MakeAdvancedItem("Mirror shape", "\uE8AB", () => Change(g => g.ShapeFlipH = !g.ShapeFlipH)));

@@ -629,11 +629,12 @@ namespace ModernImageViewer
         public const string Hexagon = "Hexagon";
         public const string Trapezoid = "Trapezoid";
         public const string Rhombus = "Rhombus / Diamond";
+        public const string Parallelogram = "Parallelogram";
         public const string RightTriangle = "Right triangle";
         public const string Squircle = "Squircle";
         public const string Blob = "Organic blob";
 
-        public static readonly string[] All = { Rectangle, Squircle, Oval, Arch, LShape, Triangle, RightTriangle, Rhombus, Trapezoid, Hexagon, Blob };
+        public static readonly string[] All = { Rectangle, Squircle, Oval, Arch, LShape, Triangle, RightTriangle, Rhombus, Trapezoid, Parallelogram, Hexagon, Blob };
 
         // Curves all the way round, so they have no corners for the corner radius to round.
         private static bool HasNoCorners(string? shape) => shape is Oval or Squircle or Blob;
@@ -652,6 +653,7 @@ namespace ModernImageViewer
                 Hexagon => new (double, double)[] { (0.25, 0), (0.75, 0), (1, 0.5), (0.75, 1), (0.25, 1), (0, 0.5) },
                 Trapezoid => new (double, double)[] { (0.2, 0), (0.8, 0), (1, 1), (0, 1) },
                 Rhombus => new (double, double)[] { (0.5, 0), (1, 0.5), (0.5, 1), (0, 0.5) },
+                Parallelogram => new (double, double)[] { (0.2, 0), (1, 0), (0.8, 1), (0, 1) },
                 RightTriangle => new (double, double)[] { (0, 0), (1, 1), (0, 1) },
                 Arch => ArchPoints(36),
                 Squircle => SquirclePoints(96),
