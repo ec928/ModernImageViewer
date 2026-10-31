@@ -11,7 +11,8 @@ namespace ModernImageViewer
     }
 
     /// <summary>What the composer needs to know about a picture. Faces and the focus are shares of the picture.</summary>
-    public sealed record PhotoFacts(string Path, double Width, double Height, IReadOnlyList<UnitRect> Faces, double FocusX, double FocusY, string Color)
+    public sealed record PhotoFacts(string Path, double Width, double Height, IReadOnlyList<UnitRect> Faces, double FocusX, double FocusY, string Color,
+        ulong Look = 0, bool ScreenLike = false, double Sharpness = 1000, double Brightness = 0.5, bool Featured = false)
     {
         public double Aspect => Width / Math.Max(1, Height);
     }
@@ -136,38 +137,43 @@ namespace ModernImageViewer
         }
     }
 
-    /// <summary>What the user has asked of Surprise me. Saved between sessions.</summary>
+    /// <summary>
+    /// What the user has asked of Surprise me: ranges, thresholds and odds, none of which rules anything out. Saved between
+    /// sessions. Anything missing or out of range in the saved file comes back as its default or its limit.
+    /// </summary>
     public sealed class SurpriseOptions
     {
-        public const string ZoomOff = "Off";
-        public static readonly (string Name, double Most)[] ZoomLevels = { (ZoomOff, 1), ("Up to 2x", 2), ("Up to 3x", 3), ("Up to 5x", 5) };
-        public const string DefaultPictures = "9 to 16";
-        public static readonly (string Name, int Fewest, int Most)[] PictureCounts = { ("4 to 6", 4, 6), ("7 to 9", 7, 9), (DefaultPictures, 9, 16), ("16", 16, 16) };
+        public const string CardAny = "Any";
+        public const string CardWhite = "White";
+        public const string CardBlack = "Black";
+        public const string CardFromPictures = "From the pictures";
+        public static readonly string[] Cards = { CardAny, CardWhite, CardBlack, CardFromPictures };
 
-        public List<string> Designs { get; set; } = LayoutComposer.Recipes.ToList();
-        public string Zoom { get; set; } = ZoomOff;
-        public string Pictures { get; set; } = DefaultPictures;
+        public const double RarestDesign = 0.1, MostFavouredDesign = 5;
+        public const double MostOfAnyZoom = 5;
+        public const int FewestAllowed = 2;
+
+        /// <summary>How often each design comes up compared with the others. It can be made rare, never impossible.</summary>
+        public Dictionary<string, double> DesignOdds { get; set; } = new();
+        public double MostZoom { get; set; } = 1;
+        public double ZoomChance { get; set; } = 1;
+        /// <summary>How many of the best versions the pick is made from: 1 is always the best, more is more varied.</summary>
+        public int Variety { get; set; } = 3;
+        /// <summary>How much of a face must show for it to count as uncut.</summary>
+        public double FaceShown { get; set; } = 0.85;
+        public double MostTilt { get; set; } = 6.5;
+        /// <summary>The hero's height as a share of the canvas, give or take a tenth.</summary>
+        public double HeroSize { get; set; } = 0.72;
+        public double GapScale { get; set; } = 1;
+        public string Card { get; set; } = CardAny;
         public bool KeepCanvas { get; set; }
+        public int FewestPictures { get; set; } = 9;
+        public int MostPictures { get; set; } = MosaicLayout.MaxShown;
+        /// <summary>The odds that a click from a large set takes pictures next to each other in folder and date.</summary>
+        public double TogetherChance { get; set; } = 0.8;
+        public bool SkipScreens { get; set; } = true;
 
-        [System.Text.Json.Serialization.JsonIgnore]
-        public double MostZoom => ZoomLevels.FirstOrDefault(z => z.Name == Zoom).Most is var most && most >= 1 ? most : 1;
-
-        [System.Text.Json.Serialization.JsonIgnore]
-        public (int Fewest, int Most) PictureRange
-        {
-            get
-            {
-                var found = PictureCounts.FirstOrDefault(c => c.Name == Pictures);
-                return found.Most > 0 ? (found.Fewest, found.Most) : (9, 16);
-            }
-        }
-
-        /// <summary>The last design left ticked stays ticked, so there is always something to make.</summary>
-        public void ToggleDesign(string design)
-        {
-            if (!Designs.Remove(design)) Designs.Add(design);
-            else if (Designs.Count == 0) Designs.Add(design);
-        }
+        public double OddsOf(string design) => DesignOdds.TryGetValue(design, out double odds) ? Math.Clamp(odds, RarestDesign, MostFavouredDesign) : 1;
 
         public static SurpriseOptions FromJson(string? json)
         {
@@ -175,8 +181,18 @@ namespace ModernImageViewer
             {
                 var read = string.IsNullOrWhiteSpace(json) ? null : System.Text.Json.JsonSerializer.Deserialize<SurpriseOptions>(json);
                 if (read == null) return new SurpriseOptions();
-                read.Designs = (read.Designs ?? new List<string>()).Where(LayoutComposer.Recipes.Contains).Distinct().ToList();
-                if (read.Designs.Count == 0) read.Designs = LayoutComposer.Recipes.ToList();
+                read.DesignOdds ??= new Dictionary<string, double>();
+                read.MostZoom = Math.Clamp(read.MostZoom, 1, MostOfAnyZoom);
+                read.ZoomChance = Math.Clamp(read.ZoomChance, 0, 1);
+                read.Variety = Math.Clamp(read.Variety, 1, 12);
+                read.FaceShown = Math.Clamp(read.FaceShown, 0.5, 1);
+                read.MostTilt = Math.Clamp(read.MostTilt, 0, 20);
+                read.HeroSize = Math.Clamp(read.HeroSize, 0.4, 0.9);
+                read.GapScale = Math.Clamp(read.GapScale, 0.25, 3);
+                read.FewestPictures = Math.Clamp(read.FewestPictures, FewestAllowed, MosaicLayout.MaxShown);
+                read.MostPictures = Math.Clamp(read.MostPictures, read.FewestPictures, MosaicLayout.MaxShown);
+                read.TogetherChance = Math.Clamp(read.TogetherChance, 0, 1);
+                if (!Cards.Contains(read.Card)) read.Card = CardAny;
                 return read;
             }
             catch (System.Text.Json.JsonException)
@@ -191,44 +207,63 @@ namespace ModernImageViewer
     /// <summary>Hands out a large set of pictures a few at a time, every one of them before any comes round again.</summary>
     public sealed class PictureDeck
     {
+        // In the order given, so a hand can be taken from pictures next to each other.
+        private readonly List<string> _order = new();
         private readonly HashSet<string> _known = new(StringComparer.OrdinalIgnoreCase);
-        private readonly List<string> _waiting = new();
+        private readonly HashSet<string> _waiting = new(StringComparer.OrdinalIgnoreCase);
+        private readonly List<string> _added = new();
         private readonly Random _random;
 
         public PictureDeck(IEnumerable<string> pictures, Random random)
         {
             _random = random;
-            Include(pictures);
+            foreach (string picture in pictures)
+            {
+                if (!_known.Add(picture)) continue;
+                _order.Add(picture);
+                _waiting.Add(picture);
+            }
         }
 
         public int Count => _known.Count;
 
+        public bool Holds(string picture) => _known.Contains(picture);
+
         /// <summary>Pictures not seen before go first, so one just added shows up soon.</summary>
         public void Include(IEnumerable<string> pictures)
         {
-            var added = pictures.Where(_known.Add).OrderBy(_ => _random.Next()).ToList();
-            _waiting.InsertRange(0, added);
-        }
-
-        public List<string> Deal(int count)
-        {
-            var dealt = new List<string>();
-            Take(dealt, count);
-            if (dealt.Count < count)
+            foreach (string picture in pictures)
             {
-                // Round again, leaving out this hand so no picture is in it twice.
-                _waiting.AddRange(_known.Except(dealt, StringComparer.OrdinalIgnoreCase).OrderBy(_ => _random.Next()));
-                Take(dealt, count - dealt.Count);
-                _waiting.AddRange(dealt.Where(d => !_waiting.Contains(d, StringComparer.OrdinalIgnoreCase)));
+                if (!_known.Add(picture)) continue;
+                _order.Add(picture);
+                _added.Add(picture);
             }
-            return dealt;
         }
 
-        private void Take(List<string> into, int count)
+        public List<string> Deal(int count, bool together = false)
         {
-            int taking = Math.Min(count, _waiting.Count);
-            into.AddRange(_waiting.Take(taking));
-            _waiting.RemoveRange(0, taking);
+            var hand = _added.Take(count).ToList();
+            _added.RemoveRange(0, hand.Count);
+            while (hand.Count < count)
+            {
+                if (_waiting.Count == 0)
+                {
+                    // Round again, leaving out this hand so no picture is in it twice.
+                    _waiting.UnionWith(_known.Except(hand, StringComparer.OrdinalIgnoreCase));
+                    if (_waiting.Count == 0) break;
+                }
+                var open = Enumerable.Range(0, _order.Count).Where(i => _waiting.Contains(_order[i])).ToList();
+                int anchor = open[_random.Next(open.Count)];
+                var picks = together
+                    ? open.OrderBy(i => Math.Abs(i - anchor)).Take(count - hand.Count).ToList()
+                    : new List<int> { anchor };
+                foreach (int i in picks)
+                {
+                    hand.Add(_order[i]);
+                    _waiting.Remove(_order[i]);
+                }
+            }
+            return hand;
         }
     }
 
@@ -243,14 +278,23 @@ namespace ModernImageViewer
         public const string GalleryWall = "Gallery wall";
         public const string HeroSpotlight = "Hero spotlight";
         public const string ScatteredPrints = "Scattered prints";
-        public static readonly string[] Recipes = { EdgeToEdge, GalleryWall, HeroSpotlight, ScatteredPrints };
+        public const string SlantedPanels = "Slanted panels";
+        public const string Circles = "Circles";
+        public static readonly string[] Recipes = { EdgeToEdge, GalleryWall, HeroSpotlight, ScatteredPrints, SlantedPanels, Circles };
 
         private const int Versions = 48;
         private const int TreesPerVersion = 120;
         private const int MaxScattered = 9;
+        private const int MaxPanels = 6;
+        private const int NearlyTheSame = 5;
+        private const double ScreenFlatShare = 0.15;
         // The face box runs from the eyes to the mouth, so this leaves room for the head and shoulders.
         private const double FacesFill = 0.4;
         private const double MostEnlarged = 2;
+        private const double FeaturedLarger = 1.5;
+        // The middle of the faces in a sample of family photos, below which a face looks soft.
+        private const double SharpEnough = 150;
+        private const double TooDark = 0.2;
 
         public static Composition? Compose(IReadOnlyList<PhotoFacts> photos, double width, double height, int seed, string? avoid = null, double rasterScale = 1, string? only = null, SurpriseOptions? options = null)
         {
@@ -258,11 +302,10 @@ namespace ModernImageViewer
             if (usable.Count < 2 || width < 50 || height < 50) return null;
 
             var random = new Random(seed);
-            var possible = Recipes.Where(r => CanMake(r, usable.Count) && (only == null || r == only)).ToList();
-            // Scattered prints alone cannot take 12 pictures. Something is better than nothing happening.
-            var wanted = possible.Where(r => options == null || options.Designs.Contains(r)).ToList();
-            var recipes = (wanted.Count > 0 ? wanted : possible).OrderBy(_ => random.Next()).ToList();
-            double mostZoom = options?.MostZoom ?? 1;
+            options ??= new SurpriseOptions();
+            // A race: each design draws a time, sooner the higher its odds, so favoured ones come first more often and none is shut out.
+            var recipes = Recipes.Where(r => CanMake(r, usable.Count) && (only == null || r == only))
+                .OrderBy(r => -Math.Log(1 - random.NextDouble()) / options.OddsOf(r)).ToList();
             // The one just shown comes last, so clicking again gives something different.
             if (recipes.Count > 1 && recipes.Remove(avoid ?? "")) recipes.Add(avoid!);
 
@@ -276,20 +319,23 @@ namespace ModernImageViewer
                     var found = new List<Composition>();
                     for (int i = 0; i < Versions; i++)
                     {
-                        var version = Build(recipe, usable, width, height, random, pass == 0 ? look : random.Next(int.MaxValue));
+                        var version = Build(recipe, usable, width, height, random, pass == 0 ? look : random.Next(int.MaxValue), options);
                         if (version == null) continue;
-                        if (mostZoom > 1)
+                        if (options.MostZoom > 1)
                         {
-                            foreach (var cell in version.Cells) AimAtSubject(cell, mostZoom, rasterScale);
+                            foreach (var cell in version.Cells)
+                            {
+                                if (random.NextDouble() < options.ZoomChance) AimAtSubject(cell, options.MostZoom, rasterScale);
+                            }
                         }
-                        Judge(version, rasterScale);
+                        Judge(version, rasterScale, options.FaceShown);
                         found.Add(version);
                     }
                     var ranked = found.OrderByDescending(c => c.Score).ToList();
                     if (ranked.Count == 0) break;
                     if (fallback == null || ranked[0].Score > fallback.Score) fallback = ranked[0];
                     var clean = ranked.Where(c => c.FacesCut == 0 && c.PicturesBuried == 0).ToList();
-                    if (clean.Count > 0) return clean[random.Next(Math.Min(3, clean.Count))];
+                    if (clean.Count > 0) return clean[random.Next(Math.Min(options.Variety, clean.Count))];
                     if (recipe != HeroSpotlight) break;
                 }
             }
@@ -299,16 +345,48 @@ namespace ModernImageViewer
         public static bool CanMake(string recipe, int photos) => recipe switch
         {
             HeroSpotlight => photos >= 3,
-            ScatteredPrints => photos >= 3 && photos <= MaxScattered,
+            ScatteredPrints or Circles => photos >= 3 && photos <= MaxScattered,
+            SlantedPanels => photos >= 3 && photos <= MaxPanels,
             _ => photos >= 2
         };
 
-        private static Composition? Build(string recipe, List<PhotoFacts> photos, double w, double h, Random random, int look) => recipe switch
+        /// <summary>
+        /// A guess, used only to leave a picture out of a large set. Photos sent by message lose their camera details, so
+        /// camera details or a large face mean a photo. Otherwise a screenshot's name, a PNG, a phone screen's height, or
+        /// large flat areas give it away: in a sample of 300 pictures, photos from a camera reached 2% flat and captures started at 16%.
+        /// </summary>
+        public static bool LooksLikeScreen(string path, bool camera, double width, double height, IReadOnlyList<UnitRect> faces, double flatShare)
+        {
+            if (camera || faces.Any(f => f.Area >= 0.01)) return false;
+            if (flatShare >= ScreenFlatShare) return true;
+            string name = System.IO.Path.GetFileName(path);
+            if (name.Contains("screenshot", StringComparison.OrdinalIgnoreCase) || name.Contains("screen shot", StringComparison.OrdinalIgnoreCase)) return true;
+            if (string.Equals(System.IO.Path.GetExtension(path), ".png", StringComparison.OrdinalIgnoreCase)) return true;
+            return height / Math.Max(1, width) >= 1.75;
+        }
+
+        /// <summary>For a large set: what looks like a screen capture goes, and all but one of near-identical shots. Never a featured picture, and never so many that nothing is left to arrange.</summary>
+        public static List<PhotoFacts> LeaveOutScreensAndRepeats(List<PhotoFacts> photos)
+        {
+            var kept = new List<PhotoFacts>();
+            foreach (var photo in photos.OrderByDescending(p => p.Featured))
+            {
+                if (photo.Featured) { kept.Add(photo); continue; }
+                if (photo.ScreenLike) continue;
+                if (photo.Look != 0 && kept.Any(k => k.Look != 0 && System.Numerics.BitOperations.PopCount(k.Look ^ photo.Look) <= NearlyTheSame)) continue;
+                kept.Add(photo);
+            }
+            return kept.Count >= 2 ? kept : photos;
+        }
+
+        private static Composition? Build(string recipe, List<PhotoFacts> photos, double w, double h, Random random, int look, SurpriseOptions options) => recipe switch
         {
             EdgeToEdge => BuildEdgeToEdge(photos, w, h, random),
-            GalleryWall => BuildGalleryWall(photos, w, h, random),
-            HeroSpotlight => BuildHeroSpotlight(photos, w, h, random, look),
-            _ => BuildScatteredPrints(photos, w, h, random)
+            GalleryWall => BuildGalleryWall(photos, w, h, random, options),
+            SlantedPanels => BuildSlantedPanels(photos, w, h, random),
+            Circles => BuildCircles(photos, w, h, random),
+            HeroSpotlight => BuildHeroSpotlight(photos, w, h, random, look, options),
+            _ => BuildScatteredPrints(photos, w, h, random, options)
         };
 
         private static Composition? BuildEdgeToEdge(List<PhotoFacts> photos, double w, double h, Random random)
@@ -322,16 +400,23 @@ namespace ModernImageViewer
             return Finish(EdgeToEdge, cells, mosaic, "#FF0A0A0A", CanvasLook.Solid, FrameLooks.Flush(), w, h);
         }
 
-        private static Composition? BuildGalleryWall(List<PhotoFacts> photos, double w, double h, Random random)
+        private static Composition? BuildGalleryWall(List<PhotoFacts> photos, double w, double h, Random random, SurpriseOptions options)
         {
             // One sheet of card with the pictures set into it: the margin all round matches the gaps between them.
-            string card = random.Next(3) switch
+            int cardKind = options.Card switch
+            {
+                SurpriseOptions.CardWhite => 0,
+                SurpriseOptions.CardBlack => 1,
+                SurpriseOptions.CardFromPictures => 2,
+                _ => random.Next(3)
+            };
+            string card = cardKind switch
             {
                 0 => "#FFF8F8F8",
                 1 => "#FF141414",
                 _ => Tone(Boldest(photos, random).Color, 0.22, 0.16)
             };
-            double gap = Math.Clamp(Math.Min(w, h) * (0.012 + random.NextDouble() * 0.012), 6, 20);
+            double gap = Math.Clamp(Math.Min(w, h) * (0.012 + random.NextDouble() * 0.012), 6, 20) * options.GapScale;
             double radius = random.Next(3) == 0 ? gap * 0.6 : 0;
             var cellFrame = new CellBorderDto { Color = "#00000000", Padding = gap / 2, CornerRadius = radius, GutterMaterial = "Solid", GutterColor = card };
             var canvasFrame = new CellBorderDto { Color = "#00000000", Padding = gap / 2, GutterMaterial = "Solid", GutterColor = card };
@@ -342,9 +427,10 @@ namespace ModernImageViewer
             return Finish(GalleryWall, cells, mosaic, card, CanvasLook.Solid, canvasFrame, w, h);
         }
 
-        private static Composition? BuildHeroSpotlight(List<PhotoFacts> photos, double w, double h, Random random, int look)
+        private static Composition? BuildHeroSpotlight(List<PhotoFacts> photos, double w, double h, Random random, int look, SurpriseOptions options)
         {
-            var hero = photos.OrderByDescending(Presence).Take(2).OrderBy(_ => random.Next()).First();
+            var hero = photos.Where(p => p.Featured).OrderBy(_ => random.Next()).FirstOrDefault()
+                ?? photos.OrderByDescending(Presence).Take(2).OrderBy(_ => random.Next()).First();
             var rest = photos.Where(p => !ReferenceEquals(p, hero)).ToList();
             var tree = FindTree(rest, w / h, random);
             if (tree == null) return null;
@@ -354,7 +440,7 @@ namespace ModernImageViewer
 
             string[] shapes = { WindowShapes.Arch, WindowShapes.Oval, WindowShapes.Squircle, WindowShapes.Hexagon };
             string shape = shapes[look % shapes.Length];
-            double cardH = h * (0.62 + random.NextDouble() * 0.2);
+            double cardH = h * (options.HeroSize - 0.1 + random.NextDouble() * 0.2);
             double aspect = shape switch
             {
                 WindowShapes.Arch => 0.72 + random.NextDouble() * 0.12,
@@ -393,7 +479,7 @@ namespace ModernImageViewer
             return Finish(HeroSpotlight, cells, mosaic, Tone(hero.Color, 0.25, 0.1), CanvasLook.Solid, FrameLooks.Flush(), w, h);
         }
 
-        private static Composition? BuildScatteredPrints(List<PhotoFacts> photos, double w, double h, Random random)
+        private static Composition? BuildScatteredPrints(List<PhotoFacts> photos, double w, double h, Random random, SurpriseOptions options)
         {
             int count = photos.Count;
             int columns = Math.Max(1, (int)Math.Round(Math.Sqrt(count * w / h)));
@@ -409,12 +495,13 @@ namespace ModernImageViewer
             double share = 1.05 + random.NextDouble() * 0.25;
             double border = Math.Clamp(Math.Min(w, h) * 0.012, 5, 12);
             double shadowRoom = Math.Min(w, h) * 0.03;
-            var order = photos.OrderBy(_ => random.Next()).ToList();
+            // A featured print is larger and lies on top.
+            var order = photos.OrderBy(p => p.Featured ? 1 : 0).ThenBy(_ => random.Next()).ToList();
             var cells = new List<ComposedCell>();
             for (int i = 0; i < count; i++)
             {
                 var photo = order[i];
-                double area = w * h * share / count;
+                double area = w * h * share / count * (photo.Featured ? FeaturedLarger : 1);
                 double printH = Math.Sqrt(area / photo.Aspect);
                 double printW = printH * photo.Aspect;
                 double fit = Math.Min(1, Math.Min(w * 0.62 / printW, h * 0.72 / printH));
@@ -424,7 +511,8 @@ namespace ModernImageViewer
                 double jitterY = (random.NextDouble() - 0.5) * h / rows * 0.3;
                 double cx = Math.Clamp(spots[i].X + jitterX, printW * 0.46, w - printW * 0.46);
                 double cy = Math.Clamp(spots[i].Y + jitterY, printH * 0.46, h - printH * 0.46);
-                double turn = (random.NextDouble() < 0.5 ? -1 : 1) * (1.5 + random.NextDouble() * 5);
+                // From under a quarter of the most tilt up to all of it, so a pile never looks squared up by accident.
+                double turn = (random.NextDouble() < 0.5 ? -1 : 1) * options.MostTilt * (0.23 + random.NextDouble() * 0.77);
                 cells.Add(new ComposedCell
                 {
                     Photo = photo,
@@ -449,6 +537,81 @@ namespace ModernImageViewer
             }
             string surface = random.Next(2) == 0 ? CanvasLook.Vignette : CanvasLook.Gradient;
             return Finish(ScatteredPrints, cells, null, Tone(Boldest(photos, random).Color, 0.28, 0.3), surface, FrameLooks.Flush(), w, h);
+        }
+
+        /// <summary>Tall panels that lean the same way, with even gaps along the slant, running off the canvas at each end so no corner is left bare.</summary>
+        private static Composition? BuildSlantedPanels(List<PhotoFacts> photos, double w, double h, Random random)
+        {
+            int count = photos.Count;
+            const double lean = 0.2;
+            double gap = Math.Clamp(Math.Min(w, h) * 0.012, 5, 12);
+            double panelW = (w - (count - 1) * gap) / ((1 - lean) * count - lean);
+            bool mirrored = random.Next(2) == 0;
+            var order = photos.OrderBy(_ => random.Next()).ToList();
+            var cells = new List<ComposedCell>();
+            for (int i = 0; i < count; i++)
+            {
+                cells.Add(new ComposedCell
+                {
+                    Photo = order[i],
+                    Floating = true,
+                    X = -lean * panelW + i * ((1 - lean) * panelW + gap),
+                    Y = 0,
+                    W = panelW,
+                    H = h,
+                    Geometry = new CellGeometryDto { Shape = WindowShapes.Parallelogram, ShapeFlipH = mirrored }
+                });
+            }
+            return Finish(SlantedPanels, cells, null, "#FF0A0A0A", CanvasLook.Solid, FrameLooks.Flush(), w, h);
+        }
+
+        /// <summary>Round portraits of varied size on a quiet canvas. The boldest picture is the largest.</summary>
+        private static Composition? BuildCircles(List<PhotoFacts> photos, double w, double h, Random random)
+        {
+            int count = photos.Count;
+            int columns = Math.Max(1, (int)Math.Round(Math.Sqrt(count * w / h)));
+            int rows = (int)Math.Ceiling(count / (double)columns);
+            var order = photos.OrderBy(_ => random.Next()).ToList();
+            var boldest = order.Where(p => p.Featured).FirstOrDefault() ?? Boldest(order, random);
+            double line = Math.Clamp(Math.Min(w, h) * 0.006, 3, 7);
+            double shadowRoom = Math.Min(w, h) * 0.03;
+            double evenArea = w * h * 0.8 / count;
+            var cells = new List<ComposedCell>();
+            for (int i = 0; i < count; i++)
+            {
+                int row = i / columns;
+                int inRow = row == rows - 1 ? count - columns * (rows - 1) : columns;
+                int column = i - row * columns;
+                var photo = order[i];
+                double scale = ReferenceEquals(photo, boldest) ? FeaturedLarger : 0.82 + random.NextDouble() * 0.2;
+                double across = Math.Min(Math.Sqrt(evenArea * scale * 4 / Math.PI), Math.Min(w * 0.6, h * 0.85));
+                double cx = (column + 0.5) / inRow * w + (random.NextDouble() - 0.5) * w / columns * 0.2;
+                double cy = (row + 0.5) / rows * h + (random.NextDouble() - 0.5) * h / rows * 0.2;
+                cx = Math.Clamp(cx, across * 0.52, w - across * 0.52);
+                cy = Math.Clamp(cy, across * 0.52, h - across * 0.52);
+                cells.Add(new ComposedCell
+                {
+                    Photo = photo,
+                    Floating = true,
+                    X = cx - across / 2 - shadowRoom,
+                    Y = cy - across / 2 - shadowRoom,
+                    W = across + 2 * shadowRoom,
+                    H = across + 2 * shadowRoom,
+                    Geometry = new CellGeometryDto { Shape = WindowShapes.Oval },
+                    Frame = new CellBorderDto
+                    {
+                        Color = "#FFFFFFFF",
+                        Thickness = line,
+                        Padding = shadowRoom,
+                        ShadowIntensity = 60,
+                        Shadow = true,
+                        GutterMaterial = "None",
+                        GutterColor = "#00000000"
+                    }
+                });
+            }
+            string surface = random.Next(2) == 0 ? CanvasLook.Vignette : CanvasLook.Gradient;
+            return Finish(Circles, cells, null, Tone(boldest.Color, 0.25, 0.22), surface, FrameLooks.Flush(), w, h);
         }
 
         // ---- Fitting pictures to a rectangle
@@ -614,7 +777,7 @@ namespace ModernImageViewer
         /// Faces matter most. A face a shape cuts into, or another cell covers, is what makes a random layout look careless.
         /// Then how much of each picture shows, whether any is enlarged past its detail, and how well prints cover the canvas.
         /// </summary>
-        private static void Judge(Composition version, double rasterScale)
+        private static void Judge(Composition version, double rasterScale, double faceShown)
         {
             double faceScore = 1;
             int facesCut = 0;
@@ -625,7 +788,7 @@ namespace ModernImageViewer
                 foreach (var face in cell.Photo.Faces)
                 {
                     double visible = VisibleShare(version, i, face);
-                    if (visible < 0.85)
+                    if (visible < faceShown)
                     {
                         // A tiny face in a crowd costs less than a person's own.
                         double weight = Math.Min(1, Math.Sqrt(face.Area) * 6);
@@ -766,13 +929,15 @@ namespace ModernImageViewer
             return hit / (double)(steps * steps);
         }
 
-        /// <summary>How much a picture holds: its faces most, then its size.</summary>
+        /// <summary>How much a picture holds: its faces most, then its size. A soft or dark one should not take the best place because of a big face, and a featured one always does.</summary>
         private static double Presence(PhotoFacts photo)
         {
             double faces = photo.Faces.Sum(f => Math.Sqrt(f.Area));
             double aspect = photo.Aspect;
             double comfortable = aspect > 2.2 || aspect < 0.45 ? 0.5 : 1;
-            return (1 + 3 * Math.Min(1, faces)) * comfortable * (1 + Math.Log10(Math.Max(10, photo.Width * photo.Height)) / 10);
+            double quality = Math.Clamp(photo.Sharpness / SharpEnough, 0.4, 1) * (photo.Brightness < TooDark ? 0.4 : 1);
+            double featured = photo.Featured ? 100 : 1;
+            return (1 + 3 * Math.Min(1, faces)) * comfortable * quality * featured * (1 + Math.Log10(Math.Max(10, photo.Width * photo.Height)) / 10);
         }
 
         private static PhotoFacts Boldest(List<PhotoFacts> photos, Random random) => photos.OrderByDescending(Presence).Take(3).OrderBy(_ => random.Next()).First();

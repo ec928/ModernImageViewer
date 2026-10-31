@@ -146,6 +146,7 @@ namespace ModernImageViewer
         /// <summary>The session stays as it is, ready to come back to.</summary>
         public void PrepareToLeave()
         {
+            StopAutoPlay();
             CloseCountsCard();
             _hudTimer.Stop();
         }
@@ -2071,6 +2072,16 @@ namespace ModernImageViewer
             var activeCard = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, item));
             if (activeCard != null) menu.Items.Add(MakeLayerMenu(activeCard));
             AddCellImageMenu(menu, item);
+            if (!IsEmptyCell(item))
+            {
+                string picture = item.Path;
+                var feature = MakeChoiceItem("Feature in Surprise me", _featuredPictures.Contains(picture), () =>
+                {
+                    if (!_featuredPictures.Remove(picture)) _featuredPictures.Add(picture);
+                });
+                ToolTipService.SetToolTip(feature, "Surprise me always uses this picture and gives it the best place");
+                menu.Items.Add(feature);
+            }
 
             if (activeCard != null)
             {

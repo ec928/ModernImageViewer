@@ -32,6 +32,7 @@ namespace ModernImageViewer
             RootGrid.AddHandler(KeyUpEvent, new KeyEventHandler((_, _) => NoteUserAction()), true);
             AttachFileDrop();
             AttachCanvasClip();
+            AttachSurpriseStops();
         }
 
         private void NoteUserAction()

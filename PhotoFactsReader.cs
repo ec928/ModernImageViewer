@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading;
 using System.Threading.Tasks;
@@ -33,6 +34,7 @@ namespace ModernImageViewer
                 if (width < 1 || height < 1) return null;
 
                 var faces = new List<UnitRect>();
+                double sharpness = 1000;
                 if (detector != null)
                 {
                     double ratio = Math.Min(1.0, (double)FaceEdge / Math.Max(decoder.PixelWidth, decoder.PixelHeight));
@@ -52,6 +54,7 @@ namespace ModernImageViewer
                             face.FaceBox.Width / (double)small.PixelWidth,
                             face.FaceBox.Height / (double)small.PixelHeight));
                     }
+                    sharpness = MeasureSharpness(small, faces);
                 }
 
                 int side = GridCells * CellPixels;
@@ -60,13 +63,122 @@ namespace ModernImageViewer
                 var pixels = new byte[4 * side * side];
                 tiny.CopyToBuffer(pixels.AsBuffer());
                 var (focusX, focusY) = FindFocus(pixels, side);
-                return new PhotoFacts(path, width, height, faces, focusX, focusY, MainColor(pixels));
+                bool camera = await HasCameraAsync(decoder).ConfigureAwait(true);
+                return new PhotoFacts(path, width, height, faces, focusX, focusY, MainColor(pixels), LookOf(pixels, side), LayoutComposer.LooksLikeScreen(path, camera, width, height, faces, FlatShare(pixels, side)), sharpness, Brightness(pixels));
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 System.Diagnostics.Debug.WriteLine($"[PhotoFacts] {path}: {ex.Message}");
                 return null;
             }
+        }
+
+        private static async Task<bool> HasCameraAsync(BitmapDecoder decoder)
+        {
+            try
+            {
+                var found = await decoder.BitmapProperties.GetPropertiesAsync(new[] { "System.Photo.CameraModel" });
+                return found.Count > 0;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Formats with no such property, PNG among them, say so by throwing.
+                return false;
+            }
+        }
+
+        /// <summary>Edges in the faces, or in the whole picture if there are none. Blur leaves little difference between neighbouring pixels.</summary>
+        private static double MeasureSharpness(SoftwareBitmap gray, List<UnitRect> faces)
+        {
+            int w = gray.PixelWidth, h = gray.PixelHeight;
+            if (w < 3 || h < 3) return 1000;
+            var pixels = new byte[w * h];
+            gray.CopyToBuffer(pixels.AsBuffer());
+            double left = 0, top = 0, right = 1, bottom = 1;
+            if (faces.Count > 0)
+            {
+                var largest = faces.OrderByDescending(f => f.Area).First();
+                left = largest.X;
+                top = largest.Y;
+                right = largest.X + largest.W;
+                bottom = largest.Y + largest.H;
+            }
+            int x0 = Math.Clamp((int)(left * w), 1, w - 2), x1 = Math.Clamp((int)(right * w), 1, w - 2);
+            int y0 = Math.Clamp((int)(top * h), 1, h - 2), y1 = Math.Clamp((int)(bottom * h), 1, h - 2);
+            double sum = 0, squares = 0;
+            int count = 0;
+            for (int y = y0; y <= y1; y++)
+            {
+                for (int x = x0; x <= x1; x++)
+                {
+                    int i = y * w + x;
+                    double edge = 4 * pixels[i] - pixels[i - 1] - pixels[i + 1] - pixels[i - w] - pixels[i + w];
+                    sum += edge;
+                    squares += edge * edge;
+                    count++;
+                }
+            }
+            if (count == 0) return 1000;
+            double mean = sum / count;
+            return squares / count - mean * mean;
+        }
+
+        /// <summary>The share of the picture in blocks of nearly one color. A screen has large flat areas, and a photo's noise and light rarely do.</summary>
+        private static double FlatShare(byte[] pixels, int side)
+        {
+            int flat = 0;
+            for (int row = 0; row < GridCells; row++)
+            {
+                for (int col = 0; col < GridCells; col++)
+                {
+                    int low = 255, high = 0;
+                    for (int py = row * CellPixels; py < (row + 1) * CellPixels; py++)
+                    {
+                        for (int px = col * CellPixels; px < (col + 1) * CellPixels; px++)
+                        {
+                            int i = (py * side + px) * 4;
+                            int luma = (pixels[i + 2] * 299 + pixels[i + 1] * 587 + pixels[i] * 114) / 1000;
+                            low = Math.Min(low, luma);
+                            high = Math.Max(high, luma);
+                        }
+                    }
+                    if (high - low <= 2) flat++;
+                }
+            }
+            return flat / (double)(GridCells * GridCells);
+        }
+
+        private static double Brightness(byte[] pixels)
+        {
+            double total = 0;
+            for (int i = 0; i + 3 < pixels.Length; i += 4)
+                total += (pixels[i + 2] * 299 + pixels[i + 1] * 587 + pixels[i] * 114) / 1000.0;
+            return total / (pixels.Length / 4) / 255;
+        }
+
+        /// <summary>A fingerprint of the picture's light and dark, so two shots of the same moment can be recognised. Each bit: is this block brighter than the next?</summary>
+        private static ulong LookOf(byte[] pixels, int side)
+        {
+            const int blocks = 9, rows = 8;
+            var luma = new double[rows, blocks];
+            for (int y = 0; y < side; y++)
+            {
+                for (int x = 0; x < side; x++)
+                {
+                    int i = (y * side + x) * 4;
+                    luma[y * rows / side, x * blocks / side] += pixels[i + 2] * 0.299 + pixels[i + 1] * 0.587 + pixels[i] * 0.114;
+                }
+            }
+            ulong look = 0;
+            for (int r = 0; r < rows; r++)
+            {
+                for (int c = 0; c < blocks - 1; c++)
+                {
+                    look <<= 1;
+                    if (luma[r, c] > luma[r, c + 1]) look |= 1;
+                }
+            }
+            return look;
         }
 
         /// <summary>With no face to go on, the busiest part of the picture, leaning toward the upper part where subjects tend to be.</summary>
