@@ -247,7 +247,7 @@ namespace ModernImageViewer
 
         private void OpenCountsCard()
         {
-            if (IsCountsCardOpen || CountsSwitch.Visibility != Visibility.Visible) return;
+            if (IsCountsCardOpen || CountsSwitch.Visibility != Visibility.Visible || CountsSwitch.Opacity == 0) return;
             FillCountsPanel();
             CountsCard.Visibility = Visibility.Visible;
             PlaceCountsCard();
@@ -1636,7 +1636,7 @@ namespace ModernImageViewer
             // A tap, so a drag on an empty floating cell still moves it.
             cellGrid.Tapped += (s, e) =>
             {
-                if (!IsEmptyCell(photo.Item)) return;
+                if (!IsEmptyCell(photo.Item) || IsBareCanvas(_items.IndexOf(photo.Item))) return;
                 e.Handled = true;
                 AddImageRequested?.Invoke(this, photo.Item);
             };

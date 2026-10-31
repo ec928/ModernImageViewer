@@ -177,15 +177,9 @@ namespace ModernImageViewer
             }
         }
 
-        private void RestoreSnapshot(string json)
+        /// <summary>Rebuilt cells take the images already decoded, so they do not flash or decode again.</summary>
+        private Dictionary<string, BitmapSource> DecodedBitmaps()
         {
-            var file = MultiViewLayoutFile.FromJson(json);
-            if (file == null) return;
-
-            // The open card edits a frame object the restore is about to replace.
-            _cellBorderFlyout?.Hide();
-
-            // The rebuilt cells take the images already decoded, so an undo does not flash or decode again.
             var ready = new Dictionary<string, BitmapSource>(StringComparer.OrdinalIgnoreCase);
             foreach (var root in _cellRoots)
             {
@@ -195,9 +189,19 @@ namespace ModernImageViewer
                     ready[parts.Bound.Item.Path] = bitmap;
                 }
             }
+            return ready;
+        }
+
+        private void RestoreSnapshot(string json)
+        {
+            var file = MultiViewLayoutFile.FromJson(json);
+            if (file == null) return;
+
+            // The open card edits a frame object the restore is about to replace.
+            _cellBorderFlyout?.Hide();
 
             _restoringUndo = true;
-            _reuseBitmaps = ready;
+            _reuseBitmaps = DecodedBitmaps();
             try
             {
                 ApplyLayoutFile(file, restoreAspect: false);

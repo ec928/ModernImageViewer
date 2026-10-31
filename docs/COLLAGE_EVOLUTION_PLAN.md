@@ -16,6 +16,7 @@ How it is built is in `ARCHITECTURE.md`, under Multi-view. How it looks and beha
 - Canvas surface and color, including custom colors
 - Frame & Border for the whole canvas
 - Undo and redo, three autosaved sessions, and Reset canvas and images
+- Surprise me: four designed layouts, scored against the pictures so faces stay clear
 - Save and load `.mivlayout` layouts
 - Export to JPEG or PNG, and copy to the clipboard
 

@@ -115,3 +115,4 @@ The Win2D viewer core is real, but GPU lifetime was not reference-counted end-to
 - 2026-10-31: Detached windows, not released. Counted by window, so the app cannot stay running hidden. A picture that fails says so. Handled keys are ignored. Stays fitted through resizing until zoomed, by either way of detaching. Dragging out stops at 16 windows.
 - 2026-10-31: Clicking a photo outside a selection opens that photo and keeps the selection.
 - 2026-10-31: v0.24.0, released. Everything since v0.22.0.
+- 2026-10-31: Multi-View, not released. Surprise me: arranges the pictures into Edge to edge, Gallery wall, Hero spotlight or Scattered prints, scored against face detection. One empty grid cell under floating cells now counts as bare canvas.

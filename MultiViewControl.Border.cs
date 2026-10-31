@@ -133,6 +133,10 @@ namespace ModernImageViewer
         /// <summary>A cell can hold no image. It keeps its parameters, and they apply to the next image it gets.</summary>
         private static bool IsEmptyCell(ImageItem item) => string.IsNullOrEmpty(item.Path);
 
+        /// <summary>One empty grid cell under floating cells is the bare canvas they lie on, not a place waiting for a picture.</summary>
+        private bool IsBareCanvas(int slot) =>
+            slot == 0 && GridCellCount == 1 && IsEmptyCell(_items[0]) && _freeformCards.Count > 0;
+
         /// <summary>Take the image out of this cell.</summary>
         private void EmptyCell(int slot)
         {
@@ -157,7 +161,7 @@ namespace ModernImageViewer
                 parts.ImageContainer.Visibility = empty || failed ? Visibility.Collapsed : Visibility.Visible;
             if (parts.HiddenPlaceholder is StackPanel placeholder)
             {
-                placeholder.Visibility = empty || failed ? Visibility.Visible : Visibility.Collapsed;
+                placeholder.Visibility = (empty && !IsBareCanvas(slot)) || failed ? Visibility.Visible : Visibility.Collapsed;
                 if (placeholder.Children.Count >= 3
                     && placeholder.Children[0] is FontIcon icon
                     && placeholder.Children[1] is TextBlock title

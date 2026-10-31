@@ -309,12 +309,17 @@ namespace ModernImageViewer
             if (!show)
             {
                 CloseCountsCard();
-                CountsSwitch.Visibility = Visibility.Collapsed;
+                // Surprise me keeps the bar its width, so the button stays under the pointer for the next click.
+                CountsSwitch.Visibility = _surpriseBusy ? Visibility.Visible : Visibility.Collapsed;
+                CountsSwitch.Opacity = 0;
+                RowsSide.IsEnabled = false;
+                ColumnsSide.IsEnabled = false;
                 return;
             }
 
             int lines = EffectiveLines();
             CountsSwitch.Visibility = Visibility.Visible;
+            CountsSwitch.Opacity = 1;
             RowsSideText.Text = _flipped ? "Rows" : lines + (lines == 1 ? " Row" : " Rows");
             ColumnsSideText.Text = _flipped ? lines + (lines == 1 ? " Column" : " Columns") : "Columns";
             ShowCountsSides();

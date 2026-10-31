@@ -313,7 +313,7 @@ namespace ModernImageViewer
             }
             for (int slot = 0; slot < Math.Min(GridCellCount, _cellRoots.Length); slot++)
             {
-                if (Over(_cellRoots[slot])) return IsEmptyCell(_items[slot]) ? slot : -1;
+                if (Over(_cellRoots[slot])) return IsEmptyCell(_items[slot]) && !IsBareCanvas(slot) ? slot : -1;
             }
             return -1;
         }
@@ -460,6 +460,8 @@ namespace ModernImageViewer
                 _cellRoots = roots.ToArray();
             }
 
+            // The last floating cell gone, the bare canvas is an empty cell again.
+            ShowEmptyState(0);
             ShowHudAndOverlays();
         }
 
