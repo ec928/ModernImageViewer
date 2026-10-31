@@ -1152,6 +1152,8 @@ namespace ModernImageViewer
         }
 
         private int _hudMenusOpen;
+        // Asked rather than counted: a menu whose cell goes away must not hold the playbar up for good.
+        private MenuFlyout? _openCellMenu;
 
         private void HudMenu_Opened(object? sender, object e)
         {
@@ -1190,7 +1192,7 @@ namespace ModernImageViewer
 
         private void HideHudAndOverlays()
         {
-            if (_isPointerOverHud || _hudMenusOpen > 0) return;
+            if (_isPointerOverHud || _hudMenusOpen > 0 || _openCellMenu?.IsOpen == true) return;
 
             _hudTimer.Stop();
             _isHudVisible = false;
@@ -1719,10 +1721,11 @@ namespace ModernImageViewer
             _cellTopControls.Add(topControls);
 
             bool isCellHovered = false;
+            bool isMenuOpen = false;
             void SetCellHover(bool hovered)
             {
                 isCellHovered = hovered;
-                bool show = _isHudVisible && isCellHovered;
+                bool show = isMenuOpen || (_isHudVisible && isCellHovered);
                 topControls.Opacity = show ? 1.0 : 0.0;
                 topControls.IsHitTestVisible = show;
             }
@@ -1847,15 +1850,25 @@ namespace ModernImageViewer
             };
             FillCellMenu(menu, photo.Item);
             menu.Opening += (_, _) => FillCellMenu(menu, photo.Item);
+            // The cell's own buttons show with its menu, and take a click through the menu's light dismiss.
+            menu.OverlayInputPassThroughElement = topControls;
             menu.Opened += (_, _) =>
             {
                 ShowPositionBadges(Slot(photo.Item));
                 EnforceDarkFlyoutPresenter();
+                _openCellMenu = menu;
+                ShowHudAndOverlays();
+                isMenuOpen = true;
+                SetCellHover(isCellHovered);
             };
             menu.Closed += (_, _) =>
             {
                 HidePositionBadges();
                 NoteUserAction();
+                if (ReferenceEquals(_openCellMenu, menu)) _openCellMenu = null;
+                isMenuOpen = false;
+                SetCellHover(isCellHovered);
+                ShowHudAndOverlays();
             };
 
             cellGrid.ContextFlyout = menu;

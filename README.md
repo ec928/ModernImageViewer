@@ -89,7 +89,7 @@ On the photos themselves:
 
 - Drag the edge between two photos to resize them; double-click an edge to make the photos on either side equal. Changing how many lines there are, or how many photos are in a line, puts those sizes back to even. Switching between rows and columns keeps them, except beside a banner or pair, where the other photos are laid out again.
 - Scroll to zoom, drag to pan, middle-click to reset, double-click to zoom in or back out.
-- Hover over a photo to show its buttons at the top right: view it on its own, or remove the cell.
+- Hover over a photo, or open its right-click menu, to show its buttons at the top right: view it on its own, or remove the cell.
 - **Alt+drag** a photo onto another to swap the two.
 - Right-click a cell to swap, copy or move its photo to another cell, set its frame or shape, replace it from a file, or clear it. **Clear cell** takes the photo out and keeps the cell, so its space stays empty on the canvas and in an export. **Replace image** also recovers a cell whose file is missing. **Window** gives the cell a shape. **Replace image** and **Clear cell** are under **Image**, which also rotates, mirrors and flips the photo. The corners a shape leaves show the canvas, and a click there still reaches the cell.
 - The maximise button at the top right shows one photo on its own. **←** / **→** step through the photos, skipping empty cells; **Esc** returns to the grid.
