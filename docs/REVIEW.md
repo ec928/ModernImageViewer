@@ -118,3 +118,4 @@ The Win2D viewer core is real, but GPU lifetime was not reference-counted end-to
 - 2026-10-31: Multi-View, not released. Surprise me: arranges the pictures into Edge to edge, Gallery wall, Hero spotlight or Scattered prints, scored against face detection. One empty grid cell under floating cells now counts as bare canvas.
 - 2026-10-31: Multi-View, not released. Surprise me deals a large set from a deck, so every picture gets a turn; it had been shrinking to the pictures on screen after the first click.
 - 2026-10-31: v0.25.0, internal. Surprise me.
+- 2026-10-31: Multi-View, not released. Surprise me options in the wheel: designs, zoom on faces up to 5x, pictures from a large set, keep my canvas.

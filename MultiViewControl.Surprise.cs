@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -14,7 +15,6 @@ namespace ModernImageViewer
     public sealed partial class MultiViewControl
     {
         private const int FactReaders = 4;
-        private const int FewestFromLargeSet = 9;
 
         private readonly ConcurrentDictionary<string, PhotoFacts> _photoFacts = new(StringComparer.OrdinalIgnoreCase);
         // Only set while the session started with more pictures than a layout can show.
@@ -22,6 +22,72 @@ namespace ModernImageViewer
         private bool _surpriseRun;
         private string? _surpriseRecipe;
         private bool _surpriseBusy;
+        private SurpriseOptions? _surpriseOptions;
+
+        private static string SurpriseOptionsPath => System.IO.Path.Combine(AppPaths.LocalDirectory, "surprise-options.json");
+
+        private SurpriseOptions SurpriseChoices
+        {
+            get
+            {
+                if (_surpriseOptions != null) return _surpriseOptions;
+                string? json = null;
+                try
+                {
+                    if (System.IO.File.Exists(SurpriseOptionsPath)) json = System.IO.File.ReadAllText(SurpriseOptionsPath);
+                }
+                catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+                {
+                    // The defaults will do.
+                }
+                return _surpriseOptions = SurpriseOptions.FromJson(json);
+            }
+        }
+
+        private void ChangeSurpriseChoices(Action<SurpriseOptions> change)
+        {
+            change(SurpriseChoices);
+            try
+            {
+                System.IO.Directory.CreateDirectory(AppPaths.LocalDirectory);
+                AtomicFile.WriteAllText(SurpriseOptionsPath, SurpriseChoices.ToJson());
+            }
+            catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+            {
+                // It still applies until the app closes.
+            }
+        }
+
+        /// <summary>One flat list, so nothing here is more than one level below the wheel.</summary>
+        private MenuFlyoutSubItem MakeSurpriseMenu()
+        {
+            var menu = new MenuFlyoutSubItem { Text = "Surprise me", Icon = new FontIcon { Glyph = "\uE8B1" } };
+            void Heading(string text) => menu.Items.Add(new MenuFlyoutItem { Text = text, IsEnabled = false });
+
+            Heading("Designs");
+            foreach (string design in LayoutComposer.Recipes)
+                menu.Items.Add(MakeChoiceItem(design, SurpriseChoices.Designs.Contains(design), () => ChangeSurpriseChoices(o => o.ToggleDesign(design))));
+
+            menu.Items.Add(new MenuFlyoutSeparator());
+            Heading("Zoom on faces");
+            foreach (var level in SurpriseOptions.ZoomLevels)
+                menu.Items.Add(MakeChoiceItem(level.Name, SurpriseChoices.Zoom == level.Name, () => ChangeSurpriseChoices(o => o.Zoom = level.Name)));
+
+            menu.Items.Add(new MenuFlyoutSeparator());
+            Heading("Pictures from a large set");
+            foreach (var count in SurpriseOptions.PictureCounts)
+            {
+                var item = MakeChoiceItem(count.Name, SurpriseChoices.Pictures == count.Name, () => ChangeSurpriseChoices(o => o.Pictures = count.Name));
+                ToolTipService.SetToolTip(item, "How many each click uses when there are more than 16");
+                menu.Items.Add(item);
+            }
+
+            menu.Items.Add(new MenuFlyoutSeparator());
+            var keep = MakeChoiceItem("Keep my canvas", SurpriseChoices.KeepCanvas, () => ChangeSurpriseChoices(o => o.KeepCanvas = !o.KeepCanvas));
+            ToolTipService.SetToolTip(keep, "Keep this canvas color, surface and frame instead of the design's");
+            menu.Items.Add(keep);
+            return menu;
+        }
 
         private async void SurpriseButton_Click(object sender, RoutedEventArgs e)
         {
@@ -42,7 +108,9 @@ namespace ModernImageViewer
             try
             {
                 // More than a layout can show: a different set each time, so all of them get a turn.
-                var chosen = _surpriseDeck?.Deal(Random.Shared.Next(FewestFromLargeSet, MosaicLayout.MaxShown + 1)) ?? pictures;
+                var options = SurpriseChoices;
+                var range = options.PictureRange;
+                var chosen = _surpriseDeck?.Deal(Random.Shared.Next(range.Fewest, range.Most + 1)) ?? pictures;
                 var ready = DecodedBitmaps();
                 // A picture already showing as failed would only put its message into the design.
                 var failed = _cellRoots.Select(root => root?.Tag as CellParts).Where(parts => parts?.Bound.Failed == true)
@@ -52,10 +120,11 @@ namespace ModernImageViewer
                 double scale = XamlRoot?.RasterizationScale ?? 1;
                 double width = RootGrid.ActualWidth, height = RootGrid.ActualHeight;
                 string? avoid = sameRun ? _surpriseRecipe : null;
-                var composition = await Task.Run(() => LayoutComposer.Compose(facts, width, height, Random.Shared.Next(), avoid, scale));
+                var composition = await Task.Run(() => LayoutComposer.Compose(facts, width, height, Random.Shared.Next(), avoid, scale, null, options));
                 // The session was changed for other pictures while these were being read, and that wins.
                 if (composition == null || !SessionPictures().SequenceEqual(pictures)) return;
 
+                if (options.KeepCanvas) composition.KeepCanvas(_canvasColor, _canvasSurface, _canvasFrame);
                 if (!sameRun) AutoSaveSession();
                 CaptureUndoPoint();
                 _cellBorderFlyout?.Hide();

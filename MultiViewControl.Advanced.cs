@@ -633,6 +633,7 @@ namespace ModernImageViewer
             });
             ToolTipService.SetToolTip(fillFit, _isFillMode ? "Show the whole of each photo" : "Crop each photo to fill its cell");
             AdvancedMenuFlyout.Items.Add(fillFit);
+            AdvancedMenuFlyout.Items.Add(MakeSurpriseMenu());
 
             AdvancedMenuFlyout.Items.Add(new MenuFlyoutSeparator());
             var reset = MakeAdvancedItem("Reset canvas and images", "\uE72C", ResetCanvasAndImages);

@@ -30,6 +30,7 @@ namespace ModernImageViewer
         public CellGeometryDto Geometry { get; init; } = new();
         public double PanX { get; set; }
         public double PanY { get; set; }
+        public double Zoom { get; set; } = 1;
         public double ImageWidth { get; set; }
         public double ImageHeight { get; set; }
     }
@@ -40,9 +41,9 @@ namespace ModernImageViewer
         /// <summary>Back to front.</summary>
         public List<ComposedCell> Cells { get; init; } = new();
         public MosaicLayout? Mosaic { get; init; }
-        public string CanvasColor { get; init; } = CanvasLook.DefaultColor;
-        public string CanvasSurface { get; init; } = CanvasLook.Solid;
-        public CellBorderDto CanvasFrame { get; init; } = FrameLooks.Flush();
+        public string CanvasColor { get; private set; } = CanvasLook.DefaultColor;
+        public string CanvasSurface { get; private set; } = CanvasLook.Solid;
+        public CellBorderDto CanvasFrame { get; private set; } = FrameLooks.Flush();
         public double Width { get; init; }
         public double Height { get; init; }
         public double Score { get; set; }
@@ -50,6 +51,25 @@ namespace ModernImageViewer
         public int FacesCut { get; set; }
         /// <summary>Pictures mostly hidden by others on top, so they were placed for nothing.</summary>
         public int PicturesBuried { get; set; }
+
+        public void SetCanvas(string color, string surface, CellBorderDto frame)
+        {
+            CanvasColor = color;
+            CanvasSurface = surface;
+            CanvasFrame = frame;
+        }
+
+        /// <summary>The user's own canvas in place of the design's. A card's color would hide it, so its gaps go clear.</summary>
+        public void KeepCanvas(string color, string surface, CellBorderDto frame)
+        {
+            SetCanvas(color, surface, frame.Clone());
+            foreach (var cell in Cells)
+            {
+                if (cell.Frame.GutterMaterial != "Solid") continue;
+                cell.Frame.GutterMaterial = "None";
+                cell.Frame.GutterColor = "#00000000";
+            }
+        }
 
         public MultiViewLayoutFile ToLayoutFile()
         {
@@ -77,6 +97,7 @@ namespace ModernImageViewer
                     Name = System.IO.Path.GetFileName(cell.Photo.Path),
                     PanX = cell.PanX,
                     PanY = cell.PanY,
+                    Zoom = cell.Zoom > 1 ? cell.Zoom : null,
                     Border = cell.Frame.Clone(),
                     Geometry = cell.Geometry.Clone()
                 });
@@ -105,6 +126,7 @@ namespace ModernImageViewer
                         ZIndex = 5001 + i,
                         PanX = cell.PanX,
                         PanY = cell.PanY,
+                        Zoom = cell.Zoom > 1 ? cell.Zoom : null,
                         Border = cell.Frame.Clone(),
                         Geometry = cell.Geometry.Clone()
                     });
@@ -112,6 +134,58 @@ namespace ModernImageViewer
             }
             return file;
         }
+    }
+
+    /// <summary>What the user has asked of Surprise me. Saved between sessions.</summary>
+    public sealed class SurpriseOptions
+    {
+        public const string ZoomOff = "Off";
+        public static readonly (string Name, double Most)[] ZoomLevels = { (ZoomOff, 1), ("Up to 2x", 2), ("Up to 3x", 3), ("Up to 5x", 5) };
+        public const string DefaultPictures = "9 to 16";
+        public static readonly (string Name, int Fewest, int Most)[] PictureCounts = { ("4 to 6", 4, 6), ("7 to 9", 7, 9), (DefaultPictures, 9, 16), ("16", 16, 16) };
+
+        public List<string> Designs { get; set; } = LayoutComposer.Recipes.ToList();
+        public string Zoom { get; set; } = ZoomOff;
+        public string Pictures { get; set; } = DefaultPictures;
+        public bool KeepCanvas { get; set; }
+
+        [System.Text.Json.Serialization.JsonIgnore]
+        public double MostZoom => ZoomLevels.FirstOrDefault(z => z.Name == Zoom).Most is var most && most >= 1 ? most : 1;
+
+        [System.Text.Json.Serialization.JsonIgnore]
+        public (int Fewest, int Most) PictureRange
+        {
+            get
+            {
+                var found = PictureCounts.FirstOrDefault(c => c.Name == Pictures);
+                return found.Most > 0 ? (found.Fewest, found.Most) : (9, 16);
+            }
+        }
+
+        /// <summary>The last design left ticked stays ticked, so there is always something to make.</summary>
+        public void ToggleDesign(string design)
+        {
+            if (!Designs.Remove(design)) Designs.Add(design);
+            else if (Designs.Count == 0) Designs.Add(design);
+        }
+
+        public static SurpriseOptions FromJson(string? json)
+        {
+            try
+            {
+                var read = string.IsNullOrWhiteSpace(json) ? null : System.Text.Json.JsonSerializer.Deserialize<SurpriseOptions>(json);
+                if (read == null) return new SurpriseOptions();
+                read.Designs = (read.Designs ?? new List<string>()).Where(LayoutComposer.Recipes.Contains).Distinct().ToList();
+                if (read.Designs.Count == 0) read.Designs = LayoutComposer.Recipes.ToList();
+                return read;
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                return new SurpriseOptions();
+            }
+        }
+
+        public string ToJson() => System.Text.Json.JsonSerializer.Serialize(this);
     }
 
     /// <summary>Hands out a large set of pictures a few at a time, every one of them before any comes round again.</summary>
@@ -174,14 +248,21 @@ namespace ModernImageViewer
         private const int Versions = 48;
         private const int TreesPerVersion = 120;
         private const int MaxScattered = 9;
+        // The face box runs from the eyes to the mouth, so this leaves room for the head and shoulders.
+        private const double FacesFill = 0.4;
+        private const double MostEnlarged = 2;
 
-        public static Composition? Compose(IReadOnlyList<PhotoFacts> photos, double width, double height, int seed, string? avoid = null, double rasterScale = 1, string? only = null)
+        public static Composition? Compose(IReadOnlyList<PhotoFacts> photos, double width, double height, int seed, string? avoid = null, double rasterScale = 1, string? only = null, SurpriseOptions? options = null)
         {
             var usable = photos.Where(p => p.Width >= 1 && p.Height >= 1).Take(MosaicLayout.MaxShown).ToList();
             if (usable.Count < 2 || width < 50 || height < 50) return null;
 
             var random = new Random(seed);
-            var recipes = Recipes.Where(r => CanMake(r, usable.Count) && (only == null || r == only)).OrderBy(_ => random.Next()).ToList();
+            var possible = Recipes.Where(r => CanMake(r, usable.Count) && (only == null || r == only)).ToList();
+            // Scattered prints alone cannot take 12 pictures. Something is better than nothing happening.
+            var wanted = possible.Where(r => options == null || options.Designs.Contains(r)).ToList();
+            var recipes = (wanted.Count > 0 ? wanted : possible).OrderBy(_ => random.Next()).ToList();
+            double mostZoom = options?.MostZoom ?? 1;
             // The one just shown comes last, so clicking again gives something different.
             if (recipes.Count > 1 && recipes.Remove(avoid ?? "")) recipes.Add(avoid!);
 
@@ -197,6 +278,10 @@ namespace ModernImageViewer
                     {
                         var version = Build(recipe, usable, width, height, random, pass == 0 ? look : random.Next(int.MaxValue));
                         if (version == null) continue;
+                        if (mostZoom > 1)
+                        {
+                            foreach (var cell in version.Cells) AimAtSubject(cell, mostZoom, rasterScale);
+                        }
                         Judge(version, rasterScale);
                         found.Add(version);
                     }
@@ -479,11 +564,13 @@ namespace ModernImageViewer
         private static Composition Finish(string recipe, List<ComposedCell> cells, MosaicLayout? mosaic, string color, string surface, CellBorderDto frame, double w, double h)
         {
             foreach (var cell in cells) AimAtSubject(cell);
-            return new Composition { Recipe = recipe, Cells = cells, Mosaic = mosaic, CanvasColor = color, CanvasSurface = surface, CanvasFrame = frame, Width = w, Height = h };
+            var made = new Composition { Recipe = recipe, Cells = cells, Mosaic = mosaic, Width = w, Height = h };
+            made.SetCanvas(color, surface, frame);
+            return made;
         }
 
         /// <summary>The picture covers the cell, as Fill does, and shifts so its subject sits a little above the middle.</summary>
-        private static void AimAtSubject(ComposedCell cell)
+        private static void AimAtSubject(ComposedCell cell, double mostZoom = 1, double rasterScale = 1)
         {
             double innerW = Math.Max(1, cell.W - 2 * cell.Frame.Padding);
             double innerH = Math.Max(1, cell.H - 2 * cell.Frame.Padding);
@@ -491,10 +578,9 @@ namespace ModernImageViewer
             double scale = Math.Max(cover.Width / cell.Photo.Width, cover.Height / cell.Photo.Height);
             double imageW = cell.Photo.Width * scale;
             double imageH = cell.Photo.Height * scale;
-            cell.ImageWidth = imageW;
-            cell.ImageHeight = imageH;
 
             double fx = cell.Photo.FocusX, fy = cell.Photo.FocusY;
+            double zoom = 1;
             if (cell.Photo.Faces.Count > 0)
             {
                 double left = cell.Photo.Faces.Min(f => f.X);
@@ -503,7 +589,19 @@ namespace ModernImageViewer
                 double bottom = cell.Photo.Faces.Max(f => f.Y + f.H);
                 fx = (left + right) / 2;
                 fy = (top + bottom) / 2;
+                if (mostZoom > 1)
+                {
+                    // All the faces found, with room around them, and no further than the picture has the detail for.
+                    double fills = FacesFill * Math.Min(innerW / Math.Max(1, (right - left) * imageW), innerH / Math.Max(1, (bottom - top) * imageH));
+                    double detail = MostEnlarged * cell.Photo.Width / Math.Max(1, imageW * rasterScale);
+                    zoom = Math.Max(1, Math.Min(mostZoom, Math.Min(fills, detail)));
+                }
             }
+            imageW *= zoom;
+            imageH *= zoom;
+            cell.Zoom = zoom;
+            cell.ImageWidth = imageW;
+            cell.ImageHeight = imageH;
             double maxX = Math.Max(0, (imageW - innerW) / 2);
             double maxY = Math.Max(0, (imageH - innerH) / 2);
             cell.PanX = Math.Clamp(-(fx - 0.5) * imageW, -maxX, maxX);
