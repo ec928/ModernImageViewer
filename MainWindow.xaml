@@ -636,18 +636,18 @@
                                     </StackPanel>
                                 </Button>
                                 
-                                <Rectangle Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,0" Opacity="0.5"/>
+                                <Rectangle x:Name="MultiSelectPlayRule" Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,0" Opacity="0.5"/>
 
-                                <Button Click="MultiSelectCinematic_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" ToolTipService.ToolTip="Play Cinematic Slideshow">
+                                <Button x:Name="MultiSelectPlayButton" Click="MultiSelectCinematic_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" ToolTipService.ToolTip="Play Cinematic Slideshow">
                                     <SymbolIcon Symbol="Play" />
                                 </Button>
 
-                                <Rectangle Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,0" Opacity="0.5"/>
+                                <Rectangle x:Name="MultiSelectDeleteRule" Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,0" Opacity="0.5"/>
 
-                                <Button Click="MultiSelectDelete_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" ToolTipService.ToolTip="Delete Selected (Del)">
+                                <Button x:Name="MultiSelectDeleteButton" Click="MultiSelectDelete_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" ToolTipService.ToolTip="Delete Selected (Del)">
                                     <SymbolIcon Symbol="Delete" Foreground="#FFFF6B68" />
                                 </Button>
-                                <Button Click="MultiSelectClear_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" ToolTipService.ToolTip="Clear Selection (Esc)">
+                                <Button x:Name="MultiSelectCloseButton" Click="MultiSelectClear_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" ToolTipService.ToolTip="Clear Selection (Esc)">
                                     <SymbolIcon Symbol="Cancel" />
                                 </Button>
                             </StackPanel>

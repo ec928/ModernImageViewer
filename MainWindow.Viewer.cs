@@ -927,7 +927,7 @@ namespace ModernImageViewer
             if (_multiViewParked)
             {
                 _multiViewParked = false;
-                RestoreViewTogetherTip();
+                ShowAddingMode(false);
             }
             else if (MultiViewControl.Visibility == Visibility.Visible)
             {
@@ -968,8 +968,7 @@ namespace ModernImageViewer
             EndMultiViewCanvas();
             _multiViewParked = true;
             ImageGrid.SelectedItems.Clear();
-            ToolTipService.SetToolTip(ViewTogetherButton, "Add these to the layout (Enter)");
-            ViewTogetherText.Text = "Add to layout";
+            ShowAddingMode(true);
             NoteParkedSelection();
             FocusGrid();
         }
@@ -1006,8 +1005,8 @@ namespace ModernImageViewer
         {
             if (!_multiViewParked || MultiViewControl == null) return;
             _multiViewParked = false;
-            RestoreViewTogetherTip();
             ImageGrid.SelectedItems.Clear();
+            ShowAddingMode(false);
             BeginMultiViewCanvas();
             MultiViewControl.Visibility = Visibility.Visible;
             MultiViewControl.FocusView();
@@ -1022,18 +1021,28 @@ namespace ModernImageViewer
             if (!_multiViewParked || MultiSelectCountText == null) return;
             int count = Images.Count(img => img.IsGridSelected && !img.IsDirectory);
             MultiSelectActionBar.Visibility = Visibility.Visible;
-            MultiSelectCountText.Text = count > 0 ? count + " selected" : "Select pictures to add";
+            MultiSelectCountText.Text = count > 0 ? count + " selected" : "Click pictures to add";
             ViewTogetherButton.IsEnabled = count > 0;
         }
 
         private bool CanViewTogether(int selected) => selected > 1 || (_multiViewParked && selected > 0);
 
-        private void RestoreViewTogetherTip()
+        /// <summary>While adding, a plain click selects a picture, and the bar offers only what applies.</summary>
+        private void ShowAddingMode(bool adding)
         {
-            if (ViewTogetherButton == null) return;
-            ToolTipService.SetToolTip(ViewTogetherButton, "View Together (Enter)");
-            ViewTogetherText.Text = "View Together";
+            ImageGrid.IsItemClickEnabled = !adding;
+            ImageGrid.IsMultiSelectCheckBoxEnabled = !adding;
+            ImageGrid.SelectionMode = adding ? ListViewSelectionMode.Multiple : ListViewSelectionMode.Extended;
+            ToolTipService.SetToolTip(ViewTogetherButton, adding ? "Add these to the layout (Enter)" : "View Together (Enter)");
+            ViewTogetherText.Text = adding ? "Add to layout" : "View Together";
             ViewTogetherButton.IsEnabled = true;
+            var other = adding ? Visibility.Collapsed : Visibility.Visible;
+            MultiSelectPlayRule.Visibility = other;
+            MultiSelectPlayButton.Visibility = other;
+            MultiSelectDeleteRule.Visibility = other;
+            MultiSelectDeleteButton.Visibility = other;
+            ToolTipService.SetToolTip(MultiSelectCloseButton, adding ? "Back to the layout (Esc)" : "Clear Selection (Esc)");
+            if (!adding) MultiSelectActionBar.Visibility = Visibility.Collapsed;
         }
 
         private bool BeginMultiViewCanvas()
@@ -3182,6 +3191,14 @@ namespace ModernImageViewer
             FocusGrid();
         }
 
+        private void OpenGridFolder(ImageItem folder)
+        {
+            if (folder.Path == DriveRootPath)
+                ShowDriveList();
+            else if (!string.IsNullOrEmpty(folder.Path) && Directory.Exists(folder.Path))
+                _ = ScanFolder(folder.Path);
+        }
+
         private void ImageGrid_ItemClick(object s, ItemClickEventArgs e)
         {
             bool isCtrl = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
@@ -3204,10 +3221,7 @@ namespace ModernImageViewer
             {
                 if (i.IsDirectory)
                 {
-                    if (i.Path == DriveRootPath)
-                        ShowDriveList();
-                    else if (!string.IsNullOrEmpty(i.Path) && Directory.Exists(i.Path))
-                        _ = ScanFolder(i.Path);
+                    OpenGridFolder(i);
                 }
                 else
                 {

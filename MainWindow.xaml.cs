@@ -690,6 +690,9 @@ namespace ModernImageViewer
                     }
                 }
                 finally { _strippingDirectorySelection = false; }
+                // While adding pictures there is no item click, so a folder opens from here.
+                var folder = _multiViewParked ? directories.FirstOrDefault(d => d.IsDirectory) : null;
+                if (folder != null) OpenGridFolder(folder);
             }
 
             int count = 0;
