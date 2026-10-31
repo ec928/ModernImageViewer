@@ -153,7 +153,7 @@ Hovering a floating cell shows its resize rectangle as a dashed outline with a w
 
 Rows and Columns are a switch on the playbar, with the line count on the side in use. Clicking the other side turns the grid and opens the Grid layout card. Clicking the side in use opens or closes the card. The card holds how many lines and what is in each. The switch stays clickable while the card is open, so one click changes sides.
 
-The Frame & Border card always shows at full height for the window, in front of every cell. It opens beside its cell, or against the window edge farther from a cell too big to sit beside, and scrolls only when the window is too short.
+Save/Load is one menu of two columns, image sizes and layouts, with no sideways scrolling. Folder names are shortened, with the full path in the tooltip. Every folder always shows, its layouts share the height left, and any that do not fit are counted as +N on the folder row. Only a window too short for the image sizes scrolls.\n\nThe Frame & Border card always shows at full height for the window, in front of every cell. It opens beside its cell, or against the window edge farther from a cell too big to sit beside, and scrolls only when the window is too short.
 
 ### Invariants:
 1. **Dynamic Swap Badges**:

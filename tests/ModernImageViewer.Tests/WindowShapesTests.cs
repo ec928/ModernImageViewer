@@ -247,6 +247,26 @@ namespace ModernImageViewer.Tests
             Assert.Equal(new[] { -1 }, CellPhotoPick.Assign(new[] { "C:\\A.JPG" }, new[] { "c:\\a.jpg" }, Folder("c:\\a.jpg")));
         }
 
+        [Theory]
+        [InlineData("C:\\Users\\me\\Downloads", "Downloads")]
+        [InlineData("C:\\Users\\me\\Pictures\\Trips", "Pictures\\Trips")]
+        [InlineData("C:\\Users\\me\\OneDrive\\Apps\\Dev\\tests", "\u2026\\Dev\\tests")]
+        [InlineData("D:\\Photos", "D:\\Photos")]
+        [InlineData("D:\\", "D:\\")]
+        [InlineData("D:\\A\\B\\C\\D", "\u2026\\C\\D")]
+        public void FolderLabelsStayShort(string path, string want)
+        {
+            Assert.Equal(want, FolderLabel.Short(path, "C:\\Users\\me"));
+        }
+
+        [Fact]
+        public void MenuRowsReachEveryFolderBeforeASecondRowForAny()
+        {
+            Assert.Equal(new[] { 2, 1, 1 }, MenuRows.Share(new[] { 9, 9, 1 }, 4, 3));
+            Assert.Equal(new[] { 3, 0, 2 }, MenuRows.Share(new[] { 9, 0, 2 }, 99, 3));
+            Assert.Equal(new[] { 0, 0 }, MenuRows.Share(new[] { 5, 5 }, 0, 3));
+        }
+
         [Fact]
         public void TurningAnImageWrapsAroundACircle()
         {

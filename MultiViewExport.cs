@@ -54,6 +54,15 @@ namespace ModernImageViewer
         private static readonly SolidColorBrush _menuGoldStar = new(Windows.UI.Color.FromArgb(255, 255, 200, 59));
         private static readonly SolidColorBrush _menuDividerBrush = new(Windows.UI.Color.FromArgb(35, 255, 255, 255));
 
+        private const double SaveMenuWidth = 660;
+        private const double SaveMenuImageColumn = 216;
+        private const double MenuRowHeight = 40;
+        private const double MenuFolderHeight = 40;
+        private const double MenuLayoutHeight = 35;
+        private const double MenuHeaderHeight = 36;
+        private const double MenuDividerHeight = 12;
+        private const int MenuLayoutsPerFolder = 3;
+
         private void SaveFlyout_Opening(object sender, object e)
         {
             BuildSaveFlyoutMenu();
@@ -61,12 +70,8 @@ namespace ModernImageViewer
 
         private void BuildSaveFlyoutMenu()
         {
-            var panel = new StackPanel
-            {
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                Spacing = 1,
-                XYFocusKeyboardNavigation = Microsoft.UI.Xaml.Input.XYFocusKeyboardNavigationMode.Enabled
-            };
+            var panel = new StackPanel { Spacing = 1 };
+            panel.Children.Add(CreateSectionHeader("Save image"));
 
             double canvasW = CellsGrid.ActualWidth;
             double canvasH = CellsGrid.ActualHeight;
@@ -109,7 +114,9 @@ namespace ModernImageViewer
             panel.Children.Add(custom);
 
             // Layout Save & Load
-            panel.Children.Add(CreateMenuDivider());
+            var imageColumn = panel;
+            panel = new StackPanel { Spacing = 1 };
+            panel.Children.Add(CreateSectionHeader("Layouts"));
 
             var saveLayoutItem = CreateMenuItemButton("Save Layout as\u2026", icon: new FontIcon { Glyph = "\uE74E", FontSize = 13, Foreground = _menuWhiteSecondary });
             saveLayoutItem.Click += async (_, _) =>
@@ -141,27 +148,29 @@ namespace ModernImageViewer
                     panel.Children.Add(CreateMenuDivider());
                 }
 
-                if (favs.Count > 0)
+                // Every folder always shows. Its layouts take whatever height the window has left.
+                var folders = favs.Concat(recents).ToList();
+                var files = folders.Select(LayoutFilesIn).ToList();
+                double taken = MenuHeaderHeight + 2 * MenuRowHeight + folders.Count * MenuFolderHeight;
+                if (favs.Count > 0) taken += MenuDividerHeight + MenuHeaderHeight;
+                if (recents.Count > 0) taken += 2 * MenuDividerHeight + MenuHeaderHeight + MenuRowHeight;
+                int spare = (int)Math.Max(0, (SaveMenuHeight() - taken) / MenuLayoutHeight);
+                var shown = MenuRows.Share(files.Select(f => f.Count).ToList(), spare, MenuLayoutsPerFolder);
+
+                for (int i = 0; i < folders.Count; i++)
                 {
-                    panel.Children.Add(CreateSectionHeader(favs.Count >= 3 ? "Favourites (3 of 3)" : "Favourites"));
-                    foreach (var p in favs)
+                    if (i == 0 && favs.Count > 0)
+                        panel.Children.Add(CreateSectionHeader(favs.Count >= 3 ? "Favourites (3 of 3)" : "Favourites"));
+                    if (i == favs.Count)
                     {
-                        AddFolderAndLayouts(panel, p, isFavourite: true);
+                        if (favs.Count > 0) panel.Children.Add(CreateMenuDivider());
+                        panel.Children.Add(CreateSectionHeader("Recent"));
                     }
+                    AddFolderAndLayouts(panel, folders[i], i < favs.Count, files[i], shown[i]);
                 }
 
                 if (recents.Count > 0)
                 {
-                    if (favs.Count > 0)
-                    {
-                        panel.Children.Add(CreateMenuDivider());
-                    }
-                    panel.Children.Add(CreateSectionHeader("Recent"));
-                    foreach (var p in recents)
-                    {
-                        AddFolderAndLayouts(panel, p, isFavourite: false);
-                    }
-
                     panel.Children.Add(CreateMenuDivider());
                     var clearBtn = CreateMenuItemButton("Clear Recent Locations", icon: new FontIcon { Glyph = "\uE74D", FontSize = 13, Foreground = _menuWhiteSecondary });
                     clearBtn.Click += (_, _) =>
@@ -185,17 +194,35 @@ namespace ModernImageViewer
                 }
             }
 
-            var scroll = new ScrollViewer
+            var columns = new Grid
             {
-                Content = panel,
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                MaxHeight = 540
+                Width = Math.Min(SaveMenuWidth, Math.Max(320, RootGrid.ActualWidth - 32)),
+                ColumnSpacing = 8,
+                XYFocusKeyboardNavigation = Microsoft.UI.Xaml.Input.XYFocusKeyboardNavigationMode.Enabled
             };
+            columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(SaveMenuImageColumn) });
+            columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1) });
+            columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var rule = new Rectangle { Fill = _menuDividerBrush, Margin = new Thickness(0, 8, 0, 8) };
+            Grid.SetColumn(rule, 1);
+            Grid.SetColumn(panel, 2);
+            columns.Children.Add(imageColumn);
+            columns.Children.Add(rule);
+            columns.Children.Add(panel);
 
-            SaveFlyout.Content = scroll;
+            // Fits as it stands. It scrolls only in a window too short for the image sizes themselves.
+            SaveFlyout.Content = new ScrollViewer
+            {
+                Content = columns,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollMode = ScrollMode.Disabled,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                MaxHeight = SaveMenuHeight()
+            };
         }
+
+        /// <summary>The height free above the bar.</summary>
+        private double SaveMenuHeight() => Math.Max(200, RootGrid.ActualHeight - UnifiedHud.ActualHeight - UnifiedHud.Margin.Bottom - 32);
 
         private Button CreateMenuItemButton(string text, string? rightText = null, IconElement? icon = null)
         {
@@ -267,31 +294,24 @@ namespace ModernImageViewer
             };
         }
 
-        private void AddFolderAndLayouts(StackPanel panel, string path, bool isFavourite)
+        private static List<string> LayoutFilesIn(string path)
         {
-            panel.Children.Add(CreateFolderRow(path, isFavourite));
-
-            if (Directory.Exists(path))
+            try
             {
-                List<string> layoutFiles = new();
-                try
-                {
-                    layoutFiles = Directory.GetFiles(path, "*.mivlayout")
-                        .OrderByDescending(f => File.GetLastWriteTimeUtc(f))
-                        .ToList();
-                }
-                catch { }
-
-                foreach (var layoutPath in layoutFiles.Take(3))
-                {
-                    panel.Children.Add(CreateLayoutFileRow(layoutPath));
-                }
-
-                if (layoutFiles.Count > 3)
-                {
-                    panel.Children.Add(CreateMoreLayoutsButton(path, layoutFiles.Count - 3));
-                }
+                if (Directory.Exists(path))
+                    return Directory.GetFiles(path, "*.mivlayout").OrderByDescending(File.GetLastWriteTimeUtc).ToList();
             }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+            }
+            return new List<string>();
+        }
+
+        private void AddFolderAndLayouts(StackPanel panel, string path, bool isFavourite, List<string> layoutFiles, int shown)
+        {
+            panel.Children.Add(CreateFolderRow(path, isFavourite, layoutFiles.Count - shown));
+            foreach (var layoutPath in layoutFiles.Take(shown))
+                panel.Children.Add(CreateLayoutFileRow(layoutPath));
         }
 
         private Button CreateLayoutFileRow(string layoutPath)
@@ -311,7 +331,7 @@ namespace ModernImageViewer
             Grid.SetColumn(icon, 0);
             content.Children.Add(icon);
 
-            string fileName = Path.GetFileName(layoutPath);
+            string fileName = Path.GetFileNameWithoutExtension(layoutPath);
             var label = new TextBlock
             {
                 Text = fileName,
@@ -380,44 +400,7 @@ namespace ModernImageViewer
             return btn;
         }
 
-        private Button CreateMoreLayoutsButton(string folderPath, int extraCount)
-        {
-            var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(24, 0, 0, 0) };
-            content.Children.Add(new FontIcon
-            {
-                Glyph = "\uE8DA",
-                FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
-                FontSize = 11,
-                Foreground = _menuWhiteTertiary,
-                VerticalAlignment = VerticalAlignment.Center
-            });
-            content.Children.Add(new TextBlock
-            {
-                Text = $"+{extraCount} more layouts in folder…",
-                FontSize = 11.5,
-                Foreground = _menuWhiteSecondary,
-                VerticalAlignment = VerticalAlignment.Center
-            });
-
-            var btn = new Button
-            {
-                Style = (Style)Application.Current.Resources["SubtleButtonStyle"],
-                Content = content,
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                HorizontalContentAlignment = HorizontalAlignment.Left,
-                Padding = new Thickness(6, 2, 8, 2),
-                CornerRadius = new CornerRadius(4),
-                MinHeight = 24
-            };
-            btn.Click += async (_, _) =>
-            {
-                SaveFlyout.Hide();
-                await OpenLayoutFileAsync();
-            };
-            return btn;
-        }
-
-        private Grid CreateFolderRow(string path, bool isFavourite)
+        private Grid CreateFolderRow(string path, bool isFavourite, int moreLayouts)
         {
             var row = new Grid
             {
@@ -425,6 +408,7 @@ namespace ModernImageViewer
                 Margin = new Thickness(0, 1, 0, 1)
             };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             bool available = Directory.Exists(path);
@@ -444,7 +428,8 @@ namespace ModernImageViewer
             Grid.SetColumn(icon, 0);
             content.Children.Add(icon);
 
-            string displayName = available ? path : path + " (not available)";
+            string shortName = FolderLabel.Short(path, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
+            string displayName = available ? shortName : shortName + " (not available)";
             var label = new TextBlock
             {
                 Text = displayName,
@@ -487,6 +472,27 @@ namespace ModernImageViewer
             Grid.SetColumn(openBtn, 0);
             row.Children.Add(openBtn);
 
+            if (moreLayouts > 0)
+            {
+                var moreBtn = new Button
+                {
+                    Style = (Style)Application.Current.Resources["SubtleButtonStyle"],
+                    Content = new TextBlock { Text = "+" + moreLayouts, FontSize = 12, Foreground = _menuWhiteSecondary },
+                    Height = 32,
+                    Padding = new Thickness(6, 0, 6, 0),
+                    CornerRadius = new CornerRadius(4),
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                ToolTipService.SetToolTip(moreBtn, moreLayouts + " more in this folder. Click to choose a layout.");
+                moreBtn.Click += async (_, _) =>
+                {
+                    SaveFlyout.Hide();
+                    await OpenLayoutFileAsync();
+                };
+                Grid.SetColumn(moreBtn, 1);
+                row.Children.Add(moreBtn);
+            }
+
             // Star button
             bool full = !isFavourite && (MainWindow.Instance?.MultiViewFavouriteSaveLocations.Count ?? 0) >= 3;
             var starIcon = new FontIcon
@@ -516,7 +522,7 @@ namespace ModernImageViewer
                 MainWindow.Instance?.ToggleMultiViewFavourite(path);
                 BuildSaveFlyoutMenu();
             };
-            Grid.SetColumn(starBtn, 1);
+            Grid.SetColumn(starBtn, 2);
             row.Children.Add(starBtn);
 
             // Context menu on the row

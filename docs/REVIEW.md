@@ -100,3 +100,4 @@ The Win2D viewer core is real, but GPU lifetime was not reference-counted end-to
 - 2026-10-31: v0.21.0, internal. Replace image from a file, resize grips and outline on floating cells, floating cells limited by their centre and clipped to the canvas, and Photos returning when cells share a file.
 - 2026-10-31: Multi-View, not released. Rows and Columns are a switch on the playbar that opens the Grid layout card. The card keeps how many lines and what is in each.
 - 2026-10-31: Multi-View, not released. The Grid layout card is a plain panel above the bar rather than a flyout, because self-dismissal raced with the switch and the card sometimes failed to open.
+- 2026-10-31: Multi-View, not released. Save/Load is one two-column menu with no sideways scrolling, shortened folder names, and layouts sharing the height available.

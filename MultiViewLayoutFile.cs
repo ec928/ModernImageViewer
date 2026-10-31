@@ -859,6 +859,46 @@ namespace ModernImageViewer
         }
     }
 
+    /// <summary>A folder's name for a narrow menu row. The full path goes in its tooltip.</summary>
+    public static class FolderLabel
+    {
+        /// <summary>Under the user's home it starts there. Elsewhere it is the last two folders, or the whole path if that is all there is.</summary>
+        public static string Short(string path, string? home)
+        {
+            string trimmed = path.TrimEnd('\\');
+            if (trimmed.Length == 0) return path;
+            var parts = trimmed.Split('\\');
+            string tail = parts.Length > 3 ? "\u2026\\" + parts[^2] + "\\" + parts[^1] : trimmed;
+            if (string.IsNullOrEmpty(home) || !trimmed.StartsWith(home.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase))
+                return parts.Length <= 3 ? trimmed + (trimmed.EndsWith(':') ? "\\" : "") : tail;
+            var inside = trimmed.Substring(home.TrimEnd('\\').Length + 1).Split('\\');
+            return inside.Length <= 2 ? string.Join("\\", inside) : tail;
+        }
+    }
+
+    /// <summary>Shares out a limited number of menu rows.</summary>
+    public static class MenuRows
+    {
+        /// <summary>One row at a time to each list in turn, so a long list cannot crowd out the ones after it.</summary>
+        public static int[] Share(IReadOnlyList<int> counts, int rows, int maxEach)
+        {
+            var shown = new int[counts.Count];
+            for (int pass = 0; pass < maxEach; pass++)
+            {
+                for (int i = 0; i < counts.Count; i++)
+                {
+                    if (rows <= 0) return shown;
+                    if (counts[i] > pass)
+                    {
+                        shown[i]++;
+                        rows--;
+                    }
+                }
+            }
+            return shown;
+        }
+    }
+
     /// <summary>
     /// Which cell shows what after a change of selection. A cell whose photo is still selected keeps it, so cells that share
     /// a photo and an arrangement made with Swap both survive. New photos fill the cells whose photo was deselected. A cell
