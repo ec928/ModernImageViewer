@@ -139,7 +139,7 @@ Clear cell                                         Trapezoid, Hexagon, Organic b
 Remove cell                   Layer   >   Bring to front, Bring forward, Send backward, Send to back
 ```
 
-The playbar's wheel holds Undo and Redo. Add images sends the user to the folders to pick pictures, each of which comes back as a floating cell. The Canvas button holds Shape, Surface and Color. Save/Load holds Copy to clipboard and the last three autosaved sessions, timed to the second. Replacing a session never asks, because it can be had back from there. Back, Esc and the tile and list buttons leave the session waiting, and the Multi-View button returns to it.
+The playbar's wheel holds Undo and Redo. Add images sends the user to the folders to pick pictures, each of which comes back as a floating cell. The Canvas button holds Shape, Surface, Color and Frame & Border, which is the cell card without Shadow and Apply to all cells. Save/Load holds Copy to clipboard and the last three autosaved sessions, timed to the second. Replacing a session never asks, because it can be had back from there. Back, Esc and the tile and list buttons leave the session waiting, and the Multi-View button returns to it.
 
 Swap with and Copy to name positions only, never file names, so the two columns stay about the width of a single column of named entries. Each row is one menu entry, and the side of the row under the pointer is the column chosen, shown by a highlight on that half. Pointing at a target marks its cell's badge, with "+ attributes" for the second column. The same layout appears with any number of cells, down to one row with two photos.
 

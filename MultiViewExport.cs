@@ -27,8 +27,8 @@ namespace ModernImageViewer
         private void RefreshCanvasLabel()
         {
             if (AspectText == null || CellsGrid == null) return;
-            int w = (int)Math.Round(CellsGrid.ActualWidth);
-            int h = (int)Math.Round(CellsGrid.ActualHeight);
+            int w = (int)Math.Round(RootGrid.ActualWidth);
+            int h = (int)Math.Round(RootGrid.ActualHeight);
             AspectText.Text = GridCanvasMath.MatchAspect(w, h);
         }
 
@@ -77,8 +77,8 @@ namespace ModernImageViewer
             var panel = new StackPanel { Spacing = 1 };
             panel.Children.Add(CreateSectionHeader("Save image"));
 
-            double canvasW = CellsGrid.ActualWidth;
-            double canvasH = CellsGrid.ActualHeight;
+            double canvasW = RootGrid.ActualWidth;
+            double canvasH = RootGrid.ActualHeight;
 
             // Resolutions
             foreach (int height in GridCanvasMath.SaveHeights)
@@ -622,13 +622,13 @@ namespace ModernImageViewer
             double scale = XamlRoot?.RasterizationScale ?? 1;
             if (scale <= 0) scale = 1;
             return (
-                (int)Math.Round(CellsGrid.ActualWidth * scale),
-                (int)Math.Round(CellsGrid.ActualHeight * scale));
+                (int)Math.Round(RootGrid.ActualWidth * scale),
+                (int)Math.Round(RootGrid.ActualHeight * scale));
         }
 
         private async Task SaveAtHeightAsync(int height)
         {
-            if (!GridCanvasMath.TryOutputSize(height, CellsGrid.ActualWidth, CellsGrid.ActualHeight, out int width, out int outputH))
+            if (!GridCanvasMath.TryOutputSize(height, RootGrid.ActualWidth, RootGrid.ActualHeight, out int width, out int outputH))
             {
                 await ShowExportMessageAsync("That height does not fit. An edge would pass 16384 pixels.");
                 return;
@@ -719,10 +719,11 @@ namespace ModernImageViewer
             SaveText.Text = "Saving\u2026";
             try
             {
-                using var image = await RenderCanvasAsync(shots, width, height, _canvasColor, _canvasSurface);
+                bool png = string.Equals(Path.GetExtension(file.Path), ".png", StringComparison.OrdinalIgnoreCase);
+                using var image = await RenderCanvasAsync(shots, width, height, _canvasColor, _canvasSurface, _canvasFrame, transparentCorners: png);
                 using IRandomAccessStream stream = await file.OpenAsync(FileAccessMode.ReadWrite);
                 stream.Size = 0;
-                if (string.Equals(Path.GetExtension(file.Path), ".png", StringComparison.OrdinalIgnoreCase))
+                if (png)
                     await image.SaveAsync(stream, CanvasBitmapFileFormat.Png);
                 else
                     await image.SaveAsync(stream, CanvasBitmapFileFormat.Jpeg, 0.95f);
@@ -754,8 +755,8 @@ namespace ModernImageViewer
         {
             var shots = new List<CellShot>();
             int count = Math.Min(GridCellCount, _cellRoots.Length);
-            double canvasW = CellsGrid.ActualWidth;
-            double canvasH = CellsGrid.ActualHeight;
+            double canvasW = RootGrid.ActualWidth;
+            double canvasH = RootGrid.ActualHeight;
             if (canvasW < 1 || canvasH < 1) return shots;
 
             // Grid cells first, then freeform cells from back to front, so the export stacks like the screen.
@@ -795,7 +796,7 @@ namespace ModernImageViewer
                 var floating = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Container, rootElem));
                 Point origin = floating != null
                     ? new Point(Canvas.GetLeft(rootElem), Canvas.GetTop(rootElem))
-                    : rootElem.TransformToVisual(CellsGrid).TransformPoint(new Point(0, 0));
+                    : rootElem.TransformToVisual(RootGrid).TransformPoint(new Point(0, 0));
                 Rect Placed(FrameworkElement element)
                 {
                     Rect local = element.TransformToVisual(rootElem).TransformBounds(new Rect(0, 0, element.ActualWidth, element.ActualHeight));
@@ -829,7 +830,7 @@ namespace ModernImageViewer
         }
 
         /// <summary>Draw the canvas and its cells. The caller owns the image and disposes it.</summary>
-        private static async Task<CanvasRenderTarget> RenderCanvasAsync(List<CellShot> shots, int width, int height, string canvasColor, string canvasSurface)
+        private static async Task<CanvasRenderTarget> RenderCanvasAsync(List<CellShot> shots, int width, int height, string canvasColor, string canvasSurface, CellBorderDto canvasFrame, bool transparentCorners)
         {
             var device = CanvasDevice.GetSharedDevice();
             var target = new CanvasRenderTarget(device, width, height, 96);
@@ -857,6 +858,7 @@ namespace ModernImageViewer
                     };
                     clear.FillRectangle(0, 0, width, height, brush);
                 }
+                DrawCanvasFrame(clear, device, canvasFrame, width, height, width / (shots.Count > 0 ? shots[0].CanvasW : width));
             }
 
             foreach (var shot in shots)
@@ -1158,7 +1160,58 @@ namespace ModernImageViewer
                 }
             }
 
-            return target;
+            float cornerRadius = (float)(Math.Max(0, canvasFrame.CornerRadius) * width / (shots.Count > 0 ? shots[0].CanvasW : width));
+            if (cornerRadius <= 0) return target;
+
+            // The finished canvas is painted through a rounded shape, so nothing on it reaches past the corners.
+            var rounded = new CanvasRenderTarget(device, width, height, 96);
+            using (var session = rounded.CreateDrawingSession())
+            {
+                session.Clear(transparentCorners ? Color.FromArgb(0, 0, 0, 0) : ToColor(FrameColor.Parse(canvasColor)));
+                using var brush = new CanvasImageBrush(device, target);
+                session.FillRoundedRectangle(0, 0, width, height, cornerRadius, cornerRadius, brush);
+            }
+            target.Dispose();
+            return rounded;
+        }
+
+        /// <summary>The canvas frame in pixels, as ApplyCanvasFrame draws it: the mat fills the line and gutter, and the line runs along the edge.</summary>
+        private static void DrawCanvasFrame(CanvasDrawingSession session, CanvasDevice device, CellBorderDto frame, int width, int height, double scale)
+        {
+            float line = (float)(Math.Max(0, frame.Thickness) * scale);
+            float inset = line + (float)(Math.Max(0, frame.Padding) * scale);
+            if (inset <= 0) return;
+
+            var mat = ToColor(FrameColor.MatFill(frame.GutterMaterial, frame.GutterColor));
+            if (mat.A > 0)
+                session.DrawRectangle(inset / 2, inset / 2, Math.Max(1, width - inset), Math.Max(1, height - inset), mat, inset);
+            if (line <= 0) return;
+
+            float half = line / 2;
+            float x = half, y = half;
+            float w = Math.Max(1, width - line);
+            float h = Math.Max(1, height - line);
+            float radius = Math.Max(0, (float)(frame.CornerRadius * scale) - half);
+            string style = frame.StrokeStyle ?? "Solid";
+            if (string.Equals(style, "Gradient", StringComparison.OrdinalIgnoreCase))
+            {
+                var start = FrameColor.Parse(frame.Color);
+                using var brush = new CanvasLinearGradientBrush(device, ToColor(start), ToColor(FrameColor.GradientEnd(frame.SecondaryColor, start)))
+                {
+                    StartPoint = new System.Numerics.Vector2(0, 0),
+                    EndPoint = new System.Numerics.Vector2(width, height)
+                };
+                session.DrawRoundedRectangle(x, y, w, h, radius, radius, brush, line);
+                return;
+            }
+            var color = string.Equals(style, "InnerMuted", StringComparison.OrdinalIgnoreCase)
+                ? ToColor(FrameColor.MutedStroke(frame.Color))
+                : ParseColor(frame.Color);
+            if (color.A == 0) return;
+            if (string.Equals(style, "Dashed", StringComparison.OrdinalIgnoreCase))
+                session.DrawRoundedRectangle(x, y, w, h, radius, radius, color, line, new CanvasStrokeStyle { DashStyle = CanvasDashStyle.Dash });
+            else
+                session.DrawRoundedRectangle(x, y, w, h, radius, radius, color, line);
         }
 
         private async Task CopyCanvasToClipboardAsync()
@@ -1177,7 +1230,7 @@ namespace ModernImageViewer
             _savingGrid = true;
             try
             {
-                using var image = await RenderCanvasAsync(shots, width, height, _canvasColor, _canvasSurface);
+                using var image = await RenderCanvasAsync(shots, width, height, _canvasColor, _canvasSurface, _canvasFrame, transparentCorners: true);
                 var stream = new InMemoryRandomAccessStream();
                 await image.SaveAsync(stream, CanvasBitmapFileFormat.Png);
                 stream.Seek(0);
@@ -1270,6 +1323,7 @@ namespace ModernImageViewer
                     Aspect = AspectText?.Text,
                     BackgroundColor = _canvasColor,
                     Surface = _canvasSurface,
+                    Frame = _canvasFrame.Clone(),
                     Width = RootGrid.ActualWidth,
                     Height = RootGrid.ActualHeight
                 },
@@ -1430,6 +1484,7 @@ namespace ModernImageViewer
             // Clear the cells of the session being replaced before anything counts them.
             ClearAllFreeformCards();
             SetCanvas(layoutFile.Canvas?.BackgroundColor, layoutFile.Canvas?.Surface);
+            SetCanvasFrame(layoutFile.Canvas?.Frame);
 
             if (layoutFile.Photos != null && layoutFile.Photos.Count > 0)
             {

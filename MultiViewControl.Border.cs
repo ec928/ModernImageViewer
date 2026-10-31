@@ -26,6 +26,7 @@ namespace ModernImageViewer
         private int _frameFlyoutTicket;
         private Flyout? _cellBorderFlyout;
         private FrameworkElement? _cellBorderFlyoutAnchor;
+        private CellBorderDto _canvasFrame = FrameLooks.Flush();
 
         public CellBorderDto GetBorderForItem(ImageItem? item)
         {
@@ -343,13 +344,18 @@ namespace ModernImageViewer
         {
             int slot = Slot(item);
             if (slot < 0 || (uint)slot >= (uint)_cellRoots.Length) return;
-            var targetElement = _cellRoots[slot] ?? (FrameworkElement)this;
+            OpenFrameCard(item, GetBorderForItem(item), () => ApplyBorderToCell(slot), _cellRoots[slot] ?? (FrameworkElement)this, "Position " + (slot + 1));
+        }
 
+        /// <summary>The same card for the whole canvas. A canvas has no shadow, and no other cells to copy its frame onto.</summary>
+        private void OpenCanvasFrameCard() => OpenFrameCard(null, _canvasFrame, ApplyCanvasFrame, this, "Canvas");
+
+        private void OpenFrameCard(ImageItem? item, CellBorderDto border, Action applyFrame, FrameworkElement targetElement, string targetName)
+        {
             // Ignore the open panel's close, so it cannot overwrite this one.
             int ticket = ++_frameFlyoutTicket;
             _cellBorderFlyout?.Hide();
 
-            var border = GetBorderForItem(item);
             bool syncing = false;
 
             Action? refreshColor = null;
@@ -384,7 +390,9 @@ namespace ModernImageViewer
             }, out Slider gutterSlider);
             Slider shadowSlider = null!;
             TextBlock shadowValue = null!;
-            ToolTipService.SetToolTip(gutterRow, "How far this photo sits inside its cell. The photo beside it keeps its own inset.");
+            ToolTipService.SetToolTip(gutterRow, item != null
+                ? "How far this photo sits inside its cell. The photo beside it keeps its own inset."
+                : "How far the grid sits inside the canvas. Floating cells stay where they are.");
 
             void StyleGlow()
             {
@@ -425,7 +433,7 @@ namespace ModernImageViewer
 
             void Touch()
             {
-                ApplyBorderToCell(slot);
+                applyFrame();
                 RefreshPanel();
             }
 
@@ -561,7 +569,7 @@ namespace ModernImageViewer
             string[] matStyles = { "None", "Solid", "Acrylic" };
             var matTrack = MakeSegment(new[] { "None", "Solid", "Frosted" }, new[]
             {
-                "No mat. The gutter shows the dark canvas",
+                "No mat. The gutter shows the canvas",
                 "Flat color in the gutter",
                 "The mat color, translucent"
             }, index =>
@@ -664,9 +672,9 @@ namespace ModernImageViewer
             };
             Grid.SetColumn(glowToggle, 3);
             // Rim glow belongs to rectangles, so a shape does not offer it.
-            glowToggle.Visibility = GetGeometry(item).Shape == WindowShapes.Rectangle ? Visibility.Visible : Visibility.Collapsed;
+            glowToggle.Visibility = item != null && GetGeometry(item).Shape == WindowShapes.Rectangle ? Visibility.Visible : Visibility.Collapsed;
             shadowHeader.Children.Add(glowToggle);
-            body.Children.Add(shadowHeader);
+            if (item != null) body.Children.Add(shadowHeader);
 
             shadowSlider = new Slider
             {
@@ -686,7 +694,7 @@ namespace ModernImageViewer
                 border.Shadow = e.NewValue > 0;
                 Touch();
             };
-            body.Children.Add(shadowSlider);
+            if (item != null) body.Children.Add(shadowSlider);
 
             RefreshPanel();
 
@@ -747,7 +755,7 @@ namespace ModernImageViewer
                     if (it != null)
                         _itemBorders[it] = proto.Clone();
                 }
-                if (_itemBorders.TryGetValue(item, out var stored))
+                if (_itemBorders.TryGetValue(item!, out var stored))
                 {
                     border = stored;
                 }
@@ -760,16 +768,19 @@ namespace ModernImageViewer
             var root = new StackPanel { Spacing = 10, Width = 328 };
             var title = new TextBlock
             {
-                Text = "Frame & Border \u2014 Position " + (slot + 1),
+                Text = "Frame & Border \u2014 " + targetName,
                 FontSize = 14,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                 Foreground = _menuWhitePrimary
             };
             root.Children.Add(title);
             root.Children.Add(scroll);
-            root.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle { Height = 1, Fill = _menuDividerBrush });
-            root.Children.Add(apply);
-            AutomationProperties.SetName(root, "Frame and border for position " + (slot + 1));
+            if (item != null)
+            {
+                root.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle { Height = 1, Fill = _menuDividerBrush });
+                root.Children.Add(apply);
+            }
+            AutomationProperties.SetName(root, "Frame and border for " + targetName.ToLowerInvariant());
 
             var flyout = new Flyout
             {

@@ -261,6 +261,18 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
+        public void CanvasFrame_SurvivesASaveAndIsAbsentFromOlderFiles()
+        {
+            var file = new MultiViewLayoutFile();
+            file.Canvas.Frame = new CellBorderDto { Thickness = 3, Padding = 20, CornerRadius = 12, Color = "#FF112233", GutterMaterial = "Solid", GutterColor = "#FFF8F8F8" };
+            var read = MultiViewLayoutFile.FromJson(file.ToJson());
+            Assert.True(file.Canvas.Frame.SameLook(read!.Canvas.Frame));
+
+            file.Canvas.Frame = null;
+            Assert.Null(MultiViewLayoutFile.FromJson(file.ToJson())!.Canvas.Frame);
+        }
+
+        [Fact]
         public void Mosaic_FitsOnlyATreeThatPlacesEachPhotoOnce()
         {
             var good = MosaicNodeDto.FromMosaicLayout(MosaicLayout.FromCounts(new[] { 2, 2 }, rows: true));

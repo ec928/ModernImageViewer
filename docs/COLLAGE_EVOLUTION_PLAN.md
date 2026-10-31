@@ -14,6 +14,7 @@ How it is built is in `ARCHITECTURE.md`, under Multi-view. How it looks and beha
 - Pictures from the app (Add images) or dropped from Explorer become new floating cells
 - Window shapes on floating cells: rectangle, squircle, circle or oval, arch, L-shape, triangle, right triangle, rhombus, trapezoid, hexagon and organic blob, with rotation, mirroring and shape-only rotation
 - Canvas surface and color, including custom colors
+- Frame & Border for the whole canvas
 - Undo and redo
 - Save and load `.mivlayout` layouts
 - Export to JPEG or PNG, and copy to the clipboard

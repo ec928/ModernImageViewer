@@ -59,6 +59,10 @@ namespace ModernImageViewer
         [JsonPropertyName("surface")]
         public string? Surface { get; set; }
 
+        /// <summary>The line, corners, gutter and mat of the whole canvas. Shadow and rim are not used here.</summary>
+        [JsonPropertyName("frame")]
+        public CellBorderDto? Frame { get; set; }
+
         /// <summary>The canvas size the floating cells were saved on, so they can be placed on one of another size.</summary>
         [JsonPropertyName("width")]
         public double? Width { get; set; }

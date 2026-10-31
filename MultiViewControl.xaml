@@ -178,6 +178,11 @@
 
     <Grid x:Name="RootGrid" Background="#FF0A0A0A" RequestedTheme="Dark" PointerMoved="RootGrid_PointerMoved"
           IsTabStop="True" UseSystemFocusVisuals="False" FocusVisualPrimaryThickness="0" FocusVisualSecondaryThickness="0">
+        <!-- The canvas frame sits behind the grid, which moves in by the line and gutter. Floating cells stay above it. -->
+        <Border x:Name="CanvasFrameMat" IsHitTestVisible="False" Canvas.ZIndex="5"/>
+        <Border x:Name="CanvasFrameStroke" IsHitTestVisible="False" Canvas.ZIndex="6"/>
+        <Rectangle x:Name="CanvasFrameDashes" IsHitTestVisible="False" Canvas.ZIndex="6" Visibility="Collapsed"/>
+
         <!-- Main Tiled Layout Container (Zero wasted space: edge to edge) -->
         <Grid x:Name="CellsGrid" Margin="0" Canvas.ZIndex="10">
             <!-- Dynamic Columns and Rows generated in C# -->

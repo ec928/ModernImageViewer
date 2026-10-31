@@ -236,7 +236,10 @@ namespace ModernImageViewer
         private void AttachCanvasClip()
         {
             RootGrid.SizeChanged += (_, e) =>
+            {
                 FreeformCanvas.Clip = new RectangleGeometry { Rect = new Rect(0, 0, e.NewSize.Width, e.NewSize.Height) };
+                ApplyCanvasCorners();
+            };
         }
 
         /// <summary>

@@ -640,6 +640,80 @@ namespace ModernImageViewer
                 NoteUserAction();
             })));
             menu.Items.Add(color);
+
+            var frame = new MenuFlyoutItem { Text = "Frame & Border\u2026" };
+            frame.Click += (_, _) => OpenCanvasFrameCard();
+            ToolTipService.SetToolTip(frame, "A line, rounded corners and a margin around the whole canvas");
+            menu.Items.Add(frame);
+        }
+
+        /// <summary>The frame goes round the canvas and the grid moves in by its line and gutter, so the line never covers a photo.</summary>
+        private void ApplyCanvasFrame()
+        {
+            var frame = _canvasFrame;
+            double line = Math.Max(0, frame.Thickness);
+            double inset = line + Math.Max(0, frame.Padding);
+            CellsGrid.Margin = new Thickness(inset);
+
+            var mat = FrameColor.MatFill(frame.GutterMaterial, frame.GutterColor);
+            CanvasFrameMat.BorderThickness = new Thickness(mat.A > 0 ? inset : 0);
+            CanvasFrameMat.BorderBrush = mat.A > 0 ? new SolidColorBrush(ToColor(mat)) : null;
+
+            string style = frame.StrokeStyle ?? "Solid";
+            bool dashed = string.Equals(style, "Dashed", StringComparison.OrdinalIgnoreCase);
+            CanvasFrameStroke.CornerRadius = new CornerRadius(frame.CornerRadius);
+            CanvasFrameStroke.BorderThickness = new Thickness(dashed ? 0 : line);
+            if (string.Equals(style, "InnerMuted", StringComparison.OrdinalIgnoreCase))
+            {
+                CanvasFrameStroke.BorderBrush = new SolidColorBrush(ToColor(FrameColor.MutedStroke(frame.Color)));
+            }
+            else if (string.Equals(style, "Gradient", StringComparison.OrdinalIgnoreCase))
+            {
+                var primary = FrameColor.Parse(frame.Color);
+                var brush = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 1) };
+                brush.GradientStops.Add(new GradientStop { Color = ToColor(primary), Offset = 0 });
+                brush.GradientStops.Add(new GradientStop { Color = ToColor(FrameColor.GradientEnd(frame.SecondaryColor, primary)), Offset = 1 });
+                CanvasFrameStroke.BorderBrush = brush;
+            }
+            else
+            {
+                CanvasFrameStroke.BorderBrush = ParseBorderBrush(frame.Color);
+            }
+
+            var dash = FrameColor.Parse(frame.Color);
+            CanvasFrameDashes.Visibility = dashed && line > 0 && dash.A > 0 ? Visibility.Visible : Visibility.Collapsed;
+            if (dashed)
+            {
+                CanvasFrameDashes.Stroke = new SolidColorBrush(ToColor(dash));
+                CanvasFrameDashes.StrokeThickness = line;
+                CanvasFrameDashes.StrokeDashArray = new DoubleCollection { 3, 2 };
+                CanvasFrameDashes.RadiusX = frame.CornerRadius;
+                CanvasFrameDashes.RadiusY = frame.CornerRadius;
+            }
+
+            ApplyCanvasCorners();
+        }
+
+        /// <summary>Rounds the canvas with everything on it, floating cells included.</summary>
+        private void ApplyCanvasCorners()
+        {
+            var visual = ElementCompositionPreview.GetElementVisual(RootGrid);
+            double radius = _canvasFrame.CornerRadius;
+            if (radius <= 0 || RootGrid.ActualWidth < 1 || RootGrid.ActualHeight < 1)
+            {
+                visual.Clip = null;
+                return;
+            }
+            var geometry = visual.Compositor.CreateRoundedRectangleGeometry();
+            geometry.Size = new Vector2((float)RootGrid.ActualWidth, (float)RootGrid.ActualHeight);
+            geometry.CornerRadius = new Vector2((float)radius, (float)radius);
+            visual.Clip = visual.Compositor.CreateGeometricClip(geometry);
+        }
+
+        private void SetCanvasFrame(CellBorderDto? frame)
+        {
+            _canvasFrame = frame?.Clone() ?? FrameLooks.Flush();
+            ApplyCanvasFrame();
         }
 
         private void SetCanvas(string? color, string? surface)
