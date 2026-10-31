@@ -1057,9 +1057,6 @@ namespace ModernImageViewer
                 case (VirtualKey)189: // - / _
                     ChangeLines(-1);
                     return true;
-                case VirtualKey.F:
-                    ToggleFillMode();
-                    return true;
                 case VirtualKey.R:
                     ToggleRowsColumns();
                     return true;

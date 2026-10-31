@@ -861,6 +861,7 @@ namespace ModernImageViewer
                     clear.FillRectangle(0, 0, width, height, brush);
                 }
                 DrawCanvasMat(clear, device, canvasFrame, width, height, frameScale);
+                DrawCanvasShadow(clear, device, canvasFrame, width, height, frameScale);
             }
 
             // Grid photos stop at the rounded line, so what they cover past it is put back from here.
@@ -875,6 +876,7 @@ namespace ModernImageViewer
                 lineDrawn = true;
                 using var over = target.CreateDrawingSession();
                 DrawCanvasLine(over, device, backdrop, canvasFrame, width, height, frameScale);
+                DrawCanvasRim(over, canvasFrame, width, height, frameScale);
             }
 
             foreach (var shot in shots)
@@ -1214,6 +1216,31 @@ namespace ModernImageViewer
             double radius = Math.Max(0, frame.CornerRadius) * scale;
             using var ring = CanvasFrameRing(device, width, height, gutter + line / 2, Math.Max(0, radius - line / 2));
             session.FillGeometry(ring, mat);
+        }
+
+        /// <summary>The shadow the grid and line cast onto the gutter.</summary>
+        private static void DrawCanvasShadow(CanvasDrawingSession session, CanvasDevice device, CellBorderDto frame, int width, int height, double scale)
+        {
+            double gutter = Math.Max(0, frame.Padding) * scale;
+            if (frame.ShadowIntensity <= 0 || frame.RimGlow || gutter <= 0) return;
+            var shade = FrameShadow.RenderAlpha(width, height, gutter, gutter, width - 2 * gutter, height - 2 * gutter,
+                Math.Max(0, frame.CornerRadius) * scale, frame.ShadowIntensity, scale, scale);
+            var pixels = new byte[width * height * 4];
+            for (int p = 0; p < shade.Length; p++)
+                pixels[(p * 4) + 3] = shade[p];
+            using var bitmap = CanvasBitmap.CreateFromBytes(device, pixels, width, height, Windows.Graphics.DirectX.DirectXPixelFormat.B8G8R8A8UIntNormalized);
+            session.DrawImage(bitmap, 0, 0);
+        }
+
+        /// <summary>The light edge inside the line's outer edge, as ApplyCanvasFrame draws it.</summary>
+        private static void DrawCanvasRim(CanvasDrawingSession session, CellBorderDto frame, int width, int height, double scale)
+        {
+            if (frame.ShadowIntensity <= 0 || !frame.RimGlow) return;
+            float gutter = (float)(Math.Max(0, frame.Padding) * scale);
+            float line = (float)(Math.Max(1.0, frame.ShadowIntensity * 0.035 + 1.0) * scale);
+            float radius = Math.Max(0, (float)(frame.CornerRadius * scale) - line / 2);
+            session.DrawRoundedRectangle(gutter + line / 2, gutter + line / 2, Math.Max(1, width - 2 * gutter - line), Math.Max(1, height - 2 * gutter - line),
+                radius, radius, Color.FromArgb((byte)Math.Clamp(frame.ShadowIntensity * 2.1, 30, 240), 255, 255, 255), line);
         }
 
         /// <summary>Cuts the grid's corners back to the inside of the line, then draws the line, as ApplyCanvasFrame does.</summary>

@@ -610,14 +610,13 @@ namespace ModernImageViewer
             AdvancedMenuFlyout.Items.Add(redo);
 
             AdvancedMenuFlyout.Items.Add(new MenuFlyoutSeparator());
-            var fill = MakeChoiceItem("Fill", _isFillMode, () => { if (!_isFillMode) ToggleFillMode(); });
-            fill.KeyboardAcceleratorTextOverride = "F";
-            ToolTipService.SetToolTip(fill, "Crop each photo to its frame");
-            AdvancedMenuFlyout.Items.Add(fill);
-            var fit = MakeChoiceItem("Fit", !_isFillMode, () => { if (_isFillMode) ToggleFillMode(); });
-            fit.KeyboardAcceleratorTextOverride = "F";
-            ToolTipService.SetToolTip(fit, "Show the whole photo");
-            AdvancedMenuFlyout.Items.Add(fit);
+            var fillFit = MakeAdvancedItem(_isFillMode ? "Fit whole photos" : "Fill cells", _isFillMode ? "\uE73F" : "\uE740", () =>
+            {
+                ToggleFillMode();
+                NoteUserAction();
+            });
+            ToolTipService.SetToolTip(fillFit, _isFillMode ? "Show the whole of each photo" : "Crop each photo to fill its cell");
+            AdvancedMenuFlyout.Items.Add(fillFit);
         }
 
         /// <summary>The surface and color behind the cells, under the canvas shape.</summary>
@@ -701,6 +700,17 @@ namespace ModernImageViewer
                 CanvasFrameDashes.RadiusY = frame.CornerRadius;
             }
 
+            bool rim = frame.ShadowIntensity > 0 && frame.RimGlow;
+            CanvasFrameRim.Margin = new Thickness(gutter);
+            CanvasFrameRim.Visibility = rim ? Visibility.Visible : Visibility.Collapsed;
+            if (rim)
+            {
+                CanvasFrameRim.Stroke = new SolidColorBrush(Windows.UI.Color.FromArgb((byte)Math.Clamp(frame.ShadowIntensity * 2.1, 30, 240), 255, 255, 255));
+                CanvasFrameRim.StrokeThickness = Math.Max(1.0, frame.ShadowIntensity * 0.035 + 1.0);
+                CanvasFrameRim.RadiusX = frame.CornerRadius;
+                CanvasFrameRim.RadiusY = frame.CornerRadius;
+            }
+
             ApplyCanvasCorners();
         }
 
@@ -741,6 +751,9 @@ namespace ModernImageViewer
 
             using var ring = CanvasFrameRing(CanvasDevice.GetSharedDevice(), width, height, gutter + line / 2, Math.Max(0, radius - line / 2));
             matVisual.Clip = compositor.CreateGeometricClip(compositor.CreatePathGeometry(new CompositionPath(ring)));
+
+            // The grid and line cast it onto the gutter, as a cell's card does onto its mat. It is on the mat's layer, under the line.
+            ApplyDropShadow(CanvasFrameMat, frame);
         }
 
         private void SetCanvasFrame(CellBorderDto? frame)

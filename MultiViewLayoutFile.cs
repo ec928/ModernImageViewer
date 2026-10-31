@@ -59,7 +59,7 @@ namespace ModernImageViewer
         [JsonPropertyName("surface")]
         public string? Surface { get; set; }
 
-        /// <summary>The line, corners, gutter and mat of the whole canvas. Shadow and rim are not used here.</summary>
+        /// <summary>The line, corners, gutter, mat and shadow of the whole canvas.</summary>
         [JsonPropertyName("frame")]
         public CellBorderDto? Frame { get; set; }
 

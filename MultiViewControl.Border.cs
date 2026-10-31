@@ -347,7 +347,7 @@ namespace ModernImageViewer
             OpenFrameCard(item, GetBorderForItem(item), () => ApplyBorderToCell(slot), _cellRoots[slot] ?? (FrameworkElement)this, "Position " + (slot + 1));
         }
 
-        /// <summary>The same card for the whole canvas. A canvas has no shadow, and no other cells to copy its frame onto.</summary>
+        /// <summary>The same card for the whole canvas, which has no other canvases to copy its frame onto.</summary>
         private void OpenCanvasFrameCard() => OpenFrameCard(null, _canvasFrame, ApplyCanvasFrame, this, "Canvas");
 
         private void OpenFrameCard(ImageItem? item, CellBorderDto border, Action applyFrame, FrameworkElement targetElement, string targetName)
@@ -672,9 +672,9 @@ namespace ModernImageViewer
             };
             Grid.SetColumn(glowToggle, 3);
             // Rim glow belongs to rectangles, so a shape does not offer it.
-            glowToggle.Visibility = item != null && GetGeometry(item).Shape == WindowShapes.Rectangle ? Visibility.Visible : Visibility.Collapsed;
+            glowToggle.Visibility = item == null || GetGeometry(item).Shape == WindowShapes.Rectangle ? Visibility.Visible : Visibility.Collapsed;
             shadowHeader.Children.Add(glowToggle);
-            if (item != null) body.Children.Add(shadowHeader);
+            body.Children.Add(shadowHeader);
 
             shadowSlider = new Slider
             {
@@ -692,9 +692,17 @@ namespace ModernImageViewer
                 if (syncing) return;
                 border.ShadowIntensity = e.NewValue;
                 border.Shadow = e.NewValue > 0;
+                // The canvas shadow falls on the gutter, and past the canvas edge there is nowhere else for it to show.
+                if (item == null && e.NewValue > 0 && border.Padding <= 0 && !border.RimGlow)
+                {
+                    border.Padding = 16;
+                    syncing = true;
+                    gutterSlider.Value = 16;
+                    syncing = false;
+                }
                 Touch();
             };
-            if (item != null) body.Children.Add(shadowSlider);
+            body.Children.Add(shadowSlider);
 
             RefreshPanel();
 
