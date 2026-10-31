@@ -16,7 +16,7 @@ A high-performance, hardware-accelerated image viewer built for creators, 3D art
 
 **Favourite Folders** — Star up to 10 folders in the Favourites and Recent Folders menu to keep them above your 10 most recent folders. A favourite stays until you remove it, even when its drive is unplugged, and Clear Recent Folders leaves favourites alone.
 
-**Multi-View** — Compare up to 16 photos in one window. Set how many rows or columns and how many photos sit in each, give one or two photos a hero spot, drag the edges between photos, swap photos with Alt+drag, and save the result as a JPEG. See [Multi-View](#-multi-view) below.
+**Multi-View** — Compare up to 16 photos in one window, or build them into a collage. Set the rows and columns, give photos a hero spot, drag the edges between them, frame each cell, float cells above the grid in shapes, and save the result as a JPEG or PNG or copy it to the clipboard. Layouts can be saved and reopened. See [Multi-View](#-multi-view) below.
 
 **Collage and Cinematic (beta)** — In-app collage editor, and a cinematic slideshow whose show you can edit: reorder, hide and duplicate slides, hold a Ken Burns move on one slide, and save or reload the show. These are still being hardened; save often.
 
@@ -79,10 +79,11 @@ The bar appears when you move the mouse:
 | **Fill / Fit** (**F**) | Fill crops each photo to its frame; Fit shows the whole photo |
 | **Grid Layout** (**3 Rows**) | Opens the layout card, and the button stays marked until the card closes. The layout inspector and playbar stay as an immersive dark glass HUD over the photos. **Rows** and **Columns** turn the grid, and **−** and **+** on that same control set how many lines. Each line is drawn as that many photos, with the count on the bar: rows are bands, columns are stacks from the left. A line's **−** and **+** move one photo. **+** takes it from the last other line that has more than one, and **−** moves it to the last line, or to the line before when that line is already the last. **Even out** puts the lines back to an even split when they differ. **R** flips rows and columns. The **−** and **+** keys change how many lines. |
 | **Hero** (**H**) | The button reads **Hero** when it is off, and **Hero: Banner**, **Hero: Rectangle**, or **Hero: Pair** while that kind is on. Click for the next kind, and again after the last to turn it off. **Banner** is one large photo along a side. **Rectangle** is one large photo in a corner block, with 4, 5, 6, 7 or 9 photos. **Pair** is the first two photos large, with 3 or more |
-| **↻** (next position) | Move the hero: a banner or pair goes round the top, right, bottom and left sides |
+| **↻** (next position) | Shown while a hero is on. Moves it: a banner or pair goes round the top, right, bottom and left sides |
 | **Reset** | Undo the zoom and pan of every photo |
 | **16:9** | Canvas shape: 16:9, 16:10, 21:9, 4:3, 1:1 or 3:4. Resize the window for any other shape |
-| **Save** (**Ctrl+S**) | Save the grid as a JPEG at 720p to 4320p, at the window's size, or at a custom size |
+| **Save/Load** (**Ctrl+S**) | Save the canvas as a JPEG or PNG at 720p to 4320p, at the window's size, or at a custom size. Save the layout as a `.mivlayout` file and reopen it later |
+| **Wheel** (advanced) | **Undo** (**Ctrl+Z**), **Redo** (**Ctrl+Y**), **Copy to clipboard** (**Ctrl+C**), **Save as PNG**, and **Canvas**: the surface and color behind the cells |
 
 With a Banner or Pair, the rows, columns and per-line counts arrange the other photos. A Rectangle does not follow those lines. Changing the line count or a line's count turns that hero off.
 
@@ -92,8 +93,22 @@ On the photos themselves:
 - Scroll to zoom, drag to pan, middle-click to reset, double-click to zoom in or back out.
 - Hover over a photo to show its buttons at the top right. The move arrows move it one place earlier or later; they are left out on a very small photo.
 - **Alt+drag** a photo onto another to swap the two.
-- Right-click a photo to move it, swap it with any other, view it on its own, or remove it from the view.
-- The maximise button at the top right shows one photo on its own. **←** / **→** step through the photos; **Esc** returns to the grid.
+- Right-click a cell to move it, swap or copy its photo to another cell, set its frame, view it on its own, hide it, or remove it. **Advanced** rotates, mirrors and flips the photo.
+- The maximise button at the top right shows one photo on its own. **←** / **→** step through the photos, skipping hidden ones; **Esc** returns to the grid.
+
+A cell keeps its own settings. Swapping or copying changes only the photo it shows: its frame, zoom and rotation stay. **Frame & Border** sets the line, corners, gutter, mat and shadow. Flush removes them all. Hold a preset button to save the current frame there, and click it to use it again. The last swatch in each color row opens the Windows color picker.
+
+### Floating cells
+
+Right-click a cell and choose **Freeform** to float a copy of it above the grid. The original cell is hidden, and the new cell starts with its frame.
+
+- Drag to move, and drag the edges or corners to resize. **Ctrl+drag** pans the photo inside the cell. Dragged cells snap to the canvas, each other and the grid; hold **Alt** to move freely.
+- **Advanced > Window** sets the shape: rectangle, L-shape, circle or oval, or triangle. It also rotates, mirrors and flips the shape. **Rotate shape only** keeps the photo still.
+- Hover over a floating cell for its handles. The round handle at the top rotates it: hold **Shift** for 15 degree steps, or **Ctrl** to turn the shape and keep the photo still. On an L-shape, the small handle moves the inner corner.
+- **Advanced > Layer** sets which floating cell is in front. Floating cells stay above the grid.
+- **Dock to Grid** puts the photo back into its hidden cell, or a new cell if that one is gone or in use.
+
+Floating cells keep their share of the canvas when the window changes size. **Grid** at the bottom left of the bar ends the session and clears them, along with any frames and settings, so save the layout first to keep your work.
 
 ## ⌨️ Shortcuts
 

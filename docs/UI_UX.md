@@ -122,25 +122,27 @@ The Single Viewer and Multi-View Solo/Maximize modes share an **identical** HUD 
 
 ## 6. Multi-View UI & Interaction Patterns
 
-Multi-View enables comparative inspection of up to 16 images in fluid mosaics:
+Multi-View shows up to 16 grid cells in fluid mosaics, with floating cells above them. Its right-click menu is grouped by what the user is doing:
 
 ```
-+-------------------------------------------------------+
-| [1] 20240510.jpg          | [2] 20240223.jpg          |
-|                           |                           |
-|       (Photo A)           |        (Photo B)          |
-|                           |                           |
-|---------------------------+---------------------------|
-| [3] 20240315.jpg          | [4] 20240419.jpg          |
-|                           |    +--------------------+ |
-|                           |    | Move Left / Up     | |
-|       (Photo C)           |    | Move Right / Down  | |
-|                           |    | Swap with...     > | | -> [Position 1, Position 2...]
-|                           |    | Solo / Maximize    | |
-|                           |    | Remove from View   | |
-|                           |    +--------------------+ |
-+-------------------------------------------------------+
+Move Left / Up
+Move Right / Down
+Swap with...              >   Position 1, Position 2...
+Copy to...                >
+--------------------------
+Frame & Border...
+Advanced                  >   Rotate image left / right
+--------------------------    Mirror image, Flip image
+Solo / Maximize               ----------- floating cells only
+Freeform  (or Dock to Grid)   Window  >   Rectangle, L-shape, Circle / Oval, Triangle
+Hide image                                Rotate left / right
+--------------------------                Rotate shape only, left / right
+Remove from View                          Mirror shape, Flip shape, Reset window
+                              Layer   >   Bring to front, Bring forward,
+                                          Send backward, Send to back
 ```
+
+The playbar's wheel holds Undo, Redo, Copy to clipboard, Save as PNG, and Canvas (Surface, Color).
 
 ### Invariants:
 1. **Dynamic Swap Badges**:
@@ -155,7 +157,14 @@ Multi-View enables comparative inspection of up to 16 images in fluid mosaics:
    - Clicking Solo/Maximize expands the chosen photo to fill the canvas while preserving all multi-view layout state.
    - The top-left info HUD is identical in visual treatment and data layout to the Single Viewer inspection HUD.
    - Exit button returns cleanly to the mosaic view.
-5. **Immersive Dark Flyout & Menu Presenters**:
+5. **Show Controls Only When They Apply**:
+   - The next-position button shows only while a hero is on. Grid Layout is disabled below two grid cells that show an image. An empty preset is dimmed.
+   - A hidden cell's label fades with the playbar, so the composition can be seen without it.
+6. **Floating Cell Labels and Handles**:
+   - A floating cell's position label is centered and stays upright, however the window is turned. Its hover buttons and handles are not clipped by its shape, and stay briefly after the pointer leaves so they can be reached.
+7. **One Word for a Thing**:
+   - Menus and the frame card call a place a *Position* and a slot a *cell*. UI strings use the spelling *color*.
+8. **Immersive Dark Flyout & Menu Presenters**:
    - The photo canvas and floating playbar are an immersive dark surface. All playbar flyouts (Aspect menu, Save resolutions) and photo cell context menus must render with a dark background (`#F2202020`), subtle 1px border (`#33FFFFFF`), `CornerRadius="10"`, and white text.
    - **WinUI 3 Trap Avoided**: Setting only `<Setter Property="RequestedTheme" Value="Dark" />` on `MenuFlyoutPresenter` causes the presenter's template background to resolve against the Light popup root while child items turn white (resulting in white text on a light beige background). Menus hosted in `XamlRoot` must explicitly set `Background="#F2202020"` and `BorderBrush="#33FFFFFF"` via `MultiViewMenuFlyoutPresenterStyle` and enforce dark styling on open.
 
@@ -199,6 +208,15 @@ Every major workflow must be accessible without a mouse:
 | | `Ctrl + Wheel` / `+` / `-` | Smooth zoom in / out |
 | | `B` | Toggle 2-page comic book spread mode |
 | **Multi-View** | `Alt + Drag` | Drag and swap photo cells |
+| | `Ctrl + Z` / `Ctrl + Y` | Undo / redo |
+| | `Ctrl + C` | Copy the canvas as an image |
+| | `Ctrl + S` | Save or load |
+| | `F` / `H` / `R` | Fill or Fit / next hero / rows or columns |
+| | `+` / `-` | More or fewer lines |
+| **Floating cells** | `Ctrl + Drag` | Pan the photo inside the cell |
+| | `Alt` while dragging | Move without snapping |
+| | `Ctrl` on the rotate handle | Turn the shape and keep the photo still |
+| | `Shift` on the rotate handle | Rotate in 15 degree steps |
 | **System** | Bare `Alt` | Handled silently to prevent stealing focus to the Win32 system menu |
 
 ### Focus Visuals:
