@@ -76,13 +76,12 @@ The bar appears when you move the mouse:
 |---|---|
 | **Back** / **Esc** | Back to the tiles. Your layout stays while the app is open: the Multi-View button at the top returns to it. Choosing photos and **View Together**, or opening a layout, replaces it, and the old one is kept under **Autosaved** in Save/Load |
 | **Add images** | Find pictures in your folders using the app itself. Click the ones you want, then press **Add to layout** or **Enter**: each becomes a new floating cell. **Esc**, or the close button with nothing selected, returns to the layout without adding |
-| **Fill / Fit** (**F**) | Fill crops each photo to its frame; Fit shows the whole photo |
 | **3 Rows** / **Columns** | The switch on the bar turns the grid, and the side in use shows how many lines. Either side opens the grid layout card, and the side in use closes it again. The layout inspector and playbar stay as an immersive dark glass HUD over the photos. **−** and **+** at the top of the card set how many lines. Each line is drawn as that many photos, with the count on the bar: rows are bands, columns are stacks from the left. A line's **−** and **+** move one photo. **+** takes it from the last other line that has more than one, and **−** moves it to the last line, or to the line before when that line is already the last. **Even out** puts the lines back to an even split when they differ. **R** flips rows and columns. The **−** and **+** keys change how many lines. |
 | **Hero** (**H**) | The button reads **Hero** when it is off, and **Hero: Banner**, **Hero: Rectangle**, or **Hero: Pair** while that kind is on. Click for the next kind, and again after the last to turn it off. **Banner** is one large photo along a side. **Rectangle** is one large photo in a corner block, with 4, 5, 6, 7 or 9 photos. **Pair** is the first two photos large, with 3 or more |
 | **↻** (next position) | Shown while a hero is on. Moves it: a banner or pair goes round the top, right, bottom and left sides |
 | **Canvas** | Shape: 16:9, 16:10, 21:9, 4:3, 1:1 or 3:4, or resize the window for any other. Surface and color: what shows behind the cells. **Frame & Border**: a line, rounded corners and a margin around the whole canvas |
 | **Save/Load** (**Ctrl+S**) | Copy the canvas to the clipboard (**Ctrl+C**), or save it as a JPEG or PNG at 720p to 4320p, at the window's size, or at a custom size. Save the layout as a `.mivlayout` file and reopen it later. Image sizes are on the left of the menu, layouts on the right, with your favourite and recent folders. A folder with more layouts than fit shows **+N**, which opens the file picker |
-| **Wheel** (advanced) | **Undo** (**Ctrl+Z**) and **Redo** (**Ctrl+Y**) |
+| **Wheel** (advanced) | **Undo** (**Ctrl+Z**), **Redo** (**Ctrl+Y**), and **Fill** or **Fit** (**F**): Fill crops each photo to its frame, Fit shows the whole photo |
 
 With a Banner or Pair, the rows, columns and per-line counts arrange the other photos. A Rectangle does not follow those lines. Changing the line count or a line's count turns that hero off.
 
@@ -104,7 +103,7 @@ Either way, each cell stays where it is at its own size and layer. **Replace ima
 
 **Frame & Border** opens beside the cell, or against the window's far edge when the cell is too big to sit beside. It sets the line, corners, gutter, mat and shadow. Flush removes them all. Hold a preset button to save the current frame there, and click it to use it again. The last swatch in each color row opens the Windows color picker.
 
-The same card under **Canvas** frames the whole canvas. The gutter is the margin between the line and the grid, and the mat fills it. Floating cells stay where they are and can sit over the margin. It is saved in the layout and included in an export. In a PNG, or a copy to the clipboard, rounded corners are transparent. In a JPEG they show the canvas color.
+The same card under **Canvas** frames the whole canvas. As in a cell, the gutter is on the outside and the mat fills it, then the line, then the grid. Floating cells stay where they are and can sit over the margin. It is saved in the layout and included in an export. In a PNG, or a copy to the clipboard, rounded corners are transparent. In a JPEG they show the canvas color.
 
 ### Floating cells
 

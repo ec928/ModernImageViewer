@@ -137,7 +137,6 @@ namespace ModernImageViewer
                 return;
             }
 
-            UpdateFillFitButton();
             int count = VisibleCount(stored);
 
             if (count == 1)

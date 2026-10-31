@@ -809,6 +809,7 @@ namespace ModernImageViewer
                 shots.Add(new CellShot
                 {
                     Path = _items[i].Path,
+                    Floating = floating != null,
                     Cell = bounds,
                     Card = cardBounds,
                     Photo = photoBounds,
@@ -834,6 +835,7 @@ namespace ModernImageViewer
         {
             var device = CanvasDevice.GetSharedDevice();
             var target = new CanvasRenderTarget(device, width, height, 96);
+            double frameScale = width / (shots.Count > 0 ? shots[0].CanvasW : width);
             using (var clear = target.CreateDrawingSession())
             {
                 var near = ToColor(FrameColor.Parse(canvasColor));
@@ -858,11 +860,27 @@ namespace ModernImageViewer
                     };
                     clear.FillRectangle(0, 0, width, height, brush);
                 }
-                DrawCanvasFrame(clear, device, canvasFrame, width, height, width / (shots.Count > 0 ? shots[0].CanvasW : width));
+                DrawCanvasMat(clear, device, canvasFrame, width, height, frameScale);
+            }
+
+            // Grid photos stop at the rounded line, so what they cover past it is put back from here.
+            using var backdrop = canvasFrame.CornerRadius > canvasFrame.Thickness ? new CanvasRenderTarget(device, width, height, 96) : null;
+            backdrop?.CopyPixelsFromBitmap(target);
+
+            // The line goes on above the grid and below the floating cells.
+            bool lineDrawn = false;
+            void FinishGrid()
+            {
+                if (lineDrawn) return;
+                lineDrawn = true;
+                using var over = target.CreateDrawingSession();
+                DrawCanvasLine(over, device, backdrop, canvasFrame, width, height, frameScale);
             }
 
             foreach (var shot in shots)
             {
+                if (shot.Floating) FinishGrid();
+
                 // Hidden means the whole cell: no image, mat, frame or shadow.
 
                 Rect photo = shot.Photo.Width >= 1 && shot.Photo.Height >= 1 ? shot.Photo
@@ -1160,7 +1178,9 @@ namespace ModernImageViewer
                 }
             }
 
-            float cornerRadius = (float)(Math.Max(0, canvasFrame.CornerRadius) * width / (shots.Count > 0 ? shots[0].CanvasW : width));
+            FinishGrid();
+
+            float cornerRadius = (float)(Math.Max(0, canvasFrame.CornerRadius) * frameScale);
             if (cornerRadius <= 0) return target;
 
             // The finished canvas is painted through a rounded shape, so nothing on it reaches past the corners.
@@ -1175,31 +1195,55 @@ namespace ModernImageViewer
             return rounded;
         }
 
-        /// <summary>The canvas frame in pixels, as ApplyCanvasFrame draws it: the mat fills the line and gutter, and the line runs along the edge.</summary>
-        private static void DrawCanvasFrame(CanvasDrawingSession session, CanvasDevice device, CellBorderDto frame, int width, int height, double scale)
+        /// <summary>The whole canvas less a rounded rectangle set in from its edge.</summary>
+        private static CanvasGeometry CanvasFrameRing(CanvasDevice device, double width, double height, double inset, double radius)
         {
-            float line = (float)(Math.Max(0, frame.Thickness) * scale);
-            float inset = line + (float)(Math.Max(0, frame.Padding) * scale);
-            if (inset <= 0) return;
+            using var outer = CanvasGeometry.CreateRectangle(device, 0, 0, (float)width, (float)height);
+            using var hole = CanvasGeometry.CreateRoundedRectangle(device, (float)inset, (float)inset,
+                (float)Math.Max(1, width - 2 * inset), (float)Math.Max(1, height - 2 * inset), (float)radius, (float)radius);
+            return outer.CombineWith(hole, System.Numerics.Matrix3x2.Identity, CanvasGeometryCombine.Exclude);
+        }
 
+        /// <summary>The mat in pixels, as ApplyCanvasCorners cuts it: it fills the gutter and runs under the line.</summary>
+        private static void DrawCanvasMat(CanvasDrawingSession session, CanvasDevice device, CellBorderDto frame, int width, int height, double scale)
+        {
+            double gutter = Math.Max(0, frame.Padding) * scale;
             var mat = ToColor(FrameColor.MatFill(frame.GutterMaterial, frame.GutterColor));
-            if (mat.A > 0)
-                session.DrawRectangle(inset / 2, inset / 2, Math.Max(1, width - inset), Math.Max(1, height - inset), mat, inset);
-            if (line <= 0) return;
+            if (gutter <= 0 || mat.A == 0) return;
+            double line = Math.Max(0, frame.Thickness) * scale;
+            double radius = Math.Max(0, frame.CornerRadius) * scale;
+            using var ring = CanvasFrameRing(device, width, height, gutter + line / 2, Math.Max(0, radius - line / 2));
+            session.FillGeometry(ring, mat);
+        }
 
+        /// <summary>Cuts the grid's corners back to the inside of the line, then draws the line, as ApplyCanvasFrame does.</summary>
+        private static void DrawCanvasLine(CanvasDrawingSession session, CanvasDevice device, CanvasRenderTarget? backdrop, CellBorderDto frame, int width, int height, double scale)
+        {
+            double gutterPixels = Math.Max(0, frame.Padding) * scale;
+            double linePixels = Math.Max(0, frame.Thickness) * scale;
+            double radiusPixels = Math.Max(0, frame.CornerRadius) * scale;
+            if (backdrop != null)
+            {
+                using var outside = CanvasFrameRing(device, width, height, gutterPixels + linePixels, radiusPixels - linePixels);
+                using var restore = new CanvasImageBrush(device, backdrop);
+                session.FillGeometry(outside, restore);
+            }
+            if (linePixels <= 0) return;
+
+            float line = (float)linePixels;
             float half = line / 2;
-            float x = half, y = half;
-            float w = Math.Max(1, width - line);
-            float h = Math.Max(1, height - line);
-            float radius = Math.Max(0, (float)(frame.CornerRadius * scale) - half);
+            float x = (float)gutterPixels + half, y = x;
+            float w = Math.Max(1, width - 2 * (float)gutterPixels - line);
+            float h = Math.Max(1, height - 2 * (float)gutterPixels - line);
+            float radius = Math.Max(0, (float)radiusPixels - half);
             string style = frame.StrokeStyle ?? "Solid";
             if (string.Equals(style, "Gradient", StringComparison.OrdinalIgnoreCase))
             {
                 var start = FrameColor.Parse(frame.Color);
                 using var brush = new CanvasLinearGradientBrush(device, ToColor(start), ToColor(FrameColor.GradientEnd(frame.SecondaryColor, start)))
                 {
-                    StartPoint = new System.Numerics.Vector2(0, 0),
-                    EndPoint = new System.Numerics.Vector2(width, height)
+                    StartPoint = new System.Numerics.Vector2((float)gutterPixels, (float)gutterPixels),
+                    EndPoint = new System.Numerics.Vector2(width - (float)gutterPixels, height - (float)gutterPixels)
                 };
                 session.DrawRoundedRectangle(x, y, w, h, radius, radius, brush, line);
                 return;
@@ -1610,7 +1654,6 @@ namespace ModernImageViewer
                 }
             }
 
-            UpdateFillFitButton();
             ShowHudAndOverlays();
 
             if (!_restoringUndo) ResetUndo();
@@ -1644,6 +1687,7 @@ namespace ModernImageViewer
         private sealed class CellShot
         {
             public string Path = "";
+            public bool Floating;
             public Rect Cell;
             public Rect Card;
             public Rect Photo;

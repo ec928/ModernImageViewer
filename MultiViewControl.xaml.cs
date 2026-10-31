@@ -137,7 +137,6 @@ namespace ModernImageViewer
 
             ExitSolo();
             BuildLayout();
-            UpdateFillFitButton();
             ShowHudAndOverlays();
             ResetUndo();
         }
@@ -2888,11 +2887,6 @@ namespace ModernImageViewer
             ShowHudAndOverlays();
         }
 
-        private void FillFitButton_Click(object sender, RoutedEventArgs e)
-        {
-            ToggleFillMode();
-        }
-
         public void ReflowFrames()
         {
             foreach (var update in _layoutUpdaters)
@@ -2902,31 +2896,12 @@ namespace ModernImageViewer
         public void ToggleFillMode()
         {
             _isFillMode = !_isFillMode;
-            UpdateFillFitButton();
             ResetAllZooms();
             foreach (var update in _layoutUpdaters)
             {
                 update();
             }
             ShowHudAndOverlays();
-        }
-
-        private void UpdateFillFitButton()
-        {
-            if (FillFitText != null)
-            {
-                FillFitText.Text = _isFillMode ? "Fill" : "Fit";
-            }
-            if (FillFitIcon != null)
-            {
-                FillFitIcon.Glyph = _isFillMode ? "\uE740" : "\uE73F";
-            }
-            if (FillFitButton != null)
-            {
-                ToolTipService.SetToolTip(FillFitButton, _isFillMode 
-                    ? "Fill Mode (F) - Zero wasted space (Click for Fit Entire Photo)" 
-                    : "Fit Mode (F) - Whole photo visible (Click for Fill)");
-            }
         }
 
         private void ResetAllZooms()

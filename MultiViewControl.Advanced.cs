@@ -609,6 +609,15 @@ namespace ModernImageViewer
             ToolTipService.SetToolTip(redo, "Redo (Ctrl+Y)");
             AdvancedMenuFlyout.Items.Add(redo);
 
+            AdvancedMenuFlyout.Items.Add(new MenuFlyoutSeparator());
+            var fill = MakeChoiceItem("Fill", _isFillMode, () => { if (!_isFillMode) ToggleFillMode(); });
+            fill.KeyboardAcceleratorTextOverride = "F";
+            ToolTipService.SetToolTip(fill, "Crop each photo to its frame");
+            AdvancedMenuFlyout.Items.Add(fill);
+            var fit = MakeChoiceItem("Fit", !_isFillMode, () => { if (_isFillMode) ToggleFillMode(); });
+            fit.KeyboardAcceleratorTextOverride = "F";
+            ToolTipService.SetToolTip(fit, "Show the whole photo");
+            AdvancedMenuFlyout.Items.Add(fit);
         }
 
         /// <summary>The surface and color behind the cells, under the canvas shape.</summary>
@@ -647,20 +656,20 @@ namespace ModernImageViewer
             menu.Items.Add(frame);
         }
 
-        /// <summary>The frame goes round the canvas and the grid moves in by its line and gutter, so the line never covers a photo.</summary>
+        /// <summary>The same order as a cell, from the outside in: gutter and mat, then the line, then the grid. The line never covers a photo.</summary>
         private void ApplyCanvasFrame()
         {
             var frame = _canvasFrame;
+            double gutter = Math.Max(0, frame.Padding);
             double line = Math.Max(0, frame.Thickness);
-            double inset = line + Math.Max(0, frame.Padding);
-            CellsGrid.Margin = new Thickness(inset);
+            CellsGrid.Margin = new Thickness(gutter + line);
 
             var mat = FrameColor.MatFill(frame.GutterMaterial, frame.GutterColor);
-            CanvasFrameMat.BorderThickness = new Thickness(mat.A > 0 ? inset : 0);
-            CanvasFrameMat.BorderBrush = mat.A > 0 ? new SolidColorBrush(ToColor(mat)) : null;
+            CanvasFrameMat.Background = mat.A > 0 && gutter > 0 ? new SolidColorBrush(ToColor(mat)) : null;
 
             string style = frame.StrokeStyle ?? "Solid";
             bool dashed = string.Equals(style, "Dashed", StringComparison.OrdinalIgnoreCase);
+            CanvasFrameStroke.Margin = new Thickness(gutter);
             CanvasFrameStroke.CornerRadius = new CornerRadius(frame.CornerRadius);
             CanvasFrameStroke.BorderThickness = new Thickness(dashed ? 0 : line);
             if (string.Equals(style, "InnerMuted", StringComparison.OrdinalIgnoreCase))
@@ -681,6 +690,7 @@ namespace ModernImageViewer
             }
 
             var dash = FrameColor.Parse(frame.Color);
+            CanvasFrameDashes.Margin = new Thickness(gutter);
             CanvasFrameDashes.Visibility = dashed && line > 0 && dash.A > 0 ? Visibility.Visible : Visibility.Collapsed;
             if (dashed)
             {
@@ -694,20 +704,43 @@ namespace ModernImageViewer
             ApplyCanvasCorners();
         }
 
-        /// <summary>Rounds the canvas with everything on it, floating cells included.</summary>
+        /// <summary>
+        /// Rounds the canvas with everything on it, and the grid inside the line so no photo corner pokes through it.
+        /// The mat is a whole-canvas fill with the line's shape cut out, so it reaches right up to the rounded line.
+        /// </summary>
         private void ApplyCanvasCorners()
         {
+            var frame = _canvasFrame;
+            double width = RootGrid.ActualWidth, height = RootGrid.ActualHeight;
             var visual = ElementCompositionPreview.GetElementVisual(RootGrid);
-            double radius = _canvasFrame.CornerRadius;
-            if (radius <= 0 || RootGrid.ActualWidth < 1 || RootGrid.ActualHeight < 1)
+            var gridVisual = ElementCompositionPreview.GetElementVisual(CellsGrid);
+            var matVisual = ElementCompositionPreview.GetElementVisual(CanvasFrameMat);
+            if (width < 1 || height < 1)
             {
                 visual.Clip = null;
+                gridVisual.Clip = null;
+                matVisual.Clip = null;
                 return;
             }
-            var geometry = visual.Compositor.CreateRoundedRectangleGeometry();
-            geometry.Size = new Vector2((float)RootGrid.ActualWidth, (float)RootGrid.ActualHeight);
-            geometry.CornerRadius = new Vector2((float)radius, (float)radius);
-            visual.Clip = visual.Compositor.CreateGeometricClip(geometry);
+            var compositor = visual.Compositor;
+            double radius = Math.Max(0, frame.CornerRadius);
+            double gutter = Math.Max(0, frame.Padding);
+            double line = Math.Max(0, frame.Thickness);
+
+            CompositionClip Rounded(double w, double h, double r)
+            {
+                var geometry = compositor.CreateRoundedRectangleGeometry();
+                geometry.Size = new Vector2((float)Math.Max(1, w), (float)Math.Max(1, h));
+                geometry.CornerRadius = new Vector2((float)r, (float)r);
+                return compositor.CreateGeometricClip(geometry);
+            }
+
+            visual.Clip = radius > 0 ? Rounded(width, height, radius) : null;
+            double inset = gutter + line;
+            gridVisual.Clip = radius > line ? Rounded(width - 2 * inset, height - 2 * inset, radius - line) : null;
+
+            using var ring = CanvasFrameRing(CanvasDevice.GetSharedDevice(), width, height, gutter + line / 2, Math.Max(0, radius - line / 2));
+            matVisual.Clip = compositor.CreateGeometricClip(compositor.CreatePathGeometry(new CompositionPath(ring)));
         }
 
         private void SetCanvasFrame(CellBorderDto? frame)
