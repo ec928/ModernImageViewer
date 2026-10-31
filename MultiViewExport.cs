@@ -841,8 +841,9 @@ namespace ModernImageViewer
 
                 // The mat fills the outer outline. The gutter insets the photo and frame onto the inner one.
                 double gutterPixels = cardX - cellRect.X;
-                using CanvasGeometry? shape = Polygon(WindowShapes.Placed(shot.Geometry, cellRect.X, cellRect.Y, cellRect.Width, cellRect.Height, rx > 0 ? rx + gutterPixels : 0));
-                using CanvasGeometry? cardShape = Polygon(WindowShapes.Placed(shot.Geometry, cardX, cardY, cardW, cardH, rx));
+                using CanvasGeometry? shape = Polygon(WindowShapes.Placed(shot.Geometry, cellRect.X, cellRect.Y, cellRect.Width, cellRect.Height,
+                    rx > 0 ? rx + gutterPixels : 0, concaveRadius: Math.Max(0, rx - gutterPixels)));
+                using CanvasGeometry? cardShape = Polygon(WindowShapes.Placed(shot.Geometry, cellRect.X, cellRect.Y, cellRect.Width, cellRect.Height, rx, gutterPixels));
 
                 // The mat is the cell around the photo. The photo is drawn inside the card, so it does not cover the gutter.
                 var mat = FrameColor.MatFill(shot.Border?.GutterMaterial, shot.Border?.GutterColor);
@@ -861,7 +862,7 @@ namespace ModernImageViewer
                 }
 
                 // 1. Draw Drop Shadow or Ambient Rim Glow
-                if (shape == null && shot.Border != null && shot.Border.ShadowIntensity > 0)
+                if (shot.Border != null && shot.Border.ShadowIntensity > 0 && (shape == null || !shot.Border.RimGlow))
                 {
                     using var shadowSession = target.CreateDrawingSession();
                     shadowSession.Transform = windowTurn;
@@ -893,17 +894,20 @@ namespace ModernImageViewer
                         float slotY = (float)(shot.Cell.Y * scaleY);
                         int slotW = Math.Max(1, (int)Math.Round(shot.Cell.Width * scaleX));
                         int slotH = Math.Max(1, (int)Math.Round(shot.Cell.Height * scaleY));
-                        var shade = FrameShadow.RenderAlpha(
-                            slotW,
-                            slotH,
-                            cardX - slotX,
-                            cardY - slotY,
-                            cardW,
-                            cardH,
-                            shot.Border.CornerRadius * scaleX,
-                            shot.Border.ShadowIntensity,
-                            scaleX,
-                            scaleY);
+                        var shadeOutline = WindowShapes.Placed(shot.Geometry, 0, 0, slotW, slotH, rx, gutterPixels);
+                        var shade = shadeOutline != null
+                            ? FrameShadow.RenderAlpha(slotW, slotH, shadeOutline, shot.Border.ShadowIntensity, scaleX, scaleY)
+                            : FrameShadow.RenderAlpha(
+                                slotW,
+                                slotH,
+                                cardX - slotX,
+                                cardY - slotY,
+                                cardW,
+                                cardH,
+                                shot.Border.CornerRadius * scaleX,
+                                shot.Border.ShadowIntensity,
+                                scaleX,
+                                scaleY);
                         var shadePixels = new byte[slotW * slotH * 4];
                         for (int p = 0; p < shade.Length; p++)
                         {
@@ -917,7 +921,10 @@ namespace ModernImageViewer
                             slotW,
                             slotH,
                             Windows.Graphics.DirectX.DirectXPixelFormat.B8G8R8A8UIntNormalized);
-                        shadowSession.DrawImage(shadeBitmap, slotX, slotY);
+                        using (shape == null ? null : shadowSession.CreateLayer(1f, shape))
+                        {
+                            shadowSession.DrawImage(shadeBitmap, slotX, slotY);
+                        }
                     }
                 }
 
@@ -966,8 +973,8 @@ namespace ModernImageViewer
                     if (shape != null)
                     {
                         // Pulled in by half the stroke, as on screen, so its outer edge meets the photo's edge.
-                        using var strokeShape = Polygon(WindowShapes.Placed(shot.Geometry, cardX + strokeW / 2, cardY + strokeW / 2,
-                            Math.Max(1, cardW - strokeW), Math.Max(1, cardH - strokeW), Math.Max(0, rx - strokeW / 2)))!;
+                        using var strokeShape = Polygon(WindowShapes.Placed(shot.Geometry, cellRect.X, cellRect.Y, cellRect.Width, cellRect.Height,
+                            Math.Max(0, rx - strokeW / 2), gutterPixels + strokeW / 2, rx + strokeW / 2))!;
                         if (strokeW > 0 && string.Equals(strokeStyle, "Gradient", StringComparison.OrdinalIgnoreCase))
                         {
                             var start = FrameColor.Parse(shot.Border?.Color);

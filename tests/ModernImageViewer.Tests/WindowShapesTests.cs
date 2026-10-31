@@ -74,6 +74,45 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
+        public void InsetMovesEveryEdgeOfAnLTheSameDistance()
+        {
+            var inner = WindowShapes.Placed(new CellGeometryDto { Shape = WindowShapes.LShape }, 0, 0, 100, 100, inset: 10)!;
+            var want = new[] { (10.0, 10.0), (40.0, 10.0), (40.0, 60.0), (90.0, 60.0), (90.0, 90.0), (10.0, 90.0) };
+            Assert.Equal(want.Length, inner.Length);
+            for (int i = 0; i < want.Length; i++)
+            {
+                Assert.Equal(want[i].Item1, inner[i].X, 6);
+                Assert.Equal(want[i].Item2, inner[i].Y, 6);
+            }
+        }
+
+        [Fact]
+        public void InsetIsTheSameOnAllThreeSidesOfATriangle()
+        {
+            var inner = WindowShapes.Placed(new CellGeometryDto { Shape = WindowShapes.Triangle }, 0, 0, 200, 100, inset: 10)!;
+            var outer = WindowShapes.Placed(new CellGeometryDto { Shape = WindowShapes.Triangle }, 0, 0, 200, 100)!;
+            for (int edge = 0; edge < 3; edge++)
+            {
+                var a = outer[edge];
+                var b = outer[(edge + 1) % 3];
+                double length = Math.Sqrt((b.X - a.X) * (b.X - a.X) + (b.Y - a.Y) * (b.Y - a.Y));
+                double nearest = inner.Min(p => Math.Abs((b.X - a.X) * (a.Y - p.Y) - (a.X - p.X) * (b.Y - a.Y)) / length);
+                Assert.Equal(10, nearest, 6);
+            }
+        }
+
+        [Fact]
+        public void ShadowFollowsTheOutlineAndNotItsRectangle()
+        {
+            var triangle = WindowShapes.Placed(new CellGeometryDto { Shape = WindowShapes.Triangle }, 0, 0, 200, 200, inset: 30)!;
+            var alpha = FrameShadow.RenderAlpha(200, 200, triangle, 60);
+            byte At(int x, int y) => alpha[y * 200 + x];
+            Assert.Equal(0, At(100, 150));      // under the photo
+            Assert.True(At(100, 180) > 0);      // just below the bottom edge
+            Assert.Equal(0, At(10, 10));        // the far top corner of the rectangle
+        }
+
+        [Fact]
         public void SnapPullsTheNearestEdgeOrCentreOntoALine()
         {
             Assert.Equal((100.0, (double?)100), FreeformSnap.Snap(104, 50, new[] { 100.0 }));

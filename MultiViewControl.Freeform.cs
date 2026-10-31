@@ -28,6 +28,7 @@ namespace ModernImageViewer
             public int SourceSlot { get; set; }
             public FrameworkElement Container { get; set; } = null!;
             public Border? NotchHandle { get; set; }
+            public string? ShadowKey { get; set; }
             public int ZIndex { get; set; } = 5000;
             public double X { get; set; }
             public double Y { get; set; }

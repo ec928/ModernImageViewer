@@ -444,6 +444,69 @@ namespace ModernImageViewer
             return alpha;
         }
 
+        /// <summary>The same shadow cast by any outline, for a shaped window.</summary>
+        public static byte[] RenderAlpha(int width, int height, (double X, double Y)[] outline, double intensity, double scaleX = 1, double scaleY = 1)
+        {
+            int count = width > 0 && height > 0 ? width * height : 0;
+            var alpha = new byte[count];
+            if (count == 0 || intensity <= 0 || outline.Length < 3) return alpha;
+
+            var spec = At(intensity);
+            double sigma = spec.Sigma * Math.Max(scaleX, scaleY);
+            if (sigma < 0.5 || spec.Source <= 0) return alpha;
+            double ox = spec.OffsetX * scaleX;
+            double oy = spec.OffsetY * scaleY;
+            int radius = Math.Max(1, (int)Math.Ceiling(sigma * 2.8));
+            var kernel = Kernel(sigma, radius);
+
+            var src = new float[count];
+            FillOutline(src, width, height, outline, ox, oy, (float)spec.Source);
+            int x0 = Clamp((int)Math.Floor(outline.Min(p => p.X) + ox) - radius, 0, width);
+            int y0 = Clamp((int)Math.Floor(outline.Min(p => p.Y) + oy) - radius, 0, height);
+            int x1 = Clamp((int)Math.Ceiling(outline.Max(p => p.X) + ox) + radius, 0, width);
+            int y1 = Clamp((int)Math.Ceiling(outline.Max(p => p.Y) + oy) + radius, 0, height);
+            if (x1 <= x0 || y1 <= y0) return alpha;
+            Blur(src, width, height, x0, y0, x1, y1, kernel);
+            FillOutline(src, width, height, outline, 0, 0, 0);
+
+            for (int i = 0; i < count; i++)
+            {
+                float a = src[i];
+                if (a <= 0) continue;
+                if (a > 1) a = 1;
+                alpha[i] = (byte)Math.Round(a * 255f);
+            }
+            return alpha;
+        }
+
+        /// <summary>Sets every pixel inside the outline, one row at a time.</summary>
+        private static void FillOutline(float[] target, int width, int height, (double X, double Y)[] outline, double shiftX, double shiftY, float value)
+        {
+            int top = Clamp((int)Math.Floor(outline.Min(p => p.Y) + shiftY), 0, height);
+            int bottom = Clamp((int)Math.Ceiling(outline.Max(p => p.Y) + shiftY), 0, height);
+            var crossings = new List<double>();
+            for (int y = top; y < bottom; y++)
+            {
+                double row = y + 0.5 - shiftY;
+                crossings.Clear();
+                for (int i = 0; i < outline.Length; i++)
+                {
+                    var a = outline[i];
+                    var b = outline[(i + 1) % outline.Length];
+                    if ((a.Y <= row && b.Y > row) || (b.Y <= row && a.Y > row))
+                        crossings.Add(a.X + (row - a.Y) / (b.Y - a.Y) * (b.X - a.X) + shiftX);
+                }
+                crossings.Sort();
+                for (int c = 0; c + 1 < crossings.Count; c += 2)
+                {
+                    int from = Clamp((int)Math.Ceiling(crossings[c] - 0.5), 0, width);
+                    int to = Clamp((int)Math.Floor(crossings[c + 1] - 0.5) + 1, 0, width);
+                    for (int x = from; x < to; x++)
+                        target[y * width + x] = value;
+                }
+            }
+        }
+
         private static float[] Kernel(double sigma, int radius)
         {
             var kernel = new float[radius * 2 + 1];
@@ -628,12 +691,72 @@ namespace ModernImageViewer
         }
 
         /// <summary>The outline placed in a rectangle, with its corners rounded. An oval has no corners to round. Null for a rectangle.</summary>
-        public static (double X, double Y)[]? Placed(CellGeometryDto? geometry, double x, double y, double width, double height, double radius = 0)
+        /// <param name="inset">Moves every edge inward by this distance, so a gutter is the same width all round.</param>
+        /// <param name="concaveRadius">The radius of inward corners, such as the inner corner of an L. Defaults to <paramref name="radius"/>.</param>
+        public static (double X, double Y)[]? Placed(CellGeometryDto? geometry, double x, double y, double width, double height,
+            double radius = 0, double inset = 0, double? concaveRadius = null)
         {
             var unit = Outline(geometry);
             if (unit == null) return null;
             var points = unit.Select(p => (X: x + p.X * width, Y: y + p.Y * height)).ToArray();
-            return radius > 0 && geometry!.Shape != Oval ? Rounded(points, radius) : points;
+            if (inset > 0) points = Inset(points, inset);
+            double inward = concaveRadius ?? radius;
+            return (radius > 0 || inward > 0) && geometry!.Shape != Oval ? Rounded(points, radius, inward) : points;
+        }
+
+        private static double SignedArea((double X, double Y)[] points)
+        {
+            double sum = 0;
+            for (int i = 0; i < points.Length; i++)
+            {
+                var a = points[i];
+                var b = points[(i + 1) % points.Length];
+                sum += a.X * b.Y - b.X * a.Y;
+            }
+            return sum / 2;
+        }
+
+        /// <summary>Each edge moved inward by the distance. A distance the shape cannot take is reduced until it can.</summary>
+        private static (double X, double Y)[] Inset((double X, double Y)[] points, double distance)
+        {
+            double area = SignedArea(points);
+            if (Math.Abs(area) < 1) return points;
+            for (int attempt = 0; attempt < 8; attempt++)
+            {
+                var moved = MoveEdges(points, distance, area > 0 ? 1 : -1);
+                double movedArea = SignedArea(moved);
+                if (Math.Sign(movedArea) == Math.Sign(area) && Math.Abs(movedArea) >= 0.02 * Math.Abs(area))
+                    return moved;
+                distance *= 0.7;
+            }
+            return points;
+        }
+
+        private static (double X, double Y)[] MoveEdges((double X, double Y)[] points, double distance, int side)
+        {
+            var moved = new (double X, double Y)[points.Length];
+            for (int i = 0; i < points.Length; i++)
+            {
+                var prev = points[(i + points.Length - 1) % points.Length];
+                var at = points[i];
+                var next = points[(i + 1) % points.Length];
+                var n1 = InwardNormal(prev, at, side);
+                var n2 = InwardNormal(at, next, side);
+                // The corner where the two moved edges meet.
+                double denominator = 1 + n1.X * n2.X + n1.Y * n2.Y;
+                if (denominator < 0.05) denominator = 0.05;
+                moved[i] = (at.X + distance * (n1.X + n2.X) / denominator, at.Y + distance * (n1.Y + n2.Y) / denominator);
+            }
+            return moved;
+        }
+
+        private static (double X, double Y) InwardNormal((double X, double Y) from, (double X, double Y) to, int side)
+        {
+            double dx = to.X - from.X;
+            double dy = to.Y - from.Y;
+            double length = Math.Sqrt(dx * dx + dy * dy);
+            if (length < 1e-9) return (0, 0);
+            return (-dy / length * side, dx / length * side);
         }
 
         /// <summary>
@@ -658,9 +781,10 @@ namespace ModernImageViewer
             return (reachX * 2, reachY * 2);
         }
 
-        private static (double X, double Y)[] Rounded((double X, double Y)[] points, double radius)
+        private static (double X, double Y)[] Rounded((double X, double Y)[] points, double radius, double concaveRadius)
         {
             const int steps = 8;
+            int winding = Math.Sign(SignedArea(points));
             var result = new List<(double X, double Y)>(points.Length * (steps + 1));
             for (int i = 0; i < points.Length; i++)
             {
@@ -669,7 +793,9 @@ namespace ModernImageViewer
                 var next = points[(i + 1) % points.Length];
                 double toPrev = Math.Sqrt((prev.X - at.X) * (prev.X - at.X) + (prev.Y - at.Y) * (prev.Y - at.Y));
                 double toNext = Math.Sqrt((next.X - at.X) * (next.X - at.X) + (next.Y - at.Y) * (next.Y - at.Y));
-                double cut = Math.Min(radius, Math.Min(toPrev, toNext) / 2);
+                double turn = (at.X - prev.X) * (next.Y - at.Y) - (at.Y - prev.Y) * (next.X - at.X);
+                bool inward = Math.Sign(turn) == -winding;
+                double cut = Math.Min(inward ? concaveRadius : radius, Math.Min(toPrev, toNext) / 2);
                 if (cut < 0.01)
                 {
                     result.Add(at);

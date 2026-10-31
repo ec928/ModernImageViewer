@@ -187,7 +187,9 @@ namespace ModernImageViewer
             }
 
             cellBorder.Shadow = null;
-            ApplyDropShadow(gutterHost, border);
+            // A shaped window casts its shadow from its outline, in ApplyWindowGeometry.
+            if (GetGeometry(item).Shape == WindowShapes.Rectangle)
+                ApplyDropShadow(gutterHost, border);
 
             if (border.ShadowIntensity > 0 && border.RimGlow)
             {
@@ -845,6 +847,11 @@ namespace ModernImageViewer
             }
 
             var alpha = FrameShadow.RenderAlpha(width, height, pad, pad, cardW, cardH, border.CornerRadius, border.ShadowIntensity);
+            WriteShadow(image, alpha, width, height);
+        }
+
+        private static void WriteShadow(Image image, byte[] alpha, int width, int height)
+        {
             var pixels = new byte[width * height * 4];
             for (int i = 0; i < alpha.Length; i++)
             {

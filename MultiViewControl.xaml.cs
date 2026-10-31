@@ -1902,6 +1902,7 @@ namespace ModernImageViewer
             gutterBorder.SizeChanged += (_, e) =>
             {
                 if (e.NewSize.Width < 2 || e.NewSize.Height < 2) return;
+                if (GetGeometry(photo.Item).Shape != WindowShapes.Rectangle) return;
                 ApplyDropShadow(gutterBorder, GetBorderForItem(photo.Item));
             };
             Canvas.SetZIndex(gutterBorder, 0);

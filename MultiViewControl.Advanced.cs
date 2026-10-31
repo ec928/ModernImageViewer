@@ -161,11 +161,12 @@ namespace ModernImageViewer
             var shapedCard = CardBorder(window);
             var frame = GetBorderForItem(card.Item);
             double gutter = shapedCard?.Margin.Left ?? 0;
-            double cardW = Math.Max(1, width - 2 * gutter);
-            double cardH = Math.Max(1, height - 2 * gutter);
             double radius = frame.CornerRadius;
-            var cardOutline = WindowShapes.Placed(geometry, 0, 0, cardW, cardH, radius)!;
-            var matOutline = WindowShapes.Placed(geometry, 0, 0, width, height, radius > 0 ? radius + gutter : 0)!;
+            // In the card's own coordinates, which start one gutter inside the window.
+            var cardOutline = WindowShapes.Placed(geometry, -gutter, -gutter, width, height, radius, gutter)!;
+            var matOutline = WindowShapes.Placed(geometry, 0, 0, width, height, radius > 0 ? radius + gutter : 0,
+                concaveRadius: Math.Max(0, radius - gutter))!;
+            ApplyShapedShadow(card, window, geometry, frame, width, height, gutter);
 
             // Pointers follow the outline: the empty part of the window has nothing to hit, so clicks reach what is behind.
             if (photoGrid != null)
@@ -186,7 +187,7 @@ namespace ModernImageViewer
             {
                 double nx = geometry.ShapeFlipH ? 1 - geometry.NotchX : geometry.NotchX;
                 double ny = geometry.ShapeFlipV ? 1 - geometry.NotchY : geometry.NotchY;
-                card.NotchHandle.Margin = new Thickness(gutter + nx * cardW - card.NotchHandle.Width / 2, gutter + ny * cardH - card.NotchHandle.Height / 2, 0, 0);
+                card.NotchHandle.Margin = new Thickness(nx * width - card.NotchHandle.Width / 2, ny * height - card.NotchHandle.Height / 2, 0, 0);
             }
 
             // The clip goes on the parts inside the window. A composition visual on the window itself stops it taking pointer input.
@@ -218,11 +219,37 @@ namespace ModernImageViewer
             }
             // Pulled in by half the stroke, so its outer edge meets the photo's edge and is not cut off there.
             double half = frame.Thickness / 2;
-            var strokeOutline = WindowShapes.Placed(geometry, gutter + half, gutter + half,
-                Math.Max(1, cardW - frame.Thickness), Math.Max(1, cardH - frame.Thickness), Math.Max(0, radius - half))!;
+            var strokeOutline = WindowShapes.Placed(geometry, 0, 0, width, height, Math.Max(0, radius - half), gutter + half, radius + half)!;
             var drawn = new PointCollection();
             foreach (var p in strokeOutline) drawn.Add(new Point(p.X, p.Y));
             outlineElement.Points = drawn;
+        }
+
+        /// <summary>The shadow is cast by the photo's outline onto the mat. Rendered only when something it depends on has changed.</summary>
+        private void ApplyShapedShadow(FreeformCard card, Grid window, CellGeometryDto geometry, CellBorderDto frame, double width, double height, double gutter)
+        {
+            if (window.Tag is not CellParts { GutterHost: not null } parts) return;
+            if (parts.GutterHost.Child is not Image image) return;
+
+            int w = (int)Math.Round(width);
+            int h = (int)Math.Round(height);
+            bool drop = frame.ShadowIntensity > 0 && !frame.RimGlow && !_hiddenItems.Contains(card.Item) && w >= 2 && h >= 2;
+            if (!drop)
+            {
+                image.Source = null;
+                image.Visibility = Visibility.Collapsed;
+                card.ShadowKey = null;
+                return;
+            }
+
+            string key = string.Join("|", w, h, gutter, frame.ShadowIntensity, frame.CornerRadius,
+                geometry.Shape, geometry.ShapeFlipH, geometry.ShapeFlipV, geometry.NotchX, geometry.NotchY);
+            if (key == card.ShadowKey && image.Source != null) return;
+            card.ShadowKey = key;
+
+            var outline = WindowShapes.Placed(geometry, 0, 0, w, h, frame.CornerRadius, gutter);
+            if (outline == null) return;
+            WriteShadow(image, FrameShadow.RenderAlpha(w, h, outline, frame.ShadowIntensity), w, h);
         }
 
         private static void ClipToOutline(FrameworkElement part, (double X, double Y)[] outline)
@@ -355,9 +382,8 @@ namespace ModernImageViewer
                 // Measured against the window, so its rotation is already taken out.
                 var p = e.GetCurrentPoint(window).Position;
                 var geometry = GetGeometry(card.Item);
-                double gutter = CardBorder(window)?.Margin.Left ?? 0;
-                double fx = Math.Clamp((p.X - gutter) / Math.Max(1, window.Width - 2 * gutter), 0.15, 0.85);
-                double fy = Math.Clamp((p.Y - gutter) / Math.Max(1, window.Height - 2 * gutter), 0.15, 0.85);
+                double fx = Math.Clamp(p.X / window.Width, 0.15, 0.85);
+                double fy = Math.Clamp(p.Y / window.Height, 0.15, 0.85);
                 geometry.NotchX = geometry.ShapeFlipH ? 1 - fx : fx;
                 geometry.NotchY = geometry.ShapeFlipV ? 1 - fy : fy;
                 ApplyWindowGeometry(card);
