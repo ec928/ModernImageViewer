@@ -672,9 +672,6 @@ namespace ModernImageViewer
         [DllImport("user32.dll")]
         public static extern bool SetForegroundWindow(IntPtr hWnd);
 
-        [DllImport("user32.dll")]
-        public static extern bool BringWindowToTop(IntPtr hWnd);
-
         public const int SW_RESTORE = 9;
 
         [DllImport("user32.dll")]

@@ -139,11 +139,6 @@
                     </MenuFlyoutSubItem>
                     <MenuFlyoutSeparator/>
 
-                    <MenuFlyoutItem x:Name="AddToCollageMenuItem" Text="Add to Collage" Click="AddToCollage_Click">
-                        <MenuFlyoutItem.Icon>
-                            <SymbolIcon Symbol="Pictures"/>
-                        </MenuFlyoutItem.Icon>
-                    </MenuFlyoutItem>
                     <MenuFlyoutItem Text="Play Cinematic Slideshow" Click="PlayCinematic_Click">
                         <MenuFlyoutItem.Icon>
                             <SymbolIcon Symbol="Play" />
@@ -293,9 +288,6 @@
 
                         <Button Click="PlayCinematic_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Play Cinematic Slideshow">
                             <SymbolIcon Symbol="Play"/>
-                        </Button>
-                        <Button Click="AddToCollage_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Add to Collage">
-                            <SymbolIcon Symbol="Pictures"/>
                         </Button>
 
                         <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="6,6" Opacity="0.4"/>

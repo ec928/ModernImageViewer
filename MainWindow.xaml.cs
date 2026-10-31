@@ -18,7 +18,6 @@ using System.Threading.Tasks;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.UI;
 using Windows.Storage;
-using ModernImageViewer.Collage;
 
 namespace ModernImageViewer
 {
@@ -398,7 +397,6 @@ namespace ModernImageViewer
             public int MultiViewWindowHeight { get; set; } = -1;
             public float Gamma { get; set; } = 2.2f;
             public string ImageEditorPath { get; set; } = "mspaint.exe";
-            public string VideoDirectorPath { get; set; } = string.Empty;
             public string SortOrder { get; set; } = "NameAsc";
             public bool ListMode { get; set; }
             public double TileSize { get; set; } = 164;
@@ -590,7 +588,6 @@ namespace ModernImageViewer
         }
 
 
-        private CollageEditorWindow? _collageEditorWindow;
         private readonly List<ModernImageViewer.Cinematic.CinematicWindow> _cinematicWindows = new();
 
         public int CinematicWindowCount => _cinematicWindows.Count;
@@ -603,98 +600,6 @@ namespace ModernImageViewer
             window.Closed += (_, _) => _cinematicWindows.Remove(window);
         }
 
-        private async void OpenDirector_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                string path = _currentSettings.VideoDirectorPath;
-                if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
-                {
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = path,
-                        UseShellExecute = true
-                    });
-                    return;
-                }
-
-                string[] fallbacks = new[]
-                {
-                    System.IO.Path.Combine(AppContext.BaseDirectory, "VideoDirector.exe"),
-                    System.IO.Path.Combine(AppContext.BaseDirectory, @"..\VideoDirector\VideoDirector.exe")
-                };
-
-                foreach (var candidate in fallbacks)
-                {
-                    if (File.Exists(candidate))
-                    {
-                        _currentSettings.VideoDirectorPath = candidate;
-                        SaveAllSettings();
-                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                        {
-                            FileName = candidate,
-                            UseShellExecute = true
-                        });
-                        return;
-                    }
-                }
-
-                // Prompt user to locate VideoDirector.exe if missing
-                var picker = new Windows.Storage.Pickers.FileOpenPicker();
-                var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-                WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
-                picker.ViewMode = Windows.Storage.Pickers.PickerViewMode.Thumbnail;
-                picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.ComputerFolder;
-                picker.FileTypeFilter.Add(".exe");
-
-                var file = await picker.PickSingleFileAsync();
-                if (file != null)
-                {
-                    _currentSettings.VideoDirectorPath = file.Path;
-                    SaveAllSettings();
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = file.Path,
-                        UseShellExecute = true
-                    });
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Failed to launch Video Director: {ex.Message}");
-            }
-        }
-
-        private void TestCollage_Click(object sender, RoutedEventArgs e)
-        {
-            if (_collageEditorWindow != null)
-            {
-                try
-                {
-                    var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(_collageEditorWindow);
-
-                    // Robust bring-to-front sequence
-                    NativeMethods.ShowWindow(hwnd, NativeMethods.SW_RESTORE);     // Restore if minimized
-                    NativeMethods.SetForegroundWindow(hwnd);
-                    NativeMethods.BringWindowToTop(hwnd);
-
-                    _collageEditorWindow.Activate();
-                }
-                catch
-                {
-                    // Window is in bad state -> recreate it
-                    _collageEditorWindow.Close();
-                    _collageEditorWindow = null;
-                }
-
-                if (_collageEditorWindow != null) return;
-            }
-
-            // Create new editor
-            _collageEditorWindow = new CollageEditorWindow();
-            _collageEditorWindow.Closed += (s, args) => _collageEditorWindow = null;
-            _collageEditorWindow.Activate();
-        }
         private void SaveAllSettings()
         {
             try
@@ -831,26 +736,6 @@ namespace ModernImageViewer
             var selectedItems = ImageGrid.SelectedItems.OfType<ImageItem>().Where(i => !i.IsDirectory).ToList();
             if (selectedItems.Count == 0) return;
             OpenCinematic(selectedItems.Select(i => i.Path).ToList(), 0);
-            ImageGrid.SelectedItems.Clear();
-        }
-
-        private void MultiSelectCollage_Click(object sender, RoutedEventArgs e)
-        {
-            var selectedItems = ImageGrid.SelectedItems.OfType<ImageItem>().Where(i => !i.IsDirectory).ToList();
-            if (selectedItems.Count == 0) return;
-            
-            if (_collageEditorWindow == null)
-            {
-                TestCollage_Click(this, new RoutedEventArgs());
-            }
-
-            if (_collageEditorWindow != null)
-            {
-                foreach (var item in selectedItems)
-                {
-                    _collageEditorWindow.AddExternalImage(item.Path);
-                }
-            }
             ImageGrid.SelectedItems.Clear();
         }
 

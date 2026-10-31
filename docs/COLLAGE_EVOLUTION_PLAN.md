@@ -1,6 +1,6 @@
 # Multi-View Collage Plan
 
-Multi-View is becoming the app's collage mode. The aim is to replace the separate Collage editor with it, and to come closer to the more capable collage apps, while staying extremely easy and fast to use.
+Multi-View is the app's collage mode, and it has replaced the separate Collage editor. The aim is to come closer to the more capable collage apps while staying extremely easy and fast to use. Anything more is built on this cell architecture.
 
 How it is built is in `ARCHITECTURE.md`, under Multi-view. How it looks and behaves is in `UI_UX.md`. In short, it is cell based: a cell holds the parameters, and the image is only what it shows.
 
@@ -19,8 +19,8 @@ How it is built is in `ARCHITECTURE.md`, under Multi-view. How it looks and beha
 
 ## Still open
 
-- Retire the Collage editor. It still has rotation handles, automatic layouts (Masonry, Tiled, Brick, Organic), snapping and a grid overlay, so what is worth keeping has to be decided first.
-- Drag images in from the tile grid or Explorer. The Photos button changes images today.
+- Add new images to a session, for example by dragging them in from the tile grid or Explorer. The Photos button changes images today.
+- Select several cells to move or align together.
 - Replace the photo of a cell whose file is missing, from the cell itself.
 - Text as cell content.
 - Layouts as templates, applied to any selection of photos.

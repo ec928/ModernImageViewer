@@ -4,9 +4,9 @@ Authoritative invariants. Consult this before changing decode, cache, or GPU lif
 
 ## Product
 
-Unpackaged WinUI 3 / Win2D image browser (portable zip). Collage editor and in-app cinematic director are in-tree beta surfaces, not described as core README features.
+Unpackaged WinUI 3 / Win2D image browser (portable zip). The in-app cinematic director is an in-tree beta surface, not described as a core README feature. Collage work happens in Multi-view. The separate Collage editor was removed on 2026-10-31.
 
-Local state lives under `%LocalAppData%\ModernImageViewer\` (`settings.json`, collage window bounds, cinematic window bounds, `CinematicAutoSave.json`). Never `ApplicationData.Current` — this app has no package identity.
+Local state lives under `%LocalAppData%\ModernImageViewer\` (`settings.json`, cinematic window bounds, `CinematicAutoSave.json`). Never `ApplicationData.Current` — this app has no package identity.
 
 UI/UX styling, typography, theme parity, and component specifications are documented in `UI_UX.md`.
 
@@ -18,8 +18,8 @@ UI/UX styling, typography, theme parity, and component specifications are docume
 | Fast preview | 1200 | `ViewerEngine.DecodeFastPreviewAsync` | Uploaded on UI thread |
 | Viewer, fit | long edge of the view | main window and detached window, after the preview | Yes |
 | Viewer, zoomed past fit | native, capped at 16384 | same windows, one further decode | Yes |
-| Display / collage high-res / cinematic | 4096 | collage `LoadHighResAsync`, `SceneAnalysisService` | Yes |
-| Export | native | collage export | Temporary, disposed after save |
+| Display / cinematic | 4096 | `SceneAnalysisService` | Yes |
+| Export | sized to the cell | Multi-view export | Temporary, disposed after save |
 
 `DecodeHighFidelityAsync(path, token, maxEdge)` is the viewer decode past the preview. `maxEdge` is the long edge to produce, never above 16384. At fit that edge is the view. Zoomed past fit it is the file, capped at 16384. The scroll wheel's lower limit stays 0.1 for an ordinary photo. Fit of a wider image may go below 0.1, and that fit becomes the wheel floor for that image only.
 
@@ -32,12 +32,10 @@ WIC color-manages to sRGB. The draw path does **not** use Win2D `ColorManagement
 `ImageCache` is the only writer of the shared decode cache.
 
 - `Publish(path, entry)` — cache takes the entry (initial refcount 1). Releases any *different* previous occupant. Will not replace a longer `DecodedLongEdge` with a shorter one (a high-fidelity entry still beats a preview when an edge was not recorded). Uses `TryRemove`/`TryAdd`, never a raw indexer write.
-- `TryGet` — borrow. A surface that draws an entry must `AddRef` for the time it holds GPU pointers (`ImageViewerControl.InjectImage`) and `Release` in `PrepareForNewImage` / Unload / device-lost. Collage must not `Publish` over a slot that already has decodable content.
+- `TryGet` — borrow. A surface that draws an entry must `AddRef` for the time it holds GPU pointers (`ImageViewerControl.InjectImage`) and `Release` in `PrepareForNewImage` / Unload / device-lost.
 - `Evict(path)` — `Release` + remove. A detached window that displays a cache entry keeps it alive via the control’s `AddRef` until it `Release`s. Closing the window cancels an in-flight decode and releases that entry if it has not been published.
 - `Rename(old, new)` — move the slot; release anything displaced at `new`.
 - Never `dictionary[path] = entry`. Never `Dispose()` GPU fields on a shared entry. Device-lost: `ImageCache.Clear()` (including GIF `AnimationFrames`) and re-decode. Treat animation-frame device mismatch like `GpuBitmap` mismatch.
-
-Collage keeps a **local** `CanvasBitmap` dictionary (`SetLocalGpu`) bound to that canvas's device. It may `Publish` a preview entry for native width/height, but must not clobber HF.
 
 Refcount: cache hold = 1. Detached windows `AddRef` when they display a cache entry and `Release` on close. `ManageCache` `Evict`s keys outside the keep-alive radius (current ± 20). Prefetch is current +15 / −8.
 
@@ -127,7 +125,6 @@ Anything that orders file or folder names for display goes through `NaturalSort`
 
 ## Known remaining debt
 
-- Collage and cinematic windows are still large code-behinds. Further splits (`FolderScanService`, director UI vs playback) are welcome but not required for correctness. Tracked as improvement I3 in `REVIEW.md`.
-- Collage hit-testing ignores `Rotation` (AABB). Visuals rotate; pointers still use the unrotated layout.
+- The cinematic window is still a large code-behind. Further splits (`FolderScanService`, director UI vs playback) are welcome but not required for correctness. Tracked as improvement I3 in `REVIEW.md`.
 - HEIC/AVIF need the Windows codecs pack. Decode failure shows a HUD.
 - Unsigned portable zip: SmartScreen warning is expected.

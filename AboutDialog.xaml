@@ -79,15 +79,12 @@
                     <Run Text="&#x2022;  "/><Run Text="Responsive two-page spread" FontWeight="SemiBold"/><Run Text=" &#x2014; automatically displays side-by-side double-page spreads when the window is stretched wide enough (toggle anytime with B), while keeping covers and wide landscapes on a single page."/>
                 </TextBlock>
 
-                <TextBlock Text="Cinematic and collage (Beta)" Style="{StaticResource AboutSectionHeader}"/>
+                <TextBlock Text="Cinematic (Beta)" Style="{StaticResource AboutSectionHeader}"/>
                 <TextBlock Style="{StaticResource AboutBullet}">
                     <Run Text="&#x2022;  "/><Run Text="Cinematic slideshow" FontWeight="SemiBold"/><Run Text=" &#x2014; press Play for automated Ken Burns camera moves with smart subject framing and smooth crossfades between slides."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Custom direction &amp; Video Director" FontWeight="SemiBold"/><Run Text=" &#x2014; customize start/end frames, easing curves, and slide timing, or launch Video Director for multi-track editing and MP4 export."/>
-                </TextBlock>
-                <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Collage editor" FontWeight="SemiBold"/><Run Text=" &#x2014; arrange, rotate, and export multi-image compositions at native resolution."/>
+                    <Run Text="&#x2022;  "/><Run Text="Custom direction" FontWeight="SemiBold"/><Run Text=" &#x2014; customize start/end frames, easing curves, and slide timing."/>
                 </TextBlock>
 
                 <TextBlock Text="Performance and formats" Style="{StaticResource AboutSectionHeader}"/>

@@ -89,7 +89,6 @@ namespace ModernImageViewer
         public event EventHandler? EditRequested;
         public event EventHandler? RenameRequested;
         public event EventHandler? DeleteRequested;
-        public event EventHandler? AddToCollageRequested;
         public event EventHandler<float>? GammaChanged;
         public event EventHandler? ZoomChanged;
 
@@ -370,7 +369,6 @@ namespace ModernImageViewer
             _mouseWheelAccumulator = 0;
             bool isMutateAllowed = TargetImage != null && !TargetImage.IsComicEntry;
             Visibility mutateVis = isMutateAllowed ? Visibility.Visible : Visibility.Collapsed;
-            if (AddToCollageMenuItem != null) AddToCollageMenuItem.Visibility = mutateVis;
             if (EditImageMenuItem != null) EditImageMenuItem.Visibility = mutateVis;
             if (RenameImageMenuItem != null) RenameImageMenuItem.Visibility = mutateVis;
             if (DeleteImageMenuItem != null) DeleteImageMenuItem.Visibility = mutateVis;
@@ -1080,11 +1078,6 @@ namespace ModernImageViewer
         }
 
         // --- File Operations Handlers ---
-        private void AddToCollage_Click(object sender, RoutedEventArgs e)
-        {
-            AddToCollageRequested?.Invoke(this, EventArgs.Empty);
-        }
-
         private void PlayCinematic_Click(object sender, RoutedEventArgs e)
         {
             var main = MainWindow.Instance;

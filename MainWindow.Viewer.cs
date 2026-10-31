@@ -2875,7 +2875,6 @@ namespace ModernImageViewer
             SyncViewModeButtons();
             SyncPresetButtons();
             SyncThemeButtons();
-            _collageEditorWindow?.ApplyAppTheme(CurrentRequestedTheme);
 
             if (save)
                 SaveAllSettings();
@@ -3356,7 +3355,6 @@ namespace ModernImageViewer
             if (GridMenuDetachItem != null) GridMenuDetachItem.Visibility = photoVis;
             if (GridMenuPhotoSep1 != null) GridMenuPhotoSep1.Visibility = photoVis;
             if (GridMenuCinematicItem != null) GridMenuCinematicItem.Visibility = photoVis;
-            if (GridMenuCollageItem != null) GridMenuCollageItem.Visibility = isEditablePhoto ? Visibility.Visible : Visibility.Collapsed;
             if (GridMenuPhotoSep2 != null) GridMenuPhotoSep2.Visibility = fileMutateVis;
             if (GridMenuEditItem != null) GridMenuEditItem.Visibility = isEditablePhoto ? Visibility.Visible : Visibility.Collapsed;
             if (GridMenuRenameItem != null) GridMenuRenameItem.Visibility = fileMutateVis;
@@ -3407,17 +3405,6 @@ namespace ModernImageViewer
             var item = _contextMenuTargetItem ?? CursorItem();
             int startIdx = item != null ? Math.Max(0, Images.IndexOf(item)) : 0;
             if (Images.Count > 0) OpenCinematic(Images.Select(i => i.Path).ToList(), startIdx);
-        }
-
-        private void GridMenuCollage_Click(object sender, RoutedEventArgs e)
-        {
-            if (ImageGrid.SelectedItems.Count > 0)
-            {
-                MultiSelectCollage_Click(sender, e);
-                return;
-            }
-            var item = _contextMenuTargetItem ?? CursorItem();
-            if (item != null && !item.IsDirectory) AddImageToCollage(item.Path);
         }
 
         private void GridMenuEdit_Click(object sender, RoutedEventArgs e)
@@ -3514,19 +3501,6 @@ namespace ModernImageViewer
         private void ViewerControl_ToggleFullscreenRequested(object sender, EventArgs e) => ToggleFullscreen();
         private void ViewerControl_NavigateRequested(object sender, int step) => Navigate(step);
         private void ViewerControl_ShowInExplorerRequested(object sender, EventArgs e) => ShowInExplorer_Click(sender, new RoutedEventArgs());
-
-        private void ViewerControl_AddToCollageRequested(object? sender, EventArgs e)
-        {
-            if (_currentIndex >= 0 && _currentIndex < Images.Count)
-                AddImageToCollage(Images[_currentIndex].Path);
-        }
-
-        public void AddImageToCollage(string path)
-        {
-            if (string.IsNullOrEmpty(path)) return;
-            TestCollage_Click(this, new RoutedEventArgs());
-            _collageEditorWindow?.AddExternalImage(path);
-        }
 
         public void NotifyImageDeleted(string path)
         {

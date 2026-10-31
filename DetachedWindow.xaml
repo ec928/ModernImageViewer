@@ -23,7 +23,6 @@
                                   EditRequested="ViewerControl_EditRequested"
                                   RenameRequested="ViewerControl_RenameRequested"
                                   DeleteRequested="ViewerControl_DeleteRequested"
-                                  AddToCollageRequested="ViewerControl_AddToCollageRequested"
                                   ShowInExplorerRequested="ViewerControl_ShowInExplorerRequested"
                                   SwitchToMainRequested="ViewerControl_SwitchToMainRequested" />
 

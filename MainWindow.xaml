@@ -329,36 +329,13 @@
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
 
-                        <!-- === UNIFIED ACTION TOOLSTRIP (Slideshow, Collage, Video Director) === -->
                         <Border Grid.Row="0" Margin="10,4,10,8" Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="6" Padding="2">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="36"/>
-                                    <ColumnDefinition Width="1"/>
-                                    <ColumnDefinition Width="36"/>
-                                    <ColumnDefinition Width="1"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-
-                                <Button Grid.Column="0" Style="{StaticResource SidebarToolButtonStyle}" Click="PlayCinematicFolder_Click" HorizontalAlignment="Stretch" Height="26" Padding="0" CornerRadius="4" IsTabStop="False" ToolTipService.ToolTip="Play Cinematic Slideshow">
+                            <Button Style="{StaticResource SidebarToolButtonStyle}" Click="PlayCinematicFolder_Click" HorizontalAlignment="Stretch" Height="26" Padding="8,0" CornerRadius="4" IsTabStop="False" ToolTipService.ToolTip="Play Cinematic Slideshow">
+                                <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
                                     <SymbolIcon Symbol="Play"/>
-                                </Button>
-
-                                <Rectangle Grid.Column="1" Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,3" Opacity="0.5"/>
-
-                                <Button Grid.Column="2" Style="{StaticResource SidebarToolButtonStyle}" Click="TestCollage_Click" HorizontalAlignment="Stretch" Height="26" Padding="0" CornerRadius="4" IsTabStop="False" ToolTipService.ToolTip="Open Collage Editor">
-                                    <SymbolIcon Symbol="Pictures"/>
-                                </Button>
-
-                                <Rectangle Grid.Column="3" Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,3" Opacity="0.5"/>
-
-                                <Button Grid.Column="4" Style="{StaticResource SidebarToolButtonStyle}" Click="OpenDirector_Click" HorizontalAlignment="Stretch" Height="26" Padding="8,0" CornerRadius="4" IsTabStop="False" ToolTipService.ToolTip="Open Video Director">
-                                    <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
-                                        <SymbolIcon Symbol="Video"/>
-                                        <TextBlock Text="Video Director" FontSize="12"/>
-                                    </StackPanel>
-                                </Button>
-                            </Grid>
+                                    <TextBlock Text="Cinematic Slideshow" FontSize="12"/>
+                                </StackPanel>
+                            </Button>
                         </Border>
 
                         <BreadcrumbBar x:Name="FolderBreadcrumb" Grid.Row="1" Margin="10,3,6,4" ItemClicked="BreadcrumbBar_ItemClicked" IsTabStop="False">
@@ -470,9 +447,6 @@
                                 <MenuFlyoutSeparator x:Name="GridMenuPhotoSep1"/>
                                 <MenuFlyoutItem x:Name="GridMenuCinematicItem" Text="Play Cinematic Slideshow" Click="GridMenuCinematic_Click">
                                     <MenuFlyoutItem.Icon><SymbolIcon Symbol="Play"/></MenuFlyoutItem.Icon>
-                                </MenuFlyoutItem>
-                                <MenuFlyoutItem x:Name="GridMenuCollageItem" Text="Add to Collage" Click="GridMenuCollage_Click">
-                                    <MenuFlyoutItem.Icon><SymbolIcon Symbol="Pictures"/></MenuFlyoutItem.Icon>
                                 </MenuFlyoutItem>
                                 <MenuFlyoutSeparator x:Name="GridMenuPhotoSep2"/>
                                 <MenuFlyoutItem x:Name="GridMenuEditItem" Text="Edit Image" Click="GridMenuEdit_Click">
@@ -667,9 +641,6 @@
                                 <Button Click="MultiSelectCinematic_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" ToolTipService.ToolTip="Play Cinematic Slideshow">
                                     <SymbolIcon Symbol="Play" />
                                 </Button>
-                                <Button Click="MultiSelectCollage_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" ToolTipService.ToolTip="Add to Collage">
-                                    <SymbolIcon Symbol="Pictures" />
-                                </Button>
 
                                 <Rectangle Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,0" Opacity="0.5"/>
 
@@ -798,8 +769,7 @@
                                               DetachLimitRequested="ViewerControl_DetachLimitRequested"
                                               EditRequested="ViewerControl_EditRequested"
                                               RenameRequested="ViewerControl_RenameRequested"
-                                              DeleteRequested="ViewerControl_DeleteRequested"
-                                              AddToCollageRequested="ViewerControl_AddToCollageRequested" />
+                                              DeleteRequested="ViewerControl_DeleteRequested" />
 
                     <local:MultiViewControl x:Name="MultiViewControl"
                                             Grid.RowSpan="2"

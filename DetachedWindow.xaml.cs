@@ -268,7 +268,6 @@ namespace ModernImageViewer
             ViewerControl.EditRequested -= ViewerControl_EditRequested;
             ViewerControl.RenameRequested -= ViewerControl_RenameRequested;
             ViewerControl.DeleteRequested -= ViewerControl_DeleteRequested;
-            ViewerControl.AddToCollageRequested -= ViewerControl_AddToCollageRequested;
             ViewerControl.ShowInExplorerRequested -= ViewerControl_ShowInExplorerRequested;
             ViewerControl.SwitchToMainRequested -= ViewerControl_SwitchToMainRequested;
         }
@@ -543,11 +542,6 @@ namespace ModernImageViewer
                 MainWindow.Instance?.NotifyImageDeleted(_imageItem.Path);
                 this.Close();
             }
-        }
-
-        private void ViewerControl_AddToCollageRequested(object? sender, EventArgs e)
-        {
-            MainWindow.Instance?.AddImageToCollage(_imageItem.Path);
         }
 
         private void ViewerControl_SwitchToMainRequested(object? sender, EventArgs e)

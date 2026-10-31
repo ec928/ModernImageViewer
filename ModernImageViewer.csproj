@@ -65,11 +65,6 @@
     <RemoveDir Directories="@(_DropMui->'%(RootDir)%(Directory)'->Distinct())" ContinueOnError="true" />
   </Target>
   <ItemGroup>
-    <None Remove="CollageCanvas.xaml" />
-    <None Remove="CollageEditorWindow.xaml" />
-  </ItemGroup>
-
-  <ItemGroup>
     <Content Include="Assets\SplashScreen.scale-200.png" />
     <Content Include="Assets\LockScreenLogo.scale-200.png" />
     <Content Include="Assets\Square150x150Logo.scale-200.png" />
@@ -118,16 +113,6 @@
     <PackageReference Include="SharpCompress" Version="0.48.0" />
   </ItemGroup>
   <ItemGroup>
-    <Page Update="CollageEditorWindow.xaml">
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
-  </ItemGroup>
-  <ItemGroup>
-    <Page Update="CollageCanvas.xaml">
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
-  </ItemGroup>
-  <ItemGroup>
     <Page Update="ImageViewerControl.xaml">
       <Generator>MSBuild:Compile</Generator>
     </Page>
@@ -141,9 +126,6 @@
     <Page Update="DetachedWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
     </Page>
-  </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Collage\" />
   </ItemGroup>
   <ItemGroup>
     <Page Update="Cinematic\CinematicWindow.xaml">

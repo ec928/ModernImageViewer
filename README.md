@@ -18,7 +18,7 @@ A high-performance, hardware-accelerated image viewer built for creators, 3D art
 
 **Multi-View** — Compare up to 16 photos in one window, or build them into a collage. Set the rows and columns, give photos a hero spot, drag the edges between them, frame each cell, float cells above the grid in shapes, and save the result as a JPEG or PNG or copy it to the clipboard. Layouts can be saved and reopened. See [Multi-View](#-multi-view) below.
 
-**Collage and Cinematic (beta)** — In-app collage editor, and a cinematic slideshow whose show you can edit: reorder, hide and duplicate slides, hold a Ken Burns move on one slide, and save or reload the show. These are still being hardened; save often.
+**Cinematic (beta)** — A cinematic slideshow whose show you can edit: reorder, hide and duplicate slides, hold a Ken Burns move on one slide, and save or reload the show. It is still being hardened; save often.
 
 HEIC/HEIF and AVIF need the corresponding Windows codecs installed. If a file will not open, the viewer shows a short HUD message rather than a blank canvas.
 

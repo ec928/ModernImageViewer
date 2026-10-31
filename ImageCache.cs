@@ -34,9 +34,6 @@ namespace ModernImageViewer
         /// Releases any different previous occupant. Will not replace a longer decode
         /// with a shorter one - the incoming entry is Released instead.
         /// </summary>
-        public static bool HasUsableDecode(string path) =>
-            TryGet(path, out var existing) && existing != null && existing.HasDecodableContent;
-
         public static void Publish(string path, ImageCacheEntry entry)
         {
             if (string.IsNullOrEmpty(path) || entry == null) return;
