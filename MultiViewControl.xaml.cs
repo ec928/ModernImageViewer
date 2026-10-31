@@ -433,6 +433,7 @@ namespace ModernImageViewer
 
             CountsPanel.Children.Add(BuildLayoutHeader(lines, rows, isEven));
             CountsPanel.Children.Add(BuildLayoutToolbar(lines, rows));
+            CountsPanel.Children.Add(BuildHeroRow());
             CountsPanel.Children.Add(new Rectangle
             {
                 Style = LayoutStyle("LayoutDividerStyle"),
@@ -916,7 +917,8 @@ namespace ModernImageViewer
             finally { _relayoutKeepingCells = false; }
         }
 
-        private void HeroButton_Click(object sender, RoutedEventArgs e)
+        /// <summary>H: the next kind, then off.</summary>
+        private void CycleHero()
         {
             var kinds = MosaicLayout.HeroKinds(VisibleCount(GridCellCount));
             if (kinds.Length == 0) return;
@@ -948,6 +950,78 @@ namespace ModernImageViewer
             ShowHudAndOverlays();
         }
 
+        private static readonly HeroKind[] HeroRowKinds = { HeroKind.Banner, HeroKind.Rectangle, HeroKind.Pair };
+
+        /// <summary>The Hero row of the grid layout card: off, or one kind directly. What this many photos cannot do is greyed out.</summary>
+        private FrameworkElement BuildHeroRow()
+        {
+            var available = MosaicLayout.HeroKinds(VisibleCount(GridCellCount));
+            var row = new StackPanel { Spacing = 4, Margin = new Thickness(0, 8, 0, 0) };
+
+            var header = new Grid { Height = 30 };
+            var title = new TextBlock { Text = "Hero", FontSize = 12, Foreground = _menuWhiteSecondary, VerticalAlignment = VerticalAlignment.Center };
+            ToolTipService.SetToolTip(title, "Rectangle needs 4, 5, 6, 7 or 9 photos, and Pair needs at least 3.");
+            header.Children.Add(title);
+            if (_heroActive)
+            {
+                var next = new Button
+                {
+                    Style = (Style)Resources["QuietButtonStyle"],
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    Padding = new Thickness(8, 4, 8, 4),
+                    CornerRadius = new CornerRadius(8),
+                    Content = new FontIcon { FontFamily = new FontFamily("Segoe Fluent Icons"), Glyph = "\uE7AD", FontSize = 13 }
+                };
+                ToolTipService.SetToolTip(next, "Next position");
+                AutomationProperties.SetName(next, "Next position");
+                next.Click += RotateHero_Click;
+                header.Children.Add(next);
+            }
+            row.Children.Add(header);
+
+            var buttons = new Button[4];
+            var track = MakeSegment(new[] { "Off", "Banner", "Rectangle", "Pair" }, new[]
+            {
+                "No hero",
+                "One large photo along a side",
+                "One large photo in a corner block",
+                "The first two photos large"
+            }, SetHero, out var show, buttons);
+            for (int i = 0; i < HeroRowKinds.Length; i++)
+            {
+                bool can = Array.IndexOf(available, HeroRowKinds[i]) >= 0;
+                buttons[i + 1].IsEnabled = can;
+                if (buttons[i + 1].Content is TextBlock caption && !can) caption.Opacity = 0.4;
+            }
+            show(_heroActive ? Array.IndexOf(HeroRowKinds, _heroKind) + 1 : 0);
+            row.Children.Add(track);
+            return row;
+        }
+
+        private void SetHero(int choice)
+        {
+            bool off = choice == 0;
+            if (off && !_heroActive) return;
+            if (off)
+            {
+                _heroActive = false;
+            }
+            else
+            {
+                var kind = HeroRowKinds[choice - 1];
+                if (_heroActive && _heroKind == kind) return;
+                _heroActive = true;
+                _heroKind = kind;
+                _heroPosition = kind == HeroKind.Banner
+                    ? MosaicLayout.DefaultBannerPosition(CellsGrid.ActualWidth, CellsGrid.ActualHeight)
+                    : 0;
+            }
+            RelayoutKeepingCells();
+            RefreshOpenLayout();
+            ShowHudAndOverlays();
+            NoteUserAction();
+        }
+
         private void RotateHero_Click(object sender, RoutedEventArgs e)
         {
             if (!_heroActive) return;
@@ -975,47 +1049,6 @@ namespace ModernImageViewer
                 int positions = MosaicLayout.HeroPositions(VisibleCount(GridCellCount), _heroKind);
                 if (_heroPosition >= positions) _heroPosition = 0;
             }
-        }
-
-        private void RefreshHeroChrome(int count)
-        {
-            if (HeroButton == null || RotateHeroButton == null || HeroText == null) return;
-            bool show = count > 1;
-            HeroButton.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-            // Next position means nothing until there is a hero to move.
-            RotateHeroButton.Visibility = show && _heroActive ? Visibility.Visible : Visibility.Collapsed;
-            RotateHeroButton.IsEnabled = _heroActive;
-            string kind = MosaicLayout.HeroTitle(_heroKind);
-            HeroText.Text = _heroActive ? "Hero: " + kind : "Hero";
-
-            if (_heroActive)
-            {
-                HeroButton.Background = Application.Current.Resources["AccentFillColorDefaultBrush"] as Brush
-                    ?? new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 120, 215));
-                HeroText.Foreground = new SolidColorBrush(Microsoft.UI.Colors.White);
-                HeroText.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
-                if (HeroIcon != null)
-                {
-                    HeroIcon.Foreground = new SolidColorBrush(Microsoft.UI.Colors.White);
-                    HeroIcon.Opacity = 1.0;
-                }
-            }
-            else
-            {
-                HeroButton.ClearValue(Button.BackgroundProperty);
-                HeroText.ClearValue(TextBlock.ForegroundProperty);
-                HeroText.FontWeight = Microsoft.UI.Text.FontWeights.Normal;
-                if (HeroIcon != null)
-                {
-                    HeroIcon.ClearValue(FontIcon.ForegroundProperty);
-                    HeroIcon.Opacity = 0.85;
-                }
-            }
-
-            ToolTipService.SetToolTip(HeroButton, _heroActive
-                ? "Hero: " + kind + ". Click for the next kind, or off (H)"
-                : "Hero (H). Click for a large photo.");
-            ToolTipService.SetToolTip(RotateHeroButton, "Next position");
         }
 
         public bool HandleKeyDown(VirtualKey key)
@@ -1062,7 +1095,7 @@ namespace ModernImageViewer
                     ToggleRowsColumns();
                     return true;
                 case VirtualKey.H:
-                    HeroButton_Click(this, new RoutedEventArgs());
+                    CycleHero();
                     return true;
                 case VirtualKey.S:
                     if (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))

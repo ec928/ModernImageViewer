@@ -168,7 +168,7 @@ The Frame & Border card always shows at full height for the window, in front of 
    - The top-left info HUD is identical in visual treatment and data layout to the Single Viewer inspection HUD.
    - Exit button returns cleanly to the mosaic view.
 5. **Show Controls Only When They Apply**:
-   - The next-position button shows only while a hero is on. Grid Layout is disabled below two grid cells that show an image. An empty preset is dimmed.
+   - Hero is a row in the grid layout card, not on the bar: Off, Banner, Rectangle and Pair, with what the photo count does not allow greyed out, and next position only while a hero is on. Grid Layout is disabled below two grid cells that show an image. An empty preset is dimmed.
    - An empty cell's label fades with the playbar, so the composition can be seen without it.
 6. **Floating Cell Labels and Handles**:
    - A floating cell's position label is centered and stays upright, however the window is turned. Its hover buttons and handles are not clipped by its shape, and stay briefly after the pointer leaves so they can be reached.

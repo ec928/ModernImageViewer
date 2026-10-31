@@ -133,7 +133,6 @@ namespace ModernImageViewer
 
                 RelinkFreeformCells();
                 RefreshLinesChrome(0);
-                RefreshHeroChrome(0);
                 return;
             }
 
@@ -176,7 +175,6 @@ namespace ModernImageViewer
 
             RelinkFreeformCells();
             RefreshLinesChrome(stored);
-            RefreshHeroChrome(stored);
         }
 
         /// <summary>A rebuild can start the shared lists again. Freeform cells live outside the grid and carry on.</summary>

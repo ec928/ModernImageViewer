@@ -301,7 +301,7 @@
                                     Style="{StaticResource QuietButtonStyle}"
                                     Padding="8,5"
                                     CornerRadius="12"
-                                    ToolTipService.ToolTip="Arrange in rows (R). Opens the grid layout.">
+                                    ToolTipService.ToolTip="Arrange in rows (R). Opens the grid layout and hero.">
                                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                     <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xEA37;" FontSize="14" />
                                     <TextBlock x:Name="RowsSideText" Text="Rows" VerticalAlignment="Center" FontSize="13" />
@@ -312,7 +312,7 @@
                                     Style="{StaticResource QuietButtonStyle}"
                                     Padding="8,5"
                                     CornerRadius="12"
-                                    ToolTipService.ToolTip="Arrange in columns (R). Opens the grid layout.">
+                                    ToolTipService.ToolTip="Arrange in columns (R). Opens the grid layout and hero.">
                                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                     <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8C0;" FontSize="14" />
                                     <TextBlock x:Name="ColumnsSideText" Text="Columns" VerticalAlignment="Center" FontSize="13" />
@@ -320,28 +320,6 @@
                             </Button>
                         </StackPanel>
                     </Border>
-
-                    <Button x:Name="HeroButton"
-                            Click="HeroButton_Click"
-                            Style="{StaticResource QuietButtonStyle}"
-                            Padding="8,5"
-                            CornerRadius="12"
-                            ToolTipService.ToolTip="Hero (H). Click for a large photo.">
-                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                            <FontIcon x:Name="HeroIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xEE4E;" FontSize="14" />
-                            <TextBlock x:Name="HeroText" Text="Hero" VerticalAlignment="Center" FontSize="13" />
-                        </StackPanel>
-                    </Button>
-
-                    <Button x:Name="RotateHeroButton"
-                            Click="RotateHero_Click"
-                            Style="{StaticResource QuietButtonStyle}"
-                            Padding="8,5"
-                            CornerRadius="12"
-                            IsEnabled="False"
-                            ToolTipService.ToolTip="Next position" AutomationProperties.Name="Next position">
-                        <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE7AD;" FontSize="14" />
-                    </Button>
 
                     <!-- Subtle Section Divider 2 -->
                     <Rectangle Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,0" Opacity="0.5"/>
