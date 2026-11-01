@@ -169,7 +169,7 @@ namespace ModernImageViewer
 
             Heading(right, "Auto-play");
             string AutoPlayName(int seconds) => seconds > 0 ? seconds + " seconds" : "Off";
-            Row(right, "New layout every", "Saved like the other settings. Starts when chosen, or when you press Surprise me. A click on the picture, Esc or Space pauses it, and Surprise me resumes it.",
+            Row(right, "New layout every", "Saved like the other settings. Starts when chosen, or when you press Surprise me. The bar says Playing or Paused. A click on the picture, Esc or Space pauses it. Music is set from the gear in the main window.",
                 Choice(SurpriseOptions.AutoPlayChoices.Select(AutoPlayName), AutoPlayName(options.AutoPlaySeconds), name =>
                 {
                     int seconds = name == "Off" ? 0 : int.Parse(name.Split(' ')[0]);

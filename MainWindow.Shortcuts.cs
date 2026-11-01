@@ -56,7 +56,15 @@ namespace ModernImageViewer
                 ("Ctrl+C", "Copy the canvas as a picture"),
                 ("Ctrl+S", "Save or load"),
                 ("Alt+drag", "Swap two photos"),
-                ("Esc", "Back to the folder"),
+                ("Space", "Pause or start Surprise me auto-play"),
+                ("Esc", "Pause auto-play if it is playing, otherwise back to the folder"),
+            }),
+            ("Cinematic", new[]
+            {
+                ("Space", "Pause or play"),
+                ("Left, Right", "Previous and next slide"),
+                ("F11", "Full screen"),
+                ("Esc", "Back out one step: preview, Edit show, full screen, then the show"),
             }),
             ("Floating cells", new[]
             {

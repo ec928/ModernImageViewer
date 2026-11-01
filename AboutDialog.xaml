@@ -90,7 +90,11 @@
                     <Run Text="&#x2022;  "/><Run Text="Cinematic slideshow" FontWeight="SemiBold"/><Run Text=" &#x2014; press Play for automated Ken Burns camera moves with smart subject framing and smooth crossfades between slides."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Custom direction" FontWeight="SemiBold"/><Run Text=" &#x2014; customize start/end frames, easing curves, and slide timing."/>
+                    <Run Text="&#x2022;  "/><Run Text="Custom direction" FontWeight="SemiBold"/><Run Text=" &#x2014; Edit show lets you hide, reorder and duplicate pictures, and set start and end frames and timing for a slide."/>
+                </TextBlock>
+
+                <TextBlock Style="{StaticResource AboutBullet}">
+                    <Run Text="&#x2022;  "/><Run Text="Music" FontWeight="SemiBold"/><Run Text=" &#x2014; random songs from your folder at or above a star rating, under Cinematic shows and Surprise me auto-play. Set it from the gear in the main window."/>
                 </TextBlock>
 
                 <TextBlock Text="Performance and formats" Style="{StaticResource AboutSectionHeader}"/>
