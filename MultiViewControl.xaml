@@ -347,6 +347,28 @@
                         </StackPanel>
                     </Button>
 
+                    <Button x:Name="AutoPlayOffButton"
+                            Click="AutoPlayOffButton_Click"
+                            Visibility="Collapsed"
+                            AutomationProperties.Name="Turn auto-play off"
+                            ToolTipService.ToolTip="Turn auto-play off. Surprise me then makes one layout at a time. You can set it again in Surprise me options."
+                            Style="{StaticResource QuietButtonStyle}"
+                            Padding="8,5"
+                            CornerRadius="12">
+                        <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE711;" FontSize="12" />
+                    </Button>
+
+                    <Button x:Name="SurprisePreviousSongButton"
+                            Click="SurprisePreviousSong_Click"
+                            Visibility="Collapsed"
+                            AutomationProperties.Name="Previous song"
+                            ToolTipService.ToolTip="Previous song"
+                            Style="{StaticResource QuietButtonStyle}"
+                            Padding="8,5"
+                            CornerRadius="12">
+                        <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE892;" FontSize="13" />
+                    </Button>
+
                     <Button x:Name="SurpriseNextSongButton"
                             Click="SurpriseNextSong_Click"
                             Visibility="Collapsed"

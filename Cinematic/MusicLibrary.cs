@@ -157,6 +157,8 @@ namespace ModernImageViewer.Cinematic
     {
         private readonly List<string> _waiting = new();
         private readonly List<string> _played = new();
+        private readonly List<string> _heard = new();
+        private int _at = -1;
         private string? _last;
 
         public int Count => _waiting.Count + _played.Count;
@@ -166,6 +168,8 @@ namespace ModernImageViewer.Cinematic
         public string? Next(Random rnd)
         {
             if (Count == 0) return null;
+            // After going back, forward retraces what was heard before choosing anything new.
+            if (_at < _heard.Count - 1) return _heard[++_at];
             if (_waiting.Count == 0)
             {
                 _waiting.AddRange(_played);
@@ -178,7 +182,12 @@ namespace ModernImageViewer.Cinematic
             _waiting.RemoveAt(pick);
             _played.Add(song);
             _last = song;
+            _heard.Add(song);
+            _at = _heard.Count - 1;
             return song;
         }
+
+        /// <summary>The song heard before this one, or nothing at the first.</summary>
+        public string? Previous() => _at > 0 ? _heard[--_at] : null;
     }
 }

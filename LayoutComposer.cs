@@ -169,6 +169,9 @@ namespace ModernImageViewer
         public bool KeepCanvas { get; set; }
         public int FewestPictures { get; set; } = 9;
         public int MostPictures { get; set; } = MosaicLayout.MaxShown;
+
+        /// <summary>With more pictures than a click may use, the clicks take turns through them.</summary>
+        public bool TakesTurns(int pictures) => pictures > Math.Min(MosaicLayout.MaxShown, MostPictures);
         /// <summary>The odds that a click from a large set takes pictures next to each other in folder and date.</summary>
         public double TogetherChance { get; set; } = 0.8;
         public bool SkipScreens { get; set; } = true;

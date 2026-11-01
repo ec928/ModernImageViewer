@@ -57,6 +57,7 @@ namespace ModernImageViewer.Cinematic
         }
 
         private void BtnNextSong_Click(object sender, RoutedEventArgs e) => _music?.NextSong();
+        private void BtnPreviousSong_Click(object sender, RoutedEventArgs e) => _music?.PreviousSong();
 
         private async Task ChooseMusicFileAsync()
         {

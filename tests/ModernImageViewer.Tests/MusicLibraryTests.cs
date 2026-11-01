@@ -141,6 +141,24 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
+        public void Previous_goes_back_through_what_was_heard_and_forward_again()
+        {
+            var deck = new MusicDeck();
+            foreach (var s in new[] { "a", "b", "c", "d", "e" }) deck.Add(s);
+            var rnd = new Random(2);
+            Assert.Null(deck.Previous());
+            string one = deck.Next(rnd)!, two = deck.Next(rnd)!, three = deck.Next(rnd)!;
+            Assert.Equal(two, deck.Previous());
+            Assert.Equal(one, deck.Previous());
+            Assert.Null(deck.Previous());
+            Assert.Equal(two, deck.Next(rnd));
+            Assert.Equal(three, deck.Next(rnd));
+            string four = deck.Next(rnd)!;
+            Assert.DoesNotContain(four, new[] { one, two, three });
+            Assert.Equal(three, deck.Previous());
+        }
+
+        [Fact]
         public void Deck_takes_songs_that_arrive_while_playing()
         {
             var deck = new MusicDeck();

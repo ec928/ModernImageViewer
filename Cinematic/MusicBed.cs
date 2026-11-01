@@ -121,6 +121,13 @@ namespace ModernImageViewer.Cinematic
             _ = OpenAsync(song, Path.GetFileNameWithoutExtension(song));
         }
 
+        public void PreviousSong()
+        {
+            if (_player == null || _deck == null) return;
+            string? song = _deck.Previous();
+            if (song != null) _ = OpenAsync(song, Path.GetFileNameWithoutExtension(song));
+        }
+
         /// <summary>By file, not by address: the player cannot find a file: address with an accent or other non-English letter in it.</summary>
         private async Task OpenAsync(string path, string name)
         {

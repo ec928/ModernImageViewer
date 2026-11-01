@@ -143,6 +143,10 @@
                         ToolTipService.ToolTip="{x:Bind ViewModel.MusicLabel, Mode=OneWay}" AutomationProperties.Name="{x:Bind ViewModel.MusicLabel, Mode=OneWay}">
                     <SymbolIcon Symbol="Audio" />
                 </Button>
+                <Button x:Name="BtnPreviousSong" IsTabStop="False" UseSystemFocusVisuals="False" Click="BtnPreviousSong_Click" Width="36" Height="44" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="18"
+                        ToolTipService.ToolTip="Previous song" AutomationProperties.Name="Previous song" Visibility="{x:Bind ViewModel.NextSongVisibility, Mode=OneWay}">
+                    <FontIcon Glyph="&#xE892;" FontSize="14" />
+                </Button>
                 <Button x:Name="BtnNextSong" IsTabStop="False" UseSystemFocusVisuals="False" Click="BtnNextSong_Click" Width="36" Height="44" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="18"
                         ToolTipService.ToolTip="Next song" AutomationProperties.Name="Next song" Visibility="{x:Bind ViewModel.NextSongVisibility, Mode=OneWay}">
                     <FontIcon Glyph="&#xE893;" FontSize="14" />

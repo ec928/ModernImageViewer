@@ -200,6 +200,10 @@ namespace ModernImageViewer.Tests
             Assert.Equal(1, read.MostZoom);
             Assert.Equal(3, read.Variety);
             Assert.Equal(9, read.FewestPictures);
+            Assert.False(new SurpriseOptions().TakesTurns(16));
+            Assert.True(new SurpriseOptions().TakesTurns(17));
+            Assert.True(new SurpriseOptions { MostPictures = 9 }.TakesTurns(14));
+            Assert.False(new SurpriseOptions { MostPictures = 9 }.TakesTurns(9));
         }
 
         [Fact]

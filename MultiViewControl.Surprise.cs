@@ -161,9 +161,9 @@ namespace ModernImageViewer
                 Choice(SurpriseOptions.Cards, options.Card, name => ChangeSurpriseChoices(o => o.Card = name)));
             Toggle(right, "Keep my canvas", "Keep the canvas color, surface and frame as they are now, instead of the design's.", options.KeepCanvas, (o, on) => o.KeepCanvas = on);
 
-            Heading(right, "With more than 16 pictures");
-            Slide(right, "Fewest each click", "The least a click uses.", SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.FewestPictures, (o, v) => o.FewestPictures = (int)v);
-            Slide(right, "Most each click", "The most a click uses.", SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.MostPictures, (o, v) => o.MostPictures = (int)v);
+            Heading(right, "How many pictures");
+            Slide(right, "Fewest each click", "The least a click uses, when there are more pictures than the most below.", SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.FewestPictures, (o, v) => o.FewestPictures = (int)v);
+            Slide(right, "Most each click", "The most a click uses. With more pictures than this, clicks take turns through them.", SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.MostPictures, (o, v) => o.MostPictures = (int)v);
             Slide(right, "Same folder and date, %", "The odds that a click takes pictures that are neighbours when sorted by folder, then file date, which usually means one event. Otherwise it takes them from anywhere.", 0, 100, 5, options.TogetherChance * 100, (o, v) => o.TogetherChance = v / 100);
             Toggle(right, "Skip screens and repeats", "Leave out what looks like a screen capture or a graphic, and all but one of near-identical shots. This is a guess.", options.SkipScreens, (o, on) => o.SkipScreens = on);
 
@@ -300,6 +300,7 @@ namespace ModernImageViewer
             if (playing) AutoPlayIcon.Foreground = AutoPlayText.Foreground;
             else AutoPlayIcon.ClearValue(IconElement.ForegroundProperty);
             SurpriseNextSongButton.Visibility = playing && _surpriseMusic?.IsFolder == true ? Visibility.Visible : Visibility.Collapsed;
+            SurprisePreviousSongButton.Visibility = SurpriseNextSongButton.Visibility;
             ShowHudAndOverlays();
         }
 
@@ -383,6 +384,7 @@ namespace ModernImageViewer
                     _surpriseMusicKey = null;
                     ShowAutoPlayToast(title);
                     SurpriseNextSongButton.Visibility = Visibility.Collapsed;
+                    SurprisePreviousSongButton.Visibility = Visibility.Collapsed;
                 };
                 _surpriseMusic.NowPlayingChanged += song => ToolTipService.SetToolTip(SurpriseNextSongButton, song == null ? "Next song" : "Now playing: " + song + ". Press for the next song.");
             }
@@ -404,6 +406,16 @@ namespace ModernImageViewer
         }
 
         private void SurpriseNextSong_Click(object sender, RoutedEventArgs e) => _surpriseMusic?.NextSong();
+        private void SurprisePreviousSong_Click(object sender, RoutedEventArgs e) => _surpriseMusic?.PreviousSong();
+
+        private void AutoPlayOffButton_Click(object sender, RoutedEventArgs e)
+        {
+            StopAutoPlay();
+            StopAutoPlayMusic();
+            ChangeSurpriseChoices(o => o.AutoPlaySeconds = 0);
+            ShowAutoPlayState();
+            ShowAutoPlayToast("Auto-play off. Surprise me now makes one layout at a time");
+        }
 
         /// <summary>
         /// Clear, over the canvas and under the bar and the card, so the click that pauses auto-play only pauses it and does not
@@ -460,7 +472,7 @@ namespace ModernImageViewer
             bool playing = _autoPlaySeconds > 0;
             bool sameRun = _surpriseRun;
             var pictures = SessionPictures();
-            if (pictures.Count > MosaicLayout.MaxShown && _surpriseDeck == null)
+            if (SurpriseChoices.TakesTurns(pictures.Count) && _surpriseDeck == null)
                 _surpriseDeck = new PictureDeck(PicturesInOrder(), new Random());
             _surpriseDeck?.Include(pictures);
             if ((_surpriseDeck?.Count ?? pictures.Count) < 2)
