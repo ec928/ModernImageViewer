@@ -131,3 +131,4 @@ The Win2D viewer core is real, but GPU lifetime was not reference-counted end-to
 - 2026-11-01: Music from a folder by rating in Cinematic and Surprise me, set from the options gear with the image editor. Surprise me's bar says Playing or Paused; Esc pauses auto-play. Measured: start about 1.1 s to the picture, idle CPU 0, auto-play over 90 minutes moves between about 370 and 530 MB with handles and threads flat, so no leak.
 - 2026-11-01: v0.28.0, released. Everything since v0.26.0.
 - 2026-11-01: v0.28.1, internal. Leaving Multi-View in full screen no longer leaves the window stuck small with no frame. Reproduced on 0.28.0 first.
+- 2026-11-01: v0.28.2, internal. Opening Multi-View in full screen keeps its saved window size.
