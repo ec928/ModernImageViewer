@@ -357,7 +357,7 @@
                                     Style="{StaticResource QuietButtonStyle}"
                                     Padding="6,5"
                                     CornerRadius="12">
-                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE70D;" FontSize="11" />
+                                <FontIcon x:Name="SurpriseCardArrow" FontFamily="Segoe Fluent Icons" Glyph="&#xE70E;" FontSize="11" />
                             </Button>
                         </StackPanel>
                     </Border>
@@ -380,7 +380,7 @@
                             <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE7F4;" FontSize="14" />
                             <TextBlock Text="Canvas" VerticalAlignment="Center" FontSize="13" />
                             <TextBlock x:Name="AspectText" Text="16:9" Visibility="Collapsed" />
-                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE70D;" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE70E;" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
 

@@ -9,6 +9,19 @@ namespace ModernImageViewer.Tests
         private readonly string _dir = Directory.CreateTempSubdirectory("mivmusic").FullName;
         public void Dispose() => Directory.Delete(_dir, true);
 
+        [Theory]
+        [InlineData("Wellerman", "Nathan Evans", "y2mate.com - Nathan Evans  Wellerman Sea Shanty_320kbps", "Wellerman – Nathan Evans")]
+        [InlineData("Sinners (Official Audio)", "  Barns Courtney ", "x", "Sinners (Official Audio) – Barns Courtney")]
+        [InlineData("Arranca", "", "x", "Arranca")]
+        [InlineData("Arranca", null, "x", "Arranca")]
+        [InlineData("   ", "Moby", "Moby - Anthem", "Moby - Anthem")]
+        [InlineData(null, null, "y2mate.com - Miike Snow - Animal_320kbps", "Miike Snow - Animal")]
+        [InlineData(null, null, "Y2MATE.COM - Miike Snow", "Miike Snow")]
+        [InlineData(null, null, "India.Arie - Ready For Love", "India.Arie - Ready For Love")]
+        [InlineData(null, null, "274 - Jefferson Airplane", "274 - Jefferson Airplane")]
+        public void A_song_shows_its_title_then_artist_or_a_clean_file_name(string? title, string? artist, string file, string expected) =>
+            Assert.Equal(expected, MusicLibrary.SongName(title, artist, file));
+
         private static byte[] SyncSafe(int n) => new[] { (byte)((n >> 21) & 0x7F), (byte)((n >> 14) & 0x7F), (byte)((n >> 7) & 0x7F), (byte)(n & 0x7F) };
         private static byte[] BigEndian(int n) => new[] { (byte)(n >> 24), (byte)(n >> 16), (byte)(n >> 8), (byte)n };
 

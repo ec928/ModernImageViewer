@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace ModernImageViewer.Cinematic
 {
@@ -28,6 +29,22 @@ namespace ModernImageViewer.Cinematic
             }
             catch (IOException) { return null; }
             catch (UnauthorizedAccessException) { return null; }
+        }
+
+        /// <summary>
+        /// The song first, so it survives if the line is cut short. With no title in the tags, the file's name without the
+        /// download site's name and bitrate that such files carry.
+        /// </summary>
+        public static string SongName(string? title, string? artist, string fileName)
+        {
+            title = title?.Trim();
+            artist = artist?.Trim();
+            if (string.IsNullOrEmpty(title))
+            {
+                string name = Regex.Replace(fileName, @"^[\w.-]+\.(com|net|org)\s+-\s+", string.Empty, RegexOptions.IgnoreCase);
+                return Regex.Replace(name, @"_\d+kbps$", string.Empty, RegexOptions.IgnoreCase).Trim();
+            }
+            return string.IsNullOrEmpty(artist) ? title : $"{title} \u2013 {artist}";
         }
 
         public static bool Qualifies(double? stars, double lowestStars, bool includeUnrated) =>

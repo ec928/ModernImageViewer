@@ -54,7 +54,7 @@ namespace ModernImageViewer.Cinematic
             {
                 _player = NewPlayer();
                 _player.IsLoopingEnabled = true;
-                _ = OpenAsync(path, Path.GetFileName(path));
+                _ = OpenAsync(path, Path.GetFileNameWithoutExtension(path));
             }
             catch (System.Runtime.InteropServices.COMException ex)
             {
@@ -149,12 +149,27 @@ namespace ModernImageViewer.Cinematic
                 var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(path);
                 if (ticket != _openTicket || _player == null) return;
                 _player.Source = MediaSource.CreateFromStorageFile(file);
-                NowPlayingChanged?.Invoke(name);
                 Sync();
+                string shown = await ShownNameAsync(file, name);
+                if (ticket == _openTicket && _player != null) NowPlayingChanged?.Invoke(shown);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or System.Runtime.InteropServices.COMException)
             {
                 if (ticket == _openTicket && _player != null) SongFailed(ex.Message);
+            }
+        }
+
+        /// <summary>A file Windows cannot read the tags of still plays, under its file name.</summary>
+        private static async Task<string> ShownNameAsync(Windows.Storage.StorageFile file, string fileName)
+        {
+            try
+            {
+                var tags = await file.Properties.GetMusicPropertiesAsync();
+                return MusicLibrary.SongName(tags.Title, tags.Artist, fileName);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or System.Runtime.InteropServices.COMException)
+            {
+                return MusicLibrary.SongName(null, null, fileName);
             }
         }
 

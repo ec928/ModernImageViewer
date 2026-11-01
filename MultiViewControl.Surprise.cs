@@ -345,6 +345,7 @@ namespace ModernImageViewer
             AddOverCanvas(_surpriseCard, 6500);
             PlaceSurpriseCard();
             SurpriseCardButton.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF));
+            SurpriseCardArrow.Glyph = "\uE70D";
             ShowAutoPlayState();
             HudMenu_Opened(this, EventArgs.Empty);
         }
@@ -479,6 +480,7 @@ namespace ModernImageViewer
             _cardPreviousSong = null;
             _cardNextSong = null;
             SurpriseCardButton.ClearValue(Control.BackgroundProperty);
+            SurpriseCardArrow.Glyph = "\uE70E";
             HudMenu_Closed(this, EventArgs.Empty);
         }
 
@@ -758,7 +760,8 @@ namespace ModernImageViewer
                 ? _surpriseSong ?? "Looking for songs"
                 : music?.HasFolder != true ? "No music yet" : !music.InSurprise ? "Music is off" : _musicProblem ?? "Plays with auto-play";
             // The message over the picture would be behind this card.
-            ToolTipService.SetToolTip(_cardSongText, _musicProblem != null && _surpriseMusic?.IsFolder != true ? _musicProblemWhy : null);
+            // A long song name is cut short here, so the whole of it goes there too.
+            ToolTipService.SetToolTip(_cardSongText, _musicProblem != null && _surpriseMusic?.IsFolder != true ? _musicProblemWhy : _surpriseSong);
             bool canStep = _surpriseMusic?.IsFolder == true;
             if (_cardPreviousSong != null) _cardPreviousSong.IsEnabled = canStep;
             if (_cardNextSong != null) _cardNextSong.IsEnabled = canStep;
