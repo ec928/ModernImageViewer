@@ -2619,7 +2619,10 @@ namespace ModernImageViewer
             }
             _isFullscreen = !_isFullscreen;
             SyncTileChrome();
+            MultiViewControl?.ShowFullScreen(_isFullscreen);
         }
+
+        public void ToggleFullScreen() => ToggleFullscreen();
 
         // The header is the tile screen's title bar. A photo covers it, and the old drag strip comes back for that window.
         private void SyncTileChrome()

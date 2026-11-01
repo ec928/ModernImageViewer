@@ -359,6 +359,16 @@
                                     CornerRadius="12">
                                 <FontIcon x:Name="SurpriseCardArrow" FontFamily="Segoe Fluent Icons" Glyph="&#xE70E;" FontSize="11" />
                             </Button>
+                            <Button x:Name="FullScreenButton"
+                                    Click="FullScreenButton_Click"
+                                    AllowFocusOnInteraction="False"
+                                    AutomationProperties.Name="Full screen (F11)"
+                                    ToolTipService.ToolTip="Full screen (F11)"
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    Padding="8,5"
+                                    CornerRadius="12">
+                                <FontIcon x:Name="FullScreenIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE740;" FontSize="14" />
+                            </Button>
                         </StackPanel>
                     </Border>
 

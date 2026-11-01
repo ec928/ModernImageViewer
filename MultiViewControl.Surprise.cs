@@ -102,6 +102,18 @@ namespace ModernImageViewer
         private Button? _cardPreviousSong;
         private Button? _cardNextSong;
 
+        // Without focus, so Space still pauses a show after this has been pressed.
+        private void FullScreenButton_Click(object sender, RoutedEventArgs e) => MainWindow.Instance?.ToggleFullScreen();
+
+        /// <summary>The window says, because F11 changes it too. The same symbols and words as Cinematic's.</summary>
+        public void ShowFullScreen(bool on)
+        {
+            FullScreenIcon.Glyph = on ? "\uE73F" : "\uE740";
+            string name = on ? "Leave full screen (F11)" : "Full screen (F11)";
+            ToolTipService.SetToolTip(FullScreenButton, name);
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(FullScreenButton, name);
+        }
+
         private void SurpriseCardButton_Click(object sender, RoutedEventArgs e)
         {
             if (_surpriseCard != null) RemoveSurpriseCard();
