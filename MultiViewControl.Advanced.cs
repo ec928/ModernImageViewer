@@ -633,9 +633,6 @@ namespace ModernImageViewer
             });
             ToolTipService.SetToolTip(fillFit, _isFillMode ? "Show the whole of each photo" : "Crop each photo to fill its cell");
             AdvancedMenuFlyout.Items.Add(fillFit);
-            var surprise = MakeAdvancedItem("Surprise me options\u2026", "\uE8B1", ShowSurpriseCard);
-            ToolTipService.SetToolTip(surprise, "Zoom, the Gallery wall card, your canvas, which pictures, and auto-play");
-            AdvancedMenuFlyout.Items.Add(surprise);
 
             AdvancedMenuFlyout.Items.Add(new MenuFlyoutSeparator());
             var reset = MakeAdvancedItem("Reset canvas and images", "\uE72C", ResetCanvasAndImages);

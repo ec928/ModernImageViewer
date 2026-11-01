@@ -73,38 +73,63 @@ namespace ModernImageViewer
 
         private void AttachSurpriseStops()
         {
-            // Closing the card leaves auto-play running. Only a click on the picture, Esc or Space pauses it,
-            // so Alt+Tab or a click on the bar does not.
+            // Closing the card leaves auto-play running. Only a click on the picture, Esc, Space or the bar's button pauses it.
             RootGrid.AddHandler(PointerPressedEvent, new PointerEventHandler((_, e) =>
             {
                 if (_surpriseCard != null && !IsInSurpriseCard(e.OriginalSource)) RemoveSurpriseCard();
             }), true);
             RootGrid.AddHandler(KeyDownEvent, new KeyEventHandler((_, e) =>
             {
-                if (_surpriseCard != null)
+                if (_surpriseCard != null && e.Key == Windows.System.VirtualKey.Escape)
                 {
-                    if (e.Key != Windows.System.VirtualKey.Escape) return;
                     RemoveSurpriseCard();
                     e.Handled = true;
                 }
             }), true);
+            RootGrid.SizeChanged += (_, _) => PlaceSurpriseCard();
         }
 
-        /// <summary>One card of ranges, thresholds and odds, which stays open while they are changed. A change applies from the next click.</summary>
+        private const double SurpriseCardWidth = 452;
+        private const double SurpriseCardGap = 8;
+        private string _surpriseSectionOpen = "How many pictures";
+        private TextBlock? _cardSongText;
+        private Button? _cardPlayButton;
+        private FontIcon? _cardPlayIcon;
+        private TextBlock? _cardPlayText;
+        private Button? _cardPreviousSong;
+        private Button? _cardNextSong;
+
+        private void SurpriseCardButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_surpriseCard != null) RemoveSurpriseCard();
+            else ShowSurpriseCard();
+        }
+
+        /// <summary>
+        /// Everything about Surprise me, opened from its control on the bar and placed just above it, as the grid layout's card is.
+        /// What is used most is at the top. The ranges, thresholds and odds are folded into sections, one open at a time.
+        /// </summary>
         private void ShowSurpriseCard()
         {
             var options = SurpriseChoices;
-            var left = new StackPanel { Spacing = 2, Width = 320 };
-            var right = new StackPanel { Spacing = 2, Width = 340 };
+            var body = new StackPanel { Spacing = 10 };
 
-            void Heading(StackPanel column, string text) =>
-                column.Children.Add(new TextBlock { Text = text, FontSize = 12, Opacity = 0.7, Margin = new Thickness(0, 8, 0, 2) });
+            FontIcon Icon(string glyph, double size = 14) => new() { FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe Fluent Icons"), Glyph = glyph, FontSize = size };
+
+            Button IconButton(string glyph, string name, RoutedEventHandler pressed)
+            {
+                var button = new Button { Content = Icon(glyph), Padding = new Thickness(10, 6, 10, 6), VerticalAlignment = VerticalAlignment.Center };
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, name);
+                ToolTipService.SetToolTip(button, name);
+                button.Click += pressed;
+                return button;
+            }
 
             void Row(StackPanel column, string label, string tip, FrameworkElement control)
             {
                 var row = new Grid { ColumnSpacing = 10, MinHeight = 34 };
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) });
                 var text = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis };
                 ToolTipService.SetToolTip(row, tip);
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(control, label);
@@ -129,64 +154,105 @@ namespace ModernImageViewer
                 Row(column, label, tip, toggle);
             }
 
-            ComboBox Choice(IEnumerable<string> names, string current, Action<string> chosen)
+            // Layouts: back, play, forward, and how fast
+            var transport = new Grid { ColumnSpacing = 6 };
+            transport.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            transport.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            transport.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            transport.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var previousLayout = IconButton("\uE76B", "Previous layout", (_, _) => StepLayout(back: true));
+            ToolTipService.SetToolTip(previousLayout, "Previous layout (Left). Pauses first.");
+            var nextLayout = IconButton("\uE76C", "Next layout", (_, _) => StepLayout(back: false));
+            ToolTipService.SetToolTip(nextLayout, "Forward again after going back (Right).");
+            _cardPlayIcon = Icon("\uE768", 13);
+            _cardPlayText = new TextBlock { Text = "Play", VerticalAlignment = VerticalAlignment.Center };
+            var playContent = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
+            playContent.Children.Add(_cardPlayIcon);
+            playContent.Children.Add(_cardPlayText);
+            _cardPlayButton = new Button { Content = playContent, HorizontalAlignment = HorizontalAlignment.Stretch };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(_cardPlayButton, "Play or pause from the card");
+            _cardPlayButton.Click += AutoPlayButton_Click;
+            Grid.SetColumn(_cardPlayButton, 1);
+            Grid.SetColumn(nextLayout, 2);
+            var speed = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, Margin = new Thickness(6, 0, 0, 0) };
+            Grid.SetColumn(speed, 3);
+            var speeds = new List<Microsoft.UI.Xaml.Controls.Primitives.ToggleButton>();
+            foreach (int seconds in SurpriseOptions.AutoPlayChoices.Where(s => s > 0))
             {
-                var box = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = names.ToList(), SelectedItem = current };
-                box.SelectionChanged += (_, _) =>
+                var choice = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton { Content = seconds + " s", IsChecked = seconds == options.PlaySeconds, Padding = new Thickness(8, 5, 8, 5), MinWidth = 0, FontSize = 12 };
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(choice, $"A new layout every {seconds} seconds");
+                ToolTipService.SetToolTip(choice, $"A new layout every {seconds} seconds");
+                choice.Click += (_, _) =>
                 {
-                    if (box.SelectedItem is string name) chosen(name);
+                    foreach (var other in speeds) other.IsChecked = ReferenceEquals(other, choice);
+                    ChangeSurpriseChoices(o => o.AutoPlaySeconds = seconds);
+                    if (_autoPlaySeconds > 0)
+                    {
+                        _autoPlaySeconds = seconds;
+                        if (_autoPlayTimer != null) _autoPlayTimer.Interval = TimeSpan.FromSeconds(seconds);
+                    }
+                    ShowAutoPlayState();
                 };
-                return box;
+                speeds.Add(choice);
+                speed.Children.Add(choice);
+            }
+            transport.Children.Add(previousLayout);
+            transport.Children.Add(_cardPlayButton);
+            transport.Children.Add(nextLayout);
+            transport.Children.Add(speed);
+            body.Children.Add(transport);
+
+            body.Children.Add(MusicRow(Icon, IconButton));
+            body.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle { Height = 1, Opacity = 0.2, Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) });
+
+            // The ranges, one section open at a time
+            var sections = new List<Expander>();
+            StackPanel Section(string title)
+            {
+                var inner = new StackPanel { Spacing = 2 };
+                var section = new Expander { Header = title, Content = inner, IsExpanded = title == _surpriseSectionOpen, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+                section.Expanding += (_, _) =>
+                {
+                    _surpriseSectionOpen = title;
+                    foreach (var other in sections)
+                        if (!ReferenceEquals(other, section)) other.IsExpanded = false;
+                };
+                sections.Add(section);
+                body.Children.Add(section);
+                return inner;
             }
 
-            Heading(left, "How often each design comes up");
+            var count = Section("How many pictures");
+            Slide(count, "Fewest each click", "The least a click uses, when there are more pictures than the most below.", SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.FewestPictures, (o, v) => o.FewestPictures = (int)v);
+            Slide(count, "Most each click", "The most a click uses. With more pictures than this, clicks take turns through them.", SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.MostPictures, (o, v) => o.MostPictures = (int)v);
+            Slide(count, "Same folder and date, %", "The odds that a click takes pictures that are neighbours when sorted by folder, then file date, which usually means one event. Otherwise it takes them from anywhere.", 0, 100, 5, options.TogetherChance * 100, (o, v) => o.TogetherChance = v / 100);
+            Toggle(count, "Skip screens and repeats", "Leave out what looks like a screen capture or a graphic, and all but one of near-identical shots. This is a guess.", options.SkipScreens, (o, on) => o.SkipScreens = on);
+
+            var designs = Section("How often each design comes up");
             foreach (string design in LayoutComposer.Recipes)
             {
-                Slide(left, design, "Left is rarer, right is more often. A design is never ruled out.", -1, 1, 0.1, Math.Log(options.OddsOf(design), DesignOddsBase),
+                Slide(designs, design, "Left is rarer, right is more often. A design is never ruled out.", -1, 1, 0.1, Math.Log(options.OddsOf(design), DesignOddsBase),
                     (o, v) => o.DesignOdds[design] = Math.Pow(DesignOddsBase, v));
             }
-            Heading(left, "Choosing a version");
-            Slide(left, "Variety", "How many of the best versions it picks from. 1 is always the best one.", 1, 12, 1, options.Variety, (o, v) => o.Variety = (int)v);
-            Slide(left, "Face shown, %", "How much of a face must show for it to count as uncut. Lower allows bolder layouts.", 50, 100, 5, options.FaceShown * 100, (o, v) => o.FaceShown = v / 100);
 
-            Heading(left, "Zoom on faces");
-            Slide(left, "Most zoom, x", "1 is off. Brings forward people who are small in the picture. A person Windows misses can be cropped.", 1, SurpriseOptions.MostOfAnyZoom, 0.5, options.MostZoom, (o, v) => o.MostZoom = v);
-            Slide(left, "How often, %", "The odds that a picture with faces is zoomed.", 0, 100, 5, options.ZoomChance * 100, (o, v) => o.ZoomChance = v / 100);
+            var version = Section("Choosing a version");
+            Slide(version, "Variety", "How many of the best versions it picks from. 1 is always the best one.", 1, 12, 1, options.Variety, (o, v) => o.Variety = (int)v);
+            Slide(version, "Face shown, %", "How much of a face must show for it to count as uncut. Lower allows bolder layouts.", 50, 100, 5, options.FaceShown * 100, (o, v) => o.FaceShown = v / 100);
 
-            Heading(right, "Look");
-            Slide(right, "Most tilt, degrees", "How far Scattered prints can turn.", 0, 20, 0.5, options.MostTilt, (o, v) => o.MostTilt = v);
-            Slide(right, "Hero size, %", "The hero's height against the canvas, give or take a tenth.", 40, 90, 1, options.HeroSize * 100, (o, v) => o.HeroSize = v / 100);
-            Slide(right, "Gallery gaps", "1 is the usual gap between pictures on a Gallery wall.", 0.25, 3, 0.25, options.GapScale, (o, v) => o.GapScale = v);
-            Row(right, "Gallery card", "The color of the card the pictures are set into.",
-                Choice(SurpriseOptions.Cards, options.Card, name => ChangeSurpriseChoices(o => o.Card = name)));
-            Toggle(right, "Keep my canvas", "Keep the canvas color, surface and frame as they are now, instead of the design's.", options.KeepCanvas, (o, on) => o.KeepCanvas = on);
+            var faces = Section("Zoom on faces");
+            Slide(faces, "Most zoom, x", "1 is off. Brings forward people who are small in the picture. A person Windows misses can be cropped.", 1, SurpriseOptions.MostOfAnyZoom, 0.5, options.MostZoom, (o, v) => o.MostZoom = v);
+            Slide(faces, "How often, %", "The odds that a picture with faces is zoomed.", 0, 100, 5, options.ZoomChance * 100, (o, v) => o.ZoomChance = v / 100);
 
-            Heading(right, "How many pictures");
-            Slide(right, "Fewest each click", "The least a click uses, when there are more pictures than the most below.", SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.FewestPictures, (o, v) => o.FewestPictures = (int)v);
-            Slide(right, "Most each click", "The most a click uses. With more pictures than this, clicks take turns through them.", SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.MostPictures, (o, v) => o.MostPictures = (int)v);
-            Slide(right, "Same folder and date, %", "The odds that a click takes pictures that are neighbours when sorted by folder, then file date, which usually means one event. Otherwise it takes them from anywhere.", 0, 100, 5, options.TogetherChance * 100, (o, v) => o.TogetherChance = v / 100);
-            Toggle(right, "Skip screens and repeats", "Leave out what looks like a screen capture or a graphic, and all but one of near-identical shots. This is a guess.", options.SkipScreens, (o, on) => o.SkipScreens = on);
+            var look = Section("Look");
+            Slide(look, "Most tilt, degrees", "How far Scattered prints can turn.", 0, 20, 0.5, options.MostTilt, (o, v) => o.MostTilt = v);
+            Slide(look, "Hero size, %", "The hero's height against the canvas, give or take a tenth.", 40, 90, 1, options.HeroSize * 100, (o, v) => o.HeroSize = v / 100);
+            Slide(look, "Gallery gaps", "1 is the usual gap between pictures on a Gallery wall.", 0.25, 3, 0.25, options.GapScale, (o, v) => o.GapScale = v);
+            var card = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = SurpriseOptions.Cards.ToList(), SelectedItem = options.Card };
+            card.SelectionChanged += (_, _) => { if (card.SelectedItem is string name) ChangeSurpriseChoices(o => o.Card = name); };
+            Row(look, "Gallery card", "The color of the card the pictures are set into.", card);
+            Toggle(look, "Keep my canvas", "Keep the canvas color, surface and frame as they are now, instead of the design's.", options.KeepCanvas, (o, on) => o.KeepCanvas = on);
 
-            Heading(right, "Auto-play");
-            string AutoPlayName(int seconds) => seconds > 0 ? seconds + " seconds" : "Off";
-            Row(right, "New layout every", "Saved like the other settings. Starts when chosen, or when you press Surprise me. The bar says Playing or Paused. A click on the picture, Esc or Space pauses it. Music is set from the gear in the main window.",
-                Choice(SurpriseOptions.AutoPlayChoices.Select(AutoPlayName), AutoPlayName(options.AutoPlaySeconds), name =>
-                {
-                    int seconds = name == "Off" ? 0 : int.Parse(name.Split(' ')[0]);
-                    ChangeSurpriseChoices(o => o.AutoPlaySeconds = seconds);
-                    if (seconds == 0) StopAutoPlay();
-                    else StartAutoPlay(seconds);
-                    ShowAutoPlayState();
-                }));
-
-            var columns = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 24 };
-            columns.Children.Add(left);
-            columns.Children.Add(right);
-            var content = new StackPanel { Spacing = 8 };
-            var close = new Button { Content = "Close", HorizontalAlignment = HorizontalAlignment.Right };
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(close, "Close Surprise me options");
-            close.Click += (_, _) => RemoveSurpriseCard();
-            var defaults = new Button { Content = "Back to defaults" };
+            var defaults = new Button { Content = "Back to defaults", HorizontalAlignment = HorizontalAlignment.Right, FontSize = 12 };
             defaults.Click += (_, _) =>
             {
                 _surpriseOptions = new SurpriseOptions();
@@ -196,38 +262,133 @@ namespace ModernImageViewer
                 RemoveSurpriseCard();
                 ShowSurpriseCard();
             };
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right };
-            buttons.Children.Add(defaults);
-            buttons.Children.Add(close);
-            content.Children.Add(columns);
-            content.Children.Add(buttons);
+            body.Children.Add(defaults);
 
-            // In the window like the grid card, so it stays open when the window loses focus and takes no click meant for the canvas.
             RemoveSurpriseCard();
+            CloseCountsCard();
             _surpriseCard = new Border
             {
-                Child = new ScrollViewer
-                {
-                    Content = content,
-                    HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-                    HorizontalScrollMode = ScrollMode.Auto,
-                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto
-                },
-                Margin = new Thickness(8),
-                Padding = new Thickness(16, 8, 16, 12),
+                Child = new ScrollViewer { Content = body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(0, 0, 12, 0) },
+                Width = SurpriseCardWidth,
+                Padding = new Thickness(14, 12, 2, 12),
                 CornerRadius = new CornerRadius(10),
                 Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xF2, 0x1E, 0x1E, 0x1E)),
                 BorderBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF)),
                 BorderThickness = new Thickness(1),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Bottom,
                 RequestedTheme = ElementTheme.Dark
             };
             Canvas.SetZIndex(_surpriseCard, 6500);
             Grid.SetRowSpan(_surpriseCard, Math.Max(1, RootGrid.RowDefinitions.Count));
             Grid.SetColumnSpan(_surpriseCard, Math.Max(1, RootGrid.ColumnDefinitions.Count));
             RootGrid.Children.Add(_surpriseCard);
+            PlaceSurpriseCard();
+            SurpriseCardButton.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF));
+            ShowAutoPlayState();
             HudMenu_Opened(this, EventArgs.Empty);
+        }
+
+        /// <summary>Centred over the control and just above the bar, inside the window, as the grid layout's card is.</summary>
+        private void PlaceSurpriseCard()
+        {
+            if (_surpriseCard == null) return;
+            double fromBottom = UnifiedHud.ActualHeight + UnifiedHud.Margin.Bottom + SurpriseCardGap;
+            _surpriseCard.MaxHeight = Math.Max(160, RootGrid.ActualHeight - fromBottom - SurpriseCardGap);
+            var at = SurpriseControl.TransformToVisual(RootGrid).TransformPoint(new Windows.Foundation.Point(0, 0));
+            double left = at.X + (SurpriseControl.ActualWidth - SurpriseCardWidth) / 2;
+            left = Math.Max(SurpriseCardGap, Math.Min(left, RootGrid.ActualWidth - SurpriseCardWidth - SurpriseCardGap));
+            _surpriseCard.Margin = new Thickness(left, 0, 0, fromBottom);
+        }
+
+        /// <summary>The music row shows and changes the one set of music settings, which the main window's options also open.</summary>
+        private FrameworkElement MusicRow(Func<string, double, FontIcon> icon, Func<string, string, RoutedEventHandler, Button> iconButton)
+        {
+            var music = MainWindow.Instance?.MyMusic;
+            WatchMusicSettings();
+            var panel = new StackPanel { Spacing = 6 };
+
+            var top = new Grid { ColumnSpacing = 6 };
+            top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var note = icon("\uE8D6", 13);
+            note.VerticalAlignment = VerticalAlignment.Center;
+            _cardSongText = new TextBlock { VerticalAlignment = VerticalAlignment.Center, FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(_cardSongText, "SurpriseSongText");
+            Grid.SetColumn(_cardSongText, 1);
+            _cardPreviousSong = iconButton("\uE892", "Previous song", (_, _) => _surpriseMusic?.PreviousSong());
+            Grid.SetColumn(_cardPreviousSong, 2);
+            _cardNextSong = iconButton("\uE893", "Next song", (_, _) => _surpriseMusic?.NextSong());
+            Grid.SetColumn(_cardNextSong, 3);
+            top.Children.Add(note);
+            top.Children.Add(_cardSongText);
+            top.Children.Add(_cardPreviousSong);
+            top.Children.Add(_cardNextSong);
+            panel.Children.Add(top);
+
+            var bottom = new Grid { ColumnSpacing = 8 };
+            bottom.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            bottom.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
+            bottom.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            bottom.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            bool hasFolder = music?.HasFolder == true;
+            var where = new TextBlock
+            {
+                Text = hasFolder ? $"{System.IO.Path.GetFileName(music!.Folder!.TrimEnd('\\'))}, {music.LowestStars:0.#}+ stars" + (music.IncludesUnrated ? " and unrated" : "") : "No music folder",
+                FontSize = 12, Opacity = 0.75, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis
+            };
+            var volume = new Slider { Minimum = 0, Maximum = 100, Value = music?.Volume ?? 60, VerticalAlignment = VerticalAlignment.Center, IsEnabled = hasFolder };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(volume, "Music volume");
+            ToolTipService.SetToolTip(volume, "Music volume");
+            volume.ValueChanged += (_, e) =>
+            {
+                _surpriseMusic?.SetVolume(e.NewValue);
+                MainWindow.Instance?.SetMusicVolume(e.NewValue);
+            };
+            Grid.SetColumn(volume, 1);
+            var on = new ToggleSwitch { IsOn = music?.InSurprise != false, OnContent = string.Empty, OffContent = string.Empty, MinWidth = 0, VerticalAlignment = VerticalAlignment.Center, IsEnabled = hasFolder };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(on, "Music with auto-play");
+            ToolTipService.SetToolTip(on, "Play music with auto-play");
+            on.Toggled += (_, _) =>
+            {
+                MainWindow.Instance?.SetMusicInSurprise(on.IsOn);
+                if (_autoPlaySeconds > 0) { if (on.IsOn) StartAutoPlayMusic(); else StopAutoPlayMusic(); }
+                ShowAutoPlayState();
+            };
+            Grid.SetColumn(on, 2);
+            var change = new Button { Content = hasFolder ? "Change..." : "Choose...", FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(change, "Change music");
+            change.Click += (_, _) => MainWindow.Instance?.OpenMusicSettings();
+            Grid.SetColumn(change, 3);
+            bottom.Children.Add(where);
+            bottom.Children.Add(volume);
+            bottom.Children.Add(on);
+            bottom.Children.Add(change);
+            panel.Children.Add(bottom);
+            return panel;
+        }
+
+        private bool _watchingMusicSettings;
+
+        private void WatchMusicSettings()
+        {
+            if (_watchingMusicSettings || MainWindow.Instance == null) return;
+            _watchingMusicSettings = true;
+            MainWindow.Instance.MusicSettingsChanged += () =>
+            {
+                if (_autoPlaySeconds > 0) StartAutoPlayMusic();
+                if (_surpriseCard != null) ShowSurpriseCard();
+            };
+        }
+
+        /// <summary>Steps through what Undo holds, pausing first, so going back does not race the next layout.</summary>
+        private void StepLayout(bool back)
+        {
+            StopAutoPlay();
+            if (back) Undo();
+            else Redo();
         }
 
         private void RemoveSurpriseCard()
@@ -235,6 +396,13 @@ namespace ModernImageViewer
             if (_surpriseCard == null) return;
             RootGrid.Children.Remove(_surpriseCard);
             _surpriseCard = null;
+            _cardSongText = null;
+            _cardPlayButton = null;
+            _cardPlayIcon = null;
+            _cardPlayText = null;
+            _cardPreviousSong = null;
+            _cardNextSong = null;
+            SurpriseCardButton.ClearValue(Control.BackgroundProperty);
             HudMenu_Closed(this, EventArgs.Empty);
         }
 
@@ -242,7 +410,7 @@ namespace ModernImageViewer
         {
             for (var node = source as DependencyObject; node != null; node = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(node))
             {
-                if (ReferenceEquals(node, _surpriseCard)) return true;
+                if (ReferenceEquals(node, _surpriseCard) || ReferenceEquals(node, SurpriseControl)) return true;
             }
             return false;
         }
@@ -256,7 +424,7 @@ namespace ModernImageViewer
             AddAutoPlayShield();
             StartAutoPlayMusic();
             ShowAutoPlayState();
-            ShowAutoPlayToast($"Auto-play on: a new layout every {seconds} seconds");
+            ShowAutoPlayToast($"Playing: a new layout every {seconds} seconds");
             var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(seconds) };
             _autoPlayTimer = timer;
             timer.Tick += async (_, _) =>
@@ -279,49 +447,83 @@ namespace ModernImageViewer
             CaptureUndoPoint();
             _surpriseMusic?.SetPlaying(false);
             ShowAutoPlayState();
-            ShowAutoPlayToast("Auto-play paused");
+            ShowAutoPlayToast("Paused");
         }
 
-        /// <summary>With an interval saved, the bar always says which state it is in, and the button changes it.</summary>
+        /// <summary>The bar and the card always say whether it is playing, and pressing either changes it.</summary>
         private void ShowAutoPlayState()
         {
-            int interval = SurpriseChoices.AutoPlaySeconds;
             bool playing = _autoPlaySeconds > 0;
-            AutoPlayButton.Visibility = interval > 0 ? Visibility.Visible : Visibility.Collapsed;
-            AutoPlayIcon.Glyph = playing ? "\uE769" : "\uE768";
-            AutoPlayText.Text = playing ? $"Playing, every {_autoPlaySeconds} s" : "Paused";
-            string name = playing ? "Pause auto-play" : "Play auto-play";
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(AutoPlayButton, name);
-            ToolTipService.SetToolTip(AutoPlayButton, playing ? "Pause. A click on the picture, Esc or Space does the same." : "Start again. Space does the same.");
-            if (playing) AutoPlayButton.Background = Application.Current.Resources["AccentFillColorDefaultBrush"] as Microsoft.UI.Xaml.Media.Brush;
-            else AutoPlayButton.ClearValue(Control.BackgroundProperty);
-            if (playing) AutoPlayText.Foreground = Application.Current.Resources["TextOnAccentFillColorPrimaryBrush"] as Microsoft.UI.Xaml.Media.Brush;
-            else AutoPlayText.ClearValue(TextBlock.ForegroundProperty);
-            if (playing) AutoPlayIcon.Foreground = AutoPlayText.Foreground;
-            else AutoPlayIcon.ClearValue(IconElement.ForegroundProperty);
-            SurpriseNextSongButton.Visibility = playing && _surpriseMusic?.IsFolder == true ? Visibility.Visible : Visibility.Collapsed;
-            SurprisePreviousSongButton.Visibility = SurpriseNextSongButton.Visibility;
+            string glyph = playing ? "\uE769" : "\uE768";
+            string text = playing ? $"{_autoPlaySeconds} s" : "Play";
+            AutoPlayIcon.Glyph = glyph;
+            AutoPlayText.Text = text;
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(AutoPlayButton, playing ? "Pause auto-play" : "Play auto-play");
+            ToolTipService.SetToolTip(AutoPlayButton, playing ? "Pause. A click on the picture, Esc or Space does the same." : $"Play a new layout every {SurpriseChoices.PlaySeconds} seconds. Space does the same.");
+            if (playing)
+            {
+                var accent = Application.Current.Resources["AccentFillColorDefaultBrush"] as Microsoft.UI.Xaml.Media.Brush;
+                var onAccent = Application.Current.Resources["TextOnAccentFillColorPrimaryBrush"] as Microsoft.UI.Xaml.Media.Brush;
+                AutoPlayButton.Background = accent;
+                AutoPlayText.Foreground = onAccent;
+                AutoPlayIcon.Foreground = onAccent;
+            }
+            else
+            {
+                AutoPlayButton.ClearValue(Control.BackgroundProperty);
+                AutoPlayText.ClearValue(TextBlock.ForegroundProperty);
+                AutoPlayIcon.ClearValue(IconElement.ForegroundProperty);
+            }
+            if (_cardPlayIcon != null) _cardPlayIcon.Glyph = glyph;
+            if (_cardPlayText != null) _cardPlayText.Text = playing ? "Pause" : "Play";
+            ShowCardSong();
             ShowHudAndOverlays();
+        }
+
+        private string? _surpriseSong;
+
+        private void ShowCardSong()
+        {
+            if (_cardSongText == null) return;
+            var music = MainWindow.Instance?.MyMusic;
+            _cardSongText.Text = _surpriseMusic?.IsFolder == true
+                ? _surpriseSong ?? "Looking for songs"
+                : music?.HasFolder != true ? "No music yet" : music.InSurprise ? "Plays with auto-play" : "Music is off";
+            bool canStep = _surpriseMusic?.IsFolder == true;
+            if (_cardPreviousSong != null) _cardPreviousSong.IsEnabled = canStep;
+            if (_cardNextSong != null) _cardNextSong.IsEnabled = canStep;
         }
 
         private void AutoPlayButton_Click(object sender, RoutedEventArgs e)
         {
             if (_autoPlaySeconds > 0) StopAutoPlay();
-            else if (SurpriseChoices.AutoPlaySeconds > 0) StartAutoPlay(SurpriseChoices.AutoPlaySeconds);
+            else StartAutoPlay(SurpriseChoices.PlaySeconds);
         }
 
-        /// <summary>Esc and Space pause. Space starts it again, so one key does both. With auto-play paused Esc is the usual Back.</summary>
+        /// <summary>
+        /// Space plays and pauses. Esc pauses, and otherwise is the usual Back. Left and Right step through the layouts once Surprise me has made some.
+        /// </summary>
         private bool HandleAutoPlayKey(Windows.System.VirtualKey key)
         {
-            if (_surpriseCard != null) return false;
+            if (_surpriseCard != null)
+            {
+                if (key != Windows.System.VirtualKey.Escape) return false;
+                RemoveSurpriseCard();
+                return true;
+            }
             if (_autoPlaySeconds > 0 && key is Windows.System.VirtualKey.Escape or Windows.System.VirtualKey.Space)
             {
                 StopAutoPlay();
                 return true;
             }
-            if (key == Windows.System.VirtualKey.Space && _autoPlaySeconds == 0 && _surpriseRun && SurpriseChoices.AutoPlaySeconds > 0)
+            if (key == Windows.System.VirtualKey.Space)
             {
-                StartAutoPlay(SurpriseChoices.AutoPlaySeconds);
+                StartAutoPlay(SurpriseChoices.PlaySeconds);
+                return true;
+            }
+            if (_surpriseRun && key is Windows.System.VirtualKey.Left or Windows.System.VirtualKey.Right)
+            {
+                StepLayout(back: key == Windows.System.VirtualKey.Left);
                 return true;
             }
             return false;
@@ -383,10 +585,13 @@ namespace ModernImageViewer
                 {
                     _surpriseMusicKey = null;
                     ShowAutoPlayToast(title);
-                    SurpriseNextSongButton.Visibility = Visibility.Collapsed;
-                    SurprisePreviousSongButton.Visibility = Visibility.Collapsed;
+                    ShowCardSong();
                 };
-                _surpriseMusic.NowPlayingChanged += song => ToolTipService.SetToolTip(SurpriseNextSongButton, song == null ? "Next song" : "Now playing: " + song + ". Press for the next song.");
+                _surpriseMusic.NowPlayingChanged += song =>
+                {
+                    _surpriseSong = song;
+                    ShowCardSong();
+                };
             }
             _surpriseMusic.SetVolume(music.Volume);
             // Carrying on after a pause keeps the song. A changed folder or rating starts afresh.
@@ -403,18 +608,6 @@ namespace ModernImageViewer
         {
             _surpriseMusic?.Stop();
             _surpriseMusicKey = null;
-        }
-
-        private void SurpriseNextSong_Click(object sender, RoutedEventArgs e) => _surpriseMusic?.NextSong();
-        private void SurprisePreviousSong_Click(object sender, RoutedEventArgs e) => _surpriseMusic?.PreviousSong();
-
-        private void AutoPlayOffButton_Click(object sender, RoutedEventArgs e)
-        {
-            StopAutoPlay();
-            StopAutoPlayMusic();
-            ChangeSurpriseChoices(o => o.AutoPlaySeconds = 0);
-            ShowAutoPlayState();
-            ShowAutoPlayToast("Auto-play off. Surprise me now makes one layout at a time");
         }
 
         /// <summary>
@@ -454,17 +647,8 @@ namespace ModernImageViewer
             _autoPlayShieldPressed = false;
         }
 
-        /// <summary>With an interval set, this starts or keeps auto-play going, from a new layout now.</summary>
-        private async void SurpriseButton_Click(object sender, RoutedEventArgs e)
-        {
-            int seconds = SurpriseChoices.AutoPlaySeconds;
-            if (seconds > 0)
-            {
-                if (_autoPlaySeconds > 0) await SurpriseAsync(fade: true);
-                else StartAutoPlay(seconds);
-            }
-            else await SurpriseAsync(fade: false);
-        }
+        /// <summary>One new layout, always. If a show is playing it carries on.</summary>
+        private async void SurpriseButton_Click(object sender, RoutedEventArgs e) => await SurpriseAsync(fade: _autoPlaySeconds > 0);
 
         private async Task SurpriseAsync(bool fade)
         {

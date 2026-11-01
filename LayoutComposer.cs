@@ -178,6 +178,8 @@ namespace ModernImageViewer
         /// <summary>0 is off. A saved setting like the rest: pausing auto-play does not change it.</summary>
         public int AutoPlaySeconds { get; set; }
         public static readonly int[] AutoPlayChoices = { 0, 5, 10, 30 };
+        /// <summary>How long Play shows each layout. Not playing is not a setting, so there is always a speed.</summary>
+        public int PlaySeconds => AutoPlaySeconds > 0 ? AutoPlaySeconds : 5;
 
         public double OddsOf(string design) => DesignOdds.TryGetValue(design, out double odds) ? Math.Clamp(odds, RarestDesign, MostFavouredDesign) : 1;
 

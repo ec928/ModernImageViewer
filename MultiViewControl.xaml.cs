@@ -1160,8 +1160,6 @@ namespace ModernImageViewer
 
         private void ShowHudAndOverlays()
         {
-            AutoPlayButton.Visibility = SurpriseChoices.AutoPlaySeconds > 0 ? Visibility.Visible : Visibility.Collapsed;
-            AutoPlayOffButton.Visibility = SurpriseChoices.AutoPlaySeconds > 0 && _autoPlaySeconds == 0 ? Visibility.Visible : Visibility.Collapsed;
             _hudTimer.Stop();
             _hudTimer.Start();
 

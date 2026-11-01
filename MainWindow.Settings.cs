@@ -16,6 +16,21 @@ namespace ModernImageViewer
 
         public event Action? MusicSettingsChanged;
 
+        public void OpenMusicSettings() => MusicSettings_Click(this, new RoutedEventArgs());
+
+        /// <summary>From a place that shows these beside the music itself, so the one set of settings stays in step.</summary>
+        public void SetMusicInSurprise(bool on)
+        {
+            _currentSettings.MusicInSurprise = on;
+            SaveAllSettings();
+        }
+
+        public void SetMusicVolume(double percent)
+        {
+            _currentSettings.MusicVolume = percent;
+            SaveAllSettings();
+        }
+
         private async void MusicSettings_Click(object sender, RoutedEventArgs e)
         {
             HeaderSettingsFlyout.Hide();

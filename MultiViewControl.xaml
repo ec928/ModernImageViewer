@@ -321,63 +321,44 @@
                         </StackPanel>
                     </Border>
 
-                    <Button x:Name="SurpriseButton"
-                            Click="SurpriseButton_Click"
-                            AutomationProperties.Name="Surprise me"
-                            Style="{StaticResource QuietButtonStyle}"
-                            Padding="8,5"
-                            CornerRadius="12"
-                            ToolTipService.ToolTip="Arrange these pictures in a new designed layout. Click again for another. Undo goes back.">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8B1;" FontSize="14" />
-                            <TextBlock Text="Surprise me" VerticalAlignment="Center" FontSize="13" />
+                    <Border x:Name="SurpriseControl" CornerRadius="12" Background="#14FFFFFF" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal">
+                            <Button x:Name="SurpriseButton"
+                                    Click="SurpriseButton_Click"
+                                    AutomationProperties.Name="Surprise me"
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    Padding="8,5"
+                                    CornerRadius="12"
+                                    ToolTipService.ToolTip="One new layout from these pictures. Press again for another.">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8B1;" FontSize="14" />
+                                    <TextBlock Text="Surprise me" VerticalAlignment="Center" FontSize="13" />
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="AutoPlayButton"
+                                    Click="AutoPlayButton_Click"
+                                    MinWidth="78"
+                                    AutomationProperties.Name="Play auto-play"
+                                    ToolTipService.ToolTip="Play a new layout every few seconds. Space does the same."
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    Padding="8,5"
+                                    CornerRadius="12">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon x:Name="AutoPlayIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE768;" FontSize="13" />
+                                    <TextBlock x:Name="AutoPlayText" Text="Play" VerticalAlignment="Center" FontSize="13" />
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="SurpriseCardButton"
+                                    Click="SurpriseCardButton_Click"
+                                    AutomationProperties.Name="Surprise me settings"
+                                    ToolTipService.ToolTip="Layouts, speed, music and how it chooses"
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    Padding="6,5"
+                                    CornerRadius="12">
+                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE70D;" FontSize="11" />
+                            </Button>
                         </StackPanel>
-                    </Button>
-
-                    <Button x:Name="AutoPlayButton"
-                            Click="AutoPlayButton_Click"
-                            Visibility="Collapsed"
-                            AutomationProperties.Name="Play auto-play"
-                            Style="{StaticResource QuietButtonStyle}"
-                            Padding="8,5"
-                            CornerRadius="12">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon x:Name="AutoPlayIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE768;" FontSize="13" />
-                            <TextBlock x:Name="AutoPlayText" Text="Paused" VerticalAlignment="Center" FontSize="13" />
-                        </StackPanel>
-                    </Button>
-
-                    <Button x:Name="AutoPlayOffButton"
-                            Click="AutoPlayOffButton_Click"
-                            Visibility="Collapsed"
-                            AutomationProperties.Name="Turn auto-play off"
-                            ToolTipService.ToolTip="Turn auto-play off. Surprise me then makes one layout at a time. You can set it again in Surprise me options."
-                            Style="{StaticResource QuietButtonStyle}"
-                            Padding="8,5"
-                            CornerRadius="12">
-                        <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE711;" FontSize="12" />
-                    </Button>
-
-                    <Button x:Name="SurprisePreviousSongButton"
-                            Click="SurprisePreviousSong_Click"
-                            Visibility="Collapsed"
-                            AutomationProperties.Name="Previous song"
-                            ToolTipService.ToolTip="Previous song"
-                            Style="{StaticResource QuietButtonStyle}"
-                            Padding="8,5"
-                            CornerRadius="12">
-                        <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE892;" FontSize="13" />
-                    </Button>
-
-                    <Button x:Name="SurpriseNextSongButton"
-                            Click="SurpriseNextSong_Click"
-                            Visibility="Collapsed"
-                            AutomationProperties.Name="Next song"
-                            Style="{StaticResource QuietButtonStyle}"
-                            Padding="8,5"
-                            CornerRadius="12">
-                        <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE893;" FontSize="13" />
-                    </Button>
+                    </Border>
 
                     <!-- Subtle Section Divider 2 -->
                     <Rectangle Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,0" Opacity="0.5"/>
