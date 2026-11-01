@@ -21,8 +21,8 @@ namespace ModernImageViewer
 {
     public sealed partial class MultiViewControl
     {
-        // One drop adds no more cells than the grid could hold, so dropping a whole folder's selection cannot flood the canvas.
-        private const int MaxDroppedCells = 16;
+        /// <summary>Up to this many pictures become floating cells. More than this is a batch, and waits for Surprise me without touching the layout.</summary>
+        public const int MostPlacedAsCells = 8;
         private const double DroppedCellShare = 0.45;
         private const double DroppedCellCascade = 28;
         private const double ResizeCornerSize = 22;
@@ -324,10 +324,15 @@ namespace ModernImageViewer
 
         private async Task AddDroppedPicturesAsync(IReadOnlyList<string> paths, Point where)
         {
+            if (paths.Count > MostPlacedAsCells)
+            {
+                AddWaitingPictures(paths);
+                return;
+            }
             double canvasW = Math.Max(320, RootGrid.ActualWidth);
             double canvasH = Math.Max(240, RootGrid.ActualHeight);
             int placed = 0;
-            foreach (string path in paths.Take(MaxDroppedCells))
+            foreach (string path in paths)
             {
                 double aspect = await ReadAspectAsync(path);
                 double h = canvasH * DroppedCellShare;
@@ -359,8 +364,47 @@ namespace ModernImageViewer
                 placed++;
             }
             NoteUserAction();
-            if (paths.Count > MaxDroppedCells)
-                await ShowExportMessageAsync($"Added the first {MaxDroppedCells} of {paths.Count} pictures.");
+        }
+
+        /// <summary>
+        /// They join the session past the cells on show, as the rest of a large View Together does, so the layout does not change.
+        /// A saved layout and Undo keep them, and Surprise me takes turns through them.
+        /// </summary>
+        private void AddWaitingPictures(IReadOnlyList<string> paths)
+        {
+            var have = new HashSet<string>(_items.Select(i => i.Path ?? string.Empty), StringComparer.OrdinalIgnoreCase);
+            var fresh = paths.Where(have.Add).ToList();
+            if (fresh.Count == 0)
+            {
+                ShowAutoPlayToast("Those pictures are already here");
+                return;
+            }
+            CaptureUndoPoint();
+            int shown = VisibleCount(GridCellCount);
+            var file = BuildLayoutFile();
+            AppendWaiting(file, fresh, shown);
+            _cellBorderFlyout?.Hide();
+            _restoringUndo = true;
+            _reuseBitmaps = DecodedBitmaps();
+            try
+            {
+                ApplyLayoutFile(file, restoreAspect: false);
+            }
+            finally
+            {
+                _reuseBitmaps = null;
+                _restoringUndo = false;
+            }
+            CaptureUndoPoint();
+            ShowAutoPlayToast($"Added {fresh.Count} pictures. Surprise me will use them; {shown} of {GridCellCount} show on the canvas");
+        }
+
+        private static void AppendWaiting(MultiViewLayoutFile file, IEnumerable<string> paths, int shown)
+        {
+            file.State ??= new LayoutStateDto();
+            file.State.FramedSlots = Math.Max(1, shown);
+            foreach (string path in paths)
+                file.Photos.Add(new PhotoSlotDto { Slot = file.Photos.Count, Path = path, Name = Path.GetFileName(path) });
         }
 
         /// <summary>The file's shape as it displays, read from its header. A file that will not open counts as 16:9, and its cell says so.</summary>
@@ -429,7 +473,8 @@ namespace ModernImageViewer
             {
                 // The source cell is gone or shows something else, so the image gets a new grid cell, which cannot turn.
                 GetGeometry(card.Item).ClearWindowTurn();
-                int gridEnd = GridCellCount;
+                // After the cells on show, so a picture waiting beyond them does not take its place.
+                int gridEnd = _framedSlots > 0 ? Math.Min(_framedSlots, GridCellCount) : GridCellCount;
                 _items.Insert(gridEnd, card.Item);
                 var roots = new List<FrameworkElement?>(_cellRoots);
                 roots.Insert(Math.Min(gridEnd, roots.Count), null);

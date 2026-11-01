@@ -250,6 +250,8 @@ namespace ModernImageViewer
 
         public int Count => _known.Count;
 
+        public IReadOnlyList<string> All => _order;
+
         public bool Holds(string picture) => _known.Contains(picture);
 
         /// <summary>Pictures not seen before go first, so one just added shows up soon.</summary>

@@ -282,7 +282,7 @@
                             Background="Transparent"
                             Padding="4,0"
                             VerticalAlignment="Center"
-                            ToolTipService.ToolTip="Multi-view shows up to 16 photos. The rest of the selection is not shown.">
+                            ToolTipService.ToolTip="The others are waiting. Surprise me uses them, and a cell's right-click menu can swap one in.">
                         <TextBlock x:Name="ShownText"
                                    VerticalAlignment="Center"
                                    FontSize="13"

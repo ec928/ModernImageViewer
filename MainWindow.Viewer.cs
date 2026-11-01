@@ -1027,6 +1027,47 @@ namespace ModernImageViewer
             }
         }
 
+        private void AddFolder_Click(object sender, RoutedEventArgs e) =>
+            AddWholeFolder(Images.Where(img => !img.IsDirectory && !img.IsComicEntry && IsPictureFile(img.Path)).Select(img => img.Path).ToList());
+
+        private async void AddSubfolders_Click(object sender, RoutedEventArgs e)
+        {
+            string? folder = _currentDirectory;
+            if (string.IsNullOrEmpty(folder)) return;
+            const int RecallOnDataAccess = 0x400000;
+            AddSubfoldersButton.IsEnabled = false;
+            MultiSelectCountText.Text = "Finding pictures...";
+            try
+            {
+                var found = await Task.Run(() =>
+                {
+                    var options = new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true };
+                    return Directory.EnumerateFiles(folder, "*", options)
+                        .Where(p => IsPictureFile(p) && ((int)File.GetAttributes(p) & RecallOnDataAccess) == 0)
+                        .ToList();
+                });
+                found.Sort(NaturalSort.Compare);
+                AddWholeFolder(found);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                MultiSelectCountText.Text = "Could not read that folder";
+            }
+            finally
+            {
+                AddSubfoldersButton.IsEnabled = true;
+            }
+        }
+
+        private void AddWholeFolder(List<string> pictures)
+        {
+            if (pictures.Count == 0 || MultiViewControl == null) return;
+            ResumeParkedMultiView();
+            MultiViewControl.DispatcherQueue.TryEnqueue(
+                Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
+                () => _ = MultiViewControl.AddPicturesAsync(pictures));
+        }
+
         private void ResumeParkedMultiView()
         {
             if (!_multiViewParked || MultiViewControl == null) return;
@@ -1050,8 +1091,22 @@ namespace ModernImageViewer
             MultiSelectActionBar.Visibility = Visibility.Visible;
             MultiSelectCountText.Text = _parkedNote
                 ?? (_parkedCell != null ? $"Click a picture for position {MultiViewControl!.PositionOf(_parkedCell)}"
-                : count > 0 ? count + " selected" : "Click pictures to add");
+                : count > 0 ? count + " selected" : $"Pick up to {MultiViewControl.MostPlacedAsCells} for the canvas, or more for Surprise me");
             ViewTogetherButton.IsEnabled = count > 0;
+            if (_parkedCell == null)
+            {
+                bool batch = count > MultiViewControl.MostPlacedAsCells;
+                ViewTogetherText.Text = batch ? "Add for Surprise me" : "Add to canvas";
+                ToolTipService.SetToolTip(ViewTogetherButton, batch
+                    ? $"More than {MultiViewControl.MostPlacedAsCells} pictures wait for Surprise me. The layout does not change. (Enter)"
+                    : "Each picture becomes a floating cell on the canvas. (Enter)");
+                int inFolder = Images.Count(img => !img.IsDirectory && !img.IsComicEntry && IsPictureFile(img.Path));
+                AddFolderText.Text = $"Add this folder ({inFolder})";
+                AddFolderButton.IsEnabled = inFolder > 0;
+                ToolTipService.SetToolTip(AddFolderButton, inFolder > MultiViewControl.MostPlacedAsCells
+                    ? "All of them wait for Surprise me. The layout does not change."
+                    : "Each picture becomes a floating cell on the canvas.");
+            }
         }
 
         private bool CanViewTogether(int selected) => selected > 1 || (_multiViewParked && selected > 0);
@@ -1074,6 +1129,9 @@ namespace ModernImageViewer
             MultiSelectPlayButton.Visibility = other;
             MultiSelectDeleteRule.Visibility = other;
             MultiSelectDeleteButton.Visibility = other;
+            var wholeFolder = adding && _parkedCell == null ? Visibility.Visible : Visibility.Collapsed;
+            AddFolderButton.Visibility = wholeFolder;
+            AddSubfoldersButton.Visibility = wholeFolder;
             ToolTipService.SetToolTip(MultiSelectCloseButton, adding ? "Back to the layout (Esc)" : "Clear Selection (Esc)");
             if (!adding) MultiSelectActionBar.Visibility = Visibility.Collapsed;
         }

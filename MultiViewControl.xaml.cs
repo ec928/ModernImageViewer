@@ -2067,6 +2067,14 @@ namespace ModernImageViewer
                         (target, withAttributes) => MoveItemTo(curSlot, target, withAttributes)));
                 }
 
+                int waiting = WaitingPictures().Count;
+                if (waiting > 0 && curSlot >= 0)
+                {
+                    var swapWaiting = MakeAdvancedItem($"Swap with a waiting picture ({waiting})\u2026", "\uE8B9", () => ShowWaitingCard(curSlot));
+                    ToolTipService.SetToolTip(swapWaiting, "Pictures that are not on the canvas. Pick one by looking at it.");
+                    menu.Items.Add(swapWaiting);
+                }
+
                 menu.Items.Add(new MenuFlyoutSeparator());
             }
 
@@ -2151,9 +2159,13 @@ namespace ModernImageViewer
             ToolTipService.SetToolTip(headerCells[1], "The image with its frame, image rotation, zoom and shape. The cell's own rotation too, between floating cells.");
             sub.Items.Add(new MenuFlyoutItem { Tag = header, Template = template, IsEnabled = false });
 
+            int gridCells = GridCellCount;
+            int cellsOnShow = VisibleCount(gridCells);
             for (int i = 0; i < _items.Count; i++)
             {
                 if (i == curSlot) continue;
+                // A position that cannot be seen means nothing. Those pictures have their own entry on the menu.
+                if (i >= cellsOnShow && i < gridCells) continue;
                 int targetSlot = i;
                 string position = $"Position {i + 1}";
                 var (row, cells) = MakeRow(position, position, 14, _menuWhitePrimary);

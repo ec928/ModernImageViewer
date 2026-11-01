@@ -658,6 +658,13 @@
                                     </StackPanel>
                                 </Button>
                                 
+                                <Button x:Name="AddFolderButton" Click="AddFolder_Click" Visibility="Collapsed" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" AutomationProperties.Name="Add this folder">
+                                    <TextBlock x:Name="AddFolderText" Text="Add this folder" FontSize="13" VerticalAlignment="Center"/>
+                                </Button>
+                                <Button x:Name="AddSubfoldersButton" Click="AddSubfolders_Click" Visibility="Collapsed" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" AutomationProperties.Name="Add with subfolders" ToolTipService.ToolTip="This folder and every folder inside it. With more than 8 pictures, they wait for Surprise me and the layout does not change.">
+                                    <TextBlock Text="With subfolders" FontSize="13" VerticalAlignment="Center"/>
+                                </Button>
+
                                 <Rectangle x:Name="MultiSelectPlayRule" Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,0" Opacity="0.5"/>
 
                                 <Button x:Name="MultiSelectPlayButton" Click="MultiSelectCinematic_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" ToolTipService.ToolTip="Play Cinematic Slideshow" AutomationProperties.Name="Play Cinematic Slideshow">

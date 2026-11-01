@@ -77,6 +77,7 @@ namespace ModernImageViewer
             RootGrid.AddHandler(PointerPressedEvent, new PointerEventHandler((_, e) =>
             {
                 if (_surpriseCard != null && !IsInSurpriseCard(e.OriginalSource)) RemoveSurpriseCard();
+                if (_waitingCard != null && !IsInside(e.OriginalSource, _waitingCard)) RemoveWaitingCard();
             }), true);
             RootGrid.AddHandler(KeyDownEvent, new KeyEventHandler((_, e) =>
             {
@@ -457,6 +458,126 @@ namespace ModernImageViewer
             HudMenu_Closed(this, EventArgs.Empty);
         }
 
+        private sealed record WaitingPicture(string Path, int Slot);
+
+        private Border? _waitingCard;
+
+        private List<WaitingPicture> WaitingPictures()
+        {
+            var waiting = new List<WaitingPicture>();
+            int grid = GridCellCount;
+            for (int i = VisibleCount(grid); i < grid; i++)
+            {
+                if (!IsEmptyCell(_items[i])) waiting.Add(new WaitingPicture(_items[i].Path, i));
+            }
+            return waiting;
+        }
+
+        /// <summary>A position that cannot be seen means nothing, so pictures off the canvas are chosen by looking at them.</summary>
+        private void ShowWaitingCard(int intoSlot)
+        {
+            RemoveSurpriseCard();
+            RemoveWaitingCard();
+            var all = WaitingPictures();
+            var thumbnails = new GridView
+            {
+                ItemsSource = all,
+                SelectionMode = ListViewSelectionMode.None,
+                IsItemClickEnabled = true,
+                ItemTemplate = (DataTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(
+                    "<DataTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><Grid Width=\"132\" Height=\"96\"><Image Stretch=\"UniformToFill\"/></Grid></DataTemplate>")
+            };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(thumbnails, "WaitingPictures");
+            thumbnails.ContainerContentChanging += (_, args) =>
+            {
+                if (args.ItemContainer.ContentTemplateRoot is not Grid cell || cell.Children[0] is not Image image) return;
+                if (args.InRecycleQueue)
+                {
+                    image.Source = null;
+                    return;
+                }
+                if (args.Item is not WaitingPicture picture) return;
+                ToolTipService.SetToolTip(args.ItemContainer, System.IO.Path.GetFileName(picture.Path));
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(args.ItemContainer, System.IO.Path.GetFileName(picture.Path));
+                try
+                {
+                    image.Source = new BitmapImage { DecodePixelWidth = 200, UriSource = new Uri(picture.Path) };
+                }
+                catch (UriFormatException)
+                {
+                    image.Source = null;
+                }
+            };
+            thumbnails.ItemClick += (_, args) =>
+            {
+                if (args.ClickedItem is not WaitingPicture picture) return;
+                RemoveWaitingCard();
+                SwapItems(intoSlot, picture.Slot, false);
+                NoteUserAction();
+            };
+
+            var search = new TextBox { PlaceholderText = "Search names", MinWidth = 180 };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(search, "Search waiting pictures");
+            search.TextChanged += (_, _) =>
+                thumbnails.ItemsSource = all.Where(p => System.IO.Path.GetFileName(p.Path).Contains(search.Text, StringComparison.OrdinalIgnoreCase)).ToList();
+            var close = new Button { Content = "Close" };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(close, "Close waiting pictures");
+            close.Click += (_, _) => RemoveWaitingCard();
+            var top = new Grid { ColumnSpacing = 10 };
+            top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            top.Children.Add(new TextBlock { Text = $"{all.Count} waiting. Click one to swap it into position {intoSlot + 1}.", VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis });
+            Grid.SetColumn(search, 1);
+            top.Children.Add(search);
+            Grid.SetColumn(close, 2);
+            top.Children.Add(close);
+
+            var body = new Grid { RowSpacing = 10 };
+            body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            body.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            Grid.SetRow(thumbnails, 1);
+            body.Children.Add(top);
+            body.Children.Add(thumbnails);
+
+            _waitingCard = new Border
+            {
+                Child = body,
+                Width = Math.Min(760, Math.Max(320, RootGrid.ActualWidth - 32)),
+                Height = Math.Min(560, Math.Max(240, RootGrid.ActualHeight - 32)),
+                Padding = new Thickness(14),
+                CornerRadius = new CornerRadius(10),
+                Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xF2, 0x1E, 0x1E, 0x1E)),
+                BorderBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF)),
+                BorderThickness = new Thickness(1),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                RequestedTheme = ElementTheme.Dark
+            };
+            Canvas.SetZIndex(_waitingCard, 6500);
+            Grid.SetRowSpan(_waitingCard, Math.Max(1, RootGrid.RowDefinitions.Count));
+            Grid.SetColumnSpan(_waitingCard, Math.Max(1, RootGrid.ColumnDefinitions.Count));
+            RootGrid.Children.Add(_waitingCard);
+            HudMenu_Opened(this, EventArgs.Empty);
+        }
+
+        private void RemoveWaitingCard()
+        {
+            if (_waitingCard == null) return;
+            RootGrid.Children.Remove(_waitingCard);
+            _waitingCard = null;
+            HudMenu_Closed(this, EventArgs.Empty);
+        }
+
+        private static bool IsInside(object? source, DependencyObject container)
+        {
+            for (var node = source as DependencyObject; node != null; node = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(node))
+            {
+                if (ReferenceEquals(node, container)) return true;
+            }
+            return false;
+        }
+
         private bool IsInSurpriseCard(object? source)
         {
             for (var node = source as DependencyObject; node != null; node = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(node))
@@ -557,6 +678,12 @@ namespace ModernImageViewer
         /// </summary>
         private bool HandleAutoPlayKey(Windows.System.VirtualKey key)
         {
+            if (_waitingCard != null)
+            {
+                if (key != Windows.System.VirtualKey.Escape) return false;
+                RemoveWaitingCard();
+                return true;
+            }
             if (_surpriseCard != null)
             {
                 if (key != Windows.System.VirtualKey.Escape) return false;
@@ -747,7 +874,7 @@ namespace ModernImageViewer
                 _reuseBitmaps = ready;
                 try
                 {
-                    ApplyLayoutFile(composition.ToLayoutFile(), restoreAspect: false);
+                    ApplyLayoutFile(WithRestWaiting(composition.ToLayoutFile(), pictures), restoreAspect: false);
                 }
                 finally
                 {
@@ -775,6 +902,16 @@ namespace ModernImageViewer
                 _surpriseBusy = false;
                 SurpriseButton.IsEnabled = true;
             }
+        }
+
+        /// <summary>A layout holds the hand, and every other picture waits behind it, so saving or Undo does not lose them.</summary>
+        private MultiViewLayoutFile WithRestWaiting(MultiViewLayoutFile file, List<string> pictures)
+        {
+            var used = new HashSet<string>(file.Photos.Select(p => p.Path ?? string.Empty), StringComparer.OrdinalIgnoreCase);
+            foreach (var cell in file.Freeform ?? new List<FreeformCellDto>()) used.Add(cell.Path ?? string.Empty);
+            var rest = (_surpriseDeck?.All ?? (IReadOnlyList<string>)pictures).Where(used.Add).ToList();
+            if (rest.Count > 0) AppendWaiting(file, rest, file.Photos.Count);
+            return file;
         }
 
         /// <summary>Featured pictures are always in the hand. The deck supplies the rest.</summary>
