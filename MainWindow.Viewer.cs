@@ -1081,7 +1081,7 @@ namespace ModernImageViewer
         private bool BeginMultiViewCanvas()
         {
             if (_multiViewCanvasActive || _appWindow == null) return false;
-            if (!_parkKeptSize)
+            if (!_parkKeptSize && !_isFullscreen)
             {
                 _stashedGridWidth = _appWindow.Size.Width;
                 _stashedGridHeight = _appWindow.Size.Height;
@@ -1089,6 +1089,8 @@ namespace ModernImageViewer
             _parkKeptSize = false;
             _multiViewCanvasActive = true;
             SyncViewModeButtons();
+            // Full screen has no frame. A size set now would shrink it and leave nothing to move or resize it by.
+            if (_isFullscreen) return false;
 
             int width = _currentSettings.MultiViewWindowWidth;
             int height = _currentSettings.MultiViewWindowHeight;
@@ -1105,6 +1107,15 @@ namespace ModernImageViewer
         private void EndMultiViewCanvas()
         {
             if (!_multiViewCanvasActive || _appWindow == null) return;
+            // The tiles get their own window size back, and a size set on a full screen window leaves it stuck with no frame.
+            // Picking pictures to add keeps the size, and comes straight back to Multi-View.
+            if (_isFullscreen && !_parkKeptSize) ToggleFullscreen();
+            if (_isFullscreen)
+            {
+                _multiViewCanvasActive = false;
+                SyncViewModeButtons();
+                return;
+            }
             _currentSettings.MultiViewWindowWidth = _appWindow.Size.Width;
             _currentSettings.MultiViewWindowHeight = _appWindow.Size.Height;
             _multiViewCanvasActive = false;
@@ -1115,13 +1126,14 @@ namespace ModernImageViewer
 
         private void RestoreGridWindowSize()
         {
+            if (_isFullscreen) ToggleFullscreen();
             if (_appWindow != null && _stashedGridWidth >= 300 && _stashedGridHeight >= 300)
                 _appWindow.Resize(new Windows.Graphics.SizeInt32(_stashedGridWidth, _stashedGridHeight));
         }
 
         private void ApplyMultiViewAspect(double widthOverHeight)
         {
-            if (!_multiViewCanvasActive || _appWindow == null || widthOverHeight <= 0) return;
+            if (!_multiViewCanvasActive || _appWindow == null || widthOverHeight <= 0 || _isFullscreen) return;
             if (_appWindow.Presenter is OverlappedPresenter presenter && presenter.State == OverlappedPresenterState.Maximized)
                 presenter.Restore();
 

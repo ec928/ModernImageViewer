@@ -683,7 +683,11 @@ namespace ModernImageViewer
 
                 if (_appWindow.Presenter is OverlappedPresenter p && p.State == OverlappedPresenterState.Minimized) return;
 
-                if (_multiViewCanvasActive || _parkKeptSize)
+                // Full screen is the monitor's size, not a window size to come back to.
+                if (_isFullscreen)
+                {
+                }
+                else if (_multiViewCanvasActive || _parkKeptSize)
                 {
                     _currentSettings.MultiViewWindowWidth = _appWindow.Size.Width;
                     _currentSettings.MultiViewWindowHeight = _appWindow.Size.Height;
@@ -698,8 +702,11 @@ namespace ModernImageViewer
                     _currentSettings.WindowWidth = _appWindow.Size.Width;
                     _currentSettings.WindowHeight = _appWindow.Size.Height;
                 }
-                _currentSettings.WindowX = _appWindow.Position.X;
-                _currentSettings.WindowY = _appWindow.Position.Y;
+                if (!_isFullscreen)
+                {
+                    _currentSettings.WindowX = _appWindow.Position.X;
+                    _currentSettings.WindowY = _appWindow.Position.Y;
+                }
 
                 _currentSettings.Gamma = _currentGamma;
                 _currentSettings.ImageEditorPath = ImageEditorPath;
