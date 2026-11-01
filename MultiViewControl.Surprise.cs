@@ -260,9 +260,8 @@ namespace ModernImageViewer
             range.Children.Add(new TextBlock { Text = "seconds", VerticalAlignment = VerticalAlignment.Center, FontSize = 13 });
 
             var speedRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-            speedRow.Children.Add(new TextBlock { Text = "Every", VerticalAlignment = VerticalAlignment.Center, FontSize = 13 });
+            speedRow.Children.Add(new TextBlock { Text = "Seconds", VerticalAlignment = VerticalAlignment.Center, FontSize = 13 });
             speedRow.Children.Add(speed);
-            speedRow.Children.Add(new TextBlock { Text = "s", VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Visibility = Visibility.Collapsed });
             body.Children.Add(speedRow);
             body.Children.Add(range);
 
