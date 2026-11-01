@@ -339,6 +339,9 @@ namespace ModernImageViewer
             return tray > 0 ? $"{selected.Count} selected: {canvas}, {tray} to the image tray" : $"{selected.Count} selected: {canvas}";
         }
 
+        public string? FirstImageFolder =>
+            _items.Where(i => !IsEmptyCell(i)).Select(i => Path.GetDirectoryName(i.Path)).FirstOrDefault();
+
         private List<string> NotYetHere(IReadOnlyList<string> paths)
         {
             var have = new HashSet<string>(_items.Select(i => i.Path ?? string.Empty), StringComparer.OrdinalIgnoreCase);

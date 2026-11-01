@@ -1853,6 +1853,7 @@ namespace ModernImageViewer
             closeBtn.Resources["ButtonForegroundPointerOver"] = new SolidColorBrush(Microsoft.UI.Colors.White);
             closeBtn.Resources["ButtonForegroundPressed"] = new SolidColorBrush(Microsoft.UI.Colors.White);
             ToolTipService.SetToolTip(closeBtn, "Remove cell");
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(closeBtn, "Remove cell");
             closeBtn.Click += (s, e) => RemoveItem(photo.Item);
             topStack.Children.Add(closeBtn);
 
@@ -2310,6 +2311,8 @@ namespace ModernImageViewer
         /// </summary>
         private void RemoveItem(ImageItem item)
         {
+            // The cell goes while its button handles the click, so the pointer release never reaches the canvas to record the step.
+            NoteUserAction();
             var freeformCard = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, item));
             if (freeformCard != null)
             {

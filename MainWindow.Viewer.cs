@@ -984,7 +984,9 @@ namespace ModernImageViewer
             _parkedCell = cell;
             _parkedNote = null;
             // A photo's replacement is most likely beside it. A file that has gone leaves the view where it is.
-            string? cellFolder = string.IsNullOrEmpty(cell?.Path) ? null : System.IO.Path.GetDirectoryName(cell.Path);
+            // With no folder open, as after opening a saved layout, more of the same is most likely beside the first image.
+            string? cellFolder = !string.IsNullOrEmpty(cell?.Path) ? System.IO.Path.GetDirectoryName(cell.Path)
+                : Images.Count == 0 ? MultiViewControl.FirstImageFolder : null;
             if (cellFolder != null && !string.Equals(cellFolder.TrimEnd('\\'), _currentDirectory?.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
                 _ = ScanIfThereAsync(cellFolder);
             MultiViewControl.PrepareToLeave();
@@ -1001,6 +1003,7 @@ namespace ModernImageViewer
         private async Task ScanIfThereAsync(string folder)
         {
             if (await Task.Run(() => Directory.Exists(folder))) await ScanFolder(folder);
+            NoteParkedSelection();
         }
 
         /// <summary>Back to the session, with whatever pictures were selected as new floating cells.</summary>
