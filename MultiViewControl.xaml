@@ -277,18 +277,20 @@
                             <TextBlock Text="Add images" VerticalAlignment="Center" FontSize="13" />
                         </StackPanel>
                     </Button>
-                    <Border x:Name="ShownBadge"
+                    <Button x:Name="ShownBadge"
+                            Click="ShownBadge_Click"
                             Visibility="Collapsed"
-                            Background="Transparent"
-                            Padding="4,0"
+                            Style="{StaticResource QuietButtonStyle}"
+                            Padding="8,5"
+                            CornerRadius="12"
                             VerticalAlignment="Center"
-                            ToolTipService.ToolTip="Images in the tray are not on the canvas. Surprise me uses them, and Swap with on a cell's right-click menu can bring one in.">
+                            ToolTipService.ToolTip="Open the image tray. Images there are not on the canvas. Surprise me uses them, and you can put one on the canvas or remove it.">
                         <TextBlock x:Name="ShownText"
                                    VerticalAlignment="Center"
                                    FontSize="13"
                                    Typography.NumeralAlignment="Tabular"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    </Border>
+                    </Button>
 
                     <!-- Subtle Section Divider 1 -->
                     <Rectangle Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,0" Opacity="0.5"/>
@@ -476,7 +478,7 @@
                     <Button Click="ExitSolo_Click" Style="{StaticResource QuietButtonStyle}" Padding="8,5" CornerRadius="12" ToolTipService.ToolTip="Back to Multi-View (Esc)">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <SymbolIcon Symbol="Back" />
-                            <TextBlock Text="All Photos" FontSize="13" />
+                            <TextBlock Text="All Images" FontSize="13" />
                         </StackPanel>
                     </Button>
                     <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,4" Opacity="0.4"/>

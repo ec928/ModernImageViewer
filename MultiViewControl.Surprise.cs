@@ -77,7 +77,7 @@ namespace ModernImageViewer
             RootGrid.AddHandler(PointerPressedEvent, new PointerEventHandler((_, e) =>
             {
                 if (_surpriseCard != null && !IsInSurpriseCard(e.OriginalSource)) RemoveSurpriseCard();
-                if (_trayCard != null && !IsInside(e.OriginalSource, _trayCard)) RemoveTrayCard();
+                if (_trayCard != null && !IsInside(e.OriginalSource, _trayCard) && !IsInside(e.OriginalSource, ShownBadge)) RemoveTrayCard();
             }), true);
             RootGrid.AddHandler(KeyDownEvent, new KeyEventHandler((_, e) =>
             {
@@ -497,21 +497,69 @@ namespace ModernImageViewer
             return tray;
         }
 
-        /// <summary>A position that cannot be seen means nothing, so images in the tray are chosen by looking at them.</summary>
+        private int TraySlotOf(string path)
+        {
+            int grid = GridCellCount;
+            for (int i = VisibleCount(grid); i < grid; i++)
+            {
+                if (string.Equals(_items[i].Path, path, StringComparison.OrdinalIgnoreCase)) return i;
+            }
+            return -1;
+        }
+
+        private void ShownBadge_Click(object sender, RoutedEventArgs e)
+        {
+            if (_trayCard != null)
+            {
+                RemoveTrayCard();
+                return;
+            }
+            StopAutoPlay();
+            ShowTrayCard(NoCell);
+        }
+
+        private const int NoCell = -1;
+
+        /// <summary>
+        /// A position that cannot be seen means nothing, so images in the tray are chosen by looking at them. Opened from a cell, a click
+        /// fills that cell. Opened from the bar's count, it puts the image on the canvas by the same rule as adding one.
+        /// </summary>
         private void ShowTrayCard(int intoSlot)
         {
             RemoveSurpriseCard();
             RemoveTrayCard();
-            var all = TrayImages();
+            var all = TrayImages().Select(t => t.Path).ToList();
+            var current = new System.Collections.ObjectModel.ObservableCollection<string>(all);
             var thumbnails = new GridView
             {
-                ItemsSource = all,
+                ItemsSource = current,
                 SelectionMode = ListViewSelectionMode.None,
                 IsItemClickEnabled = true,
                 ItemTemplate = (DataTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(
                     "<DataTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><Grid Width=\"132\" Height=\"96\"><Image Stretch=\"UniformToFill\"/></Grid></DataTemplate>")
             };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(thumbnails, "ImageTray");
+
+            string click = intoSlot == NoCell ? "Click one to put it on the canvas."
+                : $"Click one to {(IsEmptyCell(_items[intoSlot]) ? "add it to" : "swap it into")} position {PositionOfSlot(intoSlot)}.";
+            var heading = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+            void ShowHeading() => heading.Text = current.Count == all.Count ? $"Image tray: {all.Count}. {click}"
+                : current.Count == 0 ? "No image in the tray has that in its name."
+                : $"Image tray: {current.Count} of {all.Count}. {click}";
+            ShowHeading();
+
+            void RemoveFromSession(string path)
+            {
+                int slot = TraySlotOf(path);
+                if (slot < 0) return;
+                RemoveItem(_items[slot]);
+                all.Remove(path);
+                current.Remove(path);
+                ShowHeading();
+                ShowTrayChanged();
+                if (all.Count == 0) RemoveTrayCard();
+            }
+
             thumbnails.ContainerContentChanging += (_, args) =>
             {
                 if (args.ItemContainer.ContentTemplateRoot is not Grid cell || cell.Children[0] is not Image image) return;
@@ -520,12 +568,16 @@ namespace ModernImageViewer
                     image.Source = null;
                     return;
                 }
-                if (args.Item is not TrayImage picture) return;
-                ToolTipService.SetToolTip(args.ItemContainer, System.IO.Path.GetFileName(picture.Path));
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(args.ItemContainer, System.IO.Path.GetFileName(picture.Path));
+                if (args.Item is not string path) return;
+                ToolTipService.SetToolTip(args.ItemContainer, System.IO.Path.GetFileName(path));
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(args.ItemContainer, System.IO.Path.GetFileName(path));
+                var menu = new MenuFlyout();
+                if (Resources.TryGetValue("MultiViewMenuFlyoutPresenterStyle", out var style) && style is Style presenter) menu.MenuFlyoutPresenterStyle = presenter;
+                menu.Items.Add(MakeAdvancedItem("Remove from session", "\uE74D", () => RemoveFromSession(path)));
+                args.ItemContainer.ContextFlyout = menu;
                 try
                 {
-                    image.Source = new BitmapImage { DecodePixelWidth = 200, UriSource = new Uri(picture.Path) };
+                    image.Source = new BitmapImage { DecodePixelWidth = 200, UriSource = new Uri(path) };
                 }
                 catch (UriFormatException)
                 {
@@ -534,18 +586,29 @@ namespace ModernImageViewer
             };
             thumbnails.ItemClick += (_, args) =>
             {
-                if (args.ClickedItem is not TrayImage picture) return;
+                if (args.ClickedItem is not string path) return;
                 RemoveTrayCard();
-                SwapItems(intoSlot, picture.Slot, false);
-                // The tray may just have emptied, and the empty cells mention it.
-                for (int i = 0; i < VisibleCount(GridCellCount); i++)
-                    ShowEmptyState(i);
-                ShowShownBadge();
+                if (intoSlot == NoCell)
+                {
+                    BringFromTray(path);
+                    return;
+                }
+                int slot = TraySlotOf(path);
+                if (slot < 0) return;
+                SwapItems(intoSlot, slot, false);
+                ShowTrayChanged();
                 NoteUserAction();
             };
 
             var search = new TextBox { PlaceholderText = "Search names", MinWidth = 180 };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(search, "Search the image tray");
+            search.TextChanged += (_, _) =>
+            {
+                current = new System.Collections.ObjectModel.ObservableCollection<string>(all.Where(p => System.IO.Path.GetFileName(p).Contains(search.Text, StringComparison.OrdinalIgnoreCase)));
+                thumbnails.ItemsSource = current;
+                ShowHeading();
+            };
+            search.Loaded += (_, _) => search.Focus(FocusState.Programmatic);
             var close = new Button { Content = "Close" };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(close, "Close the image tray");
             close.Click += (_, _) => RemoveTrayCard();
@@ -553,28 +616,21 @@ namespace ModernImageViewer
             top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            string click = $"Click one to {(IsEmptyCell(_items[intoSlot]) ? "add it to" : "swap it into")} position {PositionOfSlot(intoSlot)}.";
-            var heading = new TextBlock { Text = $"Image tray: {all.Count}. {click}", VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-            search.TextChanged += (_, _) =>
-            {
-                var found = all.Where(p => System.IO.Path.GetFileName(p.Path).Contains(search.Text, StringComparison.OrdinalIgnoreCase)).ToList();
-                thumbnails.ItemsSource = found;
-                heading.Text = found.Count == all.Count ? $"Image tray: {all.Count}. {click}"
-                    : found.Count == 0 ? $"No image in the tray has that in its name."
-                    : $"Image tray: {found.Count} of {all.Count}. {click}";
-            };
-            search.Loaded += (_, _) => search.Focus(FocusState.Programmatic);
             top.Children.Add(heading);
             Grid.SetColumn(search, 1);
             top.Children.Add(search);
             Grid.SetColumn(close, 2);
             top.Children.Add(close);
+            var hint = new TextBlock { Text = "Right-click an image to remove it from the session.", FontSize = 12, Opacity = 0.7 };
 
             var body = new Grid { RowSpacing = 10 };
             body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             body.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            Grid.SetRow(thumbnails, 1);
+            Grid.SetRow(hint, 1);
+            Grid.SetRow(thumbnails, 2);
             body.Children.Add(top);
+            body.Children.Add(hint);
             body.Children.Add(thumbnails);
 
             // Stretched up to a limit, so it follows the window if that is resized while it is open.
@@ -585,6 +641,14 @@ namespace ModernImageViewer
             _trayCard.Padding = new Thickness(14);
             AddOverCanvas(_trayCard, 6500);
             HudMenu_Opened(this, EventArgs.Empty);
+        }
+
+        /// <summary>The tray may just have emptied, and the empty cells and the bar's count mention it.</summary>
+        private void ShowTrayChanged()
+        {
+            for (int i = 0; i < VisibleCount(GridCellCount); i++)
+                ShowEmptyState(i);
+            ShowShownBadge();
         }
 
         private void RemoveTrayCard()

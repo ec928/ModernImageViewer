@@ -411,6 +411,15 @@ namespace ModernImageViewer
             CaptureUndoPoint();
             int shown = VisibleCount(GridCellCount);
             var file = BuildLayoutFile();
+            int onShow = PlaceInCells(file, forCells, shown);
+            AppendToTray(file, forTray, onShow);
+            ApplyKeepingBitmaps(file);
+            CaptureUndoPoint();
+        }
+
+        /// <summary>Into the empty places first, then new cells after those on show. Returns how many cells are then on show.</summary>
+        private static int PlaceInCells(MultiViewLayoutFile file, IReadOnlyList<string> forCells, int shown)
+        {
             int filled = 0;
             for (int i = 0; i < shown && filled < forCells.Count; i++)
             {
@@ -420,22 +429,41 @@ namespace ModernImageViewer
                 filled++;
             }
             int newCells = forCells.Count - filled;
-            if (newCells > 0)
+            if (newCells == 0) return shown;
+            file.Photos.InsertRange(shown, forCells.Skip(filled).Select(path => new PhotoSlotDto { Path = path, Name = Path.GetFileName(path) }));
+            for (int i = 0; i < file.Photos.Count; i++)
+                file.Photos[i].Slot = i;
+            foreach (var card in file.Freeform ?? new List<FreeformCellDto>())
             {
-                file.Photos.InsertRange(shown, forCells.Skip(filled).Select(path => new PhotoSlotDto { Path = path, Name = Path.GetFileName(path) }));
-                for (int i = 0; i < file.Photos.Count; i++)
-                    file.Photos[i].Slot = i;
-                foreach (var card in file.Freeform ?? new List<FreeformCellDto>())
-                {
-                    if (card.SourceSlot >= shown) card.SourceSlot += newCells;
-                }
-                file.Mosaic = null;
-                file.State!.Lines = MosaicLayout.DefaultLines(shown + newCells);
-                file.State.LineCounts = null;
+                if (card.SourceSlot >= shown) card.SourceSlot += newCells;
             }
-            AppendToTray(file, forTray, shown + newCells);
-            ApplyKeepingBitmaps(file);
+            file.Mosaic = null;
+            file.State!.Lines = MosaicLayout.DefaultLines(shown + newCells);
+            file.State.LineCounts = null;
+            return shown + newCells;
+        }
+
+        /// <summary>The same rule as adding one image: a cell while the canvas has room, floating once it has 16.</summary>
+        private void BringFromTray(string path)
+        {
+            int slot = TraySlotOf(path);
+            if (slot < 0) return;
+            bool room = ImagesOnCanvas() < MosaicLayout.MaxShown;
             CaptureUndoPoint();
+            int shown = VisibleCount(GridCellCount);
+            var file = BuildLayoutFile();
+            file.Photos.RemoveAt(slot);
+            for (int i = 0; i < file.Photos.Count; i++)
+                file.Photos[i].Slot = i;
+            foreach (var card in file.Freeform ?? new List<FreeformCellDto>())
+            {
+                if (card.SourceSlot == slot) card.SourceSlot = -1;
+                else if (card.SourceSlot > slot) card.SourceSlot--;
+            }
+            AppendToTray(file, Array.Empty<string>(), room ? PlaceInCells(file, new[] { path }, shown) : shown);
+            ApplyKeepingBitmaps(file);
+            if (room) CaptureUndoPoint();
+            else _ = AddPicturesAsync(new[] { path });
         }
 
         private void ApplyKeepingBitmaps(MultiViewLayoutFile file)

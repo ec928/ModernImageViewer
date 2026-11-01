@@ -1039,7 +1039,7 @@ namespace ModernImageViewer
             if (string.IsNullOrEmpty(folder)) return;
             const int RecallOnDataAccess = 0x400000;
             AddSubfoldersButton.IsEnabled = false;
-            MultiSelectCountText.Text = "Finding pictures...";
+            MultiSelectCountText.Text = "Finding images...";
             try
             {
                 var found = await Task.Run(() =>

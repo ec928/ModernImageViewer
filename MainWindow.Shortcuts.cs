@@ -53,9 +53,9 @@ namespace ModernImageViewer
                 ("R", "Rows or columns"),
                 ("H", "Next hero"),
                 ("Ctrl+Z, Ctrl+Y", "Undo and redo"),
-                ("Ctrl+C", "Copy the canvas as a picture"),
+                ("Ctrl+C", "Copy the canvas as an image"),
                 ("Ctrl+S", "Save or load"),
-                ("Alt+drag", "Swap two photos"),
+                ("Alt+drag", "Swap two images"),
                 ("Space", "Pause or start Surprise me auto-play"),
                 ("Left, Right", "Previous and next layout, after Surprise me"),
                 ("Esc", "Pause auto-play if it is playing, otherwise back to the folder"),
@@ -69,9 +69,9 @@ namespace ModernImageViewer
             }),
             ("Floating cells", new[]
             {
-                ("Ctrl+drag", "Pan the photo inside the cell"),
+                ("Ctrl+drag", "Pan the image inside the cell"),
                 ("Alt while dragging", "Move without snapping"),
-                ("Ctrl on the rotate handle", "Turn the shape and keep the photo still"),
+                ("Ctrl on the rotate handle", "Turn the shape and keep the image still"),
                 ("Shift on the rotate handle", "Rotate in 15 degree steps"),
             }),
         };

@@ -108,7 +108,7 @@ namespace ModernImageViewer
                 });
                 emptyPanel.Children.Add(new TextBlock
                 {
-                    Text = "No photos in layout",
+                    Text = "No images in layout",
                     FontSize = 16,
                     FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                     HorizontalAlignment = HorizontalAlignment.Center,
@@ -116,7 +116,7 @@ namespace ModernImageViewer
                 });
                 emptyPanel.Children.Add(new TextBlock
                 {
-                    Text = "Open a saved layout (.mivlayout) or drag photos here",
+                    Text = "Open a saved layout (.mivlayout) or drag images here",
                     FontSize = 13,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
@@ -211,6 +211,7 @@ namespace ModernImageViewer
             int tray = TrayImages().Count;
             ShownBadge.Visibility = tray > 0 ? Visibility.Visible : Visibility.Collapsed;
             ShownText.Text = $"{ImagesOnCanvas()} on canvas, {tray} in tray";
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(ShownBadge, ShownText.Text);
         }
 
         private int VisibleCount(int count)

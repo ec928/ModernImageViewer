@@ -380,12 +380,12 @@ namespace ModernImageViewer
                 var slot = _lineSlots[i];
                 FillStrip(slot.Strip, counts[i], slot.Vertical);
                 slot.Value.Text = counts[i].ToString();
-                AutomationProperties.SetName(slot.Value, counts[i] + " photos in " + slot.Name.ToLowerInvariant());
+                AutomationProperties.SetName(slot.Value, counts[i] + " images in " + slot.Name.ToLowerInvariant());
                 string spoken = slot.Name.ToLowerInvariant();
                 bool canLess = MosaicLayout.MovePhoto(counts, i, -1) != null;
                 bool canMore = MosaicLayout.MovePhoto(counts, i, 1) != null;
-                ApplyStepState(slot.Less, canLess, canLess ? "One fewer in " + spoken : slot.Name + " already has one photo");
-                ApplyStepState(slot.More, canMore, canMore ? "One more in " + spoken : "No photo left to move");
+                ApplyStepState(slot.Less, canLess, canLess ? "One fewer in " + spoken : slot.Name + " already has one image");
+                ApplyStepState(slot.More, canMore, canMore ? "One more in " + spoken : "No image left to move");
             }
         }
 
@@ -394,8 +394,8 @@ namespace ModernImageViewer
             if (_evenButton == null) return;
             _evenButton.IsEnabled = !isEven;
             ToolTipService.SetToolTip(_evenButton, isEven
-                ? "The lines already have the same number of photos."
-                : "Give every line the same number of photos.");
+                ? "The lines already have the same number of images."
+                : "Give every line the same number of images.");
         }
 
         private void SyncLineCountStepper(int lines, bool rows)
@@ -455,7 +455,7 @@ namespace ModernImageViewer
             string noun = rows
                 ? (lines == 1 ? "row" : "rows")
                 : (lines == 1 ? "column" : "columns");
-            string across = $"{arranged} {(arranged == 1 ? "photo" : "photos")} across {lines} {noun}";
+            string across = $"{arranged} {(arranged == 1 ? "image" : "images")} across {lines} {noun}";
 
             if (_heroActive && !HeroUsesLines)
                 return "Editing the lines turns the hero off";
@@ -620,8 +620,8 @@ namespace ModernImageViewer
             bool canMore = MosaicLayout.MovePhoto(CurrentLineCounts(), line, 1) != null;
             string spoken = name.ToLowerInvariant();
             return MakeStepperWell(
-                canLess ? $"One fewer in {spoken}" : $"{name} already has one photo",
-                canMore ? $"One more in {spoken}" : "No photo left to move",
+                canLess ? $"One fewer in {spoken}" : $"{name} already has one image",
+                canMore ? $"One more in {spoken}" : "No image left to move",
                 canLess,
                 canMore,
                 () => AdjustLine(line, -1),
@@ -642,7 +642,7 @@ namespace ModernImageViewer
                 Text = count.ToString(),
                 Style = LayoutStyle("LayoutCountChipTextStyle")
             };
-            AutomationProperties.SetName(badge, count + " photos in " + name.ToLowerInvariant());
+            AutomationProperties.SetName(badge, count + " images in " + name.ToLowerInvariant());
             var chip = new Border
             {
                 Style = LayoutStyle("LayoutCountChipStyle"),
@@ -957,7 +957,7 @@ namespace ModernImageViewer
 
             var header = new Grid { Height = 30 };
             var title = new TextBlock { Text = "Hero", FontSize = 12, Foreground = _menuWhiteSecondary, VerticalAlignment = VerticalAlignment.Center };
-            ToolTipService.SetToolTip(title, "Rectangle needs 4, 5, 6, 7 or 9 photos, and Pair needs at least 3.");
+            ToolTipService.SetToolTip(title, "Rectangle needs 4, 5, 6, 7 or 9 images, and Pair needs at least 3.");
             header.Children.Add(title);
             if (_heroActive)
             {
@@ -980,9 +980,9 @@ namespace ModernImageViewer
             var track = MakeSegment(new[] { "Off", "Banner", "Rectangle", "Pair" }, new[]
             {
                 "No hero",
-                "One large photo along a side",
-                "One large photo in a corner block",
-                "The first two photos large"
+                "One large image along a side",
+                "One large image in a corner block",
+                "The first two images large"
             }, SetHero, out var show, buttons);
             for (int i = 0; i < HeroRowKinds.Length; i++)
             {

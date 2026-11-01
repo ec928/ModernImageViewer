@@ -59,13 +59,13 @@
                     <Run Text="&#x2022;  "/><Run Text="Favourite folders" FontWeight="SemiBold"/><Run Text=" &#x2014; star up to 10 folders in the Favourites and Recent Folders menu to keep them; they stay until you remove them."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Multi-View" FontWeight="SemiBold"/><Run Text=" &#x2014; compare up to 16 photos in rows or columns of your choosing, with hero layouts, draggable edges, and Alt+drag to swap."/>
+                    <Run Text="&#x2022;  "/><Run Text="Multi-View" FontWeight="SemiBold"/><Run Text=" &#x2014; compare up to 16 images in rows or columns of your choosing, with hero layouts, draggable edges, and Alt+drag to swap. Add a whole folder, and what does not fit waits in the image tray."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Collages" FontWeight="SemiBold"/><Run Text=" &#x2014; frame each cell, rotate and mirror photos, float cells above the grid in shapes, drop in pictures from File Explorer, choose the canvas, undo and redo, save layouts, and export to JPEG, PNG, or the clipboard."/>
+                    <Run Text="&#x2022;  "/><Run Text="Collages" FontWeight="SemiBold"/><Run Text=" &#x2014; frame each cell, rotate and mirror images, float cells above the grid in shapes, drop in images from File Explorer, choose the canvas, undo and redo, save layouts, and export to JPEG, PNG, or the clipboard."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Surprise me" FontWeight="SemiBold"/><Run Text=" &#x2014; one click arranges your pictures into a new designed layout, avoiding cutting or covering the faces it finds. Click again for another, set an interval for auto-play, and shape the odds in its options."/>
+                    <Run Text="&#x2022;  "/><Run Text="Surprise me" FontWeight="SemiBold"/><Run Text=" &#x2014; one click arranges your images into a new designed layout, avoiding cutting or covering the faces it finds. Click again for another, press Play for a new one every few seconds with your music, and shape the odds on its card."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
                     <Run Text="&#x2022;  "/><Run Text="Window &amp; Tile Size presets" FontWeight="SemiBold"/><Run Text=" &#x2014; save up to three window and tile size states (Ctrl+1, Ctrl+2, Ctrl+3) to jump between compact browsing and wide two-page layouts."/>

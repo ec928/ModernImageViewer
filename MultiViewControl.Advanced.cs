@@ -401,7 +401,7 @@ namespace ModernImageViewer
             rotate.VerticalAlignment = VerticalAlignment.Top;
             rotate.Margin = new Thickness(0, 12, 0, 0);
             rotate.IsHitTestVisible = false;
-            ToolTipService.SetToolTip(rotate, "Drag to rotate the cell. Hold Ctrl to rotate the shape and keep the photo still. Hold Shift for 15 degree steps.");
+            ToolTipService.SetToolTip(rotate, "Drag to rotate the cell. Hold Ctrl to rotate the shape and keep the image still. Hold Shift for 15 degree steps.");
 
             bool turning = false;
             double startPointer = 0;
@@ -633,12 +633,12 @@ namespace ModernImageViewer
             AdvancedMenuFlyout.Items.Add(redo);
 
             AdvancedMenuFlyout.Items.Add(new MenuFlyoutSeparator());
-            var fillFit = MakeAdvancedItem(_isFillMode ? "Fit whole photos" : "Fill cells", _isFillMode ? "\uE73F" : "\uE740", () =>
+            var fillFit = MakeAdvancedItem(_isFillMode ? "Fit whole images" : "Fill cells", _isFillMode ? "\uE73F" : "\uE740", () =>
             {
                 ToggleFillMode();
                 NoteUserAction();
             });
-            ToolTipService.SetToolTip(fillFit, _isFillMode ? "Show the whole of each photo" : "Crop each photo to fill its cell");
+            ToolTipService.SetToolTip(fillFit, _isFillMode ? "Show the whole of each image" : "Crop each image to fill its cell");
             AdvancedMenuFlyout.Items.Add(fillFit);
 
             AdvancedMenuFlyout.Items.Add(new MenuFlyoutSeparator());
@@ -658,7 +658,7 @@ namespace ModernImageViewer
                 ToolTipService.SetToolTip(choice, CanvasLook.Describe(name));
                 surface.Items.Add(choice);
             }
-            ToolTipService.SetToolTip(surface, "Shows where no cell covers the canvas: empty cells, and around photos in Fit");
+            ToolTipService.SetToolTip(surface, "Shows where no cell covers the canvas: empty cells, and around images in Fit");
             menu.Items.Add(surface);
 
             var color = new MenuFlyoutSubItem { Text = "Color" };

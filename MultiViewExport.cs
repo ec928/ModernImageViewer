@@ -265,7 +265,7 @@ namespace ModernImageViewer
                 int photos = file.Photos.Count(p => !string.IsNullOrEmpty(p.Path) && !p.Hidden) + (file.Freeform?.Count ?? 0);
                 var saved = File.GetLastWriteTime(path);
                 string when = saved.Date == DateTime.Today ? saved.ToString("HH:mm:ss") : saved.ToString("d MMM HH:mm:ss");
-                var row = CreateMenuItemButton(when, photos == 1 ? "1 photo" : photos + " photos");
+                var row = CreateMenuItemButton(when, photos == 1 ? "1 image" : photos + " images");
                 row.Click += (_, _) =>
                 {
                     SaveFlyout.Hide();
@@ -742,7 +742,7 @@ namespace ModernImageViewer
             }
             if (AnyPhotoLoading())
             {
-                await ShowExportMessageAsync("A photo is still loading.");
+                await ShowExportMessageAsync("An image is still loading.");
                 return;
             }
 
@@ -1344,7 +1344,7 @@ namespace ModernImageViewer
             if (shots.Count == 0) return;
             if (AnyPhotoLoading())
             {
-                await ShowExportMessageAsync("A photo is still loading.");
+                await ShowExportMessageAsync("An image is still loading.");
                 return;
             }
             var (width, height) = CanvasPixels();

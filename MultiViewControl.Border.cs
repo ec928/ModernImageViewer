@@ -403,7 +403,7 @@ namespace ModernImageViewer
             Slider shadowSlider = null!;
             TextBlock shadowValue = null!;
             ToolTipService.SetToolTip(gutterRow, item != null
-                ? "How far this photo sits inside its cell. The photo beside it keeps its own inset."
+                ? "How far this image sits inside its cell. The image beside it keeps its own inset."
                 : "How far the grid sits inside the canvas. Floating cells stay where they are.");
 
             void StyleGlow()
