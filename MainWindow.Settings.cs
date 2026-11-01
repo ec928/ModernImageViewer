@@ -30,15 +30,37 @@ namespace ModernImageViewer
             HeaderSettingsFlyout.Hide();
             string? folder = _currentSettings.MusicFolder;
             var (rating, unrated) = MusicChoices.RatingControls(_currentSettings.MusicLowestStars, _currentSettings.MusicIncludesUnrated);
-            var inCinematic = new CheckBox { Content = "Cinematic shows", IsChecked = _currentSettings.MusicInCinematic };
-            var inSurprise = new CheckBox { Content = "Surprise me auto-play", IsChecked = _currentSettings.MusicInSurprise };
-            var volume = new Slider { Header = "Volume", Minimum = 0, Maximum = 100, Value = _currentSettings.MusicVolume };
+            var inCinematic = SettingsCard.Switch("Cinematic shows", _currentSettings.MusicInCinematic);
+            var inSurprise = SettingsCard.Switch("Surprise me auto-play", _currentSettings.MusicInSurprise);
+            var volume = new Slider { Minimum = 0, Maximum = 100, Value = _currentSettings.MusicVolume, Width = 150, VerticalAlignment = VerticalAlignment.Center };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(volume, "Music volume");
+            var volumeText = new TextBlock { Width = 38, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Opacity = SettingsCard.Quiet };
+            void ShowVolume() => volumeText.Text = $"{volume.Value:0}%";
+            ShowVolume();
+            volume.ValueChanged += (_, _) => ShowVolume();
+            var volumeRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            volumeRow.Children.Add(volume);
+            volumeRow.Children.Add(volumeText);
 
-            var where = new TextBlock { Text = folder ?? "No folder chosen", TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
-            where.SetValue(Microsoft.UI.Xaml.Automation.AutomationProperties.AutomationIdProperty, "MusicFolderText");
-            var choose = new Button { Content = "Choose folder..." };
-            var clear = new Button { Content = "No music", IsEnabled = folder != null };
+            var choose = new Button { VerticalAlignment = VerticalAlignment.Center };
+            var clear = new Button { Content = "No music", VerticalAlignment = VerticalAlignment.Center };
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            buttons.Children.Add(choose);
+            buttons.Children.Add(clear);
+            var (folderRow, folderTitle, folderDetail) = SettingsCard.Row("\uE8B7", string.Empty, string.Empty, buttons);
+            folderDetail.SetValue(Microsoft.UI.Xaml.Automation.AutomationProperties.AutomationIdProperty, "MusicFolderText");
+
+            void ShowFolder(string? problem = null)
+            {
+                folderTitle.Text = folder == null ? "No folder chosen" : Path.GetFileName(folder.TrimEnd('\\'));
+                folderDetail.Text = problem ?? folder ?? "Choose where your songs are";
+                ToolTipService.SetToolTip(folderDetail, folderDetail.Text);
+                choose.Content = folder == null ? "Choose folder..." : "Change...";
+                clear.Visibility = folder == null ? Visibility.Collapsed : Visibility.Visible;
+                // The rest says what to do with a folder, so it waits for one.
+                rating.IsEnabled = unrated.IsEnabled = inCinematic.IsEnabled = inSurprise.IsEnabled = volume.IsEnabled = folder != null;
+            }
+            ShowFolder();
             choose.Click += async (_, _) =>
             {
                 try
@@ -50,35 +72,31 @@ namespace ModernImageViewer
                     var picked = await picker.PickSingleFolderAsync();
                     if (picked == null) return;
                     folder = picked.Path;
-                    where.Text = folder;
-                    clear.IsEnabled = true;
+                    ShowFolder();
                 }
                 catch (Exception ex) when (ex is not OutOfMemoryException)
                 {
-                    where.Text = "Could not choose that folder. " + ex.Message;
+                    ShowFolder("Could not choose that folder. " + ex.Message);
                 }
             };
             clear.Click += (_, _) =>
             {
                 folder = null;
-                where.Text = "No folder chosen";
-                clear.IsEnabled = false;
+                ShowFolder();
             };
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-            buttons.Children.Add(choose);
-            buttons.Children.Add(clear);
 
-            var panel = new StackPanel { Spacing = 12, MinWidth = 360 };
-            panel.Children.Add(where);
-            panel.Children.Add(buttons);
-            panel.Children.Add(rating);
-            panel.Children.Add(unrated);
-            panel.Children.Add(new TextBlock { Text = MusicChoices.FormatsNote, TextWrapping = TextWrapping.Wrap, FontSize = 12, Opacity = 0.8 });
-            panel.Children.Add(new TextBlock { Text = "Play it during", Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"] });
-            panel.Children.Add(inCinematic);
-            panel.Children.Add(inSurprise);
-            panel.Children.Add(volume);
-            panel.Children.Add(new TextBlock { Text = "A saved show can have its own music, which comes first. Songs play in random order.", TextWrapping = TextWrapping.Wrap, FontSize = 12, Opacity = 0.8 });
+            var panel = new StackPanel { Width = 480, Padding = new Thickness(0, 0, 12, 0) };
+            panel.Children.Add(SettingsCard.Section("Songs", first: true));
+            panel.Children.Add(SettingsCard.Card(
+                folderRow,
+                SettingsCard.Row("\uE734", "Lowest rating", MusicChoices.FormatsNote, rating).Row,
+                SettingsCard.Row("\uE9CE", "Include unrated songs", null, unrated).Row));
+            panel.Children.Add(SettingsCard.Section("Play during"));
+            panel.Children.Add(SettingsCard.Card(
+                SettingsCard.Row("\uE714", "Cinematic shows", "A saved show with its own music plays that instead.", inCinematic).Row,
+                SettingsCard.Row("\uE8B1", "Surprise me auto-play", null, inSurprise).Row));
+            panel.Children.Add(SettingsCard.Section("Sound"));
+            panel.Children.Add(SettingsCard.Card(SettingsCard.Row("\uE767", "Volume", null, volumeRow).Row));
 
             var dialog = new ContentDialog
             {
@@ -87,15 +105,16 @@ namespace ModernImageViewer
                 PrimaryButtonText = "Save",
                 CloseButtonText = "Cancel",
                 DefaultButton = ContentDialogButton.Primary,
-                XamlRoot = RootGrid.XamlRoot
+                XamlRoot = RootGrid.XamlRoot,
+                RequestedTheme = CurrentRequestedTheme
             };
             if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
 
             _currentSettings.MusicFolder = folder;
             _currentSettings.MusicLowestStars = MusicChoices.ChosenStars(rating);
-            _currentSettings.MusicIncludesUnrated = unrated.IsChecked == true;
-            _currentSettings.MusicInCinematic = inCinematic.IsChecked == true;
-            _currentSettings.MusicInSurprise = inSurprise.IsChecked == true;
+            _currentSettings.MusicIncludesUnrated = unrated.IsOn;
+            _currentSettings.MusicInCinematic = inCinematic.IsOn;
+            _currentSettings.MusicInSurprise = inSurprise.IsOn;
             _currentSettings.MusicVolume = volume.Value;
             SaveAllSettings();
             MusicSettingsChanged?.Invoke();
@@ -106,10 +125,13 @@ namespace ModernImageViewer
         {
             HeaderSettingsFlyout.Hide();
             string editor = ImageEditorPath;
-            var name = new TextBlock { Text = EditorName(editor), TextWrapping = TextWrapping.Wrap };
+            var choose = new Button { Content = "Change...", VerticalAlignment = VerticalAlignment.Center };
+            var paint = new Button { Content = "Use Paint", VerticalAlignment = VerticalAlignment.Center };
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            buttons.Children.Add(choose);
+            buttons.Children.Add(paint);
+            var (row, name, detail) = SettingsCard.Row("\uE70F", EditorName(editor), "Edit Image opens pictures in this program.", buttons);
             name.SetValue(Microsoft.UI.Xaml.Automation.AutomationProperties.AutomationIdProperty, "ImageEditorText");
-            var choose = new Button { Content = "Choose program..." };
-            var paint = new Button { Content = "Use Paint" };
             choose.Click += async (_, _) =>
             {
                 try
@@ -125,7 +147,7 @@ namespace ModernImageViewer
                 }
                 catch (Exception ex) when (ex is not OutOfMemoryException)
                 {
-                    name.Text = "Could not choose that program. " + ex.Message;
+                    detail.Text = "Could not choose that program. " + ex.Message;
                 }
             };
             paint.Click += (_, _) =>
@@ -133,12 +155,8 @@ namespace ModernImageViewer
                 editor = DefaultEditor;
                 name.Text = EditorName(editor);
             };
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-            buttons.Children.Add(choose);
-            buttons.Children.Add(paint);
-            var panel = new StackPanel { Spacing = 12, MinWidth = 340 };
-            panel.Children.Add(name);
-            panel.Children.Add(buttons);
+            var panel = new StackPanel { Width = 480 };
+            panel.Children.Add(SettingsCard.Card(row));
 
             var dialog = new ContentDialog
             {
@@ -147,7 +165,8 @@ namespace ModernImageViewer
                 PrimaryButtonText = "Save",
                 CloseButtonText = "Cancel",
                 DefaultButton = ContentDialogButton.Primary,
-                XamlRoot = RootGrid.XamlRoot
+                XamlRoot = RootGrid.XamlRoot,
+                RequestedTheme = CurrentRequestedTheme
             };
             if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
             ImageEditorPath = editor;
@@ -187,16 +206,81 @@ namespace ModernImageViewer
             ? $"{Path.GetFileName(Folder!.TrimEnd('\\'))}, {LowestStars:0.#}+ stars" + (IncludesUnrated ? " and unrated" : "")
             : NoFolder;
 
-        public static (ComboBox Rating, CheckBox Unrated) RatingControls(double lowestStars, bool includeUnrated)
+        public static (ComboBox Rating, ToggleSwitch Unrated) RatingControls(double lowestStars, bool includeUnrated)
         {
-            var rating = new ComboBox { Header = "Lowest rating", HorizontalAlignment = HorizontalAlignment.Stretch };
+            var rating = new ComboBox { Width = 120, VerticalAlignment = VerticalAlignment.Center };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(rating, "Lowest rating");
             for (double stars = 0.5; stars <= 5; stars += 0.5)
                 rating.Items.Add(stars == 1 ? "1 star" : $"{stars:0.#} stars");
             rating.SelectedIndex = (int)Math.Clamp(Math.Round(lowestStars * 2) - 1, 0, 9);
-            return (rating, new CheckBox { Content = "Include unrated songs", IsChecked = includeUnrated });
+            return (rating, SettingsCard.Switch("Include unrated songs", includeUnrated));
         }
 
         public static double ChosenStars(ComboBox rating) => (Math.Max(0, rating.SelectedIndex) + 1) / 2.0;
+    }
+
+    /// <summary>
+    /// Settings in dialogs: small section headers as in About, and rows grouped on cards as on the app's other panels.
+    /// A row is an icon, a title with an optional line under it, and its control at the right.
+    /// </summary>
+    public static class SettingsCard
+    {
+        /// <summary>Secondary text and icons. Taken from the dialog's own text color: a brush looked up in code would follow the app-wide theme, not the dialog's.</summary>
+        public const double Quiet = 0.7;
+
+        private static T FromXaml<T>(string attributes) where T : class =>
+            (T)Microsoft.UI.Xaml.Markup.XamlReader.Load($"<Border xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" {attributes}/>");
+
+        public static TextBlock Section(string text, bool first = false) => new()
+        {
+            Text = text,
+            FontSize = 12,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            CharacterSpacing = 80,
+            Opacity = Quiet,
+            Margin = new Thickness(2, first ? 0 : 16, 0, 6)
+        };
+
+        public static ToggleSwitch Switch(string name, bool on)
+        {
+            var toggle = new ToggleSwitch { IsOn = on, OnContent = string.Empty, OffContent = string.Empty, MinWidth = 0, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(toggle, name);
+            return toggle;
+        }
+
+        public static (Grid Row, TextBlock Title, TextBlock Detail) Row(string glyph, string title, string? detail, FrameworkElement control)
+        {
+            var row = new Grid { ColumnSpacing = 12, MinHeight = 44, Padding = new Thickness(14, 8, 14, 8) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var icon = new FontIcon { FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), Glyph = glyph, FontSize = 16, VerticalAlignment = VerticalAlignment.Center, Opacity = Quiet };
+            var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Spacing = 1 };
+            var name = new TextBlock { Text = title, TextTrimming = TextTrimming.CharacterEllipsis };
+            var line = new TextBlock { Text = detail ?? string.Empty, FontSize = 12, TextWrapping = TextWrapping.Wrap, MaxLines = 2, TextTrimming = TextTrimming.CharacterEllipsis, Opacity = Quiet };
+            words.Children.Add(name);
+            words.Children.Add(line);
+            line.RegisterPropertyChangedCallback(TextBlock.TextProperty, (_, _) => line.Visibility = string.IsNullOrEmpty(line.Text) ? Visibility.Collapsed : Visibility.Visible);
+            line.Visibility = string.IsNullOrEmpty(detail) ? Visibility.Collapsed : Visibility.Visible;
+            Grid.SetColumn(words, 1);
+            Grid.SetColumn(control, 2);
+            row.Children.Add(icon);
+            row.Children.Add(words);
+            row.Children.Add(control);
+            return (row, name, line);
+        }
+
+        public static Border Card(params FrameworkElement[] rows)
+        {
+            var stack = new StackPanel();
+            for (int i = 0; i < rows.Length; i++)
+            {
+                if (i > 0) stack.Children.Add(FromXaml<Border>("Height=\"1\" Background=\"{ThemeResource DividerStrokeColorDefaultBrush}\""));
+                stack.Children.Add(rows[i]);
+            }
+            var card = FromXaml<Border>("CornerRadius=\"8\" BorderThickness=\"1\" BorderBrush=\"{ThemeResource CardStrokeColorDefaultBrush}\" Background=\"{ThemeResource CardBackgroundFillColorDefaultBrush}\"");
+            card.Child = stack;
+            return card;
+        }
     }
 }

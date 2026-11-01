@@ -109,10 +109,10 @@ namespace ModernImageViewer.Cinematic
             bool startUnrated = ViewModel.IsMusicFolder ? ViewModel.MusicIncludesUnrated : mine?.IncludesUnrated ?? false;
             var (rating, unrated) = MusicChoices.RatingControls(startStars, startUnrated);
 
-            var panel = new StackPanel { Spacing = 12, MinWidth = 300 };
-            panel.Children.Add(rating);
-            panel.Children.Add(unrated);
-            panel.Children.Add(new TextBlock { Text = MusicChoices.FormatsNote, TextWrapping = TextWrapping.Wrap, FontSize = 12, Opacity = 0.8 });
+            var panel = new StackPanel { Width = 440 };
+            panel.Children.Add(SettingsCard.Card(
+                SettingsCard.Row("\uE734", "Lowest rating", MusicChoices.FormatsNote, rating).Row,
+                SettingsCard.Row("\uE9CE", "Include unrated songs", null, unrated).Row));
 
             var dialog = new ContentDialog
             {
@@ -125,7 +125,7 @@ namespace ModernImageViewer.Cinematic
                 RequestedTheme = ElementTheme.Dark
             };
             if (await dialog.ShowAsync() == ContentDialogResult.Primary)
-                ViewModel.SetMusicFolder(folder, MusicChoices.ChosenStars(rating), unrated.IsChecked == true);
+                ViewModel.SetMusicFolder(folder, MusicChoices.ChosenStars(rating), unrated.IsOn);
         }
 
         private void BtnMusic_Click(object sender, RoutedEventArgs e)

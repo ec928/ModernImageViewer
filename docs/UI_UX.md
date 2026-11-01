@@ -205,6 +205,7 @@ In accordance with workspace UX standards:
 - **Never** float commitment buttons inline with form content.
 - **Dedicated Footers**: Dialogs (About, Settings, Save / Export) must feature a dedicated bottom footer spanning the full width, separated by a 1px border or subtle tint.
 - **Button Alignment**: Primary actions (e.g., "Save", "Done") anchor to the **bottom-right** of the footer, with secondary actions ("Cancel") immediately to their left.
+- **Settings in a dialog**: small section headers as in About, with rows on rounded cards (`SettingsCard`): an icon, a title with an optional line under it, and the control at the right. Switches rather than checkboxes. A dialog takes the app's theme (`CurrentRequestedTheme`), so it never shows bright over a dark app. Controls that only mean something with a choice made wait until it is made.
 - **Button Hierarchy**:
   - Primary button: Accent fill (`AccentButtonStyle`).
   - Secondary / Dismiss button: Default or subtle stroke (`Default` / `SubtleButtonStyle`).
