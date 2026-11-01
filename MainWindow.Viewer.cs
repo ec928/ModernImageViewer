@@ -1078,6 +1078,8 @@ namespace ModernImageViewer
             if (!adding) MultiSelectActionBar.Visibility = Visibility.Collapsed;
         }
 
+        private bool _multiViewOpenedFullscreen;
+
         private bool BeginMultiViewCanvas()
         {
             if (_multiViewCanvasActive || _appWindow == null) return false;
@@ -1088,6 +1090,7 @@ namespace ModernImageViewer
             }
             _parkKeptSize = false;
             _multiViewCanvasActive = true;
+            _multiViewOpenedFullscreen = _isFullscreen;
             SyncViewModeButtons();
             // Full screen has no frame. A size set now would shrink it and leave nothing to move or resize it by.
             if (_isFullscreen) return false;
@@ -1109,6 +1112,8 @@ namespace ModernImageViewer
             if (!_multiViewCanvasActive || _appWindow == null) return;
             // The tiles get their own window size back, and a size set on a full screen window leaves it stuck with no frame.
             // Picking pictures to add keeps the size, and comes straight back to Multi-View.
+            // Opened and left in full screen, it never had a window size of its own to remember.
+            bool neverWindowed = _multiViewOpenedFullscreen && _isFullscreen;
             if (_isFullscreen && !_parkKeptSize) ToggleFullscreen();
             if (_isFullscreen)
             {
@@ -1116,8 +1121,11 @@ namespace ModernImageViewer
                 SyncViewModeButtons();
                 return;
             }
-            _currentSettings.MultiViewWindowWidth = _appWindow.Size.Width;
-            _currentSettings.MultiViewWindowHeight = _appWindow.Size.Height;
+            if (!neverWindowed)
+            {
+                _currentSettings.MultiViewWindowWidth = _appWindow.Size.Width;
+                _currentSettings.MultiViewWindowHeight = _appWindow.Size.Height;
+            }
             _multiViewCanvasActive = false;
             SyncViewModeButtons();
             if (!_parkKeptSize) RestoreGridWindowSize();
