@@ -146,6 +146,76 @@ namespace ModernImageViewer.Tests
             for (int i = 0; i < 100; i++) Assert.DoesNotContain(gone, deck.Deal(16));
         }
 
+        private static void AssertCovered(CameraView view)
+        {
+            double margin = 0.5 / view.Zoom;
+            Assert.True(view.Zoom >= 1, $"zoom {view.Zoom}");
+            Assert.InRange(view.X, margin - 1e-9, 1 - margin + 1e-9);
+            Assert.InRange(view.Y, margin - 1e-9, 1 - margin + 1e-9);
+        }
+
+        [Fact]
+        public void The_camera_never_shows_past_the_edge_of_the_canvas()
+        {
+            var random = new Random(5);
+            double[] amounts = { 0.01, 0.2, 0.5, 1, 7 };
+            double[] lengths = { 0.1, 3, 5, 12, 62.5, 1000 };
+            (double, double)[][] aims = { Array.Empty<(double, double)>(), new[] { (0.0, 0.0) }, new[] { (1.0, 1.0) }, new[] { (0.5, 0.5), (-3.0, 9.0) } };
+            for (int i = 0; i < 4000; i++)
+            {
+                var move = CameraMove.Plan(aims[i % aims.Length], amounts[i % amounts.Length], random.NextDouble(), random.NextDouble(), lengths[i % lengths.Length], null, random)!;
+                for (double t = -1; t <= move.Seconds + 1; t += Math.Max(move.Seconds / 7, 0.01)) AssertCovered(move.At(t));
+            }
+        }
+
+        [Fact]
+        public void The_camera_visibly_moves_and_each_kind_stays_what_it_says()
+        {
+            var random = new Random(9);
+            var seen = new HashSet<CameraKind>();
+            for (int i = 0; i < 500; i++)
+            {
+                var move = CameraMove.Plan(Array.Empty<(double, double)>(), 0.5, 0.5, 0, 8, null, random)!;
+                seen.Add(move.Kind);
+                var (start, end) = (move.At(0), move.At(8));
+                if (move.Kind == CameraKind.ZoomIn) Assert.True(end.Zoom > start.Zoom);
+                if (move.Kind == CameraKind.ZoomOut) Assert.True(end.Zoom < start.Zoom);
+                if (move.Kind == CameraKind.Drift) Assert.True(Math.Abs(end.X - start.X) + Math.Abs(end.Y - start.Y) > 0.02);
+            }
+            Assert.Equal(3, seen.Count);
+        }
+
+        [Fact]
+        public void No_motion_means_no_camera_and_the_same_kind_does_not_repeat()
+        {
+            var random = new Random(4);
+            Assert.Null(CameraMove.Plan(Array.Empty<(double, double)>(), 0, 0.5, 0.5, 8, null, random));
+            int repeats = 0;
+            CameraKind? last = null;
+            for (int i = 0; i < 500; i++)
+            {
+                var move = CameraMove.Plan(Array.Empty<(double, double)>(), 0.5, 0.5, 0, 8, last, random)!;
+                if (move.Kind == last) repeats++;
+                last = move.Kind;
+            }
+            Assert.True(repeats < 10, $"{repeats} repeats");
+        }
+
+        [Fact]
+        public void The_camera_gets_somewhere_to_aim_on_every_design_with_faces()
+        {
+            var photos = Photos(9, 1600, 1200, new UnitRect(0.45, 0.4, 0.1, 0.12));
+            foreach (string recipe in LayoutComposer.Recipes)
+            {
+                if (!LayoutComposer.CanMake(recipe, photos.Count)) continue;
+                var made = LayoutComposer.Compose(photos, 1280, 720, 1, null, 1, recipe)!;
+                var subjects = made.CameraSubjects();
+                Assert.NotEmpty(subjects);
+                Assert.True(subjects.Distinct().Count() > 1 || made.Cells.Count == 1, recipe);
+                Assert.All(subjects, s => { Assert.InRange(s.X, 0, 1); Assert.InRange(s.Y, 0, 1); });
+            }
+        }
+
         private static SurpriseOptions Zoomed(double most) => new() { MostZoom = most };
 
         [Fact]

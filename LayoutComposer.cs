@@ -72,6 +72,14 @@ namespace ModernImageViewer
             }
         }
 
+        /// <summary>Where the camera may aim: the middle of the largest cells with faces in them, as shares of the canvas.</summary>
+        public List<(double X, double Y)> CameraSubjects() => Cells
+            .Where(c => c.Photo.Faces.Count > 0 && Width >= 1 && Height >= 1)
+            .OrderByDescending(c => c.W * c.H)
+            .Take(3)
+            .Select(c => (Math.Clamp((c.X + c.W / 2) / Width, 0, 1), Math.Clamp((c.Y + c.H / 2) / Height, 0, 1)))
+            .ToList();
+
         public MultiViewLayoutFile ToLayoutFile()
         {
             var file = new MultiViewLayoutFile
@@ -182,6 +190,12 @@ namespace ModernImageViewer
         public bool AutoPlayRandom { get; set; }
         public int RandomFewestSeconds { get; set; } = 5;
         public int RandomMostSeconds { get; set; } = 15;
+        /// <summary>How far the camera moves over each layout during auto-play, 0 to 1. 0 is still.</summary>
+        public double MotionAmount { get; set; } = 0.5;
+        /// <summary>The odds that it zooms rather than drifts.</summary>
+        public double MotionZoomChance { get; set; } = 0.5;
+        /// <summary>The odds that it aims at a cell with faces, where there is one.</summary>
+        public double MotionFaceChance { get; set; } = 0.7;
 
         /// <summary>How long Play shows each layout. Not playing is not a setting, so there is always a speed.</summary>
         public int PlaySeconds => AutoPlaySeconds > 0 ? AutoPlaySeconds : 5;
@@ -216,6 +230,9 @@ namespace ModernImageViewer
                 if (!RandomPlayChoices.Contains(read.RandomFewestSeconds)) read.RandomFewestSeconds = 5;
                 if (!RandomPlayChoices.Contains(read.RandomMostSeconds)) read.RandomMostSeconds = 15;
                 if (read.RandomMostSeconds < read.RandomFewestSeconds) read.RandomMostSeconds = read.RandomFewestSeconds;
+                read.MotionAmount = Math.Clamp(read.MotionAmount, 0, 1);
+                read.MotionZoomChance = Math.Clamp(read.MotionZoomChance, 0, 1);
+                read.MotionFaceChance = Math.Clamp(read.MotionFaceChance, 0, 1);
                 return read;
             }
             catch (System.Text.Json.JsonException)

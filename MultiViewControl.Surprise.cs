@@ -201,7 +201,8 @@ namespace ModernImageViewer
                 if (_autoPlaySeconds > 0 && _autoPlayTimer != null)
                 {
                     _autoPlaySeconds = SurpriseChoices.PlaySeconds;
-                    _autoPlayTimer.Interval = TimeSpan.FromSeconds(SurpriseChoices.NextPlaySeconds(Random.Shared));
+                    _layoutSeconds = SurpriseChoices.NextPlaySeconds(Random.Shared);
+                    _autoPlayTimer.Interval = TimeSpan.FromSeconds(_layoutSeconds);
                 }
                 ShowAutoPlayState();
             }
@@ -268,6 +269,7 @@ namespace ModernImageViewer
             speedRow.Children.Add(speed);
             body.Children.Add(speedRow);
             body.Children.Add(range);
+            Slide(body, "Motion", "How far the camera moves over each layout while it plays, from still to strong. The middle matches a Cinematic show.", 0, 100, 5, options.MotionAmount * 100, (o, v) => o.MotionAmount = v / 100);
 
             body.Children.Add(Label("Music"));
             body.Children.Add(MusicRow(Icon, WordButton));
@@ -314,6 +316,10 @@ namespace ModernImageViewer
             Slide(faces, "Most zoom, x", "1 is off. Brings forward people who are small in the image. A person Windows misses can be cropped.", 1, SurpriseOptions.MostOfAnyZoom, 0.5, options.MostZoom, (o, v) => o.MostZoom = v);
             Slide(faces, "How often, %", "The odds that an image with faces is zoomed.", 0, 100, 5, options.ZoomChance * 100, (o, v) => o.ZoomChance = v / 100);
 
+            var camera = Section("Camera");
+            Slide(camera, "Zooms rather than drifts, %", "The odds that the camera zooms in or out. Otherwise it drifts across the layout.", 0, 100, 5, options.MotionZoomChance * 100, (o, v) => o.MotionZoomChance = v / 100);
+            Slide(camera, "Aims at faces, %", "The odds that it heads for a large cell with faces in it, where there is one.", 0, 100, 5, options.MotionFaceChance * 100, (o, v) => o.MotionFaceChance = v / 100);
+
             var look = Section("Look");
             Slide(look, "Most tilt, degrees", "How far Scattered prints can turn.", 0, 20, 0.5, options.MostTilt, (o, v) => o.MostTilt = v);
             Slide(look, "Hero size, %", "The hero's height against the canvas, give or take a tenth.", 40, 90, 1, options.HeroSize * 100, (o, v) => o.HeroSize = v / 100);
@@ -353,7 +359,8 @@ namespace ModernImageViewer
                 if (_autoPlaySeconds > 0 && _autoPlayTimer != null)
                 {
                     _autoPlaySeconds = SurpriseChoices.PlaySeconds;
-                    _autoPlayTimer.Interval = TimeSpan.FromSeconds(SurpriseChoices.NextPlaySeconds(Random.Shared));
+                    _layoutSeconds = SurpriseChoices.NextPlaySeconds(Random.Shared);
+                    _autoPlayTimer.Interval = TimeSpan.FromSeconds(_layoutSeconds);
                 }
                 ShowSurpriseCard();
             };
@@ -722,13 +729,16 @@ namespace ModernImageViewer
             StartAutoPlayMusic();
             ShowAutoPlayState();
             ShowAutoPlayToast($"Playing: a new layout every {SurpriseChoices.PlayWords}");
-            var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(SurpriseChoices.NextPlaySeconds(Random.Shared)) };
+            _layoutSeconds = SurpriseChoices.NextPlaySeconds(Random.Shared);
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(_layoutSeconds) };
             _autoPlayTimer = timer;
             timer.Tick += async (_, _) =>
             {
                 timer.Stop();
+                // Chosen first, so the camera knows how long the layout it is about to show will stay.
+                _layoutSeconds = SurpriseChoices.NextPlaySeconds(Random.Shared);
                 await SurpriseAsync(fade: true);
-                timer.Interval = TimeSpan.FromSeconds(SurpriseChoices.NextPlaySeconds(Random.Shared));
+                timer.Interval = TimeSpan.FromSeconds(_layoutSeconds);
                 if (ReferenceEquals(_autoPlayTimer, timer)) timer.Start();
             };
             await SurpriseAsync(fade: true);
@@ -742,6 +752,7 @@ namespace ModernImageViewer
             _autoPlayTimer?.Stop();
             _autoPlayTimer = null;
             if (!_autoPlayShieldPressed) RemoveAutoPlayShield();
+            SendCanvasCameraHome();
             CaptureUndoPoint();
             _surpriseMusic?.SetPlaying(false);
             ShowAutoPlayState();
@@ -981,6 +992,8 @@ namespace ModernImageViewer
                 CaptureUndoPoint();
                 _cellBorderFlyout?.Hide();
                 Image? before = fade ? await CoverWithPictureOfCanvasAsync() : null;
+                // The cover holds the old layout where the camera had it, and the new one starts from nothing.
+                ResetCanvasCamera();
                 _restoringUndo = true;
                 _reuseBitmaps = ready;
                 try
@@ -1006,6 +1019,7 @@ namespace ModernImageViewer
                     _surpriseSettling = false;
                 }
                 CaptureUndoPoint();
+                if (before != null && _autoPlaySeconds > 0) StartCanvasCamera(composition);
                 if (before != null) FadeAway(before);
             }
             finally
@@ -1090,6 +1104,8 @@ namespace ModernImageViewer
         {
             StopAutoPlay();
             StopAutoPlayMusic();
+            ResetCanvasCamera();
+            _lastCameraKind = null;
             _surpriseDeck = null;
             _surpriseRun = false;
             _surpriseRecipe = null;

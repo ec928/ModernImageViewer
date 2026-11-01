@@ -148,6 +148,7 @@ namespace ModernImageViewer
         {
             StopAutoPlay();
             StopAutoPlayMusic();
+            ResetCanvasCamera();
             CloseCountsCard();
             _hudTimer.Stop();
         }
