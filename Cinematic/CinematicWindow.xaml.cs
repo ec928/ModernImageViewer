@@ -69,7 +69,11 @@ namespace ModernImageViewer.Cinematic
         private int _seqScrollGeneration;
         private bool _sequenceWanted;
         private bool _isManuallyNavigating = false;
-        private int _currentTransitionType = -1;
+        private TimeSpan _fadeStartTime = TimeSpan.Zero;
+        private TimeSpan _lastRenderTime = TimeSpan.Zero;
+        private bool _nothingToPlayShown;
+        private bool _isFullscreen;
+        private bool _maximizedBeforeFullscreen;
         private int _trajectoryUpdateId = 0;
 
         private Queue<CameraTransform> _currentSequence = new();
@@ -207,8 +211,9 @@ namespace ModernImageViewer.Cinematic
                 presenter.IsMinimizable = true;
                 presenter.IsResizable = true;
 
-                RestoreCinematicWindowPlacement(presenter);
+                bool startFullscreen = RestoreCinematicWindowPlacement(presenter);
                 _appWindow.Changed += CinematicAppWindow_Changed;
+                if (startFullscreen) SetFullscreen(true);
             }
 
             _idleTimer = DispatcherQueue.CreateTimer();
@@ -251,7 +256,7 @@ namespace ModernImageViewer.Cinematic
             _restoreGate.TrySetResult(true);
         }
 
-        private void RestoreCinematicWindowPlacement(OverlappedPresenter presenter)
+        private bool RestoreCinematicWindowPlacement(OverlappedPresenter presenter)
         {
             string settingsFile = System.IO.Path.Combine(AppPaths.LocalDirectory, "WindowBounds.json");
             try
@@ -261,6 +266,7 @@ namespace ModernImageViewer.Cinematic
 
                 int w = 0, h = 0, x = int.MinValue, y = int.MinValue;
                 bool maximized = false;
+                bool fullscreen = false;
                 if (System.IO.File.Exists(settingsFile))
                 {
                     var json = System.IO.File.ReadAllText(settingsFile);
@@ -272,6 +278,7 @@ namespace ModernImageViewer.Cinematic
                         if (bounds.TryGetValue("X", out int sx)) x = sx;
                         if (bounds.TryGetValue("Y", out int sy)) y = sy;
                         maximized = bounds.TryGetValue("Maximized", out int mx) && mx == 1;
+                        fullscreen = bounds.TryGetValue("Fullscreen", out int fs) && fs == 1;
                     }
                 }
 
@@ -294,16 +301,49 @@ namespace ModernImageViewer.Cinematic
                 _haveRestoreBounds = true;
 
                 if (maximized) presenter.Maximize();
+                return fullscreen;
             }
             catch
             {
                 SetDefaultCinematicBounds();
+                return false;
             }
+        }
+
+        private void SetFullscreen(bool on)
+        {
+            if (on == _isFullscreen) return;
+            if (on)
+            {
+                _maximizedBeforeFullscreen = _appWindow.Presenter is OverlappedPresenter p && p.State == OverlappedPresenterState.Maximized;
+                _isFullscreen = true;
+                _appWindow.SetPresenter(AppWindowPresenterKind.FullScreen);
+            }
+            else
+            {
+                _appWindow.SetPresenter(AppWindowPresenterKind.Default);
+                _isFullscreen = false;
+            }
+            IconFullscreen.Symbol = on ? Symbol.BackToWindow : Symbol.FullScreen;
+            string name = on ? "Leave full screen (F11 or Esc)" : "Full screen (F11)";
+            ToolTipService.SetToolTip(BtnFullscreen, name);
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(BtnFullscreen, name);
+            // What was loaded next was framed for the old screen shape.
+            DiscardPreload();
+        }
+
+        private void BtnFullscreen_Click(object sender, RoutedEventArgs e) => SetFullscreen(!_isFullscreen);
+
+        private void Accelerator_Fullscreen(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender, Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
+        {
+            SetFullscreen(!_isFullscreen);
+            args.Handled = true;
         }
 
         private void CinematicAppWindow_Changed(AppWindow sender, AppWindowChangedEventArgs args)
         {
             if (!args.DidSizeChange && !args.DidPositionChange && !args.DidPresenterChange) return;
+            if (_isFullscreen) return;
             if (_appWindow.Presenter is OverlappedPresenter p && p.State == OverlappedPresenterState.Restored
                 && _appWindow.Size.Width > 0 && _appWindow.Size.Height > 0)
             {
@@ -352,11 +392,10 @@ namespace ModernImageViewer.Cinematic
 
         private void Accelerator_Escape(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender, Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
         {
-            if (DirectorSidebar.IsPaneOpen)
-            {
-                DirectorSidebar.IsPaneOpen = false;
-                args.Handled = true;
-            }
+            args.Handled = true;
+            if (DirectorSidebar.IsPaneOpen) DirectorSidebar.IsPaneOpen = false;
+            else if (_isFullscreen) SetFullscreen(false);
+            else this.Close();
         }
 
         // --------------------------------------------------------
@@ -372,6 +411,9 @@ namespace ModernImageViewer.Cinematic
         {
             _isPreloading = false;
             _nextSequence.Clear();
+            _fadeStartTime = TimeSpan.Zero;
+            _crossfadeBlurAlpha = 0f;
+            _crossfadeSubjectAlpha = 0f;
             if (_secondaryFrame != null)
             {
                 if (_primaryFrame == null || _secondaryFrame.GpuBitmap != _primaryFrame.GpuBitmap)
@@ -495,6 +537,7 @@ namespace ModernImageViewer.Cinematic
                 _mathCts?.Cancel();
 
                 _isPreloading = false;
+                _fadeStartTime = TimeSpan.Zero;
                 _currentSequence.Clear();
                 _nextSequence.Clear();
 
@@ -516,9 +559,7 @@ namespace ModernImageViewer.Cinematic
                     if (newFrame == null && !token.IsCancellationRequested)
                     {
                         ViewModel.MarkClipFailed(loadIndex);
-                        int skip = ViewModel.PeekNextIndex();
-                        if (skip != loadIndex)
-                            DispatcherQueue.TryEnqueue(() => ViewModel.NavigateTo(skip));
+                        SkipFailedPicture(loadIndex);
                     }
                     return;
                 }
@@ -541,6 +582,7 @@ namespace ModernImageViewer.Cinematic
 
                 _slideDurationSeconds = _primaryFrame.Trajectory.RecommendedDurationSeconds;
                 _slideStartTime = TimeSpan.Zero;
+                _fadeStartTime = TimeSpan.Zero;
                 _crossfadeBlurAlpha = 0f;
                 _crossfadeSubjectAlpha = 0f;
 
@@ -598,7 +640,14 @@ namespace ModernImageViewer.Cinematic
             _sessionCts = new CancellationTokenSource();
             var token = _sessionCts.Token;
 
-            var frame = await DecodeAndMarshalImageAsync(ViewModel.CurrentIndex, token);
+            int firstIndex = ViewModel.CurrentIndex;
+            var frame = await DecodeAndMarshalImageAsync(firstIndex, token);
+            if (frame == null && !token.IsCancellationRequested)
+            {
+                ViewModel.MarkClipFailed(firstIndex);
+                SkipFailedPicture(firstIndex);
+                return;
+            }
             if (frame != null && !token.IsCancellationRequested)
             {
                 var request = new PlaybackRequest(SlideshowCanvas.Size, ViewModel.GetCurrentEffectiveSettings());
@@ -621,6 +670,19 @@ namespace ModernImageViewer.Cinematic
                 else DispatcherQueue.TryEnqueue(() => frame.Dispose());
             }
             else if (frame != null) DispatcherQueue.TryEnqueue(() => frame.Dispose());
+        }
+
+        private void SkipFailedPicture(int failedIndex)
+        {
+            int next = ViewModel.PeekNextIndex();
+            if (next != failedIndex)
+            {
+                DispatcherQueue.TryEnqueue(() => ViewModel.NavigateTo(next));
+                return;
+            }
+            if (_nothingToPlayShown || RootGrid.XamlRoot == null) return;
+            _nothingToPlayShown = true;
+            _ = ViewerEngine.ShowMessageAsync(RootGrid.XamlRoot, "Nothing to play", "None of these pictures could be opened.");
         }
 
         private async Task<SlideFrame?> DecodeAndMarshalImageAsync(int index, CancellationToken token)
@@ -681,12 +743,17 @@ namespace ModernImageViewer.Cinematic
 
             var args = e as RenderingEventArgs;
             TimeSpan totalTime = args?.RenderingTime ?? TimeSpan.Zero;
+            TimeSpan sinceLastFrame = _lastRenderTime == TimeSpan.Zero ? TimeSpan.Zero : totalTime - _lastRenderTime;
+            _lastRenderTime = totalTime;
 
             if (DirectorSidebar.IsPaneOpen)
                 UpdateStatusUi();
 
             if (!ViewModel.IsPlaying || _isManuallyNavigating)
             {
+                // Pause holds the picture: the clocks wait with it, so Play carries on from here.
+                if (_slideStartTime != TimeSpan.Zero) _slideStartTime += sinceLastFrame;
+                if (_fadeStartTime != TimeSpan.Zero) _fadeStartTime += sinceLastFrame;
                 if (DirectorSidebar.IsPaneOpen && !_previewing)
                     SlideshowCanvas.Invalidate();
                 return;
@@ -723,19 +790,26 @@ namespace ModernImageViewer.Cinematic
                 }
             }
 
-            if (progress >= 1.0)
+            // The fade starts when the next picture is due, or when it arrives if it is late, and the next slide's clock starts with it.
+            if (_secondaryFrame != null && _fadeStartTime == TimeSpan.Zero && elapsedSeconds >= cfStartElapsed)
+                _fadeStartTime = totalTime;
+            double fadeElapsed = _fadeStartTime == TimeSpan.Zero ? -1 : (totalTime - _fadeStartTime).TotalSeconds;
+            bool fadeFinished = _secondaryFrame != null && fadeElapsed >= crossfadeDuration;
+
+            if (progress >= 1.0 && _previewing)
             {
-                if (_previewing)
-                {
-                    _previewing = false;
-                    if (ViewModel.IsPlaying) ViewModel.TogglePlay();
-                    DiscardPreload();
-                    SlideProgressBar.Value = 0;
-                    SyncPlayPauseUI();
-                    SlideshowCanvas.Invalidate();
-                    return;
-                }
-                if (_secondaryFrame != null)
+                _previewing = false;
+                if (ViewModel.IsPlaying) ViewModel.TogglePlay();
+                DiscardPreload();
+                SlideProgressBar.Value = 0;
+                SyncPlayPauseUI();
+                SlideshowCanvas.Invalidate();
+                return;
+            }
+
+            if (fadeFinished || (progress >= 1.0 && _secondaryFrame == null))
+            {
+                if (fadeFinished)
                 {
                     var oldPrimary = _primaryFrame;
                     _primaryFrame = _secondaryFrame;
@@ -754,9 +828,11 @@ namespace ModernImageViewer.Cinematic
                     }
 
                     _slideDurationSeconds = _primaryFrame.Trajectory.RecommendedDurationSeconds;
-                    _slideStartTime = totalTime;
-                    elapsedSeconds = 0;
-                    progress = 0;
+                    _slideStartTime = _fadeStartTime;
+                    _fadeStartTime = TimeSpan.Zero;
+                    fadeElapsed = -1;
+                    elapsedSeconds = (totalTime - _slideStartTime).TotalSeconds;
+                    progress = elapsedSeconds / _slideDurationSeconds;
                     _crossfadeBlurAlpha = 0f;
                     _crossfadeSubjectAlpha = 0f;
                 }
@@ -796,24 +872,20 @@ namespace ModernImageViewer.Cinematic
             float mainT = (float)Math.Clamp(progress, 0.0, 1.0);
             UpdateFrameVectors(_primaryFrame!, mainT, ViewModel.GetCurrentEffectiveSettings().IntensityPercent);
 
-            if (elapsedSeconds >= cfStartElapsed && _secondaryFrame != null)
+            if (fadeElapsed >= 0 && _secondaryFrame != null)
             {
-                double cfElapsed = elapsedSeconds - cfStartElapsed;
-                double blendWindow = _secondaryFrame.Trajectory.RequiresCut ? 0.8 : 1.5;
-
-                _crossfadeBlurAlpha = (float)Math.Clamp(cfElapsed / blendWindow, 0.0, 1.0);
+                float fade = (float)Math.Clamp(fadeElapsed / crossfadeDuration, 0.0, 1.0);
+                _crossfadeBlurAlpha = fade * fade * (3f - 2f * fade);
                 _crossfadeSubjectAlpha = _crossfadeBlurAlpha;
 
-                if (_crossfadeBlurAlpha <= 0.01f || _currentTransitionType == -1)
-                    _currentTransitionType = Random.Shared.Next(3);
-
-                UpdateFrameVectors(_secondaryFrame, 0f, ViewModel.GetCurrentEffectiveSettings().IntensityPercent);
+                // Already moving as it fades in, so nothing stops or starts when the old picture goes.
+                float incomingT = (float)Math.Clamp(fadeElapsed / _secondaryFrame.Trajectory.RecommendedDurationSeconds, 0.0, 1.0);
+                UpdateFrameVectors(_secondaryFrame, incomingT, ViewModel.GetCurrentEffectiveSettings().IntensityPercent);
             }
             else
             {
                 _crossfadeBlurAlpha = 0f;
                 _crossfadeSubjectAlpha = 0f;
-                _currentTransitionType = -1;
             }
 
             SlideProgressBar.Value = mainT;
@@ -824,41 +896,18 @@ namespace ModernImageViewer.Cinematic
         {
             try
             {
-                Vector2 pOffset = Vector2.Zero;
-                Vector2 sOffset = Vector2.Zero;
-
-                if (_crossfadeSubjectAlpha > 0f && _currentTransitionType > 0)
-                {
-                    float width = (float)sender.Size.Width;
-                    float t = _crossfadeSubjectAlpha;
-                    float easedT = t * t * (3f - 2f * t);
-
-                    if (_currentTransitionType == 1)
-                    {
-                        pOffset = new Vector2(-width * easedT, 0);
-                        sOffset = new Vector2(width * (1f - easedT), 0);
-                    }
-                    else if (_currentTransitionType == 2)
-                    {
-                        pOffset = new Vector2(width * easedT, 0);
-                        sOffset = new Vector2(-width * (1f - easedT), 0);
-                    }
-                }
-
                 if (_primaryFrame != null && _primaryFrame.GpuBitmap.Device == sender.Device)
-                    DrawFrame(args, _primaryFrame, sender.Size, 1.0f, 1.0f, pOffset);
+                    DrawFrame(args, _primaryFrame, sender.Size, 1.0f, 1.0f);
 
                 if (_secondaryFrame != null && _secondaryFrame.GpuBitmap.Device == sender.Device && (_crossfadeBlurAlpha > 0f || _crossfadeSubjectAlpha > 0f))
                 {
-                    float sAlpha = _currentTransitionType > 0 ? 1.0f : _crossfadeSubjectAlpha;
-                    float bAlpha = _currentTransitionType > 0 ? 1.0f : _crossfadeBlurAlpha;
-                    DrawFrame(args, _secondaryFrame, sender.Size, bAlpha, sAlpha, sOffset);
+                    DrawFrame(args, _secondaryFrame, sender.Size, _crossfadeBlurAlpha, _crossfadeSubjectAlpha);
                 }
             }
             catch (ObjectDisposedException) { }
         }
 
-        private void DrawFrame(CanvasDrawEventArgs args, SlideFrame frame, Size bounds, float blurAlpha, float subjectAlpha, Vector2 transitionOffset = default)
+        private void DrawFrame(CanvasDrawEventArgs args, SlideFrame frame, Size bounds, float blurAlpha, float subjectAlpha)
         {
             var imgSize = frame.Intelligence.ImageSize;
             var traj = frame.Trajectory;
@@ -890,10 +939,9 @@ namespace ModernImageViewer.Cinematic
 
                     var bgTransform = Matrix3x2.CreateScale(bgScale * 1.15f)
                                     * Matrix3x2.CreateTranslation(
-                                        Math.Clamp(rawPanX, -bufferX, bufferX),
-                                        Math.Clamp(rawPanY, -bufferY, bufferY))
-                                    * Matrix3x2.CreateRotation(frame.CurrentRotation * -0.5f, bgCenter)
-                                    * Matrix3x2.CreateTranslation(transitionOffset);
+                                        Math.Clamp(rawPanX, -bufferX, bufferX) - bufferX,
+                                        Math.Clamp(rawPanY, -bufferY, bufferY) - bufferY)
+                                    * Matrix3x2.CreateRotation(frame.CurrentRotation * -0.5f, bgCenter);
 
                     args.DrawingSession.Transform = bgTransform;
 
@@ -915,7 +963,7 @@ namespace ModernImageViewer.Cinematic
                 if (subjectAlpha > 0f)
                 {
                     var fgCenter = new Vector2((float)bounds.Width / 2f, (float)bounds.Height / 2f);
-                    var fgTransform = Matrix3x2.CreateScale(frame.CurrentScale) * Matrix3x2.CreateTranslation(frame.CurrentPan) * Matrix3x2.CreateRotation(frame.CurrentRotation, fgCenter) * Matrix3x2.CreateTranslation(transitionOffset);
+                    var fgTransform = Matrix3x2.CreateScale(frame.CurrentScale) * Matrix3x2.CreateTranslation(frame.CurrentPan) * Matrix3x2.CreateRotation(frame.CurrentRotation, fgCenter);
 
                     args.DrawingSession.Transform = fgTransform;
                     args.DrawingSession.DrawImage(frame.GpuBitmap, 0, 0, frame.GpuBitmap.Bounds, subjectAlpha, CanvasImageInterpolation.HighQualityCubic);
@@ -926,7 +974,7 @@ namespace ModernImageViewer.Cinematic
                 if (subjectAlpha > 0f)
                 {
                     var centerPoint = new Vector2((float)bounds.Width / 2f, (float)bounds.Height / 2f);
-                    var transform = Matrix3x2.CreateScale(frame.CurrentScale) * Matrix3x2.CreateTranslation(frame.CurrentPan) * Matrix3x2.CreateRotation(frame.CurrentRotation, centerPoint) * Matrix3x2.CreateTranslation(transitionOffset);
+                    var transform = Matrix3x2.CreateScale(frame.CurrentScale) * Matrix3x2.CreateTranslation(frame.CurrentPan) * Matrix3x2.CreateRotation(frame.CurrentRotation, centerPoint);
 
                     args.DrawingSession.Transform = transform;
                     args.DrawingSession.DrawImage(frame.GpuBitmap, 0, 0, frame.GpuBitmap.Bounds, subjectAlpha, CanvasImageInterpolation.HighQualityCubic);
@@ -949,11 +997,6 @@ namespace ModernImageViewer.Cinematic
             PreviewBanner.Visibility = _previewing ? Visibility.Visible : Visibility.Collapsed;
             if (showEditOverlay && !ViewModel.HasUnsavedZoomPan) ResetKeyframeBoxes();
             UpdateStatusUi();
-
-            if (ViewModel.IsPlaying)
-            {
-                _slideStartTime = TimeSpan.Zero;
-            }
             SlideshowCanvas.Invalidate();
         }
 
@@ -1789,6 +1832,13 @@ namespace ModernImageViewer.Cinematic
                 }
             }
             frame.CurrentPan = linearPan;
+
+            if (traj.Mode == LayoutMode.Fullscreen && traj.Technique != "Custom" && SlideshowCanvas.ActualWidth > 0)
+            {
+                var img = frame.Intelligence.ImageSize;
+                (frame.CurrentPan, frame.CurrentRotation) = CameraFraming.KeepCovered(frame.CurrentScale, frame.CurrentPan, frame.CurrentRotation,
+                    (float)SlideshowCanvas.ActualWidth, (float)SlideshowCanvas.ActualHeight, (float)img.Width, (float)img.Height);
+            }
         }
 
         private void CinematicWindow_Closed(object sender, WindowEventArgs args)
@@ -1796,7 +1846,9 @@ namespace ModernImageViewer.Cinematic
             try
             {
                 string settingsFile = System.IO.Path.Combine(AppPaths.LocalDirectory, "WindowBounds.json");
-                bool maximized = _appWindow.Presenter is OverlappedPresenter op && op.State == OverlappedPresenterState.Maximized;
+                bool maximized = _isFullscreen
+                    ? _maximizedBeforeFullscreen
+                    : _appWindow.Presenter is OverlappedPresenter op && op.State == OverlappedPresenterState.Maximized;
                 var size = _haveRestoreBounds ? _restoreSize : _appWindow.Size;
                 var pos = _haveRestoreBounds ? _restorePos : _appWindow.Position;
 
@@ -1806,7 +1858,8 @@ namespace ModernImageViewer.Cinematic
                     { "Height", size.Height },
                     { "X", pos.X },
                     { "Y", pos.Y },
-                    { "Maximized", maximized ? 1 : 0 }
+                    { "Maximized", maximized ? 1 : 0 },
+                    { "Fullscreen", _isFullscreen ? 1 : 0 }
                 };
 
                 System.IO.File.WriteAllText(settingsFile, System.Text.Json.JsonSerializer.Serialize(bounds));

@@ -15,6 +15,7 @@
             <KeyboardAccelerator Key="Left" Invoked="Accelerator_Prev" />
             <KeyboardAccelerator Key="Right" Invoked="Accelerator_Next" />
             <KeyboardAccelerator Key="Escape" Invoked="Accelerator_Escape" />
+            <KeyboardAccelerator Key="F11" Invoked="Accelerator_Fullscreen" />
         </Grid.KeyboardAccelerators>
 
         <ProgressBar x:Name="SlideProgressBar" VerticalAlignment="Top" HorizontalAlignment="Stretch" 
@@ -144,6 +145,12 @@
                 <ToggleButton x:Name="BtnDirectorToggle" IsTabStop="False" UseSystemFocusVisuals="False" Click="BtnDirectorToggle_Click" Width="44" Height="44" Background="Transparent" BorderThickness="0" CornerRadius="22" ToolTipService.ToolTip="Director (Ken Burns)">
                     <SymbolIcon x:Name="IconDirector" Symbol="Edit" />
                 </ToggleButton>
+
+                <Border Width="1" Height="24" Background="{ThemeResource SurfaceStrokeColorDefaultBrush}" Margin="4,0" />
+
+                <Button x:Name="BtnFullscreen" IsTabStop="False" UseSystemFocusVisuals="False" Click="BtnFullscreen_Click" Width="44" Height="44" Background="Transparent" BorderThickness="0" CornerRadius="22" ToolTipService.ToolTip="Full screen (F11)" AutomationProperties.Name="Full screen (F11)">
+                    <SymbolIcon x:Name="IconFullscreen" Symbol="FullScreen" />
+                </Button>
             </StackPanel>
         </Border>
 
@@ -198,7 +205,7 @@
                                                    Style="{ThemeResource BodyStrongTextBlockStyle}" />
                                     </Grid>
                                     <Slider Minimum="3" Maximum="30" Value="{x:Bind ViewModel.DurationSeconds, Mode=TwoWay}"
-                                            ToolTipService.ToolTip="How long this shot holds" />
+                                            ToolTipService.ToolTip="How long this slide holds. Auto varies it from 5 to 20 seconds; moving this sets it for this slide." />
                                 </StackPanel>
                             </StackPanel>
                         </Border>

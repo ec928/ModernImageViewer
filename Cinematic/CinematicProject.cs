@@ -23,7 +23,7 @@ namespace ModernImageViewer.Cinematic.Data
             {
                 return new SlideSettings
                 {
-                    DurationSeconds = overrideDef.DurationSeconds ?? GlobalDefaults.DurationSeconds,
+                    DurationSeconds = overrideDef.DurationSeconds ?? 0,
                     IntensityPercent = overrideDef.IntensityPercent ?? GlobalDefaults.IntensityPercent,
                     TechniqueOverride = overrideDef.TechniqueOverride ?? GlobalDefaults.TechniqueOverride,
                     BeatCount = overrideDef.BeatCount ?? GlobalDefaults.BeatCount,
@@ -45,7 +45,6 @@ namespace ModernImageViewer.Cinematic.Data
 
             return new SlideSettings
             {
-                DurationSeconds = GlobalDefaults.DurationSeconds,
                 IntensityPercent = GlobalDefaults.IntensityPercent,
                 TechniqueOverride = GlobalDefaults.TechniqueOverride,
                 BeatCount = GlobalDefaults.BeatCount,
@@ -68,11 +67,8 @@ namespace ModernImageViewer.Cinematic.Data
 
     public class GlobalDefaults
     {
-        [JsonPropertyName("durationSeconds")]
-        public double DurationSeconds { get; set; } = 12.0;
-
         [JsonPropertyName("intensityPercent")]
-        public double IntensityPercent { get; set; } = 6.0;
+        public double IntensityPercent { get; set; } = 16.0;
 
         [JsonPropertyName("techniqueOverride")]
         public string TechniqueOverride { get; set; } = "Auto";

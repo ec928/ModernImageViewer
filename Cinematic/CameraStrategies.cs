@@ -23,6 +23,12 @@ namespace ModernImageViewer.Cinematic
             return scaleToFill / scaleToFit;
         }
 
+        public static bool IsNarrowForScreen(SceneIntelligence intel, Size bounds)
+        {
+            bool narrower = intel.ImageSize.Width / Math.Max(1, intel.ImageSize.Height) < bounds.Width / Math.Max(1, bounds.Height);
+            return narrower && GetCropRatio(intel, bounds) > 1.35f;
+        }
+
         public static float CalculateFaceZoom(Rect faceRect, Size bounds, float minScale)
         {
             float bh = (float)bounds.Height; float fh = (float)faceRect.Height;
@@ -139,6 +145,9 @@ namespace ModernImageViewer.Cinematic
             transform.StartScale = settings.DirectionMode == 3 ? maxZoom : (zoomIn ? baseZoom : maxZoom);
             transform.EndScale = settings.DirectionMode == 3 ? maxZoom : (zoomIn ? maxZoom : baseZoom);
 
+            double panOdds = StrategyMath.GetCropRatio(intel, bounds) > 1.2f ? 0.75 : 0.5;
+            bool panAcross = !hasManualTarget && (settings.DirectionMode == 3 || (settings.DirectionMode == 0 && rnd.NextDouble() < panOdds));
+
             if (settings.UseTilt)
             {
                 float maxTilt = 0.8f * (float)(Math.PI / 180.0);
@@ -149,11 +158,42 @@ namespace ModernImageViewer.Cinematic
             Rect full = new Rect(0, 0, bounds.Width, bounds.Height);
             transform.StartPan = CameraMath.GetTargetedPan(intel.SaliencyTarget, transform.StartScale, full, intel.ImageSize, rnd, hasManualTarget);
             transform.EndPan = CameraMath.GetTargetedPan(intel.SaliencyTarget, transform.EndScale, full, intel.ImageSize, rnd, hasManualTarget);
+            if (panAcross) PanAcross(transform, intel, bounds, settings, minScale, rnd);
 
             transform.RecommendedDurationSeconds = 12.0 + rnd.NextDouble() * 3.0;
             transform.CrossfadeDurationSeconds = 1.8;
 
             return transform;
+        }
+
+        /// <summary>Slides the view across the subject at one zoom. Sideways where the picture has the room, sometimes up or down.</summary>
+        private static void PanAcross(CameraTransform transform, SceneIntelligence intel, Size bounds, SlideSettings settings, float minScale, Random rnd)
+        {
+            float amount = (float)settings.IntensityPercent / 100f;
+            float scale = minScale * Math.Max(1.06f, 1f + amount * 0.75f);
+            float bw = (float)bounds.Width, bh = (float)bounds.Height;
+            float roomX = (float)intel.ImageSize.Width * scale - bw;
+            float roomY = (float)intel.ImageSize.Height * scale - bh;
+
+            bool sideways = roomY < bh * 0.1f || (roomX >= bw * 0.1f && rnd.NextDouble() < 0.75);
+            float room = sideways ? roomX : roomY;
+            float screen = sideways ? bw : bh;
+            float travel = Math.Min(room, screen * (0.08f + amount * 0.8f));
+            float centre = sideways
+                ? bw / 2f - intel.SaliencyTarget.X * scale
+                : bh / 2f - intel.SaliencyTarget.Y * scale;
+            float from = Math.Clamp(centre - travel / 2f, -room, -travel);
+            if (rnd.Next(2) == 0) { from += travel; travel = -travel; }
+
+            float otherCentre = sideways
+                ? bh / 2f - intel.SaliencyTarget.Y * scale
+                : bw / 2f - intel.SaliencyTarget.X * scale;
+            float across = Math.Clamp(otherCentre, sideways ? -Math.Max(0f, roomY) : -Math.Max(0f, roomX), 0f);
+
+            transform.StartScale = scale;
+            transform.EndScale = scale;
+            transform.StartPan = sideways ? new Vector2(from, across) : new Vector2(across, from);
+            transform.EndPan = sideways ? new Vector2(from + travel, across) : new Vector2(across, from + travel);
         }
     }
 

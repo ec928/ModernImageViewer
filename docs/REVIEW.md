@@ -125,3 +125,4 @@ The Win2D viewer core is real, but GPU lifetime was not reference-counted end-to
 - 2026-10-31: v0.26.0, released. Everything since v0.24.0.
 - 2026-11-01: Arrow keys in the preview no longer stop working after a tile click. The preview never took focus, so the tile behind it took the key.
 - 2026-11-01: v0.26.1, internal. Arrow keys in the preview after a tile click.
+- 2026-11-01: Cinematic Play round: pacing, no repeated move, stronger motion, crossfade only, moving through the fade, wide pictures pan, fullscreen and Esc, pause holds, failed pictures skipped. Upload measured at 2 to 35 ms per picture, so left on the UI thread. For Ed to judge by watching.

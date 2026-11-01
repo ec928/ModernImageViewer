@@ -17,7 +17,8 @@ namespace ModernImageViewer.Cinematic
         public Rect? FocusTargetRect { get; set; }
         public Rect? StartCrop { get; set; }
         public Rect? EndCrop { get; set; }
-        public double DurationSeconds { get; set; } = 10.0;
+        /// <summary>0 is Auto: the director rolls this slide's length.</summary>
+        public double DurationSeconds { get; set; }
         public int BeatCount { get; set; } = 1;
         public string CurveOverride { get; set; } = "EaseInOut";
     }

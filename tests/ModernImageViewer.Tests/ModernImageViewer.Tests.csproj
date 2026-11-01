@@ -23,5 +23,6 @@
     <Compile Include="..\..\NaturalSort.cs" Link="NaturalSort.cs" />
     <Compile Include="..\..\AtomicFile.cs" Link="AtomicFile.cs" />
     <Compile Include="..\..\ListMerge.cs" Link="ListMerge.cs" />
+    <Compile Include="..\..\Cinematic\ShowPacing.cs" Link="ShowPacing.cs" />
   </ItemGroup>
 </Project>

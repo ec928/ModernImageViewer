@@ -8,6 +8,8 @@ namespace ModernImageViewer.Cinematic
 {
     public class CinematicDirector
     {
+        private readonly ShowPacing _pacing = new();
+
         public Queue<CameraTransform> GetSequence(SceneIntelligence intel, Size bounds, SlideSettings settings, System.Threading.CancellationToken token)
         {
             var queue = new Queue<CameraTransform>();
@@ -33,7 +35,7 @@ namespace ModernImageViewer.Cinematic
                     StartPan = start.Pan,
                     EndScale = end.Scale,
                     EndPan = end.Pan,
-                    RecommendedDurationSeconds = settings.DurationSeconds,
+                    RecommendedDurationSeconds = settings.DurationSeconds > 0 ? settings.DurationSeconds : _pacing.NextDuration(Random.Shared),
                     CrossfadeDurationSeconds = 2.5,
                     EaseKind = string.IsNullOrEmpty(settings.CurveOverride) ? "EaseInOut" : settings.CurveOverride,
                     IsSnapZoom = settings.CurveOverride == "SnapZoom"
@@ -41,11 +43,41 @@ namespace ModernImageViewer.Cinematic
                 return queue;
             }
 
-            GeneratePrimarySequence(queue, localIntel, bounds, settings);
-
+            double slideSeconds = settings.DurationSeconds > 0 ? settings.DurationSeconds : _pacing.NextDuration(Random.Shared);
             int targetBeats = Math.Max(1, settings.BeatCount);
+
+            // The same zoom looks rushed on a short slide and timid on a long one.
+            double chosenIntensity = settings.IntensityPercent;
+            settings.IntensityPercent = chosenIntensity * Math.Clamp(slideSeconds / 12.0, 0.6, 1.25);
+            bool canVary = settings.TechniqueOverride is null or "" or "Auto" && settings.DirectionMode == 0 && !settings.FocusTargetRect.HasValue;
+            const int triesForADifferentMove = 8;
+            for (int attempt = 0; attempt < triesForADifferentMove; attempt++)
+            {
+                token.ThrowIfCancellationRequested();
+                queue.Clear();
+                GeneratePrimarySequence(queue, localIntel, bounds, settings);
+
+                // Two moves chained in a short slide is a flip-book. Stay with one, on the person if there is one.
+                if (targetBeats == 1 && queue.Count > 1 && slideSeconds < ShortSlideSeconds)
+                {
+                    var kept = !StrategyMath.IsNarrowForScreen(localIntel, bounds) && localIntel.Faces.Count > 0
+                        ? new NarrativePushInStrategy().CalculateTrajectory(localIntel, bounds, settings, Random.Shared)
+                        : queue.Peek();
+                    if (kept.Technique == "None") kept.Technique = "The Ethereal Hold";
+                    queue.Clear();
+                    queue.Enqueue(kept);
+                }
+
+                var first = queue.Peek();
+                string move = CameraFraming.MoveName(first.StartScale, first.EndScale, first.StartPan, first.EndPan);
+                if (canVary && _pacing.IsRepeat(move) && attempt < triesForADifferentMove - 1) continue;
+                _pacing.Remember(move);
+                break;
+            }
+            settings.IntensityPercent = chosenIntensity;
+
             int effectiveBeats = Math.Max(targetBeats, queue.Count);
-            double durationPerBeat = settings.DurationSeconds / effectiveBeats;
+            double durationPerBeat = slideSeconds / effectiveBeats;
 
             foreach (var shot in queue) shot.RecommendedDurationSeconds = durationPerBeat;
 
@@ -97,6 +129,8 @@ namespace ModernImageViewer.Cinematic
             return queue;
         }
 
+        private const double ShortSlideSeconds = 8.0;
+
         private static void ApplyCurve(CameraTransform shot, SlideSettings settings)
         {
             if (!string.IsNullOrEmpty(settings.CurveOverride) && settings.CurveOverride != "EaseInOut")
@@ -130,7 +164,7 @@ namespace ModernImageViewer.Cinematic
             }
 
             bool runTemplate = settings.UseNarrativeArc && intel.Faces.Count > 0 && Random.Shared.NextDouble() < 0.65;
-            bool isPortrait = StrategyMath.GetCropRatio(intel, bounds) > 1.35f;
+            bool isPortrait = StrategyMath.IsNarrowForScreen(intel, bounds);
 
             if (runTemplate)
             {

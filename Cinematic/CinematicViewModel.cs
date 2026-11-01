@@ -241,7 +241,7 @@ namespace ModernImageViewer.Cinematic.ViewModels
         // TwoWay Bound Slider Properties
         public double DurationSeconds
         {
-            get => IsOverrideMode ? (CurrentDraft.DurationSeconds ?? ActiveProject.GlobalDefaults.DurationSeconds) : ActiveProject.GlobalDefaults.DurationSeconds;
+            get => IsOverrideMode ? (CurrentDraft.DurationSeconds ?? AutoSliderSeconds) : AutoSliderSeconds;
             set
             {
                 if (Math.Abs(DurationSeconds - value) < 0.001) return;
@@ -254,7 +254,10 @@ namespace ModernImageViewer.Cinematic.ViewModels
             }
         }
 
-        public string DurationLabel => $"{DurationSeconds:0} s";
+        public string DurationLabel => IsOverrideMode && CurrentDraft.DurationSeconds != null ? $"{DurationSeconds:0} s" : "Auto";
+
+        // Where the slider rests while the slide is on Auto. Auto rolls 5 to 20 seconds per slide.
+        private const double AutoSliderSeconds = 12.0;
 
         public string CurveOverride
         {

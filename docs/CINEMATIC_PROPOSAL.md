@@ -1,6 +1,6 @@
 # Cinematic in ModernImageViewer: an excellent stills show
 
-**Status:** proposal. A 2026-08-27 attempt was reverted (lied: Clear-to-Auto on Auto; no visible start/end). Rebuild must follow §4–§6: two modes, no lying.  
+**Status:** proposal, with the Play round built (2026-11-01; see the end of §2). A 2026-08-27 attempt was reverted (lied: Clear-to-Auto on Auto; no visible start/end). Rebuild must follow §4–§6: two modes, no lying.  
 **Date:** 2026-08-27 (two-mode law)  
 **Scope:** The cinematic slideshow **in this app**. VideoDirector stays the multi-track compositor and MP4 exporter. Cinematic does not become an NLE.
 
@@ -31,6 +31,8 @@ If any of those is missing, cinematic in this app is still incomplete. A filmstr
 Fire-and-forget works as a *gesture* and fails as a *show*. Play copies a path list and starts. The auto camera is real (faces, saliency, named techniques, beats, crossfade). Management is not: anonymous ticks, frozen membership, overrides keyed by **file name**, director knobs aimed at “this filename while it happens to be on screen.” Default duration is a flat 12s; consecutive slides can feel like the same move. No music. No first-class show in the main window. Fullscreen/present is not a show feature. One image on screen except during crossfade.
 
 VideoDirector is the opposite: empty start, strong timeline, weak stills transitions, export.
+
+**Built since (Play round, 2026-11-01):** Auto slides roll 5–20s alternating short and long, with a slide duration set in the panel overriding that. No move runs twice in a row (in, out, left, right, up, down, hold). Crossfade is the only transition between slides, and the incoming picture is already moving during it. Default intensity is 16, scaled by slide length. A picture wider than the screen fills it and mostly pans. Fullscreen by button or F11, remembered; Esc closes the panel, then leaves fullscreen, then closes the show. Pause holds the picture and Play carries on from there. A picture that will not open is skipped. Sections 8 and 10 are therefore met for Play, apart from choosing a display and an all-slides duration. Everything else in this section still stands.
 
 **Failure to avoid:** cinematic becomes a worse VideoDirector.  
 **Failure to avoid equally:** we ship curation and call it done while Play still looks like a timer on a pan.
