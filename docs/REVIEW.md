@@ -127,3 +127,4 @@ The Win2D viewer core is real, but GPU lifetime was not reference-counted end-to
 - 2026-11-01: v0.26.1, internal. Arrow keys in the preview after a tile click.
 - 2026-11-01: Cinematic Play round: pacing, no repeated move, stronger motion, crossfade only, moving through the fade, wide pictures pan, fullscreen and Esc, pause holds, failed pictures skipped. Upload measured at 2 to 35 ms per picture, so left on the UI thread. For Ed to judge by watching.
 - 2026-11-01: Cinematic Edit show: one door, picture strip, plain slide panel, Save show and Open show including from the main window, one music track. Removed technique, beats and curve, and the viewer's unused slideshow timer. Not run: a real mouse, a real drag-and-drop on the strip, audible music, a real song file.
+- 2026-11-01: v0.27.0, internal. Cinematic Play round, Edit show, Save and Open show, one music track.
