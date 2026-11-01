@@ -431,6 +431,12 @@ namespace ModernImageViewer
                 file.State.LineCounts = null;
             }
             AppendToTray(file, forTray, shown + newCells);
+            ApplyKeepingBitmaps(file);
+            CaptureUndoPoint();
+        }
+
+        private void ApplyKeepingBitmaps(MultiViewLayoutFile file)
+        {
             _cellBorderFlyout?.Hide();
             _restoringUndo = true;
             _reuseBitmaps = DecodedBitmaps();
@@ -443,6 +449,38 @@ namespace ModernImageViewer
                 _reuseBitmaps = null;
                 _restoringUndo = false;
             }
+        }
+
+        /// <summary>Where docking puts this image: its own cell if still empty, or with the grid at its most, any empty cell. -1 is a new cell.</summary>
+        private int DockTarget(FreeformCard card)
+        {
+            bool Usable(int slot) => slot >= 0 && slot < GridCellCount && IsEmptyCell(_items[slot])
+                && (uint)slot < (uint)_cellRoots.Length && _cellRoots[slot]?.Tag is CellParts;
+
+            if (Usable(card.SourceSlot)) return card.SourceSlot;
+            int shown = VisibleCount(GridCellCount);
+            if (shown < MosaicLayout.MaxShown) return -1;
+            for (int slot = 0; slot < shown; slot++)
+            {
+                if (Usable(slot)) return slot;
+            }
+            return -1;
+        }
+
+        /// <summary>A grid at its most has no new cell to give, and one more would push an image off the canvas.</summary>
+        private bool GridHasNoRoomFor(FreeformCard card) =>
+            VisibleCount(GridCellCount) >= MosaicLayout.MaxShown && DockTarget(card) < 0;
+
+        private void MoveFreeformCardToTray(FreeformCard card)
+        {
+            int index = _freeformCards.IndexOf(card);
+            if (index < 0) return;
+            CaptureUndoPoint();
+            int shown = VisibleCount(GridCellCount);
+            var file = BuildLayoutFile();
+            file.Freeform!.RemoveAt(index);
+            AppendToTray(file, new[] { card.Item.Path ?? string.Empty }, shown);
+            ApplyKeepingBitmaps(file);
             CaptureUndoPoint();
         }
 
@@ -474,13 +512,16 @@ namespace ModernImageViewer
         public void DockFreeformCard(FreeformCard card)
         {
             if (card == null) return;
+            if (GridHasNoRoomFor(card))
+            {
+                MoveFreeformCardToTray(card);
+                return;
+            }
 
             // The floating cell's own slot, taken before its image moves into the grid.
             int cardSlot = _items.IndexOf(card.Item);
-            int source = card.SourceSlot;
-            bool backToSource = source >= 0 && source < GridCellCount
-                && IsEmptyCell(_items[source])
-                && (uint)source < (uint)_cellRoots.Length && _cellRoots[source]?.Tag is CellParts;
+            int source = DockTarget(card);
+            bool backToSource = source >= 0;
 
             FreeformCanvas.Children.Remove(card.Container);
             _freeformCards.Remove(card);
@@ -554,6 +595,7 @@ namespace ModernImageViewer
 
             // The last floating cell gone, the bare canvas is an empty cell again.
             ShowEmptyState(0);
+            ShowShownBadge();
             ShowHudAndOverlays();
         }
 

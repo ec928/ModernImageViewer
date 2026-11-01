@@ -1722,6 +1722,7 @@ namespace ModernImageViewer
 
             for (int i = 0; i < _cellRoots.Length; i++)
                 ShowEmptyState(i);
+            ShowShownBadge();
 
             ApplyBorderToAllCells();
 

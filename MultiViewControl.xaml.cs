@@ -2007,6 +2007,7 @@ namespace ModernImageViewer
             placeholder.Children.Add(new TextBlock
             {
                 Text = "Click to add an image",
+                TextAlignment = TextAlignment.Center,
                 FontSize = 11,
                 Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(170, 255, 255, 255)),
                 HorizontalAlignment = HorizontalAlignment.Center
@@ -2052,6 +2053,9 @@ namespace ModernImageViewer
             if (IsEmptyCell(item))
             {
                 menu.Items.Add(MakeAdvancedItem("Add image\u2026", "\uE8E5", () => AddImageRequested?.Invoke(this, item)));
+                int inTray = TrayImages().Count;
+                if (inTray > 0)
+                    menu.Items.Add(MakeAdvancedItem($"Add from image tray ({inTray})\u2026", "\uE8B9", () => ShowTrayCard(curSlot)));
                 menu.Items.Add(new MenuFlyoutSeparator());
             }
 
@@ -2060,7 +2064,7 @@ namespace ModernImageViewer
                 var swapMenu = MakeCellTargetMenu("Swap with...", "\uE8AB", "Swap with", curSlot,
                     (target, withAttributes) => SwapItems(curSlot, target, withAttributes));
                 int inTray = TrayImages().Count;
-                if (inTray > 0 && curSlot >= 0)
+                if (inTray > 0 && !IsEmptyCell(item))
                 {
                     var fromTray = MakeAdvancedItem($"Image tray ({inTray})\u2026", "\uE8B9", () => ShowTrayCard(curSlot));
                     ToolTipService.SetToolTip(fromTray, "Images that are not on the canvas. Pick one by looking at it.");
@@ -2100,17 +2104,24 @@ namespace ModernImageViewer
 
             if (activeCard != null)
             {
-                var dockItem = new MenuFlyoutItem
+                bool noRoom = GridHasNoRoomFor(activeCard);
+                // An empty floating cell has nothing to put in the tray, and closing it is how it goes.
+                if (!noRoom || !IsEmptyCell(item))
                 {
-                    Text = "Dock to Grid",
-                    Icon = new FontIcon { Glyph = "\uE8CA" }
-                };
-                dockItem.Click += (s, e) =>
-                {
-                    DockFreeformCard(activeCard);
-                };
-                menu.Items.Add(new MenuFlyoutSeparator());
-                menu.Items.Add(dockItem);
+                    var dockItem = new MenuFlyoutItem
+                    {
+                        Text = noRoom ? "Move to Tray" : "Dock to Grid",
+                        Icon = new FontIcon { Glyph = noRoom ? "\uE8B9" : "\uE8CA" }
+                    };
+                    if (noRoom)
+                        ToolTipService.SetToolTip(dockItem, "The grid already has 16 cells, so this image goes in the image tray.");
+                    dockItem.Click += (s, e) =>
+                    {
+                        DockFreeformCard(activeCard);
+                    };
+                    menu.Items.Add(new MenuFlyoutSeparator());
+                    menu.Items.Add(dockItem);
+                }
             }
             else if (!IsEmptyCell(item))
             {

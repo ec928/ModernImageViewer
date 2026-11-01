@@ -169,7 +169,9 @@ namespace ModernImageViewer
                 {
                     icon.Glyph = failed ? "" : "\uE739";
                     title.Text = empty ? "Empty cell" : System.IO.File.Exists(_items[slot].Path) ? "Can't open this file" : "File not found";
-                    detail.Text = empty ? "Click to add an image" : _items[slot].Name ?? string.Empty;
+                    detail.Text = !empty ? _items[slot].Name ?? string.Empty
+                        : TrayImages().Count > 0 ? "Click to add an image\nRight-click to add from the image tray"
+                        : "Click to add an image";
                 }
             }
             parts.Bound.ApplyGeometry?.Invoke();

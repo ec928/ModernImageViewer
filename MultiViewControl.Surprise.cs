@@ -513,6 +513,10 @@ namespace ModernImageViewer
                 if (args.ClickedItem is not TrayImage picture) return;
                 RemoveTrayCard();
                 SwapItems(intoSlot, picture.Slot, false);
+                // The tray may just have emptied, and the empty cells mention it.
+                for (int i = 0; i < VisibleCount(GridCellCount); i++)
+                    ShowEmptyState(i);
+                ShowShownBadge();
                 NoteUserAction();
             };
 
@@ -527,7 +531,7 @@ namespace ModernImageViewer
             top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            top.Children.Add(new TextBlock { Text = $"Image tray: {all.Count}. Click one to swap it into position {PositionOfSlot(intoSlot)}.", VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis });
+            top.Children.Add(new TextBlock { Text = $"Image tray: {all.Count}. Click one to {(IsEmptyCell(_items[intoSlot]) ? "add it to" : "swap it into")} position {PositionOfSlot(intoSlot)}.", VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis });
             Grid.SetColumn(search, 1);
             top.Children.Add(search);
             Grid.SetColumn(close, 2);
