@@ -548,6 +548,8 @@ namespace ModernImageViewer
                 : $"Image tray: {current.Count} of {all.Count}. {click}";
             ShowHeading();
 
+            var search = new TextBox { PlaceholderText = "Search names", MinWidth = 180 };
+
             void RemoveFromSession(string path)
             {
                 int slot = TraySlotOf(path);
@@ -558,6 +560,8 @@ namespace ModernImageViewer
                 ShowHeading();
                 ShowTrayChanged();
                 if (all.Count == 0) RemoveTrayCard();
+                // Its thumbnail had the focus and is gone.
+                else search.Focus(FocusState.Programmatic);
             }
 
             thumbnails.ContainerContentChanging += (_, args) =>
@@ -600,7 +604,6 @@ namespace ModernImageViewer
                 NoteUserAction();
             };
 
-            var search = new TextBox { PlaceholderText = "Search names", MinWidth = 180 };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(search, "Search the image tray");
             search.TextChanged += (_, _) =>
             {
@@ -754,6 +757,8 @@ namespace ModernImageViewer
             _cardSongText.Text = _surpriseMusic?.IsFolder == true
                 ? _surpriseSong ?? "Looking for songs"
                 : music?.HasFolder != true ? "No music yet" : !music.InSurprise ? "Music is off" : _musicProblem ?? "Plays with auto-play";
+            // The message over the picture would be behind this card.
+            ToolTipService.SetToolTip(_cardSongText, _musicProblem != null && _surpriseMusic?.IsFolder != true ? _musicProblemWhy : null);
             bool canStep = _surpriseMusic?.IsFolder == true;
             if (_cardPreviousSong != null) _cardPreviousSong.IsEnabled = canStep;
             if (_cardNextSong != null) _cardNextSong.IsEnabled = canStep;
@@ -827,6 +832,7 @@ namespace ModernImageViewer
 
         private Cinematic.MusicBed? _surpriseMusic;
         private string? _musicProblem;
+        private string? _musicProblemWhy;
 
         private void StartAutoPlayMusic()
         {
@@ -844,6 +850,7 @@ namespace ModernImageViewer
                 _surpriseMusic.GaveUp += (title, why) =>
                 {
                     _musicProblem = title;
+                    _musicProblemWhy = why;
                     ShowAutoPlayToast($"{title}. {why}");
                     ShowCardSong();
                 };

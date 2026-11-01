@@ -1052,7 +1052,16 @@ namespace ModernImageViewer
         {
             ShowHudAndOverlays();
             // An open card keeps the keyboard. Letters typed in the tray's search are not shortcuts, and nothing behind the card changes.
-            if (_trayCard != null || _surpriseCard != null) return key != VirtualKey.Tab;
+            if (_trayCard != null || _surpriseCard != null)
+            {
+                // The card's own Esc needs focus inside the canvas, and removing a thumbnail can leave it nowhere.
+                if (key == VirtualKey.Escape)
+                {
+                    RemoveSurpriseCard();
+                    RemoveTrayCard();
+                }
+                return key != VirtualKey.Tab;
+            }
             if (HandleAutoPlayKey(key)) return true;
 
             if (IsSoloActive)
