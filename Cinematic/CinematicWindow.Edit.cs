@@ -30,61 +30,67 @@ namespace ModernImageViewer.Cinematic
         // --------------------------------------------------------
         private void SyncPlayPauseUI()
         {
-            if (DirectorSidebar.IsPaneOpen && ViewModel.IsPlaying && !_previewing)
+            if (_editing && ViewModel.IsPlaying && !_previewing)
                 ViewModel.TogglePlay();
 
-            bool showEditOverlay = DirectorSidebar.IsPaneOpen && !_previewing;
-            WysiwygOverlay.Visibility = showEditOverlay ? Visibility.Visible : Visibility.Collapsed;
-            WysiwygHint.Visibility = Visibility.Collapsed;
-            StatusBanner.Visibility = DirectorSidebar.IsPaneOpen ? Visibility.Visible : Visibility.Collapsed;
-            PreviewBanner.Visibility = _previewing ? Visibility.Visible : Visibility.Collapsed;
-            if (showEditOverlay && !ViewModel.HasUnsavedZoomPan) ResetKeyframeBoxes();
-            UpdateStatusUi();
+            ApplyEditChrome();
+            if (_editing && !_previewing && !ViewModel.HasUnsavedZoomPan) ResetKeyframeBoxes();
+            SyncMusicPlayback();
             SlideshowCanvas.Invalidate();
         }
 
-        private void UpdateStatusUi()
+        /// <summary>Everything Edit show puts on screen. A preview takes it all away, so it shows the shot as it plays.</summary>
+        private void ApplyEditChrome()
         {
-            if (StateText == null || _primaryFrame == null) return;
-            var traj = _primaryFrame.Trajectory;
-            bool draft = ViewModel.HasUnsavedZoomPan;
-            bool custom = ViewModel.IsOverrideMode;
-
-            if (draft)
-            {
-                StateText.Text = "DRAFT \u2014 not saved";
-                StateText.Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 210, 70));
-                StateBadge.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(60, 255, 200, 0));
-            }
-            else if (custom)
-            {
-                StateText.Text = "CUSTOM \u2014 you saved this zoom/pan";
-                StateText.Foreground = _telemetryOverrideText;
-                StateBadge.Background = _telemetryOverrideBg;
-            }
-            else
-            {
-                StateText.Text = "AUTO \u2014 engine zoom/pan, not customized";
-                StateText.Foreground = _telemetryAutoText;
-                StateBadge.Background = _telemetryAutoBg;
-            }
-
-            string zoom = $"Zoom/pan {traj.StartScale:F2}\u00D7 \u2192 {traj.EndScale:F2}\u00D7";
-            string who = draft
-                ? "Show still uses the last saved state until you Save."
-                : custom
-                    ? "This slide uses your saved rectangles, not the engine."
-                    : "These rectangles are the engine's. Different start/end is normal Auto Ken Burns \u2014 not your edit.";
-            if (StatusDetailText != null) StatusDetailText.Text = who;
-            if (ZoomPanReadout != null) ZoomPanReadout.Text = zoom;
-            if (TelemetryText != null)
-            {
-                TelemetryText.Text =
-                    $"{zoom}\n" +
-                    $"Slide {ViewModel.CurrentIndex + 1} / {ViewModel.Track.Count}  \u00B7  {ViewModel.CurrentFileName}\n" +
-                    $"Saved: {(custom ? "Custom zoom/pan" : "Auto (engine)")}  \u00B7  Unsaved draft: {(draft ? "yes" : "no")}";
-            }
+            var editVisibility = _editing && !_previewing ? Visibility.Visible : Visibility.Collapsed;
+            EditPanel.Visibility = editVisibility;
+            SequenceBar.Visibility = editVisibility;
+            WysiwygOverlay.Visibility = editVisibility;
+            PreviewBanner.Visibility = _previewing ? Visibility.Visible : Visibility.Collapsed;
+            BtnEditShow.IsChecked = _editing;
+            ApplyPlaybarToggle(BtnEditShow, _editing);
+            ActionBar.Margin = new Thickness(0, 0, _editing && !_previewing ? EditPanelWidth : 0, 40);
+            if (_editing) ActionBar.Opacity = 1.0;
         }
+
+        private void SetEditing(bool on)
+        {
+            if (on == _editing) return;
+            bool wasPreviewing = _previewing;
+            _previewing = false;
+            _editing = on;
+            DiscardPreload();
+            if (on)
+            {
+                if (ViewModel.IsPlaying) ViewModel.TogglePlay();
+                _idleTimer.Stop();
+                SyncPlayPauseUI();
+                ScrollSequenceToCurrent();
+                return;
+            }
+
+            if (ViewModel.HasUnsavedZoomPan) ViewModel.DiscardZoomPanDraft();
+            UpdateActiveTrajectoriesAsync();
+            if (ViewModel.CurrentClip?.IsHidden == true) ViewModel.MoveNext();
+            if (!ViewModel.IsPlaying) ViewModel.TogglePlay();
+            _slideStartTime = TimeSpan.Zero;
+            SyncPlayPauseUI();
+            _idleTimer.Start();
+        }
+
+        private void BtnEditShow_Click(object sender, RoutedEventArgs e) => SetEditing(BtnEditShow.IsChecked == true);
+
+        private void EndPreview()
+        {
+            _previewing = false;
+            if (ViewModel.IsPlaying) ViewModel.TogglePlay();
+            DiscardPreload();
+            SlideProgressBar.Value = 0;
+            SyncPlayPauseUI();
+            SlideshowCanvas.Invalidate();
+        }
+
+        private void BtnUseAutoDuration_Click(object sender, RoutedEventArgs e) => ViewModel.UseAutoDuration();
 
         private void DrawEditWorkspace(CanvasDrawEventArgs args, SlideFrame frame, Size bounds)
         {
@@ -118,10 +124,10 @@ namespace ModernImageViewer.Cinematic
         {
             if (SelectedBox() == null || bounds.Width < 1) return;
 
-            float pipW = 280f;
+            float pipW = 180f;
             float pipH = pipW * (float)(bounds.Height / Math.Max(1, bounds.Width));
             float pipX = 16f;
-            float pipY = (float)bounds.Height - pipH - 16f;
+            float pipY = (float)(bounds.Height - EditBottomReserve) - pipH - 8f;
             var pipRect = new Rect(pipX, pipY, pipW, pipH);
             float k = pipW / (float)Math.Max(1, bounds.Width);
             float scale = _selectedIsStart ? frame.Trajectory.StartScale : frame.Trajectory.EndScale;
@@ -140,13 +146,13 @@ namespace ModernImageViewer.Cinematic
                 : Windows.UI.Color.FromArgb(255, 255, 138, 0);
             ds.DrawRectangle(pipRect, accent, 2.5f);
             using var fmt = new CanvasTextFormat { FontSize = 13, FontFamily = "Segoe UI" };
-            ds.DrawText(_selectedIsStart ? "Zoom/pan start, filling the screen" : "Zoom/pan end, filling the screen",
+            ds.DrawText(_selectedIsStart ? "Start, as it fills the screen" : "End, as it fills the screen",
                 pipX + 8, pipY + 6, accent, fmt);
         }
 
         private void WysiwygOverlay_SizeChanged(object sender, SizeChangedEventArgs e)
         {
-            if (DirectorSidebar.IsPaneOpen && !ViewModel.IsPlaying && !_isDraggingBox && !_isResizing)
+            if (_editing && !ViewModel.IsPlaying && !_isDraggingBox && !_isResizing)
                 ResetKeyframeBoxes();
         }
 
@@ -169,9 +175,16 @@ namespace ModernImageViewer.Cinematic
             e.Handled = true;
         }
 
+        // The picture being framed stays clear of what sits over the canvas: the panel, the strip and the bar.
+        private const double EditPanelWidth = 340;
+        private const double EditTopReserve = 8;
+        private const double EditBottomReserve = 256;
+
         private bool TryEditLayout(double viewW, double viewH, Size img, out float scale, out float drawW, out float drawH, out float ox, out float oy)
         {
             scale = drawW = drawH = ox = oy = 0;
+            viewW -= EditPanelWidth;
+            viewH -= EditTopReserve + EditBottomReserve;
             if (viewW <= 1 || viewH <= 1) return false;
             double iw = Math.Max(1, img.Width);
             double ih = Math.Max(1, img.Height);
@@ -182,7 +195,7 @@ namespace ModernImageViewer.Cinematic
             drawW = (float)(iw * scale);
             drawH = (float)(ih * scale);
             ox = (float)((viewW - drawW) / 2);
-            oy = (float)((viewH - drawH) / 2);
+            oy = (float)((viewH - drawH) / 2 + EditTopReserve);
             return drawW > 1 && drawH > 1;
         }
 
@@ -208,13 +221,13 @@ namespace ModernImageViewer.Cinematic
         private void ApplyBoxRect(Border box, double left, double top, double width, double height)
         {
             double aspect = OutputAspect();
-            double viewW = WysiwygOverlay.ActualWidth;
-            double viewH = WysiwygOverlay.ActualHeight;
+            double viewW = Math.Max(32, WysiwygOverlay.ActualWidth - EditPanelWidth);
+            double viewH = Math.Max(32, WysiwygOverlay.ActualHeight - EditTopReserve - EditBottomReserve);
             width = Math.Clamp(width, 32, viewW);
             height = width / aspect;
             if (height > viewH) { height = viewH; width = height * aspect; }
             left = Math.Clamp(left, 0, viewW - width);
-            top = Math.Clamp(top, 0, viewH - height);
+            top = Math.Clamp(top, EditTopReserve, EditTopReserve + viewH - height);
             box.Width = width;
             box.Height = height;
             Canvas.SetLeft(box, left);
@@ -234,7 +247,7 @@ namespace ModernImageViewer.Cinematic
         {
             if (StartFrameBox == null || EndFrameBox == null || _primaryFrame == null) return;
             if (_isDraggingBox || _isResizing) return;
-            if (ViewModel.HasUnsavedZoomPan) { ApplyChrome(); UpdateStatusUi(); return; }
+            if (ViewModel.HasUnsavedZoomPan) { ApplyChrome(); return; }
             if (!TryEditLayout(WysiwygOverlay.ActualWidth, WysiwygOverlay.ActualHeight, _primaryFrame.Intelligence.ImageSize, out _, out double drawW, out double drawH, out double ox, out double oy))
                 return;
 
@@ -328,7 +341,11 @@ namespace ModernImageViewer.Cinematic
             _primaryFrame.Trajectory.StartPan = s.Pan;
             _primaryFrame.Trajectory.EndScale = e.Scale;
             _primaryFrame.Trajectory.EndPan = e.Pan;
-            _primaryFrame.Trajectory.StrategyName = ViewModel.HasUnsavedZoomPan || ViewModel.IsOverrideMode ? "Custom" : _primaryFrame.Trajectory.StrategyName;
+            if (ViewModel.HasUnsavedZoomPan || ViewModel.CurrentDraft.StartCrop != null)
+            {
+                _primaryFrame.Trajectory.StrategyName = "Custom";
+                _primaryFrame.Trajectory.Technique = "Custom";
+            }
         }
 
         private void CommitKeyframeCrops(bool persist)
@@ -345,7 +362,6 @@ namespace ModernImageViewer.Cinematic
             {
                 ViewModel.MarkZoomPanDraft();
             }
-            UpdateStatusUi();
         }
 
         private void BeginBoxInteraction(Border box, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e, bool resize, string corner)
@@ -443,13 +459,9 @@ namespace ModernImageViewer.Cinematic
             if (ViewModel.HasUnsavedZoomPan || ViewModel.IsOverrideMode)
                 ApplyBoxesToTrajectory();
             _previewing = true;
-            WysiwygOverlay.Visibility = Visibility.Collapsed;
-            WysiwygHint.Visibility = Visibility.Collapsed;
-            PreviewBanner.Visibility = Visibility.Visible;
-            StatusBanner.Visibility = Visibility.Visible;
+            ApplyEditChrome();
             _slideStartTime = TimeSpan.Zero;
             if (!ViewModel.IsPlaying) ViewModel.TogglePlay();
-            UpdateStatusUi();
             SlideshowCanvas.Invalidate();
         }
 
@@ -465,6 +477,7 @@ namespace ModernImageViewer.Cinematic
             if (ViewModel.IsPlaying) ViewModel.TogglePlay();
             DiscardPreload();
             ViewModel.RevertToAuto();
+            if (_primaryFrame != null) _primaryFrame.Trajectory.Technique = "Auto";
             if (_primaryFrame != null && _primaryFrame.HasEngineCrops)
             {
                 ApplyCropsToTrajectory(_primaryFrame.EngineStartCrop, _primaryFrame.EngineEndCrop);
@@ -474,7 +487,6 @@ namespace ModernImageViewer.Cinematic
             {
                 UpdateActiveTrajectoriesAsync(forceEngineReroll: true);
             }
-            UpdateStatusUi();
             SlideshowCanvas.Invalidate();
         }
 
@@ -628,44 +640,6 @@ namespace ModernImageViewer.Cinematic
             }
         }
 
-        private void BtnSequenceToggle_Click(object sender, RoutedEventArgs e)
-        {
-            if (DirectorSidebar.IsPaneOpen)
-            {
-                BtnSequenceToggle.IsChecked = false;
-                ApplyPlaybarToggle(BtnSequenceToggle, false);
-                SequenceBar.Visibility = Visibility.Collapsed;
-                return;
-            }
-            _sequenceWanted = BtnSequenceToggle.IsChecked == true;
-            SequenceBar.Visibility = _sequenceWanted ? Visibility.Visible : Visibility.Collapsed;
-            ApplyPlaybarToggle(BtnSequenceToggle, _sequenceWanted);
-            if (_sequenceWanted) DispatcherQueue.TryEnqueue(ScrollSequenceToCurrent);
-        }
-
-        private void HideSequenceForKenBurns()
-        {
-            _sequenceWanted = BtnSequenceToggle.IsChecked == true || SequenceBar.Visibility == Visibility.Visible;
-            SequenceBar.Visibility = Visibility.Collapsed;
-            BtnSequenceToggle.IsChecked = false;
-            ApplyPlaybarToggle(BtnSequenceToggle, false);
-        }
-
-        private void RestoreSequenceAfterKenBurns()
-        {
-            BtnSequenceToggle.IsChecked = _sequenceWanted;
-            SequenceBar.Visibility = _sequenceWanted ? Visibility.Visible : Visibility.Collapsed;
-            ApplyPlaybarToggle(BtnSequenceToggle, _sequenceWanted);
-            if (_sequenceWanted) DispatcherQueue.TryEnqueue(ScrollSequenceToCurrent);
-        }
-
-        private void BtnDirectorToggle_Click(object sender, RoutedEventArgs e)
-        {
-            bool on = BtnDirectorToggle.IsChecked == true;
-            DirectorSidebar.IsPaneOpen = on;
-            ApplyPlaybarToggle(BtnDirectorToggle, on);
-        }
-
         private static void ApplyPlaybarToggle(Microsoft.UI.Xaml.Controls.Primitives.ToggleButton btn, bool on)
         {
             btn.Background = on
@@ -684,81 +658,59 @@ namespace ModernImageViewer.Cinematic
 
         private async void BtnExport_Click(object sender, RoutedEventArgs e)
         {
-            var savePicker = new Windows.Storage.Pickers.FileSavePicker();
-            WinRT.Interop.InitializeWithWindow.Initialize(savePicker, WinRT.Interop.WindowNative.GetWindowHandle(this));
-            savePicker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.PicturesLibrary;
-            savePicker.FileTypeChoices.Add("Cinematic Project", new List<string>() { ".json" });
-            savePicker.SuggestedFileName = "DirectorProject";
+            try
+            {
+                var savePicker = new Windows.Storage.Pickers.FileSavePicker();
+                WinRT.Interop.InitializeWithWindow.Initialize(savePicker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+                savePicker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.PicturesLibrary;
+                savePicker.FileTypeChoices.Add("Show", new List<string>() { ".json" });
+                savePicker.SuggestedFileName = "My show";
 
-            StorageFile file = await savePicker.PickSaveFileAsync();
-            if (file != null) await ViewModel.ExportProjectAsync(file);
+                StorageFile file = await savePicker.PickSaveFileAsync();
+                if (file != null) await ViewModel.ExportProjectAsync(file);
+            }
+            catch (Exception ex)
+            {
+                await ViewerEngine.ShowMessageAsync(RootGrid.XamlRoot, "Could not save the show", ex.Message);
+            }
         }
 
         private async void BtnLoad_Click(object sender, RoutedEventArgs e)
         {
-            var openPicker = new Windows.Storage.Pickers.FileOpenPicker();
-            WinRT.Interop.InitializeWithWindow.Initialize(openPicker, WinRT.Interop.WindowNative.GetWindowHandle(this));
-            openPicker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.PicturesLibrary;
-            openPicker.FileTypeFilter.Add(".json");
+            try
+            {
+                var openPicker = new Windows.Storage.Pickers.FileOpenPicker();
+                WinRT.Interop.InitializeWithWindow.Initialize(openPicker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+                openPicker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.PicturesLibrary;
+                openPicker.FileTypeFilter.Add(".json");
 
-            StorageFile file = await openPicker.PickSingleFileAsync();
-            if (file == null) return;
-            var (applied, loaded, missing) = await ViewModel.LoadProjectAsync(file);
-            if (!applied)
-            {
-                await ViewerEngine.ShowMessageAsync(RootGrid.XamlRoot,
-                    "Could not open show",
-                    missing > 0
-                        ? "None of the stills in that file are still on disk."
-                        : "The file could not be read.");
-                return;
+                StorageFile file = await openPicker.PickSingleFileAsync();
+                if (file == null) return;
+                var (show, missing) = CinematicViewModel.ReadShow(await FileIO.ReadTextAsync(file));
+                if (show == null)
+                {
+                    await ViewerEngine.ShowMessageAsync(RootGrid.XamlRoot, "Could not open the show",
+                        missing > 0 ? "None of its pictures are still on disk." : "This file is not a saved show.");
+                    return;
+                }
+                DiscardPreload();
+                ViewModel.ApplyShow(show);
+                await ReportShowProblemsAsync(missing);
             }
-            if (missing > 0)
+            catch (Exception ex)
             {
-                await ViewerEngine.ShowMessageAsync(RootGrid.XamlRoot,
-                    "Some stills are missing",
-                    $"{missing} file(s) were skipped. Playing {loaded} still(s) that are still on disk.");
+                await ViewerEngine.ShowMessageAsync(RootGrid.XamlRoot, "Could not open the show", ex.Message);
             }
-            DiscardPreload();
-            _ = ManualNavigateAsync();
         }
 
-        private void DirectorSidebar_PaneOpening(Microsoft.UI.Xaml.Controls.SplitView sender, object args)
+        private async Task ReportShowProblemsAsync(int missingPictures)
         {
-            _previewing = false;
-            DiscardPreload();
-            if (ViewModel.IsPlaying) ViewModel.TogglePlay();
-            SyncPlayPauseUI();
-            BtnDirectorToggle.IsChecked = true;
-            ApplyPlaybarToggle(BtnDirectorToggle, true);
-            HideSequenceForKenBurns();
+            if (missingPictures <= 0 && !ViewModel.MusicWasMissing) return;
+            var lines = new List<string>();
+            if (missingPictures > 0) lines.Add(missingPictures == 1 ? "1 picture is no longer on disk, so the rest will play." : $"{missingPictures} pictures are no longer on disk, so the rest will play.");
+            if (ViewModel.MusicWasMissing) lines.Add("Its music file is no longer on disk, so it will play without music.");
+            await ViewerEngine.ShowMessageAsync(RootGrid.XamlRoot, "Part of this show is missing", string.Join(" ", lines));
         }
 
-        private void DirectorSidebar_PaneClosed(Microsoft.UI.Xaml.Controls.SplitView sender, object args)
-        {
-            bool wasPreviewing = _previewing;
-            _previewing = false;
-            WysiwygOverlay.Visibility = Visibility.Collapsed;
-            WysiwygHint.Visibility = Visibility.Collapsed;
-            if (StatusBanner != null) StatusBanner.Visibility = Visibility.Collapsed;
-            if (PreviewBanner != null) PreviewBanner.Visibility = Visibility.Collapsed;
-            DiscardPreload();
-            if (ViewModel.HasUnsavedZoomPan)
-                ViewModel.DiscardZoomPanDraft();
-            UpdateActiveTrajectoriesAsync();
-            if (wasPreviewing)
-            {
-                if (ViewModel.IsPlaying) ViewModel.TogglePlay();
-                _slideStartTime = TimeSpan.Zero;
-            }
-            else if (!ViewModel.IsPlaying)
-            {
-                ViewModel.TogglePlay();
-                _slideStartTime = TimeSpan.Zero;
-            }
-            BtnDirectorToggle.IsChecked = false;
-            ApplyPlaybarToggle(BtnDirectorToggle, false);
-            RestoreSequenceAfterKenBurns();
-        }
     }
 }

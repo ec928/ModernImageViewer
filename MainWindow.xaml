@@ -330,12 +330,21 @@
                         </Grid.RowDefinitions>
 
                         <Border Grid.Row="0" Margin="10,4,10,8" Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="6" Padding="2">
-                            <Button Style="{StaticResource SidebarToolButtonStyle}" Click="PlayCinematicFolder_Click" HorizontalAlignment="Stretch" Height="26" Padding="8,0" CornerRadius="4" IsTabStop="False" ToolTipService.ToolTip="Play Cinematic Slideshow">
-                                <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
-                                    <SymbolIcon Symbol="Play"/>
-                                    <TextBlock Text="Cinematic Slideshow" FontSize="12"/>
-                                </StackPanel>
-                            </Button>
+                            <Grid ColumnSpacing="2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Button Style="{StaticResource SidebarToolButtonStyle}" Click="PlayCinematicFolder_Click" HorizontalAlignment="Stretch" Height="26" Padding="8,0" CornerRadius="4" IsTabStop="False" ToolTipService.ToolTip="Play Cinematic Slideshow">
+                                    <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+                                        <SymbolIcon Symbol="Play"/>
+                                        <TextBlock Text="Cinematic Slideshow" FontSize="12"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Grid.Column="1" Style="{StaticResource SidebarToolButtonStyle}" Click="OpenCinematicShow_Click" Height="26" Padding="8,0" CornerRadius="4" IsTabStop="False" ToolTipService.ToolTip="Open a saved show" AutomationProperties.Name="Open show">
+                                    <TextBlock Text="Open show" FontSize="12"/>
+                                </Button>
+                            </Grid>
                         </Border>
 
                         <BreadcrumbBar x:Name="FolderBreadcrumb" Grid.Row="1" Margin="10,3,6,4" ItemClicked="BreadcrumbBar_ItemClicked" IsTabStop="False">

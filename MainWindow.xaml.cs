@@ -76,7 +76,6 @@ namespace ModernImageViewer
         private int _currentIndex = -1;
         private ImageItem? _currentRenderedItem;
 
-        private DispatcherTimer? _slideshowTimer;
         private DispatcherTimer? _hfPromotionTimer;
         private CancellationTokenSource? _hfCts;
         private CancellationTokenSource? _fastDecodeCts;
@@ -264,8 +263,6 @@ namespace ModernImageViewer
             RootGrid.PointerMoved += RootGrid_PointerMoved;
             FolderBreadcrumb.ItemsSource = _breadcrumbs;
 
-            _slideshowTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
-            _slideshowTimer.Tick += (s, e) => Navigate(1);
 
             _hfPromotionTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
             _hfPromotionTimer.Tick += async (s, e) =>
@@ -635,6 +632,34 @@ namespace ModernImageViewer
             var window = new ModernImageViewer.Cinematic.CinematicWindow(paths, startIndex);
             _cinematicWindows.Add(window);
             window.Closed += (_, _) => _cinematicWindows.Remove(window);
+        }
+
+        private async void OpenCinematicShow_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var picker = new Windows.Storage.Pickers.FileOpenPicker();
+                WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+                picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.PicturesLibrary;
+                picker.FileTypeFilter.Add(".json");
+                var file = await picker.PickSingleFileAsync();
+                if (file == null) return;
+
+                var (show, missing) = ModernImageViewer.Cinematic.ViewModels.CinematicViewModel.ReadShow(await Windows.Storage.FileIO.ReadTextAsync(file));
+                if (show == null)
+                {
+                    await ViewerEngine.ShowMessageAsync(RootGrid.XamlRoot, "Could not open the show",
+                        missing > 0 ? "None of its pictures are still on disk." : "This file is not a saved show.");
+                    return;
+                }
+                var window = new ModernImageViewer.Cinematic.CinematicWindow(ModernImageViewer.Cinematic.ViewModels.CinematicViewModel.PathsOnDisk(show), 0, show, missing);
+                _cinematicWindows.Add(window);
+                window.Closed += (_, _) => _cinematicWindows.Remove(window);
+            }
+            catch (Exception ex)
+            {
+                await ViewerEngine.ShowMessageAsync(RootGrid.XamlRoot, "Could not open the show", ex.Message);
+            }
         }
 
         private readonly object _settingsGate = new();

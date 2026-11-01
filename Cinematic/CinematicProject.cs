@@ -17,45 +17,37 @@ namespace ModernImageViewer.Cinematic.Data
         [JsonPropertyName("sequence")]
         public List<TrackClipRecord> Sequence { get; set; } = new();
 
+        [JsonPropertyName("musicPath")]
+        public string? MusicPath { get; set; }
+
+        [JsonPropertyName("musicVolume")]
+        public double MusicVolume { get; set; } = 60.0;
+
         public SlideSettings GetEffectiveSettings(string fileName)
         {
-            if (Ledger.TryGetValue(fileName, out var overrideDef) && overrideDef.IsUserOverridden)
-            {
-                return new SlideSettings
-                {
-                    DurationSeconds = overrideDef.DurationSeconds ?? 0,
-                    IntensityPercent = overrideDef.IntensityPercent ?? GlobalDefaults.IntensityPercent,
-                    TechniqueOverride = overrideDef.TechniqueOverride ?? GlobalDefaults.TechniqueOverride,
-                    BeatCount = overrideDef.BeatCount ?? GlobalDefaults.BeatCount,
-                    DirectionMode = overrideDef.DirectionOverride ?? GlobalDefaults.DirectionOverride,
-                    UseTilt = GlobalDefaults.UseTilt,
-                    UseNarrativeArc = GlobalDefaults.UseNarrativeArc,
-                    FocusTargetRect = overrideDef.FocusTargetRect != null
-                        ? (Windows.Foundation.Rect?)new Windows.Foundation.Rect(
-                            overrideDef.FocusTargetRect.X,
-                            overrideDef.FocusTargetRect.Y,
-                            overrideDef.FocusTargetRect.Width,
-                            overrideDef.FocusTargetRect.Height)
-                        : null,
-                    StartCrop = ToRect(overrideDef.StartCrop),
-                    EndCrop = ToRect(overrideDef.EndCrop),
-                    CurveOverride = overrideDef.CurveOverride ?? GlobalDefaults.CurveOverride
-                };
-            }
-
-            return new SlideSettings
+            var settings = new SlideSettings
             {
                 IntensityPercent = GlobalDefaults.IntensityPercent,
-                TechniqueOverride = GlobalDefaults.TechniqueOverride,
-                BeatCount = GlobalDefaults.BeatCount,
                 DirectionMode = GlobalDefaults.DirectionOverride,
                 UseTilt = GlobalDefaults.UseTilt,
-                UseNarrativeArc = GlobalDefaults.UseNarrativeArc,
-                FocusTargetRect = null,
-                StartCrop = null,
-                EndCrop = null,
-                CurveOverride = GlobalDefaults.CurveOverride
+                UseNarrativeArc = GlobalDefaults.UseNarrativeArc
             };
+            if (Ledger.TryGetValue(fileName, out var slide) && slide.IsUserOverridden)
+            {
+                settings.DurationSeconds = slide.DurationSeconds ?? 0;
+                settings.DirectionMode = slide.DirectionOverride ?? GlobalDefaults.DirectionOverride;
+                settings.FocusTargetRect = ToRect(slide.FocusTargetRect);
+                settings.StartCrop = ToRect(slide.StartCrop);
+                settings.EndCrop = ToRect(slide.EndCrop);
+            }
+            return settings;
+        }
+
+        /// <summary>A slide marked custom for settings that no longer exist has nothing left to say.</summary>
+        public void DropEmptySlides()
+        {
+            foreach (var key in new List<string>(Ledger.Keys))
+                if (!Ledger[key].HasAnything) Ledger.Remove(key);
         }
 
         private static Windows.Foundation.Rect? ToRect(NormalizedRect? r)
@@ -70,12 +62,6 @@ namespace ModernImageViewer.Cinematic.Data
         [JsonPropertyName("intensityPercent")]
         public double IntensityPercent { get; set; } = 16.0;
 
-        [JsonPropertyName("techniqueOverride")]
-        public string TechniqueOverride { get; set; } = "Auto";
-
-        [JsonPropertyName("beatCount")]
-        public int BeatCount { get; set; } = 1;
-
         [JsonPropertyName("directionOverride")]
         public int DirectionOverride { get; set; } = 0;
 
@@ -84,9 +70,6 @@ namespace ModernImageViewer.Cinematic.Data
 
         [JsonPropertyName("useNarrativeArc")]
         public bool UseNarrativeArc { get; set; } = true;
-
-        [JsonPropertyName("curveOverride")]
-        public string CurveOverride { get; set; } = "EaseInOut";
     }
 
     public class SlideSequenceDefinition
@@ -94,14 +77,8 @@ namespace ModernImageViewer.Cinematic.Data
         [JsonPropertyName("fileName")]
         public string FileName { get; set; } = string.Empty;
 
-        [JsonPropertyName("techniqueOverride")]
-        public string? TechniqueOverride { get; set; }
-
         [JsonPropertyName("durationSeconds")]
         public double? DurationSeconds { get; set; }
-
-        [JsonPropertyName("intensityPercent")]
-        public double? IntensityPercent { get; set; }
 
         [JsonPropertyName("focusTargetRect")]
         public NormalizedRect? FocusTargetRect { get; set; }
@@ -115,14 +92,11 @@ namespace ModernImageViewer.Cinematic.Data
         [JsonPropertyName("directionOverride")]
         public int? DirectionOverride { get; set; }
 
-        [JsonPropertyName("beatCount")]
-        public int? BeatCount { get; set; }
-
         [JsonPropertyName("isUserOverridden")]
         public bool IsUserOverridden { get; set; } = false;
 
-        [JsonPropertyName("curveOverride")]
-        public string? CurveOverride { get; set; }
+        [JsonIgnore]
+        public bool HasAnything => StartCrop != null || EndCrop != null || FocusTargetRect != null || DurationSeconds != null || DirectionOverride != null;
     }
 
     public class TrackClipRecord

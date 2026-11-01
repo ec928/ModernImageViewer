@@ -75,7 +75,7 @@ Tests live at `tests\ModernImageViewer.Tests` **inside** the repo. `ViewerMath.c
 
 ## Cinematic direction
 
-Product proposal (only the Play round is built, see its section 2): `CINEMATIC_PROPOSAL.md`. Bar is **excellent cinematic in this app**: directed Play on a filled show, optional Edit show, music, present. VideoDirector remains the compositor / MP4 export app.
+Product proposal (what is built is listed in its section 2): `CINEMATIC_PROPOSAL.md`. The window is split into `CinematicWindow.xaml.cs` (window, keys, chrome), `.Playback.cs` (decode, clock, draw), `.Edit.cs` (Edit show) and `.Music.cs`. Edit show draws over a full-window canvas, so the shot keeps the shape it plays at, and the picture being framed stays clear of the panel and strip. Bar is **excellent cinematic in this app**: directed Play on a filled show, optional Edit show, music, present. VideoDirector remains the compositor / MP4 export app.
 
 Slide length and no-repeat live in `ShowPacing`, and `CameraFraming.KeepCovered` keeps an Auto frame over the whole screen; both are plain maths with tests. A slide duration of 0 means Auto. A new Play from the grid or viewer starts from the launch list. `CinematicAutoSave.json` is a crash restore only: written atomically while a show is open, deleted on clean close of the last cinematic window, offered once on the next Play if the file is still there.
 

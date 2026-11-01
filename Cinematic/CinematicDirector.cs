@@ -37,19 +37,17 @@ namespace ModernImageViewer.Cinematic
                     EndPan = end.Pan,
                     RecommendedDurationSeconds = settings.DurationSeconds > 0 ? settings.DurationSeconds : _pacing.NextDuration(Random.Shared),
                     CrossfadeDurationSeconds = 2.5,
-                    EaseKind = string.IsNullOrEmpty(settings.CurveOverride) ? "EaseInOut" : settings.CurveOverride,
-                    IsSnapZoom = settings.CurveOverride == "SnapZoom"
+                    EaseKind = "EaseInOut"
                 });
                 return queue;
             }
 
             double slideSeconds = settings.DurationSeconds > 0 ? settings.DurationSeconds : _pacing.NextDuration(Random.Shared);
-            int targetBeats = Math.Max(1, settings.BeatCount);
 
             // The same zoom looks rushed on a short slide and timid on a long one.
             double chosenIntensity = settings.IntensityPercent;
             settings.IntensityPercent = chosenIntensity * Math.Clamp(slideSeconds / 12.0, 0.6, 1.25);
-            bool canVary = settings.TechniqueOverride is null or "" or "Auto" && settings.DirectionMode == 0 && !settings.FocusTargetRect.HasValue;
+            bool canVary = settings.DirectionMode == 0 && !settings.FocusTargetRect.HasValue;
             const int triesForADifferentMove = 8;
             for (int attempt = 0; attempt < triesForADifferentMove; attempt++)
             {
@@ -58,7 +56,7 @@ namespace ModernImageViewer.Cinematic
                 GeneratePrimarySequence(queue, localIntel, bounds, settings);
 
                 // Two moves chained in a short slide is a flip-book. Stay with one, on the person if there is one.
-                if (targetBeats == 1 && queue.Count > 1 && slideSeconds < ShortSlideSeconds)
+                if (queue.Count > 1 && slideSeconds < ShortSlideSeconds)
                 {
                     var kept = !StrategyMath.IsNarrowForScreen(localIntel, bounds) && localIntel.Faces.Count > 0
                         ? new NarrativePushInStrategy().CalculateTrajectory(localIntel, bounds, settings, Random.Shared)
@@ -76,93 +74,19 @@ namespace ModernImageViewer.Cinematic
             }
             settings.IntensityPercent = chosenIntensity;
 
-            int effectiveBeats = Math.Max(targetBeats, queue.Count);
-            double durationPerBeat = slideSeconds / effectiveBeats;
-
-            foreach (var shot in queue) shot.RecommendedDurationSeconds = durationPerBeat;
-
-            while (queue.Count < targetBeats)
+            double durationPerBeat = slideSeconds / queue.Count;
+            foreach (var shot in queue)
             {
-                token.ThrowIfCancellationRequested();
-                var lastShot = queue.Last();
-                var continuationShot = new CameraTransform
-                {
-                    StrategyName = "Sequential Combo",
-                    Mode = lastShot.Mode,
-                    CurveSign = -lastShot.CurveSign,
-                    RequiresCut = false,
-                    IsSnapZoom = true,
-                    Technique = $"Extended Combo (Beat {queue.Count + 1})",
-                    RecommendedDurationSeconds = durationPerBeat,
-                    CrossfadeDurationSeconds = 1.5
-                };
-
-                continuationShot.StartScale = lastShot.EndScale;
-                continuationShot.StartPan = lastShot.EndPan;
-                continuationShot.StartRotation = lastShot.EndRotation;
-
-                bool isPullOut = queue.Count % 2 != 0;
-                float baseFill = Math.Max((float)bounds.Width / (float)localIntel.ImageSize.Width, (float)bounds.Height / (float)localIntel.ImageSize.Height);
-                Rect full = new Rect(0, 0, bounds.Width, bounds.Height);
-
-                if (isPullOut)
-                {
-                    continuationShot.EndScale = baseFill * 1.05f;
-                    Vector2 imageCenter = new Vector2((float)localIntel.ImageSize.Width / 2f, (float)localIntel.ImageSize.Height / 2f);
-                    continuationShot.EndPan = CameraMath.GetTargetedPan(imageCenter, continuationShot.EndScale, full, localIntel.ImageSize, Random.Shared, false);
-                }
-                else
-                {
-                    float targetPushScale = settings.FocusTargetRect.HasValue
-                        ? StrategyMath.GetExplicitTargetScale(settings.FocusTargetRect.Value, bounds, localIntel.ImageSize)
-                        : queue.First().EndScale;
-
-                    continuationShot.EndScale = Math.Max(lastShot.StartScale, targetPushScale);
-                    continuationShot.EndPan = CameraMath.GetTargetedPan(localIntel.SaliencyTarget, continuationShot.EndScale, full, localIntel.ImageSize, Random.Shared, settings.FocusTargetRect.HasValue);
-                }
-
-                continuationShot.EndRotation = lastShot.StartRotation;
-                queue.Enqueue(continuationShot);
+                shot.RecommendedDurationSeconds = durationPerBeat;
+                shot.EaseKind = shot.IsSnapZoom ? "SnapZoom" : "EaseInOut";
             }
-
-            foreach (var shot in queue) ApplyCurve(shot, settings);
             return queue;
         }
 
         private const double ShortSlideSeconds = 8.0;
 
-        private static void ApplyCurve(CameraTransform shot, SlideSettings settings)
-        {
-            if (!string.IsNullOrEmpty(settings.CurveOverride) && settings.CurveOverride != "EaseInOut")
-            {
-                shot.EaseKind = settings.CurveOverride;
-                shot.IsSnapZoom = settings.CurveOverride == "SnapZoom";
-            }
-            else
-            {
-                shot.EaseKind = shot.IsSnapZoom ? "SnapZoom" : "EaseInOut";
-            }
-        }
-
         private void GeneratePrimarySequence(Queue<CameraTransform> queue, SceneIntelligence intel, Size bounds, SlideSettings settings)
         {
-            if (!string.IsNullOrEmpty(settings.TechniqueOverride) && settings.TechniqueOverride != "Auto")
-            {
-                CameraTransform explicitShot;
-                bool hasFaces = intel.Faces.Count > 0;
-
-                switch (settings.TechniqueOverride)
-                {
-                    case "DiscoveryTrack": explicitShot = hasFaces ? new IntimateTrackingStrategy().CalculateTrajectory(intel, bounds, settings, Random.Shared) : new StandardFallbackStrategy().CalculateTrajectory(intel, bounds, settings, Random.Shared); explicitShot.IsSnapZoom = true; break;
-                    case "IntimateReveal": explicitShot = hasFaces ? new PortraitHeadshotStrategy().CalculateTrajectory(intel, bounds, settings, Random.Shared) : new StandardFallbackStrategy().CalculateTrajectory(intel, bounds, settings, Random.Shared); explicitShot.RequiresCut = true; break;
-                    case "EtherealHold": explicitShot = hasFaces ? new NarrativePushInStrategy().CalculateTrajectory(intel, bounds, settings, Random.Shared) : new StandardFallbackStrategy().CalculateTrajectory(intel, bounds, settings, Random.Shared); explicitShot.RecommendedDurationSeconds += 5.0; break;
-                    default: explicitShot = new StandardFallbackStrategy().CalculateTrajectory(intel, bounds, settings, Random.Shared); break;
-                }
-                explicitShot.Technique = settings.TechniqueOverride;
-                queue.Enqueue(explicitShot);
-                return;
-            }
-
             bool runTemplate = settings.UseNarrativeArc && intel.Faces.Count > 0 && Random.Shared.NextDouble() < 0.65;
             bool isPortrait = StrategyMath.IsNarrowForScreen(intel, bounds);
 

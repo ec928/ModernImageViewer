@@ -163,9 +163,8 @@ namespace ModernImageViewer.Cinematic
             _primaryFrame.Trajectory.StartPan = s.Pan;
             _primaryFrame.Trajectory.EndScale = e.Scale;
             _primaryFrame.Trajectory.EndPan = e.Pan;
-            var curve = ViewModel.CurveOverride;
-            _primaryFrame.Trajectory.EaseKind = string.IsNullOrEmpty(curve) ? "EaseInOut" : curve;
-            _primaryFrame.Trajectory.IsSnapZoom = curve == "SnapZoom";
+            _primaryFrame.Trajectory.EaseKind = "EaseInOut";
+            _primaryFrame.Trajectory.IsSnapZoom = false;
             double duration = ViewModel.GetCurrentEffectiveSettings().DurationSeconds;
             if (duration > 0)
             {
@@ -188,8 +187,7 @@ namespace ModernImageViewer.Cinematic
             if (!forceEngineReroll && !customCrops && _primaryFrame.HasEngineCrops && !ViewModel.HasUnsavedZoomPan)
             {
                 ApplyCropsToTrajectory(_primaryFrame.EngineStartCrop, _primaryFrame.EngineEndCrop);
-                if (DirectorSidebar.IsPaneOpen && !_previewing) ResetKeyframeBoxes();
-                UpdateStatusUi();
+                if (_editing && !_previewing) ResetKeyframeBoxes();
                 SlideshowCanvas.Invalidate();
                 return;
             }
@@ -197,8 +195,7 @@ namespace ModernImageViewer.Cinematic
             if (!forceEngineReroll && customCrops && !ViewModel.HasUnsavedZoomPan)
             {
                 ApplyCropsToTrajectory(settings.StartCrop!.Value, settings.EndCrop!.Value);
-                if (DirectorSidebar.IsPaneOpen && !_previewing) ResetKeyframeBoxes();
-                UpdateStatusUi();
+                if (_editing && !_previewing) ResetKeyframeBoxes();
                 SlideshowCanvas.Invalidate();
                 return;
             }
@@ -228,9 +225,8 @@ namespace ModernImageViewer.Cinematic
                     SlideshowCanvas.Invalidate();
                     DispatcherQueue.TryEnqueue(() =>
                     {
-                        if (DirectorSidebar.IsPaneOpen && !_previewing && !ViewModel.HasUnsavedZoomPan)
+                        if (_editing && !_previewing && !ViewModel.HasUnsavedZoomPan)
                             ResetKeyframeBoxes();
-                        UpdateStatusUi();
                     });
                 }
             }
@@ -308,7 +304,7 @@ namespace ModernImageViewer.Cinematic
                 _crossfadeBlurAlpha = 0f;
                 _crossfadeSubjectAlpha = 0f;
 
-                if (!ViewModel.IsPlaying && !DirectorSidebar.IsPaneOpen)
+                if (!ViewModel.IsPlaying && !_editing)
                 {
                     ViewModel.TogglePlay();
                 }
@@ -468,15 +464,12 @@ namespace ModernImageViewer.Cinematic
             TimeSpan sinceLastFrame = _lastRenderTime == TimeSpan.Zero ? TimeSpan.Zero : totalTime - _lastRenderTime;
             _lastRenderTime = totalTime;
 
-            if (DirectorSidebar.IsPaneOpen)
-                UpdateStatusUi();
-
             if (!ViewModel.IsPlaying || _isManuallyNavigating)
             {
                 // Pause holds the picture: the clocks wait with it, so Play carries on from here.
                 if (_slideStartTime != TimeSpan.Zero) _slideStartTime += sinceLastFrame;
                 if (_fadeStartTime != TimeSpan.Zero) _fadeStartTime += sinceLastFrame;
-                if (DirectorSidebar.IsPaneOpen && !_previewing)
+                if (_editing && !_previewing)
                     SlideshowCanvas.Invalidate();
                 return;
             }
@@ -520,12 +513,7 @@ namespace ModernImageViewer.Cinematic
 
             if (progress >= 1.0 && _previewing)
             {
-                _previewing = false;
-                if (ViewModel.IsPlaying) ViewModel.TogglePlay();
-                DiscardPreload();
-                SlideProgressBar.Value = 0;
-                SyncPlayPauseUI();
-                SlideshowCanvas.Invalidate();
+                EndPreview();
                 return;
             }
 
@@ -633,7 +621,7 @@ namespace ModernImageViewer.Cinematic
         {
             var imgSize = frame.Intelligence.ImageSize;
             var traj = frame.Trajectory;
-            bool isEditMode = DirectorSidebar.IsPaneOpen && !_previewing;
+            bool isEditMode = _editing && !_previewing;
 
             if (isEditMode)
             {

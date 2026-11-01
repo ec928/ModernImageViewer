@@ -13,14 +13,11 @@ namespace ModernImageViewer.Cinematic
         public int DirectionMode { get; set; }
         public bool UseTilt { get; set; }
         public bool UseNarrativeArc { get; set; } = true;
-        public string TechniqueOverride { get; set; } = "Auto";
         public Rect? FocusTargetRect { get; set; }
         public Rect? StartCrop { get; set; }
         public Rect? EndCrop { get; set; }
         /// <summary>0 is Auto: the director rolls this slide's length.</summary>
         public double DurationSeconds { get; set; }
-        public int BeatCount { get; set; } = 1;
-        public string CurveOverride { get; set; } = "EaseInOut";
     }
 
     public class SceneIntelligence

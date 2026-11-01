@@ -1194,7 +1194,6 @@ namespace ModernImageViewer
             _hfCts?.Cancel();
             ClearImageCache();
 
-            if (_slideshowTimer != null && _slideshowTimer.IsEnabled) _slideshowTimer.Stop();
 
             ViewerControl.PrepareForNewImage(null);
 

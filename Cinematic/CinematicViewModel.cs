@@ -155,7 +155,7 @@ namespace ModernImageViewer.Cinematic.ViewModels
             get => _isPlaying;
             set { if (SetProperty(ref _isPlaying, value)) OnPropertyChanged(nameof(PlayPauseIcon)); }
         }
-        public Microsoft.UI.Xaml.Controls.Symbol PlayPauseIcon => IsPlaying ? Microsoft.UI.Xaml.Controls.Symbol.Stop : Microsoft.UI.Xaml.Controls.Symbol.Play;
+        public Microsoft.UI.Xaml.Controls.Symbol PlayPauseIcon => IsPlaying ? Microsoft.UI.Xaml.Controls.Symbol.Pause : Microsoft.UI.Xaml.Controls.Symbol.Play;
 
         // Playlist Toggles
         private bool _isShuffleEnabled;
@@ -192,12 +192,9 @@ namespace ModernImageViewer.Cinematic.ViewModels
                         SyncStateForCurrentSlide();
                         RequestRefresh();
                     }
-                    OnPropertyChanged(nameof(PanelHeader));
-                    OnPropertyChanged(nameof(OverrideButtonText));
-                    OnPropertyChanged(nameof(RevertButtonVisibility));
+                    OnPropertyChanged(nameof(SlideBadge));
                     OnPropertyChanged(nameof(CanRevertZoomPan));
                     OnPropertyChanged(nameof(CanSaveZoomPan));
-                    OnPropertyChanged(nameof(SaveHint));
                     RefreshAllProperties();
                     RefreshClipStatuses();
                     _ = AutoSaveAsync();
@@ -213,35 +210,23 @@ namespace ModernImageViewer.Cinematic.ViewModels
             {
                 if (SetProperty(ref _hasUnsavedZoomPan, value))
                 {
-                    OnPropertyChanged(nameof(PanelHeader));
+                    OnPropertyChanged(nameof(SlideBadge));
                     OnPropertyChanged(nameof(CanSaveZoomPan));
                     OnPropertyChanged(nameof(CanRevertZoomPan));
-                    OnPropertyChanged(nameof(SaveHint));
                 }
             }
         }
 
-        public string PanelHeader => HasUnsavedZoomPan
-            ? (IsOverrideMode
-                ? "DRAFT \u2014 custom zoom/pan changed, not saved"
-                : "DRAFT \u2014 you moved zoom/pan, not saved")
-            : (IsOverrideMode
-                ? "CUSTOM \u2014 you saved zoom/pan for this slide"
-                : "AUTO \u2014 engine zoom/pan, not customized");
-        public string OverrideButtonText => IsOverrideMode ? "Revert to Auto" : "Using Auto";
-        public Visibility RevertButtonVisibility => Visibility.Visible;
+        public string SlideBadge => HasUnsavedZoomPan ? "Not saved" : IsOverrideMode ? "Custom" : "Auto";
         public bool CanSaveZoomPan => HasUnsavedZoomPan;
         public bool CanRevertZoomPan => HasUnsavedZoomPan || IsOverrideMode;
-        public string SaveHint => HasUnsavedZoomPan
-            ? "Not saved. The show still uses the last saved state (Auto or previous Custom) until you Save."
-            : IsOverrideMode
-                ? "Saved. This slide uses your zoom/pan, not the engine."
-                : "Not customized. The rectangles are the engine's zoom/pan. Dragging them makes a draft \u2014 Save to keep it.";
 
-        // TwoWay Bound Slider Properties
+        // Where the slider rests while the slide is on Auto. Auto rolls 5 to 20 seconds per slide.
+        private const double AutoSliderSeconds = 12.0;
+
         public double DurationSeconds
         {
-            get => IsOverrideMode ? (CurrentDraft.DurationSeconds ?? AutoSliderSeconds) : AutoSliderSeconds;
+            get => CurrentDraft.DurationSeconds ?? AutoSliderSeconds;
             set
             {
                 if (Math.Abs(DurationSeconds - value) < 0.001) return;
@@ -249,83 +234,119 @@ namespace ModernImageViewer.Cinematic.ViewModels
                 CurrentDraft.DurationSeconds = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(DurationLabel));
+                OnPropertyChanged(nameof(SlideDurationIsSet));
                 RequestRefresh();
                 _ = AutoSaveAsync();
             }
         }
 
-        public string DurationLabel => IsOverrideMode && CurrentDraft.DurationSeconds != null ? $"{DurationSeconds:0} s" : "Auto";
+        public string DurationLabel => CurrentDraft.DurationSeconds != null ? $"{DurationSeconds:0} s" : "Auto";
+        public bool SlideDurationIsSet => CurrentDraft.DurationSeconds != null;
 
-        // Where the slider rests while the slide is on Auto. Auto rolls 5 to 20 seconds per slide.
-        private const double AutoSliderSeconds = 12.0;
-
-        public string CurveOverride
+        public void UseAutoDuration()
         {
-            get => IsOverrideMode
-                ? (CurrentDraft.CurveOverride ?? ActiveProject.GlobalDefaults.CurveOverride)
-                : ActiveProject.GlobalDefaults.CurveOverride;
+            CurrentDraft.DurationSeconds = null;
+            ForgetSlideIfEmpty();
+            RefreshAllProperties();
+            SlideMotionChanged?.Invoke();
+            _ = AutoSaveAsync();
+        }
+
+        public const string SameAsAllSlides = "same";
+
+        /// <summary>This slide's move. It follows all slides until one is chosen.</summary>
+        public string SlideMove
+        {
+            get => CurrentDraft.DirectionOverride?.ToString() ?? SameAsAllSlides;
             set
             {
-                if (string.IsNullOrEmpty(value) || CurveOverride == value) return;
-                if (IsOverrideMode) CurrentDraft.CurveOverride = value; else ActiveProject.GlobalDefaults.CurveOverride = value;
+                if (string.IsNullOrEmpty(value) || SlideMove == value) return;
+                if (value == SameAsAllSlides)
+                {
+                    CurrentDraft.DirectionOverride = null;
+                    ForgetSlideIfEmpty();
+                }
+                else
+                {
+                    if (!IsOverrideMode) IsOverrideMode = true;
+                    CurrentDraft.DirectionOverride = int.TryParse(value, out int move) ? move : 0;
+                }
                 OnPropertyChanged();
-                RequestRefresh();
+                SlideMotionChanged?.Invoke();
                 _ = AutoSaveAsync();
             }
         }
 
-        public double IntensityPercent
+        public string AllMove
         {
-            get => IsOverrideMode ? (CurrentDraft.IntensityPercent ?? ActiveProject.GlobalDefaults.IntensityPercent) : ActiveProject.GlobalDefaults.IntensityPercent;
+            get => ActiveProject.GlobalDefaults.DirectionOverride.ToString();
             set
             {
-                if (Math.Abs(IntensityPercent - value) < 0.001) return;
-                if (IsOverrideMode) CurrentDraft.IntensityPercent = value; else ActiveProject.GlobalDefaults.IntensityPercent = value;
+                if (string.IsNullOrEmpty(value) || AllMove == value) return;
+                ActiveProject.GlobalDefaults.DirectionOverride = int.TryParse(value, out int move) ? move : 0;
                 OnPropertyChanged();
-                RequestRefresh();
+                SlideMotionChanged?.Invoke();
                 _ = AutoSaveAsync();
             }
         }
 
-        public int BeatCount
+        public double Movement
         {
-            get => IsOverrideMode ? (CurrentDraft.BeatCount ?? ActiveProject.GlobalDefaults.BeatCount) : ActiveProject.GlobalDefaults.BeatCount;
+            get => ActiveProject.GlobalDefaults.IntensityPercent;
             set
             {
-                if (BeatCount == value) return;
-                if (IsOverrideMode) CurrentDraft.BeatCount = value; else ActiveProject.GlobalDefaults.BeatCount = value;
+                if (Math.Abs(Movement - value) < 0.001) return;
+                ActiveProject.GlobalDefaults.IntensityPercent = value;
                 OnPropertyChanged();
-                RequestRefresh();
+                SlideMotionChanged?.Invoke();
                 _ = AutoSaveAsync();
             }
         }
 
-        public string TechniqueOverride
+        /// <summary>A slide with nothing of its own left goes back to Auto, so its badge stays true.</summary>
+        private void ForgetSlideIfEmpty()
         {
-            get => IsOverrideMode ? (CurrentDraft.TechniqueOverride ?? ActiveProject.GlobalDefaults.TechniqueOverride) : ActiveProject.GlobalDefaults.TechniqueOverride;
+            if (IsOverrideMode && !CurrentDraft.HasAnything && !HasUnsavedZoomPan) RevertToAuto();
+        }
+
+        // Music
+        public string? MusicPath => ActiveProject.MusicPath;
+        public bool HasMusic => !string.IsNullOrEmpty(ActiveProject.MusicPath);
+        public Visibility MusicVolumeVisibility => HasMusic ? Visibility.Visible : Visibility.Collapsed;
+        public string MusicLabel => HasMusic ? "Music: " + Path.GetFileName(ActiveProject.MusicPath) : "Add music";
+
+        public double MusicVolume
+        {
+            get => ActiveProject.MusicVolume;
             set
             {
-                if (TechniqueOverride == value) return;
-                if (IsOverrideMode) CurrentDraft.TechniqueOverride = value; else ActiveProject.GlobalDefaults.TechniqueOverride = value;
+                if (Math.Abs(MusicVolume - value) < 0.001) return;
+                ActiveProject.MusicVolume = Math.Clamp(value, 0, 100);
                 OnPropertyChanged();
-                RequestRefresh();
+                MusicVolumeChanged?.Invoke();
                 _ = AutoSaveAsync();
             }
         }
 
-        public string DirectionOverride
+        public void SetMusic(string? path)
         {
-            get => IsOverrideMode ? (CurrentDraft.DirectionOverride?.ToString() ?? ActiveProject.GlobalDefaults.DirectionOverride.ToString()) : ActiveProject.GlobalDefaults.DirectionOverride.ToString();
-            set
-            {
-                if (DirectionOverride == value) return;
-                int val = int.TryParse(value, out int v) ? v : 0;
-                if (IsOverrideMode) CurrentDraft.DirectionOverride = val; else ActiveProject.GlobalDefaults.DirectionOverride = val;
-                OnPropertyChanged();
-                RequestRefresh();
-                _ = AutoSaveAsync();
-            }
+            ActiveProject.MusicPath = path;
+            RaiseMusic();
+            _ = AutoSaveAsync();
         }
+
+        private void RaiseMusic()
+        {
+            OnPropertyChanged(nameof(HasMusic));
+            OnPropertyChanged(nameof(MusicVolumeVisibility));
+            OnPropertyChanged(nameof(MusicLabel));
+            OnPropertyChanged(nameof(MusicVolume));
+            MusicChanged?.Invoke();
+        }
+
+        public event Action? SlideMotionChanged;
+        public event Action? MusicChanged;
+        public event Action? MusicVolumeChanged;
 
         public CinematicViewModel(List<string> imagePaths, int startIndex)
         {
@@ -462,11 +483,10 @@ namespace ModernImageViewer.Cinematic.ViewModels
         {
             OnPropertyChanged(nameof(DurationSeconds));
             OnPropertyChanged(nameof(DurationLabel));
-            OnPropertyChanged(nameof(CurveOverride));
-            OnPropertyChanged(nameof(IntensityPercent));
-            OnPropertyChanged(nameof(BeatCount));
-            OnPropertyChanged(nameof(TechniqueOverride));
-            OnPropertyChanged(nameof(DirectionOverride));
+            OnPropertyChanged(nameof(SlideDurationIsSet));
+            OnPropertyChanged(nameof(SlideMove));
+            OnPropertyChanged(nameof(AllMove));
+            OnPropertyChanged(nameof(Movement));
         }
 
         private List<int> VisibleIndices()
@@ -511,9 +531,14 @@ namespace ModernImageViewer.Cinematic.ViewModels
                 Track[i].IsActive = (i == _currentIndex);
             RefreshClipStatuses();
             OnPropertyChanged(nameof(HideButtonLabel));
+            OnPropertyChanged(nameof(CurrentFileName));
+            OnPropertyChanged(nameof(CanHideOrRemove));
         }
 
-        public string HideButtonLabel => CurrentClip?.IsHidden == true ? "Unhide" : "Hide";
+        public string HideButtonLabel => CurrentClip?.IsHidden == true ? "Bring back" : "Hide in this show";
+
+        // The last picture showing cannot go: a show needs something to play.
+        public bool CanHideOrRemove => CurrentClip?.IsHidden == true || VisibleIndices().Count > 1;
 
         public void RefreshClipStatuses()
         {
@@ -568,13 +593,14 @@ namespace ModernImageViewer.Cinematic.ViewModels
             if (VisibleIndices().Count <= 1 && !CurrentClip.IsHidden) return;
             CurrentClip.IsHidden = !CurrentClip.IsHidden;
             OnPropertyChanged(nameof(HideButtonLabel));
+            OnPropertyChanged(nameof(CanHideOrRemove));
             PersistSequence();
             _pendingNextClipId = null;
         }
 
         public void RemoveCurrentClip()
         {
-            if (Track.Count <= 1 || CurrentClip == null) return;
+            if (Track.Count <= 1 || CurrentClip == null || !CanHideOrRemove) return;
             int removeAt = CurrentIndex;
             RemoveLedgerForCurrent();
             Track.RemoveAt(removeAt);
@@ -593,7 +619,8 @@ namespace ModernImageViewer.Cinematic.ViewModels
 
         public void ResetToLaunchSet()
         {
-            ActiveProject = new CinematicProject();
+            var music = (ActiveProject.MusicPath, ActiveProject.MusicVolume);
+            ActiveProject = new CinematicProject { MusicPath = music.MusicPath, MusicVolume = music.MusicVolume };
             string? keep = CurrentClip?.FilePath;
             Track.Clear();
             _failedClipIds.Clear();
@@ -614,6 +641,7 @@ namespace ModernImageViewer.Cinematic.ViewModels
             OnPropertyChanged(nameof(CurrentIndex));
             RefreshActiveClip();
             SyncStateForCurrentSlide();
+            RefreshAllProperties();
             PersistSequence();
             SequenceChanged?.Invoke();
             RaiseNav();
@@ -663,6 +691,7 @@ namespace ModernImageViewer.Cinematic.ViewModels
             if (added > 0)
             {
                 RebuildImagePaths();
+                RefreshActiveClip();
                 PersistSequence();
                 SequenceChanged?.Invoke();
             }
@@ -688,6 +717,7 @@ namespace ModernImageViewer.Cinematic.ViewModels
             if (added > 0)
             {
                 RebuildImagePaths();
+                RefreshActiveClip();
                 PersistSequence();
                 SequenceChanged?.Invoke();
             }
@@ -740,13 +770,10 @@ namespace ModernImageViewer.Cinematic.ViewModels
 
             _hasUnsavedZoomPan = false;
             OnPropertyChanged(nameof(IsOverrideMode));
-            OnPropertyChanged(nameof(PanelHeader));
-            OnPropertyChanged(nameof(OverrideButtonText));
-            OnPropertyChanged(nameof(RevertButtonVisibility));
+            OnPropertyChanged(nameof(SlideBadge));
             OnPropertyChanged(nameof(HasUnsavedZoomPan));
             OnPropertyChanged(nameof(CanSaveZoomPan));
             OnPropertyChanged(nameof(CanRevertZoomPan));
-            OnPropertyChanged(nameof(SaveHint));
             RefreshAllProperties();
             RefreshClipStatuses();
         }
@@ -791,11 +818,9 @@ namespace ModernImageViewer.Cinematic.ViewModels
             CurrentDraft = new SlideSequenceDefinition { FileName = CurrentFileName, IsUserOverridden = false };
             _isOverrideMode = false;
             OnPropertyChanged(nameof(IsOverrideMode));
-            OnPropertyChanged(nameof(PanelHeader));
-            OnPropertyChanged(nameof(OverrideButtonText));
+            OnPropertyChanged(nameof(SlideBadge));
             OnPropertyChanged(nameof(CanRevertZoomPan));
             OnPropertyChanged(nameof(CanSaveZoomPan));
-            OnPropertyChanged(nameof(SaveHint));
             RefreshAllProperties();
             RefreshClipStatuses();
             _ = AutoSaveAsync();
@@ -851,27 +876,43 @@ namespace ModernImageViewer.Cinematic.ViewModels
             await Windows.Storage.FileIO.WriteTextAsync(file, json);
         }
 
-        public async Task<(bool Applied, int Loaded, int Missing)> LoadProjectAsync(StorageFile file)
+        /// <summary>Reads a saved show. Null if the file is not one. Older shows keep their pictures, order and framing; settings that no longer exist are dropped.</summary>
+        public static (CinematicProject? Show, int Missing) ReadShow(string json)
         {
-            string json = await Windows.Storage.FileIO.ReadTextAsync(file);
-            var loadedProject = JsonSerializer.Deserialize<CinematicProject>(json);
-            if (loadedProject == null) return (false, 0, 0);
+            CinematicProject? show;
+            try { show = JsonSerializer.Deserialize<CinematicProject>(json); }
+            catch (JsonException) { return (null, 0); }
+            if (show?.Sequence == null || show.Sequence.Count == 0) return (null, 0);
+            int missing = CountMissing(show);
+            return missing >= show.Sequence.Count ? (null, missing) : (show, missing);
+        }
 
-            int missing = CountMissing(loadedProject);
-            int present = (loadedProject.Sequence?.Count ?? 0) - missing;
-            if (loadedProject.Sequence != null && loadedProject.Sequence.Count > 0 && present <= 0)
-                return (false, 0, missing);
+        public static List<string> PathsOnDisk(CinematicProject show) =>
+            show.Sequence.Where(r => !string.IsNullOrWhiteSpace(r.FilePath) && File.Exists(r.FilePath)).Select(r => r.FilePath).ToList();
 
-            ActiveProject = loadedProject;
+        public void ApplyShow(CinematicProject show)
+        {
+            show.DropEmptySlides();
+            ActiveProject = show;
+            MusicWasMissing = !string.IsNullOrEmpty(show.MusicPath) && !File.Exists(show.MusicPath);
+            if (MusicWasMissing) show.MusicPath = null;
+            _currentIndex = 0;
             ApplySequenceFromProject();
+            var visible = VisibleIndices();
+            if (visible.Count > 0 && !visible.Contains(_currentIndex)) _currentIndex = visible[0];
+            OnPropertyChanged(nameof(CurrentIndex));
+            RefreshActiveClip();
             _pendingNextClipId = null;
             _failedClipIds.Clear();
             SyncStateForCurrentSlide();
+            RefreshAllProperties();
+            RaiseMusic();
             RequestRefresh();
             SequenceChanged?.Invoke();
             RaiseNav();
-            return (true, Track.Count, missing);
         }
+
+        public bool MusicWasMissing { get; private set; }
 
         public async Task AutoSaveAsync()
         {
@@ -913,14 +954,7 @@ namespace ModernImageViewer.Cinematic.ViewModels
                 string json = await File.ReadAllTextAsync(path);
                 var loadedProject = JsonSerializer.Deserialize<CinematicProject>(json);
                 if (loadedProject == null) return;
-                ActiveProject = loadedProject;
-                ApplySequenceFromProject();
-                _pendingNextClipId = null;
-                _failedClipIds.Clear();
-                SyncStateForCurrentSlide();
-                RequestRefresh();
-                SequenceChanged?.Invoke();
-                RaiseNav();
+                ApplyShow(loadedProject);
             }
             catch (Exception ex) { Debug.WriteLine($"[Cinematic] RestoreAutoSave: {ex.Message}"); }
         }

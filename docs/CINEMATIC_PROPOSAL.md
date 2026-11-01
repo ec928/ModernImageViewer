@@ -1,6 +1,6 @@
 # Cinematic in ModernImageViewer: an excellent stills show
 
-**Status:** proposal, with the Play round built (2026-11-01; see the end of §2). A 2026-08-27 attempt was reverted (lied: Clear-to-Auto on Auto; no visible start/end). Rebuild must follow §4–§6: two modes, no lying.  
+**Status:** proposal, with the Play round, Edit show, Open show and music built (2026-11-01; see the end of §2). A 2026-08-27 attempt was reverted (lied: Clear-to-Auto on Auto; no visible start/end). Rebuild must follow §4–§6: two modes, no lying.  
 **Date:** 2026-08-27 (two-mode law)  
 **Scope:** The cinematic slideshow **in this app**. VideoDirector stays the multi-track compositor and MP4 exporter. Cinematic does not become an NLE.
 
@@ -33,6 +33,8 @@ Fire-and-forget works as a *gesture* and fails as a *show*. Play copies a path l
 VideoDirector is the opposite: empty start, strong timeline, weak stills transitions, export.
 
 **Built since (Play round, 2026-11-01):** Auto slides roll 5–20s alternating short and long, with a slide duration set in the panel overriding that. No move runs twice in a row (in, out, left, right, up, down, hold). Crossfade is the only transition between slides, and the incoming picture is already moving during it. Default intensity is 16, scaled by slide length. A picture wider than the screen fills it and mostly pans. Fullscreen by button or F11, remembered; Esc closes the panel, then leaves fullscreen, then closes the show. Pause holds the picture and Play carries on from there. A picture that will not open is skipped. Sections 8 and 10 are therefore met for Play, apart from choosing a display and an all-slides duration. Everything else in this section still stands.
+
+**Built since (Edit show, 2026-11-01):** one labelled **Edit show** button opens the picture strip and the slide panel, and closing it plays on. Hide in this show, Remove, Duplicate, Add pictures and Start over are on the strip. The panel has Start and End boxes, Save, Revert, Preview, Duration, a Move for this slide, and a Move and Movement for all slides. Technique, beats and curve are gone, and older shows drop those settings, along with any per-slide intensity. **Save show** and **Open show** are in the panel, with **Open show** also beside Play in the main window (file picker, no recents). One music file loops under the show with volume on the bar, and waits while the show is paused or being edited. The separate window stays (Ed, 2026-11-01). Still open: all-slides duration, chosen display, recents, search in the strip, adding from the main viewer, pairs, and keying customizations by path + index.
 
 **Failure to avoid:** cinematic becomes a worse VideoDirector.  
 **Failure to avoid equally:** we ship curation and call it done while Play still looks like a timer on a pan.

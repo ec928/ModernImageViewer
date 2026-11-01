@@ -30,10 +30,6 @@ namespace ModernImageViewer.Cinematic
         private CancellationTokenSource? _sessionCts;
         private CancellationTokenSource? _mathCts;
 
-        private readonly SolidColorBrush _telemetryOverrideText = new SolidColorBrush(Microsoft.UI.Colors.Orange);
-        private readonly SolidColorBrush _telemetryAutoText = new SolidColorBrush(Microsoft.UI.Colors.White);
-        private readonly SolidColorBrush _telemetryOverrideBg = new SolidColorBrush(Windows.UI.Color.FromArgb(50, 255, 165, 0));
-        private readonly SolidColorBrush _telemetryAutoBg = new SolidColorBrush(Windows.UI.Color.FromArgb(40, 255, 255, 255));
         private sealed record PlaybackRequest(Size Bounds, SlideSettings Settings);
 
         private AppWindow _appWindow;
@@ -65,9 +61,11 @@ namespace ModernImageViewer.Cinematic
         private double _lastCanvasHeight;
 
         private DispatcherQueueTimer _idleTimer;
+        private int _openedShowMissing;
+        private bool _openedAShow;
         private bool _pointerOverChrome;
         private int _seqScrollGeneration;
-        private bool _sequenceWanted;
+        private bool _editing;
         private bool _isManuallyNavigating = false;
         private TimeSpan _fadeStartTime = TimeSpan.Zero;
         private TimeSpan _lastRenderTime = TimeSpan.Zero;
@@ -80,15 +78,21 @@ namespace ModernImageViewer.Cinematic
         private Queue<CameraTransform> _nextSequence = new();
         private readonly TaskCompletionSource<bool> _restoreGate = new();
 
-        public CinematicWindow(List<string> imagePaths, int startIndex)
+        public CinematicWindow(List<string> imagePaths, int startIndex, CinematicProject? show = null, int missingPictures = 0)
         {
             this.InitializeComponent();
             this.ExtendsContentIntoTitleBar = true;
-            ApplyPlaybarToggle(BtnDirectorToggle, false);
-            ApplyPlaybarToggle(BtnSequenceToggle, false);
+            ApplyPlaybarToggle(BtnEditShow, false);
 
             ViewModel = new CinematicViewModel(imagePaths, startIndex);
             ViewModel.TrajectoryRefreshRequested += () => UpdateActiveTrajectoriesAsync();
+            ViewModel.SlideMotionChanged += () =>
+            {
+                DiscardPreload();
+                UpdateActiveTrajectoriesAsync(forceEngineReroll: true);
+            };
+            ViewModel.MusicChanged += ApplyMusic;
+            ViewModel.MusicVolumeChanged += ApplyMusicVolume;
             ViewModel.SlideNavigationRequested += () => _ = ManualNavigateAsync();
             ViewModel.SequenceChanged += () =>
             {
@@ -99,9 +103,14 @@ namespace ModernImageViewer.Cinematic
             {
                 if (e.PropertyName == nameof(ViewModel.CurrentIndex))
                     DispatcherQueue.TryEnqueue(ScrollSequenceToCurrent);
+                else if (e.PropertyName == nameof(ViewModel.IsPlaying))
+                    SyncMusicPlayback();
             };
+            if (show != null) ViewModel.ApplyShow(show);
+            _openedShowMissing = missingPictures;
+            _openedAShow = show != null;
             bool otherShowOpen = (MainWindow.Instance?.CinematicWindowCount ?? 0) > 0;
-            if (otherShowOpen || !CinematicViewModel.CrashAutoSaveExists())
+            if (_openedAShow || otherShowOpen || !CinematicViewModel.CrashAutoSaveExists())
                 _restoreGate.TrySetResult(true);
             RootGrid.Loaded += CinematicRoot_Loaded;
 
@@ -134,6 +143,11 @@ namespace ModernImageViewer.Cinematic
         private async void CinematicRoot_Loaded(object sender, RoutedEventArgs e)
         {
             RootGrid.Loaded -= CinematicRoot_Loaded;
+            if (_openedAShow)
+            {
+                await ReportShowProblemsAsync(_openedShowMissing);
+                return;
+            }
             try
             {
                 bool otherShowOpen = (MainWindow.Instance?.CinematicWindowCount ?? 1) > 1;
@@ -298,7 +312,8 @@ namespace ModernImageViewer.Cinematic
         private void Accelerator_Escape(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender, Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
         {
             args.Handled = true;
-            if (DirectorSidebar.IsPaneOpen) DirectorSidebar.IsPaneOpen = false;
+            if (_previewing) EndPreview();
+            else if (_editing) SetEditing(false);
             else if (_isFullscreen) SetFullscreen(false);
             else this.Close();
         }
@@ -307,7 +322,7 @@ namespace ModernImageViewer.Cinematic
         {
             if (ActionBar != null) ActionBar.Opacity = 1.0;
             _idleTimer.Stop();
-            if (!_pointerOverChrome) _idleTimer.Start();
+            if (!_pointerOverChrome && !_editing) _idleTimer.Start();
         }
 
         private void Chrome_PointerEntered(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
@@ -321,17 +336,17 @@ namespace ModernImageViewer.Cinematic
         {
             _pointerOverChrome = false;
             _idleTimer.Stop();
-            _idleTimer.Start();
+            if (!_editing) _idleTimer.Start();
         }
 
         private void RootGrid_PointerExited(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
         {
-            ActionBar.Opacity = 0;
+            if (!_editing) ActionBar.Opacity = 0;
         }
 
         private void IdleTimer_Tick(DispatcherQueueTimer sender, object args)
         {
-            if (_pointerOverChrome)
+            if (_pointerOverChrome || _editing)
             {
                 _idleTimer.Start();
                 return;
@@ -342,7 +357,7 @@ namespace ModernImageViewer.Cinematic
 
         private void BtnPlayStop_Click(object sender, RoutedEventArgs e)
         {
-            if (DirectorSidebar.IsPaneOpen && !_previewing)
+            if (_editing && !_previewing)
             {
                 BtnPreview_Click(sender, e);
                 return;
@@ -383,6 +398,7 @@ namespace ModernImageViewer.Cinematic
                 _appWindow.Changed -= CinematicAppWindow_Changed;
 
                 _idleTimer?.Stop();
+                DisposeMusic();
                 _sessionCts?.Cancel();
                 _mathCts?.Cancel();
                 _restoreGate.TrySetResult(true);
