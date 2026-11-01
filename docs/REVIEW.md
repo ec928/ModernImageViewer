@@ -140,3 +140,4 @@ The Win2D viewer core is real, but GPU lifetime was not reference-counted end-to
 - 2026-11-01: v0.29.0, released. Everything since v0.28.0: image tray, Surprise me as one control, camera motion and transitions, settings cards, the main dialog button on the right.
 - 2026-11-01: v0.29.1, internal. When Cinematic and auto-play both want music, the one silenced carries on when the other stops. The rule has a controlled test. The sound itself was not checked.
 - 2026-11-01: v0.29.2, internal. A full screen button in the Surprise me control, with Cinematic's symbols.
+- 2026-11-01: v0.29.2, released. The full screen button and silenced music carrying on. Neither was checked by hand before release: the button was built and the app started, and the music rule has a test.
