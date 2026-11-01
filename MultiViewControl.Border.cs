@@ -135,7 +135,7 @@ namespace ModernImageViewer
 
         /// <summary>One empty grid cell under floating cells is the bare canvas they lie on, not a place waiting for a picture.</summary>
         private bool IsBareCanvas(int slot) =>
-            slot == 0 && GridCellCount == 1 && IsEmptyCell(_items[0]) && _freeformCards.Count > 0;
+            slot == 0 && VisibleCount(GridCellCount) == 1 && IsEmptyCell(_items[0]) && _freeformCards.Count > 0;
 
         /// <summary>Take the image out of this cell.</summary>
         private void EmptyCell(int slot)

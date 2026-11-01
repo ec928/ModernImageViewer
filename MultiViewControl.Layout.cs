@@ -205,6 +205,15 @@ namespace ModernImageViewer
             }
         }
 
+        /// <summary>Says how many images are on the canvas and how many are in the tray, once there are any in the tray.</summary>
+        private void ShowShownBadge()
+        {
+            int tray = TrayImages().Count;
+            int onCanvas = _items.Count(i => !IsEmptyCell(i)) - tray;
+            ShownBadge.Visibility = tray > 0 ? Visibility.Visible : Visibility.Collapsed;
+            ShownText.Text = $"{onCanvas} on canvas, {tray} in tray";
+        }
+
         private int VisibleCount(int count)
         {
             if (count <= 0) return 0;
@@ -303,8 +312,7 @@ namespace ModernImageViewer
         private void RefreshLinesChrome(int count)
         {
             int shown = VisibleCount(count);
-            ShownBadge.Visibility = count > shown ? Visibility.Visible : Visibility.Collapsed;
-            ShownText.Text = shown + " of " + count + " shown";
+            ShowShownBadge();
             bool show = shown > 1;
             if (!show)
             {

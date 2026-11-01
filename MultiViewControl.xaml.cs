@@ -2057,22 +2057,23 @@ namespace ModernImageViewer
 
             if (_items.Count > 1)
             {
-                menu.Items.Add(MakeCellTargetMenu("Swap with...", "\uE8AB", "Swap with", curSlot,
-                    (target, withAttributes) => SwapItems(curSlot, target, withAttributes)));
+                var swapMenu = MakeCellTargetMenu("Swap with...", "\uE8AB", "Swap with", curSlot,
+                    (target, withAttributes) => SwapItems(curSlot, target, withAttributes));
+                int inTray = TrayImages().Count;
+                if (inTray > 0 && curSlot >= 0)
+                {
+                    var fromTray = MakeAdvancedItem($"Image tray ({inTray})\u2026", "\uE8B9", () => ShowTrayCard(curSlot));
+                    ToolTipService.SetToolTip(fromTray, "Images that are not on the canvas. Pick one by looking at it.");
+                    swapMenu.Items.Insert(0, fromTray);
+                    swapMenu.Items.Insert(1, new MenuFlyoutSeparator());
+                }
+                menu.Items.Add(swapMenu);
                 if (!IsEmptyCell(item))
                 {
                     menu.Items.Add(MakeCellTargetMenu("Copy to...", "\uE8C8", "Copy to", curSlot,
                         (target, withAttributes) => CopyItemTo(curSlot, target, withAttributes)));
                     menu.Items.Add(MakeCellTargetMenu("Move to...", "\uE8DE", "Move to", curSlot,
                         (target, withAttributes) => MoveItemTo(curSlot, target, withAttributes)));
-                }
-
-                int waiting = WaitingPictures().Count;
-                if (waiting > 0 && curSlot >= 0)
-                {
-                    var swapWaiting = MakeAdvancedItem($"Swap with a waiting picture ({waiting})\u2026", "\uE8B9", () => ShowWaitingCard(curSlot));
-                    ToolTipService.SetToolTip(swapWaiting, "Pictures that are not on the canvas. Pick one by looking at it.");
-                    menu.Items.Add(swapWaiting);
                 }
 
                 menu.Items.Add(new MenuFlyoutSeparator());
@@ -2164,7 +2165,7 @@ namespace ModernImageViewer
             for (int i = 0; i < _items.Count; i++)
             {
                 if (i == curSlot) continue;
-                // A position that cannot be seen means nothing. Those pictures have their own entry on the menu.
+                // A position that cannot be seen means nothing. Those images are in the tray, which Swap with opens.
                 if (i >= cellsOnShow && i < gridCells) continue;
                 int targetSlot = i;
                 string position = $"Position {i + 1}";

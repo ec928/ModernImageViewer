@@ -271,7 +271,7 @@
                             Style="{StaticResource QuietButtonStyle}"
                             Padding="8,5"
                             CornerRadius="12"
-                            ToolTipService.ToolTip="Find pictures in your folders and add them to the layout.">
+                            ToolTipService.ToolTip="Find images in your folders. The first 8 go on the canvas as freeform images, and the rest go in the image tray.">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE710;" FontSize="14" />
                             <TextBlock Text="Add images" VerticalAlignment="Center" FontSize="13" />
@@ -282,7 +282,7 @@
                             Background="Transparent"
                             Padding="4,0"
                             VerticalAlignment="Center"
-                            ToolTipService.ToolTip="The others are waiting. Surprise me uses them, and a cell's right-click menu can swap one in.">
+                            ToolTipService.ToolTip="Images in the tray are not on the canvas. Surprise me uses them, and Swap with on a cell's right-click menu can bring one in.">
                         <TextBlock x:Name="ShownText"
                                    VerticalAlignment="Center"
                                    FontSize="13"
@@ -329,7 +329,7 @@
                                     Style="{StaticResource QuietButtonStyle}"
                                     Padding="8,5"
                                     CornerRadius="12"
-                                    ToolTipService.ToolTip="One new layout from these pictures. Press again for another.">
+                                    ToolTipService.ToolTip="One new layout from your canvas and image tray. Press again for another.">
                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                     <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8B1;" FontSize="14" />
                                     <TextBlock Text="Surprise me" VerticalAlignment="Center" FontSize="13" />

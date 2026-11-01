@@ -21,7 +21,7 @@ namespace ModernImageViewer
 {
     public sealed partial class MultiViewControl
     {
-        /// <summary>Up to this many pictures become floating cells. More than this is a batch, and waits for Surprise me without touching the layout.</summary>
+        /// <summary>The first this many images added go on the canvas as freeform images. The rest go in the image tray.</summary>
         public const int MostPlacedAsCells = 8;
         private const double DroppedCellShare = 0.45;
         private const double DroppedCellCascade = 28;
@@ -324,10 +324,18 @@ namespace ModernImageViewer
 
         private async Task AddDroppedPicturesAsync(IReadOnlyList<string> paths, Point where)
         {
+            IReadOnlyList<string> forTray = Array.Empty<string>();
             if (paths.Count > MostPlacedAsCells)
             {
-                AddWaitingPictures(paths);
-                return;
+                var have = new HashSet<string>(_items.Select(i => i.Path ?? string.Empty), StringComparer.OrdinalIgnoreCase);
+                var fresh = paths.Where(have.Add).ToList();
+                if (fresh.Count == 0)
+                {
+                    ShowAutoPlayToast("Those images are already here");
+                    return;
+                }
+                forTray = fresh.Skip(MostPlacedAsCells).ToList();
+                paths = fresh.Take(MostPlacedAsCells).ToList();
             }
             double canvasW = Math.Max(320, RootGrid.ActualWidth);
             double canvasH = Math.Max(240, RootGrid.ActualHeight);
@@ -364,25 +372,24 @@ namespace ModernImageViewer
                 placed++;
             }
             NoteUserAction();
+            if (forTray.Count > 0)
+            {
+                AddToTray(forTray);
+                ShowAutoPlayToast($"Added {placed + forTray.Count} images: {placed} on the canvas, {forTray.Count} in the tray");
+            }
+            ShowShownBadge();
         }
 
         /// <summary>
-        /// They join the session past the cells on show, as the rest of a large View Together does, so the layout does not change.
-        /// A saved layout and Undo keep them, and Surprise me takes turns through them.
+        /// They join the session past the cells on show, as the rest of a large View Together does, so the rest of the layout does not change.
+        /// A saved layout and Undo keep them, Surprise me takes turns through them, and Swap with can bring one to the canvas.
         /// </summary>
-        private void AddWaitingPictures(IReadOnlyList<string> paths)
+        private void AddToTray(IReadOnlyList<string> fresh)
         {
-            var have = new HashSet<string>(_items.Select(i => i.Path ?? string.Empty), StringComparer.OrdinalIgnoreCase);
-            var fresh = paths.Where(have.Add).ToList();
-            if (fresh.Count == 0)
-            {
-                ShowAutoPlayToast("Those pictures are already here");
-                return;
-            }
             CaptureUndoPoint();
             int shown = VisibleCount(GridCellCount);
             var file = BuildLayoutFile();
-            AppendWaiting(file, fresh, shown);
+            AppendToTray(file, fresh, shown);
             _cellBorderFlyout?.Hide();
             _restoringUndo = true;
             _reuseBitmaps = DecodedBitmaps();
@@ -396,10 +403,9 @@ namespace ModernImageViewer
                 _restoringUndo = false;
             }
             CaptureUndoPoint();
-            ShowAutoPlayToast($"Added {fresh.Count} pictures. Surprise me will use them; {shown} of {GridCellCount} show on the canvas");
         }
 
-        private static void AppendWaiting(MultiViewLayoutFile file, IEnumerable<string> paths, int shown)
+        private static void AppendToTray(MultiViewLayoutFile file, IEnumerable<string> paths, int shown)
         {
             file.State ??= new LayoutStateDto();
             file.State.FramedSlots = Math.Max(1, shown);

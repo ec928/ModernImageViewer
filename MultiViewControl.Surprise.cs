@@ -77,7 +77,7 @@ namespace ModernImageViewer
             RootGrid.AddHandler(PointerPressedEvent, new PointerEventHandler((_, e) =>
             {
                 if (_surpriseCard != null && !IsInSurpriseCard(e.OriginalSource)) RemoveSurpriseCard();
-                if (_waitingCard != null && !IsInside(e.OriginalSource, _waitingCard)) RemoveWaitingCard();
+                if (_trayCard != null && !IsInside(e.OriginalSource, _trayCard)) RemoveTrayCard();
             }), true);
             RootGrid.AddHandler(KeyDownEvent, new KeyEventHandler((_, e) =>
             {
@@ -92,7 +92,7 @@ namespace ModernImageViewer
 
         private const double SurpriseCardWidth = 452;
         private const double SurpriseCardGap = 8;
-        private string _surpriseSectionOpen = "How many pictures";
+        private string _surpriseSectionOpen = "How many images";
         private TextBlock? _cardSongText;
         private Button? _cardPlayButton;
         private FontIcon? _cardPlayIcon;
@@ -287,10 +287,10 @@ namespace ModernImageViewer
                 return inner;
             }
 
-            var count = Section("How many pictures");
-            Slide(count, "Fewest each click", "The least a click uses, when there are more pictures than the most below.", SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.FewestPictures, (o, v) => o.FewestPictures = (int)v);
-            Slide(count, "Most each click", "The most a click uses. With more pictures than this, clicks take turns through them.", SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.MostPictures, (o, v) => o.MostPictures = (int)v);
-            Slide(count, "Same folder and date, %", "The odds that a click takes pictures that are neighbours when sorted by folder, then file date, which usually means one event. Otherwise it takes them from anywhere.", 0, 100, 5, options.TogetherChance * 100, (o, v) => o.TogetherChance = v / 100);
+            var count = Section("How many images");
+            Slide(count, "Fewest each click", "The least a click uses, when there are more images than the most below.", SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.FewestPictures, (o, v) => o.FewestPictures = (int)v);
+            Slide(count, "Most each click", "The most a click uses. The rest stay in the image tray, and clicks take turns through them.", SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.MostPictures, (o, v) => o.MostPictures = (int)v);
+            Slide(count, "Same folder and date, %", "The odds that a click takes images that are neighbours when sorted by folder, then file date, which usually means one event. Otherwise it takes them from anywhere.", 0, 100, 5, options.TogetherChance * 100, (o, v) => o.TogetherChance = v / 100);
             Toggle(count, "Skip screens and repeats", "Leave out what looks like a screen capture or a graphic, and all but one of near-identical shots. This is a guess.", options.SkipScreens, (o, on) => o.SkipScreens = on);
 
             var designs = Section("How often each design comes up");
@@ -314,7 +314,7 @@ namespace ModernImageViewer
             Slide(look, "Gallery gaps", "1 is the usual gap between pictures on a Gallery wall.", 0.25, 3, 0.25, options.GapScale, (o, v) => o.GapScale = v);
             var card = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = SurpriseOptions.Cards.ToList(), SelectedItem = options.Card };
             card.SelectionChanged += (_, _) => { if (card.SelectedItem is string name) ChangeSurpriseChoices(o => o.Card = name); };
-            Row(look, "Gallery card", "The color of the card the pictures are set into.", card);
+            Row(look, "Gallery card", "The color of the card the images are set into.", card);
             Toggle(look, "Keep my canvas", "Keep the canvas color, surface and frame as they are now, instead of the design's.", options.KeepCanvas, (o, on) => o.KeepCanvas = on);
 
             var defaults = new Button { Content = "Back to defaults", HorizontalAlignment = HorizontalAlignment.Right, FontSize = 12 };
@@ -458,27 +458,27 @@ namespace ModernImageViewer
             HudMenu_Closed(this, EventArgs.Empty);
         }
 
-        private sealed record WaitingPicture(string Path, int Slot);
+        private sealed record TrayImage(string Path, int Slot);
 
-        private Border? _waitingCard;
+        private Border? _trayCard;
 
-        private List<WaitingPicture> WaitingPictures()
+        private List<TrayImage> TrayImages()
         {
-            var waiting = new List<WaitingPicture>();
+            var tray = new List<TrayImage>();
             int grid = GridCellCount;
             for (int i = VisibleCount(grid); i < grid; i++)
             {
-                if (!IsEmptyCell(_items[i])) waiting.Add(new WaitingPicture(_items[i].Path, i));
+                if (!IsEmptyCell(_items[i])) tray.Add(new TrayImage(_items[i].Path, i));
             }
-            return waiting;
+            return tray;
         }
 
-        /// <summary>A position that cannot be seen means nothing, so pictures off the canvas are chosen by looking at them.</summary>
-        private void ShowWaitingCard(int intoSlot)
+        /// <summary>A position that cannot be seen means nothing, so images in the tray are chosen by looking at them.</summary>
+        private void ShowTrayCard(int intoSlot)
         {
             RemoveSurpriseCard();
-            RemoveWaitingCard();
-            var all = WaitingPictures();
+            RemoveTrayCard();
+            var all = TrayImages();
             var thumbnails = new GridView
             {
                 ItemsSource = all,
@@ -487,7 +487,7 @@ namespace ModernImageViewer
                 ItemTemplate = (DataTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(
                     "<DataTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><Grid Width=\"132\" Height=\"96\"><Image Stretch=\"UniformToFill\"/></Grid></DataTemplate>")
             };
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(thumbnails, "WaitingPictures");
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(thumbnails, "ImageTray");
             thumbnails.ContainerContentChanging += (_, args) =>
             {
                 if (args.ItemContainer.ContentTemplateRoot is not Grid cell || cell.Children[0] is not Image image) return;
@@ -496,7 +496,7 @@ namespace ModernImageViewer
                     image.Source = null;
                     return;
                 }
-                if (args.Item is not WaitingPicture picture) return;
+                if (args.Item is not TrayImage picture) return;
                 ToolTipService.SetToolTip(args.ItemContainer, System.IO.Path.GetFileName(picture.Path));
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(args.ItemContainer, System.IO.Path.GetFileName(picture.Path));
                 try
@@ -510,24 +510,24 @@ namespace ModernImageViewer
             };
             thumbnails.ItemClick += (_, args) =>
             {
-                if (args.ClickedItem is not WaitingPicture picture) return;
-                RemoveWaitingCard();
+                if (args.ClickedItem is not TrayImage picture) return;
+                RemoveTrayCard();
                 SwapItems(intoSlot, picture.Slot, false);
                 NoteUserAction();
             };
 
             var search = new TextBox { PlaceholderText = "Search names", MinWidth = 180 };
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(search, "Search waiting pictures");
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(search, "Search the image tray");
             search.TextChanged += (_, _) =>
                 thumbnails.ItemsSource = all.Where(p => System.IO.Path.GetFileName(p.Path).Contains(search.Text, StringComparison.OrdinalIgnoreCase)).ToList();
             var close = new Button { Content = "Close" };
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(close, "Close waiting pictures");
-            close.Click += (_, _) => RemoveWaitingCard();
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(close, "Close the image tray");
+            close.Click += (_, _) => RemoveTrayCard();
             var top = new Grid { ColumnSpacing = 10 };
             top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            top.Children.Add(new TextBlock { Text = $"{all.Count} waiting. Click one to swap it into position {intoSlot + 1}.", VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis });
+            top.Children.Add(new TextBlock { Text = $"Image tray: {all.Count}. Click one to swap it into position {intoSlot + 1}.", VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis });
             Grid.SetColumn(search, 1);
             top.Children.Add(search);
             Grid.SetColumn(close, 2);
@@ -540,7 +540,7 @@ namespace ModernImageViewer
             body.Children.Add(top);
             body.Children.Add(thumbnails);
 
-            _waitingCard = new Border
+            _trayCard = new Border
             {
                 Child = body,
                 Width = Math.Min(760, Math.Max(320, RootGrid.ActualWidth - 32)),
@@ -554,18 +554,18 @@ namespace ModernImageViewer
                 VerticalAlignment = VerticalAlignment.Center,
                 RequestedTheme = ElementTheme.Dark
             };
-            Canvas.SetZIndex(_waitingCard, 6500);
-            Grid.SetRowSpan(_waitingCard, Math.Max(1, RootGrid.RowDefinitions.Count));
-            Grid.SetColumnSpan(_waitingCard, Math.Max(1, RootGrid.ColumnDefinitions.Count));
-            RootGrid.Children.Add(_waitingCard);
+            Canvas.SetZIndex(_trayCard, 6500);
+            Grid.SetRowSpan(_trayCard, Math.Max(1, RootGrid.RowDefinitions.Count));
+            Grid.SetColumnSpan(_trayCard, Math.Max(1, RootGrid.ColumnDefinitions.Count));
+            RootGrid.Children.Add(_trayCard);
             HudMenu_Opened(this, EventArgs.Empty);
         }
 
-        private void RemoveWaitingCard()
+        private void RemoveTrayCard()
         {
-            if (_waitingCard == null) return;
-            RootGrid.Children.Remove(_waitingCard);
-            _waitingCard = null;
+            if (_trayCard == null) return;
+            RootGrid.Children.Remove(_trayCard);
+            _trayCard = null;
             HudMenu_Closed(this, EventArgs.Empty);
         }
 
@@ -678,10 +678,10 @@ namespace ModernImageViewer
         /// </summary>
         private bool HandleAutoPlayKey(Windows.System.VirtualKey key)
         {
-            if (_waitingCard != null)
+            if (_trayCard != null)
             {
                 if (key != Windows.System.VirtualKey.Escape) return false;
-                RemoveWaitingCard();
+                RemoveTrayCard();
                 return true;
             }
             if (_surpriseCard != null)
@@ -874,7 +874,7 @@ namespace ModernImageViewer
                 _reuseBitmaps = ready;
                 try
                 {
-                    ApplyLayoutFile(WithRestWaiting(composition.ToLayoutFile(), pictures), restoreAspect: false);
+                    ApplyLayoutFile(WithRestInTray(composition.ToLayoutFile(), pictures), restoreAspect: false);
                 }
                 finally
                 {
@@ -904,13 +904,13 @@ namespace ModernImageViewer
             }
         }
 
-        /// <summary>A layout holds the hand, and every other picture waits behind it, so saving or Undo does not lose them.</summary>
-        private MultiViewLayoutFile WithRestWaiting(MultiViewLayoutFile file, List<string> pictures)
+        /// <summary>A layout holds the hand, and every other image goes in its tray, so saving or Undo does not lose them.</summary>
+        private MultiViewLayoutFile WithRestInTray(MultiViewLayoutFile file, List<string> pictures)
         {
             var used = new HashSet<string>(file.Photos.Select(p => p.Path ?? string.Empty), StringComparer.OrdinalIgnoreCase);
             foreach (var cell in file.Freeform ?? new List<FreeformCellDto>()) used.Add(cell.Path ?? string.Empty);
             var rest = (_surpriseDeck?.All ?? (IReadOnlyList<string>)pictures).Where(used.Add).ToList();
-            if (rest.Count > 0) AppendWaiting(file, rest, file.Photos.Count);
+            if (rest.Count > 0) AppendToTray(file, rest, file.Photos.Count);
             return file;
         }
 

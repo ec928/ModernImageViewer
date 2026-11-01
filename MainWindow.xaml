@@ -661,7 +661,7 @@
                                 <Button x:Name="AddFolderButton" Click="AddFolder_Click" Visibility="Collapsed" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" AutomationProperties.Name="Add this folder">
                                     <TextBlock x:Name="AddFolderText" Text="Add this folder" FontSize="13" VerticalAlignment="Center"/>
                                 </Button>
-                                <Button x:Name="AddSubfoldersButton" Click="AddSubfolders_Click" Visibility="Collapsed" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" AutomationProperties.Name="Add with subfolders" ToolTipService.ToolTip="This folder and every folder inside it. With more than 8 pictures, they wait for Surprise me and the layout does not change.">
+                                <Button x:Name="AddSubfoldersButton" Click="AddSubfolders_Click" Visibility="Collapsed" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" AutomationProperties.Name="Add with subfolders" ToolTipService.ToolTip="This folder and every folder inside it. The first 8 go on the canvas as freeform images, and the rest go in the image tray.">
                                     <TextBlock Text="With subfolders" FontSize="13" VerticalAlignment="Center"/>
                                 </Button>
 

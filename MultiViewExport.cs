@@ -1469,7 +1469,7 @@ namespace ModernImageViewer
             for (int i = 0; i < gridCount; i++)
             {
                 var item = _items[i];
-                // A picture waiting off the canvas with nothing set on it is only a path, so a large session stays small to save and undo.
+                // An image in the tray with nothing set on it is only a path, so a large session stays small to save and undo.
                 if (i >= onShow && !_itemBorders.ContainsKey(item) && !_cellGeometry.ContainsKey(item))
                 {
                     layoutFile.Photos.Add(new PhotoSlotDto { Slot = i, Path = item.Path ?? string.Empty, Name = item.Name });

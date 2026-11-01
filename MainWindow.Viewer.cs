@@ -1091,21 +1091,18 @@ namespace ModernImageViewer
             MultiSelectActionBar.Visibility = Visibility.Visible;
             MultiSelectCountText.Text = _parkedNote
                 ?? (_parkedCell != null ? $"Click a picture for position {MultiViewControl!.PositionOf(_parkedCell)}"
-                : count > 0 ? count + " selected" : $"Pick up to {MultiViewControl.MostPlacedAsCells} for the canvas, or more for Surprise me");
+                : count > MultiViewControl.MostPlacedAsCells ? $"{count} selected: {MultiViewControl.MostPlacedAsCells} to the canvas, {count - MultiViewControl.MostPlacedAsCells} to the image tray"
+                : count > 0 ? $"{count} selected, to the canvas"
+                : $"The first {MultiViewControl.MostPlacedAsCells} images go on the canvas as freeform images. The rest go in the image tray.");
             ViewTogetherButton.IsEnabled = count > 0;
             if (_parkedCell == null)
             {
-                bool batch = count > MultiViewControl.MostPlacedAsCells;
-                ViewTogetherText.Text = batch ? "Add for Surprise me" : "Add to canvas";
-                ToolTipService.SetToolTip(ViewTogetherButton, batch
-                    ? $"More than {MultiViewControl.MostPlacedAsCells} pictures wait for Surprise me. The layout does not change. (Enter)"
-                    : "Each picture becomes a floating cell on the canvas. (Enter)");
+                ViewTogetherText.Text = "Add images";
+                ToolTipService.SetToolTip(ViewTogetherButton, $"The first {MultiViewControl.MostPlacedAsCells} go on the canvas as freeform images, and the rest go in the image tray. (Enter)");
                 int inFolder = Images.Count(img => !img.IsDirectory && !img.IsComicEntry && IsPictureFile(img.Path));
                 AddFolderText.Text = $"Add this folder ({inFolder})";
                 AddFolderButton.IsEnabled = inFolder > 0;
-                ToolTipService.SetToolTip(AddFolderButton, inFolder > MultiViewControl.MostPlacedAsCells
-                    ? "All of them wait for Surprise me. The layout does not change."
-                    : "Each picture becomes a floating cell on the canvas.");
+                ToolTipService.SetToolTip(AddFolderButton, $"The first {MultiViewControl.MostPlacedAsCells} go on the canvas as freeform images, and the rest go in the image tray.");
             }
         }
 
@@ -1119,8 +1116,8 @@ namespace ModernImageViewer
             ImageGrid.SelectionMode = adding ? ListViewSelectionMode.Multiple : ListViewSelectionMode.Extended;
             // Opening, editing or deleting a picture has no place while choosing one.
             ImageGrid.ContextFlyout = adding ? null : GridItemContextFlyout;
-            ToolTipService.SetToolTip(ViewTogetherButton, adding ? "Add these to the layout (Enter)" : "View Together (Enter)");
-            ViewTogetherText.Text = adding ? "Add to layout" : "View Together";
+            ToolTipService.SetToolTip(ViewTogetherButton, adding ? "Add these images (Enter)" : "View Together (Enter)");
+            ViewTogetherText.Text = adding ? "Add images" : "View Together";
             ViewTogetherButton.IsEnabled = true;
             // For one picture the click is the choice, so there is nothing for the button to confirm.
             ViewTogetherButton.Visibility = adding && _parkedCell != null ? Visibility.Collapsed : Visibility.Visible;
