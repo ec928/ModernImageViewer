@@ -337,7 +337,7 @@
                             </Button>
                             <Button x:Name="AutoPlayButton"
                                     Click="AutoPlayButton_Click"
-                                    MinWidth="78"
+                                    MinWidth="88"
                                     AutomationProperties.Name="Play auto-play"
                                     ToolTipService.ToolTip="Play a new layout every few seconds. Space does the same."
                                     Style="{StaticResource QuietButtonStyle}"

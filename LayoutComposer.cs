@@ -177,9 +177,20 @@ namespace ModernImageViewer
         public bool SkipScreens { get; set; } = true;
         /// <summary>0 is off. A saved setting like the rest: pausing auto-play does not change it.</summary>
         public int AutoPlaySeconds { get; set; }
-        public static readonly int[] AutoPlayChoices = { 0, 5, 10, 30 };
+        public static readonly int[] AutoPlayChoices = { 0, 3, 5, 8, 10, 15, 20, 30 };
+        public static readonly int[] RandomPlayChoices = { 3, 5, 8, 10, 15, 20, 30, 45, 60 };
+        public bool AutoPlayRandom { get; set; }
+        public int RandomFewestSeconds { get; set; } = 5;
+        public int RandomMostSeconds { get; set; } = 15;
+
         /// <summary>How long Play shows each layout. Not playing is not a setting, so there is always a speed.</summary>
         public int PlaySeconds => AutoPlaySeconds > 0 ? AutoPlaySeconds : 5;
+
+        public int NextPlaySeconds(Random rnd) =>
+            AutoPlayRandom ? rnd.Next(Math.Min(RandomFewestSeconds, RandomMostSeconds), Math.Max(RandomFewestSeconds, RandomMostSeconds) + 1) : PlaySeconds;
+
+        public string PlayLabel => AutoPlayRandom ? $"{RandomFewestSeconds}\u2013{RandomMostSeconds} s" : $"{PlaySeconds} s";
+        public string PlayWords => AutoPlayRandom ? $"{RandomFewestSeconds} to {RandomMostSeconds} seconds" : $"{PlaySeconds} seconds";
 
         public double OddsOf(string design) => DesignOdds.TryGetValue(design, out double odds) ? Math.Clamp(odds, RarestDesign, MostFavouredDesign) : 1;
 
@@ -202,6 +213,9 @@ namespace ModernImageViewer
                 read.TogetherChance = Math.Clamp(read.TogetherChance, 0, 1);
                 if (!Cards.Contains(read.Card)) read.Card = CardAny;
                 if (!AutoPlayChoices.Contains(read.AutoPlaySeconds)) read.AutoPlaySeconds = 0;
+                if (!RandomPlayChoices.Contains(read.RandomFewestSeconds)) read.RandomFewestSeconds = 5;
+                if (!RandomPlayChoices.Contains(read.RandomMostSeconds)) read.RandomMostSeconds = 15;
+                if (read.RandomMostSeconds < read.RandomFewestSeconds) read.RandomMostSeconds = read.RandomFewestSeconds;
                 return read;
             }
             catch (System.Text.Json.JsonException)

@@ -25,12 +25,6 @@ namespace ModernImageViewer
             SaveAllSettings();
         }
 
-        public void SetMusicVolume(double percent)
-        {
-            _currentSettings.MusicVolume = percent;
-            SaveAllSettings();
-        }
-
         private async void MusicSettings_Click(object sender, RoutedEventArgs e)
         {
             HeaderSettingsFlyout.Hide();

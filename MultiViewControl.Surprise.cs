@@ -154,16 +154,25 @@ namespace ModernImageViewer
                 Row(column, label, tip, toggle);
             }
 
-            // Layouts: back, play, forward, and how fast
+            // Layouts: every step button says what it steps through, so it cannot be taken for the music's.
+            Button WordButton(string text, string name, string tip, RoutedEventHandler pressed)
+            {
+                var button = new Button { Content = text, Padding = new Thickness(10, 6, 10, 6), VerticalAlignment = VerticalAlignment.Center, FontSize = 13 };
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, name);
+                ToolTipService.SetToolTip(button, tip);
+                button.Click += pressed;
+                return button;
+            }
+
+            TextBlock Label(string text) => new() { Text = text, FontSize = 12, Opacity = 0.7 };
+
+            body.Children.Add(Label("Layouts"));
             var transport = new Grid { ColumnSpacing = 6 };
             transport.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             transport.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             transport.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            transport.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var previousLayout = IconButton("\uE76B", "Previous layout", (_, _) => StepLayout(back: true));
-            ToolTipService.SetToolTip(previousLayout, "Previous layout (Left). Pauses first.");
-            var nextLayout = IconButton("\uE76C", "Next layout", (_, _) => StepLayout(back: false));
-            ToolTipService.SetToolTip(nextLayout, "Forward again after going back (Right).");
+            var previousLayout = WordButton("\u2039 Layout", "Previous layout", "Previous layout (Left). Pauses first.", (_, _) => StepLayout(back: true));
+            var nextLayout = WordButton("Layout \u203A", "Next layout", "Forward again after going back (Right).", (_, _) => StepLayout(back: false));
             _cardPlayIcon = Icon("\uE768", 13);
             _cardPlayText = new TextBlock { Text = "Play", VerticalAlignment = VerticalAlignment.Center };
             var playContent = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
@@ -174,35 +183,91 @@ namespace ModernImageViewer
             _cardPlayButton.Click += AutoPlayButton_Click;
             Grid.SetColumn(_cardPlayButton, 1);
             Grid.SetColumn(nextLayout, 2);
-            var speed = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, Margin = new Thickness(6, 0, 0, 0) };
-            Grid.SetColumn(speed, 3);
-            var speeds = new List<Microsoft.UI.Xaml.Controls.Primitives.ToggleButton>();
-            foreach (int seconds in SurpriseOptions.AutoPlayChoices.Where(s => s > 0))
-            {
-                var choice = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton { Content = seconds + " s", IsChecked = seconds == options.PlaySeconds, Padding = new Thickness(8, 5, 8, 5), MinWidth = 0, FontSize = 12 };
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(choice, $"A new layout every {seconds} seconds");
-                ToolTipService.SetToolTip(choice, $"A new layout every {seconds} seconds");
-                choice.Click += (_, _) =>
-                {
-                    foreach (var other in speeds) other.IsChecked = ReferenceEquals(other, choice);
-                    ChangeSurpriseChoices(o => o.AutoPlaySeconds = seconds);
-                    if (_autoPlaySeconds > 0)
-                    {
-                        _autoPlaySeconds = seconds;
-                        if (_autoPlayTimer != null) _autoPlayTimer.Interval = TimeSpan.FromSeconds(seconds);
-                    }
-                    ShowAutoPlayState();
-                };
-                speeds.Add(choice);
-                speed.Children.Add(choice);
-            }
             transport.Children.Add(previousLayout);
             transport.Children.Add(_cardPlayButton);
             transport.Children.Add(nextLayout);
-            transport.Children.Add(speed);
             body.Children.Add(transport);
 
-            body.Children.Add(MusicRow(Icon, IconButton));
+            // How long each layout stays: a quick choice, or a random range
+            var speeds = new List<Microsoft.UI.Xaml.Controls.Primitives.ToggleButton>();
+            var speed = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+            var range = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Visibility = options.AutoPlayRandom ? Visibility.Visible : Visibility.Collapsed };
+            void SpeedChanged()
+            {
+                if (_autoPlaySeconds > 0 && _autoPlayTimer != null)
+                {
+                    _autoPlaySeconds = SurpriseChoices.PlaySeconds;
+                    _autoPlayTimer.Interval = TimeSpan.FromSeconds(SurpriseChoices.NextPlaySeconds(Random.Shared));
+                }
+                ShowAutoPlayState();
+            }
+            Microsoft.UI.Xaml.Controls.Primitives.ToggleButton Chip(object content, string name, bool on)
+            {
+                var chip = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton { Content = content, IsChecked = on, Padding = new Thickness(8, 5, 8, 5), MinWidth = 0, FontSize = 12 };
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chip, name);
+                ToolTipService.SetToolTip(chip, name);
+                speeds.Add(chip);
+                speed.Children.Add(chip);
+                return chip;
+            }
+            foreach (int seconds in SurpriseOptions.AutoPlayChoices.Where(s => s > 0))
+            {
+                var chip = Chip(seconds.ToString(), $"A new layout every {seconds} seconds", !options.AutoPlayRandom && seconds == options.PlaySeconds);
+                chip.Click += (_, _) =>
+                {
+                    foreach (var other in speeds) other.IsChecked = ReferenceEquals(other, chip);
+                    range.Visibility = Visibility.Collapsed;
+                    ChangeSurpriseChoices(o => { o.AutoPlaySeconds = seconds; o.AutoPlayRandom = false; });
+                    SpeedChanged();
+                };
+            }
+            var randomChip = Chip("Random", "A random time for each layout", options.AutoPlayRandom);
+            randomChip.Margin = new Thickness(4, 0, 0, 0);
+            randomChip.Click += (_, _) =>
+            {
+                foreach (var other in speeds) other.IsChecked = ReferenceEquals(other, randomChip);
+                range.Visibility = Visibility.Visible;
+                ChangeSurpriseChoices(o => o.AutoPlayRandom = true);
+                SpeedChanged();
+            };
+            ComboBox RangeBox(int value, string name)
+            {
+                var box = new ComboBox { ItemsSource = SurpriseOptions.RandomPlayChoices.ToList(), SelectedItem = value, MinWidth = 76, VerticalAlignment = VerticalAlignment.Center };
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(box, name);
+                return box;
+            }
+            var fewest = RangeBox(options.RandomFewestSeconds, "Shortest random time");
+            var most = RangeBox(options.RandomMostSeconds, "Longest random time");
+            // The two ends cannot cross: moving one past the other brings the other with it.
+            fewest.SelectionChanged += (_, _) =>
+            {
+                if (fewest.SelectedItem is not int value) return;
+                if (most.SelectedItem is int high && high < value) most.SelectedItem = value;
+                ChangeSurpriseChoices(o => o.RandomFewestSeconds = value);
+                SpeedChanged();
+            };
+            most.SelectionChanged += (_, _) =>
+            {
+                if (most.SelectedItem is not int value) return;
+                if (fewest.SelectedItem is int low && low > value) fewest.SelectedItem = value;
+                ChangeSurpriseChoices(o => o.RandomMostSeconds = value);
+                SpeedChanged();
+            };
+            range.Children.Add(new TextBlock { Text = "Between", VerticalAlignment = VerticalAlignment.Center, FontSize = 13 });
+            range.Children.Add(fewest);
+            range.Children.Add(new TextBlock { Text = "and", VerticalAlignment = VerticalAlignment.Center, FontSize = 13 });
+            range.Children.Add(most);
+            range.Children.Add(new TextBlock { Text = "seconds", VerticalAlignment = VerticalAlignment.Center, FontSize = 13 });
+
+            var speedRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            speedRow.Children.Add(new TextBlock { Text = "Every", VerticalAlignment = VerticalAlignment.Center, FontSize = 13 });
+            speedRow.Children.Add(speed);
+            speedRow.Children.Add(new TextBlock { Text = "s", VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Visibility = Visibility.Collapsed });
+            body.Children.Add(speedRow);
+            body.Children.Add(range);
+
+            body.Children.Add(Label("Music"));
+            body.Children.Add(MusicRow(Icon, WordButton));
             body.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle { Height = 1, Opacity = 0.2, Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) });
 
             // The ranges, one section open at a time
@@ -301,8 +366,8 @@ namespace ModernImageViewer
             _surpriseCard.Margin = new Thickness(left, 0, 0, fromBottom);
         }
 
-        /// <summary>The music row shows and changes the one set of music settings, which the main window's options also open.</summary>
-        private FrameworkElement MusicRow(Func<string, double, FontIcon> icon, Func<string, string, RoutedEventHandler, Button> iconButton)
+        /// <summary>The song and its steps, on or off, and the way to the one set of music settings, which the main window's gear also opens.</summary>
+        private FrameworkElement MusicRow(Func<string, double, FontIcon> icon, Func<string, string, string, RoutedEventHandler, Button> wordButton)
         {
             var music = MainWindow.Instance?.MyMusic;
             WatchMusicSettings();
@@ -318,9 +383,9 @@ namespace ModernImageViewer
             _cardSongText = new TextBlock { VerticalAlignment = VerticalAlignment.Center, FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(_cardSongText, "SurpriseSongText");
             Grid.SetColumn(_cardSongText, 1);
-            _cardPreviousSong = iconButton("\uE892", "Previous song", (_, _) => _surpriseMusic?.PreviousSong());
+            _cardPreviousSong = wordButton("\u2039 Song", "Previous song", "Previous song", (_, _) => _surpriseMusic?.PreviousSong());
             Grid.SetColumn(_cardPreviousSong, 2);
-            _cardNextSong = iconButton("\uE893", "Next song", (_, _) => _surpriseMusic?.NextSong());
+            _cardNextSong = wordButton("Song \u203A", "Next song", "Next song", (_, _) => _surpriseMusic?.NextSong());
             Grid.SetColumn(_cardNextSong, 3);
             top.Children.Add(note);
             top.Children.Add(_cardSongText);
@@ -330,7 +395,6 @@ namespace ModernImageViewer
 
             var bottom = new Grid { ColumnSpacing = 8 };
             bottom.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            bottom.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
             bottom.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             bottom.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             bool hasFolder = music?.HasFolder == true;
@@ -339,15 +403,6 @@ namespace ModernImageViewer
                 Text = hasFolder ? $"{System.IO.Path.GetFileName(music!.Folder!.TrimEnd('\\'))}, {music.LowestStars:0.#}+ stars" + (music.IncludesUnrated ? " and unrated" : "") : "No music folder",
                 FontSize = 12, Opacity = 0.75, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis
             };
-            var volume = new Slider { Minimum = 0, Maximum = 100, Value = music?.Volume ?? 60, VerticalAlignment = VerticalAlignment.Center, IsEnabled = hasFolder };
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(volume, "Music volume");
-            ToolTipService.SetToolTip(volume, "Music volume");
-            volume.ValueChanged += (_, e) =>
-            {
-                _surpriseMusic?.SetVolume(e.NewValue);
-                MainWindow.Instance?.SetMusicVolume(e.NewValue);
-            };
-            Grid.SetColumn(volume, 1);
             var on = new ToggleSwitch { IsOn = music?.InSurprise != false, OnContent = string.Empty, OffContent = string.Empty, MinWidth = 0, VerticalAlignment = VerticalAlignment.Center, IsEnabled = hasFolder };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(on, "Music with auto-play");
             ToolTipService.SetToolTip(on, "Play music with auto-play");
@@ -357,15 +412,12 @@ namespace ModernImageViewer
                 if (_autoPlaySeconds > 0) { if (on.IsOn) StartAutoPlayMusic(); else StopAutoPlayMusic(); }
                 ShowAutoPlayState();
             };
-            Grid.SetColumn(on, 2);
-            var change = new Button { Content = hasFolder ? "Change..." : "Choose...", FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(change, "Change music");
-            change.Click += (_, _) => MainWindow.Instance?.OpenMusicSettings();
-            Grid.SetColumn(change, 3);
+            Grid.SetColumn(on, 1);
+            var settings = wordButton("Music settings", "Music settings", "Folder, rating and volume. The main window's gear opens the same settings.", (_, _) => MainWindow.Instance?.OpenMusicSettings());
+            Grid.SetColumn(settings, 2);
             bottom.Children.Add(where);
-            bottom.Children.Add(volume);
             bottom.Children.Add(on);
-            bottom.Children.Add(change);
+            bottom.Children.Add(settings);
             panel.Children.Add(bottom);
             return panel;
         }
@@ -424,13 +476,14 @@ namespace ModernImageViewer
             AddAutoPlayShield();
             StartAutoPlayMusic();
             ShowAutoPlayState();
-            ShowAutoPlayToast($"Playing: a new layout every {seconds} seconds");
-            var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(seconds) };
+            ShowAutoPlayToast($"Playing: a new layout every {SurpriseChoices.PlayWords}");
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(SurpriseChoices.NextPlaySeconds(Random.Shared)) };
             _autoPlayTimer = timer;
             timer.Tick += async (_, _) =>
             {
                 timer.Stop();
                 await SurpriseAsync(fade: true);
+                timer.Interval = TimeSpan.FromSeconds(SurpriseChoices.NextPlaySeconds(Random.Shared));
                 if (ReferenceEquals(_autoPlayTimer, timer)) timer.Start();
             };
             await SurpriseAsync(fade: true);
@@ -455,11 +508,11 @@ namespace ModernImageViewer
         {
             bool playing = _autoPlaySeconds > 0;
             string glyph = playing ? "\uE769" : "\uE768";
-            string text = playing ? $"{_autoPlaySeconds} s" : "Play";
+            string text = playing ? SurpriseChoices.PlayLabel : "Play";
             AutoPlayIcon.Glyph = glyph;
             AutoPlayText.Text = text;
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(AutoPlayButton, playing ? "Pause auto-play" : "Play auto-play");
-            ToolTipService.SetToolTip(AutoPlayButton, playing ? "Pause. A click on the picture, Esc or Space does the same." : $"Play a new layout every {SurpriseChoices.PlaySeconds} seconds. Space does the same.");
+            ToolTipService.SetToolTip(AutoPlayButton, playing ? "Pause. A click on the picture, Esc or Space does the same." : $"Play a new layout every {SurpriseChoices.PlayWords}. Space does the same.");
             if (playing)
             {
                 var accent = Application.Current.Resources["AccentFillColorDefaultBrush"] as Microsoft.UI.Xaml.Media.Brush;
