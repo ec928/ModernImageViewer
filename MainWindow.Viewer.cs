@@ -1091,18 +1091,16 @@ namespace ModernImageViewer
             MultiSelectActionBar.Visibility = Visibility.Visible;
             MultiSelectCountText.Text = _parkedNote
                 ?? (_parkedCell != null ? $"Click a picture for position {MultiViewControl!.PositionOf(_parkedCell)}"
-                : count > MultiViewControl.MostPlacedAsCells ? $"{count} selected: {MultiViewControl.MostPlacedAsCells} to the canvas, {count - MultiViewControl.MostPlacedAsCells} to the image tray"
-                : count > 0 ? $"{count} selected, to the canvas"
-                : $"The first {MultiViewControl.MostPlacedAsCells} images go on the canvas as freeform images. The rest go in the image tray.");
+                : MultiViewControl!.AddingNote(Images.Where(img => img.IsGridSelected && !img.IsDirectory).Select(img => img.Path).ToList()));
             ViewTogetherButton.IsEnabled = count > 0;
             if (_parkedCell == null)
             {
                 ViewTogetherText.Text = "Add images";
-                ToolTipService.SetToolTip(ViewTogetherButton, $"The first {MultiViewControl.MostPlacedAsCells} go on the canvas as freeform images, and the rest go in the image tray. (Enter)");
+                ToolTipService.SetToolTip(ViewTogetherButton, MultiViewControl.AddRuleText + " (Enter)");
                 int inFolder = Images.Count(img => !img.IsDirectory && !img.IsComicEntry && IsPictureFile(img.Path));
                 AddFolderText.Text = $"Add this folder ({inFolder})";
                 AddFolderButton.IsEnabled = inFolder > 0;
-                ToolTipService.SetToolTip(AddFolderButton, $"The first {MultiViewControl.MostPlacedAsCells} go on the canvas as freeform images, and the rest go in the image tray.");
+                ToolTipService.SetToolTip(AddFolderButton, MultiViewControl.AddRuleText);
             }
         }
 

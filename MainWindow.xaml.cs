@@ -56,7 +56,7 @@ namespace ModernImageViewer
         private AppSettings _currentSettings = new AppSettings();
         private bool _multiViewCanvasActive;
         private bool _multiViewParked;
-        // The cell waiting for one picture. Null when pictures are being added as floating cells.
+        // The cell waiting for one picture. Null when images are being added to the canvas and tray.
         private ImageItem? _parkedCell;
         // While pictures are chosen the window stays at the layout's size, and the gallery's own size waits to come back.
         private bool _parkKeptSize;

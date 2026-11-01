@@ -80,7 +80,14 @@ namespace ModernImageViewer
             if (image.Items.Count > 0) menu.Items.Add(image);
         }
 
-        public int PositionOf(ImageItem cell) => Slot(cell) + 1;
+        public int PositionOf(ImageItem cell) => PositionOfSlot(Slot(cell));
+
+        /// <summary>Positions count what is on the canvas: the cells on show, then the floating cells. The tray has none.</summary>
+        private int PositionOfSlot(int slot)
+        {
+            int grid = GridCellCount;
+            return slot >= grid ? VisibleCount(grid) + slot - grid + 1 : slot + 1;
+        }
 
         /// <summary>A picture chosen for this cell in the app.</summary>
         public void FillCell(ImageItem cell, string path)

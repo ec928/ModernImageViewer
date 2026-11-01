@@ -354,7 +354,7 @@ namespace ModernImageViewer
         {
             int slot = Slot(item);
             if (slot < 0 || (uint)slot >= (uint)_cellRoots.Length) return;
-            OpenFrameCard(item, GetBorderForItem(item), () => ApplyBorderToCell(slot), _cellRoots[slot] ?? (FrameworkElement)this, "Position " + (slot + 1));
+            OpenFrameCard(item, GetBorderForItem(item), () => ApplyBorderToCell(slot), _cellRoots[slot] ?? (FrameworkElement)this, "Position " + PositionOfSlot(slot));
         }
 
         /// <summary>The same card for the whole canvas, which has no other canvases to copy its frame onto.</summary>

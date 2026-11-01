@@ -21,8 +21,8 @@ namespace ModernImageViewer
 {
     public sealed partial class MultiViewControl
     {
-        /// <summary>The first this many images added go on the canvas as freeform images. The rest go in the image tray.</summary>
-        public const int MostPlacedAsCells = 8;
+        public const string AddRuleText = "Images fill the canvas up to 16, and the rest go in the image tray. On a full canvas, the first 4 go on it as freeform images.";
+
         private const double DroppedCellShare = 0.45;
         private const double DroppedCellCascade = 28;
         private const double ResizeCornerSize = 22;
@@ -251,7 +251,7 @@ namespace ModernImageViewer
                 if (!Takes(e)) return;
                 e.AcceptedOperation = DataPackageOperation.Copy;
                 if (hasPictures)
-                    e.DragUIOverride.Caption = EmptyCellAt(e.GetPosition(FreeformCanvas)) >= 0 ? "Add to this cell" : "Add as a floating cell";
+                    e.DragUIOverride.Caption = EmptyCellAt(e.GetPosition(FreeformCanvas)) >= 0 ? "Add to this cell" : "Add images";
                 e.Handled = true;
             }
 
@@ -322,25 +322,47 @@ namespace ModernImageViewer
         public Task AddPicturesAsync(IReadOnlyList<string> paths) =>
             AddDroppedPicturesAsync(paths, new Point(RootGrid.ActualWidth / 2, RootGrid.ActualHeight / 2));
 
+        /// <summary>What adding these would do, for the picker to say before it happens.</summary>
+        public string AddingNote(IReadOnlyList<string> selected)
+        {
+            int onCanvas = ImagesOnCanvas();
+            if (selected.Count == 0)
+            {
+                return onCanvas < MosaicLayout.MaxShown
+                    ? $"Room for {MosaicLayout.MaxShown - onCanvas} more on the canvas. The rest go in the image tray."
+                    : $"The canvas is full. The first {MosaicLayout.FreeformOnFullCanvas} go on it as freeform images, and the rest in the image tray.";
+            }
+            var fresh = NotYetHere(selected);
+            if (fresh.Count == 0) return $"{selected.Count} selected, already here";
+            var (cells, freeform, tray) = MosaicLayout.PlaceAdded(onCanvas, fresh.Count);
+            string canvas = freeform > 0 ? $"{freeform} to the canvas as freeform images" : $"{cells} to the canvas";
+            return tray > 0 ? $"{selected.Count} selected: {canvas}, {tray} to the image tray" : $"{selected.Count} selected: {canvas}";
+        }
+
+        private List<string> NotYetHere(IReadOnlyList<string> paths)
+        {
+            var have = new HashSet<string>(_items.Select(i => i.Path ?? string.Empty), StringComparer.OrdinalIgnoreCase);
+            return paths.Where(have.Add).ToList();
+        }
+
+        private int ImagesOnCanvas() => _items.Count(i => !IsEmptyCell(i)) - TrayImages().Count;
+
         private async Task AddDroppedPicturesAsync(IReadOnlyList<string> paths, Point where)
         {
-            IReadOnlyList<string> forTray = Array.Empty<string>();
-            if (paths.Count > MostPlacedAsCells)
+            var fresh = NotYetHere(paths);
+            if (fresh.Count == 0)
             {
-                var have = new HashSet<string>(_items.Select(i => i.Path ?? string.Empty), StringComparer.OrdinalIgnoreCase);
-                var fresh = paths.Where(have.Add).ToList();
-                if (fresh.Count == 0)
-                {
-                    ShowAutoPlayToast("Those images are already here");
-                    return;
-                }
-                forTray = fresh.Skip(MostPlacedAsCells).ToList();
-                paths = fresh.Take(MostPlacedAsCells).ToList();
+                ShowAutoPlayToast("Those images are already here");
+                return;
             }
+            var (cells, freeform, tray) = MosaicLayout.PlaceAdded(ImagesOnCanvas(), fresh.Count);
+            if (cells + tray > 0)
+                AddToCellsAndTray(fresh.Take(cells).ToList(), fresh.Skip(cells + freeform).ToList());
+
             double canvasW = Math.Max(320, RootGrid.ActualWidth);
             double canvasH = Math.Max(240, RootGrid.ActualHeight);
             int placed = 0;
-            foreach (string path in paths)
+            foreach (string path in fresh.Skip(cells).Take(freeform))
             {
                 double aspect = await ReadAspectAsync(path);
                 double h = canvasH * DroppedCellShare;
@@ -372,24 +394,43 @@ namespace ModernImageViewer
                 placed++;
             }
             NoteUserAction();
-            if (forTray.Count > 0)
-            {
-                AddToTray(forTray);
-                ShowAutoPlayToast($"Added {placed + forTray.Count} images: {placed} on the canvas, {forTray.Count} in the tray");
-            }
+            if (tray > 0)
+                ShowAutoPlayToast($"Added {fresh.Count} images: {cells + freeform} on the canvas, {tray} in the tray");
             ShowShownBadge();
         }
 
         /// <summary>
-        /// They join the session past the cells on show, as the rest of a large View Together does, so the rest of the layout does not change.
-        /// A saved layout and Undo keep them, Surprise me takes turns through them, and Swap with can bring one to the canvas.
+        /// Cells fill the empty places first, then join the grid, which evens out its lines for the new number. The tray starts past them.
+        /// A saved layout and Undo keep the tray, Surprise me takes turns through it, and Swap with can bring an image to the canvas.
         /// </summary>
-        private void AddToTray(IReadOnlyList<string> fresh)
+        private void AddToCellsAndTray(IReadOnlyList<string> forCells, IReadOnlyList<string> forTray)
         {
             CaptureUndoPoint();
             int shown = VisibleCount(GridCellCount);
             var file = BuildLayoutFile();
-            AppendToTray(file, fresh, shown);
+            int filled = 0;
+            for (int i = 0; i < shown && filled < forCells.Count; i++)
+            {
+                if (!string.IsNullOrEmpty(file.Photos[i].Path)) continue;
+                file.Photos[i].Path = forCells[filled];
+                file.Photos[i].Name = Path.GetFileName(forCells[filled]);
+                filled++;
+            }
+            int newCells = forCells.Count - filled;
+            if (newCells > 0)
+            {
+                file.Photos.InsertRange(shown, forCells.Skip(filled).Select(path => new PhotoSlotDto { Path = path, Name = Path.GetFileName(path) }));
+                for (int i = 0; i < file.Photos.Count; i++)
+                    file.Photos[i].Slot = i;
+                foreach (var card in file.Freeform ?? new List<FreeformCellDto>())
+                {
+                    if (card.SourceSlot >= shown) card.SourceSlot += newCells;
+                }
+                file.Mosaic = null;
+                file.State!.Lines = MosaicLayout.DefaultLines(shown + newCells);
+                file.State.LineCounts = null;
+            }
+            AppendToTray(file, forTray, shown + newCells);
             _cellBorderFlyout?.Hide();
             _restoringUndo = true;
             _reuseBitmaps = DecodedBitmaps();
@@ -479,7 +520,7 @@ namespace ModernImageViewer
             {
                 // The source cell is gone or shows something else, so the image gets a new grid cell, which cannot turn.
                 GetGeometry(card.Item).ClearWindowTurn();
-                // After the cells on show, so a picture waiting beyond them does not take its place.
+                // After the cells on show, so it does not take the place of an image in the tray.
                 int gridEnd = _framedSlots > 0 ? Math.Min(_framedSlots, GridCellCount) : GridCellCount;
                 _items.Insert(gridEnd, card.Item);
                 var roots = new List<FrameworkElement?>(_cellRoots);

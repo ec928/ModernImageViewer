@@ -209,9 +209,8 @@ namespace ModernImageViewer
         private void ShowShownBadge()
         {
             int tray = TrayImages().Count;
-            int onCanvas = _items.Count(i => !IsEmptyCell(i)) - tray;
             ShownBadge.Visibility = tray > 0 ? Visibility.Visible : Visibility.Collapsed;
-            ShownText.Text = $"{onCanvas} on canvas, {tray} in tray";
+            ShownText.Text = $"{ImagesOnCanvas()} on canvas, {tray} in tray";
         }
 
         private int VisibleCount(int count)

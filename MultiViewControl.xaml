@@ -271,7 +271,7 @@
                             Style="{StaticResource QuietButtonStyle}"
                             Padding="8,5"
                             CornerRadius="12"
-                            ToolTipService.ToolTip="Find images in your folders. The first 8 go on the canvas as freeform images, and the rest go in the image tray.">
+                            ToolTipService.ToolTip="Find images in your folders. Images fill the canvas up to 16, and the rest go in the image tray. On a full canvas, the first 4 go on it as freeform images.">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE710;" FontSize="14" />
                             <TextBlock Text="Add images" VerticalAlignment="Center" FontSize="13" />

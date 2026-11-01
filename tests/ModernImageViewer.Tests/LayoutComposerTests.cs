@@ -14,6 +14,19 @@ namespace ModernImageViewer.Tests
         private static List<PhotoFacts> Photos(int count, double w = 1600, double h = 1200, params UnitRect[] faces) =>
             Enumerable.Range(0, count).Select(n => Photo(n, w, h, faces)).ToList();
 
+        [Theory]
+        [InlineData(0, 3, 3, 0, 0)]
+        [InlineData(0, 16, 16, 0, 0)]
+        [InlineData(0, 120, 16, 0, 104)]
+        [InlineData(14, 10, 2, 0, 8)]
+        [InlineData(15, 1, 1, 0, 0)]
+        [InlineData(16, 1, 0, 1, 0)]
+        [InlineData(16, 4, 0, 4, 0)]
+        [InlineData(16, 120, 0, 4, 116)]
+        [InlineData(19, 6, 0, 4, 2)]
+        public void AddedImagesFillTheCanvasThenFloatFourThenGoInTheTray(int onCanvas, int adding, int cells, int freeform, int tray) =>
+            Assert.Equal((cells, freeform, tray), MosaicLayout.PlaceAdded(onCanvas, adding));
+
         public static IEnumerable<object[]> HostileSets()
         {
             yield return new object[] { "two", Photos(2) };

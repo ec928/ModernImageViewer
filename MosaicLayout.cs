@@ -52,6 +52,25 @@ namespace ModernImageViewer
         /// <summary>Photos actually placed. More than sixteen stop at sixteen.</summary>
         public const int MaxShown = 16;
 
+        /// <summary>Added to a full canvas, this many go on it as freeform images.</summary>
+        public const int FreeformOnFullCanvas = 4;
+
+        /// <summary>
+        /// Where added images go. A canvas with room takes them as cells up to the most it shows, with no arranging to do.
+        /// A full one takes a few as freeform images. Everything else goes in the image tray.
+        /// </summary>
+        public static (int Cells, int Freeform, int Tray) PlaceAdded(int onCanvas, int adding)
+        {
+            int room = MaxShown - onCanvas;
+            if (room > 0)
+            {
+                int cells = Math.Min(adding, room);
+                return (cells, 0, adding - cells);
+            }
+            int freeform = Math.Min(adding, FreeformOnFullCanvas);
+            return (0, freeform, adding - freeform);
+        }
+
         public static int ShownCount(int count)
         {
             return Math.Min(count, MaxShown);

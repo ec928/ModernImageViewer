@@ -2168,7 +2168,7 @@ namespace ModernImageViewer
                 // A position that cannot be seen means nothing. Those images are in the tray, which Swap with opens.
                 if (i >= cellsOnShow && i < gridCells) continue;
                 int targetSlot = i;
-                string position = $"Position {i + 1}";
+                string position = $"Position {PositionOfSlot(i)}";
                 var (row, cells) = MakeRow(position, position, 14, _menuWhitePrimary);
                 var entry = new MenuFlyoutItem { Text = position, Tag = row, Template = template };
 
@@ -2396,14 +2396,14 @@ namespace ModernImageViewer
 
                     if (isSource)
                     {
-                        parts.BadgeText.Text = compact ? $"#{i + 1} (This)" : $"Position {i + 1} (This Photo)";
+                        parts.BadgeText.Text = compact ? $"#{PositionOfSlot(i)} (This)" : $"Position {PositionOfSlot(i)} (This Photo)";
                         parts.PositionBadge.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(235, 36, 36, 36));
                         parts.PositionBadge.BorderBrush = new SolidColorBrush(accent);
                         parts.PositionBadge.BorderThickness = new Thickness(1.5);
                     }
                     else
                     {
-                        parts.BadgeText.Text = compact ? $"#{i + 1}" : $"Position {i + 1}";
+                        parts.BadgeText.Text = compact ? $"#{PositionOfSlot(i)}" : $"Position {PositionOfSlot(i)}";
                         parts.PositionBadge.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(220, 20, 20, 20));
                         parts.PositionBadge.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(90, 255, 255, 255));
                         parts.PositionBadge.BorderThickness = new Thickness(1);
@@ -2421,7 +2421,7 @@ namespace ModernImageViewer
                 var accent = GetMultiViewAccentColor();
                 bool compact = (_cellRoots[targetIndex] is FrameworkElement fe && fe.ActualWidth < 220);
                 string symbol = action == "Copy to" ? "\u2398" : "\u279C";
-                parts.BadgeText.Text = compact ? $"{symbol} #{targetIndex + 1}" : $"{symbol} {action} Position {targetIndex + 1}{(withAttributes ? " + attributes" : "")}";
+                parts.BadgeText.Text = compact ? $"{symbol} #{PositionOfSlot(targetIndex)}" : $"{symbol} {action} Position {PositionOfSlot(targetIndex)}{(withAttributes ? " + attributes" : "")}";
                 parts.PositionBadge.Background = new SolidColorBrush(accent);
                 parts.PositionBadge.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.White);
                 parts.PositionBadge.BorderThickness = new Thickness(2);
@@ -2439,14 +2439,14 @@ namespace ModernImageViewer
                 if (isSource)
                 {
                     var accent = GetMultiViewAccentColor();
-                    parts.BadgeText.Text = compact ? $"#{targetIndex + 1} (This)" : $"Position {targetIndex + 1} (This Photo)";
+                    parts.BadgeText.Text = compact ? $"#{PositionOfSlot(targetIndex)} (This)" : $"Position {PositionOfSlot(targetIndex)} (This Photo)";
                     parts.PositionBadge.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(235, 36, 36, 36));
                     parts.PositionBadge.BorderBrush = new SolidColorBrush(accent);
                     parts.PositionBadge.BorderThickness = new Thickness(1.5);
                 }
                 else
                 {
-                    parts.BadgeText.Text = compact ? $"#{targetIndex + 1}" : $"Position {targetIndex + 1}";
+                    parts.BadgeText.Text = compact ? $"#{PositionOfSlot(targetIndex)}" : $"Position {PositionOfSlot(targetIndex)}";
                     parts.PositionBadge.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(220, 20, 20, 20));
                     parts.PositionBadge.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(90, 255, 255, 255));
                     parts.PositionBadge.BorderThickness = new Thickness(1);
