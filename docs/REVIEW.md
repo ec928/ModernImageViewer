@@ -124,3 +124,4 @@ The Win2D viewer core is real, but GPU lifetime was not reference-counted end-to
 - 2026-10-31: v0.26.0, internal. Surprise me options, new designs, featuring, auto-play, and the framing and Undo fixes.
 - 2026-10-31: v0.26.0, released. Everything since v0.24.0.
 - 2026-11-01: Arrow keys in the preview no longer stop working after a tile click. The preview never took focus, so the tile behind it took the key.
+- 2026-11-01: v0.26.1, internal. Arrow keys in the preview after a tile click.
