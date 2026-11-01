@@ -11,7 +11,7 @@ namespace ModernImageViewer.Cinematic
 {
     /// <summary>
     /// Music under pictures: one file that loops, or random songs from a folder at or above a rating.
-    /// Cinematic and Surprise me's auto-play each own one, and the one that starts playing silences the other.
+    /// Cinematic and Surprise me's auto-play each own one. The one that starts playing silences the other, which carries on when it stops.
     /// </summary>
     public sealed class MusicBed : IDisposable
     {
@@ -29,7 +29,7 @@ namespace ModernImageViewer.Cinematic
         private double _volume = 0.6;
         // What was asked for. Asked for again, the song carries on rather than starting over.
         private string? _asked;
-        private static MusicBed? _sounding;
+        private static readonly OneSounding<MusicBed> Sounding = new();
 
         public event Action<string?>? NowPlayingChanged;
         /// <summary>Nothing can play. The text says why, and the bed has already stopped.</summary>
@@ -48,7 +48,8 @@ namespace ModernImageViewer.Cinematic
         public void PlayFile(string path)
         {
             if (_player != null && _asked == path) return;
-            Stop();
+            StopPlayer();
+            Sounding.Changing(this);
             _asked = path;
             try
             {
@@ -66,7 +67,8 @@ namespace ModernImageViewer.Cinematic
         public void PlayFolder(string folder, double lowestStars, bool includeUnrated)
         {
             if (IsPlayingFolder(folder, lowestStars, includeUnrated)) return;
-            Stop();
+            StopPlayer();
+            Sounding.Changing(this);
             _asked = FolderKey(folder, lowestStars, includeUnrated);
             _player = NewPlayer();
             _deck = new MusicDeck();
@@ -175,9 +177,15 @@ namespace ModernImageViewer.Cinematic
 
         public void Stop()
         {
+            StopPlayer();
+            var next = Sounding.Stopped(this);
+            if (next is { _wantPlaying: true }) next.Sync();
+        }
+
+        private void StopPlayer()
+        {
             _openTicket++;
             _asked = null;
-            if (ReferenceEquals(_sounding, this)) _sounding = null;
             _scanCts?.Cancel();
             _scanCts = null;
             _deck = null;
@@ -217,8 +225,7 @@ namespace ModernImageViewer.Cinematic
             if (_player == null || _player.Source == null) return;
             if (_wantPlaying)
             {
-                if (!ReferenceEquals(_sounding, this)) _sounding?._player?.Pause();
-                _sounding = this;
+                Sounding.Started(this)?._player?.Pause();
                 _player.Play();
             }
             else _player.Pause();

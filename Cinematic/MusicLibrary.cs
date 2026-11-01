@@ -169,6 +169,46 @@ namespace ModernImageViewer.Cinematic
         private static long BigEndian(byte[] b, int at) => ((long)b[at] << 24) | ((long)b[at + 1] << 16) | ((long)b[at + 2] << 8) | b[at + 3];
     }
 
+    /// <summary>
+    /// Whose music is heard when two want to play. The one that started last is, and when it stops the one it silenced carries on.
+    /// </summary>
+    public sealed class OneSounding<T> where T : class
+    {
+        private T? _heard;
+        private T? _waiting;
+
+        /// <summary>Returns the one to silence, if any.</summary>
+        public T? Started(T who)
+        {
+            if (ReferenceEquals(_heard, who)) return null;
+            var silenced = _heard;
+            if (silenced != null) _waiting = silenced;
+            _heard = who;
+            return silenced;
+        }
+
+        /// <summary>Returns the one to carry on, if any.</summary>
+        public T? Stopped(T who)
+        {
+            if (ReferenceEquals(_waiting, who))
+            {
+                _waiting = null;
+                return null;
+            }
+            if (!ReferenceEquals(_heard, who)) return null;
+            _heard = null;
+            var next = _waiting;
+            _waiting = null;
+            return next;
+        }
+
+        /// <summary>Changing to other songs is not stopping, so nothing else gets a turn in between.</summary>
+        public void Changing(T who)
+        {
+            if (ReferenceEquals(_heard, who)) _heard = null;
+        }
+    }
+
     /// <summary>Songs in random order. None comes round again until all have played, and songs can join while it is in use.</summary>
     public sealed class MusicDeck
     {

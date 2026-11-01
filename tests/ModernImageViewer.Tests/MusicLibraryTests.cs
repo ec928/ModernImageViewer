@@ -9,6 +9,43 @@ namespace ModernImageViewer.Tests
         private readonly string _dir = Directory.CreateTempSubdirectory("mivmusic").FullName;
         public void Dispose() => Directory.Delete(_dir, true);
 
+        [Fact]
+        public void The_last_music_started_is_heard_and_the_other_carries_on_after_it()
+        {
+            object show = new(), autoPlay = new();
+            var one = new OneSounding<object>();
+            Assert.Null(one.Started(autoPlay));
+            Assert.Same(autoPlay, one.Started(show));
+            Assert.Null(one.Started(show));
+            Assert.Same(autoPlay, one.Stopped(show));
+            // It has nothing left to wait for, and stopping it hands on to nobody.
+            Assert.Null(one.Started(autoPlay));
+            Assert.Null(one.Stopped(autoPlay));
+        }
+
+        [Fact]
+        public void Music_that_stopped_while_silenced_does_not_come_back()
+        {
+            object show = new(), autoPlay = new();
+            var one = new OneSounding<object>();
+            one.Started(autoPlay);
+            one.Started(show);
+            Assert.Null(one.Stopped(autoPlay));
+            Assert.Null(one.Stopped(show));
+        }
+
+        [Fact]
+        public void Changing_songs_is_not_stopping_so_nothing_else_gets_a_turn()
+        {
+            object show = new(), autoPlay = new();
+            var one = new OneSounding<object>();
+            one.Started(autoPlay);
+            one.Started(show);
+            one.Changing(show);
+            Assert.Null(one.Started(show));
+            Assert.Same(autoPlay, one.Stopped(show));
+        }
+
         [Theory]
         [InlineData("Wellerman", "Nathan Evans", "y2mate.com - Nathan Evans  Wellerman Sea Shanty_320kbps", "Wellerman – Nathan Evans")]
         [InlineData("Sinners (Official Audio)", "  Barns Courtney ", "x", "Sinners (Official Audio) – Barns Courtney")]
