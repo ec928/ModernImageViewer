@@ -219,6 +219,22 @@
                                 <TextBlock Text="{x:Bind ViewModel.CurrentFileName, Mode=OneWay}" FontSize="12" Opacity="0.7" TextTrimming="CharacterEllipsis" />
                             </StackPanel>
 
+                            <TextBlock x:Name="FaceNote" FontSize="12" Opacity="0.85" />
+                            <Grid x:Name="MoveStepper" Visibility="Collapsed" ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="MoveStepText" VerticalAlignment="Center" Style="{ThemeResource BodyStrongTextBlockStyle}"
+                                           ToolTipService.ToolTip="Auto plays these moves one after the other. Saving your own boxes replaces them with one move." />
+                                <Button x:Name="BtnPreviousMove" Grid.Column="1" Click="BtnPreviousMove_Click" AutomationProperties.Name="Previous move" ToolTipService.ToolTip="Previous move">
+                                    <SymbolIcon Symbol="Back" />
+                                </Button>
+                                <Button x:Name="BtnNextMove" Grid.Column="2" Click="BtnNextMove_Click" AutomationProperties.Name="Next move" ToolTipService.ToolTip="Next move">
+                                    <SymbolIcon Symbol="Forward" />
+                                </Button>
+                            </Grid>
                             <TextBlock Text="Drag the Start and End boxes on the picture to set where the camera goes." FontSize="12" TextWrapping="Wrap" Opacity="0.85" />
                             <Button Content="Preview" Click="BtnPreview_Click" HorizontalAlignment="Stretch" ToolTipService.ToolTip="Plays this slide as it will appear" />
                             <Grid ColumnSpacing="8">

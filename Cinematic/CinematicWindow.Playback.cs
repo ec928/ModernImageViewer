@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
@@ -30,6 +31,8 @@ namespace ModernImageViewer.Cinematic
             public CanvasBitmap GpuBitmap { get; }
             public SceneIntelligence Intelligence { get; }
             public CameraTransform Trajectory { get; set; } = new();
+            /// <summary>Every move this slide makes, in order. Trajectory is the one on screen.</summary>
+            public List<CameraTransform> Shots { get; set; } = new();
             public bool IsSharedResource { get; set; } = false;
             public Rect EngineStartCrop;
             public Rect EngineEndCrop;
@@ -163,13 +166,12 @@ namespace ModernImageViewer.Cinematic
             _primaryFrame.Trajectory.StartPan = s.Pan;
             _primaryFrame.Trajectory.EndScale = e.Scale;
             _primaryFrame.Trajectory.EndPan = e.Pan;
-            _primaryFrame.Trajectory.EaseKind = "EaseInOut";
-            _primaryFrame.Trajectory.IsSnapZoom = false;
             double duration = ViewModel.GetCurrentEffectiveSettings().DurationSeconds;
             if (duration > 0)
             {
-                _primaryFrame.Trajectory.RecommendedDurationSeconds = duration;
-                _slideDurationSeconds = duration;
+                double perMove = duration / Math.Max(1, _primaryFrame.Shots.Count);
+                _primaryFrame.Trajectory.RecommendedDurationSeconds = perMove;
+                _slideDurationSeconds = perMove;
             }
             else
             {
@@ -187,6 +189,7 @@ namespace ModernImageViewer.Cinematic
             if (!forceEngineReroll && !customCrops && _primaryFrame.HasEngineCrops && !ViewModel.HasUnsavedZoomPan)
             {
                 ApplyCropsToTrajectory(_primaryFrame.EngineStartCrop, _primaryFrame.EngineEndCrop);
+                SnapshotEngineCrops(_primaryFrame, _primaryFrame.Trajectory, SlideshowCanvas.Size);
                 if (_editing && !_previewing) ResetKeyframeBoxes();
                 SlideshowCanvas.Invalidate();
                 return;
@@ -212,11 +215,13 @@ namespace ModernImageViewer.Cinematic
 
             try
             {
-                var newSequence = await Task.Run(() => _director.GetSequence(intel, request.Bounds, request.Settings, token), token);
+                if (forceEngineReroll) _chosenMoves.Remove(ViewModel.CurrentClipId);
+                var newSequence = await MovesForAsync(ViewModel.CurrentClipId, intel, request, token);
 
                 if (!token.IsCancellationRequested && newSequence.Count > 0 && _primaryFrame != null)
                 {
                     _currentSequence = newSequence;
+                    _primaryFrame.Shots = newSequence.ToList();
                     var newTrajectory = _currentSequence.Dequeue();
                     _primaryFrame.Trajectory = newTrajectory;
                     _slideDurationSeconds = _primaryFrame.Trajectory.RecommendedDurationSeconds;
@@ -283,7 +288,7 @@ namespace ModernImageViewer.Cinematic
                 }
 
                 var request = new PlaybackRequest(SlideshowCanvas.Size, ViewModel.GetCurrentEffectiveSettings());
-                var queue = await Task.Run(() => _director.GetSequence(newFrame.Intelligence, request.Bounds, request.Settings, token), token);
+                var queue = await MovesForAsync(ClipIdAt(loadIndex), newFrame.Intelligence, request, token);
 
                 if (token.IsCancellationRequested)
                 {
@@ -294,6 +299,7 @@ namespace ModernImageViewer.Cinematic
                 _primaryFrame?.Dispose();
                 _primaryFrame = newFrame;
                 _currentSequence = queue;
+                _primaryFrame.Shots = queue.ToList();
                 _primaryFrame.Trajectory = _currentSequence.Count > 0 ? _currentSequence.Dequeue() : new CameraTransform();
                 if (request.Settings.StartCrop == null || request.Settings.EndCrop == null)
                     SnapshotEngineCrops(_primaryFrame, _primaryFrame.Trajectory, request.Bounds);
@@ -333,12 +339,13 @@ namespace ModernImageViewer.Cinematic
 
             try
             {
-                var queue = await Task.Run(() => _director.GetSequence(frame.Intelligence, request.Bounds, request.Settings, token), token);
+                var queue = await MovesForAsync(ClipIdAt(indexToLoad), frame.Intelligence, request, token);
 
                 if (!token.IsCancellationRequested)
                 {
                     _secondaryFrame = frame;
                     _nextSequence = queue;
+                    _secondaryFrame.Shots = queue.ToList();
                     _secondaryFrame.Trajectory = _nextSequence.Count > 0 ? _nextSequence.Dequeue() : new CameraTransform();
                     if (request.Settings.StartCrop == null || request.Settings.EndCrop == null)
                         SnapshotEngineCrops(_secondaryFrame, _secondaryFrame.Trajectory, request.Bounds);
@@ -369,7 +376,7 @@ namespace ModernImageViewer.Cinematic
             if (frame != null && !token.IsCancellationRequested)
             {
                 var request = new PlaybackRequest(SlideshowCanvas.Size, ViewModel.GetCurrentEffectiveSettings());
-                var queue = await Task.Run(() => _director.GetSequence(frame.Intelligence, request.Bounds, request.Settings, token), token);
+                var queue = await MovesForAsync(ClipIdAt(firstIndex), frame.Intelligence, request, token);
 
                 if (!token.IsCancellationRequested)
                 {
@@ -377,6 +384,7 @@ namespace ModernImageViewer.Cinematic
                     {
                         _primaryFrame = frame;
                         _currentSequence = queue;
+                        _primaryFrame.Shots = queue.ToList();
                         _primaryFrame.Trajectory = _currentSequence.Count > 0 ? _currentSequence.Dequeue() : new CameraTransform();
                         if (request.Settings.StartCrop == null || request.Settings.EndCrop == null)
                             SnapshotEngineCrops(_primaryFrame, _primaryFrame.Trajectory, request.Bounds);
@@ -401,6 +409,39 @@ namespace ModernImageViewer.Cinematic
             if (_nothingToPlayShown || RootGrid.XamlRoot == null) return;
             _nothingToPlayShown = true;
             _ = ViewerEngine.ShowMessageAsync(RootGrid.XamlRoot, "Nothing to play", "None of these pictures could be opened.");
+        }
+
+        // Auto chooses a slide's moves once, so what Edit show displays is what plays, however many times the show comes round.
+        private readonly Dictionary<string, (List<CameraTransform> Shots, Size Bounds)> _chosenMoves = new();
+
+        private static void ReAim(CameraTransform shot, Size from, Size to, Size image)
+        {
+            var start = CameraMath.CameraFromCrop(CameraMath.CropFromCamera(shot.StartScale, shot.StartPan, from, image), to, image);
+            var end = CameraMath.CameraFromCrop(CameraMath.CropFromCamera(shot.EndScale, shot.EndPan, from, image), to, image);
+            (shot.StartScale, shot.StartPan, shot.EndScale, shot.EndPan) = (start.Scale, start.Pan, end.Scale, end.Pan);
+        }
+
+        private string ClipIdAt(int index) => index >= 0 && index < ViewModel.Track.Count ? ViewModel.Track[index].Id : string.Empty;
+
+        private async Task<Queue<CameraTransform>> MovesForAsync(string clipId, SceneIntelligence intel, PlaybackRequest request, CancellationToken token)
+        {
+            bool customFraming = request.Settings.StartCrop is Rect && request.Settings.EndCrop is Rect;
+            if (!customFraming && _chosenMoves.TryGetValue(clipId, out var chosen))
+            {
+                var shots = chosen.Shots.Select(s => s.Copy()).ToList();
+                if (chosen.Bounds != request.Bounds)
+                {
+                    foreach (var shot in shots) ReAim(shot, chosen.Bounds, request.Bounds, intel.ImageSize);
+                }
+                if (request.Settings.DurationSeconds > 0)
+                    foreach (var shot in shots) shot.RecommendedDurationSeconds = request.Settings.DurationSeconds / shots.Count;
+                return new Queue<CameraTransform>(shots);
+            }
+
+            var moves = await Task.Run(() => _director.GetSequence(intel, request.Bounds, request.Settings, token), token);
+            if (!customFraming && moves.Count > 0 && !string.IsNullOrEmpty(clipId))
+                _chosenMoves[clipId] = (moves.Select(s => s.Copy()).ToList(), request.Bounds);
+            return moves;
         }
 
         private async Task<SlideFrame?> DecodeAndMarshalImageAsync(int index, CancellationToken token)

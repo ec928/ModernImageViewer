@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
@@ -65,11 +66,13 @@ namespace ModernImageViewer.Cinematic
                 if (ViewModel.IsPlaying) ViewModel.TogglePlay();
                 _idleTimer.Stop();
                 SyncPlayPauseUI();
-                ScrollSequenceToCurrent();
+                // The strip has only just appeared and has no layout to scroll yet.
+                DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, ScrollSequenceToCurrent);
                 return;
             }
 
             if (ViewModel.HasUnsavedZoomPan) ViewModel.DiscardZoomPanDraft();
+            BackToFirstMove();
             UpdateActiveTrajectoriesAsync();
             if (ViewModel.CurrentClip?.IsHidden == true) ViewModel.MoveNext();
             if (!ViewModel.IsPlaying) ViewModel.TogglePlay();
@@ -91,6 +94,47 @@ namespace ModernImageViewer.Cinematic
         }
 
         private void BtnUseAutoDuration_Click(object sender, RoutedEventArgs e) => ViewModel.UseAutoDuration();
+
+        /// <summary>The slide plays again from its first move, whichever one was being looked at.</summary>
+        private void BackToFirstMove()
+        {
+            var frame = _primaryFrame;
+            if (frame == null || frame.Shots.Count == 0) return;
+            frame.Trajectory = frame.Shots[0];
+            _currentSequence = new Queue<CameraTransform>(frame.Shots.Skip(1));
+            _slideDurationSeconds = frame.Trajectory.RecommendedDurationSeconds;
+        }
+
+        private void BtnPreviousMove_Click(object sender, RoutedEventArgs e) => ShowMove(-1);
+        private void BtnNextMove_Click(object sender, RoutedEventArgs e) => ShowMove(1);
+
+        private void ShowMove(int step)
+        {
+            var frame = _primaryFrame;
+            if (frame == null || frame.Shots.Count < 2) return;
+            int at = Math.Clamp(frame.Shots.IndexOf(frame.Trajectory) + step, 0, frame.Shots.Count - 1);
+            ViewModel.DiscardZoomPanDraft();
+            frame.Trajectory = frame.Shots[at];
+            _slideDurationSeconds = frame.Trajectory.RecommendedDurationSeconds;
+            SnapshotEngineCrops(frame, frame.Trajectory, new Size(SlideshowCanvas.ActualWidth, SlideshowCanvas.ActualHeight));
+            ResetKeyframeBoxes();
+            SlideshowCanvas.Invalidate();
+        }
+
+        /// <summary>What Auto is working from on this slide, so the boxes can be read honestly.</summary>
+        private void ShowSlideFacts()
+        {
+            var frame = _primaryFrame;
+            if (frame == null) return;
+            int count = frame.Shots.Count;
+            int at = frame.Shots.IndexOf(frame.Trajectory);
+            MoveStepper.Visibility = count > 1 ? Visibility.Visible : Visibility.Collapsed;
+            MoveStepText.Text = $"Move {Math.Max(0, at) + 1} of {count}";
+            BtnPreviousMove.IsEnabled = at > 0;
+            BtnNextMove.IsEnabled = at >= 0 && at < count - 1;
+            int faces = frame.Intelligence.Faces.Count;
+            FaceNote.Text = faces == 0 ? "No face found" : faces == 1 ? "Face found" : $"{faces} faces found";
+        }
 
         private void DrawEditWorkspace(CanvasDrawEventArgs args, SlideFrame frame, Size bounds)
         {
@@ -115,6 +159,12 @@ namespace ModernImageViewer.Cinematic
                 ds.FillRectangle(0, t + h, (float)bounds.Width, (float)bounds.Height - (t + h), dim);
                 ds.FillRectangle(0, t, l, h, dim);
                 ds.FillRectangle(l + w, t, (float)bounds.Width - (l + w), h, dim);
+            }
+
+            foreach (var face in frame.Intelligence.Faces)
+            {
+                ds.DrawRectangle((float)(ox + face.X * scale), (float)(oy + face.Y * scale), (float)(face.Width * scale), (float)(face.Height * scale),
+                    Windows.UI.Color.FromArgb(230, 120, 255, 140), 2f);
             }
 
             DrawFramedPreview(ds, frame, bounds);
@@ -247,6 +297,7 @@ namespace ModernImageViewer.Cinematic
         {
             if (StartFrameBox == null || EndFrameBox == null || _primaryFrame == null) return;
             if (_isDraggingBox || _isResizing) return;
+            ShowSlideFacts();
             if (ViewModel.HasUnsavedZoomPan) { ApplyChrome(); return; }
             if (!TryEditLayout(WysiwygOverlay.ActualWidth, WysiwygOverlay.ActualHeight, _primaryFrame.Intelligence.ImageSize, out _, out double drawW, out double drawH, out double ox, out double oy))
                 return;
@@ -468,6 +519,13 @@ namespace ModernImageViewer.Cinematic
         private void BtnSaveZoomPan_Click(object sender, RoutedEventArgs e)
         {
             CommitKeyframeCrops(persist: true);
+            // Your framing is now this slide's one move.
+            if (_primaryFrame != null)
+            {
+                _primaryFrame.Shots = new List<CameraTransform> { _primaryFrame.Trajectory };
+                _currentSequence.Clear();
+                ResetKeyframeBoxes();
+            }
             SlideshowCanvas.Invalidate();
         }
 

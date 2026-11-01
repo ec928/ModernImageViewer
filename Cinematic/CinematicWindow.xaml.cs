@@ -88,6 +88,7 @@ namespace ModernImageViewer.Cinematic
             ViewModel.TrajectoryRefreshRequested += () => UpdateActiveTrajectoriesAsync();
             ViewModel.SlideMotionChanged += () =>
             {
+                _chosenMoves.Clear();
                 DiscardPreload();
                 UpdateActiveTrajectoriesAsync(forceEngineReroll: true);
             };
@@ -435,8 +436,14 @@ namespace ModernImageViewer.Cinematic
         {
             if (Math.Abs(e.NewSize.Width - _lastCanvasWidth) > 1 || Math.Abs(e.NewSize.Height - _lastCanvasHeight) > 1)
             {
+                var before = new Size(_lastCanvasWidth, _lastCanvasHeight);
                 _lastCanvasWidth = e.NewSize.Width;
                 _lastCanvasHeight = e.NewSize.Height;
+                if (_primaryFrame != null && before.Width > 0 && before.Height > 0)
+                {
+                    foreach (var shot in _primaryFrame.Shots)
+                        if (shot != _primaryFrame.Trajectory) ReAim(shot, before, e.NewSize, _primaryFrame.Intelligence.ImageSize);
+                }
                 UpdateActiveTrajectoriesAsync();
             }
         }

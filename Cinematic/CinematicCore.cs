@@ -46,6 +46,8 @@ namespace ModernImageViewer.Cinematic
         public bool RequiresCut { get; set; } = false;
         public bool IsSnapZoom { get; set; } = false;
         public string EaseKind { get; set; } = "EaseInOut";
+
+        public CameraTransform Copy() => (CameraTransform)MemberwiseClone();
     }
 
     public static class CameraMath
