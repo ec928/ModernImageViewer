@@ -21,7 +21,15 @@ namespace ModernImageViewer.Cinematic
             _music = new MusicBed(DispatcherQueue);
             _music.NowPlayingChanged += ViewModel.SetNowPlaying;
             _music.GaveUp += (title, why) => _ = ReportMusicStoppedAsync(title, why);
-            if (MainWindow.Instance != null) MainWindow.Instance.MusicSettingsChanged += ApplyMusic;
+            if (MainWindow.Instance != null) MainWindow.Instance.MusicSettingsChanged += MyMusicChanged;
+        }
+
+        /// <summary>The volume in the options is for the music set there. A show with its own music keeps its own.</summary>
+        private void MyMusicChanged()
+        {
+            bool ownMusic = ViewModel.IsMusicFolder || !string.IsNullOrEmpty(ViewModel.MusicPath);
+            if (!ownMusic && MainWindow.Instance?.MyMusic is { } mine) ViewModel.StartAtVolume(mine.Volume);
+            ApplyMusic();
         }
 
         private void ApplyMusic()
@@ -44,14 +52,15 @@ namespace ModernImageViewer.Cinematic
 
         private void DisposeMusic()
         {
-            if (MainWindow.Instance != null) MainWindow.Instance.MusicSettingsChanged -= ApplyMusic;
+            if (MainWindow.Instance != null) MainWindow.Instance.MusicSettingsChanged -= MyMusicChanged;
             _music?.Dispose();
             _music = null;
         }
 
         private async Task ReportMusicStoppedAsync(string title, string why)
         {
-            ViewModel.SetMusic(null);
+            // Only for now. Recording "no music" in the show would outlast a drive being away or a rating that finds nothing.
+            ViewModel.SetMusicState(false, false);
             if (RootGrid.XamlRoot != null)
                 await ViewerEngine.ShowMessageAsync(RootGrid.XamlRoot, title, "The show carries on without music. " + why);
         }
@@ -131,7 +140,12 @@ namespace ModernImageViewer.Cinematic
             var mine = MainWindow.Instance?.MyMusic;
             bool ownMusic = ViewModel.IsMusicFolder || !string.IsNullOrEmpty(ViewModel.MusicPath);
             if (mine != null && mine.HasFolder && (ownMusic || ViewModel.MusicIsOff || !mine.InCinematic))
-                Add("Use my music", ViewModel.UseMyMusic);
+                Add("Use my music", () =>
+                {
+                    // With my music turned off for shows, asking for it here gives this show its folder.
+                    if (mine.InCinematic) ViewModel.UseMyMusic();
+                    else ViewModel.SetMusicFolder(mine.Folder!, mine.LowestStars, mine.IncludesUnrated);
+                });
             Add("Music from a folder...", () => _ = ChooseMusicFolderAsync());
             Add("One music file...", () => _ = ChooseMusicFileAsync());
             if (ViewModel.IsMusicFolder) Add("Change rating...", () => _ = AskMusicRatingAsync(ViewModel.MusicFolder!));

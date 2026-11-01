@@ -11,12 +11,13 @@ How it is built is in `ARCHITECTURE.md`, under Multi-view. How it looks and beha
 - Swap, copy, move and clear, with parameters staying on the cell, and swap, copy and move that can bring the cell's attributes too
 - Rotate, mirror and flip the image on any cell, and replace it with a picture found in the app
 - Floating cells: move, resize, snap, layer, and Dock back into the grid
-- Pictures from the app (Add images) or dropped from Explorer become new floating cells; an empty cell takes one from the app (Add image) or from a drop onto it
+- Images from the app (Add images) or dropped from Explorer fill the canvas up to 16, then go in the image tray, with the first 4 floating on a full canvas; an empty cell takes one from the app (Add image), from the tray or from a drop onto it
+- Image tray: the session's images not on the canvas, chosen by looking at them, with Move to Tray and Remove cell
 - Shapes on every cell: rectangle, squircle, circle or oval, arch, L-shape, triangle, right triangle, rhombus, trapezoid, parallelogram, hexagon and organic blob, with mirroring, and on floating cells rotation and shape-only rotation
 - Canvas surface and color, including custom colors
 - Frame & Border for the whole canvas
 - Undo and redo, three autosaved sessions, and Reset canvas and images
-- Surprise me: six designed layouts, scored against the pictures to avoid cutting or covering the faces found, with a card of ranges and odds, a featured picture, and auto-play
+- Surprise me: six designed layouts, scored against the pictures to avoid cutting or covering the faces found, with one control on the bar, a card of ranges and odds, a featured picture, and auto-play with music
 - Save and load `.mivlayout` layouts
 - Export to JPEG or PNG, and copy to the clipboard
 

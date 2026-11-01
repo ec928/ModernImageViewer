@@ -265,6 +265,17 @@ namespace ModernImageViewer
             }
         }
 
+        /// <summary>The session decides what is in the deck: a picture removed from it does not come round again, and one added comes up soon.</summary>
+        public void MatchSession(IReadOnlyCollection<string> pictures)
+        {
+            var kept = new HashSet<string>(pictures, StringComparer.OrdinalIgnoreCase);
+            _known.IntersectWith(kept);
+            _waiting.IntersectWith(kept);
+            _order.RemoveAll(p => !kept.Contains(p));
+            _added.RemoveAll(p => !kept.Contains(p));
+            Include(pictures);
+        }
+
         public List<string> Deal(int count, bool together = false)
         {
             var hand = _added.Take(count).ToList();

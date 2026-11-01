@@ -24,7 +24,7 @@ namespace ModernImageViewer
 
         private readonly ConcurrentDictionary<string, PhotoFacts> _photoFacts = new(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _featuredPictures = new(StringComparer.OrdinalIgnoreCase);
-        // Only set while the session started with more pictures than a layout can show.
+        // Only set while the session has more images than a click may use.
         private PictureDeck? _surpriseDeck;
         private bool _surpriseRun;
         private string? _surpriseRecipe;
@@ -81,9 +81,11 @@ namespace ModernImageViewer
             }), true);
             RootGrid.AddHandler(KeyDownEvent, new KeyEventHandler((_, e) =>
             {
-                if (_surpriseCard != null && e.Key == Windows.System.VirtualKey.Escape)
+                // Here as well as with the other keys, because the window leaves Esc alone while a text box has focus.
+                if ((_surpriseCard != null || _trayCard != null) && e.Key == Windows.System.VirtualKey.Escape)
                 {
                     RemoveSurpriseCard();
+                    RemoveTrayCard();
                     e.Handled = true;
                 }
             }), true);
@@ -141,11 +143,12 @@ namespace ModernImageViewer
                 column.Children.Add(row);
             }
 
-            void Slide(StackPanel column, string label, string tip, double min, double max, double step, double value, Action<SurpriseOptions, double> chosen)
+            Slider Slide(StackPanel column, string label, string tip, double min, double max, double step, double value, Action<SurpriseOptions, double> chosen)
             {
                 var slider = new Slider { Minimum = min, Maximum = max, StepFrequency = step, SmallChange = step, Value = value };
                 slider.ValueChanged += (_, e) => ChangeSurpriseChoices(o => chosen(o, e.NewValue));
                 Row(column, label, tip, slider);
+                return slider;
             }
 
             void Toggle(StackPanel column, string label, string tip, bool value, Action<SurpriseOptions, bool> chosen)
@@ -172,8 +175,8 @@ namespace ModernImageViewer
             transport.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             transport.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             transport.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var previousLayout = WordButton("\u2039 Layout", "Previous layout", "Previous layout (Left). Pauses first.", (_, _) => StepLayout(back: true));
-            var nextLayout = WordButton("Layout \u203A", "Next layout", "Forward again after going back (Right).", (_, _) => StepLayout(back: false));
+            var previousLayout = WordButton("\u2039 Layout", "Previous layout", "Previous layout. Pauses first. With this card closed, Left does the same.", (_, _) => StepLayout(back: true));
+            var nextLayout = WordButton("Layout \u203A", "Next layout", "Forward again after going back. With this card closed, Right does the same.", (_, _) => StepLayout(back: false));
             _cardPlayIcon = Icon("\uE768", 13);
             _cardPlayText = new TextBlock { Text = "Play", VerticalAlignment = VerticalAlignment.Center };
             var playContent = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
@@ -288,8 +291,11 @@ namespace ModernImageViewer
             }
 
             var count = Section("How many images");
-            Slide(count, "Fewest each click", "The least a click uses, when there are more images than the most below.", SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.FewestPictures, (o, v) => o.FewestPictures = (int)v);
-            Slide(count, "Most each click", "The most a click uses. The rest stay in the image tray, and clicks take turns through them.", SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.MostPictures, (o, v) => o.MostPictures = (int)v);
+            var fewestEach = Slide(count, "Fewest each click", "The least a click uses, when there are more images than the most below.", SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.FewestPictures, (o, v) => o.FewestPictures = (int)v);
+            var mostEach = Slide(count, "Most each click", "The most a click uses. The rest stay in the image tray, and clicks take turns through them.", SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.MostPictures, (o, v) => o.MostPictures = (int)v);
+            // The two ends cannot cross, as with the random time: moving one past the other brings the other with it.
+            fewestEach.ValueChanged += (_, e) => { if (mostEach.Value < e.NewValue) mostEach.Value = e.NewValue; };
+            mostEach.ValueChanged += (_, e) => { if (fewestEach.Value > e.NewValue) fewestEach.Value = e.NewValue; };
             Slide(count, "Same folder and date, %", "The odds that a click takes images that are neighbours when sorted by folder, then file date, which usually means one event. Otherwise it takes them from anywhere.", 0, 100, 5, options.TogetherChance * 100, (o, v) => o.TogetherChance = v / 100);
             Toggle(count, "Skip screens and repeats", "Leave out what looks like a screen capture or a graphic, and all but one of near-identical shots. This is a guess.", options.SkipScreens, (o, on) => o.SkipScreens = on);
 
@@ -305,13 +311,13 @@ namespace ModernImageViewer
             Slide(version, "Face shown, %", "How much of a face must show for it to count as uncut. Lower allows bolder layouts.", 50, 100, 5, options.FaceShown * 100, (o, v) => o.FaceShown = v / 100);
 
             var faces = Section("Zoom on faces");
-            Slide(faces, "Most zoom, x", "1 is off. Brings forward people who are small in the picture. A person Windows misses can be cropped.", 1, SurpriseOptions.MostOfAnyZoom, 0.5, options.MostZoom, (o, v) => o.MostZoom = v);
-            Slide(faces, "How often, %", "The odds that a picture with faces is zoomed.", 0, 100, 5, options.ZoomChance * 100, (o, v) => o.ZoomChance = v / 100);
+            Slide(faces, "Most zoom, x", "1 is off. Brings forward people who are small in the image. A person Windows misses can be cropped.", 1, SurpriseOptions.MostOfAnyZoom, 0.5, options.MostZoom, (o, v) => o.MostZoom = v);
+            Slide(faces, "How often, %", "The odds that an image with faces is zoomed.", 0, 100, 5, options.ZoomChance * 100, (o, v) => o.ZoomChance = v / 100);
 
             var look = Section("Look");
             Slide(look, "Most tilt, degrees", "How far Scattered prints can turn.", 0, 20, 0.5, options.MostTilt, (o, v) => o.MostTilt = v);
             Slide(look, "Hero size, %", "The hero's height against the canvas, give or take a tenth.", 40, 90, 1, options.HeroSize * 100, (o, v) => o.HeroSize = v / 100);
-            Slide(look, "Gallery gaps", "1 is the usual gap between pictures on a Gallery wall.", 0.25, 3, 0.25, options.GapScale, (o, v) => o.GapScale = v);
+            Slide(look, "Gallery gaps", "1 is the usual gap between images on a Gallery wall.", 0.25, 3, 0.25, options.GapScale, (o, v) => o.GapScale = v);
             var card = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = SurpriseOptions.Cards.ToList(), SelectedItem = options.Card };
             card.SelectionChanged += (_, _) => { if (card.SelectedItem is string name) ChangeSurpriseChoices(o => o.Card = name); };
             Row(look, "Gallery card", "The color of the card the images are set into.", card);
@@ -331,27 +337,35 @@ namespace ModernImageViewer
 
             RemoveSurpriseCard();
             CloseCountsCard();
-            _surpriseCard = new Border
-            {
-                Child = new ScrollViewer { Content = body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(0, 0, 12, 0) },
-                Width = SurpriseCardWidth,
-                Padding = new Thickness(14, 12, 2, 12),
-                CornerRadius = new CornerRadius(10),
-                Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xF2, 0x1E, 0x1E, 0x1E)),
-                BorderBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF)),
-                BorderThickness = new Thickness(1),
-                HorizontalAlignment = HorizontalAlignment.Left,
-                VerticalAlignment = VerticalAlignment.Bottom,
-                RequestedTheme = ElementTheme.Dark
-            };
-            Canvas.SetZIndex(_surpriseCard, 6500);
-            Grid.SetRowSpan(_surpriseCard, Math.Max(1, RootGrid.RowDefinitions.Count));
-            Grid.SetColumnSpan(_surpriseCard, Math.Max(1, RootGrid.ColumnDefinitions.Count));
-            RootGrid.Children.Add(_surpriseCard);
+            _surpriseCard = NewCard(new ScrollViewer { Content = body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(0, 0, 12, 0) });
+            _surpriseCard.Width = SurpriseCardWidth;
+            _surpriseCard.Padding = new Thickness(14, 12, 2, 12);
+            _surpriseCard.HorizontalAlignment = HorizontalAlignment.Left;
+            _surpriseCard.VerticalAlignment = VerticalAlignment.Bottom;
+            AddOverCanvas(_surpriseCard, 6500);
             PlaceSurpriseCard();
             SurpriseCardButton.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF));
             ShowAutoPlayState();
             HudMenu_Opened(this, EventArgs.Empty);
+        }
+
+        /// <summary>The dark panel the Surprise me card and the image tray share.</summary>
+        private static Border NewCard(UIElement child) => new()
+        {
+            Child = child,
+            CornerRadius = new CornerRadius(10),
+            Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xF2, 0x1E, 0x1E, 0x1E)),
+            BorderBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF)),
+            BorderThickness = new Thickness(1),
+            RequestedTheme = ElementTheme.Dark
+        };
+
+        private void AddOverCanvas(FrameworkElement element, int layer)
+        {
+            Canvas.SetZIndex(element, layer);
+            Grid.SetRowSpan(element, Math.Max(1, RootGrid.RowDefinitions.Count));
+            Grid.SetColumnSpan(element, Math.Max(1, RootGrid.ColumnDefinitions.Count));
+            RootGrid.Children.Add(element);
         }
 
         /// <summary>Centred over the control and just above the bar, inside the window, as the grid layout's card is.</summary>
@@ -400,7 +414,7 @@ namespace ModernImageViewer
             bool hasFolder = music?.HasFolder == true;
             var where = new TextBlock
             {
-                Text = hasFolder ? $"{System.IO.Path.GetFileName(music!.Folder!.TrimEnd('\\'))}, {music.LowestStars:0.#}+ stars" + (music.IncludesUnrated ? " and unrated" : "") : "No music folder",
+                Text = music?.Summary ?? MusicChoices.NoFolder,
                 FontSize = 12, Opacity = 0.75, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis
             };
             var on = new ToggleSwitch { IsOn = music?.InSurprise != false, OnContent = string.Empty, OffContent = string.Empty, MinWidth = 0, VerticalAlignment = VerticalAlignment.Center, IsEnabled = hasFolder };
@@ -409,7 +423,8 @@ namespace ModernImageViewer
             on.Toggled += (_, _) =>
             {
                 MainWindow.Instance?.SetMusicInSurprise(on.IsOn);
-                if (_autoPlaySeconds > 0) { if (on.IsOn) StartAutoPlayMusic(); else StopAutoPlayMusic(); }
+                if (!on.IsOn) StopAutoPlayMusic();
+                else if (_autoPlaySeconds > 0) StartAutoPlayMusic();
                 ShowAutoPlayState();
             };
             Grid.SetColumn(on, 1);
@@ -428,11 +443,20 @@ namespace ModernImageViewer
         {
             if (_watchingMusicSettings || MainWindow.Instance == null) return;
             _watchingMusicSettings = true;
-            MainWindow.Instance.MusicSettingsChanged += () =>
-            {
-                if (_autoPlaySeconds > 0) StartAutoPlayMusic();
-                if (_surpriseCard != null) ShowSurpriseCard();
-            };
+            MainWindow.Instance.MusicSettingsChanged += ApplyMusicSettings;
+        }
+
+        private void ApplyMusicSettings()
+        {
+            var music = MainWindow.Instance?.MyMusic;
+            _musicProblem = null;
+            if (music != null) _surpriseMusic?.SetVolume(music.Volume);
+            if (_autoPlaySeconds > 0) StartAutoPlayMusic();
+            // While paused nothing starts, but a song that is no longer what the settings ask for should not be waiting to resume.
+            else if (music == null || !music.InSurprise || !music.HasFolder || _surpriseMusic?.IsPlayingFolder(music.Folder!, music.LowestStars, music.IncludesUnrated) != true)
+                StopAutoPlayMusic();
+            if (_surpriseCard != null) ShowSurpriseCard();
+            else ShowCardSong();
         }
 
         /// <summary>Steps through what Undo holds, pausing first, so going back does not race the next layout.</summary>
@@ -522,8 +546,6 @@ namespace ModernImageViewer
 
             var search = new TextBox { PlaceholderText = "Search names", MinWidth = 180 };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(search, "Search the image tray");
-            search.TextChanged += (_, _) =>
-                thumbnails.ItemsSource = all.Where(p => System.IO.Path.GetFileName(p.Path).Contains(search.Text, StringComparison.OrdinalIgnoreCase)).ToList();
             var close = new Button { Content = "Close" };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(close, "Close the image tray");
             close.Click += (_, _) => RemoveTrayCard();
@@ -531,7 +553,18 @@ namespace ModernImageViewer
             top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            top.Children.Add(new TextBlock { Text = $"Image tray: {all.Count}. Click one to {(IsEmptyCell(_items[intoSlot]) ? "add it to" : "swap it into")} position {PositionOfSlot(intoSlot)}.", VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis });
+            string click = $"Click one to {(IsEmptyCell(_items[intoSlot]) ? "add it to" : "swap it into")} position {PositionOfSlot(intoSlot)}.";
+            var heading = new TextBlock { Text = $"Image tray: {all.Count}. {click}", VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+            search.TextChanged += (_, _) =>
+            {
+                var found = all.Where(p => System.IO.Path.GetFileName(p.Path).Contains(search.Text, StringComparison.OrdinalIgnoreCase)).ToList();
+                thumbnails.ItemsSource = found;
+                heading.Text = found.Count == all.Count ? $"Image tray: {all.Count}. {click}"
+                    : found.Count == 0 ? $"No image in the tray has that in its name."
+                    : $"Image tray: {found.Count} of {all.Count}. {click}";
+            };
+            search.Loaded += (_, _) => search.Focus(FocusState.Programmatic);
+            top.Children.Add(heading);
             Grid.SetColumn(search, 1);
             top.Children.Add(search);
             Grid.SetColumn(close, 2);
@@ -544,24 +577,13 @@ namespace ModernImageViewer
             body.Children.Add(top);
             body.Children.Add(thumbnails);
 
-            _trayCard = new Border
-            {
-                Child = body,
-                Width = Math.Min(760, Math.Max(320, RootGrid.ActualWidth - 32)),
-                Height = Math.Min(560, Math.Max(240, RootGrid.ActualHeight - 32)),
-                Padding = new Thickness(14),
-                CornerRadius = new CornerRadius(10),
-                Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xF2, 0x1E, 0x1E, 0x1E)),
-                BorderBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF)),
-                BorderThickness = new Thickness(1),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                RequestedTheme = ElementTheme.Dark
-            };
-            Canvas.SetZIndex(_trayCard, 6500);
-            Grid.SetRowSpan(_trayCard, Math.Max(1, RootGrid.RowDefinitions.Count));
-            Grid.SetColumnSpan(_trayCard, Math.Max(1, RootGrid.ColumnDefinitions.Count));
-            RootGrid.Children.Add(_trayCard);
+            // Stretched up to a limit, so it follows the window if that is resized while it is open.
+            _trayCard = NewCard(body);
+            _trayCard.MaxWidth = 760;
+            _trayCard.MaxHeight = 560;
+            _trayCard.Margin = new Thickness(16);
+            _trayCard.Padding = new Thickness(14);
+            AddOverCanvas(_trayCard, 6500);
             HudMenu_Opened(this, EventArgs.Empty);
         }
 
@@ -571,6 +593,8 @@ namespace ModernImageViewer
             RootGrid.Children.Remove(_trayCard);
             _trayCard = null;
             HudMenu_Closed(this, EventArgs.Empty);
+            // The search box had the keyboard, so the keys would go nowhere otherwise.
+            FocusView();
         }
 
         private static bool IsInside(object? source, DependencyObject container)
@@ -582,18 +606,18 @@ namespace ModernImageViewer
             return false;
         }
 
-        private bool IsInSurpriseCard(object? source)
-        {
-            for (var node = source as DependencyObject; node != null; node = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(node))
-            {
-                if (ReferenceEquals(node, _surpriseCard) || ReferenceEquals(node, SurpriseControl)) return true;
-            }
-            return false;
-        }
+        private bool IsInSurpriseCard(object? source) =>
+            IsInside(source, SurpriseControl) || (_surpriseCard != null && IsInside(source, _surpriseCard));
 
         /// <summary>The first new layout comes at once, so choosing it visibly does something.</summary>
         private async void StartAutoPlay(int seconds)
         {
+            // With nothing to change between, it would claim to play and do nothing but the music.
+            if (SessionPictures().Count < 2)
+            {
+                AddImagesRequested?.Invoke(this, EventArgs.Empty);
+                return;
+            }
             StopAutoPlay();
             CaptureUndoPoint();
             _autoPlaySeconds = seconds;
@@ -636,7 +660,7 @@ namespace ModernImageViewer
             AutoPlayIcon.Glyph = glyph;
             AutoPlayText.Text = text;
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(AutoPlayButton, playing ? "Pause auto-play" : "Play auto-play");
-            ToolTipService.SetToolTip(AutoPlayButton, playing ? "Pause. A click on the picture, Esc or Space does the same." : $"Play a new layout every {SurpriseChoices.PlayWords}. Space does the same.");
+            ToolTipService.SetToolTip(AutoPlayButton, playing ? "Pause. A click on the canvas, Esc or Space does the same." : $"Play a new layout every {SurpriseChoices.PlayWords}. Space does the same.");
             if (playing)
             {
                 var accent = Application.Current.Resources["AccentFillColorDefaultBrush"] as Microsoft.UI.Xaml.Media.Brush;
@@ -665,7 +689,7 @@ namespace ModernImageViewer
             var music = MainWindow.Instance?.MyMusic;
             _cardSongText.Text = _surpriseMusic?.IsFolder == true
                 ? _surpriseSong ?? "Looking for songs"
-                : music?.HasFolder != true ? "No music yet" : music.InSurprise ? "Plays with auto-play" : "Music is off";
+                : music?.HasFolder != true ? "No music yet" : !music.InSurprise ? "Music is off" : _musicProblem ?? "Plays with auto-play";
             bool canStep = _surpriseMusic?.IsFolder == true;
             if (_cardPreviousSong != null) _cardPreviousSong.IsEnabled = canStep;
             if (_cardNextSong != null) _cardNextSong.IsEnabled = canStep;
@@ -679,26 +703,16 @@ namespace ModernImageViewer
 
         /// <summary>
         /// Space plays and pauses. Esc pauses, and otherwise is the usual Back. Left and Right step through the layouts once Surprise me has made some.
+        /// A photo opened on its own keeps Space and the arrows for itself.
         /// </summary>
         private bool HandleAutoPlayKey(Windows.System.VirtualKey key)
         {
-            if (_trayCard != null)
-            {
-                if (key != Windows.System.VirtualKey.Escape) return false;
-                RemoveTrayCard();
-                return true;
-            }
-            if (_surpriseCard != null)
-            {
-                if (key != Windows.System.VirtualKey.Escape) return false;
-                RemoveSurpriseCard();
-                return true;
-            }
             if (_autoPlaySeconds > 0 && key is Windows.System.VirtualKey.Escape or Windows.System.VirtualKey.Space)
             {
                 StopAutoPlay();
                 return true;
             }
+            if (IsSoloActive) return false;
             if (key == Windows.System.VirtualKey.Space)
             {
                 StartAutoPlay(SurpriseChoices.PlaySeconds);
@@ -731,11 +745,8 @@ namespace ModernImageViewer
                 Margin = new Thickness(0, 24, 0, 0),
                 IsHitTestVisible = false
             };
-            Canvas.SetZIndex(toast, 6200);
-            Grid.SetRowSpan(toast, Math.Max(1, RootGrid.RowDefinitions.Count));
-            Grid.SetColumnSpan(toast, Math.Max(1, RootGrid.ColumnDefinitions.Count));
             _autoPlayToast = toast;
-            RootGrid.Children.Add(toast);
+            AddOverCanvas(toast, 6200);
             var fade = new DoubleAnimation { From = 1, To = 0, BeginTime = TimeSpan.FromSeconds(1.6), Duration = TimeSpan.FromMilliseconds(500) };
             Storyboard.SetTarget(fade, toast);
             Storyboard.SetTargetProperty(fade, "Opacity");
@@ -751,10 +762,12 @@ namespace ModernImageViewer
         }
 
         private Cinematic.MusicBed? _surpriseMusic;
-        private string? _surpriseMusicKey;
+        private string? _musicProblem;
 
         private void StartAutoPlayMusic()
         {
+            WatchMusicSettings();
+            _musicProblem = null;
             var music = MainWindow.Instance?.MyMusic;
             if (music == null || !music.InSurprise || !music.HasFolder)
             {
@@ -766,8 +779,8 @@ namespace ModernImageViewer
                 _surpriseMusic = new Cinematic.MusicBed(DispatcherQueue);
                 _surpriseMusic.GaveUp += (title, why) =>
                 {
-                    _surpriseMusicKey = null;
-                    ShowAutoPlayToast(title);
+                    _musicProblem = title;
+                    ShowAutoPlayToast($"{title}. {why}");
                     ShowCardSong();
                 };
                 _surpriseMusic.NowPlayingChanged += song =>
@@ -778,19 +791,13 @@ namespace ModernImageViewer
             }
             _surpriseMusic.SetVolume(music.Volume);
             // Carrying on after a pause keeps the song. A changed folder or rating starts afresh.
-            string key = $"{music.Folder}|{music.LowestStars}|{music.IncludesUnrated}";
-            if (key != _surpriseMusicKey || !_surpriseMusic.IsOn)
-            {
-                _surpriseMusicKey = key;
-                _surpriseMusic.PlayFolder(music.Folder!, music.LowestStars, music.IncludesUnrated);
-            }
+            _surpriseMusic.PlayFolder(music.Folder!, music.LowestStars, music.IncludesUnrated);
             _surpriseMusic.SetPlaying(true);
         }
 
         private void StopAutoPlayMusic()
         {
             _surpriseMusic?.Stop();
-            _surpriseMusicKey = null;
         }
 
         /// <summary>
@@ -801,9 +808,6 @@ namespace ModernImageViewer
         {
             if (_autoPlayShield != null) return;
             var shield = new Border { Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent) };
-            Canvas.SetZIndex(shield, 5900);
-            Grid.SetRowSpan(shield, Math.Max(1, RootGrid.RowDefinitions.Count));
-            Grid.SetColumnSpan(shield, Math.Max(1, RootGrid.ColumnDefinitions.Count));
             shield.PointerPressed += (_, _) =>
             {
                 _autoPlayShieldPressed = true;
@@ -819,7 +823,7 @@ namespace ModernImageViewer
             shield.PointerCaptureLost += (_, _) => Released();
             shield.Tapped += (_, e) => e.Handled = true;
             _autoPlayShield = shield;
-            RootGrid.Children.Add(shield);
+            AddOverCanvas(shield, 5900);
         }
 
         private void RemoveAutoPlayShield()
@@ -839,10 +843,11 @@ namespace ModernImageViewer
             bool playing = _autoPlaySeconds > 0;
             bool sameRun = _surpriseRun;
             var pictures = SessionPictures();
-            if (SurpriseChoices.TakesTurns(pictures.Count) && _surpriseDeck == null)
-                _surpriseDeck = new PictureDeck(PicturesInOrder(), new Random());
-            _surpriseDeck?.Include(pictures);
-            if ((_surpriseDeck?.Count ?? pictures.Count) < 2)
+            // The session is the whole set, tray included, so what the user removed stays out and a change to Most takes effect.
+            if (!SurpriseChoices.TakesTurns(pictures.Count)) _surpriseDeck = null;
+            else if (_surpriseDeck == null) _surpriseDeck = new PictureDeck(PicturesInOrder(), new Random());
+            else _surpriseDeck.MatchSession(pictures);
+            if (pictures.Count < 2)
             {
                 if (!playing) AddImagesRequested?.Invoke(this, EventArgs.Empty);
                 return;
@@ -939,10 +944,7 @@ namespace ModernImageViewer
                 var shot = new RenderTargetBitmap();
                 await shot.RenderAsync(RootGrid);
                 var cover = new Image { Source = shot, Stretch = Microsoft.UI.Xaml.Media.Stretch.Fill, IsHitTestVisible = false };
-                Canvas.SetZIndex(cover, 6000);
-                Grid.SetRowSpan(cover, Math.Max(1, RootGrid.RowDefinitions.Count));
-                Grid.SetColumnSpan(cover, Math.Max(1, RootGrid.ColumnDefinitions.Count));
-                RootGrid.Children.Add(cover);
+                AddOverCanvas(cover, 6000);
                 return cover;
             }
             catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.Runtime.InteropServices.COMException)

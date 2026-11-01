@@ -371,7 +371,11 @@ namespace ModernImageViewer.Cinematic.ViewModels
             _ = AutoSaveAsync();
         }
 
-        public void StartAtVolume(double percent) => ActiveProject.MusicVolume = percent;
+        public void StartAtVolume(double percent)
+        {
+            ActiveProject.MusicVolume = percent;
+            OnPropertyChanged(nameof(MusicVolume));
+        }
 
         public void UseMyMusic()
         {

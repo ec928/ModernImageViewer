@@ -1006,7 +1006,7 @@ namespace ModernImageViewer
             NoteParkedSelection();
         }
 
-        /// <summary>Back to the session, with whatever pictures were selected as new floating cells.</summary>
+        /// <summary>Back to the session, with whatever images were selected added to the canvas and tray.</summary>
         private void ApplyParkedPhotos()
         {
             if (MultiViewControl == null) return;
@@ -1093,7 +1093,7 @@ namespace ModernImageViewer
             int count = Images.Count(img => img.IsGridSelected && !img.IsDirectory);
             MultiSelectActionBar.Visibility = Visibility.Visible;
             MultiSelectCountText.Text = _parkedNote
-                ?? (_parkedCell != null ? $"Click a picture for position {MultiViewControl!.PositionOf(_parkedCell)}"
+                ?? (_parkedCell != null ? $"Click an image for position {MultiViewControl!.PositionOf(_parkedCell)}"
                 : MultiViewControl!.AddingNote(Images.Where(img => img.IsGridSelected && !img.IsDirectory).Select(img => img.Path).ToList()));
             ViewTogetherButton.IsEnabled = count > 0;
             if (_parkedCell == null)

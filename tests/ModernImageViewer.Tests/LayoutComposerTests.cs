@@ -132,6 +132,20 @@ namespace ModernImageViewer.Tests
             Assert.Contains(@"C:\new.jpg", deck.Deal(9));
         }
 
+        [Fact]
+        public void A_picture_removed_from_the_session_never_comes_round_again()
+        {
+            var all = Enumerable.Range(0, 40).Select(n => $@"C:\p\{n}.jpg").ToList();
+            var deck = new PictureDeck(all, new Random(3));
+            deck.Deal(12);
+            const string gone = @"C:\p\7.jpg";
+            deck.MatchSession(all.Where(p => p != gone).ToList());
+            Assert.Equal(39, deck.Count);
+            Assert.DoesNotContain(gone, deck.All);
+            Assert.False(deck.Holds(gone));
+            for (int i = 0; i < 100; i++) Assert.DoesNotContain(gone, deck.Deal(16));
+        }
+
         private static SurpriseOptions Zoomed(double most) => new() { MostZoom = most };
 
         [Fact]

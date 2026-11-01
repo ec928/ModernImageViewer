@@ -451,8 +451,6 @@ namespace ModernImageViewer
 
         private string LayoutSubtitle(int lines, bool rows)
         {
-            int selected = _items.Count;
-            int shown = VisibleCount(selected);
             int arranged = LineTotal();
             string noun = rows
                 ? (lines == 1 ? "row" : "rows")
@@ -465,14 +463,9 @@ namespace ModernImageViewer
             if (_heroActive && HeroUsesLines)
             {
                 string kind = MosaicLayout.HeroTitle(_heroKind).ToLowerInvariant();
-                string beside = across + ", beside the " + kind;
-                if (selected > shown)
-                    beside += ". " + shown + " of " + selected + " shown";
-                return beside;
+                return across + ", beside the " + kind;
             }
 
-            if (selected > shown)
-                return $"{shown} of {selected} photos across {lines} {noun}";
             return across;
         }
 
@@ -1058,6 +1051,8 @@ namespace ModernImageViewer
         public bool HandleKeyDown(VirtualKey key)
         {
             ShowHudAndOverlays();
+            // An open card keeps the keyboard. Letters typed in the tray's search are not shortcuts, and nothing behind the card changes.
+            if (_trayCard != null || _surpriseCard != null) return key != VirtualKey.Tab;
             if (HandleAutoPlayKey(key)) return true;
 
             if (IsSoloActive)
@@ -2099,30 +2094,27 @@ namespace ModernImageViewer
                 {
                     if (!_featuredPictures.Remove(picture)) _featuredPictures.Add(picture);
                 });
-                ToolTipService.SetToolTip(feature, "Surprise me always uses this picture and gives it the best place");
+                ToolTipService.SetToolTip(feature, "Surprise me always uses this image and gives it the best place");
                 menu.Items.Add(feature);
             }
 
             if (activeCard != null)
             {
-                bool noRoom = GridHasNoRoomFor(activeCard);
-                // An empty floating cell has nothing to put in the tray, and closing it is how it goes.
-                if (!noRoom || !IsEmptyCell(item))
+                menu.Items.Add(new MenuFlyoutSeparator());
+                if (!GridHasNoRoomFor(activeCard))
                 {
                     var dockItem = new MenuFlyoutItem
                     {
-                        Text = noRoom ? "Move to Tray" : "Dock to Grid",
-                        Icon = new FontIcon { Glyph = noRoom ? "\uE8B9" : "\uE8CA" }
+                        Text = "Dock to Grid",
+                        Icon = new FontIcon { Glyph = "\uE8CA" }
                     };
-                    if (noRoom)
-                        ToolTipService.SetToolTip(dockItem, "The grid already has 16 cells, so this image goes in the image tray.");
                     dockItem.Click += (s, e) =>
                     {
                         DockFreeformCard(activeCard);
                     };
-                    menu.Items.Add(new MenuFlyoutSeparator());
                     menu.Items.Add(dockItem);
                 }
+                if (!IsEmptyCell(item)) menu.Items.Add(MoveToTrayItem(item));
             }
             else if (!IsEmptyCell(item))
             {
@@ -2134,7 +2126,15 @@ namespace ModernImageViewer
                 freeformItem.Click += (s, e) => SpawnFreeformCell(item);
                 menu.Items.Add(new MenuFlyoutSeparator());
                 menu.Items.Add(freeformItem);
+                menu.Items.Add(MoveToTrayItem(item));
             }
+        }
+
+        private MenuFlyoutItem MoveToTrayItem(ImageItem item)
+        {
+            var move = MakeAdvancedItem("Move to Tray", "\uE8B9", () => MoveCellToTray(item));
+            ToolTipService.SetToolTip(move, "Off the canvas, but kept: Surprise me can use it, and Swap with can bring it back. Remove cell takes it out of the session.");
+            return move;
         }
 
         /// <summary>
@@ -2420,7 +2420,7 @@ namespace ModernImageViewer
 
                     if (isSource)
                     {
-                        parts.BadgeText.Text = compact ? $"#{PositionOfSlot(i)} (This)" : $"Position {PositionOfSlot(i)} (This Photo)";
+                        parts.BadgeText.Text = compact ? $"#{PositionOfSlot(i)} (This)" : $"Position {PositionOfSlot(i)} (This Image)";
                         parts.PositionBadge.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(235, 36, 36, 36));
                         parts.PositionBadge.BorderBrush = new SolidColorBrush(accent);
                         parts.PositionBadge.BorderThickness = new Thickness(1.5);
@@ -2463,7 +2463,7 @@ namespace ModernImageViewer
                 if (isSource)
                 {
                     var accent = GetMultiViewAccentColor();
-                    parts.BadgeText.Text = compact ? $"#{PositionOfSlot(targetIndex)} (This)" : $"Position {PositionOfSlot(targetIndex)} (This Photo)";
+                    parts.BadgeText.Text = compact ? $"#{PositionOfSlot(targetIndex)} (This)" : $"Position {PositionOfSlot(targetIndex)} (This Image)";
                     parts.PositionBadge.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(235, 36, 36, 36));
                     parts.PositionBadge.BorderBrush = new SolidColorBrush(accent);
                     parts.PositionBadge.BorderThickness = new Thickness(1.5);

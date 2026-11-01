@@ -474,15 +474,41 @@ namespace ModernImageViewer
         private bool GridHasNoRoomFor(FreeformCard card) =>
             VisibleCount(GridCellCount) >= MosaicLayout.MaxShown && DockTarget(card) < 0;
 
-        private void MoveFreeformCardToTray(FreeformCard card)
+        /// <summary>The image stays in the session and the canvas gets one smaller. The last cell on show stays, empty, as Remove cell leaves it.</summary>
+        private void MoveCellToTray(ImageItem item)
         {
-            int index = _freeformCards.IndexOf(card);
-            if (index < 0) return;
+            if (IsEmptyCell(item)) return;
+            string path = item.Path;
+            int cardAt = _freeformCards.FindIndex(c => ReferenceEquals(c.Item, item));
+            int slot = _items.IndexOf(item);
+            if (cardAt < 0 && slot < 0) return;
             CaptureUndoPoint();
             int shown = VisibleCount(GridCellCount);
             var file = BuildLayoutFile();
-            file.Freeform!.RemoveAt(index);
-            AppendToTray(file, new[] { card.Item.Path ?? string.Empty }, shown);
+            if (cardAt >= 0)
+            {
+                file.Freeform!.RemoveAt(cardAt);
+            }
+            else if (shown <= 1)
+            {
+                file.Photos[slot].Path = string.Empty;
+                file.Photos[slot].Name = string.Empty;
+            }
+            else
+            {
+                file.Photos.RemoveAt(slot);
+                for (int i = 0; i < file.Photos.Count; i++)
+                    file.Photos[i].Slot = i;
+                foreach (var card in file.Freeform ?? new List<FreeformCellDto>())
+                {
+                    if (card.SourceSlot == slot) card.SourceSlot = -1;
+                    else if (card.SourceSlot > slot) card.SourceSlot--;
+                }
+                file.Mosaic = null;
+                file.State!.LineCounts = null;
+                shown--;
+            }
+            AppendToTray(file, new[] { path }, shown);
             ApplyKeepingBitmaps(file);
             CaptureUndoPoint();
         }
@@ -517,7 +543,7 @@ namespace ModernImageViewer
             if (card == null) return;
             if (GridHasNoRoomFor(card))
             {
-                MoveFreeformCardToTray(card);
+                MoveCellToTray(card.Item);
                 return;
             }
 

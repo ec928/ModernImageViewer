@@ -57,6 +57,7 @@ namespace ModernImageViewer
                 ("Ctrl+S", "Save or load"),
                 ("Alt+drag", "Swap two photos"),
                 ("Space", "Pause or start Surprise me auto-play"),
+                ("Left, Right", "Previous and next layout, after Surprise me"),
                 ("Esc", "Pause auto-play if it is playing, otherwise back to the folder"),
             }),
             ("Cinematic", new[]

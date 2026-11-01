@@ -11,7 +11,7 @@ namespace ModernImageViewer.Cinematic
 {
     /// <summary>
     /// Music under pictures: one file that loops, or random songs from a folder at or above a rating.
-    /// Cinematic and Surprise me's auto-play each own one.
+    /// Cinematic and Surprise me's auto-play each own one, and the one that starts playing silences the other.
     /// </summary>
     public sealed class MusicBed : IDisposable
     {
@@ -27,6 +27,9 @@ namespace ModernImageViewer.Cinematic
         private bool _wantPlaying;
         private int _openTicket;
         private double _volume = 0.6;
+        // What was asked for. Asked for again, the song carries on rather than starting over.
+        private string? _asked;
+        private static MusicBed? _sounding;
 
         public event Action<string?>? NowPlayingChanged;
         /// <summary>Nothing can play. The text says why, and the bed has already stopped.</summary>
@@ -37,9 +40,16 @@ namespace ModernImageViewer.Cinematic
         public bool IsFolder => _deck != null;
         public bool IsOn => _player != null;
 
+        public bool IsPlayingFolder(string folder, double lowestStars, bool includeUnrated) =>
+            _player != null && _asked == FolderKey(folder, lowestStars, includeUnrated);
+
+        private static string FolderKey(string folder, double lowestStars, bool includeUnrated) => $"{folder}|{lowestStars}|{includeUnrated}";
+
         public void PlayFile(string path)
         {
+            if (_player != null && _asked == path) return;
             Stop();
+            _asked = path;
             try
             {
                 _player = NewPlayer();
@@ -55,7 +65,9 @@ namespace ModernImageViewer.Cinematic
 
         public void PlayFolder(string folder, double lowestStars, bool includeUnrated)
         {
+            if (IsPlayingFolder(folder, lowestStars, includeUnrated)) return;
             Stop();
+            _asked = FolderKey(folder, lowestStars, includeUnrated);
             _player = NewPlayer();
             _deck = new MusicDeck();
             var cts = new CancellationTokenSource();
@@ -149,6 +161,8 @@ namespace ModernImageViewer.Cinematic
         public void Stop()
         {
             _openTicket++;
+            _asked = null;
+            if (ReferenceEquals(_sounding, this)) _sounding = null;
             _scanCts?.Cancel();
             _scanCts = null;
             _deck = null;
@@ -186,7 +200,12 @@ namespace ModernImageViewer.Cinematic
         private void Sync()
         {
             if (_player == null || _player.Source == null) return;
-            if (_wantPlaying) _player.Play();
+            if (_wantPlaying)
+            {
+                if (!ReferenceEquals(_sounding, this)) _sounding?._player?.Pause();
+                _sounding = this;
+                _player.Play();
+            }
             else _player.Pause();
         }
 
@@ -203,7 +222,11 @@ namespace ModernImageViewer.Cinematic
         private void Player_Failed(MediaPlayer sender, MediaPlayerFailedEventArgs args)
         {
             string why = args.ErrorMessage;
-            _dispatcher.TryEnqueue(() => SongFailed(why));
+            _dispatcher.TryEnqueue(() =>
+            {
+                // A failure that arrives after this player was stopped or replaced is not news.
+                if (ReferenceEquals(sender, _player)) SongFailed(why);
+            });
         }
 
         private void SongFailed(string why)

@@ -167,7 +167,7 @@ namespace ModernImageViewer
             if (MusicOptionText != null)
             {
                 var music = MyMusic;
-                MusicOptionText.Text = music.HasFolder ? $"Music: {Path.GetFileName(music.Folder!.TrimEnd('\\'))}, {music.LowestStars:0.#}+ stars" : "Music: none";
+                MusicOptionText.Text = music.HasFolder ? "Music: " + music.Summary : "Music: none";
             }
             if (ImageEditorOptionText != null) ImageEditorOptionText.Text = "Image editor: " + EditorName(ImageEditorPath);
         }
@@ -178,7 +178,14 @@ namespace ModernImageViewer
     {
         public const string FormatsNote = "Ratings are read from MP3 and FLAC tags. M4A and WMA count as unrated.";
 
+        public const string NoFolder = "No music folder";
+
         public bool HasFolder => !string.IsNullOrEmpty(Folder) && Directory.Exists(Folder);
+
+        /// <summary>The same words wherever these settings are shown.</summary>
+        public string Summary => HasFolder
+            ? $"{Path.GetFileName(Folder!.TrimEnd('\\'))}, {LowestStars:0.#}+ stars" + (IncludesUnrated ? " and unrated" : "")
+            : NoFolder;
 
         public static (ComboBox Rating, CheckBox Unrated) RatingControls(double lowestStars, bool includeUnrated)
         {

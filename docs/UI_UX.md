@@ -126,7 +126,9 @@ Multi-View shows up to 16 grid cells in fluid mosaics, with floating cells above
 
 ```
 Add image...  (empty cell only, first in the menu)
-Swap with...              >   Contents only | With attributes
+Add from image tray (N)...  (empty cell, when the tray holds any)
+Swap with...              >   Image tray (N)... (when the tray holds any, not on an empty cell)
+                              Contents only | With attributes
 Copy to...                >   Position 1    | Position 1
 Move to...                >   Position 2... | Position 2...
 --------------------------
@@ -139,12 +141,17 @@ Layer  (floating cells)   >   Bring to front, Bring forward, Send backward, Send
 Image                     >   Replace image..., Clear cell,
                               Rotate image left / right, Mirror image, Flip image
 --------------------------
-Freeform  (or Dock to Grid)
+Freeform  (or Dock to Grid, which a grid of 16 cells with none empty leaves out)
+Move to Tray  (any cell with an image)
 ```
 
-The playbar's wheel holds Undo, Redo, one Fill or Fit row, which names what it will switch to and has no shortcut, and Reset canvas and images, which never asks because Undo and Autosaved bring the layout back. Add images sends the user to the folders to pick pictures, each of which comes back as a floating cell, and the window keeps its size while they do. Clicking an empty cell does the same for one picture. The Canvas button holds Aspect ratio, Surface, Color and Frame & Border, which is the cell card without Apply to all cells. Save/Load holds Copy to clipboard and the last three autosaved sessions, timed to the second. Replacing a session never asks, because it can be had back from there. Back, Esc and the tile and list buttons leave the session waiting, and the Multi-View button returns to it.
+The playbar's wheel holds Undo, Redo, one Fill or Fit row, which names what it will switch to and has no shortcut, and Reset canvas and images, which never asks because Undo and Autosaved bring the layout back. Add images sends the user to the folders to pick images, and the window keeps its size while they do. One rule covers the picker, a whole folder and a drop: below 16 images on the canvas they fill empty cells, then join the grid up to 16, and the rest go in the image tray; at 16 or more the first 4 float and the rest go in the tray. The picker's bar says the split before anything happens. With no folder open, as after opening a saved layout, the picker opens at the first image's folder. Clicking an empty cell does the same for one picture. The Canvas button holds Aspect ratio, Surface, Color and Frame & Border, which is the cell card without Apply to all cells. Save/Load holds Copy to clipboard and the last three autosaved sessions, timed to the second. Replacing a session never asks, because it can be had back from there. Back, Esc and the tile and list buttons leave the session waiting, and the Multi-View button returns to it.
 
-**Surprise me** sits on the bar beside Rows and Columns, with no keyboard shortcut. Its options are a card opened from the wheel, in the window rather than a flyout, so it stays open when the window loses focus; a click outside, Esc or Close shuts it. Options set ranges, thresholds and odds rather than switching parts of the feature off. A change waits for the next click rather than rearranging at once. Pressing it again is the point, so the bar keeps its width across the press: when a result has no grid to arrange, Rows and Columns hold their place invisibly until the next rebuild. One empty grid cell under floating cells is the bare canvas (`IsBareCanvas`): it shows no placeholder, a click on it opens nothing, and a file dropped on it floats.
+**The image tray** is the session's images that are not on the canvas. It is not a second source: it is the grid cells past those on show, so a saved layout and Undo carry it with no extra code. The bar counts both ("16 on canvas, 106 in tray"), and positions count only the canvas, grid cells first and then floating cells, so they run without a gap. A tray image has no position, so it is chosen by looking at it, in a card with thumbnails and search by name. Move to Tray keeps an image and Remove cell drops it; either makes the canvas smaller, and nothing from the tray moves in by itself.
+
+**Surprise me** sits on the bar as one control with Rows and Columns beside it: Surprise me for one new layout, Play for auto-play, and an arrow for its card, opened in the window rather than a flyout, so it stays open when the window loses focus; a click outside, Esc or the arrow shuts it. It has no keyboard shortcut of its own. An open card keeps the keyboard, so letters typed in the tray's search are not shortcuts. Play says whether it is playing by its icon, its accent fill and the speed in place of the word. Options set ranges, thresholds and odds rather than switching parts of the feature off, and two ends of a range cannot cross. A change waits for the next click rather than rearranging at once. Pressing it again is the point, so the bar keeps its width across the press: when a result has no grid to arrange, Rows and Columns hold their place invisibly until the next rebuild. Surprise me draws on the session as it stands at each click: what Remove cell took out stays out. One empty grid cell under floating cells is the bare canvas (`IsBareCanvas`): it shows no placeholder, a click on it opens nothing, and a file dropped on it takes the same rule as any other add.
+
+**Music** has one home, the gear's Music settings, which the Surprise me card opens and summarises in the same words. The card has no volume of its own. A Cinematic show can have its own music, with its own volume, and otherwise follows those settings. Each owns a `MusicBed`; only one sounds at a time, the last started. Asking a bed for what it is already playing leaves the song alone, so saving settings does not restart it. When music cannot play, the picture carries on and the user is told why; that is never recorded as a choice of no music.
 
 Swap with, Copy to and Move to name positions only, never file names, so the two columns stay about the width of a single column of named entries. Each row is one menu entry, and the side of the row under the pointer is the column chosen, shown by a highlight on that half. Pointing at a target marks its cell's badge, with "+ attributes" for the second column. The same layout appears with any number of cells, down to one row with two photos.
 
@@ -175,7 +182,7 @@ The Frame & Border card always shows at full height for the window, in front of 
 6. **Floating Cell Labels and Handles**:
    - A floating cell's position label is centered and stays upright, however the window is turned. Its hover buttons and handles are not clipped by its shape, and stay briefly after the pointer leaves so they can be reached.
 7. **One Word for a Thing**:
-   - Menus and the frame card call a place a *Position* and a slot a *cell*. UI strings use the spelling *color*.
+   - Menus and the frame card call a place a *Position* and a slot a *cell*. What is not on the canvas is in the *image tray*, "the tray" once that is clear. UI strings use the spelling *color*. The tray, Surprise me and their tooltips say *image*; older Multi-View strings still say *photo*.
 8. **Immersive Dark Flyout & Menu Presenters**:
    - The photo canvas and floating playbar are an immersive dark surface. All playbar flyouts (Aspect menu, Save resolutions) and photo cell context menus must render with a dark background (`#F2202020`), subtle 1px border (`#33FFFFFF`), `CornerRadius="10"`, and white text.
    - **WinUI 3 Trap Avoided**: Setting only `<Setter Property="RequestedTheme" Value="Dark" />` on `MenuFlyoutPresenter` causes the presenter's template background to resolve against the Light popup root while child items turn white (resulting in white text on a light beige background). Menus hosted in `XamlRoot` must explicitly set `Background="#F2202020"` and `BorderBrush="#33FFFFFF"` via `MultiViewMenuFlyoutPresenterStyle` and enforce dark styling on open.
