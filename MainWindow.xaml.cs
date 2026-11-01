@@ -417,6 +417,12 @@ namespace ModernImageViewer
             public int MultiViewWindowHeight { get; set; } = -1;
             public float Gamma { get; set; } = 2.2f;
             public string ImageEditorPath { get; set; } = "mspaint.exe";
+            public string? MusicFolder { get; set; }
+            public double MusicLowestStars { get; set; } = 3.5;
+            public bool MusicIncludesUnrated { get; set; }
+            public bool MusicInCinematic { get; set; } = true;
+            public bool MusicInSurprise { get; set; } = true;
+            public double MusicVolume { get; set; } = 60;
             public string SortOrder { get; set; } = "NameAsc";
             public bool ListMode { get; set; }
             public double TileSize { get; set; } = 164;
@@ -539,6 +545,7 @@ namespace ModernImageViewer
 
             _currentGamma = settings.Gamma;
             ImageEditorPath = settings.ImageEditorPath;
+            SyncOptionsLabels();
 
             _recentFolders.Clear();
             foreach (var folder in settings.RecentFolders)

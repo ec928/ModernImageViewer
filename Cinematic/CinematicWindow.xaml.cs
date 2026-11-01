@@ -92,7 +92,9 @@ namespace ModernImageViewer.Cinematic
                 DiscardPreload();
                 UpdateActiveTrajectoriesAsync(forceEngineReroll: true);
             };
+            SetUpMusic();
             ViewModel.MusicChanged += ApplyMusic;
+            if (MainWindow.Instance?.MyMusic is { } music) ViewModel.StartAtVolume(music.Volume);
             ViewModel.MusicVolumeChanged += ApplyMusicVolume;
             ViewModel.SlideNavigationRequested += () => _ = ManualNavigateAsync();
             ViewModel.SequenceChanged += () =>
@@ -149,6 +151,7 @@ namespace ModernImageViewer.Cinematic
                 await ReportShowProblemsAsync(_openedShowMissing);
                 return;
             }
+            ApplyMusic();
             try
             {
                 bool otherShowOpen = (MainWindow.Instance?.CinematicWindowCount ?? 1) > 1;

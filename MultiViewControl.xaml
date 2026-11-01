@@ -334,6 +334,29 @@
                         </StackPanel>
                     </Button>
 
+                    <Button x:Name="AutoPlayButton"
+                            Click="AutoPlayButton_Click"
+                            Visibility="Collapsed"
+                            AutomationProperties.Name="Play auto-play"
+                            Style="{StaticResource QuietButtonStyle}"
+                            Padding="8,5"
+                            CornerRadius="12">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon x:Name="AutoPlayIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE768;" FontSize="13" />
+                            <TextBlock x:Name="AutoPlayText" Text="Paused" VerticalAlignment="Center" FontSize="13" />
+                        </StackPanel>
+                    </Button>
+
+                    <Button x:Name="SurpriseNextSongButton"
+                            Click="SurpriseNextSong_Click"
+                            Visibility="Collapsed"
+                            AutomationProperties.Name="Next song"
+                            Style="{StaticResource QuietButtonStyle}"
+                            Padding="8,5"
+                            CornerRadius="12">
+                        <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE893;" FontSize="13" />
+                    </Button>
+
                     <!-- Subtle Section Divider 2 -->
                     <Rectangle Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,0" Opacity="0.5"/>
 

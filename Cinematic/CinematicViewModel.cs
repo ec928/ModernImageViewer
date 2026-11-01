@@ -311,9 +311,32 @@ namespace ModernImageViewer.Cinematic.ViewModels
 
         // Music
         public string? MusicPath => ActiveProject.MusicPath;
-        public bool HasMusic => !string.IsNullOrEmpty(ActiveProject.MusicPath);
-        public Visibility MusicVolumeVisibility => HasMusic ? Visibility.Visible : Visibility.Collapsed;
-        public string MusicLabel => HasMusic ? "Music: " + Path.GetFileName(ActiveProject.MusicPath) : "Add music";
+        public string? MusicFolder => ActiveProject.MusicFolder;
+        public double MusicLowestStars => ActiveProject.MusicLowestStars;
+        public bool MusicIncludesUnrated => ActiveProject.MusicIncludesUnrated;
+        public bool IsMusicFolder => !string.IsNullOrEmpty(ActiveProject.MusicFolder);
+        public bool MusicIsOff => ActiveProject.MusicOff;
+        private bool _musicOn;
+        private bool _musicFromFolder;
+        public Visibility NextSongVisibility => _musicOn && _musicFromFolder ? Visibility.Visible : Visibility.Collapsed;
+
+        public void SetMusicState(bool on, bool fromFolder)
+        {
+            _musicOn = on;
+            _musicFromFolder = fromFolder;
+            OnPropertyChanged(nameof(MusicVolumeVisibility));
+            OnPropertyChanged(nameof(NextSongVisibility));
+            OnPropertyChanged(nameof(MusicLabel));
+        }
+        public Visibility MusicVolumeVisibility => _musicOn ? Visibility.Visible : Visibility.Collapsed;
+        public string MusicLabel => _musicOn ? "Music: " + (_nowPlaying ?? "looking for songs") : "Music";
+
+        private string? _nowPlaying;
+        public void SetNowPlaying(string? song)
+        {
+            _nowPlaying = song;
+            OnPropertyChanged(nameof(MusicLabel));
+        }
 
         public double MusicVolume
         {
@@ -331,15 +354,36 @@ namespace ModernImageViewer.Cinematic.ViewModels
         public void SetMusic(string? path)
         {
             ActiveProject.MusicPath = path;
+            ActiveProject.MusicFolder = null;
+            ActiveProject.MusicOff = path == null;
+            RaiseMusic();
+            _ = AutoSaveAsync();
+        }
+
+        public void SetMusicFolder(string folder, double lowestStars, bool includeUnrated)
+        {
+            ActiveProject.MusicPath = null;
+            ActiveProject.MusicOff = false;
+            ActiveProject.MusicFolder = folder;
+            ActiveProject.MusicLowestStars = lowestStars;
+            ActiveProject.MusicIncludesUnrated = includeUnrated;
+            RaiseMusic();
+            _ = AutoSaveAsync();
+        }
+
+        public void StartAtVolume(double percent) => ActiveProject.MusicVolume = percent;
+
+        public void UseMyMusic()
+        {
+            ActiveProject.MusicPath = null;
+            ActiveProject.MusicFolder = null;
+            ActiveProject.MusicOff = false;
             RaiseMusic();
             _ = AutoSaveAsync();
         }
 
         private void RaiseMusic()
         {
-            OnPropertyChanged(nameof(HasMusic));
-            OnPropertyChanged(nameof(MusicVolumeVisibility));
-            OnPropertyChanged(nameof(MusicLabel));
             OnPropertyChanged(nameof(MusicVolume));
             MusicChanged?.Invoke();
         }
@@ -619,8 +663,16 @@ namespace ModernImageViewer.Cinematic.ViewModels
 
         public void ResetToLaunchSet()
         {
-            var music = (ActiveProject.MusicPath, ActiveProject.MusicVolume);
-            ActiveProject = new CinematicProject { MusicPath = music.MusicPath, MusicVolume = music.MusicVolume };
+            var was = ActiveProject;
+            ActiveProject = new CinematicProject
+            {
+                MusicPath = was.MusicPath,
+                MusicVolume = was.MusicVolume,
+                MusicFolder = was.MusicFolder,
+                MusicLowestStars = was.MusicLowestStars,
+                MusicIncludesUnrated = was.MusicIncludesUnrated,
+                MusicOff = was.MusicOff
+            };
             string? keep = CurrentClip?.FilePath;
             Track.Clear();
             _failedClipIds.Clear();
@@ -894,8 +946,9 @@ namespace ModernImageViewer.Cinematic.ViewModels
         {
             show.DropEmptySlides();
             ActiveProject = show;
-            MusicWasMissing = !string.IsNullOrEmpty(show.MusicPath) && !File.Exists(show.MusicPath);
-            if (MusicWasMissing) show.MusicPath = null;
+            MusicWasMissing = (!string.IsNullOrEmpty(show.MusicPath) && !File.Exists(show.MusicPath))
+                || (!string.IsNullOrEmpty(show.MusicFolder) && !Directory.Exists(show.MusicFolder));
+            if (MusicWasMissing) { show.MusicPath = null; show.MusicFolder = null; }
             _currentIndex = 0;
             ApplySequenceFromProject();
             var visible = VisibleIndices();

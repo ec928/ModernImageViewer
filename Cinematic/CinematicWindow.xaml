@@ -143,6 +143,10 @@
                         ToolTipService.ToolTip="{x:Bind ViewModel.MusicLabel, Mode=OneWay}" AutomationProperties.Name="{x:Bind ViewModel.MusicLabel, Mode=OneWay}">
                     <SymbolIcon Symbol="Audio" />
                 </Button>
+                <Button x:Name="BtnNextSong" IsTabStop="False" UseSystemFocusVisuals="False" Click="BtnNextSong_Click" Width="36" Height="44" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="18"
+                        ToolTipService.ToolTip="Next song" AutomationProperties.Name="Next song" Visibility="{x:Bind ViewModel.NextSongVisibility, Mode=OneWay}">
+                    <FontIcon Glyph="&#xE893;" FontSize="14" />
+                </Button>
                 <Slider x:Name="MusicVolumeSlider" Width="90" Minimum="0" Maximum="100" VerticalAlignment="Center" Margin="2,0,8,0"
                         IsTabStop="False" AllowFocusOnInteraction="False" AutomationProperties.Name="Music volume" ToolTipService.ToolTip="Music volume"
                         Value="{x:Bind ViewModel.MusicVolume, Mode=TwoWay}" Visibility="{x:Bind ViewModel.MusicVolumeVisibility, Mode=OneWay}" />

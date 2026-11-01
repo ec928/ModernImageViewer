@@ -147,6 +147,7 @@ namespace ModernImageViewer
         public void PrepareToLeave()
         {
             StopAutoPlay();
+            StopAutoPlayMusic();
             CloseCountsCard();
             _hudTimer.Stop();
         }
@@ -1057,6 +1058,7 @@ namespace ModernImageViewer
         public bool HandleKeyDown(VirtualKey key)
         {
             ShowHudAndOverlays();
+            if (HandleAutoPlayKey(key)) return true;
 
             if (IsSoloActive)
             {
@@ -1158,6 +1160,7 @@ namespace ModernImageViewer
 
         private void ShowHudAndOverlays()
         {
+            AutoPlayButton.Visibility = SurpriseChoices.AutoPlaySeconds > 0 ? Visibility.Visible : Visibility.Collapsed;
             _hudTimer.Stop();
             _hudTimer.Start();
 

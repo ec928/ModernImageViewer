@@ -24,5 +24,6 @@
     <Compile Include="..\..\AtomicFile.cs" Link="AtomicFile.cs" />
     <Compile Include="..\..\ListMerge.cs" Link="ListMerge.cs" />
     <Compile Include="..\..\Cinematic\ShowPacing.cs" Link="ShowPacing.cs" />
+    <Compile Include="..\..\Cinematic\MusicLibrary.cs" Link="MusicLibrary.cs" />
   </ItemGroup>
 </Project>

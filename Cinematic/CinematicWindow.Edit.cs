@@ -766,7 +766,7 @@ namespace ModernImageViewer.Cinematic
             if (missingPictures <= 0 && !ViewModel.MusicWasMissing) return;
             var lines = new List<string>();
             if (missingPictures > 0) lines.Add(missingPictures == 1 ? "1 picture is no longer on disk, so the rest will play." : $"{missingPictures} pictures are no longer on disk, so the rest will play.");
-            if (ViewModel.MusicWasMissing) lines.Add("Its music file is no longer on disk, so it will play without music.");
+            if (ViewModel.MusicWasMissing) lines.Add("Its music is no longer on disk, so it will play without music.");
             await ViewerEngine.ShowMessageAsync(RootGrid.XamlRoot, "Part of this show is missing", string.Join(" ", lines));
         }
 

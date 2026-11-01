@@ -87,11 +87,6 @@ namespace ModernImageViewer
                     RemoveSurpriseCard();
                     e.Handled = true;
                 }
-                else if (_autoPlaySeconds > 0 && e.Key is Windows.System.VirtualKey.Escape or Windows.System.VirtualKey.Space)
-                {
-                    StopAutoPlay();
-                    e.Handled = true;
-                }
             }), true);
         }
 
@@ -181,6 +176,7 @@ namespace ModernImageViewer
                     ChangeSurpriseChoices(o => o.AutoPlaySeconds = seconds);
                     if (seconds == 0) StopAutoPlay();
                     else StartAutoPlay(seconds);
+                    ShowAutoPlayState();
                 }));
 
             var columns = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 24 };
@@ -196,6 +192,7 @@ namespace ModernImageViewer
                 _surpriseOptions = new SurpriseOptions();
                 ChangeSurpriseChoices(_ => { });
                 StopAutoPlay();
+                ShowAutoPlayState();
                 RemoveSurpriseCard();
                 ShowSurpriseCard();
             };
@@ -257,6 +254,9 @@ namespace ModernImageViewer
             CaptureUndoPoint();
             _autoPlaySeconds = seconds;
             AddAutoPlayShield();
+            StartAutoPlayMusic();
+            ShowAutoPlayState();
+            ShowAutoPlayToast($"Auto-play on: a new layout every {seconds} seconds");
             var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(seconds) };
             _autoPlayTimer = timer;
             timer.Tick += async (_, _) =>
@@ -277,7 +277,133 @@ namespace ModernImageViewer
             _autoPlayTimer = null;
             if (!_autoPlayShieldPressed) RemoveAutoPlayShield();
             CaptureUndoPoint();
+            _surpriseMusic?.SetPlaying(false);
+            ShowAutoPlayState();
+            ShowAutoPlayToast("Auto-play paused");
         }
+
+        /// <summary>With an interval saved, the bar always says which state it is in, and the button changes it.</summary>
+        private void ShowAutoPlayState()
+        {
+            int interval = SurpriseChoices.AutoPlaySeconds;
+            bool playing = _autoPlaySeconds > 0;
+            AutoPlayButton.Visibility = interval > 0 ? Visibility.Visible : Visibility.Collapsed;
+            AutoPlayIcon.Glyph = playing ? "\uE769" : "\uE768";
+            AutoPlayText.Text = playing ? $"Playing, every {_autoPlaySeconds} s" : "Paused";
+            string name = playing ? "Pause auto-play" : "Play auto-play";
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(AutoPlayButton, name);
+            ToolTipService.SetToolTip(AutoPlayButton, playing ? "Pause. A click on the picture, Esc or Space does the same." : "Start again. Space does the same.");
+            if (playing) AutoPlayButton.Background = Application.Current.Resources["AccentFillColorDefaultBrush"] as Microsoft.UI.Xaml.Media.Brush;
+            else AutoPlayButton.ClearValue(Control.BackgroundProperty);
+            if (playing) AutoPlayText.Foreground = Application.Current.Resources["TextOnAccentFillColorPrimaryBrush"] as Microsoft.UI.Xaml.Media.Brush;
+            else AutoPlayText.ClearValue(TextBlock.ForegroundProperty);
+            if (playing) AutoPlayIcon.Foreground = AutoPlayText.Foreground;
+            else AutoPlayIcon.ClearValue(IconElement.ForegroundProperty);
+            SurpriseNextSongButton.Visibility = playing && _surpriseMusic?.IsFolder == true ? Visibility.Visible : Visibility.Collapsed;
+            ShowHudAndOverlays();
+        }
+
+        private void AutoPlayButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_autoPlaySeconds > 0) StopAutoPlay();
+            else if (SurpriseChoices.AutoPlaySeconds > 0) StartAutoPlay(SurpriseChoices.AutoPlaySeconds);
+        }
+
+        /// <summary>Esc and Space pause. Space starts it again, so one key does both. With auto-play paused Esc is the usual Back.</summary>
+        private bool HandleAutoPlayKey(Windows.System.VirtualKey key)
+        {
+            if (_surpriseCard != null) return false;
+            if (_autoPlaySeconds > 0 && key is Windows.System.VirtualKey.Escape or Windows.System.VirtualKey.Space)
+            {
+                StopAutoPlay();
+                return true;
+            }
+            if (key == Windows.System.VirtualKey.Space && _autoPlaySeconds == 0 && _surpriseRun && SurpriseChoices.AutoPlaySeconds > 0)
+            {
+                StartAutoPlay(SurpriseChoices.AutoPlaySeconds);
+                return true;
+            }
+            return false;
+        }
+
+        private Border? _autoPlayToast;
+        private Storyboard? _autoPlayToastFade;
+
+        /// <summary>The bar hides during a show, so a change of state also says so over the picture for a moment.</summary>
+        private void ShowAutoPlayToast(string text)
+        {
+            _autoPlayToastFade?.Stop();
+            if (_autoPlayToast != null) RootGrid.Children.Remove(_autoPlayToast);
+            var toast = new Border
+            {
+                Child = new TextBlock { Text = text, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White), FontSize = 15 },
+                Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xD8, 0x18, 0x18, 0x18)),
+                Padding = new Thickness(16, 10, 16, 10),
+                CornerRadius = new CornerRadius(8),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, 24, 0, 0),
+                IsHitTestVisible = false
+            };
+            Canvas.SetZIndex(toast, 6200);
+            Grid.SetRowSpan(toast, Math.Max(1, RootGrid.RowDefinitions.Count));
+            Grid.SetColumnSpan(toast, Math.Max(1, RootGrid.ColumnDefinitions.Count));
+            _autoPlayToast = toast;
+            RootGrid.Children.Add(toast);
+            var fade = new DoubleAnimation { From = 1, To = 0, BeginTime = TimeSpan.FromSeconds(1.6), Duration = TimeSpan.FromMilliseconds(500) };
+            Storyboard.SetTarget(fade, toast);
+            Storyboard.SetTargetProperty(fade, "Opacity");
+            var story = new Storyboard();
+            story.Children.Add(fade);
+            story.Completed += (_, _) =>
+            {
+                RootGrid.Children.Remove(toast);
+                if (ReferenceEquals(_autoPlayToast, toast)) _autoPlayToast = null;
+            };
+            _autoPlayToastFade = story;
+            story.Begin();
+        }
+
+        private Cinematic.MusicBed? _surpriseMusic;
+        private string? _surpriseMusicKey;
+
+        private void StartAutoPlayMusic()
+        {
+            var music = MainWindow.Instance?.MyMusic;
+            if (music == null || !music.InSurprise || !music.HasFolder)
+            {
+                StopAutoPlayMusic();
+                return;
+            }
+            if (_surpriseMusic == null)
+            {
+                _surpriseMusic = new Cinematic.MusicBed(DispatcherQueue);
+                _surpriseMusic.GaveUp += (title, why) =>
+                {
+                    _surpriseMusicKey = null;
+                    ShowAutoPlayToast(title);
+                    SurpriseNextSongButton.Visibility = Visibility.Collapsed;
+                };
+                _surpriseMusic.NowPlayingChanged += song => ToolTipService.SetToolTip(SurpriseNextSongButton, song == null ? "Next song" : "Now playing: " + song + ". Press for the next song.");
+            }
+            _surpriseMusic.SetVolume(music.Volume);
+            // Carrying on after a pause keeps the song. A changed folder or rating starts afresh.
+            string key = $"{music.Folder}|{music.LowestStars}|{music.IncludesUnrated}";
+            if (key != _surpriseMusicKey || !_surpriseMusic.IsOn)
+            {
+                _surpriseMusicKey = key;
+                _surpriseMusic.PlayFolder(music.Folder!, music.LowestStars, music.IncludesUnrated);
+            }
+            _surpriseMusic.SetPlaying(true);
+        }
+
+        private void StopAutoPlayMusic()
+        {
+            _surpriseMusic?.Stop();
+            _surpriseMusicKey = null;
+        }
+
+        private void SurpriseNextSong_Click(object sender, RoutedEventArgs e) => _surpriseMusic?.NextSong();
 
         /// <summary>
         /// Clear, over the canvas and under the bar and the card, so the click that pauses auto-play only pauses it and does not
@@ -320,7 +446,11 @@ namespace ModernImageViewer
         private async void SurpriseButton_Click(object sender, RoutedEventArgs e)
         {
             int seconds = SurpriseChoices.AutoPlaySeconds;
-            if (seconds > 0) StartAutoPlay(seconds);
+            if (seconds > 0)
+            {
+                if (_autoPlaySeconds > 0) await SurpriseAsync(fade: true);
+                else StartAutoPlay(seconds);
+            }
             else await SurpriseAsync(fade: false);
         }
 
@@ -466,6 +596,7 @@ namespace ModernImageViewer
         private void ForgetSurprise()
         {
             StopAutoPlay();
+            StopAutoPlayMusic();
             _surpriseDeck = null;
             _surpriseRun = false;
             _surpriseRecipe = null;

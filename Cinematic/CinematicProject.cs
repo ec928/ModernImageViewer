@@ -20,6 +20,18 @@ namespace ModernImageViewer.Cinematic.Data
         [JsonPropertyName("musicPath")]
         public string? MusicPath { get; set; }
 
+        [JsonPropertyName("musicFolder")]
+        public string? MusicFolder { get; set; }
+
+        [JsonPropertyName("musicLowestStars")]
+        public double MusicLowestStars { get; set; } = 3.5;
+
+        [JsonPropertyName("musicIncludesUnrated")]
+        public bool MusicIncludesUnrated { get; set; }
+
+        [JsonPropertyName("musicOff")]
+        public bool MusicOff { get; set; }
+
         [JsonPropertyName("musicVolume")]
         public double MusicVolume { get; set; } = 60.0;
 
