@@ -323,17 +323,45 @@ namespace ModernImageViewer
             Row(look, "Gallery card", "The color of the card the images are set into.", card);
             Toggle(look, "Keep my canvas", "Keep the canvas color, surface and frame as they are now, instead of the design's.", options.KeepCanvas, (o, on) => o.KeepCanvas = on);
 
-            var defaults = new Button { Content = "Back to defaults", HorizontalAlignment = HorizontalAlignment.Right, FontSize = 12 };
-            defaults.Click += (_, _) =>
+            // Far from where a closing click lands, and it asks: this undoes every choice on the card, and Undo does not bring them back.
+            var resetRow = new Grid { ColumnSpacing = 6, MinHeight = 32 };
+            resetRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            resetRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            resetRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var askReset = new HyperlinkButton { Content = "Reset to defaults...", FontSize = 12, Padding = new Thickness(0, 4, 8, 4), VerticalAlignment = VerticalAlignment.Center };
+            ToolTipService.SetToolTip(askReset, "Every setting on this card. Your music settings stay as they are.");
+            var question = new TextBlock { Text = "Reset every Surprise me setting?", FontSize = 13, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
+            var keep = new Button { Content = "Keep", FontSize = 12, Visibility = Visibility.Collapsed };
+            var reset = new Button { Content = "Reset", FontSize = 12, Visibility = Visibility.Collapsed };
+            Grid.SetColumn(keep, 1);
+            Grid.SetColumn(reset, 2);
+            void AskingReset(bool asking)
+            {
+                askReset.Visibility = asking ? Visibility.Collapsed : Visibility.Visible;
+                question.Visibility = keep.Visibility = reset.Visibility = asking ? Visibility.Visible : Visibility.Collapsed;
+            }
+            askReset.Click += (_, _) =>
+            {
+                AskingReset(true);
+                keep.Focus(FocusState.Programmatic);
+            };
+            keep.Click += (_, _) => AskingReset(false);
+            reset.Click += (_, _) =>
             {
                 _surpriseOptions = new SurpriseOptions();
                 ChangeSurpriseChoices(_ => { });
-                StopAutoPlay();
-                ShowAutoPlayState();
-                RemoveSurpriseCard();
+                if (_autoPlaySeconds > 0 && _autoPlayTimer != null)
+                {
+                    _autoPlaySeconds = SurpriseChoices.PlaySeconds;
+                    _autoPlayTimer.Interval = TimeSpan.FromSeconds(SurpriseChoices.NextPlaySeconds(Random.Shared));
+                }
                 ShowSurpriseCard();
             };
-            body.Children.Add(defaults);
+            resetRow.Children.Add(askReset);
+            resetRow.Children.Add(question);
+            resetRow.Children.Add(keep);
+            resetRow.Children.Add(reset);
+            body.Children.Add(resetRow);
 
             RemoveSurpriseCard();
             CloseCountsCard();
