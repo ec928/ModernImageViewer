@@ -718,8 +718,10 @@ namespace ModernImageViewer
                 PrimaryButtonText = "Save",
                 CloseButtonText = "Cancel",
                 XamlRoot = XamlRoot,
-                DefaultButton = ContentDialogButton.Primary
+                DefaultButton = ContentDialogButton.Primary,
+                RequestedTheme = MainWindow.Instance?.CurrentRequestedTheme ?? ElementTheme.Default
             };
+            DialogFooter.MainButtonOnRight(dialog);
             box.TextChanged += (_, _) => dialog.IsPrimaryButtonEnabled = ok;
             dialog.IsPrimaryButtonEnabled = ok;
             if (await dialog.ShowAsync() != ContentDialogResult.Primary) return null;
@@ -1770,7 +1772,8 @@ namespace ModernImageViewer
                 Title = "Save",
                 Content = message,
                 CloseButtonText = "Close",
-                XamlRoot = XamlRoot
+                XamlRoot = XamlRoot,
+                RequestedTheme = MainWindow.Instance?.CurrentRequestedTheme ?? ElementTheme.Default
             };
             await dialog.ShowAsync();
         }

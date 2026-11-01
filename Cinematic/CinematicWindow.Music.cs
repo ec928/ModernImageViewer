@@ -124,6 +124,7 @@ namespace ModernImageViewer.Cinematic
                 XamlRoot = RootGrid.XamlRoot,
                 RequestedTheme = ElementTheme.Dark
             };
+            DialogFooter.MainButtonOnRight(dialog);
             if (await dialog.ShowAsync() == ContentDialogResult.Primary)
                 ViewModel.SetMusicFolder(folder, MusicChoices.ChosenStars(rating), unrated.IsOn);
         }

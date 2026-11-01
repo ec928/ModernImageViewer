@@ -108,6 +108,7 @@ namespace ModernImageViewer
                 XamlRoot = RootGrid.XamlRoot,
                 RequestedTheme = CurrentRequestedTheme
             };
+            DialogFooter.MainButtonOnRight(dialog);
             if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
 
             _currentSettings.MusicFolder = folder;
@@ -168,6 +169,7 @@ namespace ModernImageViewer
                 XamlRoot = RootGrid.XamlRoot,
                 RequestedTheme = CurrentRequestedTheme
             };
+            DialogFooter.MainButtonOnRight(dialog);
             if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
             ImageEditorPath = editor;
             SaveAllSettings();

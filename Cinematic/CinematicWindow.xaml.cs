@@ -163,8 +163,10 @@ namespace ModernImageViewer.Cinematic
                         Content = "A previous cinematic session did not close cleanly. Restore it, or start this Play from the stills you just opened?",
                         PrimaryButtonText = "Restore",
                         SecondaryButtonText = "Start fresh",
-                        XamlRoot = RootGrid.XamlRoot
+                        XamlRoot = RootGrid.XamlRoot,
+                        RequestedTheme = ElementTheme.Dark
                     };
+                    DialogFooter.MainButtonOnRight(dialog);
                     var result = await dialog.ShowAsync();
                     if (result == ContentDialogResult.Primary)
                         await ViewModel.RestoreAutoSaveAsync();

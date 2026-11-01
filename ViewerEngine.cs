@@ -658,6 +658,7 @@ namespace ModernImageViewer
 
             var input = new TextBox { Text = Path.GetFileNameWithoutExtension(oldPath), SelectionStart = 0, SelectionLength = 999 };
             var dialog = new ContentDialog { Title = "Rename", Content = input, PrimaryButtonText = "Rename", CloseButtonText = "Cancel", DefaultButton = ContentDialogButton.Primary, XamlRoot = xamlRoot, RequestedTheme = MainWindow.Instance?.CurrentRequestedTheme ?? ElementTheme.Default };
+            DialogFooter.MainButtonOnRight(dialog);
 
             if (await dialog.ShowAsync() == ContentDialogResult.Primary)
             {
@@ -699,6 +700,7 @@ namespace ModernImageViewer
         {
             if (item.IsComicEntry) { await ShowMessageAsync(xamlRoot, "Read-Only Comic Archive", "Pages inside a .cbz / .cbr comic archive are read-only."); return false; }
             var dialog = new ContentDialog { Title = "Delete", Content = "Move to Recycle Bin?", PrimaryButtonText = "Yes", SecondaryButtonText = "No", DefaultButton = ContentDialogButton.Primary, XamlRoot = xamlRoot, RequestedTheme = MainWindow.Instance?.CurrentRequestedTheme ?? ElementTheme.Default };
+            DialogFooter.MainButtonOnRight(dialog);
             if (await dialog.ShowAsync() != ContentDialogResult.Primary) return false;
             string path = item.Path;
             if (await Task.Run(() => RecycleFile(path))) return true;
@@ -710,6 +712,34 @@ namespace ModernImageViewer
         {
             var dialog = new ContentDialog { Title = title, Content = content, CloseButtonText = "OK", XamlRoot = xamlRoot, RequestedTheme = MainWindow.Instance?.CurrentRequestedTheme ?? ElementTheme.Default };
             await dialog.ShowAsync();
+        }
+    }
+
+    /// <summary>
+    /// The main action goes bottom right with the others to its left, as the design ledger asks. Windows lays them out the other way round.
+    /// Its footer is one grid of these buttons, so mirroring the grid swaps them and keeps its sizing and states.
+    /// </summary>
+    public static class DialogFooter
+    {
+        public static void MainButtonOnRight(ContentDialog dialog)
+        {
+            dialog.Loaded += (_, _) =>
+            {
+                if (Find(dialog) is not Grid footer) return;
+                footer.FlowDirection = FlowDirection.RightToLeft;
+                foreach (var button in footer.Children.OfType<Button>()) button.FlowDirection = FlowDirection.LeftToRight;
+            };
+        }
+
+        private static DependencyObject? Find(DependencyObject parent)
+        {
+            for (int i = 0; i < Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(parent); i++)
+            {
+                var child = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(parent, i);
+                if (child is FrameworkElement { Name: "CommandSpace" }) return child;
+                if (Find(child) is { } found) return found;
+            }
+            return null;
         }
     }
 

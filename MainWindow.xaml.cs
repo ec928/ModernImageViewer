@@ -863,6 +863,7 @@ namespace ModernImageViewer
                 XamlRoot = RootGrid.XamlRoot,
                 RequestedTheme = RootGrid.ActualTheme
             };
+            DialogFooter.MainButtonOnRight(dialog);
 
             var result = await dialog.ShowAsync();
             if (result == ContentDialogResult.Primary)
