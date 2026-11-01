@@ -65,25 +65,28 @@ namespace ModernImageViewer
 
         public void SpawnFreeformCell(ImageItem item, FreeformCellDto? restoreDto = null)
         {
-            if (item == null || (IsEmptyCell(item) && string.IsNullOrEmpty(restoreDto?.Path))) return;
+            if (item == null || (restoreDto == null && IsEmptyCell(item))) return;
 
             int sourceSlot = restoreDto?.SourceSlot ?? Slot(item);
 
             // A saved freeform cell may hold a different image from its source cell, after a swap or a copy.
-            bool sameAsSource = restoreDto == null || string.IsNullOrEmpty(restoreDto.Path)
-                || string.Equals(restoreDto.Path, item.Path, StringComparison.OrdinalIgnoreCase);
+            bool sameAsSource = restoreDto == null
+                || (!string.IsNullOrEmpty(restoreDto.Path) && string.Equals(restoreDto.Path, item.Path, StringComparison.OrdinalIgnoreCase));
 
+            string restoredPath = restoreDto?.Path ?? string.Empty;
             // Create a new ImageItem for this Freeform Cell so it becomes Position N+1 (e.g. Position 5)
             var freeformItem = new ImageItem
             {
-                Path = sameAsSource ? item.Path : restoreDto!.Path,
-                Name = sameAsSource ? (item.Name ?? Path.GetFileName(item.Path)) : (restoreDto!.Name ?? Path.GetFileName(restoreDto.Path)),
+                Path = sameAsSource ? item.Path : restoredPath,
+                Name = sameAsSource ? (item.Name ?? Path.GetFileName(item.Path))
+                    : string.IsNullOrEmpty(restoredPath) ? string.Empty
+                    : (restoreDto!.Name ?? Path.GetFileName(restoredPath)),
                 DateModified = sameAsSource ? item.DateModified : default,
                 SizeString = sameAsSource ? item.SizeString : string.Empty,
                 Thumbnail = sameAsSource ? item.Thumbnail : null,
                 Dispatcher = item.Dispatcher
             };
-            if (!sameAsSource) FillFileDetails(freeformItem);
+            if (!sameAsSource && !string.IsNullOrEmpty(freeformItem.Path)) FillFileDetails(freeformItem);
             // Layouts saved when cells could be hidden: those cells are now empty.
             if (restoreDto?.Hidden == true)
             {
@@ -350,9 +353,9 @@ namespace ModernImageViewer
 
         private int ImagesOnCanvas() => _items.Count(i => !IsEmptyCell(i)) - TrayImages().Count;
 
-        private async Task AddDroppedPicturesAsync(IReadOnlyList<string> paths, Point where)
+        private async Task AddDroppedPicturesAsync(IReadOnlyList<string> paths, Point where, bool allowExisting = false)
         {
-            var fresh = NotYetHere(paths);
+            var fresh = allowExisting ? paths.ToList() : NotYetHere(paths);
             if (fresh.Count == 0)
             {
                 ShowAutoPlayToast("Those images are already here");
@@ -463,7 +466,7 @@ namespace ModernImageViewer
             AppendToTray(file, Array.Empty<string>(), room ? PlaceInCells(file, new[] { path }, shown) : shown);
             ApplyKeepingBitmaps(file);
             if (room) CaptureUndoPoint();
-            else _ = AddPicturesAsync(new[] { path });
+            else _ = AddDroppedPicturesAsync(new[] { path }, new Point(RootGrid.ActualWidth / 2, RootGrid.ActualHeight / 2), allowExisting: true);
         }
 
         private void ApplyKeepingBitmaps(MultiViewLayoutFile file)

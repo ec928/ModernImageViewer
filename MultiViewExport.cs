@@ -481,7 +481,11 @@ namespace ModernImageViewer
                 await LoadLayoutFromPathAsync(layoutPath);
             };
 
-            var contextMenu = new MenuFlyout();
+            var contextMenu = new MenuFlyout
+            {
+                MenuFlyoutPresenterStyle = (Style)Resources["MultiViewMenuFlyoutPresenterStyle"]
+            };
+            contextMenu.Opened += (_, _) => EnforceDarkFlyoutPresenter();
             var loadItem = new MenuFlyoutItem
             {
                 Text = "Load Layout",
@@ -634,7 +638,11 @@ namespace ModernImageViewer
             row.Children.Add(starBtn);
 
             // Context menu on the row
-            var contextMenu = new MenuFlyout();
+            var contextMenu = new MenuFlyout
+            {
+                MenuFlyoutPresenterStyle = (Style)Resources["MultiViewMenuFlyoutPresenterStyle"]
+            };
+            contextMenu.Opened += (_, _) => EnforceDarkFlyoutPresenter();
             var favItem = new MenuFlyoutItem
             {
                 Text = isFavourite ? "Remove from Favourites" : "Add to Favourites",
@@ -1136,9 +1144,14 @@ namespace ModernImageViewer
                             if (strokeW > 0 && outlineColor.A > 0)
                             {
                                 if (string.Equals(strokeStyle, "Dashed", StringComparison.OrdinalIgnoreCase))
-                                    session.DrawGeometry(strokeShape, outlineColor, strokeW, new CanvasStrokeStyle { DashStyle = CanvasDashStyle.Dash });
+                                {
+                                    using var dashStyle = new CanvasStrokeStyle { DashStyle = CanvasDashStyle.Dash };
+                                    session.DrawGeometry(strokeShape, outlineColor, strokeW, dashStyle);
+                                }
                                 else
+                                {
                                     session.DrawGeometry(strokeShape, outlineColor, strokeW);
+                                }
                             }
                         }
                     }
@@ -1205,7 +1218,7 @@ namespace ModernImageViewer
                             float srx = Math.Max(0, rx - half);
                             float sry = Math.Max(0, ry - half);
 
-                            var canvasStrokeStyle = new CanvasStrokeStyle { DashStyle = CanvasDashStyle.Dash };
+                            using var canvasStrokeStyle = new CanvasStrokeStyle { DashStyle = CanvasDashStyle.Dash };
                             if (rx > 0)
                                 session.DrawRoundedRectangle(sx, sy, sw, sh, srx, sry, strokeColor, sW, canvasStrokeStyle);
                             else
@@ -1334,9 +1347,14 @@ namespace ModernImageViewer
                 : ParseColor(frame.Color);
             if (color.A == 0) return;
             if (string.Equals(style, "Dashed", StringComparison.OrdinalIgnoreCase))
-                session.DrawRoundedRectangle(x, y, w, h, radius, radius, color, line, new CanvasStrokeStyle { DashStyle = CanvasDashStyle.Dash });
+            {
+                using var dashStyle = new CanvasStrokeStyle { DashStyle = CanvasDashStyle.Dash };
+                session.DrawRoundedRectangle(x, y, w, h, radius, radius, color, line, dashStyle);
+            }
             else
+            {
                 session.DrawRoundedRectangle(x, y, w, h, radius, radius, color, line);
+            }
         }
 
         private async Task CopyCanvasToClipboardAsync()

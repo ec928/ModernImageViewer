@@ -129,7 +129,7 @@ namespace ModernImageViewer
             var options = SurpriseChoices;
             var body = new StackPanel { Spacing = 10 };
 
-            FontIcon Icon(string glyph, double size = 14) => new() { FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe Fluent Icons"), Glyph = glyph, FontSize = size };
+            FontIcon Icon(string glyph, double size = 14) => new() { FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), Glyph = glyph, FontSize = size };
 
             Button IconButton(string glyph, string name, RoutedEventHandler pressed)
             {

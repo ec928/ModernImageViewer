@@ -78,6 +78,8 @@ namespace ModernImageViewer
                 // Release, not Dispose: a detached window may hold a reference to this entry.
                 // Refcounting frees it only once the last holder is done with it.
                 ImageCache.Publish(filePath, fastEntry);
+                if (ImageCache.TryGet(filePath, out var published) && published != null)
+                    fastEntry = published;
 
                 TryDisposeRawGpuBitmap();
                 _rawGpuBitmap = fastEntry.GpuBitmap;

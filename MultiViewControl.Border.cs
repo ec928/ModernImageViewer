@@ -167,7 +167,7 @@ namespace ModernImageViewer
                     && placeholder.Children[1] is TextBlock title
                     && placeholder.Children[2] is TextBlock detail)
                 {
-                    icon.Glyph = failed ? "" : "\uE739";
+                    icon.Glyph = failed ? "\uE783" : "\uE739";
                     title.Text = empty ? "Empty cell" : System.IO.File.Exists(_items[slot].Path) ? "Can't open this file" : "File not found";
                     detail.Text = !empty ? _items[slot].Name ?? string.Empty
                         : TrayImages().Count > 0 ? "Click to add an image\nRight-click to add from the image tray"
@@ -526,8 +526,8 @@ namespace ModernImageViewer
             {
                 "Solid line",
                 "Dashed line",
-                "Soft line in the chosen colour",
-                "Line that fades into a second colour"
+                "Soft line in the chosen color",
+                "Line that fades into a second color"
             }, index =>
             {
                 border.StrokeStyle = strokeStyles[index];

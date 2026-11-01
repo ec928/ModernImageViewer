@@ -1768,7 +1768,7 @@ namespace ModernImageViewer
             {
                 HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(0),
+                Margin = isFreeform ? new Thickness(0, 10, 22, 0) : new Thickness(0),
                 Opacity = 0.0,
                 IsHitTestVisible = false
             };
@@ -2647,6 +2647,7 @@ namespace ModernImageViewer
                     SoloTransform.TranslateY = pos.Y - (pos.Y - SoloTransform.TranslateY) * (newScale / oldScale);
                     SoloTransform.ScaleX = newScale;
                     SoloTransform.ScaleY = newScale;
+                    UpdateSoloHud();
                 }
             };
         }
@@ -2748,14 +2749,26 @@ namespace ModernImageViewer
             SoloFidelityText.Text = "HF";
         }
 
+        private bool IsCanvasSlot(int slot)
+        {
+            int grid = GridCellCount;
+            return (uint)slot < (uint)_items.Count && (slot < VisibleCount(grid) || slot >= grid);
+        }
+
         private void EnterSolo(int index)
         {
-            if ((uint)index < (uint)_items.Count && IsEmptyCell(_items[index])) return;
-            if (index < 0 || index >= _items.Count) return;
+            if (!IsCanvasSlot(index) || IsEmptyCell(_items[index])) return;
             _soloIndex = index;
             var item = _items[index];
 
-            SoloCounterText.Text = $"{index + 1} of {_items.Count}";
+            int pos = 0, total = 0;
+            for (int s = 0; s < _items.Count; s++)
+            {
+                if (!IsCanvasSlot(s) || IsEmptyCell(_items[s])) continue;
+                total++;
+                if (s <= index) pos++;
+            }
+            SoloCounterText.Text = $"{pos} of {total}";
 
             try
             {
@@ -2831,7 +2844,7 @@ namespace ModernImageViewer
             for (int step = 1; step < total; step++)
             {
                 int slot = ((_soloIndex + direction * step) % total + total) % total;
-                if (IsEmptyCell(_items[slot])) continue;
+                if (!IsCanvasSlot(slot) || IsEmptyCell(_items[slot])) continue;
                 EnterSolo(slot);
                 return;
             }

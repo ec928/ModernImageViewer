@@ -303,7 +303,11 @@ namespace ModernImageViewer
                     }
 
                     if (result != null && (result.GpuBitmap != null || result.AnimationFrames != null))
+                    {
                         ImageCache.Publish(currentItem.Path, result);
+                        if (ImageCache.TryGet(currentItem.Path, out var published) && published != null)
+                            result = published;
+                    }
                     targetEntry = result;
                 }
 
@@ -318,7 +322,7 @@ namespace ModernImageViewer
                             recoveryEntry.Bitmap.Dispose();
                             recoveryEntry.Bitmap = null;
                             ImageCache.Publish(currentItem.Path, recoveryEntry);
-                            targetEntry = recoveryEntry;
+                            targetEntry = ImageCache.TryGet(currentItem.Path, out var published) && published != null ? published : recoveryEntry;
                         }
                         else { recoveryEntry?.Release(); }
                     }
@@ -431,7 +435,7 @@ namespace ModernImageViewer
             if (result != null && (result.GpuBitmap != null || result.AnimationFrames != null))
             {
                 ImageCache.Publish(path, result);
-                return result;
+                return ImageCache.TryGet(path, out var published) && published != null ? published : result;
             }
             result?.Release();
             return null;
@@ -3871,7 +3875,7 @@ namespace ModernImageViewer
         {
             if (_currentIndex >= 0 && _currentIndex < Images.Count)
             {
-                LaunchDetachedWindow(Images[_currentIndex], e);
+                LaunchDetachedWindow(Images[_currentIndex]);
                 ClosePreviewInternal(isTearOff: true);
             }
         }
