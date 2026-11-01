@@ -2306,7 +2306,7 @@ namespace ModernImageViewer
 
         /// <summary>
         /// Remove a photo and keep the other cells, so none of them decodes again. The layout is rebuilt
-        /// for the new count, and a photo past the limit that moves into view gets a new cell.
+        /// for the new count. The canvas stays smaller: an image from the tray does not take the place.
         /// </summary>
         private void RemoveItem(ImageItem item)
         {
@@ -2318,16 +2318,26 @@ namespace ModernImageViewer
             }
             int index = _items.IndexOf(item);
             if (index < 0) return;
+            int visibleBefore = VisibleCount(GridCellCount);
+            // The last cell on show with images in the tray. The grid needs one cell, so it stays, empty.
+            if (index < visibleBefore && visibleBefore == 1 && GridCellCount > 1)
+            {
+                EmptyCell(index);
+                ShowShownBadge();
+                ShowHudAndOverlays();
+                return;
+            }
             _itemBorders.Remove(item);
             _cellGeometry.Remove(item);
-            int visibleBefore = VisibleCount(GridCellCount);
             bool cellsReady = CellRootsReady();
+            bool trayBehind = GridCellCount > visibleBefore;
             _items.RemoveAt(index);
             if (_items.Count == 0)
             {
                 CloseRequested?.Invoke(this, EventArgs.Empty);
                 return;
             }
+            if (index < visibleBefore && trayBehind) _framedSlots = visibleBefore - 1;
 
             // Freeform cells remember their source by slot, and the later slots just moved down.
             foreach (var card in _freeformCards)
