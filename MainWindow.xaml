@@ -753,7 +753,7 @@
                     </Grid>
                     </Grid>
 
-                    <local:ImageViewerControl x:Name="ViewerControl"
+                    <local:ImageViewerControl x:Name="ViewerControl" IsTabStop="True"
                                               Grid.RowSpan="2"
                                               Visibility="Collapsed"
                                               Canvas.ZIndex="1000" 

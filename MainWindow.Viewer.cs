@@ -260,7 +260,7 @@ namespace ModernImageViewer
 
             ViewerControl.PrepareForNewImage(currentItem.Thumbnail);
             ViewerControl.TargetImage = currentItem;
-            ViewerControl.Focus(FocusState.Programmatic);
+            if (!TileKeyFocusStays()) ViewerControl.Focus(FocusState.Programmatic);
 
             bool isCached = ImageCache.TryGet(currentItem.Path, out var cachedEntry) &&
                             cachedEntry != null &&
@@ -1250,12 +1250,12 @@ namespace ModernImageViewer
         private void FocusGrid()
         {
             if (RootGrid == null || _windowClosed) return;
+            if (TileKeyFocusStays()) return;
             if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible)
             {
                 ViewerControl.Focus(FocusState.Programmatic);
                 return;
             }
-            if (TileKeyFocusStays()) return;
             if (SidebarView != null && SidebarView.IsPaneOpen && FocusIsInside(SidebarPane)) return;
             RootGrid.Focus(FocusState.Programmatic);
             DispatcherQueue?.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
@@ -2278,6 +2278,21 @@ namespace ModernImageViewer
                 if (e.Key == Windows.System.VirtualKey.Enter)
                 {
                     ClosePreviewInternal();
+                    e.Handled = true;
+                }
+                else if (e.Key is Windows.System.VirtualKey.Left or Windows.System.VirtualKey.Right or Windows.System.VirtualKey.Home or Windows.System.VirtualKey.End)
+                {
+                    // Here, not in Global_KeyDown: the tile behind the preview or the zoom surface would take the key first.
+                    if (!_isStartupIndexing)
+                    {
+                        Navigate(e.Key switch
+                        {
+                            Windows.System.VirtualKey.Right => 1,
+                            Windows.System.VirtualKey.Left => -1,
+                            Windows.System.VirtualKey.Home => int.MinValue,
+                            _ => int.MaxValue,
+                        });
+                    }
                     e.Handled = true;
                 }
                 return;

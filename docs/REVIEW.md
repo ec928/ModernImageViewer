@@ -123,3 +123,4 @@ The Win2D viewer core is real, but GPU lifetime was not reference-counted end-to
 - 2026-10-31: Multi-View, not released. Each auto-play layout is its own undo step. Saved framing is no longer wiped while a picture decodes, and Undo can no longer get stuck on a layout whose picture loaded slowly.
 - 2026-10-31: v0.26.0, internal. Surprise me options, new designs, featuring, auto-play, and the framing and Undo fixes.
 - 2026-10-31: v0.26.0, released. Everything since v0.24.0.
+- 2026-11-01: Arrow keys in the preview no longer stop working after a tile click. The preview never took focus, so the tile behind it took the key.
