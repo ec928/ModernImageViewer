@@ -19,6 +19,74 @@ namespace ModernImageViewer
         }
     }
 
+    /// <summary>How a floating cell sits at a moment, on top of its place in the layout, which does not change.</summary>
+    public readonly record struct CellDrift(double X, double Y, double Turn, double Scale);
+
+    /// <summary>
+    /// Mild motion for one floating cell. It sits nearer than the grid, so it follows the camera a little further, which gives depth,
+    /// and it floats a few pixels and under a degree on slow paths of its own. Front cells sit nearest.
+    /// </summary>
+    public sealed class CellFloat
+    {
+        private const double NearestDepth = 0.3, FarthestDepth = 0.08;
+        // At full amount, as a share of the canvas's shorter side, and in degrees.
+        private const double MostDrift = 0.012, MostTurn = 1.2;
+        private const double ShortestPeriod = 11, LongestPeriod = 21;
+
+        private readonly double _depth, _driftX, _driftY, _turn, _periodX, _periodY, _periodTurn, _phaseX, _phaseY, _phaseTurn;
+
+        public CellFloat(int backToFront, int count, double amount, Random random)
+        {
+            amount = Math.Clamp(amount, 0, 1);
+            double place = count > 1 ? backToFront / (double)(count - 1) : 1;
+            _depth = amount <= 0 ? 0 : FarthestDepth + (NearestDepth - FarthestDepth) * place;
+            double Side() => random.Next(2) == 0 ? 1 : -1;
+            _driftX = amount * MostDrift * (0.6 + random.NextDouble() * 0.4) * Side();
+            _driftY = amount * MostDrift * (0.6 + random.NextDouble() * 0.4) * Side();
+            _turn = amount * MostTurn * (0.5 + random.NextDouble() * 0.5) * Side();
+            double Period() => ShortestPeriod + random.NextDouble() * (LongestPeriod - ShortestPeriod);
+            _periodX = Period();
+            _periodY = Period();
+            _periodTurn = Period();
+            _phaseX = random.NextDouble() * Math.Tau;
+            _phaseY = random.NextDouble() * Math.Tau;
+            _phaseTurn = random.NextDouble() * Math.Tau;
+        }
+
+        /// <summary>Strength takes the float itself down to nothing when going home. The depth follows the camera there by itself.</summary>
+        public CellDrift At(double seconds, CameraView view, double width, double height, double strength = 1)
+        {
+            double side = Math.Min(width, height);
+            double x = _driftX * side * Math.Sin(_phaseX + Math.Tau * seconds / _periodX) * strength;
+            double y = _driftY * side * Math.Sin(_phaseY + Math.Tau * seconds / _periodY) * strength;
+            double turn = _turn * Math.Sin(_phaseTurn + Math.Tau * seconds / _periodTurn) * strength;
+            x -= (view.X - 0.5) * width * view.Zoom * _depth;
+            y -= (view.Y - 0.5) * height * view.Zoom * _depth;
+            return new CellDrift(x, y, turn, 1 + (view.Zoom - 1) * _depth);
+        }
+    }
+
+    public enum LayoutTransition { Crossfade, ZoomThrough, ThroughDark, Slide }
+
+    public static class LayoutTransitions
+    {
+        // The most that are anything other than a crossfade, which suits photographs best and stays common.
+        private const double MostOther = 0.7;
+
+        /// <summary>Variety is 0 to 1, and 0 is always a crossfade. Slide stands out most, so it comes up least. The same one is not used twice running, except a crossfade.</summary>
+        public static LayoutTransition Choose(double variety, LayoutTransition? last, Random random)
+        {
+            if (random.NextDouble() >= Math.Clamp(variety, 0, 1) * MostOther) return LayoutTransition.Crossfade;
+            for (int i = 0; i < 8; i++)
+            {
+                double pick = random.NextDouble();
+                var choice = pick < 0.4 ? LayoutTransition.ZoomThrough : pick < 0.8 ? LayoutTransition.ThroughDark : LayoutTransition.Slide;
+                if (choice != last) return choice;
+            }
+            return LayoutTransition.Crossfade;
+        }
+    }
+
     /// <summary>
     /// One slow camera move over a still picture: the Ken Burns effect. Its zoom, drift and pacing follow what reads well in
     /// Cinematic. It knows nothing of how the picture is drawn, so it can move anything that takes a zoom and a pan.

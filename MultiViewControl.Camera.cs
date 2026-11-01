@@ -1,13 +1,19 @@
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Media;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
+using System.Numerics;
 
 namespace ModernImageViewer
 {
     /// <summary>
     /// During auto-play the finished layout moves as one picture. Only the drawing moves: nothing in the layout changes,
     /// so saving, Undo and the framing of each cell never see it. The bar and the cards stay where they are.
+    /// It moves the composition visuals, under XAML. A RenderTransform that changes every frame also changes the size XAML wants each
+    /// image decoded at, which left images soft, and Rotation or Scale properties stop the app on a cell that has a RotateTransform.
     /// </summary>
     public sealed partial class MultiViewControl
     {
@@ -22,6 +28,10 @@ namespace ModernImageViewer
         private bool _cameraRunning;
         private bool _cameraGoingHome;
         private int _layoutSeconds;
+        // A layout made during a show is not the user doing something, so it does not bring the bar back over the pictures.
+        private bool _quietBar;
+        private readonly Stopwatch _floatClock = new();
+        private readonly List<(FreeformCard Card, CellFloat Float)> _floats = new();
 
         private FrameworkElement[] CameraLayers => new FrameworkElement[] { CellsGrid, FreeformCanvas, CanvasFrameMat, CanvasFrameStroke, CanvasFrameDashes, CanvasFrameRim };
 
@@ -35,6 +45,11 @@ namespace ModernImageViewer
                 return;
             }
             _lastCameraKind = move.Kind;
+            var cards = _freeformCards.Where(c => !IsEmptyCell(c.Item)).OrderBy(c => c.ZIndex).ToList();
+            _floats.Clear();
+            for (int i = 0; i < cards.Count; i++)
+                _floats.Add((cards[i], new CellFloat(i, cards.Count, options.MotionAmount, Random.Shared)));
+            _floatClock.Restart();
             RunCamera(move, goingHome: false);
         }
 
@@ -62,11 +77,12 @@ namespace ModernImageViewer
             _cameraMove = null;
             _cameraClock.Reset();
             _cameraView = CameraView.Whole;
+            RestFloatingCells();
             if (!_cameraRunning) return;
             _cameraRunning = false;
             CompositionTarget.Rendering -= CameraFrame;
             RootGrid.SizeChanged -= CameraRoot_SizeChanged;
-            foreach (var layer in CameraLayers) layer.ClearValue(UIElement.RenderTransformProperty);
+            foreach (var layer in CameraLayers) ElementCompositionPreview.GetElementVisual(layer).TransformMatrix = Matrix4x4.Identity;
             RootGrid.ClearValue(UIElement.ClipProperty);
         }
 
@@ -81,6 +97,44 @@ namespace ModernImageViewer
             }
             _cameraView = _cameraMove.At(elapsed);
             ShowCameraView(_cameraView);
+            ShowFloatingCells(_cameraView, _cameraGoingHome ? 1 - elapsed / _cameraMove.Seconds : 1);
+        }
+
+        /// <summary>
+        /// On top of the cell's saved place and turn, which stay as they are. XAML keeps a cell's RotateTransform in this same matrix,
+        /// so it has to include the saved turn, or a tilted cell would show straight.
+        /// </summary>
+        private void ShowFloatingCells(CameraView view, double strength)
+        {
+            double width = RootGrid.ActualWidth, height = RootGrid.ActualHeight;
+            double seconds = _floatClock.Elapsed.TotalSeconds;
+            foreach (var (card, motion) in _floats)
+            {
+                var drift = motion.At(seconds, view, width, height, strength);
+                PlaceCard(card, GetGeometry(card.Item).WindowRotation + drift.Turn, drift.Scale, drift.X, drift.Y);
+            }
+        }
+
+        private static void PlaceCard(FreeformCard card, double turn, double scale, double x, double y)
+        {
+            var window = card.Container;
+            var centre = new Vector3((float)(window.ActualWidth / 2), (float)(window.ActualHeight / 2), 0);
+            ElementCompositionPreview.GetElementVisual(window).TransformMatrix =
+                Matrix4x4.CreateTranslation(-centre)
+                * Matrix4x4.CreateRotationZ((float)(turn * Math.PI / 180))
+                * Matrix4x4.CreateScale((float)scale)
+                * Matrix4x4.CreateTranslation(centre + new Vector3((float)x, (float)y, 0));
+        }
+
+        private void RestFloatingCells()
+        {
+            foreach (var (card, _) in _floats)
+            {
+                PlaceCard(card, GetGeometry(card.Item).WindowRotation, 1, 0, 0);
+                ApplyWindowTurn(card);
+            }
+            _floats.Clear();
+            _floatClock.Reset();
         }
 
         /// <summary>Each layer has its own place in the canvas, such as the grid inside a frame, so the zoom is worked out from the canvas and not from the layer.</summary>
@@ -92,12 +146,9 @@ namespace ModernImageViewer
             foreach (var layer in CameraLayers)
             {
                 var at = layer.ActualOffset;
-                if (layer.RenderTransform is not CompositeTransform transform)
-                    layer.RenderTransform = transform = new CompositeTransform();
-                transform.ScaleX = view.Zoom;
-                transform.ScaleY = view.Zoom;
-                transform.TranslateX = at.X * view.Zoom + panX - at.X;
-                transform.TranslateY = at.Y * view.Zoom + panY - at.Y;
+                ElementCompositionPreview.GetElementVisual(layer).TransformMatrix =
+                    Matrix4x4.CreateScale((float)view.Zoom)
+                    * Matrix4x4.CreateTranslation((float)(at.X * view.Zoom + panX - at.X), (float)(at.Y * view.Zoom + panY - at.Y), 0);
             }
         }
 

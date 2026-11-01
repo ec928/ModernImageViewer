@@ -216,6 +216,62 @@ namespace ModernImageViewer.Tests
             }
         }
 
+        [Fact]
+        public void A_floating_cell_stays_mild_and_each_floats_its_own_way()
+        {
+            var random = new Random(11);
+            double[] amounts = { 0.01, 0.5, 1, 7 };
+            var plain = new CameraView(1, 0.5, 0.5);
+            for (int i = 0; i < 2000; i++)
+            {
+                var cell = new CellFloat(i % 5, 5, amounts[i % amounts.Length], random);
+                double seconds = random.NextDouble() * 500;
+                var drift = cell.At(seconds, plain, 1500, 900);
+                Assert.InRange(Math.Abs(drift.X), 0, 900 * 0.0121);
+                Assert.InRange(Math.Abs(drift.Y), 0, 900 * 0.0121);
+                Assert.InRange(Math.Abs(drift.Turn), 0, 1.21);
+                Assert.Equal(1, drift.Scale);
+                var homing = cell.At(seconds, plain, 1500, 900, strength: 0);
+                Assert.Equal(0, Math.Abs(homing.X) + Math.Abs(homing.Y) + Math.Abs(homing.Turn), 9);
+            }
+            var a = new CellFloat(0, 2, 1, random).At(3, plain, 1500, 900);
+            var b = new CellFloat(1, 2, 1, random).At(3, plain, 1500, 900);
+            Assert.NotEqual(a, b);
+            var still = new CellFloat(1, 2, 0, random).At(3, new CameraView(1.5, 0.3, 0.3), 1500, 900);
+            Assert.Equal(new CellDrift(0, 0, 0, 1), still);
+        }
+
+        [Fact]
+        public void A_front_cell_follows_the_camera_further_than_a_back_cell()
+        {
+            var random = new Random(2);
+            var view = new CameraView(1.3, 0.7, 0.5);
+            CellDrift Depth(int place) => new CellFloat(place, 5, 1, random).At(0, view, 1500, 900, strength: 0);
+            var back = Depth(0);
+            var front = Depth(4);
+            Assert.True(front.Scale > back.Scale && back.Scale > 1);
+            Assert.True(front.X < back.X && back.X < 0, "the view moved right, so a nearer cell moves further left");
+        }
+
+        [Fact]
+        public void Transitions_take_their_odds_from_variety()
+        {
+            var random = new Random(8);
+            for (int i = 0; i < 500; i++) Assert.Equal(LayoutTransition.Crossfade, LayoutTransitions.Choose(0, null, random));
+            var seen = new Dictionary<LayoutTransition, int>();
+            LayoutTransition? last = null;
+            for (int i = 0; i < 4000; i++)
+            {
+                var next = LayoutTransitions.Choose(0.5, last, random);
+                if (next != LayoutTransition.Crossfade) Assert.NotEqual(last, next);
+                seen[next] = seen.GetValueOrDefault(next) + 1;
+                last = next;
+            }
+            Assert.Equal(4, seen.Count);
+            Assert.True(seen[LayoutTransition.Crossfade] > 2000, "a crossfade stays the most common by default");
+            Assert.True(seen[LayoutTransition.Slide] < seen[LayoutTransition.ZoomThrough], "slide comes up least");
+        }
+
         private static SurpriseOptions Zoomed(double most) => new() { MostZoom = most };
 
         [Fact]

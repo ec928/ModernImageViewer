@@ -269,7 +269,7 @@ namespace ModernImageViewer
             speedRow.Children.Add(speed);
             body.Children.Add(speedRow);
             body.Children.Add(range);
-            Slide(body, "Motion", "How far the camera moves over each layout while it plays, from still to strong. The middle matches a Cinematic show.", 0, 100, 5, options.MotionAmount * 100, (o, v) => o.MotionAmount = v / 100);
+            Slide(body, "Motion", "How far the camera moves over each layout while it plays, from still to strong, with floating cells following it. The middle matches a Cinematic show.", 0, 100, 5, options.MotionAmount * 100, (o, v) => o.MotionAmount = v / 100);
 
             body.Children.Add(Label("Music"));
             body.Children.Add(MusicRow(Icon, WordButton));
@@ -316,8 +316,9 @@ namespace ModernImageViewer
             Slide(faces, "Most zoom, x", "1 is off. Brings forward people who are small in the image. A person Windows misses can be cropped.", 1, SurpriseOptions.MostOfAnyZoom, 0.5, options.MostZoom, (o, v) => o.MostZoom = v);
             Slide(faces, "How often, %", "The odds that an image with faces is zoomed.", 0, 100, 5, options.ZoomChance * 100, (o, v) => o.ZoomChance = v / 100);
 
-            var camera = Section("Camera");
+            var camera = Section("Camera and transitions");
             Slide(camera, "Zooms rather than drifts, %", "The odds that the camera zooms in or out. Otherwise it drifts across the layout.", 0, 100, 5, options.MotionZoomChance * 100, (o, v) => o.MotionZoomChance = v / 100);
+            Slide(camera, "Transition variety, %", "How often a change of layout zooms through, fades through dark or slides, rather than a crossfade. 0 is always a crossfade.", 0, 100, 5, options.TransitionVariety * 100, (o, v) => o.TransitionVariety = v / 100);
             Slide(camera, "Aims at faces, %", "The odds that it heads for a large cell with faces in it, where there is one.", 0, 100, 5, options.MotionFaceChance * 100, (o, v) => o.MotionFaceChance = v / 100);
 
             var look = Section("Look");
@@ -967,6 +968,7 @@ namespace ModernImageViewer
             }
 
             _surpriseBusy = true;
+            _quietBar = playing;
             SurpriseButton.IsEnabled = false;
             try
             {
@@ -1020,11 +1022,12 @@ namespace ModernImageViewer
                 }
                 CaptureUndoPoint();
                 if (before != null && _autoPlaySeconds > 0) StartCanvasCamera(composition);
-                if (before != null) FadeAway(before);
+                if (before != null) ChangeLayoutOver(before);
             }
             finally
             {
                 _surpriseBusy = false;
+                _quietBar = false;
                 SurpriseButton.IsEnabled = true;
             }
         }
@@ -1058,7 +1061,8 @@ namespace ModernImageViewer
             try
             {
                 var shot = new RenderTargetBitmap();
-                await shot.RenderAsync(RootGrid);
+                // From outside the canvas's clip: taken of the canvas itself, a zoomed layer reaching past its edge makes the picture bigger than the canvas.
+                await shot.RenderAsync(this);
                 var cover = new Image { Source = shot, Stretch = Microsoft.UI.Xaml.Media.Stretch.Fill, IsHitTestVisible = false };
                 AddOverCanvas(cover, 6000);
                 return cover;
@@ -1077,15 +1081,62 @@ namespace ModernImageViewer
             await Task.Delay(50);
         }
 
-        /// <summary>The new layout stays covered until its pictures have loaded, so they appear together.</summary>
-        private void FadeAway(Image cover)
+        private LayoutTransition? _lastTransition;
+
+        /// <summary>
+        /// The new layout stays covered until its pictures have loaded, so they appear together. The cover is a picture of the old layout,
+        /// so each transition only has to animate that.
+        /// </summary>
+        private void ChangeLayoutOver(Image cover)
         {
-            var fade = new DoubleAnimation { From = 1, To = 0, Duration = TimeSpan.FromMilliseconds(700) };
-            Storyboard.SetTarget(fade, cover);
-            Storyboard.SetTargetProperty(fade, "Opacity");
+            var kind = LayoutTransitions.Choose(_autoPlaySeconds > 0 ? SurpriseChoices.TransitionVariety : 0, _lastTransition, Random.Shared);
+            _lastTransition = kind;
             var story = new Storyboard();
-            story.Children.Add(fade);
-            story.Completed += (_, _) => RootGrid.Children.Remove(cover);
+            void Animate(DependencyObject target, string property, double from, double to, int ms, int after = 0, EasingFunctionBase? ease = null)
+            {
+                var run = new DoubleAnimation { From = from, To = to, Duration = TimeSpan.FromMilliseconds(ms), BeginTime = TimeSpan.FromMilliseconds(after), EasingFunction = ease };
+                Storyboard.SetTarget(run, target);
+                Storyboard.SetTargetProperty(run, property);
+                story.Children.Add(run);
+            }
+            const string ScaleX = "(UIElement.RenderTransform).(CompositeTransform.ScaleX)";
+            const string ScaleY = "(UIElement.RenderTransform).(CompositeTransform.ScaleY)";
+            const string MoveX = "(UIElement.RenderTransform).(CompositeTransform.TranslateX)";
+            const string MoveY = "(UIElement.RenderTransform).(CompositeTransform.TranslateY)";
+            cover.RenderTransformOrigin = new Windows.Foundation.Point(0.5, 0.5);
+            cover.RenderTransform = new Microsoft.UI.Xaml.Media.CompositeTransform();
+            var smooth = new CubicEase { EasingMode = EasingMode.EaseInOut };
+            Border? dark = null;
+            switch (kind)
+            {
+                case LayoutTransition.ZoomThrough:
+                    Animate(cover, ScaleX, 1, 1.12, 750, ease: smooth);
+                    Animate(cover, ScaleY, 1, 1.12, 750, ease: smooth);
+                    Animate(cover, "Opacity", 1, 0, 750);
+                    break;
+                case LayoutTransition.ThroughDark:
+                    dark = new Border { Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x0A, 0x0A, 0x0A)), IsHitTestVisible = false };
+                    AddOverCanvas(dark, 5990);
+                    Animate(cover, "Opacity", 1, 0, 400);
+                    Animate(dark, "Opacity", 1, 0, 550, after: 450);
+                    break;
+                case LayoutTransition.Slide:
+                    int way = Random.Shared.Next(3);
+                    if (way == 2) Animate(cover, MoveY, 0, -RootGrid.ActualHeight, 850, ease: smooth);
+                    else Animate(cover, MoveX, 0, way == 0 ? -RootGrid.ActualWidth : RootGrid.ActualWidth, 850, ease: smooth);
+                    break;
+                default:
+                    Animate(cover, "Opacity", 1, 0, 700);
+                    break;
+            }
+            // A cover zooming or sliding reaches past the canvas, as a zoomed layer does.
+            ClipRootToCanvas();
+            story.Completed += (_, _) =>
+            {
+                RootGrid.Children.Remove(cover);
+                if (dark != null) RootGrid.Children.Remove(dark);
+                if (!_cameraRunning) RootGrid.ClearValue(UIElement.ClipProperty);
+            };
             story.Begin();
         }
 

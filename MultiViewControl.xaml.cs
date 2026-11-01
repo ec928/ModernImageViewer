@@ -1165,6 +1165,7 @@ namespace ModernImageViewer
 
         private void ShowHudAndOverlays()
         {
+            if (_quietBar) return;
             _hudTimer.Stop();
             _hudTimer.Start();
 

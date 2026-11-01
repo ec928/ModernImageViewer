@@ -196,6 +196,8 @@ namespace ModernImageViewer
         public double MotionZoomChance { get; set; } = 0.5;
         /// <summary>The odds that it aims at a cell with faces, where there is one.</summary>
         public double MotionFaceChance { get; set; } = 0.7;
+        /// <summary>How often a change of layout is something other than a crossfade, 0 to 1.</summary>
+        public double TransitionVariety { get; set; } = 0.5;
 
         /// <summary>How long Play shows each layout. Not playing is not a setting, so there is always a speed.</summary>
         public int PlaySeconds => AutoPlaySeconds > 0 ? AutoPlaySeconds : 5;
@@ -233,6 +235,7 @@ namespace ModernImageViewer
                 read.MotionAmount = Math.Clamp(read.MotionAmount, 0, 1);
                 read.MotionZoomChance = Math.Clamp(read.MotionZoomChance, 0, 1);
                 read.MotionFaceChance = Math.Clamp(read.MotionFaceChance, 0, 1);
+                read.TransitionVariety = Math.Clamp(read.TransitionVariety, 0, 1);
                 return read;
             }
             catch (System.Text.Json.JsonException)
