@@ -1096,6 +1096,22 @@ namespace ModernImageViewer
                     }
                     CloseRequested?.Invoke(this, EventArgs.Empty);
                     return true;
+                case VirtualKey.Left:
+                    if (_autoPlaySeconds > 0)
+                    {
+                        if (_isStoryboardPlayback) _ = StepStoryboardScene(back: true);
+                        else StepLayout(back: true);
+                        return true;
+                    }
+                    break;
+                case VirtualKey.Right:
+                    if (_autoPlaySeconds > 0)
+                    {
+                        if (_isStoryboardPlayback) _ = StepStoryboardScene(back: false);
+                        else StepLayout(back: false);
+                        return true;
+                    }
+                    break;
                 case VirtualKey.Add:
                 case (VirtualKey)187: // = / +
                     ChangeLines(1);

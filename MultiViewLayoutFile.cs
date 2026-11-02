@@ -29,6 +29,9 @@ namespace ModernImageViewer
         [JsonPropertyName("freeform")]
         public List<FreeformCellDto>? Freeform { get; set; }
 
+        [JsonPropertyName("storyboard")]
+        public ShowProject? Storyboard { get; set; }
+
         public string ToJson()
         {
             return JsonSerializer.Serialize(this, new JsonSerializerOptions

@@ -147,6 +147,24 @@ namespace ModernImageViewer
             };
             panel.Children.Add(openLayoutItem);
 
+            if (_activeShow != null && _activeShow.Scenes.Count > 0)
+            {
+                var saveStoryItem = CreateMenuItemButton("Save Storyboard as\u2026", icon: new FontIcon { Glyph = "\uE8B7", FontSize = 13, Foreground = _menuWhiteSecondary });
+                saveStoryItem.Click += async (_, _) =>
+                {
+                    SaveFlyout.Hide();
+                    await SaveStoryboardFileAsync();
+                };
+                panel.Children.Add(saveStoryItem);
+            }
+            var openStoryItem = CreateMenuItemButton("Open Storyboard\u2026", icon: new FontIcon { Glyph = "\uE8B7", FontSize = 13, Foreground = _menuWhiteSecondary });
+            openStoryItem.Click += async (_, _) =>
+            {
+                SaveFlyout.Hide();
+                await OpenStoryboardFileAsync();
+            };
+            panel.Children.Add(openStoryItem);
+
             double autosaveHeight = AddAutoSaveRows(panel);
 
             // Favourites & Recent save locations (last 3 recent, 3 favourites)
@@ -1538,7 +1556,64 @@ namespace ModernImageViewer
                 }
             }
 
+            if (_activeShow != null && _activeShow.Scenes.Count > 0)
+            {
+                layoutFile.Storyboard = _activeShow;
+            }
+
             return layoutFile;
+        }
+
+        private async Task SaveStoryboardFileAsync()
+        {
+            if (MainWindow.Instance == null || _activeShow == null || _activeShow.Scenes.Count == 0) return;
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(MainWindow.Instance);
+            var picker = new Windows.Storage.Pickers.FileSavePicker
+            {
+                SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.PicturesLibrary,
+                SuggestedFileName = SuggestedLayoutName() + "-show"
+            };
+            picker.FileTypeChoices.Add("Storyboard Show", new List<string> { ShowProject.FileExtension });
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+            StorageFile? file = await picker.PickSaveFileAsync();
+            if (file == null) return;
+
+            string json = _activeShow.ToJson();
+            await FileIO.WriteTextAsync(file, json);
+            ShowAutoPlayToast($"Saved Storyboard: {_activeShow.Scenes.Count} scenes");
+        }
+
+        private async Task OpenStoryboardFileAsync()
+        {
+            if (MainWindow.Instance == null) return;
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(MainWindow.Instance);
+            var picker = new Windows.Storage.Pickers.FileOpenPicker
+            {
+                SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.PicturesLibrary,
+                ViewMode = Windows.Storage.Pickers.PickerViewMode.List
+            };
+            picker.FileTypeFilter.Add(ShowProject.FileExtension);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+            StorageFile? file = await picker.PickSingleFileAsync();
+            if (file == null) return;
+
+            try
+            {
+                string json = await FileIO.ReadTextAsync(file);
+                var show = ShowProject.FromJson(json);
+                if (show != null && show.Scenes.Count > 0)
+                {
+                    _activeShow = show;
+                    ShowShownBadge();
+                    ShowAutoPlayState();
+                    ShowTrayCard(NoCell);
+                    ShowAutoPlayToast($"Loaded Storyboard: {show.Scenes.Count} scenes");
+                }
+            }
+            catch (Exception ex)
+            {
+                await ShowExportMessageAsync($"Failed to load Storyboard: {ex.Message}");
+            }
         }
 
         private async Task WriteLayoutFileAsync(StorageFile file, MultiViewLayoutFile layoutFile)
@@ -1740,9 +1815,15 @@ namespace ModernImageViewer
             _freeformBasis = savedW > 0 && savedH > 0 ? new Size(savedW, savedH) : new Size(liveW, liveH);
             RescaleFreeformCards(liveW, liveH);
 
+            if (layoutFile.Storyboard != null && layoutFile.Storyboard.Scenes.Count > 0)
+            {
+                _activeShow = layoutFile.Storyboard;
+            }
+
             for (int i = 0; i < _cellRoots.Length; i++)
                 ShowEmptyState(i);
             ShowShownBadge();
+            ShowAutoPlayState();
 
             ApplyBorderToAllCells();
 

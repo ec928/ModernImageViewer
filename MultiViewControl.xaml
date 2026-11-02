@@ -255,7 +255,18 @@
                 <Border.Shadow>
                     <ThemeShadow/>
                 </Border.Shadow>
-                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                <Grid>
+                    <ProgressBar x:Name="PlayProgressBar"
+                                 Height="2"
+                                 VerticalAlignment="Top"
+                                 Margin="14,-2,14,0"
+                                 Visibility="Collapsed"
+                                 Minimum="0"
+                                 Maximum="100"
+                                 Value="0"
+                                 Foreground="{ThemeResource AccentFillColorDefaultBrush}"
+                                 IsIndeterminate="False"/>
+                    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                     <!-- Group 1: Session Navigation -->
                     <Button Click="CloseButton_Click" 
                             Style="{StaticResource QuietButtonStyle}" 
@@ -468,6 +479,7 @@
                         <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE713;" FontSize="14" />
                     </Button>
                 </StackPanel>
+                </Grid>
             </Border>
         </Grid>
 

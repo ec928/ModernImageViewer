@@ -257,6 +257,27 @@ namespace ModernImageViewer
                     if (!string.IsNullOrEmpty(f.Path)) yield return f.Path;
             }
         }
+
+        public ShowScene Clone()
+        {
+            return new ShowScene
+            {
+                Id = Guid.NewGuid().ToString(),
+                Title = Title,
+                Layout = MultiViewLayoutFile.FromJson(Layout.ToJson()) ?? new MultiViewLayoutFile(),
+                DwellSeconds = DwellSeconds,
+                Transition = Transition,
+                CameraOverride = CameraOverride != null ? new CameraKeyframeOverride
+                {
+                    Start = new CameraViewDto(CameraOverride.Start.Zoom, CameraOverride.Start.X, CameraOverride.Start.Y),
+                    End = new CameraViewDto(CameraOverride.End.Zoom, CameraOverride.End.X, CameraOverride.End.Y),
+                    StartCrop = CameraOverride.StartCrop != null ? new NormalizedRectDto(CameraOverride.StartCrop.X, CameraOverride.StartCrop.Y, CameraOverride.StartCrop.Width, CameraOverride.StartCrop.Height) : null,
+                    EndCrop = CameraOverride.EndCrop != null ? new NormalizedRectDto(CameraOverride.EndCrop.X, CameraOverride.EndCrop.Y, CameraOverride.EndCrop.Width, CameraOverride.EndCrop.Height) : null
+                } : null,
+                IsHidden = IsHidden,
+                Recipe = Recipe
+            };
+        }
     }
 
     public sealed class CameraKeyframeOverride

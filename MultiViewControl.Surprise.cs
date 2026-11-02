@@ -1218,9 +1218,53 @@ namespace ModernImageViewer
 
         private Border? _trayCard;
         private int _trayTab = 0; // 0 = Pool, 1 = Storyboard
+        private bool _trayFilmstripMode;
         private ShowProject? _activeShow;
         private int _showPlaybackIndex = -1;
         private bool _isStoryboardPlayback;
+        private DispatcherTimer? _playbackProgressTimer;
+        private long _sceneStartTimestamp;
+        private double _sceneDwellSeconds;
+
+        private void StartPlaybackProgress(double dwellSeconds)
+        {
+            _sceneDwellSeconds = Math.Max(0.5, dwellSeconds);
+            _sceneStartTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
+            if (PlayProgressBar != null)
+            {
+                PlayProgressBar.Visibility = Visibility.Visible;
+                PlayProgressBar.Value = 0;
+            }
+            if (_playbackProgressTimer == null)
+            {
+                _playbackProgressTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
+                _playbackProgressTimer.Tick += (_, _) =>
+                {
+                    if (_autoPlaySeconds == 0)
+                    {
+                        StopPlaybackProgress();
+                        return;
+                    }
+                    double elapsed = (System.Diagnostics.Stopwatch.GetTimestamp() - _sceneStartTimestamp) / (double)System.Diagnostics.Stopwatch.Frequency;
+                    double pct = Math.Clamp((elapsed / _sceneDwellSeconds) * 100.0, 0, 100);
+                    if (PlayProgressBar != null)
+                    {
+                        PlayProgressBar.Value = pct;
+                    }
+                };
+            }
+            _playbackProgressTimer.Start();
+        }
+
+        private void StopPlaybackProgress()
+        {
+            _playbackProgressTimer?.Stop();
+            if (PlayProgressBar != null)
+            {
+                PlayProgressBar.Visibility = Visibility.Collapsed;
+                PlayProgressBar.Value = 0;
+            }
+        }
 
         private List<TrayImage> TrayImages()
         {
@@ -1325,6 +1369,24 @@ namespace ModernImageViewer
             tabStrip.Children.Add(storyTab);
             topHeader.Children.Add(tabStrip);
 
+            var headerRight = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            var modeToggle = new Button
+            {
+                Content = _trayFilmstripMode ? "🗖 Expand" : "🗕 Filmstrip",
+                Padding = new Thickness(12, 6, 12, 6),
+                CornerRadius = new CornerRadius(14),
+                Style = Resources.TryGetValue("QuietButtonStyle", out var qStyleMode) && qStyleMode is Style qsm ? qsm : null
+            };
+            ToolTipService.SetToolTip(modeToggle, _trayFilmstripMode
+                ? "Expand to full review card (view all details)"
+                : "Dock as bottom filmstrip (view canvas while composing scenes)");
+            modeToggle.Click += (_, _) =>
+            {
+                _trayFilmstripMode = !_trayFilmstripMode;
+                ShowTrayCard(intoSlot);
+            };
+            headerRight.Children.Add(modeToggle);
+
             var close = new Button
             {
                 Content = "Close",
@@ -1334,8 +1396,9 @@ namespace ModernImageViewer
             };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(close, "Close panel");
             close.Click += (_, _) => RemoveTrayCard();
-            Grid.SetColumn(close, 1);
-            topHeader.Children.Add(close);
+            headerRight.Children.Add(close);
+            Grid.SetColumn(headerRight, 1);
+            topHeader.Children.Add(headerRight);
 
             // --- 2. Container A: Image Pool Tab ---
             var poolContainer = new Grid { RowSpacing = 8 };
@@ -1383,6 +1446,15 @@ namespace ModernImageViewer
                     "<DataTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><Grid Width=\"132\" Height=\"96\"><Image Stretch=\"UniformToFill\"/></Grid></DataTemplate>")
             };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(thumbnails, "ImageTray");
+            if (_trayFilmstripMode)
+            {
+                ScrollViewer.SetHorizontalScrollBarVisibility(thumbnails, ScrollBarVisibility.Auto);
+                ScrollViewer.SetHorizontalScrollMode(thumbnails, ScrollMode.Enabled);
+                ScrollViewer.SetVerticalScrollBarVisibility(thumbnails, ScrollBarVisibility.Disabled);
+                ScrollViewer.SetVerticalScrollMode(thumbnails, ScrollMode.Disabled);
+                thumbnails.ItemsPanel = (ItemsPanelTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(
+                    "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><StackPanel Orientation=\"Horizontal\" Spacing=\"8\"/></ItemsPanelTemplate>");
+            }
 
             void RemoveFromSession(string path)
             {
@@ -1599,15 +1671,36 @@ namespace ModernImageViewer
                     "    <Border HorizontalAlignment=\"Left\" VerticalAlignment=\"Top\" Margin=\"6\" Background=\"#CC000000\" CornerRadius=\"4\" Padding=\"6,2\" IsHitTestVisible=\"False\">" +
                     "      <TextBlock Text=\"Solo 1\" FontSize=\"11\" Foreground=\"White\" FontWeight=\"SemiBold\"/>" +
                     "    </Border>" +
-                    "    <Border HorizontalAlignment=\"Right\" VerticalAlignment=\"Top\" Margin=\"6\" Background=\"#CC000000\" CornerRadius=\"4\" Padding=\"6,2\" IsHitTestVisible=\"False\">" +
+                    "    <Border HorizontalAlignment=\"Right\" VerticalAlignment=\"Top\" Margin=\"6\" Background=\"#CC000000\" CornerRadius=\"4\" Padding=\"6,2\">" +
                     "      <TextBlock Text=\"⏱ 12s\" FontSize=\"11\" Foreground=\"#4CC2FF\"/>" +
                     "    </Border>" +
-                    "    <Grid VerticalAlignment=\"Bottom\" Height=\"32\" Background=\"#F0161616\" Padding=\"8,4\" IsHitTestVisible=\"False\">" +
+                    "    <Grid VerticalAlignment=\"Bottom\" Height=\"32\" Background=\"#F0161616\" Padding=\"6,2\">" +
+                    "      <Grid.ColumnDefinitions>" +
+                    "        <ColumnDefinition Width=\"*\"/>" +
+                    "        <ColumnDefinition Width=\"Auto\"/>" +
+                    "        <ColumnDefinition Width=\"Auto\"/>" +
+                    "      </Grid.ColumnDefinitions>" +
                     "      <TextBlock Text=\"Recipe\" FontSize=\"11\" Foreground=\"White\" VerticalAlignment=\"Center\" TextTrimming=\"CharacterEllipsis\"/>" +
+                    "      <Button Grid.Column=\"1\" Padding=\"4,2\" Margin=\"2,0\" Background=\"Transparent\" BorderThickness=\"0\" CornerRadius=\"4\" ToolTipService.ToolTip=\"Duplicate scene\">" +
+                    "        <FontIcon FontFamily=\"Segoe Fluent Icons\" Glyph=\"&#xE8C8;\" FontSize=\"11\" Foreground=\"#B0FFFFFF\"/>" +
+                    "      </Button>" +
+                    "      <Button Grid.Column=\"2\" Padding=\"4,2\" Margin=\"2,0\" Background=\"Transparent\" BorderThickness=\"0\" CornerRadius=\"4\" ToolTipService.ToolTip=\"Remove scene\">" +
+                    "        <FontIcon FontFamily=\"Segoe Fluent Icons\" Glyph=\"&#xE711;\" FontSize=\"11\" Foreground=\"#B0FFFFFF\"/>" +
+                    "      </Button>" +
                     "    </Grid>" +
                     "  </Grid>" +
                     "</DataTemplate>")
             };
+
+            if (_trayFilmstripMode)
+            {
+                ScrollViewer.SetHorizontalScrollBarVisibility(scenesView, ScrollBarVisibility.Auto);
+                ScrollViewer.SetHorizontalScrollMode(scenesView, ScrollMode.Enabled);
+                ScrollViewer.SetVerticalScrollBarVisibility(scenesView, ScrollBarVisibility.Disabled);
+                ScrollViewer.SetVerticalScrollMode(scenesView, ScrollMode.Disabled);
+                scenesView.ItemsPanel = (ItemsPanelTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(
+                    "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><StackPanel Orientation=\"Horizontal\" Spacing=\"8\"/></ItemsPanelTemplate>");
+            }
 
             void RefreshCardBadges()
             {
@@ -1741,6 +1834,55 @@ namespace ModernImageViewer
                 if (recipeText != null)
                 {
                     recipeText.Text = scene.Title ?? scene.Recipe ?? $"Scene ({scene.PhotoCount})";
+                }
+
+                if (dwellBorder != null)
+                {
+                    ToolTipService.SetToolTip(dwellBorder, "Click to change dwell time");
+                    dwellBorder.PointerPressed += (sender, e) =>
+                    {
+                        e.Handled = true;
+                        var flyout = new MenuFlyout();
+                        if (Resources.TryGetValue("MultiViewMenuFlyoutPresenterStyle", out var style) && style is Style presenter)
+                            flyout.MenuFlyoutPresenterStyle = presenter;
+                        foreach (int secs in new[] { 5, 8, 12, 16, 20, 30 })
+                        {
+                            int s = secs;
+                            bool isCurrent = Math.Abs((scene.DwellSeconds ?? 12.0) - s) < 0.5;
+                            var item = new MenuFlyoutItem { Text = isCurrent ? $"{s}s  ✓" : $"{s}s" };
+                            item.Click += (_, _) =>
+                            {
+                                scene.DwellSeconds = s;
+                                if (dwellText != null) dwellText.Text = $"{motionLabel} · {s}s";
+                                UpdateStoryboardSummary();
+                            };
+                            flyout.Items.Add(item);
+                        }
+                        flyout.ShowAt(dwellBorder);
+                    };
+                }
+
+                if (bottomGrid?.Children.Count > 1 && bottomGrid.Children[1] is Button dupBtn)
+                {
+                    dupBtn.Click += (s, e) =>
+                    {
+                        var clone = scene.Clone();
+                        int idx = scenesCollection.IndexOf(scene);
+                        scenesCollection.Insert(idx + 1, clone);
+                        _activeShow!.Scenes = scenesCollection.ToList();
+                        SyncStoryboardUI();
+                        ShowAutoPlayToast("Duplicated scene");
+                    };
+                }
+                if (bottomGrid?.Children.Count > 2 && bottomGrid.Children[2] is Button delBtn)
+                {
+                    delBtn.Click += (s, e) =>
+                    {
+                        scenesCollection.Remove(scene);
+                        _activeShow?.Scenes.Remove(scene);
+                        SyncStoryboardUI();
+                        ShowAutoPlayToast("Removed scene");
+                    };
                 }
 
                 string? leadPhoto = scene.GetPhotoPaths().FirstOrDefault();
@@ -2012,9 +2154,22 @@ namespace ModernImageViewer
 
             // Stretched up to a comfortable size for reviewing cards
             _trayCard = NewCard(body);
-            _trayCard.MaxWidth = 820;
-            _trayCard.MaxHeight = 580;
-            _trayCard.Margin = new Thickness(16);
+            if (_trayFilmstripMode)
+            {
+                _trayCard.MaxWidth = 1100;
+                _trayCard.MaxHeight = 220;
+                _trayCard.VerticalAlignment = VerticalAlignment.Bottom;
+                _trayCard.HorizontalAlignment = HorizontalAlignment.Center;
+                _trayCard.Margin = new Thickness(16, 0, 16, 60);
+            }
+            else
+            {
+                _trayCard.MaxWidth = 820;
+                _trayCard.MaxHeight = 580;
+                _trayCard.VerticalAlignment = VerticalAlignment.Center;
+                _trayCard.HorizontalAlignment = HorizontalAlignment.Center;
+                _trayCard.Margin = new Thickness(16);
+            }
             _trayCard.Padding = new Thickness(14);
             AddOverCanvas(_trayCard, 6500);
             HudMenu_Opened(this, EventArgs.Empty);
@@ -2125,6 +2280,7 @@ namespace ModernImageViewer
             int totalDisplay = visibleScenes.Count;
             string sceneName = scene.Title ?? scene.Recipe ?? $"Scene {displayIndex}";
             ShowAutoPlayToast($"Scene {displayIndex} of {totalDisplay}: {sceneName}");
+            StartPlaybackProgress(_layoutSeconds);
 
             _showPlaybackIndex = (currentIndex + 1) % visibleScenes.Count;
         }
@@ -2276,6 +2432,7 @@ namespace ModernImageViewer
         {
             if (_autoPlaySeconds == 0) return;
             _autoPlaySeconds = 0;
+            StopPlaybackProgress();
             _autoPlayTimer?.Stop();
             _autoPlayTimer = null;
             if (!_autoPlayShieldPressed) RemoveAutoPlayShield();
@@ -2291,15 +2448,18 @@ namespace ModernImageViewer
         {
             bool playing = _autoPlaySeconds > 0;
             bool isStory = _isStoryboardPlayback && _activeShow != null && _activeShow.Scenes.Count > 0;
+            bool hasScenes = _activeShow != null && _activeShow.Scenes.Count > 0;
             string glyph = playing ? "\uE769" : "\uE768";
-            string text = playing ? (isStory ? "Pause" : SurpriseChoices.PlayLabel) : "Play";
+            string text = playing
+                ? (isStory ? "Pause" : SurpriseChoices.PlayLabel)
+                : (hasScenes ? "Play Show" : "Play");
             AutoPlayIcon.Glyph = glyph;
             AutoPlayText.Text = text;
 
             string playTip = playing
-                ? (isStory ? "Pause Storyboard presentation. Space or click does the same." : "Pause. A click on the canvas, Esc or Space does the same.")
-                : (_activeShow != null && _activeShow.Scenes.Count > 0
-                    ? $"Play Storyboard ({_activeShow.Scenes.Count} scenes). Space does the same."
+                ? (isStory ? "Pause Storyboard presentation (Space). Left/Right arrows skip scenes." : "Pause (Space). Left/Right arrows skip layouts.")
+                : (hasScenes
+                    ? $"Play Storyboard show ({_activeShow!.Scenes.Count} {(_activeShow.Scenes.Count == 1 ? "scene" : "scenes")} • {_activeShow.TotalEstimatedDuration:F0}s). Space does the same."
                     : $"Play a new layout every {SurpriseChoices.PlayWords}. Space does the same.");
 
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(AutoPlayButton, playing ? "Pause presentation" : "Play presentation");
@@ -2643,6 +2803,7 @@ namespace ModernImageViewer
                 if (_autoPlaySeconds > 0) _layoutSeconds = options.NextPlaySeconds(Random.Shared, composition.Cells.Count, ref _lastPlayWasLong);
                 if (before != null && _autoPlaySeconds > 0) StartCanvasCamera(composition);
                 if (before != null) ChangeLayoutOver(before, outgoingStep);
+                if (_autoPlaySeconds > 0) StartPlaybackProgress(_layoutSeconds);
                 StartPreparingNextSurprise();
             }
             finally

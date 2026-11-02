@@ -487,5 +487,80 @@ namespace ModernImageViewer.Tests
                 + " side4=" + sideNear
                 + " outer=" + outer);
         }
+
+        [Fact]
+        public void SerializeAndDeserialize_PreservesEmbeddedStoryboard()
+        {
+            var project = new ShowProject { Title = "Summer Vacation" };
+            project.Scenes.Add(new ShowScene
+            {
+                Title = "Opening Scene",
+                Recipe = "Solo",
+                DwellSeconds = 16.0,
+                CameraOverride = new CameraKeyframeOverride(
+                    new CameraViewDto(1.0, 0.5, 0.5),
+                    new CameraViewDto(1.4, 0.5, 0.4))
+            });
+
+            var file = new MultiViewLayoutFile
+            {
+                Storyboard = project
+            };
+
+            string json = file.ToJson();
+            Assert.Contains(@"""storyboard""", json);
+            Assert.Contains(@"Summer Vacation", json);
+            Assert.Contains(@"Opening Scene", json);
+
+            var loaded = MultiViewLayoutFile.FromJson(json);
+            Assert.NotNull(loaded?.Storyboard);
+            Assert.Equal("Summer Vacation", loaded.Storyboard.Title);
+            Assert.Single(loaded.Storyboard.Scenes);
+            var scene = loaded.Storyboard.Scenes[0];
+            Assert.Equal("Opening Scene", scene.Title);
+            Assert.Equal(16.0, scene.DwellSeconds);
+            Assert.NotNull(scene.CameraOverride);
+            Assert.Equal(1.4, scene.CameraOverride.End.Zoom);
+        }
+
+        [Fact]
+        public void ShowScene_Clone_CreatesDeepIndependentCopy()
+        {
+            var orig = new ShowScene
+            {
+                Title = "Original Scene",
+                Recipe = "Solo",
+                DwellSeconds = 12.0,
+                Layout = new MultiViewLayoutFile
+                {
+                    Photos = new List<PhotoSlotDto>
+                    {
+                        new() { Slot = 0, Path = @"C:\Test\Photo.jpg" }
+                    }
+                },
+                CameraOverride = new CameraKeyframeOverride(
+                    new CameraViewDto(1.0, 0.5, 0.5),
+                    new CameraViewDto(1.3, 0.6, 0.5))
+            };
+
+            var clone = orig.Clone();
+            Assert.NotEqual(orig.Id, clone.Id);
+            Assert.Equal(orig.Title, clone.Title);
+            Assert.Equal(orig.Recipe, clone.Recipe);
+            Assert.Equal(orig.DwellSeconds, clone.DwellSeconds);
+            Assert.Single(clone.Layout.Photos);
+            Assert.Equal(@"C:\Test\Photo.jpg", clone.Layout.Photos[0].Path);
+
+            // Modifying clone does not mutate original
+            clone.Title = "Cloned Scene";
+            clone.DwellSeconds = 20.0;
+            clone.Layout.Photos[0].Path = @"C:\Test\Different.jpg";
+            clone.CameraOverride!.End.Zoom = 2.0;
+
+            Assert.Equal("Original Scene", orig.Title);
+            Assert.Equal(12.0, orig.DwellSeconds);
+            Assert.Equal(@"C:\Test\Photo.jpg", orig.Layout.Photos[0].Path);
+            Assert.Equal(1.3, orig.CameraOverride.End.Zoom);
+        }
     }
 }

@@ -240,6 +240,8 @@ namespace ModernImageViewer
                     ? $"Open Storyboard ({scenes} scenes drafted). Reorder, review, and edit your presentation (B)."
                     : "Open Storyboard to compose, auto-draft, and sequence a presentation from your photos (B).");
             }
+
+            ShowAutoPlayState();
         }
 
         private int VisibleCount(int count)
