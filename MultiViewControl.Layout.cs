@@ -216,7 +216,7 @@ namespace ModernImageViewer
             if (ShownBadge != null)
             {
                 ShownBadge.Visibility = Visibility.Visible;
-                ShownBadge.Background = isTrayOpen ? new SolidColorBrush(Windows.UI.Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF)) : null;
+                HoldFlyoutSource(ShownBadge, isTrayOpen);
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(ShownBadge, tray > 0 ? $"Image Tray ({tray})" : "Image Tray");
                 ToolTipService.SetToolTip(ShownBadge, tray > 0
                     ? $"Open Image Tray ({tray} unplaced images). Click one to put it on canvas or remove from session."
@@ -230,7 +230,7 @@ namespace ModernImageViewer
             if (StoryboardButton != null)
             {
                 StoryboardButton.Visibility = Visibility.Visible;
-                StoryboardButton.Background = isStoryOpen ? new SolidColorBrush(Windows.UI.Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF)) : null;
+                HoldFlyoutSource(StoryboardButton, isStoryOpen);
             }
             if (StoryboardText != null)
             {

@@ -161,7 +161,9 @@ The Multi-View playbar is organized into five cohesive desktop functional cluste
 5. **Canvas Framing & Utilities**: `[ Canvas ^ ]`, `[ Save/Load ]`, and `[ ⚙ Advanced ]`.
 
 **The Image Tray & Storyboard Drawer** is a unified multi-purpose slide-up sheet anchored over the lower canvas:
+- **Card Geometry & Cursor Stability**: The drawer uses a consistent, fixed card dimension (820×560 in standard Card mode, 1100×220 in Filmstrip mode). Switching between the Image Tray and Storyboard tabs preserves card position and dimensions exactly, keeping top header tab buttons pinned under the user's mouse cursor without layout jitter or target invalidation.
 - **Tab 1: Image Tray**: Displays unplaced session images with interactive thumbnail grid, search box, and session pool readouts (`"Session pool: 18 total photos (16 on canvas, 2 in tray)"`). Click an image to place it on the canvas; right-click to remove it from the session.
+  - **All-On-Canvas Empty State**: When 0 photos are in the tray (all session photos are on canvas), the tray displays a dedicated centered empty-state view explaining that all session photos are placed, with a direct `[ ➕ Add Images... ]` action button to import more photos from disk.
 - **Tab 2: Storyboard**: The presentation sequencer and scene director.
   - **Manual Scene Capture**: Direct action buttons `[ 📷 + Add Canvas ]` and `[ 📷 Capture Current Canvas as Scene 1 ]` snapshot the current visual composition into an editable scene card.
   - **Auto-Drafting**: `[ 🪄 Auto-Draft Show ]` generates paced, balanced multi-card presentations from the entire photo session pool.

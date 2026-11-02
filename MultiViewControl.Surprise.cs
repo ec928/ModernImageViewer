@@ -103,7 +103,28 @@ namespace ModernImageViewer
                     e.Handled = true;
                 }
             }), true);
-            RootGrid.SizeChanged += (_, _) => PlaceSurpriseCard();
+            RootGrid.SizeChanged += (_, _) =>
+            {
+                PlaceSurpriseCard();
+                UpdateTrayCardDimensions();
+            };
+        }
+
+        private void UpdateTrayCardDimensions()
+        {
+            if (_trayCard == null) return;
+            double availW = ActualWidth > 0 ? ActualWidth : 1200;
+            double availH = ActualHeight > 0 ? ActualHeight : 800;
+            if (_trayFilmstripMode)
+            {
+                _trayCard.Width = Math.Min(1100, Math.Max(500, availW - 48));
+                _trayCard.Height = 220;
+            }
+            else
+            {
+                _trayCard.Width = Math.Min(820, Math.Max(500, availW - 48));
+                _trayCard.Height = Math.Min(560, Math.Max(360, availH - 96));
+            }
         }
 
         private const double SurpriseCardWidth = 530;
@@ -1410,17 +1431,6 @@ namespace ModernImageViewer
                 : $"Click one to {(IsEmptyCell(_items[intoSlot]) ? "add it to" : "swap it into")} position {PositionOfSlot(intoSlot)}.";
             var heading = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
             var poolSubtitle = new TextBlock { FontSize = 12, Opacity = 0.7 };
-            void ShowHeading()
-            {
-                heading.Text = current.Count == all.Count
-                    ? (all.Count == 0 ? "The image tray is empty." : $"Image tray: {all.Count} unplaced {(all.Count == 1 ? "photo" : "photos")}. {click}")
-                    : current.Count == 0 ? "No image in the tray has that in its name."
-                    : $"Image tray: {current.Count} of {all.Count}. {click}";
-                int sessionCount = SessionPictures().Count;
-                int onCanvas = ImagesOnCanvas();
-                poolSubtitle.Text = $"Session pool: {sessionCount} total photos ({onCanvas} on canvas, {all.Count} in tray)";
-            }
-            ShowHeading();
 
             var search = new TextBox { PlaceholderText = "Search names", MinWidth = 200 };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(search, "Search the image tray");
@@ -1436,6 +1446,45 @@ namespace ModernImageViewer
             var hint = new TextBlock { Text = "Right-click an image to remove it from the session.", FontSize = 12, Opacity = 0.7 };
             hintStack.Children.Add(poolSubtitle);
             hintStack.Children.Add(hint);
+
+            var emptyTrayPanel = new StackPanel
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Spacing = 10,
+                Margin = new Thickness(20)
+            };
+            var emptyTrayIcon = new FontIcon { Glyph = "\uE8B9", FontSize = 40, Foreground = winBlue };
+            var emptyTrayTitle = new TextBlock
+            {
+                FontSize = 16,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                HorizontalAlignment = HorizontalAlignment.Center
+            };
+            var emptyTrayDesc = new TextBlock
+            {
+                FontSize = 13,
+                Opacity = 0.75,
+                MaxWidth = 440,
+                TextWrapping = TextWrapping.Wrap,
+                TextAlignment = TextAlignment.Center
+            };
+            var emptyTrayAddBtn = new Button
+            {
+                Content = "➕ Add Images...",
+                Background = winBlueDeep,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White),
+                BorderBrush = winBlue,
+                CornerRadius = new CornerRadius(16),
+                Padding = new Thickness(18, 8, 18, 8),
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                HorizontalAlignment = HorizontalAlignment.Center
+            };
+            emptyTrayAddBtn.Click += (_, _) => AddImagesRequested?.Invoke(this, EventArgs.Empty);
+            emptyTrayPanel.Children.Add(emptyTrayIcon);
+            emptyTrayPanel.Children.Add(emptyTrayTitle);
+            emptyTrayPanel.Children.Add(emptyTrayDesc);
+            emptyTrayPanel.Children.Add(emptyTrayAddBtn);
 
             var thumbnails = new GridView
             {
@@ -1456,6 +1505,36 @@ namespace ModernImageViewer
                     "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><StackPanel Orientation=\"Horizontal\" Spacing=\"8\"/></ItemsPanelTemplate>");
             }
 
+            void ShowHeading()
+            {
+                int sessionCount = SessionPictures().Count;
+                int onCanvas = ImagesOnCanvas();
+                bool hasTray = all.Count > 0;
+
+                heading.Text = current.Count == all.Count
+                    ? (all.Count == 0 ? $"Image tray: 0 unplaced photos · Session pool: {sessionCount} total photos ({onCanvas} on canvas)"
+                                      : $"Image tray: {all.Count} unplaced {(all.Count == 1 ? "photo" : "photos")}. {click}")
+                    : current.Count == 0 ? "No image in the tray matches that name."
+                    : $"Image tray: {current.Count} of {all.Count}. {click}";
+
+                poolSubtitle.Text = $"Session pool: {sessionCount} total photos ({onCanvas} on canvas, {all.Count} in tray)";
+
+                search.Visibility = hasTray ? Visibility.Visible : Visibility.Collapsed;
+                hintStack.Visibility = hasTray ? Visibility.Visible : Visibility.Collapsed;
+                thumbnails.Visibility = hasTray ? Visibility.Visible : Visibility.Collapsed;
+                emptyTrayPanel.Visibility = hasTray ? Visibility.Collapsed : Visibility.Visible;
+
+                if (!hasTray)
+                {
+                    emptyTrayTitle.Text = sessionCount > 0 ? "All Photos Are on Canvas" : "Image Tray is Empty";
+                    emptyTrayDesc.Text = sessionCount > 0
+                        ? $"All {sessionCount} photos in this session are currently placed on the canvas.\nRight-click any photo on the canvas and choose 'Move to Tray' to park it here, or add more photos."
+                        : "No photos have been added to the session yet.\nAdd photos from your folders to start arranging and composing presentations.";
+                }
+            }
+
+            ShowHeading();
+
             void RemoveFromSession(string path)
             {
                 int slot = TraySlotOf(path);
@@ -1466,8 +1545,7 @@ namespace ModernImageViewer
                 ShowHeading();
                 ShowTrayChanged();
                 poolTab.Content = $"📥 Image Tray ({all.Count})";
-                if (all.Count == 0 && (_activeShow == null || _activeShow.Scenes.Count == 0)) RemoveTrayCard();
-                else search.Focus(FocusState.Programmatic);
+                if (all.Count > 0) search.Focus(FocusState.Programmatic);
             }
 
             thumbnails.ContainerContentChanging += (_, args) =>
@@ -1507,6 +1585,8 @@ namespace ModernImageViewer
             poolContainer.Children.Add(poolControlsRow);
             Grid.SetRow(hintStack, 1);
             poolContainer.Children.Add(hintStack);
+            Grid.SetRow(emptyTrayPanel, 2);
+            poolContainer.Children.Add(emptyTrayPanel);
             Grid.SetRow(thumbnails, 2);
             poolContainer.Children.Add(thumbnails);
 
@@ -2136,7 +2216,7 @@ namespace ModernImageViewer
                 ShowShownBadge();
             }
 
-            poolTab.Click += (_, _) => { _trayTab = 0; SyncTabs(); search.Focus(FocusState.Programmatic); };
+            poolTab.Click += (_, _) => { _trayTab = 0; SyncTabs(); if (all.Count > 0) search.Focus(FocusState.Programmatic); };
             storyTab.Click += (_, _) => { _trayTab = 1; SyncTabs(); };
 
             SyncTabs();
@@ -2152,20 +2232,22 @@ namespace ModernImageViewer
             Grid.SetRow(storyContainer, 1);
             body.Children.Add(storyContainer);
 
-            // Stretched up to a comfortable size for reviewing cards
+            // Fixed comfortable size so switching tabs never resizes the card or moves headers
             _trayCard = NewCard(body);
+            double availW = ActualWidth > 0 ? ActualWidth : 1200;
+            double availH = ActualHeight > 0 ? ActualHeight : 800;
             if (_trayFilmstripMode)
             {
-                _trayCard.MaxWidth = 1100;
-                _trayCard.MaxHeight = 220;
+                _trayCard.Width = Math.Min(1100, Math.Max(500, availW - 48));
+                _trayCard.Height = 220;
                 _trayCard.VerticalAlignment = VerticalAlignment.Bottom;
                 _trayCard.HorizontalAlignment = HorizontalAlignment.Center;
                 _trayCard.Margin = new Thickness(16, 0, 16, 60);
             }
             else
             {
-                _trayCard.MaxWidth = 820;
-                _trayCard.MaxHeight = 580;
+                _trayCard.Width = Math.Min(820, Math.Max(500, availW - 48));
+                _trayCard.Height = Math.Min(560, Math.Max(360, availH - 96));
                 _trayCard.VerticalAlignment = VerticalAlignment.Center;
                 _trayCard.HorizontalAlignment = HorizontalAlignment.Center;
                 _trayCard.Margin = new Thickness(16);
@@ -2174,7 +2256,7 @@ namespace ModernImageViewer
             AddOverCanvas(_trayCard, 6500);
             HudMenu_Opened(this, EventArgs.Empty);
             ShowShownBadge();
-            if (_trayTab == 0) search.Loaded += (_, _) => search.Focus(FocusState.Programmatic);
+            if (_trayTab == 0 && all.Count > 0) search.Loaded += (_, _) => search.Focus(FocusState.Programmatic);
         }
 
         private async Task PlayStoryboardAsync()
@@ -2481,19 +2563,28 @@ namespace ModernImageViewer
                 AutoPlayIcon.ClearValue(IconElement.ForegroundProperty);
             }
 
-            if (StoryboardButton != null && StoryboardText != null && StoryboardIcon != null)
+            if (ShownBadge != null)
+            {
+                bool isTrayOpen = _trayCard != null && _trayTab == 0;
+                HoldFlyoutSource(ShownBadge, isTrayOpen);
+            }
+
+            if (StoryboardButton != null)
             {
                 if (playing && isStory)
                 {
                     StoryboardButton.Background = accent;
-                    StoryboardText.Foreground = onAccent;
-                    StoryboardIcon.Foreground = onAccent;
+                    StoryboardButton.ClearValue(Control.BorderBrushProperty);
+                    StoryboardButton.ClearValue(Control.BorderThicknessProperty);
+                    if (StoryboardText != null) StoryboardText.Foreground = onAccent;
+                    if (StoryboardIcon != null) StoryboardIcon.Foreground = onAccent;
                 }
                 else
                 {
-                    StoryboardButton.ClearValue(Control.BackgroundProperty);
-                    StoryboardText.ClearValue(TextBlock.ForegroundProperty);
-                    StoryboardIcon.ClearValue(IconElement.ForegroundProperty);
+                    bool isStoryOpen = _trayCard != null && _trayTab == 1;
+                    HoldFlyoutSource(StoryboardButton, isStoryOpen);
+                    if (StoryboardText != null) StoryboardText.ClearValue(TextBlock.ForegroundProperty);
+                    if (StoryboardIcon != null) StoryboardIcon.ClearValue(IconElement.ForegroundProperty);
                 }
             }
             if (_cardPlayIcon != null) _cardPlayIcon.Glyph = glyph;
