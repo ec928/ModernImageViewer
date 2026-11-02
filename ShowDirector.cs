@@ -187,39 +187,43 @@ namespace ModernImageViewer
                 return result;
             }
 
-            // Rhythmic pattern template to give presentations cinematic pacing
-            // (e.g. Solo -> 3-photo -> Duo -> 4-photo Hero -> etc.)
-            int[] rhythmicCadence = { 1, 3, 2, 4, 1, 3, 6, 2, 4 };
-            int cadenceIdx = 0;
+            // One scene uses the top of the range, so "1 to 16" is not a list that never reaches 16.
+            bool placeTop = most > fewest && photos.Count >= most;
+            int topAt = placeTop ? random.Next(Math.Max(1, photos.Count / most)) : -1;
+            bool placedTop = !placeTop;
 
             int index = 0;
+            int scene = 0;
             while (index < photos.Count)
             {
                 int remaining = photos.Count - index;
-
-                // Pick target size within bounds using the rhythmic cadence as a guide
-                int target = rhythmicCadence[cadenceIdx % rhythmicCadence.Length];
-                cadenceIdx++;
-
-                target = Math.Clamp(target, fewest, most);
-
-                // Don't leave an awkward orphan 1 photo at the end if fewest > 1
-                if (remaining - target < fewest && remaining - target > 0)
+                int target;
+                if (!placedTop && (scene == topAt || remaining <= most))
                 {
-                    if (remaining <= most)
-                    {
-                        target = remaining;
-                    }
-                    else
-                    {
-                        target = Math.Max(fewest, remaining / 2);
-                    }
+                    target = Math.Min(most, remaining);
+                    placedTop = true;
+                }
+                else
+                {
+                    int high = Math.Min(most, remaining);
+                    int low = Math.Min(fewest, high);
+                    target = random.Next(low, high + 1);
+                }
+
+                // A leftover smaller than the minimum joins this scene, or the next scene is left large enough.
+                int leftover = remaining - target;
+                if (leftover > 0 && leftover < fewest)
+                {
+                    target = remaining <= most
+                        ? remaining
+                        : Math.Clamp(remaining - fewest, fewest, most);
                 }
 
                 target = Math.Min(target, remaining);
                 var chunk = photos.Skip(index).Take(target).ToList();
                 result.Add(chunk);
                 index += target;
+                scene++;
             }
 
             return result;

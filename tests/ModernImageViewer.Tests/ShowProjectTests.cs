@@ -220,5 +220,38 @@ namespace ModernImageViewer.Tests
             Assert.Contains(@"C:\p\photo3.png", paths);
             Assert.Contains(@"C:\p\photo4.jpg", paths);
         }
+
+        [Fact]
+        public void Scene_counts_the_canvas_and_not_the_image_pool_beside_it()
+        {
+            var scene = new ShowScene();
+            scene.Layout.State.FramedSlots = 3;
+            scene.Layout.Photos.Add(new PhotoSlotDto { Slot = 0, Path = @"C:\p\a.jpg" });
+            scene.Layout.Photos.Add(new PhotoSlotDto { Slot = 1, Path = @"C:\p\b.jpg" });
+            scene.Layout.Photos.Add(new PhotoSlotDto { Slot = 2, Path = string.Empty });
+            scene.Layout.Photos.Add(new PhotoSlotDto { Slot = 3, Path = @"C:\p\pool1.jpg" });
+            scene.Layout.Photos.Add(new PhotoSlotDto { Slot = 4, Path = @"C:\p\pool2.jpg" });
+            scene.Layout.Freeform = new List<FreeformCellDto>
+            {
+                new FreeformCellDto { Path = @"C:\p\float.jpg" }
+            };
+
+            Assert.Equal(new[] { @"C:\p\a.jpg", @"C:\p\b.jpg", @"C:\p\float.jpg" }, scene.GetPhotoPaths().ToArray());
+            // Two pictures, one empty canvas slot, one floating picture. The pool is not in the count.
+            Assert.Equal(4, scene.PhotoCount);
+            Assert.False(scene.IsSolo);
+
+            scene.KeepCanvasPhotos();
+            Assert.Equal(3, scene.Layout.Photos.Count);
+            Assert.All(scene.Layout.Photos, photo => Assert.True(photo.Slot < 3));
+            Assert.Equal(new[] { @"C:\p\a.jpg", @"C:\p\b.jpg", @"C:\p\float.jpg" }, scene.GetPhotoPaths().ToArray());
+
+            var draft = new ShowScene();
+            draft.Layout.Photos.Add(new PhotoSlotDto { Slot = 0, Path = @"C:\p\a.jpg" });
+            draft.Layout.Photos.Add(new PhotoSlotDto { Slot = 1, Path = @"C:\p\b.jpg" });
+            draft.KeepCanvasPhotos();
+            Assert.Equal(2, draft.Layout.Photos.Count);
+            Assert.Equal(2, draft.GetPhotoPaths().Count());
+        }
     }
 }

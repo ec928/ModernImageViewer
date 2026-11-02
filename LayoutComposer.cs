@@ -217,6 +217,24 @@ namespace ModernImageViewer
         /// <summary>How often a change of layout is something other than a crossfade, 0 to 1.</summary>
         public double TransitionVariety { get; set; } = 0.5;
 
+        public const string ProgressBottom = "Bottom";
+        public const string ProgressTop = "Top";
+        public const string ProgressLeft = "Left";
+        public const string ProgressRight = "Right";
+        public static readonly string[] ProgressEdges = { ProgressBottom, ProgressTop, ProgressLeft, ProgressRight };
+
+        public const string ProgressAccent = "Accent";
+        public const string ProgressWhite = "White";
+        public const string ProgressAmber = "Amber";
+        public const string ProgressAqua = "Aqua";
+        public const string ProgressRose = "Rose";
+        public static readonly string[] ProgressColors = { ProgressAccent, ProgressWhite, ProgressAmber, ProgressAqua, ProgressRose };
+
+        /// <summary>The line along a screen edge that fills while a layout holds. Off leaves the pictures clear.</summary>
+        public bool ProgressOn { get; set; } = true;
+        public string ProgressEdge { get; set; } = ProgressBottom;
+        public string ProgressColor { get; set; } = ProgressAccent;
+
         /// <summary>How long Play shows each layout. Not playing is not a setting, so there is always a speed.</summary>
         public int PlaySeconds => AutoPlaySeconds > 0 ? AutoPlaySeconds : 5;
 
@@ -275,6 +293,8 @@ namespace ModernImageViewer
                 read.MotionZoomChance = Math.Clamp(read.MotionZoomChance, 0, 1);
                 read.MotionFaceChance = Math.Clamp(read.MotionFaceChance, 0, 1);
                 read.TransitionVariety = Math.Clamp(read.TransitionVariety, 0, 1);
+                if (string.IsNullOrEmpty(read.ProgressEdge) || !ProgressEdges.Contains(read.ProgressEdge)) read.ProgressEdge = ProgressBottom;
+                if (string.IsNullOrEmpty(read.ProgressColor) || !ProgressColors.Contains(read.ProgressColor)) read.ProgressColor = ProgressAccent;
                 return read;
             }
             catch (System.Text.Json.JsonException)

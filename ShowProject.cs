@@ -238,24 +238,58 @@ namespace ModernImageViewer
         public string? Recipe { get; set; }
 
         [JsonIgnore]
-        public int PhotoCount => (Layout.Photos?.Count ?? 0) + (Layout.Freeform?.Count ?? 0);
+        public int PhotoCount
+        {
+            get
+            {
+                int framed = Layout?.State?.FramedSlots ?? 0;
+                int slots = 0;
+                if (Layout?.Photos != null)
+                {
+                    foreach (var photo in Layout.Photos)
+                    {
+                        // Slots at or past FramedSlots are the rest of the image pool, kept so the
+                        // session can put them back. They are not photos in this scene.
+                        if (framed > 0 && photo.Slot >= framed) continue;
+                        slots++;
+                    }
+                }
+                return slots + (Layout?.Freeform?.Count ?? 0);
+            }
+        }
 
         [JsonIgnore]
         public bool IsSolo => PhotoCount == 1;
 
-        /// <summary>Returns all photo paths referenced in this scene's grid and floating cells.</summary>
+        /// <summary>
+        /// Photos this scene shows. A scene that has never been shown has FramedSlots 0, and every
+        /// path is on the canvas. Later slots are the image pool beside that canvas.
+        /// </summary>
         public IEnumerable<string> GetPhotoPaths()
         {
-            if (Layout.Photos != null)
+            int framed = Layout?.State?.FramedSlots ?? 0;
+            if (Layout?.Photos != null)
             {
-                foreach (var p in Layout.Photos)
-                    if (!string.IsNullOrEmpty(p.Path)) yield return p.Path;
+                foreach (var photo in Layout.Photos)
+                {
+                    if (string.IsNullOrEmpty(photo.Path)) continue;
+                    if (framed > 0 && photo.Slot >= framed) continue;
+                    yield return photo.Path;
+                }
             }
-            if (Layout.Freeform != null)
+            if (Layout?.Freeform != null)
             {
-                foreach (var f in Layout.Freeform)
-                    if (!string.IsNullOrEmpty(f.Path)) yield return f.Path;
+                foreach (var cell in Layout.Freeform)
+                    if (!string.IsNullOrEmpty(cell.Path)) yield return cell.Path;
             }
+        }
+
+        /// <summary>Drops image-pool slots that were written into this scene by showing it.</summary>
+        public void KeepCanvasPhotos()
+        {
+            int framed = Layout?.State?.FramedSlots ?? 0;
+            if (framed <= 0 || Layout?.Photos == null) return;
+            Layout.Photos.RemoveAll(photo => photo.Slot >= framed);
         }
 
         public ShowScene Clone()

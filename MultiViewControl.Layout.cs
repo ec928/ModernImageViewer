@@ -213,7 +213,6 @@ namespace ModernImageViewer
             int onCanvas = ImagesOnCanvas();
             int scenes = _activeShow?.VisibleSceneCount ?? 0;
             bool isTrayOpen = _trayCard != null && _trayTab == 0;
-            bool isStoryOpen = _trayCard != null && _trayTab == 1;
 
             if (ShownBadge != null)
             {
@@ -223,9 +222,9 @@ namespace ModernImageViewer
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(ShownBadge, poolName);
                 ToolTipService.SetToolTip(ShownBadge, total > 0
                     ? (tray > 0
-                        ? $"Open Image Pool ({total} photos: {onCanvas} on canvas, {tray} in tray). View, search, add or arrange images."
-                        : $"Open Image Pool ({total} photos, all on canvas). View, search, add, or park photos in tray.")
-                    : "Open Image Pool to view, add, or manage session photos.");
+                        ? $"{total} photos. {onCanvas} on the canvas, {tray} not on the canvas."
+                        : $"{total} photos, all on the canvas.")
+                    : "Open Image Pool to view, add, or remove photos.");
             }
             if (ShownText != null)
             {
@@ -233,18 +232,9 @@ namespace ModernImageViewer
             }
 
             if (StoryboardButton != null)
-            {
                 StoryboardButton.Visibility = Visibility.Visible;
-                HoldFlyoutSource(StoryboardButton, isStoryOpen);
-            }
             if (StoryboardText != null)
-            {
                 StoryboardText.Text = scenes > 0 ? $"Storyboard ({scenes})" : "Storyboard";
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(StoryboardButton, StoryboardText.Text);
-                ToolTipService.SetToolTip(StoryboardButton, scenes > 0
-                    ? $"Open Storyboard ({scenes} scenes drafted). Reorder, review, and edit your presentation (B)."
-                    : "Open Storyboard to compose, auto-draft, and sequence a presentation from your photos (B).");
-            }
 
             ShowAutoPlayState();
         }

@@ -37,6 +37,8 @@ namespace ModernImageViewer
         private readonly DispatcherTimer _hudTimer;
         private bool _isHudVisible = true;
         private bool _isPointerOverHud = false;
+        private Point _lastHudPointer;
+        private bool _haveHudPointer;
 
         private int _soloIndex = -1;
         private int _lines = 1;
@@ -101,6 +103,7 @@ namespace ModernImageViewer
                     RescaleFreeformCards(e.NewSize.Width, e.NewSize.Height);
                     DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, RebaseUntouchedUndo);
                 }
+                if (_autoPlaySeconds > 0) ApplyPlayEdge(CurrentPlayPercent());
             };
 
             SetupSoloInteractions();
@@ -158,6 +161,8 @@ namespace ModernImageViewer
         {
             RemoveTrayCard();
             _activeShow = null;
+            _shuffleChosen = false;
+            _isStoryboardPlayback = false;
             ForgetSurprise();
             CloseCountsCard();
             _hudTimer.Stop();
@@ -285,6 +290,12 @@ namespace ModernImageViewer
 
         /// <summary>A press anywhere but the card or the switch closes the card, and still does what it does.</summary>
         private void CloseCountsCardOnPressOutside(object sender, PointerRoutedEventArgs e)
+        {
+            ShowHudFromUser();
+            CloseCountsCardOnPressOutsideCore(e);
+        }
+
+        private void CloseCountsCardOnPressOutsideCore(PointerRoutedEventArgs e)
         {
             if (!IsCountsCardOpen) return;
             for (var node = e.OriginalSource as DependencyObject; node != null; node = VisualTreeHelper.GetParent(node))
@@ -1054,7 +1065,7 @@ namespace ModernImageViewer
 
         public bool HandleKeyDown(VirtualKey key)
         {
-            ShowHudAndOverlays();
+            ShowHudFromUser();
             // An open card keeps the keyboard. Letters typed in the tray's search are not shortcuts, and nothing behind the card changes.
             if (_trayCard != null || _surpriseCard != null)
             {
@@ -1169,13 +1180,24 @@ namespace ModernImageViewer
 
         private void RootGrid_PointerMoved(object sender, PointerRoutedEventArgs e)
         {
-            ShowHudAndOverlays();
+            var point = e.GetCurrentPoint(RootGrid).Position;
+            if (!_haveHudPointer)
+            {
+                _lastHudPointer = point;
+                _haveHudPointer = true;
+            }
+            bool moved = Math.Abs(point.X - _lastHudPointer.X) >= 3
+                || Math.Abs(point.Y - _lastHudPointer.Y) >= 3;
+            // A new layout can report the pointer still sitting where it was. That is not the user moving.
+            if (_autoPlaySeconds > 0 && !moved) return;
+            _lastHudPointer = point;
+            ShowHudFromUser();
         }
 
         private void Hud_PointerEntered(object sender, PointerRoutedEventArgs e)
         {
             _isPointerOverHud = true;
-            ShowHudAndOverlays();
+            ShowHudFromUser();
         }
 
         private void Hud_PointerExited(object sender, PointerRoutedEventArgs e)
@@ -1185,9 +1207,19 @@ namespace ModernImageViewer
             _hudTimer.Start();
         }
 
+        /// <summary>
+        /// Shows the bar and starts the idle timer again. While a show or shuffle is playing, a new layout
+        /// calls this and must not: the bar stays hidden until the pointer, a key, or a click.
+        /// </summary>
         private void ShowHudAndOverlays()
         {
             if (_quietBar) return;
+            if (_autoPlaySeconds > 0) return;
+            ShowHudFromUser();
+        }
+
+        private void ShowHudFromUser()
+        {
             _hudTimer.Stop();
             _hudTimer.Start();
 
@@ -1225,7 +1257,7 @@ namespace ModernImageViewer
         private void HudMenu_Opened(object? sender, object e)
         {
             _hudMenusOpen++;
-            ShowHudAndOverlays();
+            ShowHudFromUser();
             EnforceDarkFlyoutPresenter();
         }
 
@@ -2084,7 +2116,7 @@ namespace ModernImageViewer
                 menu.Items.Add(MakeAdvancedItem("Add image\u2026", "\uE8E5", () => AddImageRequested?.Invoke(this, item)));
                 int inTray = TrayImages().Count;
                 if (inTray > 0)
-                    menu.Items.Add(MakeAdvancedItem($"Add from image tray ({inTray})\u2026", "\uE8B9", () => ShowTrayCard(curSlot)));
+                    menu.Items.Add(MakeAdvancedItem($"Not on the canvas ({inTray})\u2026", "\uE8B9", () => ShowTrayCard(curSlot)));
                 menu.Items.Add(new MenuFlyoutSeparator());
             }
 
@@ -2095,8 +2127,8 @@ namespace ModernImageViewer
                 int inTray = TrayImages().Count;
                 if (inTray > 0 && !IsEmptyCell(item))
                 {
-                    var fromTray = MakeAdvancedItem($"Image tray ({inTray})\u2026", "\uE8B9", () => ShowTrayCard(curSlot));
-                    ToolTipService.SetToolTip(fromTray, "Images that are not on the canvas. Pick one by looking at it.");
+                    var fromTray = MakeAdvancedItem($"Not on the canvas ({inTray})\u2026", "\uE8B9", () => ShowTrayCard(curSlot));
+                    ToolTipService.SetToolTip(fromTray, "Photos that are not on the canvas. Pick one by looking at it.");
                     swapMenu.Items.Insert(0, fromTray);
                     swapMenu.Items.Insert(1, new MenuFlyoutSeparator());
                 }
@@ -2165,8 +2197,8 @@ namespace ModernImageViewer
 
         private MenuFlyoutItem MoveToTrayItem(ImageItem item)
         {
-            var move = MakeAdvancedItem("Move to Tray", "\uE8B9", () => MoveCellToTray(item));
-            ToolTipService.SetToolTip(move, "Off the canvas, but kept: Surprise me can use it, and Swap with can bring it back. Remove cell takes it out of the session.");
+            var move = MakeAdvancedItem("Take off canvas", "\uE8B9", () => MoveCellToTray(item));
+            ToolTipService.SetToolTip(move, "Keeps the photo, but not on the canvas. Put it back from the image pool.");
             return move;
         }
 

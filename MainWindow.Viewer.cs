@@ -879,6 +879,7 @@ namespace ModernImageViewer
                 {
                     _multiViewParked = false;
                     _parkedCell = null;
+                    _returnToPanel = false;
                     _multiViewKept = false;
                     SetMultiModeTip();
                     BeginMultiViewCanvas();
@@ -941,6 +942,7 @@ namespace ModernImageViewer
             {
                 _multiViewParked = false;
                 _parkedCell = null;
+                _returnToPanel = false;
                 ShowAddingMode(false);
                 _parkKeptSize = false;
                 RestoreGridWindowSize();
@@ -987,6 +989,7 @@ namespace ModernImageViewer
             if (MultiViewControl == null || !_multiViewCanvasActive) return;
             _parkedCell = cell;
             _parkedNote = null;
+            (_returnToPanel, _returnPanelTab) = MultiViewControl.OpenPanel();
             // A photo's replacement is most likely beside it. A file that has gone leaves the view where it is.
             // With no folder open, as after opening a saved layout, more of the same is most likely beside the first image.
             string? cellFolder = !string.IsNullOrEmpty(cell?.Path) ? System.IO.Path.GetDirectoryName(cell.Path)
@@ -1088,6 +1091,14 @@ namespace ModernImageViewer
             MultiViewControl.DispatcherQueue.TryEnqueue(
                 Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
                 MultiViewControl.ReflowFrames);
+            if (_returnToPanel)
+            {
+                int tab = _returnPanelTab;
+                _returnToPanel = false;
+                MultiViewControl.DispatcherQueue.TryEnqueue(
+                    Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
+                    () => MultiViewControl.RestorePanel(tab));
+            }
         }
 
         /// <summary>While the session waits the bar stays up, so it is clear what the selection is for.</summary>

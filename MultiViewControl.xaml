@@ -210,6 +210,19 @@
             </Border.Background>
         </Border>
 
+        <!-- Fills along a screen edge while a layout holds. Not part of the bar, so the bar can hide and this stays. -->
+        <Grid x:Name="PlayEdgeHost"
+              IsHitTestVisible="False"
+              Canvas.ZIndex="5800"
+              Translation="0,0,272"
+              Visibility="Collapsed"
+              VerticalAlignment="Bottom"
+              HorizontalAlignment="Stretch"
+              Height="18">
+            <Border x:Name="PlayEdgeGlow" IsHitTestVisible="False"/>
+            <Border x:Name="PlayEdgeFill" IsHitTestVisible="False" HorizontalAlignment="Left" VerticalAlignment="Bottom" Height="3"/>
+        </Grid>
+
         <!-- The Grid layout card. A plain panel above the bar, so only this control opens and closes it. -->
         <Border x:Name="CountsCard"
                 Visibility="Collapsed"
@@ -256,16 +269,6 @@
                     <ThemeShadow/>
                 </Border.Shadow>
                 <Grid>
-                    <ProgressBar x:Name="PlayProgressBar"
-                                 Height="2"
-                                 VerticalAlignment="Top"
-                                 Margin="14,-2,14,0"
-                                 Visibility="Collapsed"
-                                 Minimum="0"
-                                 Maximum="100"
-                                 Value="0"
-                                 Foreground="{ThemeResource AccentFillColorDefaultBrush}"
-                                 IsIndeterminate="False"/>
                     <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                     <!-- Group 1: Session Navigation -->
                     <Button Click="CloseButton_Click" 
@@ -282,25 +285,31 @@
                     <!-- Subtle Section Divider 1 -->
                     <Rectangle Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,0" Opacity="0.5"/>
 
-                    <!-- Group 2: Drawer Views (Image Pool & Storyboard) -->
+                    <!-- Photos loaded. Not a playback mode. -->
                     <Border x:Name="DrawerControl" CornerRadius="12" Background="#14FFFFFF" VerticalAlignment="Center">
+                        <Button x:Name="ShownBadge"
+                                Click="ShownBadge_Click"
+                                Style="{StaticResource QuietButtonStyle}"
+                                Padding="8,5"
+                                CornerRadius="12"
+                                VerticalAlignment="Center"
+                                ToolTipService.ToolTip="Open Image Pool to view, add, or remove photos.">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8B9;" FontSize="13" />
+                                <TextBlock x:Name="ShownText"
+                                           Text="Image Pool"
+                                           VerticalAlignment="Center"
+                                           FontSize="13"
+                                           Typography.NumeralAlignment="Tabular" />
+                            </StackPanel>
+                        </Button>
+                    </Border>
+
+                    <Rectangle Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,0" Opacity="0.5"/>
+
+                    <!-- How it plays: the two modes, then previous, Play, next. -->
+                    <Border x:Name="SurpriseControl" CornerRadius="12" Background="#14FFFFFF" VerticalAlignment="Center">
                         <StackPanel Orientation="Horizontal">
-                            <Button x:Name="ShownBadge"
-                                    Click="ShownBadge_Click"
-                                    Style="{StaticResource QuietButtonStyle}"
-                                    Padding="8,5"
-                                    CornerRadius="12"
-                                    VerticalAlignment="Center"
-                                    ToolTipService.ToolTip="Open the Image Pool with session photos, search, and management.">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8B9;" FontSize="13" />
-                                    <TextBlock x:Name="ShownText"
-                                               Text="Image Pool"
-                                               VerticalAlignment="Center"
-                                               FontSize="13"
-                                               Typography.NumeralAlignment="Tabular" />
-                                </StackPanel>
-                            </Button>
                             <Button x:Name="StoryboardButton"
                                     Click="StoryboardButton_Click"
                                     Style="{StaticResource QuietButtonStyle}"
@@ -313,55 +322,16 @@
                                     <TextBlock x:Name="StoryboardText" Text="Storyboard" VerticalAlignment="Center" FontSize="13" />
                                 </StackPanel>
                             </Button>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Subtle Section Divider (visible only when CountsSwitch is shown) -->
-                    <Rectangle x:Name="CountsDivider" Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,0" Opacity="0.5"/>
-
-                    <!-- Group 3: Layout & Composition -->
-                    <Border x:Name="CountsSwitch" CornerRadius="12" Background="#14FFFFFF" VerticalAlignment="Center">
-                        <StackPanel Orientation="Horizontal">
-                            <Button x:Name="RowsSide"
-                                    Click="RowsSide_Click"
-                                    Style="{StaticResource QuietButtonStyle}"
-                                    Padding="8,5"
-                                    CornerRadius="12"
-                                    ToolTipService.ToolTip="Arrange in rows (R). Opens the grid layout and hero.">
-                                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                    <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xEA37;" FontSize="14" />
-                                    <TextBlock x:Name="RowsSideText" Text="Rows" VerticalAlignment="Center" FontSize="13" />
-                                </StackPanel>
-                            </Button>
-                            <Button x:Name="ColumnsSide"
-                                    Click="ColumnsSide_Click"
-                                    Style="{StaticResource QuietButtonStyle}"
-                                    Padding="8,5"
-                                    CornerRadius="12"
-                                    ToolTipService.ToolTip="Arrange in columns (R). Opens the grid layout and hero.">
-                                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                    <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8C0;" FontSize="14" />
-                                    <TextBlock x:Name="ColumnsSideText" Text="Columns" VerticalAlignment="Center" FontSize="13" />
-                                </StackPanel>
-                            </Button>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Subtle Section Divider 2 -->
-                    <Rectangle Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,0" Opacity="0.5"/>
-
-                    <Border x:Name="SurpriseControl" CornerRadius="12" Background="#14FFFFFF" VerticalAlignment="Center">
-                        <StackPanel Orientation="Horizontal">
                             <Button x:Name="SurpriseButton"
                                     Click="SurpriseButton_Click"
                                     AutomationProperties.Name="Surprise me"
                                     Style="{StaticResource QuietButtonStyle}"
                                     Padding="8,5"
                                     CornerRadius="12"
-                                    ToolTipService.ToolTip="One new layout from your canvas and image tray. Press again for another.">
+                                    ToolTipService.ToolTip="Surprise me is the playback mode. Click for one new layout now.">
                                 <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8B1;" FontSize="14" />
-                                    <TextBlock Text="Surprise me" VerticalAlignment="Center" FontSize="13" />
+                                    <FontIcon x:Name="SurpriseIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE8B1;" FontSize="14" />
+                                    <TextBlock x:Name="SurpriseText" Text="Surprise me" VerticalAlignment="Center" FontSize="13" />
                                 </StackPanel>
                             </Button>
                             <Rectangle Width="1" Height="16" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,0" Opacity="0.4"/>
@@ -405,21 +375,51 @@
                                     CornerRadius="12">
                                 <FontIcon x:Name="SurpriseCardArrow" FontFamily="Segoe Fluent Icons" Glyph="&#xE70E;" FontSize="11" />
                             </Button>
-                            <Button x:Name="FullScreenButton"
-                                    Click="FullScreenButton_Click"
-                                    AllowFocusOnInteraction="False"
-                                    AutomationProperties.Name="Full screen (F11)"
-                                    ToolTipService.ToolTip="Full screen (F11)"
+                        </StackPanel>
+                    </Border>
+
+                    <!-- How the grid is arranged. Hidden with the control when there is nothing to arrange. -->
+                    <Rectangle x:Name="CountsDivider" Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,0" Opacity="0.5"/>
+
+                    <Border x:Name="CountsSwitch" CornerRadius="12" Background="#14FFFFFF" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal">
+                            <Button x:Name="RowsSide"
+                                    Click="RowsSide_Click"
                                     Style="{StaticResource QuietButtonStyle}"
                                     Padding="8,5"
-                                    CornerRadius="12">
-                                <FontIcon x:Name="FullScreenIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE740;" FontSize="14" />
+                                    CornerRadius="12"
+                                    ToolTipService.ToolTip="Arrange in rows (R). Opens the grid layout and hero.">
+                                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                    <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xEA37;" FontSize="14" />
+                                    <TextBlock x:Name="RowsSideText" Text="Rows" VerticalAlignment="Center" FontSize="13" />
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="ColumnsSide"
+                                    Click="ColumnsSide_Click"
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    Padding="8,5"
+                                    CornerRadius="12"
+                                    ToolTipService.ToolTip="Arrange in columns (R). Opens the grid layout and hero.">
+                                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                    <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8C0;" FontSize="14" />
+                                    <TextBlock x:Name="ColumnsSideText" Text="Columns" VerticalAlignment="Center" FontSize="13" />
+                                </StackPanel>
                             </Button>
                         </StackPanel>
                     </Border>
 
-                    <!-- Subtle Section Divider 2 -->
                     <Rectangle Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,0" Opacity="0.5"/>
+
+                    <Button x:Name="FullScreenButton"
+                            Click="FullScreenButton_Click"
+                            AllowFocusOnInteraction="False"
+                            AutomationProperties.Name="Full screen (F11)"
+                            ToolTipService.ToolTip="Full screen (F11)"
+                            Style="{StaticResource QuietButtonStyle}"
+                            Padding="8,5"
+                            CornerRadius="12">
+                        <FontIcon x:Name="FullScreenIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE740;" FontSize="14" />
+                    </Button>
 
                     <!-- Group 3: View & Output -->
                     <Button x:Name="AspectButton"

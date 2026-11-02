@@ -409,6 +409,31 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
+        public void Play_progress_defaults_to_the_bottom_edge_and_keeps_a_chosen_one()
+        {
+            var fresh = SurpriseOptions.FromJson("{}");
+            Assert.True(fresh.ProgressOn);
+            Assert.Equal(SurpriseOptions.ProgressBottom, fresh.ProgressEdge);
+            Assert.Equal(SurpriseOptions.ProgressAccent, fresh.ProgressColor);
+
+            var saved = new SurpriseOptions
+            {
+                ProgressOn = false,
+                ProgressEdge = SurpriseOptions.ProgressLeft,
+                ProgressColor = SurpriseOptions.ProgressAmber
+            };
+            var read = SurpriseOptions.FromJson(saved.ToJson());
+            Assert.False(read.ProgressOn);
+            Assert.Equal(SurpriseOptions.ProgressLeft, read.ProgressEdge);
+            Assert.Equal(SurpriseOptions.ProgressAmber, read.ProgressColor);
+
+            var bad = SurpriseOptions.FromJson("{\"ProgressEdge\":\"Middle\",\"ProgressColor\":\"Plaid\"}");
+            Assert.True(bad.ProgressOn);
+            Assert.Equal(SurpriseOptions.ProgressBottom, bad.ProgressEdge);
+            Assert.Equal(SurpriseOptions.ProgressAccent, bad.ProgressColor);
+        }
+
+        [Fact]
         public void Favouring_a_design_makes_it_come_up_more_and_none_is_shut_out()
         {
             var options = new SurpriseOptions();

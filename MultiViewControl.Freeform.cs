@@ -21,7 +21,7 @@ namespace ModernImageViewer
 {
     public sealed partial class MultiViewControl
     {
-        public const string AddRuleText = "Images fill the canvas up to 16, and the rest go in the image tray. On a full canvas, the first 4 go on it as freeform images.";
+        public const string AddRuleText = "Photos fill the canvas up to 16. The rest stay off the canvas, in the image pool. On a full canvas, the first 4 go on top of it.";
 
         private const double DroppedCellShare = 0.45;
         private const double DroppedCellCascade = 28;
@@ -332,14 +332,14 @@ namespace ModernImageViewer
             if (selected.Count == 0)
             {
                 return onCanvas < MosaicLayout.MaxShown
-                    ? $"Room for {MosaicLayout.MaxShown - onCanvas} more on the canvas. The rest go in the image tray."
-                    : $"The canvas is full. The first {MosaicLayout.FreeformOnFullCanvas} go on it as freeform images, and the rest in the image tray.";
+                    ? $"Room for {MosaicLayout.MaxShown - onCanvas} more on the canvas. Any beyond that stay off the canvas."
+                    : $"The canvas is full. The first {MosaicLayout.FreeformOnFullCanvas} go on top of it, and the rest stay off the canvas.";
             }
             var fresh = NotYetHere(selected);
             if (fresh.Count == 0) return $"{selected.Count} selected, already here";
             var (cells, freeform, tray) = MosaicLayout.PlaceAdded(onCanvas, fresh.Count);
-            string canvas = freeform > 0 ? $"{freeform} to the canvas as freeform images" : $"{cells} to the canvas";
-            return tray > 0 ? $"{selected.Count} selected: {canvas}, {tray} to the image tray" : $"{selected.Count} selected: {canvas}";
+            string canvas = freeform > 0 ? $"{freeform} on top of the canvas" : $"{cells} to the canvas";
+            return tray > 0 ? $"{selected.Count} selected: {canvas}, {tray} off the canvas" : $"{selected.Count} selected: {canvas}";
         }
 
         public string? FirstImageFolder =>

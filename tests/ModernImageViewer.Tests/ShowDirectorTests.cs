@@ -56,6 +56,24 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
+        public void PartitionPhotos_WideRange_Uses_The_Top_Of_The_Range()
+        {
+            var photos = MakePhotos(181);
+            var options = new SurpriseOptions
+            {
+                FewestPictures = 1,
+                MostPictures = 16
+            };
+
+            var chunks = ShowDirector.PartitionPhotos(photos, options, new Random(1));
+
+            Assert.Equal(181, chunks.Sum(c => c.Count));
+            Assert.All(chunks, c => Assert.InRange(c.Count, 1, 16));
+            Assert.Contains(chunks, c => c.Count == 16);
+            Assert.Contains(chunks, c => c.Count > 6);
+        }
+
+        [Fact]
         public async Task DraftAsync_Generates_Complete_Project_Off_Thread()
         {
             var photos = MakePhotos(8);

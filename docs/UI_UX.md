@@ -122,6 +122,8 @@ The Single Viewer and Multi-View Solo/Maximize modes share an **identical** HUD 
 
 ## 6. Multi-View UI & Interaction Patterns
 
+The current multi-image screen, including the playbar and its menus, is `MULTI_IMAGE_UI.md`. The description below is older and disagrees with that screen in several places, including the playbar order, a filmstrip drawer, and tray wording.
+
 Multi-View shows up to 16 grid cells in fluid mosaics, with floating cells above them. Its right-click menu is grouped by what the user is doing:
 
 ```

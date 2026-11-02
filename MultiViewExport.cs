@@ -1817,7 +1817,10 @@ namespace ModernImageViewer
 
             if (layoutFile.Storyboard != null && layoutFile.Storyboard.Scenes.Count > 0)
             {
+                foreach (var scene in layoutFile.Storyboard.Scenes)
+                    scene.KeepCanvasPhotos();
                 _activeShow = layoutFile.Storyboard;
+                _shuffleChosen = false;
             }
 
             for (int i = 0; i < _cellRoots.Length; i++)
