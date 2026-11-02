@@ -298,65 +298,87 @@ namespace ModernImageViewer
             }
 
 
-            // Image count dual NumberBox range control (Min – Max)
+            // Image count dual SpinNumberBox range control (Min to Max)
             Slider? fewestEach = null;
             Slider? mostEach = null;
             Action? updateImagesSummary = null;
-            var imageControlsPanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
             bool syncingImageRange = false;
 
-            var fewestBox = new NumberBox
+            var fewestBox = new SpinNumberBox
             {
                 Minimum = 1,
                 Maximum = MosaicLayout.MaxShown,
                 Value = options.FewestPictures,
-                SmallChange = 1,
-                LargeChange = 2,
-                SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
-                AcceptsExpression = false,
-                Width = 76,
+                Width = 84,
                 Height = 32,
-                Padding = new Thickness(10, 2, 4, 2),
-                HorizontalContentAlignment = HorizontalAlignment.Left,
-                CornerRadius = new CornerRadius(4),
-                VerticalAlignment = VerticalAlignment.Center,
-                FontSize = 13
+                VerticalAlignment = VerticalAlignment.Center
             };
             ToolTipService.SetToolTip(fewestBox, "Minimum images per layout (1 to 16)");
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(fewestBox, "Minimum images per layout");
 
-            var rangeDash = new TextBlock
+            var toLabel = new TextBlock
             {
-                Text = "–",
-                FontSize = 14,
-                Opacity = 0.6,
+                Text = "to",
+                FontSize = 13,
+                Opacity = 0.7,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(2, 0, 2, 0)
             };
 
-            var mostBox = new NumberBox
+            var mostBox = new SpinNumberBox
             {
                 Minimum = 1,
                 Maximum = MosaicLayout.MaxShown,
                 Value = options.MostPictures,
-                SmallChange = 1,
-                LargeChange = 2,
-                SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
-                AcceptsExpression = false,
-                Width = 76,
+                Width = 84,
                 Height = 32,
-                Padding = new Thickness(10, 2, 4, 2),
-                HorizontalContentAlignment = HorizontalAlignment.Left,
-                CornerRadius = new CornerRadius(4),
-                VerticalAlignment = VerticalAlignment.Center,
-                FontSize = 13
+                VerticalAlignment = VerticalAlignment.Center
             };
             ToolTipService.SetToolTip(mostBox, "Maximum images per layout (1 to 16)");
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(mostBox, "Maximum images per layout");
 
+            var photosLabel = new TextBlock
+            {
+                Text = "photos",
+                FontSize = 13,
+                Opacity = 0.85,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(4, 0, 0, 0)
+            };
+
+            var imageControlsPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8,
+                VerticalAlignment = VerticalAlignment.Center
+            };
             imageControlsPanel.Children.Add(fewestBox);
-            imageControlsPanel.Children.Add(rangeDash);
+            imageControlsPanel.Children.Add(toLabel);
             imageControlsPanel.Children.Add(mostBox);
+            imageControlsPanel.Children.Add(photosLabel);
+
+            var imagesSummaryText = new TextBlock
+            {
+                FontSize = 12,
+                Opacity = 0.65,
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                TextAlignment = TextAlignment.Right,
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+
+            Action updateSummary = () =>
+            {
+                int f = fewestBox.Value;
+                int m = mostBox.Value;
+                if (f == 1 && m == 1) imagesSummaryText.Text = "Solo slideshow";
+                else if (f == 1 && m == 4) imagesSummaryText.Text = "Solo & small groups";
+                else if (f == 2 && m == 6) imagesSummaryText.Text = "Collage layouts";
+                else if (f >= 9 && m >= 9) imagesSummaryText.Text = "Dense wall layouts";
+                else if (f == m) imagesSummaryText.Text = $"Fixed {f} photo{(f == 1 ? "" : "s")}";
+                else imagesSummaryText.Text = $"{f}–{m} photos per scene";
+            };
+            updateSummary();
 
             void SetImageRange(int f, int m)
             {
@@ -366,11 +388,12 @@ namespace ModernImageViewer
                 syncingImageRange = true;
                 try
                 {
-                    if (Math.Abs(fewestBox.Value - f) > 0.01) fewestBox.Value = f;
-                    if (Math.Abs(mostBox.Value - m) > 0.01) mostBox.Value = m;
+                    if (fewestBox.Value != f) fewestBox.Value = f;
+                    if (mostBox.Value != m) mostBox.Value = m;
                     ChangeSurpriseChoices(o => { o.FewestPictures = f; o.MostPictures = m; });
                     if (fewestEach != null && Math.Abs(fewestEach.Value - f) > 0.01) fewestEach.Value = f;
                     if (mostEach != null && Math.Abs(mostEach.Value - m) > 0.01) mostEach.Value = m;
+                    updateSummary();
                     updateImagesSummary?.Invoke();
                 }
                 finally
@@ -379,28 +402,41 @@ namespace ModernImageViewer
                 }
             }
 
-            fewestBox.ValueChanged += (_, args) =>
+            fewestBox.ValueChanged += (_, newVal) =>
             {
-                if (syncingImageRange || double.IsNaN(args.NewValue)) return;
-                int f = (int)Math.Clamp(Math.Round(args.NewValue), 1, MosaicLayout.MaxShown);
-                int m = (int)Math.Max(f, double.IsNaN(mostBox.Value) ? f : mostBox.Value);
+                if (syncingImageRange) return;
+                int f = Math.Clamp(newVal, 1, MosaicLayout.MaxShown);
+                int m = Math.Max(f, mostBox.Value);
                 SetImageRange(f, m);
             };
 
-            mostBox.ValueChanged += (_, args) =>
+            mostBox.ValueChanged += (_, newVal) =>
             {
-                if (syncingImageRange || double.IsNaN(args.NewValue)) return;
-                int m = (int)Math.Clamp(Math.Round(args.NewValue), 1, MosaicLayout.MaxShown);
-                int f = (int)Math.Min(m, double.IsNaN(fewestBox.Value) ? m : fewestBox.Value);
+                if (syncingImageRange) return;
+                int m = Math.Clamp(newVal, 1, MosaicLayout.MaxShown);
+                int f = Math.Min(m, fewestBox.Value);
                 SetImageRange(f, m);
             };
 
-            var imagesRow = new Grid { ColumnSpacing = 12, MinHeight = 36 };
-            imagesRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var imagesRow = new Grid { MinHeight = 36, Margin = new Thickness(0, 2, 0, 2) };
+            imagesRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
             imagesRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            imagesRow.Children.Add(new TextBlock { Text = "Images", VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) });
+            imagesRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var imagesLabel = new TextBlock
+            {
+                Text = "Images",
+                VerticalAlignment = VerticalAlignment.Center,
+                FontSize = 13,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White)
+            };
+            Grid.SetColumn(imagesLabel, 0);
             Grid.SetColumn(imageControlsPanel, 1);
+            Grid.SetColumn(imagesSummaryText, 2);
+
+            imagesRow.Children.Add(imagesLabel);
             imagesRow.Children.Add(imageControlsPanel);
+            imagesRow.Children.Add(imagesSummaryText);
 
             void SpeedChanged()
             {
@@ -1670,11 +1706,10 @@ namespace ModernImageViewer
             Grid.SetColumn(storyButtons, 1);
             storyToolbar.Children.Add(storyButtons);
 
-            // Storyboard Pacing & Images Range Selector (Min – Max NumberBoxes)
-            var storyPresetRow = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+            // Storyboard Pacing & Images Range Selector (Min to Max SpinNumberBoxes)
+            var storyPresetRow = new Grid { Margin = new Thickness(0, 0, 0, 6) };
             storyPresetRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             storyPresetRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            storyPresetRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             var storyPresetLeft = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
             storyPresetLeft.Children.Add(new TextBlock
@@ -1687,58 +1722,52 @@ namespace ModernImageViewer
             });
 
             bool syncingStoryRange = false;
-            var storyFewestBox = new NumberBox
+            var storyFewestBox = new SpinNumberBox
             {
                 Minimum = 1,
                 Maximum = MosaicLayout.MaxShown,
                 Value = SurpriseChoices.FewestPictures,
-                SmallChange = 1,
-                LargeChange = 2,
-                SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
-                AcceptsExpression = false,
-                Width = 76,
+                Width = 84,
                 Height = 30,
-                Padding = new Thickness(10, 2, 4, 2),
-                HorizontalContentAlignment = HorizontalAlignment.Left,
-                CornerRadius = new CornerRadius(4),
-                VerticalAlignment = VerticalAlignment.Center,
-                FontSize = 12
+                VerticalAlignment = VerticalAlignment.Center
             };
             ToolTipService.SetToolTip(storyFewestBox, "Minimum images per drafted scene (1 to 16)");
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(storyFewestBox, "Minimum images per scene");
 
-            var storyDash = new TextBlock
+            var storyToLabel = new TextBlock
             {
-                Text = "–",
-                FontSize = 13,
-                Opacity = 0.6,
+                Text = "to",
+                FontSize = 12,
+                Opacity = 0.7,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(2, 0, 2, 0)
             };
 
-            var storyMostBox = new NumberBox
+            var storyMostBox = new SpinNumberBox
             {
                 Minimum = 1,
                 Maximum = MosaicLayout.MaxShown,
                 Value = SurpriseChoices.MostPictures,
-                SmallChange = 1,
-                LargeChange = 2,
-                SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
-                AcceptsExpression = false,
-                Width = 76,
+                Width = 84,
                 Height = 30,
-                Padding = new Thickness(10, 2, 4, 2),
-                HorizontalContentAlignment = HorizontalAlignment.Left,
-                CornerRadius = new CornerRadius(4),
-                VerticalAlignment = VerticalAlignment.Center,
-                FontSize = 12
+                VerticalAlignment = VerticalAlignment.Center
             };
             ToolTipService.SetToolTip(storyMostBox, "Maximum images per drafted scene (1 to 16)");
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(storyMostBox, "Maximum images per scene");
 
+            var storyPhotosLabel = new TextBlock
+            {
+                Text = "photos per scene",
+                FontSize = 12,
+                Opacity = 0.75,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(4, 0, 0, 0)
+            };
+
             storyPresetLeft.Children.Add(storyFewestBox);
-            storyPresetLeft.Children.Add(storyDash);
+            storyPresetLeft.Children.Add(storyToLabel);
             storyPresetLeft.Children.Add(storyMostBox);
+            storyPresetLeft.Children.Add(storyPhotosLabel);
 
             var storyPresetExplanation = new TextBlock
             {
@@ -1748,7 +1777,7 @@ namespace ModernImageViewer
                 HorizontalAlignment = HorizontalAlignment.Right,
                 TextTrimming = TextTrimming.CharacterEllipsis
             };
-            Grid.SetColumn(storyPresetExplanation, 2);
+            Grid.SetColumn(storyPresetExplanation, 1);
             storyPresetRow.Children.Add(storyPresetLeft);
             storyPresetRow.Children.Add(storyPresetExplanation);
 
@@ -1760,8 +1789,8 @@ namespace ModernImageViewer
                 syncingStoryRange = true;
                 try
                 {
-                    if (Math.Abs(storyFewestBox.Value - f) > 0.01) storyFewestBox.Value = f;
-                    if (Math.Abs(storyMostBox.Value - m) > 0.01) storyMostBox.Value = m;
+                    if (storyFewestBox.Value != f) storyFewestBox.Value = f;
+                    if (storyMostBox.Value != m) storyMostBox.Value = m;
                     ChangeSurpriseChoices(o => { o.FewestPictures = f; o.MostPictures = m; });
                     SyncStoryImageRange();
                 }
@@ -1771,19 +1800,19 @@ namespace ModernImageViewer
                 }
             }
 
-            storyFewestBox.ValueChanged += (_, args) =>
+            storyFewestBox.ValueChanged += (_, newVal) =>
             {
-                if (syncingStoryRange || double.IsNaN(args.NewValue)) return;
-                int f = (int)Math.Clamp(Math.Round(args.NewValue), 1, MosaicLayout.MaxShown);
-                int m = (int)Math.Max(f, double.IsNaN(storyMostBox.Value) ? f : storyMostBox.Value);
+                if (syncingStoryRange) return;
+                int f = Math.Clamp(newVal, 1, MosaicLayout.MaxShown);
+                int m = Math.Max(f, storyMostBox.Value);
                 SetStoryRange(f, m);
             };
 
-            storyMostBox.ValueChanged += (_, args) =>
+            storyMostBox.ValueChanged += (_, newVal) =>
             {
-                if (syncingStoryRange || double.IsNaN(args.NewValue)) return;
-                int m = (int)Math.Clamp(Math.Round(args.NewValue), 1, MosaicLayout.MaxShown);
-                int f = (int)Math.Min(m, double.IsNaN(storyFewestBox.Value) ? m : storyFewestBox.Value);
+                if (syncingStoryRange) return;
+                int m = Math.Clamp(newVal, 1, MosaicLayout.MaxShown);
+                int f = Math.Min(m, storyFewestBox.Value);
                 SetStoryRange(f, m);
             };
 
@@ -1799,8 +1828,8 @@ namespace ModernImageViewer
                     syncingStoryRange = true;
                     try
                     {
-                        if (Math.Abs(storyFewestBox.Value - f) > 0.01) storyFewestBox.Value = f;
-                        if (Math.Abs(storyMostBox.Value - m) > 0.01) storyMostBox.Value = m;
+                        if (storyFewestBox.Value != f) storyFewestBox.Value = f;
+                        if (storyMostBox.Value != m) storyMostBox.Value = m;
                     }
                     finally
                     {
