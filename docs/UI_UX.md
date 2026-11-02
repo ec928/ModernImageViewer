@@ -157,7 +157,13 @@ The Multi-View playbar is organized into five cohesive desktop functional cluste
    - Light-dismiss protection: clicking outside the card dismisses the drawer unless the click lands within `DrawerControl`, allowing seamless toggling or switching between tabs.
 3. **Grid Layout (`CountsSwitch`)**: `[ Rows | Columns ]` segmented pill.
    - **Auto-Collapse Rule**: When only a single image or empty canvas is active (`shown <= 1`), `CountsSwitch` and its preceding divider (`CountsDivider`) collapse completely (`Visibility.Collapsed`), preventing phantom gaps and double dividers.
-4. **Playback & Fullscreen (`SurpriseControl`)**: `[ Surprise me ]`, `[ Play / Pause ]`, `[ Options ^ ]`, and `[ ⛶ Fullscreen ]`.
+4. **Playback & Transport (`SurpriseControl`)**: Unified media transport cluster:
+   - `[ 🔀 Surprise me ]`: One-click generative layout composer.
+   - `[ ‹ ]`: Previous layout (Undo) or previous Storyboard scene (Left Arrow).
+   - `[ ▶ Play / ⏸ Pause ]`: Master auto-play toggle with live dwell time readout (Spacebar).
+   - `[ › ]`: Next layout (Redo/Generate) or next Storyboard scene (Right Arrow).
+   - `[ ^ ]`: Auto-Play Settings card toggle.
+   - `[ ⛶ Fullscreen ]`: Seamless full-screen presentation mode (F11).
 5. **Canvas Framing & Utilities**: `[ Canvas ^ ]`, `[ Save/Load ]`, and `[ ⚙ Advanced ]`.
 
 **The Image Tray & Storyboard Drawer** is a unified multi-purpose slide-up sheet anchored over the lower canvas:
@@ -172,7 +178,7 @@ The Multi-View playbar is organized into five cohesive desktop functional cluste
   - **Quick Dwell Time Menu**: Right-click context menu on any scene card allows instant dwell time adjustments (`5s`, `8s`, `12s`, `16s`, `20s`, `30s`).
   - **Continuous Playback**: Advancing across scenes preserves bitmaps and card sequences without layout state resets.
 
-**Surprise me** sits on the bar as one control with Rows and Columns beside it: Surprise me for one new layout, Play for auto-play, full screen with Cinematic's symbols, and an arrow for its card, opened in the window rather than a flyout, so it stays open when the window loses focus; a click outside, Esc or the arrow shuts it. It has no keyboard shortcut of its own. An open card keeps the keyboard, so letters typed in the tray's search are not shortcuts. Play says whether it is playing by its icon, its accent fill and the speed in place of the word. Options set ranges, thresholds and odds rather than switching parts of the feature off, and two ends of a range cannot cross. A change waits for the next click rather than rearranging at once. Pressing it again is the point, so the bar keeps its width across the press: when a result has no grid to arrange, Rows and Columns hold their place invisibly until the next rebuild. Surprise me draws on the session as it stands at each click: what Remove cell took out stays out. One empty grid cell under floating cells is the bare canvas (`IsBareCanvas`): it shows no placeholder, a click on it opens nothing, and a file dropped on it takes the same rule as any other add.
+**Surprise me & Unified Transport** sits on the playbar as a cohesive media transport group. Primary navigation (`Previous`, `Play/Pause`, `Next`) resides directly on the bar for instantaneous access and clear alignment with keyboard shortcuts (Left Arrow, Space, Right Arrow). The slide-up **Auto-Play Settings** card is purely dedicated to presentation parameters (images per layout, dwell duration slider, smart pacing, camera motion intensity, and soundtrack music controls), completely eliminating duplicate or competing playback buttons.
 
 **Camera motion** during auto-play moves the finished layout as one picture, with the zoom, drift and pacing of a Cinematic show. It is a transform over the layers, never a change to the layout. Floating cells sit nearer than the grid, so they follow the camera a little further, and float a few pixels and under a degree, leaving their saved place and turn alone. All of it moves composition visuals, not XAML transforms: a `RenderTransform` changing every frame leaves images soft, and the `Rotation` and `Scale` properties stop the app when they meet the `RotateTransform` of a turned cell. Layout changes animate the cover: a crossfade most often, then a zoom through, a fade through dark, or least often a slide. Nothing spins or flips. The card leads with one Motion slider, with the finer odds folded away under Camera and transitions. Pausing glides back to the whole layout. `CameraMove` plans a view as a zoom and a centre, and keeps picture to every edge.
 

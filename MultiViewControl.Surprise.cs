@@ -131,12 +131,7 @@ namespace ModernImageViewer
         private const double SurpriseCardGap = 8;
         private bool _showingSurpriseAdvanced;
         private string _surpriseSectionOpen = "Images & faces";
-        private Button? _cardPreviousLayout;
-        private Button? _cardNextLayout;
-        private Button? _cardPlayButton;
         private TextBlock? _cardSongText;
-        private FontIcon? _cardPlayIcon;
-        private TextBlock? _cardPlayText;
         private Button? _cardPreviousSong;
         private Button? _cardNextSong;
 
@@ -384,10 +379,10 @@ namespace ModernImageViewer
 
             if (!_showingSurpriseAdvanced)
             {
-                var header = new Grid { ColumnSpacing = 8, Margin = new Thickness(0, 0, 0, 2) };
+                var header = new Grid { ColumnSpacing = 8, Margin = new Thickness(0, 0, 0, 4) };
                 header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                var title = new TextBlock { Text = "Auto-Play", FontSize = 14, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+                var title = new TextBlock { Text = "Auto-Play Settings", FontSize = 14, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
                 var gearBtn = new Button
                 {
                     Content = Icon("\uE713", 13),
@@ -403,46 +398,6 @@ namespace ModernImageViewer
                 header.Children.Add(title);
                 header.Children.Add(gearBtn);
                 body.Children.Add(header);
-
-                var transport = new Grid { ColumnSpacing = 8, Margin = new Thickness(0, 4, 0, 8) };
-                transport.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
-                transport.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                transport.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
-
-                _cardPreviousLayout = WordButton("\u2039 Layout", "Previous layout", "Previous layout (Left Arrow). Pauses auto-play.", (_, _) => StepLayout(back: true));
-                _cardPreviousLayout.HorizontalAlignment = HorizontalAlignment.Stretch;
-
-                _cardPlayIcon = Icon(_autoPlaySeconds > 0 ? "\uE769" : "\uE768", 13);
-                _cardPlayText = new TextBlock { Text = _autoPlaySeconds > 0 ? "Pause" : "Play", VerticalAlignment = VerticalAlignment.Center, FontSize = 12 };
-                var playStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
-                playStack.Children.Add(_cardPlayIcon);
-                playStack.Children.Add(_cardPlayText);
-
-                _cardPlayButton = new Button
-                {
-                    Content = playStack,
-                    HorizontalAlignment = HorizontalAlignment.Stretch,
-                    Padding = new Thickness(10, 5, 10, 5),
-                    CornerRadius = new CornerRadius(4),
-                    Background = _autoPlaySeconds > 0 ? winBlueDeep : new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x2E, 0x2E, 0x2E)),
-                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White),
-                    BorderBrush = _autoPlaySeconds > 0 ? winBlue : new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x44, 0xFF, 0xFF, 0xFF)),
-                    BorderThickness = new Thickness(1)
-                };
-                ToolTipService.SetToolTip(_cardPlayButton, "Start or pause auto-play (Space)");
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(_cardPlayButton, "Play or pause auto-play");
-                _cardPlayButton.Click += AutoPlayButton_Click;
-
-                _cardNextLayout = WordButton("Layout \u203A", "Next layout", "Next layout (Right Arrow). Forward again after going back.", (_, _) => StepLayout(back: false));
-                _cardNextLayout.HorizontalAlignment = HorizontalAlignment.Stretch;
-
-                Grid.SetColumn(_cardPreviousLayout, 0);
-                Grid.SetColumn(_cardPlayButton, 1);
-                Grid.SetColumn(_cardNextLayout, 2);
-                transport.Children.Add(_cardPreviousLayout);
-                transport.Children.Add(_cardPlayButton);
-                transport.Children.Add(_cardNextLayout);
-                body.Children.Add(transport);
 
                 body.Children.Add(imagesRow);
 
@@ -1221,12 +1176,7 @@ namespace ModernImageViewer
             if (_surpriseCard == null) return;
             RootGrid.Children.Remove(_surpriseCard);
             _surpriseCard = null;
-            _cardPreviousLayout = null;
-            _cardNextLayout = null;
-            _cardPlayButton = null;
             _cardSongText = null;
-            _cardPlayIcon = null;
-            _cardPlayText = null;
             _cardPreviousSong = null;
             _cardNextSong = null;
             _showingSurpriseAdvanced = false;
@@ -2587,14 +2537,15 @@ namespace ModernImageViewer
                     if (StoryboardIcon != null) StoryboardIcon.ClearValue(IconElement.ForegroundProperty);
                 }
             }
-            if (_cardPlayIcon != null) _cardPlayIcon.Glyph = glyph;
-            if (_cardPlayText != null) _cardPlayText.Text = playing ? "Pause" : "Play";
-            if (_cardPlayButton != null)
+            if (PrevLayoutButton != null)
             {
-                var winBlue = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x4C, 0xC2, 0xFF));
-                var winBlueDeep = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x00, 0x78, 0xD4));
-                _cardPlayButton.Background = playing ? winBlueDeep : new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x2E, 0x2E, 0x2E));
-                _cardPlayButton.BorderBrush = playing ? winBlue : new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x44, 0xFF, 0xFF, 0xFF));
+                ToolTipService.SetToolTip(PrevLayoutButton, isStory || hasScenes ? "Previous scene (Left Arrow)" : "Previous layout (Left Arrow). Pauses auto-play.");
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(PrevLayoutButton, isStory || hasScenes ? "Previous scene" : "Previous layout");
+            }
+            if (NextLayoutButton != null)
+            {
+                ToolTipService.SetToolTip(NextLayoutButton, isStory || hasScenes ? "Next scene (Right Arrow)" : "Next layout (Right Arrow). Forward or new layout.");
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(NextLayoutButton, isStory || hasScenes ? "Next scene" : "Next layout");
             }
             ShowCardSong();
             ShowHudAndOverlays();
@@ -2626,6 +2577,10 @@ namespace ModernImageViewer
                 ToolTipService.SetToolTip(_cardNextSong, canStep ? "Next song" : "Set a music folder in Settings to play soundtrack");
             }
         }
+
+        private void PrevLayoutButton_Click(object sender, RoutedEventArgs e) => StepLayout(back: true);
+
+        private void NextLayoutButton_Click(object sender, RoutedEventArgs e) => StepLayout(back: false);
 
         private void AutoPlayButton_Click(object sender, RoutedEventArgs e)
         {
