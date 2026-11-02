@@ -23,7 +23,7 @@ namespace ModernImageViewer
                         File.Move(temp, path, overwrite: true);
                         return;
                     }
-                    catch (Exception ex) when (attempt < 4 && ex is IOException or UnauthorizedAccessException)
+                    catch (Exception ex) when (attempt < 12 && ex is IOException or UnauthorizedAccessException)
                     {
                         System.Threading.Thread.Sleep(30);
                     }

@@ -1557,10 +1557,11 @@ namespace ModernImageViewer
             poolContainer.Children.Add(thumbnails);
 
             // --- 3. Container B: Storyboard Tab ---
-            var storyContainer = new Grid { RowSpacing = 8 };
-            storyContainer.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            storyContainer.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            storyContainer.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            var storyContainer = new Grid { RowSpacing = 6 };
+            storyContainer.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 0: storyToolbar
+            storyContainer.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 1: storyPresetRow
+            storyContainer.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 2: draftProgressRow
+            storyContainer.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 3: emptyPanel / scenesView
 
             var storyToolbar = new Grid { ColumnSpacing = 10 };
             storyToolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -1573,6 +1574,7 @@ namespace ModernImageViewer
                 TextTrimming = TextTrimming.CharacterEllipsis
             };
 
+            Button? emptyDraftBtn = null;
             var storyButtons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
             var appendNewBtn = new Button
             {
@@ -1633,6 +1635,101 @@ namespace ModernImageViewer
             Grid.SetColumn(storyButtons, 1);
             storyToolbar.Children.Add(storyButtons);
 
+            // Storyboard Pacing Preset Selector (Solo 1, Mix 1-4, Collage 2-6, Wall 9-16)
+            var storyPresetRow = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+            storyPresetRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            storyPresetRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            storyPresetRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var storyPresetLeft = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+            storyPresetLeft.Children.Add(new TextBlock
+            {
+                Text = "Layout style:",
+                FontSize = 12,
+                Opacity = 0.75,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 4, 0)
+            });
+
+            var storyPresetChips = new List<(Microsoft.UI.Xaml.Controls.Primitives.ToggleButton Chip, int Fewest, int Most, string Name, string Desc)>();
+            var storyPresetExplanation = new TextBlock
+            {
+                FontSize = 12,
+                Opacity = 0.65,
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+            Grid.SetColumn(storyPresetExplanation, 2);
+            storyPresetRow.Children.Add(storyPresetLeft);
+            storyPresetRow.Children.Add(storyPresetExplanation);
+
+            void SyncStoryPresetChips()
+            {
+                int f = SurpriseChoices.FewestPictures;
+                int m = SurpriseChoices.MostPictures;
+                int totalPhotos = SessionPictures().Count;
+                string activeName = "Mix 1–4";
+
+                foreach (var p in storyPresetChips)
+                {
+                    bool isSel = p.Fewest == f && p.Most == m;
+                    p.Chip.IsChecked = isSel;
+                    p.Chip.Background = isSel ? winBlueDeep : new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x26, 0x26, 0x26));
+                    p.Chip.Foreground = isSel ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) : new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xEE, 0xFF, 0xFF, 0xFF));
+                    p.Chip.BorderBrush = isSel ? winBlue : new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x35, 0xFF, 0xFF, 0xFF));
+                    if (isSel)
+                    {
+                        activeName = p.Name;
+                        storyPresetExplanation.Text = p.Desc;
+                    }
+                }
+
+                if (_activeShow != null && _activeShow.Scenes.Count > 0)
+                {
+                    autoDraftBtn.Content = $"✨ Re-Draft ({totalPhotos} · {activeName})";
+                }
+                else
+                {
+                    autoDraftBtn.Content = $"✨ Auto-Draft Show ({totalPhotos} · {activeName})";
+                    if (emptyDraftBtn != null) emptyDraftBtn.Content = $"✨ Auto-Draft Show ({totalPhotos} · {activeName})";
+                }
+            }
+
+            void AddStoryPreset(string title, string tip, int f, int m, string desc)
+            {
+                bool isSel = SurpriseChoices.FewestPictures == f && SurpriseChoices.MostPictures == m;
+                var chip = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton
+                {
+                    Content = title,
+                    IsChecked = isSel,
+                    Padding = new Thickness(8, 3, 8, 3),
+                    MinWidth = 0,
+                    FontSize = 11,
+                    CornerRadius = new CornerRadius(10),
+                    BorderThickness = new Thickness(1),
+                    Background = isSel ? winBlueDeep : new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x26, 0x26, 0x26)),
+                    Foreground = isSel ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) : new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xEE, 0xFF, 0xFF, 0xFF)),
+                    BorderBrush = isSel ? winBlue : new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x35, 0xFF, 0xFF, 0xFF))
+                };
+                ToolTipService.SetToolTip(chip, tip);
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chip, title);
+                chip.Click += (_, _) =>
+                {
+                    ChangeSurpriseChoices(o => { o.FewestPictures = f; o.MostPictures = m; });
+                    SyncStoryPresetChips();
+                };
+                storyPresetChips.Add((chip, f, m, title, desc));
+                storyPresetLeft.Children.Add(chip);
+            }
+
+            AddStoryPreset("Solo 1", "One photo per scene (181 scenes for 181 photos)", 1, 1, "1 photo per scene · traditional slideshow");
+            AddStoryPreset("Mix 1–4", "Alternates solo hero shots with 2–4 image stories", 1, 4, "Alternating solos & 2–4 photo stories");
+            AddStoryPreset("Collage 2–6", "Balanced 2 to 6 image layouts", 2, 6, "2–6 photos per layout");
+            AddStoryPreset("Wall 9–16", "Dense 9 to 16 image gallery walls", 9, 16, "9–16 photos per layout · dense gallery walls");
+
+            SyncStoryPresetChips();
+
             var draftProgressRow = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
@@ -1670,7 +1767,7 @@ namespace ModernImageViewer
                 TextWrapping = TextWrapping.Wrap,
                 TextAlignment = TextAlignment.Center
             };
-            var emptyDraftBtn = new Button
+            emptyDraftBtn = new Button
             {
                 Content = "✨ Auto-Draft Show from Photos",
                 Background = winBlueDeep,
@@ -1714,12 +1811,38 @@ namespace ModernImageViewer
                     "<DataTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\">" +
                     "  <Grid Width=\"176\" Height=\"136\" CornerRadius=\"8\" Background=\"#20FFFFFF\" BorderBrush=\"#35FFFFFF\" BorderThickness=\"1\">" +
                     "    <Image Stretch=\"UniformToFill\" Margin=\"0,0,0,32\" IsHitTestVisible=\"False\"/>" +
-                    "    <Border HorizontalAlignment=\"Left\" VerticalAlignment=\"Top\" Margin=\"6\" Background=\"#CC000000\" CornerRadius=\"4\" Padding=\"6,2\" IsHitTestVisible=\"False\">" +
-                    "      <TextBlock Text=\"Solo 1\" FontSize=\"11\" Foreground=\"White\" FontWeight=\"SemiBold\"/>" +
+                    "    <Grid Margin=\"0,0,0,32\" IsHitTestVisible=\"False\" Visibility=\"Collapsed\">" +
+                    "      <Grid.RowDefinitions>" +
+                    "        <RowDefinition Height=\"*\"/>" +
+                    "        <RowDefinition Height=\"*\"/>" +
+                    "      </Grid.RowDefinitions>" +
+                    "      <Grid.ColumnDefinitions>" +
+                    "        <ColumnDefinition Width=\"*\"/>" +
+                    "        <ColumnDefinition Width=\"*\"/>" +
+                    "      </Grid.ColumnDefinitions>" +
+                    "      <Image Grid.Row=\"0\" Grid.Column=\"0\" Stretch=\"UniformToFill\" Margin=\"0.5\"/>" +
+                    "      <Image Grid.Row=\"0\" Grid.Column=\"1\" Stretch=\"UniformToFill\" Margin=\"0.5\"/>" +
+                    "      <Image Grid.Row=\"1\" Grid.Column=\"0\" Stretch=\"UniformToFill\" Margin=\"0.5\"/>" +
+                    "      <Image Grid.Row=\"1\" Grid.Column=\"1\" Stretch=\"UniformToFill\" Margin=\"0.5\"/>" +
+                    "    </Grid>" +
+                    "    <Border HorizontalAlignment=\"Right\" VerticalAlignment=\"Bottom\" Margin=\"0,0,5,37\" Background=\"#E0000000\" CornerRadius=\"4\" Padding=\"5,2\" IsHitTestVisible=\"False\" Visibility=\"Collapsed\">" +
+                    "      <StackPanel Orientation=\"Horizontal\" Spacing=\"4\">" +
+                    "        <FontIcon FontFamily=\"Segoe Fluent Icons\" Glyph=\"&#xE8A9;\" FontSize=\"10\" Foreground=\"#4CC2FF\"/>" +
+                    "        <TextBlock Text=\"9 photos\" FontSize=\"10\" Foreground=\"White\" FontWeight=\"SemiBold\"/>" +
+                    "      </StackPanel>" +
                     "    </Border>" +
-                    "    <Border HorizontalAlignment=\"Right\" VerticalAlignment=\"Top\" Margin=\"6\" Background=\"#CC000000\" CornerRadius=\"4\" Padding=\"6,2\">" +
-                    "      <TextBlock Text=\"⏱ 12s\" FontSize=\"11\" Foreground=\"#4CC2FF\"/>" +
-                    "    </Border>" +
+                    "    <Grid VerticalAlignment=\"Top\" Margin=\"5\" ColumnSpacing=\"4\">" +
+                    "      <Grid.ColumnDefinitions>" +
+                    "        <ColumnDefinition Width=\"*\"/>" +
+                    "        <ColumnDefinition Width=\"Auto\"/>" +
+                    "      </Grid.ColumnDefinitions>" +
+                    "      <Border Background=\"#D0000000\" CornerRadius=\"4\" Padding=\"5,2\" IsHitTestVisible=\"False\">" +
+                    "        <TextBlock Text=\"Solo 1\" FontSize=\"10\" Foreground=\"White\" FontWeight=\"SemiBold\" TextTrimming=\"CharacterEllipsis\"/>" +
+                    "      </Border>" +
+                    "      <Border Grid.Column=\"1\" Background=\"#D0000000\" CornerRadius=\"4\" Padding=\"5,2\">" +
+                    "        <TextBlock Text=\"⏱ 12s\" FontSize=\"10\" Foreground=\"#4CC2FF\"/>" +
+                    "      </Border>" +
+                    "    </Grid>" +
                     "    <Grid VerticalAlignment=\"Bottom\" Height=\"32\" Background=\"#F0161616\" Padding=\"6,2\">" +
                     "      <Grid.ColumnDefinitions>" +
                     "        <ColumnDefinition Width=\"*\"/>" +
@@ -1755,11 +1878,13 @@ namespace ModernImageViewer
                     var sc = scenesCollection[i];
                     if (scenesView.ContainerFromItem(sc) is GridViewItem item &&
                         item.ContentTemplateRoot is Grid card &&
-                        card.Children.Count >= 2 &&
-                        card.Children[1] is Border badgeBorder &&
+                        card.Children.Count > 3 &&
+                        card.Children[3] is Grid topGrid &&
+                        topGrid.Children.Count > 0 &&
+                        topGrid.Children[0] is Border badgeBorder &&
                         badgeBorder.Child is TextBlock badgeText)
                     {
-                        badgeText.Text = sc.IsSolo ? $"#{i + 1} Solo 1" : $"#{i + 1} {sc.Recipe ?? "Layout"} {sc.PhotoCount}";
+                        badgeText.Text = sc.IsSolo ? $"#{i + 1} Solo" : $"#{i + 1} {sc.Recipe ?? "Layout"}";
                     }
                 }
             }
@@ -1803,6 +1928,7 @@ namespace ModernImageViewer
                     autoDraftBtn.Content = $"✨ Auto-Draft Show ({totalPhotos} photos)";
                 }
 
+                SyncStoryPresetChips();
                 storyTab.Content = hasScenes ? $"🎬 Storyboard ({sceneCount})" : "🎬 Storyboard";
                 ShowShownBadge();
             }
@@ -1842,16 +1968,30 @@ namespace ModernImageViewer
             scenesView.ContainerContentChanging += (_, args) =>
             {
                 if (args.ItemContainer.ContentTemplateRoot is not Grid card) return;
-                if (args.InRecycleQueue) return;
-                if (args.Item is not ShowScene scene) return;
 
-                var img = card.Children[0] as Image;
-                var badgeBorder = card.Children[1] as Border;
+                var singleImg = card.Children.Count > 0 ? card.Children[0] as Image : null;
+                var multiGrid = card.Children.Count > 1 ? card.Children[1] as Grid : null;
+                var multiBadge = card.Children.Count > 2 ? card.Children[2] as Border : null;
+                var multiText = (multiBadge?.Child as StackPanel)?.Children.Count > 1 ? (multiBadge.Child as StackPanel)!.Children[1] as TextBlock : null;
+                var topGrid = card.Children.Count > 3 ? card.Children[3] as Grid : null;
+                var badgeBorder = topGrid?.Children.Count > 0 ? topGrid.Children[0] as Border : null;
                 var badgeText = badgeBorder?.Child as TextBlock;
-                var dwellBorder = card.Children[2] as Border;
+                var dwellBorder = topGrid?.Children.Count > 1 ? topGrid.Children[1] as Border : null;
                 var dwellText = dwellBorder?.Child as TextBlock;
-                var bottomGrid = card.Children[3] as Grid;
-                var recipeText = bottomGrid?.Children[0] as TextBlock;
+                var bottomGrid = card.Children.Count > 4 ? card.Children[4] as Grid : null;
+                var recipeText = bottomGrid?.Children.Count > 0 ? bottomGrid.Children[0] as TextBlock : null;
+
+                if (args.InRecycleQueue)
+                {
+                    if (singleImg != null) singleImg.Source = null;
+                    if (multiGrid != null)
+                    {
+                        foreach (var c in multiGrid.Children)
+                            if (c is Image mi) mi.Source = null;
+                    }
+                    return;
+                }
+                if (args.Item is not ShowScene scene) return;
 
                 int sceneIdx = scenesCollection.IndexOf(scene);
                 string sceneNum = sceneIdx >= 0 ? $"#{sceneIdx + 1} " : "";
@@ -1870,7 +2010,7 @@ namespace ModernImageViewer
 
                 if (badgeText != null)
                 {
-                    badgeText.Text = scene.IsSolo ? $"{sceneNum}Solo 1" : $"{sceneNum}{scene.Recipe ?? "Layout"} {scene.PhotoCount}";
+                    badgeText.Text = scene.IsSolo ? $"{sceneNum}Solo" : $"{sceneNum}{scene.Recipe ?? "Layout"}";
                 }
                 if (dwellText != null)
                 {
@@ -1880,6 +2020,54 @@ namespace ModernImageViewer
                 if (recipeText != null)
                 {
                     recipeText.Text = scene.Title ?? scene.Recipe ?? $"Scene ({scene.PhotoCount})";
+                }
+
+                var allPhotos = scene.GetPhotoPaths().Where(p => !string.IsNullOrEmpty(p)).ToList();
+                int photoCount = scene.PhotoCount;
+                bool isSolo = scene.IsSolo || photoCount <= 1;
+
+                if (isSolo)
+                {
+                    if (singleImg != null) singleImg.Visibility = Visibility.Visible;
+                    if (multiGrid != null) multiGrid.Visibility = Visibility.Collapsed;
+                    if (multiBadge != null) multiBadge.Visibility = Visibility.Collapsed;
+
+                    string? leadPhoto = allPhotos.FirstOrDefault();
+                    if (singleImg != null && !string.IsNullOrEmpty(leadPhoto))
+                    {
+                        try { singleImg.Source = new BitmapImage { DecodePixelWidth = 240, UriSource = new Uri(leadPhoto) }; }
+                        catch { singleImg.Source = null; }
+                    }
+                }
+                else
+                {
+                    if (singleImg != null) singleImg.Visibility = Visibility.Collapsed;
+                    if (multiGrid != null) multiGrid.Visibility = Visibility.Visible;
+                    if (multiBadge != null)
+                    {
+                        multiBadge.Visibility = Visibility.Visible;
+                        if (multiText != null) multiText.Text = $"{photoCount} photos";
+                    }
+
+                    if (multiGrid != null)
+                    {
+                        for (int i = 0; i < 4 && i < multiGrid.Children.Count; i++)
+                        {
+                            if (multiGrid.Children[i] is Image tile)
+                            {
+                                string? photo = i < allPhotos.Count ? allPhotos[i] : (allPhotos.Count > 0 ? allPhotos[i % allPhotos.Count] : null);
+                                if (!string.IsNullOrEmpty(photo))
+                                {
+                                    try { tile.Source = new BitmapImage { DecodePixelWidth = 100, UriSource = new Uri(photo) }; }
+                                    catch { tile.Source = null; }
+                                }
+                                else
+                                {
+                                    tile.Source = null;
+                                }
+                            }
+                        }
+                    }
                 }
 
                 if (dwellBorder != null)
@@ -1929,13 +2117,6 @@ namespace ModernImageViewer
                         SyncStoryboardUI();
                         ShowAutoPlayToast("Removed scene");
                     };
-                }
-
-                string? leadPhoto = scene.GetPhotoPaths().FirstOrDefault();
-                if (img != null && !string.IsNullOrEmpty(leadPhoto))
-                {
-                    try { img.Source = new BitmapImage { DecodePixelWidth = 240, UriSource = new Uri(leadPhoto) }; }
-                    catch { img.Source = null; }
                 }
 
                 // Scene Context Menu
@@ -2155,11 +2336,13 @@ namespace ModernImageViewer
             };
 
             storyContainer.Children.Add(storyToolbar);
-            Grid.SetRow(draftProgressRow, 1);
+            Grid.SetRow(storyPresetRow, 1);
+            storyContainer.Children.Add(storyPresetRow);
+            Grid.SetRow(draftProgressRow, 2);
             storyContainer.Children.Add(draftProgressRow);
-            Grid.SetRow(emptyPanel, 2);
+            Grid.SetRow(emptyPanel, 3);
             storyContainer.Children.Add(emptyPanel);
-            Grid.SetRow(scenesView, 2);
+            Grid.SetRow(scenesView, 3);
             storyContainer.Children.Add(scenesView);
 
             SyncStoryboardUI();
