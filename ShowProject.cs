@@ -78,6 +78,11 @@ namespace ModernImageViewer
             string json = await File.ReadAllTextAsync(filePath);
             return FromJson(json);
         }
+        /// <summary>Returns all unique photo paths referenced across all scenes in this project.</summary>
+        public IEnumerable<string> GetPhotoPaths()
+        {
+            return Scenes.SelectMany(s => s.GetPhotoPaths()).Distinct(StringComparer.OrdinalIgnoreCase);
+        }
 
         /// <summary>
         /// Converts a legacy CinematicProject into a unified ShowProject where each clip

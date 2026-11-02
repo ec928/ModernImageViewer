@@ -403,6 +403,7 @@ namespace ModernImageViewer
             if (tray > 0)
                 ShowAutoPlayToast($"Added {fresh.Count} images: {cells + freeform} on the canvas, {tray} in the tray");
             ShowShownBadge();
+            RefreshTrayCardIfOpen();
         }
 
         /// <summary>
@@ -417,6 +418,7 @@ namespace ModernImageViewer
             int onShow = PlaceInCells(file, forCells, shown);
             AppendToTray(file, forTray, onShow);
             ApplyKeepingBitmaps(file);
+            RefreshTrayCardIfOpen();
             CaptureUndoPoint();
         }
 

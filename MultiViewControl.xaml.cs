@@ -146,6 +146,7 @@ namespace ModernImageViewer
         /// <summary>The session stays as it is, ready to come back to.</summary>
         public void PrepareToLeave()
         {
+            RemoveTrayCard();
             StopAutoPlay();
             StopAutoPlayMusic();
             ResetCanvasCamera();
@@ -155,6 +156,8 @@ namespace ModernImageViewer
 
         public void Clear()
         {
+            RemoveTrayCard();
+            _activeShow = null;
             ForgetSurprise();
             CloseCountsCard();
             _hudTimer.Stop();

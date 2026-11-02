@@ -196,5 +196,29 @@ namespace ModernImageViewer.Tests
             Assert.Equal(0.6, atEnd.X, 2);
             Assert.Equal(0.4, atEnd.Y, 2);
         }
+
+        [Fact]
+        public void ShowProject_GetPhotoPaths_Returns_Distinct_Paths_Across_Scenes()
+        {
+            var project = new ShowProject();
+            var s1 = new ShowScene();
+            s1.Layout.Photos.Add(new PhotoSlotDto { Path = @"C:\p\photo1.jpg" });
+            s1.Layout.Photos.Add(new PhotoSlotDto { Path = @"C:\p\photo2.jpg" });
+            s1.Layout.Freeform = new List<FreeformCellDto> { new FreeformCellDto { Path = @"C:\p\photo3.png" } };
+
+            var s2 = new ShowScene();
+            s2.Layout.Photos.Add(new PhotoSlotDto { Path = @"C:\p\photo2.jpg" });
+            s2.Layout.Photos.Add(new PhotoSlotDto { Path = @"C:\p\photo4.jpg" });
+
+            project.Scenes.Add(s1);
+            project.Scenes.Add(s2);
+
+            var paths = project.GetPhotoPaths().ToList();
+            Assert.Equal(4, paths.Count);
+            Assert.Contains(@"C:\p\photo1.jpg", paths);
+            Assert.Contains(@"C:\p\photo2.jpg", paths);
+            Assert.Contains(@"C:\p\photo3.png", paths);
+            Assert.Contains(@"C:\p\photo4.jpg", paths);
+        }
     }
 }
