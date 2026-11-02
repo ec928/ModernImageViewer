@@ -1148,6 +1148,27 @@ namespace ModernImageViewer
         private void StepLayout(bool back)
         {
             StopAutoPlay();
+            if (_activeShow != null && _activeShow.Scenes.Count > 0)
+            {
+                var scenes = _activeShow.Scenes.Where(s => !s.IsHidden).ToList();
+                if (scenes.Count > 0)
+                {
+                    if (back)
+                    {
+                        _showPlaybackIndex = (_showPlaybackIndex - 1 + scenes.Count) % scenes.Count;
+                    }
+                    else
+                    {
+                        _showPlaybackIndex = (_showPlaybackIndex + 1) % scenes.Count;
+                    }
+                    var scene = scenes[_showPlaybackIndex];
+                    ApplyLayoutFile(WithRestInTray(scene.Layout, SessionPictures()), restoreAspect: false);
+                    string sceneName = scene.Title ?? scene.Recipe ?? "Scene";
+                    ShowAutoPlayToast($"Scene {_showPlaybackIndex + 1} of {scenes.Count}: {sceneName}");
+                    return;
+                }
+            }
+
             if (back)
             {
                 if (CanUndo)
@@ -1196,6 +1217,10 @@ namespace ModernImageViewer
         private sealed record TrayImage(string Path, int Slot);
 
         private Border? _trayCard;
+        private int _trayTab = 0; // 0 = Pool, 1 = Storyboard
+        private ShowProject? _activeShow;
+        private int _showPlaybackIndex = -1;
+        private bool _isStoryboardPlayback;
 
         private List<TrayImage> TrayImages()
         {
@@ -1239,8 +1264,80 @@ namespace ModernImageViewer
         {
             RemoveSurpriseCard();
             RemoveTrayCard();
+            if (intoSlot != NoCell) _trayTab = 0; // Forced to pool if swapping into a cell
+
             var all = TrayImages().Select(t => t.Path).ToList();
             var current = new System.Collections.ObjectModel.ObservableCollection<string>(all);
+
+            var winBlue = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x4C, 0xC2, 0xFF));
+            var winBlueDeep = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x00, 0x78, 0xD4));
+            var tabBgInactive = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF));
+            var tabBorderInactive = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x28, 0xFF, 0xFF, 0xFF));
+
+            // --- 1. Top Header with Segmented Tabs & Close Button ---
+            var topHeader = new Grid { Margin = new Thickness(0, 0, 0, 10) };
+            topHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            topHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var tabStrip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            var poolTab = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton
+            {
+                Content = $"📷 Image Pool ({all.Count})",
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(14, 6, 14, 6),
+                FontSize = 13,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+            };
+            var storyTab = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton
+            {
+                Content = _activeShow != null && _activeShow.Scenes.Count > 0 ? $"🎬 Storyboard ({_activeShow.Scenes.Count})" : "🎬 Storyboard",
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(14, 6, 14, 6),
+                FontSize = 13,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+            };
+            tabStrip.Children.Add(poolTab);
+            tabStrip.Children.Add(storyTab);
+            topHeader.Children.Add(tabStrip);
+
+            var close = new Button
+            {
+                Content = "Close",
+                Padding = new Thickness(14, 6, 14, 6),
+                CornerRadius = new CornerRadius(14),
+                Style = Resources.TryGetValue("QuietButtonStyle", out var qStyle) && qStyle is Style qs ? qs : null
+            };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(close, "Close panel");
+            close.Click += (_, _) => RemoveTrayCard();
+            Grid.SetColumn(close, 1);
+            topHeader.Children.Add(close);
+
+            // --- 2. Container A: Image Pool Tab ---
+            var poolContainer = new Grid { RowSpacing = 8 };
+            poolContainer.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            poolContainer.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            poolContainer.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+            string click = intoSlot == NoCell ? "Click one to put it on the canvas."
+                : $"Click one to {(IsEmptyCell(_items[intoSlot]) ? "add it to" : "swap it into")} position {PositionOfSlot(intoSlot)}.";
+            var heading = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+            void ShowHeading() => heading.Text = current.Count == all.Count ? $"Image tray: {all.Count}. {click}"
+                : current.Count == 0 ? "No image in the tray has that in its name."
+                : $"Image tray: {current.Count} of {all.Count}. {click}";
+            ShowHeading();
+
+            var search = new TextBox { PlaceholderText = "Search names", MinWidth = 200 };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(search, "Search the image tray");
+
+            var poolControlsRow = new Grid { ColumnSpacing = 10 };
+            poolControlsRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            poolControlsRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            poolControlsRow.Children.Add(heading);
+            Grid.SetColumn(search, 1);
+            poolControlsRow.Children.Add(search);
+
+            var hint = new TextBlock { Text = "Right-click an image to remove it from the session.", FontSize = 12, Opacity = 0.7 };
+
             var thumbnails = new GridView
             {
                 ItemsSource = current,
@@ -1251,16 +1348,6 @@ namespace ModernImageViewer
             };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(thumbnails, "ImageTray");
 
-            string click = intoSlot == NoCell ? "Click one to put it on the canvas."
-                : $"Click one to {(IsEmptyCell(_items[intoSlot]) ? "add it to" : "swap it into")} position {PositionOfSlot(intoSlot)}.";
-            var heading = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-            void ShowHeading() => heading.Text = current.Count == all.Count ? $"Image tray: {all.Count}. {click}"
-                : current.Count == 0 ? "No image in the tray has that in its name."
-                : $"Image tray: {current.Count} of {all.Count}. {click}";
-            ShowHeading();
-
-            var search = new TextBox { PlaceholderText = "Search names", MinWidth = 180 };
-
             void RemoveFromSession(string path)
             {
                 int slot = TraySlotOf(path);
@@ -1270,19 +1357,15 @@ namespace ModernImageViewer
                 current.Remove(path);
                 ShowHeading();
                 ShowTrayChanged();
-                if (all.Count == 0) RemoveTrayCard();
-                // Its thumbnail had the focus and is gone.
+                poolTab.Content = $"📷 Image Pool ({all.Count})";
+                if (all.Count == 0 && (_activeShow == null || _activeShow.Scenes.Count == 0)) RemoveTrayCard();
                 else search.Focus(FocusState.Programmatic);
             }
 
             thumbnails.ContainerContentChanging += (_, args) =>
             {
                 if (args.ItemContainer.ContentTemplateRoot is not Grid cell || cell.Children[0] is not Image image) return;
-                if (args.InRecycleQueue)
-                {
-                    image.Source = null;
-                    return;
-                }
+                if (args.InRecycleQueue) { image.Source = null; return; }
                 if (args.Item is not string path) return;
                 ToolTipService.SetToolTip(args.ItemContainer, System.IO.Path.GetFileName(path));
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(args.ItemContainer, System.IO.Path.GetFileName(path));
@@ -1290,24 +1373,15 @@ namespace ModernImageViewer
                 if (Resources.TryGetValue("MultiViewMenuFlyoutPresenterStyle", out var style) && style is Style presenter) menu.MenuFlyoutPresenterStyle = presenter;
                 menu.Items.Add(MakeAdvancedItem("Remove from session", "\uE74D", () => RemoveFromSession(path)));
                 args.ItemContainer.ContextFlyout = menu;
-                try
-                {
-                    image.Source = new BitmapImage { DecodePixelWidth = 200, UriSource = new Uri(path) };
-                }
-                catch (UriFormatException)
-                {
-                    image.Source = null;
-                }
+                try { image.Source = new BitmapImage { DecodePixelWidth = 200, UriSource = new Uri(path) }; }
+                catch (UriFormatException) { image.Source = null; }
             };
+
             thumbnails.ItemClick += (_, args) =>
             {
                 if (args.ClickedItem is not string path) return;
                 RemoveTrayCard();
-                if (intoSlot == NoCell)
-                {
-                    BringFromTray(path);
-                    return;
-                }
+                if (intoSlot == NoCell) { BringFromTray(path); return; }
                 int slot = TraySlotOf(path);
                 if (slot < 0) return;
                 SwapItems(intoSlot, slot, false);
@@ -1315,49 +1389,443 @@ namespace ModernImageViewer
                 NoteUserAction();
             };
 
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(search, "Search the image tray");
             search.TextChanged += (_, _) =>
             {
                 current = new System.Collections.ObjectModel.ObservableCollection<string>(all.Where(p => System.IO.Path.GetFileName(p).Contains(search.Text, StringComparison.OrdinalIgnoreCase)));
                 thumbnails.ItemsSource = current;
                 ShowHeading();
             };
-            search.Loaded += (_, _) => search.Focus(FocusState.Programmatic);
-            var close = new Button { Content = "Close" };
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(close, "Close the image tray");
-            close.Click += (_, _) => RemoveTrayCard();
-            var top = new Grid { ColumnSpacing = 10 };
-            top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            top.Children.Add(heading);
-            Grid.SetColumn(search, 1);
-            top.Children.Add(search);
-            Grid.SetColumn(close, 2);
-            top.Children.Add(close);
-            var hint = new TextBlock { Text = "Right-click an image to remove it from the session.", FontSize = 12, Opacity = 0.7 };
 
-            var body = new Grid { RowSpacing = 10 };
-            body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            poolContainer.Children.Add(poolControlsRow);
+            Grid.SetRow(hint, 1);
+            poolContainer.Children.Add(hint);
+            Grid.SetRow(thumbnails, 2);
+            poolContainer.Children.Add(thumbnails);
+
+            // --- 3. Container B: Storyboard Tab ---
+            var storyContainer = new Grid { RowSpacing = 8 };
+            storyContainer.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            storyContainer.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            storyContainer.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+            var storyToolbar = new Grid { ColumnSpacing = 10 };
+            storyToolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            storyToolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var storySummary = new TextBlock
+            {
+                VerticalAlignment = VerticalAlignment.Center,
+                FontSize = 13,
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+
+            var storyButtons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            var autoDraftBtn = new Button
+            {
+                Content = "✨ Auto-Draft Show",
+                Background = winBlueDeep,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White),
+                BorderBrush = winBlue,
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(14, 6, 14, 6),
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+            };
+            ToolTipService.SetToolTip(autoDraftBtn, "Analyzes all session pictures and composes a complete, paced show with smooth camera moves.");
+
+            var playShowBtn = new Button
+            {
+                Content = "▷ Play Show",
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(14, 6, 14, 6),
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+            };
+            ToolTipService.SetToolTip(playShowBtn, "Plays the drafted storyboard in sequence.");
+
+            var clearShowBtn = new Button
+            {
+                Content = "Clear",
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(12, 6, 12, 6),
+                Style = Resources.TryGetValue("QuietButtonStyle", out var clStyle) && clStyle is Style cls ? cls : null
+            };
+
+            storyButtons.Children.Add(autoDraftBtn);
+            storyButtons.Children.Add(playShowBtn);
+            storyButtons.Children.Add(clearShowBtn);
+
+            storyToolbar.Children.Add(storySummary);
+            Grid.SetColumn(storyButtons, 1);
+            storyToolbar.Children.Add(storyButtons);
+
+            var draftProgressRow = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 10,
+                Visibility = Visibility.Collapsed,
+                Margin = new Thickness(0, 2, 0, 4)
+            };
+            var progressRing = new ProgressRing { IsActive = true, Width = 16, Height = 16, Foreground = winBlue };
+            var progressText = new TextBlock { Text = "Analyzing pictures...", VerticalAlignment = VerticalAlignment.Center, FontSize = 12 };
+            draftProgressRow.Children.Add(progressRing);
+            draftProgressRow.Children.Add(progressText);
+
+            // Empty state view
+            var emptyPanel = new StackPanel
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Spacing = 10,
+                Margin = new Thickness(20)
+            };
+            var emptyIcon = new FontIcon { Glyph = "\uE8B7", FontSize = 40, Foreground = winBlue };
+            var emptyTitle = new TextBlock
+            {
+                Text = "No Show Scenes Drafted Yet",
+                FontSize = 16,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                HorizontalAlignment = HorizontalAlignment.Center
+            };
+            var emptyDesc = new TextBlock
+            {
+                Text = "Click 'Auto-Draft Show' to compose a balanced, paced presentation with smooth camera moves from your photos.",
+                FontSize = 13,
+                Opacity = 0.75,
+                MaxWidth = 440,
+                TextWrapping = TextWrapping.Wrap,
+                TextAlignment = TextAlignment.Center
+            };
+            var emptyDraftBtn = new Button
+            {
+                Content = "✨ Auto-Draft Show from Photos",
+                Background = winBlueDeep,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White),
+                BorderBrush = winBlue,
+                CornerRadius = new CornerRadius(16),
+                Padding = new Thickness(18, 8, 18, 8),
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 6, 0, 0)
+            };
+
+            emptyPanel.Children.Add(emptyIcon);
+            emptyPanel.Children.Add(emptyTitle);
+            emptyPanel.Children.Add(emptyDesc);
+            emptyPanel.Children.Add(emptyDraftBtn);
+
+            // Storyboard scenes gridview
+            var scenesCollection = new System.Collections.ObjectModel.ObservableCollection<ShowScene>(_activeShow?.Scenes ?? Enumerable.Empty<ShowScene>());
+            var scenesView = new GridView
+            {
+                ItemsSource = scenesCollection,
+                SelectionMode = ListViewSelectionMode.None,
+                IsItemClickEnabled = true,
+                ItemTemplate = (DataTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(
+                    "<DataTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\">" +
+                    "  <Grid Width=\"176\" Height=\"136\" CornerRadius=\"8\" Background=\"#20FFFFFF\" BorderBrush=\"#35FFFFFF\" BorderThickness=\"1\">" +
+                    "    <Image Stretch=\"UniformToFill\" Margin=\"0,0,0,32\"/>" +
+                    "    <Border HorizontalAlignment=\"Left\" VerticalAlignment=\"Top\" Margin=\"6\" Background=\"#CC000000\" CornerRadius=\"4\" Padding=\"6,2\">" +
+                    "      <TextBlock Text=\"Solo 1\" FontSize=\"11\" Foreground=\"White\" FontWeight=\"SemiBold\"/>" +
+                    "    </Border>" +
+                    "    <Border HorizontalAlignment=\"Right\" VerticalAlignment=\"Top\" Margin=\"6\" Background=\"#CC000000\" CornerRadius=\"4\" Padding=\"6,2\">" +
+                    "      <TextBlock Text=\"⏱ 12s\" FontSize=\"11\" Foreground=\"#4CC2FF\"/>" +
+                    "    </Border>" +
+                    "    <Grid VerticalAlignment=\"Bottom\" Height=\"32\" Background=\"#F0161616\" Padding=\"8,4\">" +
+                    "      <TextBlock Text=\"Recipe\" FontSize=\"11\" Foreground=\"White\" VerticalAlignment=\"Center\" TextTrimming=\"CharacterEllipsis\"/>" +
+                    "    </Grid>" +
+                    "  </Grid>" +
+                    "</DataTemplate>")
+            };
+
+            void SyncStoryboardUI()
+            {
+                int sceneCount = _activeShow?.Scenes.Count ?? 0;
+                bool hasScenes = sceneCount > 0;
+                emptyPanel.Visibility = hasScenes ? Visibility.Collapsed : Visibility.Visible;
+                scenesView.Visibility = hasScenes ? Visibility.Visible : Visibility.Collapsed;
+                playShowBtn.IsEnabled = hasScenes;
+                clearShowBtn.IsEnabled = hasScenes;
+
+                if (hasScenes)
+                {
+                    double dur = _activeShow!.TotalEstimatedDuration;
+                    storySummary.Text = $"Storyboard: {sceneCount} scenes · ~{dur:F0}s total duration";
+                }
+                else
+                {
+                    storySummary.Text = "Storyboard: no scenes created yet";
+                }
+
+                storyTab.Content = hasScenes ? $"🎬 Storyboard ({sceneCount})" : "🎬 Storyboard";
+                scenesCollection = new System.Collections.ObjectModel.ObservableCollection<ShowScene>(_activeShow?.Scenes ?? Enumerable.Empty<ShowScene>());
+                scenesView.ItemsSource = scenesCollection;
+                ShowShownBadge();
+            }
+
+            scenesView.ContainerContentChanging += (_, args) =>
+            {
+                if (args.ItemContainer.ContentTemplateRoot is not Grid card) return;
+                if (args.InRecycleQueue) return;
+                if (args.Item is not ShowScene scene) return;
+
+                var img = card.Children[0] as Image;
+                var badgeBorder = card.Children[1] as Border;
+                var badgeText = badgeBorder?.Child as TextBlock;
+                var dwellBorder = card.Children[2] as Border;
+                var dwellText = dwellBorder?.Child as TextBlock;
+                var bottomGrid = card.Children[3] as Grid;
+                var recipeText = bottomGrid?.Children[0] as TextBlock;
+
+                if (badgeText != null)
+                {
+                    badgeText.Text = scene.IsSolo ? "Solo 1" : $"{scene.Recipe ?? "Layout"} {scene.PhotoCount}";
+                }
+                if (dwellText != null)
+                {
+                    double d = scene.DwellSeconds ?? 12.0;
+                    dwellText.Text = $"⏱ {d:F0}s";
+                }
+                if (recipeText != null)
+                {
+                    recipeText.Text = scene.Title ?? scene.Recipe ?? $"Scene ({scene.PhotoCount})";
+                }
+
+                string? leadPhoto = scene.GetPhotoPaths().FirstOrDefault();
+                if (img != null && !string.IsNullOrEmpty(leadPhoto))
+                {
+                    try { img.Source = new BitmapImage { DecodePixelWidth = 240, UriSource = new Uri(leadPhoto) }; }
+                    catch { img.Source = null; }
+                }
+
+                // Scene Context Menu
+                var menu = new MenuFlyout();
+                if (Resources.TryGetValue("MultiViewMenuFlyoutPresenterStyle", out var style) && style is Style presenter) menu.MenuFlyoutPresenterStyle = presenter;
+                menu.Items.Add(MakeAdvancedItem("Apply to Canvas", "\uE768", () =>
+                {
+                    RemoveTrayCard();
+                    ApplyLayoutFile(WithRestInTray(scene.Layout, SessionPictures()), restoreAspect: false);
+                }));
+                menu.Items.Add(MakeAdvancedItem("Remove Scene", "\uE74D", () =>
+                {
+                    _activeShow?.Scenes.Remove(scene);
+                    SyncStoryboardUI();
+                }));
+                int idx = _activeShow?.Scenes.IndexOf(scene) ?? -1;
+                if (idx > 0)
+                {
+                    menu.Items.Add(MakeAdvancedItem("Move Earlier", "\uE76B", () =>
+                    {
+                        _activeShow!.Scenes.RemoveAt(idx);
+                        _activeShow.Scenes.Insert(idx - 1, scene);
+                        SyncStoryboardUI();
+                    }));
+                }
+                if (idx >= 0 && idx < (_activeShow?.Scenes.Count ?? 0) - 1)
+                {
+                    menu.Items.Add(MakeAdvancedItem("Move Later", "\uE76C", () =>
+                    {
+                        _activeShow!.Scenes.RemoveAt(idx);
+                        _activeShow.Scenes.Insert(idx + 1, scene);
+                        SyncStoryboardUI();
+                    }));
+                }
+                args.ItemContainer.ContextFlyout = menu;
+            };
+
+            scenesView.ItemClick += (_, args) =>
+            {
+                if (args.ClickedItem is not ShowScene scene) return;
+                RemoveTrayCard();
+                ApplyLayoutFile(WithRestInTray(scene.Layout, SessionPictures()), restoreAspect: false);
+            };
+
+            async Task RunAutoDraftAsync()
+            {
+                autoDraftBtn.IsEnabled = false;
+                emptyDraftBtn.IsEnabled = false;
+                draftProgressRow.Visibility = Visibility.Visible;
+                progressText.Text = "Reading photo details...";
+
+                try
+                {
+                    var pictures = SessionPictures();
+                    if (pictures.Count == 0) return;
+
+                    var ready = DecodedBitmaps();
+                    var facts = await ReadFactsAsync(pictures, path => ready.TryGetValue(path, out var bitmap) ? (bitmap.PixelWidth, bitmap.PixelHeight) : null);
+
+                    var progress = new Progress<ShowDraftProgress>(p =>
+                    {
+                        progressText.Text = $"Drafting scene {p.CompletedScenes} of {p.TotalEstimatedScenes}... ({p.Percent:F0}%)";
+                    });
+
+                    _activeShow = await ShowDirector.DraftAsync(
+                        facts,
+                        SurpriseChoices,
+                        ActualWidth,
+                        ActualHeight,
+                        "Auto-Drafted Presentation",
+                        progress);
+                }
+                finally
+                {
+                    draftProgressRow.Visibility = Visibility.Collapsed;
+                    autoDraftBtn.IsEnabled = true;
+                    emptyDraftBtn.IsEnabled = true;
+                    SyncStoryboardUI();
+                }
+            }
+
+            autoDraftBtn.Click += async (_, _) => await RunAutoDraftAsync();
+            emptyDraftBtn.Click += async (_, _) => await RunAutoDraftAsync();
+            playShowBtn.Click += async (_, _) => await PlayStoryboardAsync();
+            clearShowBtn.Click += (_, _) =>
+            {
+                if (_activeShow != null)
+                {
+                    _activeShow.Scenes.Clear();
+                    SyncStoryboardUI();
+                }
+            };
+
+            storyContainer.Children.Add(storyToolbar);
+            Grid.SetRow(draftProgressRow, 1);
+            storyContainer.Children.Add(draftProgressRow);
+            Grid.SetRow(emptyPanel, 2);
+            storyContainer.Children.Add(emptyPanel);
+            Grid.SetRow(scenesView, 2);
+            storyContainer.Children.Add(scenesView);
+
+            SyncStoryboardUI();
+
+            // --- 4. Main Tab Switching Logic ---
+            void SyncTabs()
+            {
+                poolTab.IsChecked = _trayTab == 0;
+                poolTab.Background = _trayTab == 0 ? winBlueDeep : tabBgInactive;
+                poolTab.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White);
+                poolTab.BorderBrush = _trayTab == 0 ? winBlue : tabBorderInactive;
+
+                storyTab.IsChecked = _trayTab == 1;
+                storyTab.Background = _trayTab == 1 ? winBlueDeep : tabBgInactive;
+                storyTab.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White);
+                storyTab.BorderBrush = _trayTab == 1 ? winBlue : tabBorderInactive;
+
+                poolContainer.Visibility = _trayTab == 0 ? Visibility.Visible : Visibility.Collapsed;
+                storyContainer.Visibility = _trayTab == 1 ? Visibility.Visible : Visibility.Collapsed;
+            }
+
+            poolTab.Click += (_, _) => { _trayTab = 0; SyncTabs(); search.Focus(FocusState.Programmatic); };
+            storyTab.Click += (_, _) => { _trayTab = 1; SyncTabs(); };
+
+            SyncTabs();
+
+            // Assemble Body
+            var body = new Grid { RowSpacing = 8 };
             body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             body.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            Grid.SetRow(hint, 1);
-            Grid.SetRow(thumbnails, 2);
-            body.Children.Add(top);
-            body.Children.Add(hint);
-            body.Children.Add(thumbnails);
 
-            // Stretched up to a limit, so it follows the window if that is resized while it is open.
+            body.Children.Add(topHeader);
+            Grid.SetRow(poolContainer, 1);
+            body.Children.Add(poolContainer);
+            Grid.SetRow(storyContainer, 1);
+            body.Children.Add(storyContainer);
+
+            // Stretched up to a comfortable size for reviewing cards
             _trayCard = NewCard(body);
-            _trayCard.MaxWidth = 760;
-            _trayCard.MaxHeight = 560;
+            _trayCard.MaxWidth = 820;
+            _trayCard.MaxHeight = 580;
             _trayCard.Margin = new Thickness(16);
             _trayCard.Padding = new Thickness(14);
             AddOverCanvas(_trayCard, 6500);
             HudMenu_Opened(this, EventArgs.Empty);
+            if (_trayTab == 0) search.Loaded += (_, _) => search.Focus(FocusState.Programmatic);
         }
 
-        /// <summary>The tray may just have emptied, and the empty cells and the bar's count mention it.</summary>
+        private async Task PlayStoryboardAsync()
+        {
+            if (_activeShow == null || _activeShow.Scenes.Count == 0) return;
+            RemoveTrayCard();
+            StopAutoPlay();
+            CaptureUndoPoint();
+            _isStoryboardPlayback = true;
+            _showPlaybackIndex = 0;
+            _autoPlaySeconds = 12;
+            AddAutoPlayShield();
+            StartAutoPlayMusic();
+            ShowAutoPlayState();
+            ShowAutoPlayToast($"Playing Storyboard: {_activeShow.Scenes.Count} scenes");
+
+            var firstScene = _activeShow.Scenes.FirstOrDefault(s => !s.IsHidden);
+            _layoutSeconds = (int)(firstScene?.DwellSeconds ?? SurpriseChoices.NextPlaySeconds(Random.Shared));
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(_layoutSeconds) };
+            _autoPlayTimer = timer;
+            timer.Tick += async (_, _) =>
+            {
+                timer.Stop();
+                if (_isStoryboardPlayback && _activeShow != null && _activeShow.Scenes.Count > 0)
+                {
+                    await PlayNextStoryboardSceneAsync(fade: true);
+                }
+                else
+                {
+                    await SurpriseAsync(fade: true);
+                }
+                timer.Interval = TimeSpan.FromSeconds(_layoutSeconds);
+                if (ReferenceEquals(_autoPlayTimer, timer)) timer.Start();
+            };
+            await PlayNextStoryboardSceneAsync(fade: true);
+            timer.Interval = TimeSpan.FromSeconds(_layoutSeconds);
+            if (ReferenceEquals(_autoPlayTimer, timer)) timer.Start();
+        }
+
+        private async Task PlayNextStoryboardSceneAsync(bool fade)
+        {
+            if (_activeShow == null || _activeShow.Scenes.Count == 0)
+            {
+                StopAutoPlay();
+                return;
+            }
+
+            var visibleScenes = _activeShow.Scenes.Where(s => !s.IsHidden).ToList();
+            if (visibleScenes.Count == 0)
+            {
+                StopAutoPlay();
+                return;
+            }
+
+            if (_showPlaybackIndex < 0 || _showPlaybackIndex >= visibleScenes.Count)
+                _showPlaybackIndex = 0;
+
+            var scene = visibleScenes[_showPlaybackIndex];
+            _layoutSeconds = (int)(scene.DwellSeconds ?? SurpriseChoices.NextPlaySeconds(Random.Shared));
+
+            var pictures = SessionPictures();
+            var outgoingStep = fade ? OutgoingCameraStep(0.7) : (1.0, 0.0, 0.0);
+            Image? before = fade ? await CoverWithPictureOfCanvasAsync() : null;
+            ResetCanvasCamera();
+
+            try
+            {
+                ApplyLayoutFile(WithRestInTray(scene.Layout, pictures), restoreAspect: false);
+            }
+            finally
+            {
+            }
+
+            if (scene.CameraOverride != null)
+            {
+                var move = scene.CameraOverride.ToCameraMove(_layoutSeconds + CameraOverrunSeconds);
+                if (move != null)
+                {
+                    RunCamera(move, goingHome: false);
+                }
+            }
+
+            if (before != null) ChangeLayoutOver(before, outgoingStep);
+
+            _showPlaybackIndex = (_showPlaybackIndex + 1) % visibleScenes.Count;
+        }
+
         private void ShowTrayChanged()
         {
             for (int i = 0; i < VisibleCount(GridCellCount); i++)
@@ -1413,7 +1881,14 @@ namespace ModernImageViewer
             timer.Tick += async (_, _) =>
             {
                 timer.Stop();
-                await SurpriseAsync(fade: true);
+                if (_isStoryboardPlayback && _activeShow != null && _activeShow.Scenes.Count > 0)
+                {
+                    await PlayNextStoryboardSceneAsync(fade: true);
+                }
+                else
+                {
+                    await SurpriseAsync(fade: true);
+                }
                 timer.Interval = TimeSpan.FromSeconds(_layoutSeconds);
                 if (ReferenceEquals(_autoPlayTimer, timer)) timer.Start();
             };
@@ -1426,6 +1901,7 @@ namespace ModernImageViewer
         {
             if (_autoPlaySeconds == 0) return;
             _autoPlaySeconds = 0;
+            _isStoryboardPlayback = false;
             _autoPlayTimer?.Stop();
             _autoPlayTimer = null;
             if (!_autoPlayShieldPressed) RemoveAutoPlayShield();

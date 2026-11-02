@@ -209,8 +209,9 @@ namespace ModernImageViewer
         private void ShowShownBadge()
         {
             int tray = TrayImages().Count;
-            ShownBadge.Visibility = tray > 0 ? Visibility.Visible : Visibility.Collapsed;
-            ShownText.Text = $"{ImagesOnCanvas()} on canvas, {tray} in tray";
+            int scenes = _activeShow?.VisibleSceneCount ?? 0;
+            ShownBadge.Visibility = (tray > 0 || scenes > 0) ? Visibility.Visible : Visibility.Collapsed;
+            ShownText.Text = scenes > 0 ? $"{ImagesOnCanvas()} on canvas, {tray} in tray · {scenes} scenes" : $"{ImagesOnCanvas()} on canvas, {tray} in tray";
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(ShownBadge, ShownText.Text);
         }
 
