@@ -1467,6 +1467,15 @@ namespace ModernImageViewer
                 BorderBrush = winBlue
             };
 
+            var addCanvasBtn = new Button
+            {
+                Content = "📷 + Add Canvas",
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(12, 6, 12, 6),
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+            };
+            ToolTipService.SetToolTip(addCanvasBtn, "Capture current canvas layout as a new scene in the Storyboard.");
+
             var autoDraftBtn = new Button
             {
                 Content = "✨ Auto-Draft Show",
@@ -1497,6 +1506,7 @@ namespace ModernImageViewer
             };
 
             storyButtons.Children.Add(appendNewBtn);
+            storyButtons.Children.Add(addCanvasBtn);
             storyButtons.Children.Add(autoDraftBtn);
             storyButtons.Children.Add(playShowBtn);
             storyButtons.Children.Add(clearShowBtn);
@@ -1555,10 +1565,22 @@ namespace ModernImageViewer
                 Margin = new Thickness(0, 6, 0, 0)
             };
 
+            var emptyAddCanvasBtn = new Button
+            {
+                Content = "📷 Capture Current Canvas as Scene 1",
+                CornerRadius = new CornerRadius(16),
+                Padding = new Thickness(16, 8, 16, 8),
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 4, 0, 0)
+            };
+            ToolTipService.SetToolTip(emptyAddCanvasBtn, "Start your presentation using the photos currently arranged on the canvas.");
+
             emptyPanel.Children.Add(emptyIcon);
             emptyPanel.Children.Add(emptyTitle);
             emptyPanel.Children.Add(emptyDesc);
             emptyPanel.Children.Add(emptyDraftBtn);
+            emptyPanel.Children.Add(emptyAddCanvasBtn);
 
             // Storyboard scenes gridview with mouse drag-and-drop reordering
             var scenesCollection = new System.Collections.ObjectModel.ObservableCollection<ShowScene>(_activeShow?.Scenes ?? Enumerable.Empty<ShowScene>());
@@ -1695,6 +1717,18 @@ namespace ModernImageViewer
                 int sceneIdx = scenesCollection.IndexOf(scene);
                 string sceneNum = sceneIdx >= 0 ? $"#{sceneIdx + 1} " : "";
 
+                string motionLabel = "• Still";
+                if (scene.CameraOverride != null)
+                {
+                    double zDiff = scene.CameraOverride.End.Zoom - scene.CameraOverride.Start.Zoom;
+                    double panDist = Math.Abs(scene.CameraOverride.End.X - scene.CameraOverride.Start.X) +
+                                     Math.Abs(scene.CameraOverride.End.Y - scene.CameraOverride.Start.Y);
+                    if (zDiff > 0.15) motionLabel = "⤢ Zoom";
+                    else if (zDiff < -0.15) motionLabel = "⤡ Out";
+                    else if (panDist > 0.15) motionLabel = "⇄ Pan";
+                    else motionLabel = "⤢ Move";
+                }
+
                 if (badgeText != null)
                 {
                     badgeText.Text = scene.IsSolo ? $"{sceneNum}Solo 1" : $"{sceneNum}{scene.Recipe ?? "Layout"} {scene.PhotoCount}";
@@ -1702,7 +1736,7 @@ namespace ModernImageViewer
                 if (dwellText != null)
                 {
                     double d = scene.DwellSeconds ?? 12.0;
-                    dwellText.Text = $"⏱ {d:F0}s";
+                    dwellText.Text = $"{motionLabel} · {d:F0}s";
                 }
                 if (recipeText != null)
                 {
@@ -1728,6 +1762,24 @@ namespace ModernImageViewer
                 {
                     ApplyLayoutFile(WithRestInTray(scene.Layout, SessionPictures()), restoreAspect: false);
                 }));
+
+                // Quick Dwell Time Adjustment Submenu
+                var dwellSub = new MenuFlyoutSubItem { Text = "Set Dwell Time" };
+                foreach (int secs in new[] { 5, 8, 12, 16, 20, 30 })
+                {
+                    int s = secs;
+                    bool isCurrent = Math.Abs((scene.DwellSeconds ?? 12.0) - s) < 0.5;
+                    var item = new MenuFlyoutItem { Text = isCurrent ? $"{s}s  ✓" : $"{s}s" };
+                    item.Click += (_, _) =>
+                    {
+                        scene.DwellSeconds = s;
+                        if (dwellText != null) dwellText.Text = $"{motionLabel} · {s}s";
+                        UpdateStoryboardSummary();
+                    };
+                    dwellSub.Items.Add(item);
+                }
+                menu.Items.Add(dwellSub);
+
                 menu.Items.Add(MakeAdvancedItem("Remove Scene", "\uE74D", () =>
                 {
                     scenesCollection.Remove(scene);
@@ -1875,6 +1927,32 @@ namespace ModernImageViewer
                 }
             }
 
+            void CaptureCurrentCanvasAsScene()
+            {
+                var pictures = SessionPictures();
+                if (pictures.Count == 0) return;
+                var file = BuildLayoutFile();
+                int onShow = ImagesOnCanvas();
+                string title = onShow == 1 ? "Custom Solo" : $"Custom Layout ({onShow})";
+                var scene = new ShowScene
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Title = title,
+                    Recipe = "Custom",
+                    Layout = file,
+                    DwellSeconds = SurpriseChoices.PlaySeconds,
+                    Transition = "Crossfade"
+                };
+
+                _activeShow ??= new ShowProject { Title = "Custom Presentation" };
+                _activeShow.Scenes.Add(scene);
+                SyncStoryboardUI();
+                RefreshCardBadges();
+                ShowAutoPlayToast($"Captured canvas as scene #{_activeShow.Scenes.Count}");
+            }
+
+            addCanvasBtn.Click += (_, _) => CaptureCurrentCanvasAsScene();
+            emptyAddCanvasBtn.Click += (_, _) => CaptureCurrentCanvasAsScene();
             appendNewBtn.Click += async (_, _) => await RunAppendNewPhotosAsync();
             autoDraftBtn.Click += async (_, _) => await RunAutoDraftAsync();
             emptyDraftBtn.Click += async (_, _) => await RunAutoDraftAsync();
@@ -2209,16 +2287,26 @@ namespace ModernImageViewer
         private void ShowAutoPlayState()
         {
             bool playing = _autoPlaySeconds > 0;
+            bool isStory = _isStoryboardPlayback && _activeShow != null && _activeShow.Scenes.Count > 0;
             string glyph = playing ? "\uE769" : "\uE768";
-            string text = playing ? SurpriseChoices.PlayLabel : "Play";
+            string text = playing ? (isStory ? "Pause" : SurpriseChoices.PlayLabel) : "Play";
             AutoPlayIcon.Glyph = glyph;
             AutoPlayText.Text = text;
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(AutoPlayButton, playing ? "Pause auto-play" : "Play auto-play");
-            ToolTipService.SetToolTip(AutoPlayButton, playing ? "Pause. A click on the canvas, Esc or Space does the same." : $"Play a new layout every {SurpriseChoices.PlayWords}. Space does the same.");
+
+            string playTip = playing
+                ? (isStory ? "Pause Storyboard presentation. Space or click does the same." : "Pause. A click on the canvas, Esc or Space does the same.")
+                : (_activeShow != null && _activeShow.Scenes.Count > 0
+                    ? $"Play Storyboard ({_activeShow.Scenes.Count} scenes). Space does the same."
+                    : $"Play a new layout every {SurpriseChoices.PlayWords}. Space does the same.");
+
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(AutoPlayButton, playing ? "Pause presentation" : "Play presentation");
+            ToolTipService.SetToolTip(AutoPlayButton, playTip);
+
+            var accent = Application.Current.Resources["AccentFillColorDefaultBrush"] as Microsoft.UI.Xaml.Media.Brush;
+            var onAccent = Application.Current.Resources["TextOnAccentFillColorPrimaryBrush"] as Microsoft.UI.Xaml.Media.Brush;
+
             if (playing)
             {
-                var accent = Application.Current.Resources["AccentFillColorDefaultBrush"] as Microsoft.UI.Xaml.Media.Brush;
-                var onAccent = Application.Current.Resources["TextOnAccentFillColorPrimaryBrush"] as Microsoft.UI.Xaml.Media.Brush;
                 AutoPlayButton.Background = accent;
                 AutoPlayText.Foreground = onAccent;
                 AutoPlayIcon.Foreground = onAccent;
@@ -2228,6 +2316,22 @@ namespace ModernImageViewer
                 AutoPlayButton.ClearValue(Control.BackgroundProperty);
                 AutoPlayText.ClearValue(TextBlock.ForegroundProperty);
                 AutoPlayIcon.ClearValue(IconElement.ForegroundProperty);
+            }
+
+            if (StoryboardButton != null && StoryboardText != null && StoryboardIcon != null)
+            {
+                if (playing && isStory)
+                {
+                    StoryboardButton.Background = accent;
+                    StoryboardText.Foreground = onAccent;
+                    StoryboardIcon.Foreground = onAccent;
+                }
+                else
+                {
+                    StoryboardButton.ClearValue(Control.BackgroundProperty);
+                    StoryboardText.ClearValue(TextBlock.ForegroundProperty);
+                    StoryboardIcon.ClearValue(IconElement.ForegroundProperty);
+                }
             }
             if (_cardPlayIcon != null) _cardPlayIcon.Glyph = glyph;
             if (_cardPlayText != null) _cardPlayText.Text = playing ? "Pause" : "Play";
