@@ -313,8 +313,8 @@ namespace ModernImageViewer
                 Height = 32,
                 VerticalAlignment = VerticalAlignment.Center
             };
-            ToolTipService.SetToolTip(fewestBox, "Minimum images per layout (1 to 16)");
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(fewestBox, "Minimum images per layout");
+            ToolTipService.SetToolTip(fewestBox, "Minimum images per scene (1 to 16)");
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(fewestBox, "Minimum images per scene");
 
             var toLabel = new TextBlock
             {
@@ -334,12 +334,12 @@ namespace ModernImageViewer
                 Height = 32,
                 VerticalAlignment = VerticalAlignment.Center
             };
-            ToolTipService.SetToolTip(mostBox, "Maximum images per layout (1 to 16)");
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(mostBox, "Maximum images per layout");
+            ToolTipService.SetToolTip(mostBox, "Maximum images per scene (1 to 16)");
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(mostBox, "Maximum images per scene");
 
-            var photosLabel = new TextBlock
+            var imagesSuffix = new TextBlock
             {
-                Text = "photos",
+                Text = "images per scene",
                 FontSize = 13,
                 Opacity = 0.85,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -355,30 +355,7 @@ namespace ModernImageViewer
             imageControlsPanel.Children.Add(fewestBox);
             imageControlsPanel.Children.Add(toLabel);
             imageControlsPanel.Children.Add(mostBox);
-            imageControlsPanel.Children.Add(photosLabel);
-
-            var imagesSummaryText = new TextBlock
-            {
-                FontSize = 12,
-                Opacity = 0.65,
-                VerticalAlignment = VerticalAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Right,
-                TextAlignment = TextAlignment.Right,
-                TextTrimming = TextTrimming.CharacterEllipsis
-            };
-
-            Action updateSummary = () =>
-            {
-                int f = fewestBox.Value;
-                int m = mostBox.Value;
-                if (f == 1 && m == 1) imagesSummaryText.Text = "Solo slideshow";
-                else if (f == 1 && m == 4) imagesSummaryText.Text = "Solo & small groups";
-                else if (f == 2 && m == 6) imagesSummaryText.Text = "Collage layouts";
-                else if (f >= 9 && m >= 9) imagesSummaryText.Text = "Dense wall layouts";
-                else if (f == m) imagesSummaryText.Text = $"Fixed {f} photo{(f == 1 ? "" : "s")}";
-                else imagesSummaryText.Text = $"{f}–{m} photos per scene";
-            };
-            updateSummary();
+            imageControlsPanel.Children.Add(imagesSuffix);
 
             void SetImageRange(int f, int m)
             {
@@ -393,7 +370,6 @@ namespace ModernImageViewer
                     ChangeSurpriseChoices(o => { o.FewestPictures = f; o.MostPictures = m; });
                     if (fewestEach != null && Math.Abs(fewestEach.Value - f) > 0.01) fewestEach.Value = f;
                     if (mostEach != null && Math.Abs(mostEach.Value - m) > 0.01) mostEach.Value = m;
-                    updateSummary();
                     updateImagesSummary?.Invoke();
                 }
                 finally
@@ -421,7 +397,6 @@ namespace ModernImageViewer
             var imagesRow = new Grid { MinHeight = 36, Margin = new Thickness(0, 2, 0, 2) };
             imagesRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
             imagesRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            imagesRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
             var imagesLabel = new TextBlock
             {
@@ -432,11 +407,9 @@ namespace ModernImageViewer
             };
             Grid.SetColumn(imagesLabel, 0);
             Grid.SetColumn(imageControlsPanel, 1);
-            Grid.SetColumn(imagesSummaryText, 2);
 
             imagesRow.Children.Add(imagesLabel);
             imagesRow.Children.Add(imageControlsPanel);
-            imagesRow.Children.Add(imagesSummaryText);
 
             void SpeedChanged()
             {
@@ -1709,7 +1682,6 @@ namespace ModernImageViewer
             // Storyboard Pacing & Images Range Selector (Min to Max SpinNumberBoxes)
             var storyPresetRow = new Grid { Margin = new Thickness(0, 0, 0, 6) };
             storyPresetRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            storyPresetRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
             var storyPresetLeft = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
             storyPresetLeft.Children.Add(new TextBlock
@@ -1755,9 +1727,9 @@ namespace ModernImageViewer
             ToolTipService.SetToolTip(storyMostBox, "Maximum images per drafted scene (1 to 16)");
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(storyMostBox, "Maximum images per scene");
 
-            var storyPhotosLabel = new TextBlock
+            var storySuffix = new TextBlock
             {
-                Text = "photos per scene",
+                Text = "images per scene",
                 FontSize = 12,
                 Opacity = 0.75,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -1767,19 +1739,9 @@ namespace ModernImageViewer
             storyPresetLeft.Children.Add(storyFewestBox);
             storyPresetLeft.Children.Add(storyToLabel);
             storyPresetLeft.Children.Add(storyMostBox);
-            storyPresetLeft.Children.Add(storyPhotosLabel);
+            storyPresetLeft.Children.Add(storySuffix);
 
-            var storyPresetExplanation = new TextBlock
-            {
-                FontSize = 12,
-                Opacity = 0.65,
-                VerticalAlignment = VerticalAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Right,
-                TextTrimming = TextTrimming.CharacterEllipsis
-            };
-            Grid.SetColumn(storyPresetExplanation, 1);
             storyPresetRow.Children.Add(storyPresetLeft);
-            storyPresetRow.Children.Add(storyPresetExplanation);
 
             void SetStoryRange(int f, int m)
             {
@@ -1837,9 +1799,7 @@ namespace ModernImageViewer
                     }
                 }
 
-                storyPresetExplanation.Text = f == 1 && m == 1
-                    ? "1 photo per scene (Solo slideshow)"
-                    : (f == m ? $"{f} photo{(f == 1 ? "" : "s")} per scene (fixed count)" : $"{f} to {m} photos per scene");
+
 
                 if (_activeShow != null && _activeShow.Scenes.Count > 0)
                 {
