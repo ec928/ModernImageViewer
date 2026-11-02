@@ -1686,11 +1686,9 @@ namespace ModernImageViewer
             var storyPresetLeft = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
             storyPresetLeft.Children.Add(new TextBlock
             {
-                Text = "Images:",
-                FontSize = 12,
-                Opacity = 0.75,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 2, 0)
+                Text = "Images per scene:",
+                FontSize = 13,
+                VerticalAlignment = VerticalAlignment.Center
             });
 
             bool syncingStoryRange = false;
@@ -1727,19 +1725,9 @@ namespace ModernImageViewer
             ToolTipService.SetToolTip(storyMostBox, "Maximum images per drafted scene (1 to 16)");
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(storyMostBox, "Maximum images per scene");
 
-            var storySuffix = new TextBlock
-            {
-                Text = "images per scene",
-                FontSize = 12,
-                Opacity = 0.75,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(4, 0, 0, 0)
-            };
-
             storyPresetLeft.Children.Add(storyFewestBox);
             storyPresetLeft.Children.Add(storyToLabel);
             storyPresetLeft.Children.Add(storyMostBox);
-            storyPresetLeft.Children.Add(storySuffix);
 
             storyPresetRow.Children.Add(storyPresetLeft);
 
