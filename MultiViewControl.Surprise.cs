@@ -298,16 +298,119 @@ namespace ModernImageViewer
             }
 
 
-            // Quick Image Count Presets (syncs bidirectionally with Fewest & Most sliders)
+            // Image count dual NumberBox range control (Min – Max) + quick presets
             Slider? fewestEach = null;
             Slider? mostEach = null;
             Action? updateImagesSummary = null;
             var imagePresetChips = new List<(Microsoft.UI.Xaml.Controls.Primitives.ToggleButton Chip, int Fewest, int Most)>();
-            var imagePresetsPanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-            bool syncingImagePresets = false;
+            var imageControlsPanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+            bool syncingImageRange = false;
+
+            var fewestBox = new NumberBox
+            {
+                Minimum = 1,
+                Maximum = MosaicLayout.MaxShown,
+                Value = options.FewestPictures,
+                SmallChange = 1,
+                LargeChange = 2,
+                SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
+                AcceptsExpression = false,
+                MinWidth = 54,
+                Width = 60,
+                Height = 32,
+                CornerRadius = new CornerRadius(4),
+                VerticalAlignment = VerticalAlignment.Center,
+                            };
+            ToolTipService.SetToolTip(fewestBox, "Minimum images per layout (1 to 16)");
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(fewestBox, "Minimum images per layout");
+
+            var rangeDash = new TextBlock
+            {
+                Text = "–",
+                FontSize = 13,
+                Opacity = 0.6,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(1, 0, 1, 0)
+            };
+
+            var mostBox = new NumberBox
+            {
+                Minimum = 1,
+                Maximum = MosaicLayout.MaxShown,
+                Value = options.MostPictures,
+                SmallChange = 1,
+                LargeChange = 2,
+                SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
+                AcceptsExpression = false,
+                MinWidth = 54,
+                Width = 60,
+                Height = 32,
+                CornerRadius = new CornerRadius(4),
+                VerticalAlignment = VerticalAlignment.Center,
+                            };
+            ToolTipService.SetToolTip(mostBox, "Maximum images per layout (1 to 16)");
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(mostBox, "Maximum images per layout");
+
+            imageControlsPanel.Children.Add(fewestBox);
+            imageControlsPanel.Children.Add(rangeDash);
+            imageControlsPanel.Children.Add(mostBox);
+
+            var imagePresetsPanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0) };
+            imageControlsPanel.Children.Add(imagePresetsPanel);
+
+            void SetImageRange(int f, int m)
+            {
+                f = Math.Clamp(f, 1, MosaicLayout.MaxShown);
+                m = Math.Clamp(m, f, MosaicLayout.MaxShown);
+                if (syncingImageRange) return;
+                syncingImageRange = true;
+                try
+                {
+                    if (Math.Abs(fewestBox.Value - f) > 0.01) fewestBox.Value = f;
+                    if (Math.Abs(mostBox.Value - m) > 0.01) mostBox.Value = m;
+                    ChangeSurpriseChoices(o => { o.FewestPictures = f; o.MostPictures = m; });
+                    if (fewestEach != null && Math.Abs(fewestEach.Value - f) > 0.01) fewestEach.Value = f;
+                    if (mostEach != null && Math.Abs(mostEach.Value - m) > 0.01) mostEach.Value = m;
+                    SyncImagePresetChips();
+                }
+                finally
+                {
+                    syncingImageRange = false;
+                }
+            }
+
+            fewestBox.ValueChanged += (_, args) =>
+            {
+                if (syncingImageRange || double.IsNaN(args.NewValue)) return;
+                int f = (int)Math.Clamp(Math.Round(args.NewValue), 1, MosaicLayout.MaxShown);
+                int m = (int)Math.Max(f, double.IsNaN(mostBox.Value) ? f : mostBox.Value);
+                SetImageRange(f, m);
+            };
+
+            mostBox.ValueChanged += (_, args) =>
+            {
+                if (syncingImageRange || double.IsNaN(args.NewValue)) return;
+                int m = (int)Math.Clamp(Math.Round(args.NewValue), 1, MosaicLayout.MaxShown);
+                int f = (int)Math.Min(m, double.IsNaN(fewestBox.Value) ? m : fewestBox.Value);
+                SetImageRange(f, m);
+            };
+
             void SyncImagePresetChips()
             {
                 int f = SurpriseChoices.FewestPictures, m = SurpriseChoices.MostPictures;
+                if (!syncingImageRange)
+                {
+                    syncingImageRange = true;
+                    try
+                    {
+                        if (Math.Abs(fewestBox.Value - f) > 0.01) fewestBox.Value = f;
+                        if (Math.Abs(mostBox.Value - m) > 0.01) mostBox.Value = m;
+                    }
+                    finally
+                    {
+                        syncingImageRange = false;
+                    }
+                }
                 foreach (var p in imagePresetChips)
                 {
                     bool isSel = p.Fewest == f && p.Most == m;
@@ -318,6 +421,7 @@ namespace ModernImageViewer
                 }
                 updateImagesSummary?.Invoke();
             }
+
             void AddImagePreset(string title, string tip, int f, int m)
             {
                 bool isSel = options.FewestPictures == f && options.MostPictures == m;
@@ -325,9 +429,9 @@ namespace ModernImageViewer
                 {
                     Content = title,
                     IsChecked = isSel,
-                    Padding = new Thickness(8, 4, 8, 4),
+                    Padding = new Thickness(7, 4, 7, 4),
                     MinWidth = 0,
-                    FontSize = 12,
+                    FontSize = 11,
                     CornerRadius = new CornerRadius(4),
                     BorderThickness = new Thickness(1),
                     Background = isSel ? winBlueDeep : new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x26, 0x26, 0x26)),
@@ -336,35 +440,22 @@ namespace ModernImageViewer
                 };
                 ToolTipService.SetToolTip(chip, tip);
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chip, title);
-                chip.Click += (_, _) =>
-                {
-                    syncingImagePresets = true;
-                    try
-                    {
-                        ChangeSurpriseChoices(o => { o.FewestPictures = f; o.MostPictures = m; });
-                        if (fewestEach != null) fewestEach.Value = f;
-                        if (mostEach != null) mostEach.Value = m;
-                    }
-                    finally
-                    {
-                        syncingImagePresets = false;
-                    }
-                    SyncImagePresetChips();
-                };
+                chip.Click += (_, _) => SetImageRange(f, m);
                 imagePresetChips.Add((chip, f, m));
                 imagePresetsPanel.Children.Add(chip);
             }
+
             AddImagePreset("Solo 1", "One hero photo per layout with full-bleed or gallery mat framing", 1, 1);
-            AddImagePreset("Mix 1\u20134", "Alternates between solo hero photos and 2\u20134 image stories", 1, 4);
-            AddImagePreset("Collage 2\u20136", "Balanced 2 to 6 image layouts", 2, 6);
-            AddImagePreset("Wall 9\u201316", "Dense 9 to 16 image gallery walls and grids", 9, 16);
+            AddImagePreset("Mix 1–4", "Alternates between solo hero photos and 2–4 image stories", 1, 4);
+            AddImagePreset("Collage 2–6", "Balanced 2 to 6 image layouts", 2, 6);
+            AddImagePreset("Wall 9–16", "Dense 9 to 16 image gallery walls and grids", 9, 16);
 
             var imagesRow = new Grid { ColumnSpacing = 12, MinHeight = 36 };
             imagesRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             imagesRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             imagesRow.Children.Add(new TextBlock { Text = "Images", VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) });
-            Grid.SetColumn(imagePresetsPanel, 1);
-            imagesRow.Children.Add(imagePresetsPanel);
+            Grid.SetColumn(imageControlsPanel, 1);
+            imagesRow.Children.Add(imageControlsPanel);
 
             void SpeedChanged()
             {
@@ -579,13 +670,13 @@ namespace ModernImageViewer
             fewestEach = Slide(imagesSection, "Fewest each click", "The least a click uses, when there are more images than the most below.",
                 SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.FewestPictures,
                 v => $"{v:0}",
-                (o, v) => { o.FewestPictures = (int)v; if (!syncingImagePresets) SyncImagePresetChips(); });
+                (o, v) => { if (!syncingImageRange) SetImageRange((int)v, (int)mostBox.Value); });
             mostEach = Slide(imagesSection, "Most each click", "The most a click uses. The rest stay in the image tray, and clicks take turns through them.",
                 SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.MostPictures,
                 v => $"{v:0}",
-                (o, v) => { o.MostPictures = (int)v; if (!syncingImagePresets) SyncImagePresetChips(); });
-            fewestEach.ValueChanged += (_, e) => { if (!syncingImagePresets && mostEach.Value < e.NewValue) mostEach.Value = e.NewValue; };
-            mostEach.ValueChanged += (_, e) => { if (!syncingImagePresets && fewestEach.Value > e.NewValue) fewestEach.Value = e.NewValue; };
+                (o, v) => { if (!syncingImageRange) SetImageRange((int)fewestBox.Value, (int)v); });
+            fewestEach.ValueChanged += (_, e) => { if (!syncingImageRange && mostEach.Value < e.NewValue) mostEach.Value = e.NewValue; };
+            mostEach.ValueChanged += (_, e) => { if (!syncingImageRange && fewestEach.Value > e.NewValue) fewestEach.Value = e.NewValue; };
 
             Slide(imagesSection, "Same folder and date", "The odds that a click takes images that are neighbours when sorted by folder, then file date.",
                 0, 100, 5, options.TogetherChance * 100,
@@ -1433,8 +1524,7 @@ namespace ModernImageViewer
                 Opacity = 0.75,
                 MaxWidth = 440,
                 TextWrapping = TextWrapping.Wrap,
-                TextAlignment = TextAlignment.Center
-            };
+                            };
             var emptyTrayAddBtn = new Button
             {
                 Content = "➕ Add Images...",
@@ -1635,7 +1725,7 @@ namespace ModernImageViewer
             Grid.SetColumn(storyButtons, 1);
             storyToolbar.Children.Add(storyButtons);
 
-            // Storyboard Pacing Preset Selector (Solo 1, Mix 1-4, Collage 2-6, Wall 9-16)
+            // Storyboard Pacing & Images Range Selector (Min – Max NumberBoxes + Presets)
             var storyPresetRow = new Grid { Margin = new Thickness(0, 0, 0, 4) };
             storyPresetRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             storyPresetRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -1644,12 +1734,67 @@ namespace ModernImageViewer
             var storyPresetLeft = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
             storyPresetLeft.Children.Add(new TextBlock
             {
-                Text = "Layout style:",
+                Text = "Images:",
                 FontSize = 12,
                 Opacity = 0.75,
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 4, 0)
+                Margin = new Thickness(0, 0, 2, 0)
             });
+
+            bool syncingStoryRange = false;
+            var storyFewestBox = new NumberBox
+            {
+                Minimum = 1,
+                Maximum = MosaicLayout.MaxShown,
+                Value = SurpriseChoices.FewestPictures,
+                SmallChange = 1,
+                LargeChange = 2,
+                SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
+                AcceptsExpression = false,
+                MinWidth = 54,
+                Width = 58,
+                Height = 30,
+                CornerRadius = new CornerRadius(4),
+                VerticalAlignment = VerticalAlignment.Center,
+                                FontSize = 12
+            };
+            ToolTipService.SetToolTip(storyFewestBox, "Minimum images per drafted scene (1 to 16)");
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(storyFewestBox, "Minimum images per scene");
+
+            var storyDash = new TextBlock
+            {
+                Text = "–",
+                FontSize = 12,
+                Opacity = 0.6,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(1, 0, 1, 0)
+            };
+
+            var storyMostBox = new NumberBox
+            {
+                Minimum = 1,
+                Maximum = MosaicLayout.MaxShown,
+                Value = SurpriseChoices.MostPictures,
+                SmallChange = 1,
+                LargeChange = 2,
+                SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
+                AcceptsExpression = false,
+                MinWidth = 54,
+                Width = 58,
+                Height = 30,
+                CornerRadius = new CornerRadius(4),
+                VerticalAlignment = VerticalAlignment.Center,
+                                FontSize = 12
+            };
+            ToolTipService.SetToolTip(storyMostBox, "Maximum images per drafted scene (1 to 16)");
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(storyMostBox, "Maximum images per scene");
+
+            storyPresetLeft.Children.Add(storyFewestBox);
+            storyPresetLeft.Children.Add(storyDash);
+            storyPresetLeft.Children.Add(storyMostBox);
+
+            var storyPresetsContainer = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0) };
+            storyPresetLeft.Children.Add(storyPresetsContainer);
 
             var storyPresetChips = new List<(Microsoft.UI.Xaml.Controls.Primitives.ToggleButton Chip, int Fewest, int Most, string Name, string Desc)>();
             var storyPresetExplanation = new TextBlock
@@ -1664,25 +1809,82 @@ namespace ModernImageViewer
             storyPresetRow.Children.Add(storyPresetLeft);
             storyPresetRow.Children.Add(storyPresetExplanation);
 
+            void SetStoryRange(int f, int m)
+            {
+                f = Math.Clamp(f, 1, MosaicLayout.MaxShown);
+                m = Math.Clamp(m, f, MosaicLayout.MaxShown);
+                if (syncingStoryRange) return;
+                syncingStoryRange = true;
+                try
+                {
+                    if (Math.Abs(storyFewestBox.Value - f) > 0.01) storyFewestBox.Value = f;
+                    if (Math.Abs(storyMostBox.Value - m) > 0.01) storyMostBox.Value = m;
+                    ChangeSurpriseChoices(o => { o.FewestPictures = f; o.MostPictures = m; });
+                    SyncStoryPresetChips();
+                }
+                finally
+                {
+                    syncingStoryRange = false;
+                }
+            }
+
+            storyFewestBox.ValueChanged += (_, args) =>
+            {
+                if (syncingStoryRange || double.IsNaN(args.NewValue)) return;
+                int f = (int)Math.Clamp(Math.Round(args.NewValue), 1, MosaicLayout.MaxShown);
+                int m = (int)Math.Max(f, double.IsNaN(storyMostBox.Value) ? f : storyMostBox.Value);
+                SetStoryRange(f, m);
+            };
+
+            storyMostBox.ValueChanged += (_, args) =>
+            {
+                if (syncingStoryRange || double.IsNaN(args.NewValue)) return;
+                int m = (int)Math.Clamp(Math.Round(args.NewValue), 1, MosaicLayout.MaxShown);
+                int f = (int)Math.Min(m, double.IsNaN(storyFewestBox.Value) ? m : storyFewestBox.Value);
+                SetStoryRange(f, m);
+            };
+
             void SyncStoryPresetChips()
             {
                 int f = SurpriseChoices.FewestPictures;
                 int m = SurpriseChoices.MostPictures;
                 int totalPhotos = SessionPictures().Count;
-                string activeName = "Mix 1–4";
+                string activeName = f == 1 && m == 1 ? "Solo 1" : (f == m ? $"{f} photos" : $"{f}–{m} photos");
+                if (f == 1 && m == 4) activeName = "Mix 1–4";
+                else if (f == 2 && m == 6) activeName = "Collage 2–6";
+                else if (f == 9 && m == 16) activeName = "Wall 9–16";
 
+                if (!syncingStoryRange)
+                {
+                    syncingStoryRange = true;
+                    try
+                    {
+                        if (Math.Abs(storyFewestBox.Value - f) > 0.01) storyFewestBox.Value = f;
+                        if (Math.Abs(storyMostBox.Value - m) > 0.01) storyMostBox.Value = m;
+                    }
+                    finally
+                    {
+                        syncingStoryRange = false;
+                    }
+                }
+
+                bool matchedPreset = false;
                 foreach (var p in storyPresetChips)
                 {
                     bool isSel = p.Fewest == f && p.Most == m;
+                    if (isSel) matchedPreset = true;
                     p.Chip.IsChecked = isSel;
                     p.Chip.Background = isSel ? winBlueDeep : new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x26, 0x26, 0x26));
                     p.Chip.Foreground = isSel ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) : new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xEE, 0xFF, 0xFF, 0xFF));
                     p.Chip.BorderBrush = isSel ? winBlue : new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x35, 0xFF, 0xFF, 0xFF));
                     if (isSel)
                     {
-                        activeName = p.Name;
                         storyPresetExplanation.Text = p.Desc;
                     }
+                }
+                if (!matchedPreset)
+                {
+                    storyPresetExplanation.Text = f == m ? $"{f} photo{(f == 1 ? "" : "s")} per scene" : $"{f} to {m} photos per scene";
                 }
 
                 if (_activeShow != null && _activeShow.Scenes.Count > 0)
@@ -1714,13 +1916,9 @@ namespace ModernImageViewer
                 };
                 ToolTipService.SetToolTip(chip, tip);
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chip, title);
-                chip.Click += (_, _) =>
-                {
-                    ChangeSurpriseChoices(o => { o.FewestPictures = f; o.MostPictures = m; });
-                    SyncStoryPresetChips();
-                };
+                chip.Click += (_, _) => SetStoryRange(f, m);
                 storyPresetChips.Add((chip, f, m, title, desc));
-                storyPresetLeft.Children.Add(chip);
+                storyPresetsContainer.Children.Add(chip);
             }
 
             AddStoryPreset("Solo 1", "One photo per scene (181 scenes for 181 photos)", 1, 1, "1 photo per scene · traditional slideshow");
@@ -1729,6 +1927,7 @@ namespace ModernImageViewer
             AddStoryPreset("Wall 9–16", "Dense 9 to 16 image gallery walls", 9, 16, "9–16 photos per layout · dense gallery walls");
 
             SyncStoryPresetChips();
+
 
             var draftProgressRow = new StackPanel
             {
@@ -1765,8 +1964,7 @@ namespace ModernImageViewer
                 Opacity = 0.75,
                 MaxWidth = 440,
                 TextWrapping = TextWrapping.Wrap,
-                TextAlignment = TextAlignment.Center
-            };
+                            };
             emptyDraftBtn = new Button
             {
                 Content = "✨ Auto-Draft Show from Photos",
