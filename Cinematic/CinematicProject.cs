@@ -35,6 +35,7 @@ namespace ModernImageViewer.Cinematic.Data
         [JsonPropertyName("musicVolume")]
         public double MusicVolume { get; set; } = 60.0;
 
+        #if WINDOWS10_0_17763_0_OR_GREATER
         public SlideSettings GetEffectiveSettings(string fileName)
         {
             var settings = new SlideSettings
@@ -54,6 +55,7 @@ namespace ModernImageViewer.Cinematic.Data
             }
             return settings;
         }
+#endif
 
         /// <summary>A slide marked custom for settings that no longer exist has nothing left to say.</summary>
         public void DropEmptySlides()
@@ -62,11 +64,13 @@ namespace ModernImageViewer.Cinematic.Data
                 if (!Ledger[key].HasAnything) Ledger.Remove(key);
         }
 
+        #if WINDOWS10_0_17763_0_OR_GREATER
         private static Windows.Foundation.Rect? ToRect(NormalizedRect? r)
         {
             if (r == null) return null;
             return new Windows.Foundation.Rect(r.X, r.Y, r.Width, r.Height);
         }
+#endif
     }
 
     public class GlobalDefaults

@@ -26,5 +26,8 @@
     <Compile Include="..\..\ListMerge.cs" Link="ListMerge.cs" />
     <Compile Include="..\..\Cinematic\ShowPacing.cs" Link="ShowPacing.cs" />
     <Compile Include="..\..\Cinematic\MusicLibrary.cs" Link="MusicLibrary.cs" />
+    <Compile Include="..\..\Cinematic\CinematicProject.cs" Link="CinematicProject.cs" />
+    <Compile Include="..\..\ShowProject.cs" Link="ShowProject.cs" />
+    <Compile Include="..\..\ShowDirector.cs" Link="ShowDirector.cs" />
   </ItemGroup>
 </Project>
