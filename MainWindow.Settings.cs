@@ -25,6 +25,13 @@ namespace ModernImageViewer
             SaveAllSettings();
         }
 
+        public void SetMusicVolume(double volume)
+        {
+            _currentSettings.MusicVolume = Math.Clamp(volume, 0, 100);
+            SaveAllSettings();
+            MusicSettingsChanged?.Invoke();
+        }
+
         private async void MusicSettings_Click(object sender, RoutedEventArgs e)
         {
             HeaderSettingsFlyout.Hide();

@@ -610,8 +610,8 @@ namespace ModernImageViewer.Tests
         [Fact]
         public void Camera_subjects_project_face_coordinates_and_burst_filter_keeps_sharpest()
         {
-            var photo = new PhotoFacts(@"C:\p\face.jpg", 1000, 1000, new List<UnitRect> { new(0.75, 0.15, 0.1, 0.1) });
-            var cell = new ComposedCell(photo, 100, 50, 400, 400, FrameLooks.Flush(), new CellGeometryDto(), Floating: false);
+            var photo = new PhotoFacts(@"C:\p\face.jpg", 1000, 1000, new List<UnitRect> { new(0.75, 0.15, 0.1, 0.1) }, 0.5, 0.5, "#000000");
+            var cell = new ComposedCell { Photo = photo, X = 100, Y = 50, W = 400, H = 400, ImageWidth = 400, ImageHeight = 400, Frame = FrameLooks.Flush(), Geometry = new CellGeometryDto(), Floating = false };
             var pos = LayoutComposer.SubjectOnCanvas(cell, 1000, 1000);
             Assert.Equal((100 + 0.8 * 400) / 1000.0, pos.X, 3);
             Assert.Equal((50 + 0.2 * 400) / 1000.0, pos.Y, 3);

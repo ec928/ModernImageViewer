@@ -361,3 +361,7 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+# Test and sample assets
+tests/*.mivlayout
+tests/*.cbr
+tests/*.cbz

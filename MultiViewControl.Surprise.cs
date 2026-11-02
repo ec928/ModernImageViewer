@@ -106,11 +106,14 @@ namespace ModernImageViewer
             RootGrid.SizeChanged += (_, _) => PlaceSurpriseCard();
         }
 
-        private const double SurpriseCardWidth = 452;
+        private const double SurpriseCardWidth = 530;
         private const double SurpriseCardGap = 8;
-        private string _surpriseSectionOpen = "How many images";
-        private TextBlock? _cardSongText;
+        private bool _showingSurpriseAdvanced;
+        private string _surpriseSectionOpen = "Images & faces";
+        private Button? _cardPreviousLayout;
+        private Button? _cardNextLayout;
         private Button? _cardPlayButton;
+        private TextBlock? _cardSongText;
         private FontIcon? _cardPlayIcon;
         private TextBlock? _cardPlayText;
         private Button? _cardPreviousSong;
@@ -145,83 +148,208 @@ namespace ModernImageViewer
 
             FontIcon Icon(string glyph, double size = 14) => new() { FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), Glyph = glyph, FontSize = size };
 
-            Button IconButton(string glyph, string name, RoutedEventHandler pressed)
+            Style? SafeStyle(string key)
             {
-                var button = new Button { Content = Icon(glyph), Padding = new Thickness(10, 6, 10, 6), VerticalAlignment = VerticalAlignment.Center };
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, name);
-                ToolTipService.SetToolTip(button, name);
-                button.Click += pressed;
-                return button;
+                if (Resources.TryGetValue(key, out var s) && s is Style st) return st;
+                if (Application.Current?.Resources.TryGetValue(key, out var asObj) == true && asObj is Style ast) return ast;
+                return null;
             }
+
+            var winBlue = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x4C, 0xC2, 0xFF));
+            var winBlueDeep = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x00, 0x78, 0xD4));
 
             void Row(StackPanel column, string label, string tip, FrameworkElement control)
             {
-                var row = new Grid { ColumnSpacing = 10, MinHeight = 34 };
+                var row = new Grid { ColumnSpacing = 12, MinHeight = 34 };
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) });
-                var text = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
+                var text = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White), TextTrimming = TextTrimming.None };
                 ToolTipService.SetToolTip(row, tip);
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(control, label);
+                control.HorizontalAlignment = HorizontalAlignment.Right;
                 control.VerticalAlignment = VerticalAlignment.Center;
+                control.Margin = new Thickness(0, 0, 4, 0);
                 Grid.SetColumn(control, 1);
                 row.Children.Add(text);
                 row.Children.Add(control);
                 column.Children.Add(row);
             }
 
-            Slider Slide(StackPanel column, string label, string tip, double min, double max, double step, double value, Action<SurpriseOptions, double> chosen)
+            Slider Slide(StackPanel column, string label, string tip, double min, double max, double step, double value, Func<double, string> format, Action<SurpriseOptions, double> chosen)
             {
-                var slider = new Slider { Minimum = min, Maximum = max, StepFrequency = step, SmallChange = step, Value = value };
-                slider.ValueChanged += (_, e) => ChangeSurpriseChoices(o => chosen(o, e.NewValue));
-                Row(column, label, tip, slider);
+                var row = new Grid { ColumnSpacing = 12, MinHeight = 34 };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
+                var text = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White), TextTrimming = TextTrimming.None };
+
+                var rightGrid = new Grid { Width = 230, ColumnSpacing = 8, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+                rightGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
+                rightGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(62) });
+
+                var readout = new TextBlock
+                {
+                    Text = format(value),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    TextAlignment = TextAlignment.Right,
+                    FontSize = 12,
+                    Opacity = 0.82,
+                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White)
+                };
+                var slider = new Slider
+                {
+                    Minimum = min,
+                    Maximum = max,
+                    StepFrequency = step,
+                    SmallChange = step,
+                    Value = value,
+                    Width = 160,
+                    Foreground = winBlue,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                slider.Resources["SliderThumbBackground"] = winBlue;
+                slider.Resources["SliderThumbBackgroundPointerOver"] = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x70, 0xD0, 0xFF));
+                slider.Resources["SliderThumbBackgroundPressed"] = winBlue;
+                slider.Resources["SliderTrackValueFill"] = winBlue;
+                slider.Resources["SliderTrackValueFillPointerOver"] = winBlue;
+                slider.Resources["SliderTrackValueFillPressed"] = winBlue;
+                slider.ValueChanged += (_, e) =>
+                {
+                    ChangeSurpriseChoices(o => chosen(o, e.NewValue));
+                    readout.Text = format(e.NewValue);
+                };
+                ToolTipService.SetToolTip(row, tip);
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(slider, label);
+                Grid.SetColumn(slider, 0);
+                Grid.SetColumn(readout, 1);
+                rightGrid.Children.Add(slider);
+                rightGrid.Children.Add(readout);
+
+                Grid.SetColumn(text, 0);
+                Grid.SetColumn(rightGrid, 1);
+                row.Children.Add(text);
+                row.Children.Add(rightGrid);
+                column.Children.Add(row);
                 return slider;
             }
 
-            void Toggle(StackPanel column, string label, string tip, bool value, Action<SurpriseOptions, bool> chosen)
+            ToggleSwitch Toggle(StackPanel column, string label, string tip, bool value, Action<SurpriseOptions, bool> chosen)
             {
-                var toggle = new ToggleSwitch { IsOn = value, OnContent = string.Empty, OffContent = string.Empty, MinWidth = 0 };
+                var row = new Grid { ColumnSpacing = 12, MinHeight = 34 };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
+                var text = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White), TextTrimming = TextTrimming.None };
+
+                var toggle = new ToggleSwitch
+                {
+                    IsOn = value,
+                    OnContent = string.Empty,
+                    OffContent = string.Empty,
+                    MinWidth = 0,
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 0, 4, 0)
+                };
                 toggle.Toggled += (_, _) => ChangeSurpriseChoices(o => chosen(o, toggle.IsOn));
-                Row(column, label, tip, toggle);
+                ToolTipService.SetToolTip(row, tip);
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(toggle, label);
+                Grid.SetColumn(text, 0);
+                Grid.SetColumn(toggle, 1);
+                row.Children.Add(text);
+                row.Children.Add(toggle);
+                column.Children.Add(row);
+                return toggle;
             }
 
-            // Layouts: every step button says what it steps through, so it cannot be taken for the music's.
             Button WordButton(string text, string name, string tip, RoutedEventHandler pressed)
             {
-                var button = new Button { Content = text, Padding = new Thickness(10, 6, 10, 6), VerticalAlignment = VerticalAlignment.Center, FontSize = 13 };
+                var button = new Button
+                {
+                    Content = text,
+                    Padding = new Thickness(10, 5, 10, 5),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    FontSize = 12,
+                    CornerRadius = new CornerRadius(4),
+                    Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x2E, 0x2E, 0x2E)),
+                    BorderBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x44, 0xFF, 0xFF, 0xFF)),
+                    BorderThickness = new Thickness(1),
+                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White)
+                };
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, name);
                 ToolTipService.SetToolTip(button, tip);
                 button.Click += pressed;
                 return button;
             }
 
-            TextBlock Label(string text) => new() { Text = text, FontSize = 12, Opacity = 0.7 };
 
-            body.Children.Add(Label("Layouts"));
-            var transport = new Grid { ColumnSpacing = 6 };
-            transport.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            transport.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            transport.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var previousLayout = WordButton("\u2039 Layout", "Previous layout", "Previous layout. Pauses first. With this card closed, Left does the same.", (_, _) => StepLayout(back: true));
-            var nextLayout = WordButton("Layout \u203A", "Next layout", "Forward again after going back. With this card closed, Right does the same.", (_, _) => StepLayout(back: false));
-            _cardPlayIcon = Icon("\uE768", 13);
-            _cardPlayText = new TextBlock { Text = "Play", VerticalAlignment = VerticalAlignment.Center };
-            var playContent = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
-            playContent.Children.Add(_cardPlayIcon);
-            playContent.Children.Add(_cardPlayText);
-            _cardPlayButton = new Button { Content = playContent, HorizontalAlignment = HorizontalAlignment.Stretch };
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(_cardPlayButton, "Play or pause from the card");
-            _cardPlayButton.Click += AutoPlayButton_Click;
-            Grid.SetColumn(_cardPlayButton, 1);
-            Grid.SetColumn(nextLayout, 2);
-            transport.Children.Add(previousLayout);
-            transport.Children.Add(_cardPlayButton);
-            transport.Children.Add(nextLayout);
-            body.Children.Add(transport);
+            // Quick Image Count Presets (syncs bidirectionally with Fewest & Most sliders)
+            Slider? fewestEach = null;
+            Slider? mostEach = null;
+            Action? updateImagesSummary = null;
+            var imagePresetChips = new List<(Microsoft.UI.Xaml.Controls.Primitives.ToggleButton Chip, int Fewest, int Most)>();
+            var imagePresetsPanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+            bool syncingImagePresets = false;
+            void SyncImagePresetChips()
+            {
+                int f = SurpriseChoices.FewestPictures, m = SurpriseChoices.MostPictures;
+                foreach (var p in imagePresetChips)
+                {
+                    bool isSel = p.Fewest == f && p.Most == m;
+                    p.Chip.IsChecked = isSel;
+                    p.Chip.Background = isSel ? winBlueDeep : new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x26, 0x26, 0x26));
+                    p.Chip.Foreground = isSel ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) : new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xEE, 0xFF, 0xFF, 0xFF));
+                    p.Chip.BorderBrush = isSel ? winBlue : new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x35, 0xFF, 0xFF, 0xFF));
+                }
+                updateImagesSummary?.Invoke();
+            }
+            void AddImagePreset(string title, string tip, int f, int m)
+            {
+                bool isSel = options.FewestPictures == f && options.MostPictures == m;
+                var chip = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton
+                {
+                    Content = title,
+                    IsChecked = isSel,
+                    Padding = new Thickness(8, 4, 8, 4),
+                    MinWidth = 0,
+                    FontSize = 12,
+                    CornerRadius = new CornerRadius(4),
+                    BorderThickness = new Thickness(1),
+                    Background = isSel ? winBlueDeep : new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x26, 0x26, 0x26)),
+                    Foreground = isSel ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) : new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xEE, 0xFF, 0xFF, 0xFF)),
+                    BorderBrush = isSel ? winBlue : new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x35, 0xFF, 0xFF, 0xFF))
+                };
+                ToolTipService.SetToolTip(chip, tip);
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chip, title);
+                chip.Click += (_, _) =>
+                {
+                    syncingImagePresets = true;
+                    try
+                    {
+                        ChangeSurpriseChoices(o => { o.FewestPictures = f; o.MostPictures = m; });
+                        if (fewestEach != null) fewestEach.Value = f;
+                        if (mostEach != null) mostEach.Value = m;
+                    }
+                    finally
+                    {
+                        syncingImagePresets = false;
+                    }
+                    SyncImagePresetChips();
+                };
+                imagePresetChips.Add((chip, f, m));
+                imagePresetsPanel.Children.Add(chip);
+            }
+            AddImagePreset("Solo 1", "One hero photo per layout with full-bleed or gallery mat framing", 1, 1);
+            AddImagePreset("Mix 1\u20134", "Alternates between solo hero photos and 2\u20134 image stories", 1, 4);
+            AddImagePreset("Collage 2\u20136", "Balanced 2 to 6 image layouts", 2, 6);
+            AddImagePreset("Wall 9\u201316", "Dense 9 to 16 image gallery walls and grids", 9, 16);
 
-            // How long each layout stays: a quick choice, or a random range
-            var speeds = new List<Microsoft.UI.Xaml.Controls.Primitives.ToggleButton>();
-            var speed = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
-            var range = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Visibility = options.AutoPlayRandom ? Visibility.Visible : Visibility.Collapsed };
+            var imagesRow = new Grid { ColumnSpacing = 12, MinHeight = 36 };
+            imagesRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            imagesRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            imagesRow.Children.Add(new TextBlock { Text = "Images", VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) });
+            Grid.SetColumn(imagePresetsPanel, 1);
+            imagesRow.Children.Add(imagePresetsPanel);
+
             void SpeedChanged()
             {
                 if (_autoPlaySeconds > 0 && _autoPlayTimer != null)
@@ -232,81 +360,222 @@ namespace ModernImageViewer
                 }
                 ShowAutoPlayState();
             }
-            Microsoft.UI.Xaml.Controls.Primitives.ToggleButton Chip(object content, string name, bool on)
+
+            if (!_showingSurpriseAdvanced)
             {
-                var chip = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton { Content = content, IsChecked = on, Padding = new Thickness(8, 5, 8, 5), MinWidth = 0, FontSize = 12 };
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chip, name);
-                ToolTipService.SetToolTip(chip, name);
-                speeds.Add(chip);
-                speed.Children.Add(chip);
-                return chip;
-            }
-            foreach (int seconds in SurpriseOptions.AutoPlayChoices.Where(s => s > 0))
-            {
-                var chip = Chip(seconds.ToString(), $"A new layout every {seconds} seconds", !options.AutoPlayRandom && seconds == options.PlaySeconds);
-                chip.Click += (_, _) =>
+                var header = new Grid { ColumnSpacing = 8, Margin = new Thickness(0, 0, 0, 2) };
+                header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                var title = new TextBlock { Text = "Auto-Play", FontSize = 14, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+                var gearBtn = new Button
                 {
-                    foreach (var other in speeds) other.IsChecked = ReferenceEquals(other, chip);
-                    range.Visibility = Visibility.Collapsed;
-                    ChangeSurpriseChoices(o => { o.AutoPlaySeconds = seconds; o.AutoPlayRandom = false; });
+                    Content = Icon("\uE713", 13),
+                    Padding = new Thickness(6, 4, 6, 4),
+                    CornerRadius = new CornerRadius(6),
+                    Style = SafeStyle("QuietButtonStyle"),
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                ToolTipService.SetToolTip(gearBtn, "Advanced auto-play settings");
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(gearBtn, "Advanced auto-play settings");
+                gearBtn.Click += (_, _) => { _showingSurpriseAdvanced = true; ShowSurpriseCard(); };
+                Grid.SetColumn(gearBtn, 1);
+                header.Children.Add(title);
+                header.Children.Add(gearBtn);
+                body.Children.Add(header);
+
+                var transport = new Grid { ColumnSpacing = 8, Margin = new Thickness(0, 4, 0, 8) };
+                transport.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
+                transport.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                transport.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
+
+                _cardPreviousLayout = WordButton("\u2039 Layout", "Previous layout", "Previous layout (Left Arrow). Pauses auto-play.", (_, _) => StepLayout(back: true));
+                _cardPreviousLayout.HorizontalAlignment = HorizontalAlignment.Stretch;
+
+                _cardPlayIcon = Icon(_autoPlaySeconds > 0 ? "\uE769" : "\uE768", 13);
+                _cardPlayText = new TextBlock { Text = _autoPlaySeconds > 0 ? "Pause" : "Play", VerticalAlignment = VerticalAlignment.Center, FontSize = 12 };
+                var playStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
+                playStack.Children.Add(_cardPlayIcon);
+                playStack.Children.Add(_cardPlayText);
+
+                _cardPlayButton = new Button
+                {
+                    Content = playStack,
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    Padding = new Thickness(10, 5, 10, 5),
+                    CornerRadius = new CornerRadius(4),
+                    Background = _autoPlaySeconds > 0 ? winBlueDeep : new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x2E, 0x2E, 0x2E)),
+                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White),
+                    BorderBrush = _autoPlaySeconds > 0 ? winBlue : new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x44, 0xFF, 0xFF, 0xFF)),
+                    BorderThickness = new Thickness(1)
+                };
+                ToolTipService.SetToolTip(_cardPlayButton, "Start or pause auto-play (Space)");
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(_cardPlayButton, "Play or pause auto-play");
+                _cardPlayButton.Click += AutoPlayButton_Click;
+
+                _cardNextLayout = WordButton("Layout \u203A", "Next layout", "Next layout (Right Arrow). Forward again after going back.", (_, _) => StepLayout(back: false));
+                _cardNextLayout.HorizontalAlignment = HorizontalAlignment.Stretch;
+
+                Grid.SetColumn(_cardPreviousLayout, 0);
+                Grid.SetColumn(_cardPlayButton, 1);
+                Grid.SetColumn(_cardNextLayout, 2);
+                transport.Children.Add(_cardPreviousLayout);
+                transport.Children.Add(_cardPlayButton);
+                transport.Children.Add(_cardNextLayout);
+                body.Children.Add(transport);
+
+                body.Children.Add(imagesRow);
+
+                int initialFrom = options.AutoPlayRandom ? options.RandomFewestSeconds : options.PlaySeconds;
+                int initialTo = options.AutoPlayRandom ? options.RandomMostSeconds : options.PlaySeconds;
+                initialFrom = Math.Clamp(initialFrom, 3, 30);
+                initialTo = Math.Clamp(Math.Max(initialFrom, initialTo), 3, 30);
+
+                var durationRow = new Grid { ColumnSpacing = 12, MinHeight = 34 };
+                durationRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                durationRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
+
+                var durationLabel = new TextBlock { Text = "Duration", VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
+
+                var durationRightGrid = new Grid { Width = 230, ColumnSpacing = 8, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+                durationRightGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
+                durationRightGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(62) });
+
+                var durationReadout = new TextBlock
+                {
+                    Text = $"{initialFrom:0}s - {initialTo:0}s",
+                    VerticalAlignment = VerticalAlignment.Center,
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    TextAlignment = TextAlignment.Right,
+                    FontSize = 12,
+                    Opacity = 0.82,
+                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White)
+                };
+
+                var durationSlider = new RangeSlider
+                {
+                    Minimum = 3,
+                    Maximum = 30,
+                    StepFrequency = 1,
+                    RangeStart = initialFrom,
+                    RangeEnd = initialTo,
+                    Width = 160,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+
+                durationSlider.RangeChanged += (_, range) =>
+                {
+                    int low = (int)Math.Round(range.Start);
+                    int high = (int)Math.Round(range.End);
+                    durationReadout.Text = $"{low:0}s - {high:0}s";
+                    bool isRange = low < high;
+                    ChangeSurpriseChoices(o =>
+                    {
+                        o.AutoPlayRandom = isRange;
+                        o.AutoPlaySeconds = low;
+                        o.RandomFewestSeconds = low;
+                        o.RandomMostSeconds = high;
+                    });
                     SpeedChanged();
                 };
+
+                ToolTipService.SetToolTip(durationRow, "Hold time per layout before advancing. Drag thumbs apart for a random range, together for a fixed duration. Double-click to set a single fixed hold time.");
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(durationSlider, "Duration");
+
+                Grid.SetColumn(durationSlider, 0);
+                Grid.SetColumn(durationReadout, 1);
+                durationRightGrid.Children.Add(durationSlider);
+                durationRightGrid.Children.Add(durationReadout);
+
+                Grid.SetColumn(durationLabel, 0);
+                Grid.SetColumn(durationRightGrid, 1);
+                durationRow.Children.Add(durationLabel);
+                durationRow.Children.Add(durationRightGrid);
+
+                body.Children.Add(durationRow);
+
+                Toggle(body, "Smart pace", "When duration has a range, holds dense multi-photo layouts toward the longer end and solo/pair layouts toward the shorter end.", options.SmartPace, (o, on) => o.SmartPace = on);
+
+                Slide(body, "Motion", "How far the camera moves over each layout while it plays, from still to strong, with floating cells following it.", 0, 100, 5, options.MotionAmount * 100,
+                    v => v < 1 ? "Off" : $"{v:0}%",
+                    (o, v) => o.MotionAmount = v / 100);
+
+                body.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle { Height = 1, Opacity = 0.15, Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White), Margin = new Thickness(0, 6, 0, 4) });
+                var soundtrackHeader = new TextBlock
+                {
+                    Text = "Soundtrack",
+                    FontSize = 13,
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White),
+                    Margin = new Thickness(0, 2, 0, 4)
+                };
+                body.Children.Add(soundtrackHeader);
+                body.Children.Add(MusicRow(Icon, WordButton));
+
+                body.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle { Height = 1, Opacity = 0.15, Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White), Margin = new Thickness(0, 4, 0, 2) });
+                var openAdvBtn = new Button
+                {
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    Padding = new Thickness(10, 7, 10, 7),
+                    CornerRadius = new CornerRadius(6),
+                    Margin = new Thickness(0, 2, 0, 0)
+                };
+                var advStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
+                advStack.Children.Add(Icon("\uE713", 13));
+                advStack.Children.Add(new TextBlock { Text = "Advanced auto-play settings\u2026", FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
+                openAdvBtn.Content = advStack;
+                ToolTipService.SetToolTip(openAdvBtn, "Recipe odds, face intelligence, camera transitions and look");
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(openAdvBtn, "Advanced auto-play settings");
+                openAdvBtn.Click += (_, _) => { _showingSurpriseAdvanced = true; ShowSurpriseCard(); };
+                body.Children.Add(openAdvBtn);
             }
-            var randomChip = Chip("Random", "A random time for each layout", options.AutoPlayRandom);
-            randomChip.Margin = new Thickness(4, 0, 0, 0);
-            randomChip.Click += (_, _) =>
+            else
             {
-                foreach (var other in speeds) other.IsChecked = ReferenceEquals(other, randomChip);
-                range.Visibility = Visibility.Visible;
-                ChangeSurpriseChoices(o => o.AutoPlayRandom = true);
-                SpeedChanged();
-            };
-            ComboBox RangeBox(int value, string name)
-            {
-                var box = new ComboBox { ItemsSource = SurpriseOptions.RandomPlayChoices.ToList(), SelectedItem = value, MinWidth = 76, VerticalAlignment = VerticalAlignment.Center };
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(box, name);
-                return box;
-            }
-            var fewest = RangeBox(options.RandomFewestSeconds, "Shortest random time");
-            var most = RangeBox(options.RandomMostSeconds, "Longest random time");
-            // The two ends cannot cross: moving one past the other brings the other with it.
-            fewest.SelectionChanged += (_, _) =>
-            {
-                if (fewest.SelectedItem is not int value) return;
-                if (most.SelectedItem is int high && high < value) most.SelectedItem = value;
-                ChangeSurpriseChoices(o => o.RandomFewestSeconds = value);
-                SpeedChanged();
-            };
-            most.SelectionChanged += (_, _) =>
-            {
-                if (most.SelectedItem is not int value) return;
-                if (fewest.SelectedItem is int low && low > value) fewest.SelectedItem = value;
-                ChangeSurpriseChoices(o => o.RandomMostSeconds = value);
-                SpeedChanged();
-            };
-            range.Children.Add(new TextBlock { Text = "Between", VerticalAlignment = VerticalAlignment.Center, FontSize = 13 });
-            range.Children.Add(fewest);
-            range.Children.Add(new TextBlock { Text = "and", VerticalAlignment = VerticalAlignment.Center, FontSize = 13 });
-            range.Children.Add(most);
-            range.Children.Add(new TextBlock { Text = "seconds", VerticalAlignment = VerticalAlignment.Center, FontSize = 13 });
+                var advHeader = new Grid { ColumnSpacing = 8, Margin = new Thickness(0, 0, 0, 2) };
+                advHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                advHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                var backBtn = new Button
+                {
+                    Padding = new Thickness(8, 4, 8, 4),
+                    CornerRadius = new CornerRadius(6),
+                    Style = SafeStyle("QuietButtonStyle"),
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                var backStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+                backStack.Children.Add(Icon("\uE72B", 12));
+                backStack.Children.Add(new TextBlock { Text = "Back", FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
+                backBtn.Content = backStack;
+                ToolTipService.SetToolTip(backBtn, "Back to fundamental options");
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(backBtn, "Back to fundamental options");
+                backBtn.Click += (_, _) => { _showingSurpriseAdvanced = false; ShowSurpriseCard(); };
+                var advTitle = new TextBlock { Text = "Advanced Settings", FontSize = 14, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+                Grid.SetColumn(advTitle, 1);
+                advHeader.Children.Add(backBtn);
+                advHeader.Children.Add(advTitle);
+                body.Children.Add(advHeader);
 
-            var speedRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-            speedRow.Children.Add(new TextBlock { Text = "Seconds", VerticalAlignment = VerticalAlignment.Center, FontSize = 13 });
-            speedRow.Children.Add(speed);
-            body.Children.Add(speedRow);
-            body.Children.Add(range);
-            Slide(body, "Motion", "How far the camera moves over each layout while it plays, from still to strong, with floating cells following it. The middle matches a Cinematic show.", 0, 100, 5, options.MotionAmount * 100, (o, v) => o.MotionAmount = v / 100);
-
-            body.Children.Add(Label("Music"));
-            body.Children.Add(MusicRow(Icon, WordButton));
-            body.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle { Height = 1, Opacity = 0.2, Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) });
-
-            // The ranges, one section open at a time
-            var sections = new List<Expander>();
-            StackPanel Section(string title)
+                // 4 Consolidated Expanders with Live Header Summaries
+                var sections = new List<Expander>();
+            (StackPanel Content, TextBlock Summary) Section(string title, string initialSummary)
             {
-                var inner = new StackPanel { Spacing = 2 };
-                var section = new Expander { Header = title, Content = inner, IsExpanded = title == _surpriseSectionOpen, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+                var inner = new StackPanel { Spacing = 4 };
+                var headerGrid = new Grid { HorizontalAlignment = HorizontalAlignment.Stretch, ColumnSpacing = 8 };
+                headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                var titleBlock = new TextBlock { Text = title, VerticalAlignment = VerticalAlignment.Center, FontSize = 13 };
+                var summaryBlock = new TextBlock { Text = initialSummary, VerticalAlignment = VerticalAlignment.Center, FontSize = 12, Opacity = 0.62, Margin = new Thickness(0, 0, 6, 0) };
+                Grid.SetColumn(summaryBlock, 1);
+                headerGrid.Children.Add(titleBlock);
+                headerGrid.Children.Add(summaryBlock);
+
+                var section = new Expander
+                {
+                    Header = headerGrid,
+                    Content = inner,
+                    IsExpanded = title == _surpriseSectionOpen,
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    HorizontalContentAlignment = HorizontalAlignment.Stretch
+                };
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(section, title);
                 section.Expanding += (_, _) =>
                 {
                     _surpriseSectionOpen = title;
@@ -315,55 +584,281 @@ namespace ModernImageViewer
                 };
                 sections.Add(section);
                 body.Children.Add(section);
-                return inner;
+                return (inner, summaryBlock);
             }
 
-            var count = Section("How many images");
-            var fewestEach = Slide(count, "Fewest each click", "The least a click uses, when there are more images than the most below.", SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.FewestPictures, (o, v) => o.FewestPictures = (int)v);
-            var mostEach = Slide(count, "Most each click", "The most a click uses. The rest stay in the image tray, and clicks take turns through them.", SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.MostPictures, (o, v) => o.MostPictures = (int)v);
-            // The two ends cannot cross, as with the random time: moving one past the other brings the other with it.
-            fewestEach.ValueChanged += (_, e) => { if (mostEach.Value < e.NewValue) mostEach.Value = e.NewValue; };
-            mostEach.ValueChanged += (_, e) => { if (fewestEach.Value > e.NewValue) fewestEach.Value = e.NewValue; };
-            Slide(count, "Same folder and date, %", "The odds that a click takes images that are neighbours when sorted by folder, then file date, which usually means one event. Otherwise it takes them from anywhere.", 0, 100, 5, options.TogetherChance * 100, (o, v) => o.TogetherChance = v / 100);
-            Toggle(count, "Skip screens and repeats", "Leave out what looks like a screen capture or a graphic, and all but one of near-identical shots. This is a guess.", options.SkipScreens, (o, on) => o.SkipScreens = on);
+            // 1. Images & faces
+            string ImagesSummaryText()
+            {
+                int f = SurpriseChoices.FewestPictures, m = SurpriseChoices.MostPictures;
+                string rangeText = f == m ? $"{f}" : $"{f}\u2013{m}";
+                string faceText = SurpriseChoices.MostZoom <= 1.01 || SurpriseChoices.ZoomChance <= 0.001
+                    ? "Faces Off"
+                    : $"Faces {SurpriseChoices.MostZoom:0.#}\u00D7";
+                return $"{rangeText} \u00B7 {faceText}";
+            }
+            var (imagesSection, imagesSummary) = Section("Images & faces", ImagesSummaryText());
+            updateImagesSummary = () => imagesSummary.Text = ImagesSummaryText();
 
-            var designs = Section("How often each design comes up");
+            fewestEach = Slide(imagesSection, "Fewest each click", "The least a click uses, when there are more images than the most below.",
+                SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.FewestPictures,
+                v => $"{v:0}",
+                (o, v) => { o.FewestPictures = (int)v; if (!syncingImagePresets) SyncImagePresetChips(); });
+            mostEach = Slide(imagesSection, "Most each click", "The most a click uses. The rest stay in the image tray, and clicks take turns through them.",
+                SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.MostPictures,
+                v => $"{v:0}",
+                (o, v) => { o.MostPictures = (int)v; if (!syncingImagePresets) SyncImagePresetChips(); });
+            fewestEach.ValueChanged += (_, e) => { if (!syncingImagePresets && mostEach.Value < e.NewValue) mostEach.Value = e.NewValue; };
+            mostEach.ValueChanged += (_, e) => { if (!syncingImagePresets && fewestEach.Value > e.NewValue) fewestEach.Value = e.NewValue; };
+
+            Slide(imagesSection, "Same folder and date", "The odds that a click takes images that are neighbours when sorted by folder, then file date.",
+                0, 100, 5, options.TogetherChance * 100,
+                v => $"{v:0}%",
+                (o, v) => o.TogetherChance = v / 100);
+            Toggle(imagesSection, "Skip screens and repeats", "Leave out what looks like a screen capture or a graphic, and all but one of near-identical shots.",
+                options.SkipScreens, (o, on) => o.SkipScreens = on);
+            Slide(imagesSection, "Zoom on faces", "1x is off. Brings forward people who are small in the image.",
+                1, SurpriseOptions.MostOfAnyZoom, 0.5, options.MostZoom,
+                v => v <= 1.01 ? "Off" : $"{v:0.0}\u00D7",
+                (o, v) => { o.MostZoom = v; updateImagesSummary(); });
+            Slide(imagesSection, "Face zoom frequency", "The odds that an image with faces is zoomed.",
+                0, 100, 5, options.ZoomChance * 100,
+                v => v < 1 ? "Off" : $"{v:0}%",
+                (o, v) => { o.ZoomChance = v / 100; updateImagesSummary(); });
+            Slide(imagesSection, "Uncut face shown", "How much of a face must show for it to count as uncut. Lower allows bolder layouts.",
+                50, 100, 5, options.FaceShown * 100,
+                v => $"{v:0}%",
+                (o, v) => o.FaceShown = v / 100);
+
+            // 2. Designs (with style preset chips + Off stop)
+            string DesignsSummaryText()
+            {
+                int active = LayoutComposer.Recipes.Count(r => !SurpriseChoices.IsDesignOff(r));
+                return active == LayoutComposer.Recipes.Length ? $"All {active}" : $"{active} active";
+            }
+            var (designsSection, designsSummary) = Section("Designs", DesignsSummaryText());
+            var designSliders = new Dictionary<string, Slider>(StringComparer.OrdinalIgnoreCase);
+            var stylePresetChips = new List<(Microsoft.UI.Xaml.Controls.Primitives.ToggleButton Chip, HashSet<string> ActiveSet)>();
+            var stylePresetPanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Margin = new Thickness(0, 4, 0, 16) };
+            bool syncingDesignPresets = false;
+
+            void SyncDesignPresetChips()
+            {
+                var currentActive = LayoutComposer.Recipes.Where(r => !SurpriseChoices.IsDesignOff(r)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                foreach (var p in stylePresetChips)
+                    p.Chip.IsChecked = p.ActiveSet.SetEquals(currentActive);
+                designsSummary.Text = DesignsSummaryText();
+            }
+
+            void AddDesignPreset(string label, string tip, params string[] enabledRecipes)
+            {
+                var set = enabledRecipes.ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var currentActive = LayoutComposer.Recipes.Where(r => !options.IsDesignOff(r)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var chip = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton
+                {
+                    Content = label,
+                    IsChecked = set.SetEquals(currentActive),
+                    Padding = new Thickness(9, 4, 9, 4),
+                    MinWidth = 0,
+                    FontSize = 12
+                };
+                ToolTipService.SetToolTip(chip, tip);
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chip, label);
+                chip.Click += (_, _) =>
+                {
+                    syncingDesignPresets = true;
+                    try
+                    {
+                        ChangeSurpriseChoices(o =>
+                        {
+                            o.DisabledDesigns.Clear();
+                            foreach (string r in LayoutComposer.Recipes)
+                            {
+                                if (set.Contains(r)) o.DesignOdds[r] = 1.0;
+                                else o.DisabledDesigns.Add(r);
+                            }
+                        });
+                        foreach (var kv in designSliders)
+                            kv.Value.Value = set.Contains(kv.Key) ? 0.0 : -1.2;
+                    }
+                    finally
+                    {
+                        syncingDesignPresets = false;
+                    }
+                    SyncDesignPresetChips();
+                };
+                stylePresetChips.Add((chip, set));
+                stylePresetPanel.Children.Add(chip);
+            }
+            AddDesignPreset("All", "All 6 layout styles enabled", LayoutComposer.Recipes.ToArray());
+            AddDesignPreset("Clean grids", "Editorial grids and filmstrips without tilted prints or circle cutouts", "Hero and companions", "Balanced mosaic", "Filmstrip");
+            AddDesignPreset("Framed", "Matted gallery walls and hero layouts", "Gallery wall", "Hero and companions");
+            AddDesignPreset("Scrapbook", "Playful tilted prints, circle cutouts, and gallery mats", "Scattered prints", "Circles", "Gallery wall");
+            designsSection.Children.Add(stylePresetPanel);
+
+            string FormatDesignStep(double v) =>
+                v <= -1.1 ? "Off" :
+                v < -0.6 ? "Rare" :
+                v < -0.15 ? "Less" :
+                v <= 0.15 ? "Normal" :
+                v <= 0.6 ? "More" : "Often";
+
             foreach (string design in LayoutComposer.Recipes)
             {
-                Slide(designs, design, "Left is rarer, right is more often. A design is never ruled out.", -1, 1, 0.1, Math.Log(options.OddsOf(design), DesignOddsBase),
-                    (o, v) => o.DesignOdds[design] = Math.Pow(DesignOddsBase, v));
+                double initialVal = options.IsDesignOff(design) ? -1.2 : Math.Log(Math.Max(SurpriseOptions.RarestDesign, options.DesignOdds.GetValueOrDefault(design, 1.0)), DesignOddsBase);
+                var ds = Slide(designsSection, design, "Far left turns this design Off; right makes it appear more often.",
+                    -1.2, 1.0, 0.1, initialVal, FormatDesignStep,
+                    (o, v) =>
+                    {
+                        if (v <= -1.1) o.DisabledDesigns.Add(design);
+                        else
+                        {
+                            o.DisabledDesigns.Remove(design);
+                            o.DesignOdds[design] = Math.Pow(DesignOddsBase, v);
+                        }
+                        if (!syncingDesignPresets) SyncDesignPresetChips();
+                    });
+                designSliders[design] = ds;
             }
+            Slide(designsSection, "Version variety", "How many of the highest-scored candidate layouts it picks from. 1 always picks the single best layout.",
+                1, 12, 1, options.Variety,
+                v => (int)v == 1 ? "Best" : $"Top {(int)v}",
+                (o, v) => o.Variety = (int)v);
 
-            var version = Section("Choosing a version");
-            Slide(version, "Variety", "How many of the best versions it picks from. 1 is always the best one.", 1, 12, 1, options.Variety, (o, v) => o.Variety = (int)v);
-            Slide(version, "Face shown, %", "How much of a face must show for it to count as uncut. Lower allows bolder layouts.", 50, 100, 5, options.FaceShown * 100, (o, v) => o.FaceShown = v / 100);
+            // 3. Camera & transitions
+            string CameraSummaryText() => $"{SurpriseChoices.CameraMode} \u00B7 {SurpriseChoices.TransitionVariety * 100:0}%";
+            var (cameraSection, cameraSummary) = Section("Camera & transitions", CameraSummaryText());
+            Slider? zoomVsDriftSlider = null;
+            var camChips = new List<(Microsoft.UI.Xaml.Controls.Primitives.ToggleButton Chip, string Mode)>();
+            var camModePanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Margin = new Thickness(0, 4, 0, 16) };
+            foreach (string mode in SurpriseOptions.CameraModes)
+            {
+                var chip = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton
+                {
+                    Content = mode,
+                    IsChecked = string.Equals(options.CameraMode, mode, StringComparison.OrdinalIgnoreCase),
+                    Padding = new Thickness(9, 4, 9, 4),
+                    MinWidth = 0,
+                    FontSize = 12
+                };
+                ToolTipService.SetToolTip(chip, $"Camera motion style: {mode}");
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chip, mode);
+                chip.Click += (_, _) =>
+                {
+                    ChangeSurpriseChoices(o => o.CameraMode = mode);
+                    foreach (var c in camChips) c.Chip.IsChecked = ReferenceEquals(c.Chip, chip);
+                    cameraSummary.Text = CameraSummaryText();
+                };
+                camChips.Add((chip, mode));
+                camModePanel.Children.Add(chip);
+            }
+            cameraSection.Children.Add(camModePanel);
+            zoomVsDriftSlider = Slide(cameraSection, "Zooms rather than drifts", "In Auto mode, the odds that the camera zooms in or out rather than panning across the layout.",
+                0, 100, 5, options.MotionZoomChance * 100,
+                v => $"{v:0}%",
+                (o, v) => o.MotionZoomChance = v / 100);
 
-            var faces = Section("Zoom on faces");
-            Slide(faces, "Most zoom, x", "1 is off. Brings forward people who are small in the image. A person Windows misses can be cropped.", 1, SurpriseOptions.MostOfAnyZoom, 0.5, options.MostZoom, (o, v) => o.MostZoom = v);
-            Slide(faces, "How often, %", "The odds that an image with faces is zoomed.", 0, 100, 5, options.ZoomChance * 100, (o, v) => o.ZoomChance = v / 100);
+            Slide(cameraSection, "Aims at faces", "The odds that the camera heads toward a large photo with faces in it.",
+                0, 100, 5, options.MotionFaceChance * 100,
+                v => $"{v:0}%",
+                (o, v) => o.MotionFaceChance = v / 100);
+            Slide(cameraSection, "Transition variety", "How often a change of layout zooms through, fades through dark or slides, rather than a crossfade.",
+                0, 100, 5, options.TransitionVariety * 100,
+                v => v < 1 ? "Crossfade" : $"{v:0}%",
+                (o, v) => { o.TransitionVariety = v / 100; cameraSummary.Text = CameraSummaryText(); });
 
-            var camera = Section("Camera and transitions");
-            Slide(camera, "Zooms rather than drifts, %", "The odds that the camera zooms in or out. Otherwise it drifts across the layout.", 0, 100, 5, options.MotionZoomChance * 100, (o, v) => o.MotionZoomChance = v / 100);
-            Slide(camera, "Transition variety, %", "How often a change of layout zooms through, fades through dark or slides, rather than a crossfade. 0 is always a crossfade.", 0, 100, 5, options.TransitionVariety * 100, (o, v) => o.TransitionVariety = v / 100);
-            Slide(camera, "Aims at faces, %", "The odds that it heads for a large cell with faces in it, where there is one.", 0, 100, 5, options.MotionFaceChance * 100, (o, v) => o.MotionFaceChance = v / 100);
+            // 4. Soundtrack & audio
+            string MusicSummaryText()
+            {
+                var m = MainWindow.Instance?.MyMusic;
+                return m?.HasFolder == true ? m.Summary : "No folder";
+            }
+            var (musicSection, musicSummary) = Section("Soundtrack & audio", MusicSummaryText());
 
-            var look = Section("Look");
-            Slide(look, "Most tilt, degrees", "How far Scattered prints can turn.", 0, 20, 0.5, options.MostTilt, (o, v) => o.MostTilt = v);
-            Slide(look, "Hero size, %", "The hero's height against the canvas, give or take a tenth.", 40, 90, 1, options.HeroSize * 100, (o, v) => o.HeroSize = v / 100);
-            Slide(look, "Gallery gaps", "1 is the usual gap between images on a Gallery wall.", 0.25, 3, 0.25, options.GapScale, (o, v) => o.GapScale = v);
-            var card = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = SurpriseOptions.Cards.ToList(), SelectedItem = options.Card };
-            card.SelectionChanged += (_, _) => { if (card.SelectedItem is string name) ChangeSurpriseChoices(o => o.Card = name); };
-            Row(look, "Gallery card", "The color of the card the images are set into.", card);
-            Toggle(look, "Keep my canvas", "Keep the canvas color, surface and frame as they are now, instead of the design's.", options.KeepCanvas, (o, on) => o.KeepCanvas = on);
+            string folderPath = MainWindow.Instance?.MyMusic?.Folder ?? "No music folder configured";
+            var folderRow = new Grid { ColumnSpacing = 12, MinHeight = 48, Margin = new Thickness(0, 2, 0, 4) };
+            folderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            folderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
 
-            // Far from where a closing click lands, and it asks: this undoes every choice on the card, and Undo does not bring them back.
+            var folderStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            folderStack.Children.Add(new TextBlock { Text = "Music library", FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) });
+            var folderSub = new TextBlock
+            {
+                Text = folderPath,
+                FontSize = 11,
+                Opacity = 0.65,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                MaxWidth = 250,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White)
+            };
+            ToolTipService.SetToolTip(folderSub, folderPath);
+            ToolTipService.SetToolTip(folderStack, folderPath);
+            folderStack.Children.Add(folderSub);
+
+            var openMusicBtn = WordButton("Configure\u2026", "Open music library settings", "Change music folder, rating filters and playback behavior", (_, _) => MainWindow.Instance?.OpenMusicSettings());
+            openMusicBtn.HorizontalAlignment = HorizontalAlignment.Right;
+            openMusicBtn.VerticalAlignment = VerticalAlignment.Center;
+
+            Grid.SetColumn(folderStack, 0);
+            Grid.SetColumn(openMusicBtn, 1);
+            folderRow.Children.Add(folderStack);
+            folderRow.Children.Add(openMusicBtn);
+            musicSection.Children.Add(folderRow);
+
+            var mus = MainWindow.Instance?.MyMusic;
+            var lowestRatingText = mus?.LowestStars > 0 ? $"{mus.LowestStars:0}\u2605 and up" : "All ratings";
+            var ratingRow = new Grid { ColumnSpacing = 12, MinHeight = 34 };
+            ratingRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            ratingRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
+            var ratingText = new TextBlock { Text = "Rating filter", VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
+            var ratingValue = new TextBlock { Text = lowestRatingText, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, FontSize = 12, Opacity = 0.82, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
+            Grid.SetColumn(ratingText, 0);
+            Grid.SetColumn(ratingValue, 1);
+            ratingRow.Children.Add(ratingText);
+            ratingRow.Children.Add(ratingValue);
+            musicSection.Children.Add(ratingRow);
+
+            Toggle(musicSection, "Auto-play soundtrack", "Automatically play music while auto-play is running.",
+                mus?.InSurprise != false,
+                (_, on) => { MainWindow.Instance?.SetMusicInSurprise(on); musicSummary.Text = MusicSummaryText(); });
+
+            // 5. Look
+            string LookSummaryText() => $"{SurpriseChoices.Card} \u00B7 {SurpriseChoices.MostTilt:0.#}\u00B0 tilt";
+            var (lookSection, lookSummary) = Section("Look", LookSummaryText());
+            var card = new ComboBox { Width = 230, HorizontalAlignment = HorizontalAlignment.Right, ItemsSource = SurpriseOptions.Cards.ToList(), SelectedItem = options.Card };
+            card.SelectionChanged += (_, _) =>
+            {
+                if (card.SelectedItem is string name)
+                {
+                    ChangeSurpriseChoices(o => o.Card = name);
+                    lookSummary.Text = LookSummaryText();
+                }
+            };
+            Row(lookSection, "Gallery card", "The color of the card the images are set into.", card);
+            Slide(lookSection, "Gallery gaps", "1x is the usual gap between images on a Gallery wall.",
+                0.25, 3, 0.25, options.GapScale,
+                v => $"{v:0.##}\u00D7",
+                (o, v) => o.GapScale = v);
+            Slide(lookSection, "Hero size", "The hero photo's height against the canvas.",
+                40, 90, 1, options.HeroSize * 100,
+                v => $"{v:0}%",
+                (o, v) => o.HeroSize = v / 100);
+            Slide(lookSection, "Most tilt", "How far Scattered prints can turn.",
+                0, 20, 0.5, options.MostTilt,
+                v => v < 0.1 ? "0\u00B0" : $"{v:0.0}\u00B0",
+                (o, v) => { o.MostTilt = v; lookSummary.Text = LookSummaryText(); });
+            Toggle(lookSection, "Keep my canvas", "Keep the canvas color, surface and frame as they are now, instead of the design's.",
+                options.KeepCanvas, (o, on) => o.KeepCanvas = on);
+
+            // Reset to defaults
             var resetRow = new Grid { ColumnSpacing = 6, MinHeight = 32 };
             resetRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             resetRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             resetRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            resetRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var askReset = new HyperlinkButton { Content = "Reset to defaults...", FontSize = 12, Padding = new Thickness(0, 4, 8, 4), VerticalAlignment = VerticalAlignment.Center };
             ToolTipService.SetToolTip(askReset, "Every setting on this card. Your music settings stay as they are.");
-            var question = new TextBlock { Text = "Reset every Surprise me setting?", FontSize = 13, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
+            var question = new TextBlock { Text = "Reset every setting?", FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
             var keep = new Button { Content = "Keep", FontSize = 12, Visibility = Visibility.Collapsed };
             var reset = new Button { Content = "Reset", FontSize = 12, Visibility = Visibility.Collapsed };
             Grid.SetColumn(keep, 1);
@@ -391,17 +886,34 @@ namespace ModernImageViewer
                 }
                 ShowSurpriseCard();
             };
+            var doneBtn = new Button
+            {
+                Content = "Done",
+                FontSize = 12,
+                Padding = new Thickness(16, 5, 16, 5),
+                CornerRadius = new CornerRadius(6),
+                Background = winBlueDeep,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White),
+                BorderBrush = winBlue,
+                BorderThickness = new Thickness(1),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            doneBtn.Click += (_, _) => { _showingSurpriseAdvanced = false; ShowSurpriseCard(); };
+            Grid.SetColumn(doneBtn, 3);
             resetRow.Children.Add(askReset);
             resetRow.Children.Add(question);
             resetRow.Children.Add(keep);
             resetRow.Children.Add(reset);
+            resetRow.Children.Add(doneBtn);
+            body.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle { Height = 1, Opacity = 0.2, Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White), Margin = new Thickness(0, 4, 0, 2) });
             body.Children.Add(resetRow);
+            }
 
             RemoveSurpriseCard();
             CloseCountsCard();
-            _surpriseCard = NewCard(new ScrollViewer { Content = body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(0, 0, 12, 0) });
+            _surpriseCard = NewCard(new ScrollViewer { Content = body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(0, 0, 4, 0) });
             _surpriseCard.Width = SurpriseCardWidth;
-            _surpriseCard.Padding = new Thickness(14, 12, 2, 12);
+            _surpriseCard.Padding = new Thickness(16, 14, 16, 14);
             _surpriseCard.HorizontalAlignment = HorizontalAlignment.Left;
             _surpriseCard.VerticalAlignment = VerticalAlignment.Bottom;
             AddOverCanvas(_surpriseCard, 6500);
@@ -448,55 +960,165 @@ namespace ModernImageViewer
         {
             var music = MainWindow.Instance?.MyMusic;
             WatchMusicSettings();
-            var panel = new StackPanel { Spacing = 6 };
-
-            var top = new Grid { ColumnSpacing = 6 };
-            top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var note = icon("\uE8D6", 13);
-            note.VerticalAlignment = VerticalAlignment.Center;
-            _cardSongText = new TextBlock { VerticalAlignment = VerticalAlignment.Center, FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis };
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(_cardSongText, "SurpriseSongText");
-            Grid.SetColumn(_cardSongText, 1);
-            _cardPreviousSong = wordButton("\u2039 Song", "Previous song", "Previous song", (_, _) => _surpriseMusic?.PreviousSong());
-            Grid.SetColumn(_cardPreviousSong, 2);
-            _cardNextSong = wordButton("Song \u203A", "Next song", "Next song", (_, _) => _surpriseMusic?.NextSong());
-            Grid.SetColumn(_cardNextSong, 3);
-            top.Children.Add(note);
-            top.Children.Add(_cardSongText);
-            top.Children.Add(_cardPreviousSong);
-            top.Children.Add(_cardNextSong);
-            panel.Children.Add(top);
-
-            var bottom = new Grid { ColumnSpacing = 8 };
-            bottom.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            bottom.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            bottom.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var panel = new StackPanel { Spacing = 4 };
             bool hasFolder = music?.HasFolder == true;
-            var where = new TextBlock
+            bool isMusicActive = hasFolder && (music?.InSurprise != false);
+            var winBlue = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x4C, 0xC2, 0xFF));
+
+            // 1. Background Music (Toggle)
+            var bgRow = new Grid { ColumnSpacing = 12, MinHeight = 44, Margin = new Thickness(0, 2, 0, 2) };
+            bgRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            bgRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
+
+            var bgLabelStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            var bgTitle = new TextBlock { Text = "Background music", FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
+            string bgSubText = music?.Summary ?? MusicChoices.NoFolder;
+            var bgSubtitle = new TextBlock
             {
-                Text = music?.Summary ?? MusicChoices.NoFolder,
-                FontSize = 12, Opacity = 0.75, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis
+                Text = bgSubText,
+                FontSize = 11,
+                Opacity = 0.65,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                MaxWidth = 250,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White)
             };
-            var on = new ToggleSwitch { IsOn = music?.InSurprise != false, OnContent = string.Empty, OffContent = string.Empty, MinWidth = 0, VerticalAlignment = VerticalAlignment.Center, IsEnabled = hasFolder };
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(on, "Music with auto-play");
-            ToolTipService.SetToolTip(on, "Play music with auto-play");
-            on.Toggled += (_, _) =>
+            ToolTipService.SetToolTip(bgSubtitle, music?.Folder ?? bgSubText);
+            ToolTipService.SetToolTip(bgLabelStack, music?.Folder ?? bgSubText);
+            bgLabelStack.Children.Add(bgTitle);
+            bgLabelStack.Children.Add(bgSubtitle);
+
+            var onToggle = new ToggleSwitch
             {
-                MainWindow.Instance?.SetMusicInSurprise(on.IsOn);
-                if (!on.IsOn) StopAutoPlayMusic();
+                IsOn = music?.InSurprise != false,
+                OnContent = string.Empty,
+                OffContent = string.Empty,
+                MinWidth = 0,
+                IsEnabled = hasFolder,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 4, 0)
+            };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(onToggle, "Background music");
+            ToolTipService.SetToolTip(bgRow, "Play background soundtrack during auto-play");
+
+            Grid.SetColumn(bgLabelStack, 0);
+            Grid.SetColumn(onToggle, 1);
+            bgRow.Children.Add(bgLabelStack);
+            bgRow.Children.Add(onToggle);
+            panel.Children.Add(bgRow);
+
+            // 2. Volume (Full-Width Slider matching Motion and Duration)
+            var volRow = new Grid { ColumnSpacing = 12, MinHeight = 34 };
+            volRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            volRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
+
+            var volLabel = new TextBlock { Text = "Volume", VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
+
+            var volRightGrid = new Grid { Width = 230, ColumnSpacing = 8, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+            volRightGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
+            volRightGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(62) });
+
+            double initialVol = music?.Volume ?? 60;
+            var volReadout = new TextBlock
+            {
+                Text = $"{initialVol:0}%",
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                TextAlignment = TextAlignment.Right,
+                FontSize = 12,
+                Opacity = isMusicActive ? 0.82 : 0.4,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White)
+            };
+            var volSlider = new Slider
+            {
+                Minimum = 0,
+                Maximum = 100,
+                StepFrequency = 1,
+                SmallChange = 5,
+                Value = initialVol,
+                Width = 160,
+                Foreground = winBlue,
+                VerticalAlignment = VerticalAlignment.Center,
+                IsEnabled = isMusicActive
+            };
+            volSlider.Resources["SliderThumbBackground"] = winBlue;
+            volSlider.Resources["SliderThumbBackgroundPointerOver"] = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x70, 0xD0, 0xFF));
+            volSlider.Resources["SliderThumbBackgroundPressed"] = winBlue;
+            volSlider.Resources["SliderTrackValueFill"] = winBlue;
+            volSlider.Resources["SliderTrackValueFillPointerOver"] = winBlue;
+            volSlider.Resources["SliderTrackValueFillPressed"] = winBlue;
+            volSlider.ValueChanged += (_, e) =>
+            {
+                MainWindow.Instance?.SetMusicVolume(e.NewValue);
+                volReadout.Text = $"{e.NewValue:0}%";
+            };
+            ToolTipService.SetToolTip(volRow, "Soundtrack playback volume");
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(volSlider, "Soundtrack volume");
+
+            Grid.SetColumn(volSlider, 0);
+            Grid.SetColumn(volReadout, 1);
+            volRightGrid.Children.Add(volSlider);
+            volRightGrid.Children.Add(volReadout);
+
+            Grid.SetColumn(volLabel, 0);
+            Grid.SetColumn(volRightGrid, 1);
+            volRow.Children.Add(volLabel);
+            volRow.Children.Add(volRightGrid);
+            panel.Children.Add(volRow);
+
+            onToggle.Toggled += (_, _) =>
+            {
+                MainWindow.Instance?.SetMusicInSurprise(onToggle.IsOn);
+                volSlider.IsEnabled = hasFolder && onToggle.IsOn;
+                volReadout.Opacity = onToggle.IsOn ? 0.82 : 0.4;
+                if (!onToggle.IsOn) StopAutoPlayMusic();
                 else if (_autoPlaySeconds > 0) StartAutoPlayMusic();
                 ShowAutoPlayState();
+                ShowCardSong();
             };
-            Grid.SetColumn(on, 1);
-            var settings = wordButton("Music settings", "Music settings", "Folder, rating and volume. The main window's gear opens the same settings.", (_, _) => MainWindow.Instance?.OpenMusicSettings());
-            Grid.SetColumn(settings, 2);
-            bottom.Children.Add(where);
-            bottom.Children.Add(on);
-            bottom.Children.Add(settings);
-            panel.Children.Add(bottom);
+
+            // 3. Track Selection & Controls
+            var trackRow = new Grid { ColumnSpacing = 12, MinHeight = 36 };
+            trackRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            trackRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
+
+            var trackLeft = new Grid { ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
+            trackLeft.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            trackLeft.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var noteIcon = icon("\uE8D6", 13);
+            noteIcon.VerticalAlignment = VerticalAlignment.Center;
+            noteIcon.Foreground = winBlue;
+
+            _cardSongText = new TextBlock
+            {
+                VerticalAlignment = VerticalAlignment.Center,
+                FontSize = 12,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White),
+                Opacity = 0.9
+            };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(_cardSongText, "SurpriseSongText");
+
+            Grid.SetColumn(noteIcon, 0);
+            Grid.SetColumn(_cardSongText, 1);
+            trackLeft.Children.Add(noteIcon);
+            trackLeft.Children.Add(_cardSongText);
+
+            var trackButtons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) };
+            _cardPreviousSong = wordButton("\u2039 Song", "Previous song", "Previous song", (_, _) => _surpriseMusic?.PreviousSong());
+            _cardNextSong = wordButton("Song \u203A", "Next song", "Next song", (_, _) => _surpriseMusic?.NextSong());
+
+            trackButtons.Children.Add(_cardPreviousSong);
+            trackButtons.Children.Add(_cardNextSong);
+
+            Grid.SetColumn(trackLeft, 0);
+            Grid.SetColumn(trackButtons, 1);
+            trackRow.Children.Add(trackLeft);
+            trackRow.Children.Add(trackButtons);
+            panel.Children.Add(trackRow);
+
+            ShowCardSong();
             return panel;
         }
 
@@ -526,8 +1148,30 @@ namespace ModernImageViewer
         private void StepLayout(bool back)
         {
             StopAutoPlay();
-            if (back) Undo();
-            else Redo();
+            if (back)
+            {
+                if (CanUndo)
+                {
+                    Undo();
+                    ShowAutoPlayToast("Previous layout");
+                }
+                else
+                {
+                    ShowAutoPlayToast("At earliest layout");
+                }
+            }
+            else
+            {
+                if (CanRedo)
+                {
+                    Redo();
+                    ShowAutoPlayToast("Next layout");
+                }
+                else
+                {
+                    _ = SurpriseAsync(fade: true);
+                }
+            }
         }
 
         private void RemoveSurpriseCard()
@@ -535,12 +1179,15 @@ namespace ModernImageViewer
             if (_surpriseCard == null) return;
             RootGrid.Children.Remove(_surpriseCard);
             _surpriseCard = null;
-            _cardSongText = null;
+            _cardPreviousLayout = null;
+            _cardNextLayout = null;
             _cardPlayButton = null;
+            _cardSongText = null;
             _cardPlayIcon = null;
             _cardPlayText = null;
             _cardPreviousSong = null;
             _cardNextSong = null;
+            _showingSurpriseAdvanced = false;
             SurpriseCardButton.ClearValue(Control.BackgroundProperty);
             SurpriseCardArrow.Glyph = "\uE70E";
             HudMenu_Closed(this, EventArgs.Empty);
@@ -740,11 +1387,14 @@ namespace ModernImageViewer
         private bool IsInSurpriseCard(object? source) =>
             IsInside(source, SurpriseControl) || (_surpriseCard != null && IsInside(source, _surpriseCard));
 
+        private bool? _lastPlayWasLong;
+        private bool _lastHandWasSolo;
+
         /// <summary>The first new layout comes at once, so choosing it visibly does something.</summary>
         private async void StartAutoPlay(int seconds)
         {
-            // With nothing to change between, it would claim to play and do nothing but the music.
-            if (SessionPictures().Count < 2)
+            int minPics = SurpriseChoices.FewestPictures == 1 ? 1 : 2;
+            if (SessionPictures().Count < minPics)
             {
                 AddImagesRequested?.Invoke(this, EventArgs.Empty);
                 return;
@@ -752,6 +1402,7 @@ namespace ModernImageViewer
             StopAutoPlay();
             CaptureUndoPoint();
             _autoPlaySeconds = seconds;
+            _lastPlayWasLong = null;
             AddAutoPlayShield();
             StartAutoPlayMusic();
             ShowAutoPlayState();
@@ -762,13 +1413,12 @@ namespace ModernImageViewer
             timer.Tick += async (_, _) =>
             {
                 timer.Stop();
-                // Chosen first, so the camera knows how long the layout it is about to show will stay.
-                _layoutSeconds = SurpriseChoices.NextPlaySeconds(Random.Shared);
                 await SurpriseAsync(fade: true);
                 timer.Interval = TimeSpan.FromSeconds(_layoutSeconds);
                 if (ReferenceEquals(_autoPlayTimer, timer)) timer.Start();
             };
             await SurpriseAsync(fade: true);
+            timer.Interval = TimeSpan.FromSeconds(_layoutSeconds);
             if (ReferenceEquals(_autoPlayTimer, timer)) timer.Start();
         }
 
@@ -812,6 +1462,13 @@ namespace ModernImageViewer
             }
             if (_cardPlayIcon != null) _cardPlayIcon.Glyph = glyph;
             if (_cardPlayText != null) _cardPlayText.Text = playing ? "Pause" : "Play";
+            if (_cardPlayButton != null)
+            {
+                var winBlue = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x4C, 0xC2, 0xFF));
+                var winBlueDeep = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x00, 0x78, 0xD4));
+                _cardPlayButton.Background = playing ? winBlueDeep : new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x2E, 0x2E, 0x2E));
+                _cardPlayButton.BorderBrush = playing ? winBlue : new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x44, 0xFF, 0xFF, 0xFF));
+            }
             ShowCardSong();
             ShowHudAndOverlays();
         }
@@ -824,13 +1481,23 @@ namespace ModernImageViewer
             var music = MainWindow.Instance?.MyMusic;
             _cardSongText.Text = _surpriseMusic?.IsFolder == true
                 ? _surpriseSong ?? "Looking for songs"
-                : music?.HasFolder != true ? "No music yet" : !music.InSurprise ? "Music is off" : _musicProblem ?? "Plays with auto-play";
+                : music?.HasFolder != true ? "No music folder" : !music.InSurprise ? "Music is off" : _musicProblem ?? "Current track";
             // The message over the picture would be behind this card.
             // A long song name is cut short here, so the whole of it goes there too.
             ToolTipService.SetToolTip(_cardSongText, _musicProblem != null && _surpriseMusic?.IsFolder != true ? _musicProblemWhy : _surpriseSong);
-            bool canStep = _surpriseMusic?.IsFolder == true;
-            if (_cardPreviousSong != null) _cardPreviousSong.IsEnabled = canStep;
-            if (_cardNextSong != null) _cardNextSong.IsEnabled = canStep;
+            bool canStep = music?.HasFolder == true && (music.InSurprise != false);
+            if (_cardPreviousSong != null)
+            {
+                _cardPreviousSong.IsEnabled = canStep;
+                _cardPreviousSong.Opacity = canStep ? 1.0 : 0.45;
+                ToolTipService.SetToolTip(_cardPreviousSong, canStep ? "Previous song" : "Set a music folder in Settings to play soundtrack");
+            }
+            if (_cardNextSong != null)
+            {
+                _cardNextSong.IsEnabled = canStep;
+                _cardNextSong.Opacity = canStep ? 1.0 : 0.45;
+                ToolTipService.SetToolTip(_cardNextSong, canStep ? "Next song" : "Set a music folder in Settings to play soundtrack");
+            }
         }
 
         private void AutoPlayButton_Click(object sender, RoutedEventArgs e)
@@ -983,7 +1650,8 @@ namespace ModernImageViewer
             bool playing = _autoPlaySeconds > 0;
             bool sameRun = _surpriseRun;
             var pictures = SessionPictures();
-            if (pictures.Count < 2)
+            int minPics = SurpriseChoices.FewestPictures == 1 ? 1 : 2;
+            if (pictures.Count < minPics)
             {
                 if (!playing) AddImagesRequested?.Invoke(this, EventArgs.Empty);
                 return;
@@ -1075,6 +1743,7 @@ namespace ModernImageViewer
                     _surpriseSettling = false;
                 }
                 CaptureUndoPoint();
+                if (_autoPlaySeconds > 0) _layoutSeconds = options.NextPlaySeconds(Random.Shared, composition.Cells.Count, ref _lastPlayWasLong);
                 if (before != null && _autoPlaySeconds > 0) StartCanvasCamera(composition);
                 if (before != null) ChangeLayoutOver(before, outgoingStep);
                 StartPreparingNextSurprise();
@@ -1102,7 +1771,8 @@ namespace ModernImageViewer
             CancelPreparedSurprise();
             var pictures = SessionPictures();
             double width = RootGrid.ActualWidth, height = RootGrid.ActualHeight;
-            if (pictures.Count < 2 || width < 50 || height < 50) return;
+            int minPics = SurpriseChoices.FewestPictures == 1 ? 1 : 2;
+            if (pictures.Count < minPics || width < 50 || height < 50) return;
 
             var cts = new System.Threading.CancellationTokenSource();
             _prepareCts = cts;
@@ -1190,7 +1860,18 @@ namespace ModernImageViewer
         private List<string> DealHand(PictureDeck deck, SurpriseOptions options)
         {
             int fewest = Math.Min(options.FewestPictures, options.MostPictures);
-            int size = Random.Shared.Next(fewest, options.MostPictures + 1);
+            int size;
+            if (fewest == 1 && options.MostPictures > 1)
+            {
+                bool goSolo = !_lastHandWasSolo && Random.Shared.NextDouble() < 0.35;
+                _lastHandWasSolo = goSolo;
+                size = goSolo ? 1 : Random.Shared.Next(2, options.MostPictures + 1);
+            }
+            else
+            {
+                size = Random.Shared.Next(fewest, options.MostPictures + 1);
+                _lastHandWasSolo = size == 1;
+            }
             var hand = _featuredPictures.Where(deck.Holds).Take(size).ToList();
             foreach (string path in deck.Deal(size, Random.Shared.NextDouble() < options.TogetherChance))
             {

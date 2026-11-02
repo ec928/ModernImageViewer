@@ -124,7 +124,7 @@ namespace ModernImageViewer
         /// A move for this long, or none with no amount. The amount is 0 to 1. The same zoom looks rushed on a short layout and timid on a long one, so it scales with time.
         /// Never the same kind twice running, while another is possible.
         /// </summary>
-        public static CameraMove? Plan(IReadOnlyList<(double X, double Y)> subjects, double amount, double zoomChance, double aimChance, double seconds, CameraKind? last, Random random)
+        public static CameraMove? Plan(IReadOnlyList<(double X, double Y)> subjects, double amount, double zoomChance, double aimChance, double seconds, CameraKind? last, Random random, CameraKind? forcedKind = null)
         {
             if (amount <= 0 || seconds <= 0) return null;
             double intensity = Math.Min(amount, 1) * MostIntensity * Math.Clamp(seconds / 12.0, 0.6, 1.25);
@@ -132,9 +132,17 @@ namespace ModernImageViewer
                 ? subjects[random.Next(subjects.Count)]
                 : (0.5 + (random.NextDouble() - 0.5) * 0.3, 0.5 + (random.NextDouble() - 0.5) * 0.3);
 
-            CameraKind kind = ChooseKind(zoomChance, random);
-            for (int i = 0; kind == last && i < TriesForADifferentMove; i++)
+            CameraKind kind;
+            if (forcedKind.HasValue)
+            {
+                kind = forcedKind.Value;
+            }
+            else
+            {
                 kind = ChooseKind(zoomChance, random);
+                for (int i = 0; kind == last && i < TriesForADifferentMove; i++)
+                    kind = ChooseKind(zoomChance, random);
+            }
 
             if (kind == CameraKind.Drift)
             {

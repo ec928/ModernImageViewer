@@ -352,8 +352,8 @@
                             </Button>
                             <Button x:Name="SurpriseCardButton"
                                     Click="SurpriseCardButton_Click"
-                                    AutomationProperties.Name="Surprise me settings"
-                                    ToolTipService.ToolTip="Layouts, speed, music and how it chooses"
+                                    AutomationProperties.Name="Auto-play options"
+                                    ToolTipService.ToolTip="Auto-play options (pacing, style, music and advanced settings)"
                                     Style="{StaticResource QuietButtonStyle}"
                                     Padding="6,5"
                                     CornerRadius="12">

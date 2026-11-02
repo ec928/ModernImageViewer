@@ -157,12 +157,20 @@ namespace ModernImageViewer
         public const string CardFromPictures = "From the pictures";
         public static readonly string[] Cards = { CardAny, CardWhite, CardBlack, CardFromPictures };
 
+        public const string CameraAuto = "Auto";
+        public const string CameraZoomIn = "Zoom in";
+        public const string CameraZoomOut = "Zoom out";
+        public const string CameraDrift = "Drift";
+        public static readonly string[] CameraModes = { CameraAuto, CameraZoomIn, CameraZoomOut, CameraDrift };
+
         public const double RarestDesign = 0.1, MostFavouredDesign = 5;
         public const double MostOfAnyZoom = 5;
-        public const int FewestAllowed = 2;
+        public const int FewestAllowed = 1;
 
-        /// <summary>How often each design comes up compared with the others. It can be made rare, never impossible.</summary>
+        /// <summary>How often each design comes up compared with the others.</summary>
         public Dictionary<string, double> DesignOdds { get; set; } = new();
+        public HashSet<string> DisabledDesigns { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+        public bool IsDesignOff(string design) => DisabledDesigns != null && DisabledDesigns.Contains(design);
         public double MostZoom { get; set; } = 1;
         public double ZoomChance { get; set; } = 1;
         /// <summary>How many of the best versions the pick is made from: 1 is always the best, more is more varied.</summary>
@@ -188,8 +196,18 @@ namespace ModernImageViewer
         public static readonly int[] AutoPlayChoices = { 0, 3, 5, 8, 10, 15, 20, 30 };
         public static readonly int[] RandomPlayChoices = { 3, 5, 8, 10, 15, 20, 30, 45, 60 };
         public bool AutoPlayRandom { get; set; }
+        public bool SmartPace { get; set; } = true;
         public int RandomFewestSeconds { get; set; } = 5;
         public int RandomMostSeconds { get; set; } = 15;
+        public string CameraMode { get; set; } = CameraAuto;
+        [System.Text.Json.Serialization.JsonIgnore]
+        public CameraKind? ForcedCameraKind => CameraMode switch
+        {
+            CameraZoomIn => CameraKind.ZoomIn,
+            CameraZoomOut => CameraKind.ZoomOut,
+            CameraDrift => CameraKind.Drift,
+            _ => null
+        };
         /// <summary>How far the camera moves over each layout during auto-play, 0 to 1. 0 is still.</summary>
         public double MotionAmount { get; set; } = 0.5;
         /// <summary>The odds that it zooms rather than drifts.</summary>
@@ -205,6 +223,23 @@ namespace ModernImageViewer
         public int NextPlaySeconds(Random rnd) =>
             AutoPlayRandom ? rnd.Next(Math.Min(RandomFewestSeconds, RandomMostSeconds), Math.Max(RandomFewestSeconds, RandomMostSeconds) + 1) : PlaySeconds;
 
+        public int NextPlaySeconds(Random rnd, int picturesOnCanvas, ref bool? lastWasLong)
+        {
+            if (!AutoPlayRandom) return PlaySeconds;
+            if (!SmartPace) return NextPlaySeconds(rnd);
+            int low = Math.Min(RandomFewestSeconds, RandomMostSeconds);
+            int high = Math.Max(RandomFewestSeconds, RandomMostSeconds);
+            if (low == high) return low;
+            bool takeLong = lastWasLong.HasValue ? !lastWasLong.Value : rnd.Next(2) == 0;
+            lastWasLong = takeLong;
+            double mid = (low + high) / 2.0;
+            double bandLow = takeLong ? mid : low;
+            double bandHigh = takeLong ? high : mid;
+            double density = Math.Clamp((picturesOnCanvas - FewestAllowed) / (double)Math.Max(1, MosaicLayout.MaxShown - FewestAllowed), 0, 1);
+            double pick = bandLow + (bandHigh - bandLow) * (0.35 * density + 0.65 * rnd.NextDouble());
+            return Math.Clamp((int)Math.Round(pick), low, high);
+        }
+
         public string PlayLabel => AutoPlayRandom ? $"{RandomFewestSeconds}\u2013{RandomMostSeconds} s" : $"{PlaySeconds} s";
         public string PlayWords => AutoPlayRandom ? $"{RandomFewestSeconds} to {RandomMostSeconds} seconds" : $"{PlaySeconds} seconds";
 
@@ -217,6 +252,10 @@ namespace ModernImageViewer
                 var read = string.IsNullOrWhiteSpace(json) ? null : System.Text.Json.JsonSerializer.Deserialize<SurpriseOptions>(json);
                 if (read == null) return new SurpriseOptions();
                 read.DesignOdds ??= new Dictionary<string, double>();
+                read.DisabledDesigns = read.DisabledDesigns != null
+                    ? new HashSet<string>(read.DisabledDesigns.Where(d => LayoutComposer.Recipes.Contains(d)), StringComparer.OrdinalIgnoreCase)
+                    : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                if (!CameraModes.Contains(read.CameraMode)) read.CameraMode = CameraAuto;
                 read.MostZoom = Math.Clamp(read.MostZoom, 1, MostOfAnyZoom);
                 read.ZoomChance = Math.Clamp(read.ZoomChance, 0, 1);
                 read.Variety = Math.Clamp(read.Variety, 1, 12);
@@ -365,12 +404,17 @@ namespace ModernImageViewer
         public static Composition? Compose(IReadOnlyList<PhotoFacts> photos, double width, double height, int seed, string? avoid = null, double rasterScale = 1, string? only = null, SurpriseOptions? options = null)
         {
             var usable = photos.Where(p => p.Width >= 1 && p.Height >= 1).Take(MosaicLayout.MaxShown).ToList();
-            if (usable.Count < 2 || width < 50 || height < 50) return null;
+            options ??= new SurpriseOptions();
+            int minRequired = options.FewestPictures == 1 ? 1 : 2;
+            if (usable.Count < minRequired || width < 50 || height < 50) return null;
 
             var random = new Random(seed);
-            options ??= new SurpriseOptions();
-            // A race: each design draws a time, sooner the higher its odds, so favoured ones come first more often and none is shut out.
-            var recipes = Recipes.Where(r => CanMake(r, usable.Count) && (only == null || r == only))
+            if (usable.Count == 1)
+                return ComposeSolo(usable[0], width, height, random, rasterScale, options);
+
+            var eligible = Recipes.Where(r => CanMake(r, usable.Count) && (only == null || r == only)).ToList();
+            var enabled = eligible.Where(r => !options.IsDesignOff(r)).ToList();
+            var recipes = (enabled.Count > 0 ? enabled : eligible)
                 .OrderBy(r => -Math.Log(1 - random.NextDouble()) / options.OddsOf(r)).ToList();
             // The one just shown comes last, so clicking again gives something different.
             if (recipes.Count > 1 && recipes.Remove(avoid ?? "")) recipes.Add(avoid!);
@@ -443,6 +487,56 @@ namespace ModernImageViewer
                 kept.Add(photo);
             }
             return kept.Count >= 2 ? kept : photos;
+        }
+
+        private static Composition ComposeSolo(PhotoFacts photo, double w, double h, Random random, double rasterScale, SurpriseOptions options)
+        {
+            var fullCell = new ComposedCell { Photo = photo, X = 0, Y = 0, W = w, H = h, Frame = FrameLooks.Flush(), Geometry = new CellGeometryDto() };
+            var fullComp = Finish(EdgeToEdge, new List<ComposedCell> { fullCell }, MosaicLayout.Cell(0), "#FF0A0A0A", CanvasLook.Solid, FrameLooks.Flush(), w, h);
+            Judge(fullComp, rasterScale, options.FaceShown);
+            double shownShare = Math.Max(1, fullCell.W * fullCell.H) / Math.Max(1, fullCell.ImageWidth * fullCell.ImageHeight);
+            bool fitsFull = shownShare >= 0.65 && fullComp.FacesCut == 0;
+            if (fitsFull && random.Next(4) != 0)
+            {
+                if (random.Next(3) == 0)
+                {
+                    var matted = BuildGalleryWall(new List<PhotoFacts> { photo }, w, h, random, options);
+                    if (matted != null)
+                    {
+                        if (options.MostZoom > 1 && random.NextDouble() < options.ZoomChance)
+                            AimAtSubject(matted.Cells[0], options.MostZoom, rasterScale);
+                        Judge(matted, rasterScale, options.FaceShown);
+                        return matted;
+                    }
+                }
+                if (options.MostZoom > 1 && random.NextDouble() < options.ZoomChance)
+                    AimAtSubject(fullCell, options.MostZoom, rasterScale);
+                Judge(fullComp, rasterScale, options.FaceShown);
+                return fullComp;
+            }
+
+            double pad = Math.Round(Math.Min(w, h) * 0.055);
+            double availW = Math.Max(40, w - 2 * pad), availH = Math.Max(40, h - 2 * pad);
+            double scale = Math.Min(availW / photo.Width, availH / photo.Height);
+            double cardW = Math.Max(40, photo.Width * scale), cardH = Math.Max(40, photo.Height * scale);
+            double rim = Math.Clamp(Math.Round(Math.Min(cardW, cardH) * 0.022), 5, 16);
+            cardW = Math.Min(availW, cardW + 2 * rim);
+            cardH = Math.Min(availH, cardH + 2 * rim);
+            var stageFrame = new CellBorderDto { Color = "#FFFFFFFF", Thickness = rim, Padding = rim, Shadow = true, CornerRadius = 6, GutterMaterial = "None", GutterColor = "#00000000" };
+            var stageCell = new ComposedCell
+            {
+                Photo = photo,
+                Floating = true,
+                X = (w - cardW) / 2,
+                Y = (h - cardH) / 2,
+                W = cardW,
+                H = cardH,
+                Frame = stageFrame,
+                Geometry = new CellGeometryDto()
+            };
+            var stage = Finish(HeroSpotlight, new List<ComposedCell> { stageCell }, null, Tone(photo.Color, 0.28, 0.14), CanvasLook.Vignette, FrameLooks.Flush(), w, h);
+            Judge(stage, rasterScale, options.FaceShown);
+            return stage;
         }
 
         private static Composition? Build(string recipe, List<PhotoFacts> photos, double w, double h, Random random, int look, SurpriseOptions options) => recipe switch

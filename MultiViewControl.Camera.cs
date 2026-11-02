@@ -38,7 +38,7 @@ namespace ModernImageViewer
         private void StartCanvasCamera(Composition composition)
         {
             var options = SurpriseChoices;
-            var move = CameraMove.Plan(composition.CameraSubjects(), options.MotionAmount, options.MotionZoomChance, options.MotionFaceChance, _layoutSeconds + CameraOverrunSeconds, _lastCameraKind, Random.Shared);
+            var move = CameraMove.Plan(composition.CameraSubjects(), options.MotionAmount, options.MotionZoomChance, options.MotionFaceChance, _layoutSeconds + CameraOverrunSeconds, _lastCameraKind, Random.Shared, options.ForcedCameraKind);
             if (move == null)
             {
                 ResetCanvasCamera();
