@@ -284,12 +284,15 @@
                             Padding="8,5"
                             CornerRadius="12"
                             VerticalAlignment="Center"
-                            ToolTipService.ToolTip="Open the image tray. Images there are not on the canvas. Surprise me uses them, and you can put one on the canvas or remove it.">
-                        <TextBlock x:Name="ShownText"
-                                   VerticalAlignment="Center"
-                                   FontSize="13"
-                                   Typography.NumeralAlignment="Tabular"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            ToolTipService.ToolTip="Open the Image Tray with unplaced session images.">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8B9;" FontSize="13" />
+                            <TextBlock x:Name="ShownText"
+                                       VerticalAlignment="Center"
+                                       FontSize="13"
+                                       Typography.NumeralAlignment="Tabular"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
                     </Button>
 
                     <!-- Subtle Section Divider 1 -->
@@ -322,6 +325,23 @@
                             </Button>
                         </StackPanel>
                     </Border>
+
+                    <!-- Subtle Section Divider 2 -->
+                    <Rectangle Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,0" Opacity="0.5"/>
+
+                    <!-- Storyboard Button: Always accessible to setup or play presentations without starting Surprise Me -->
+                    <Button x:Name="StoryboardButton"
+                            Click="StoryboardButton_Click"
+                            Style="{StaticResource QuietButtonStyle}"
+                            Padding="8,5"
+                            CornerRadius="12"
+                            VerticalAlignment="Center"
+                            ToolTipService.ToolTip="Open the Storyboard to auto-draft, sequence, and edit presentation scenes (B).">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon x:Name="StoryboardIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE8B7;" FontSize="14" />
+                            <TextBlock x:Name="StoryboardText" Text="Storyboard" VerticalAlignment="Center" FontSize="13" />
+                        </StackPanel>
+                    </Button>
 
                     <Border x:Name="SurpriseControl" CornerRadius="12" Background="#14FFFFFF" VerticalAlignment="Center">
                         <StackPanel Orientation="Horizontal">

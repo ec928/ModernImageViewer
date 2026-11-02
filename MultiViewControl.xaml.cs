@@ -1104,6 +1104,9 @@ namespace ModernImageViewer
                 case (VirtualKey)189: // - / _
                     ChangeLines(-1);
                     return true;
+                case VirtualKey.B:
+                    StoryboardButton_Click(StoryboardButton, new RoutedEventArgs());
+                    return true;
                 case VirtualKey.R:
                     ToggleRowsColumns();
                     return true;

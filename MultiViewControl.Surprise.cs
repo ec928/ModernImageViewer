@@ -1247,10 +1247,35 @@ namespace ModernImageViewer
         {
             if (_trayCard != null)
             {
-                RemoveTrayCard();
+                if (_trayTab == 0)
+                {
+                    RemoveTrayCard();
+                    return;
+                }
+                _trayTab = 0;
+                ShowTrayCard(NoCell);
                 return;
             }
             StopAutoPlay();
+            _trayTab = 0;
+            ShowTrayCard(NoCell);
+        }
+
+        private void StoryboardButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_trayCard != null)
+            {
+                if (_trayTab == 1)
+                {
+                    RemoveTrayCard();
+                    return;
+                }
+                _trayTab = 1;
+                ShowTrayCard(NoCell);
+                return;
+            }
+            StopAutoPlay();
+            _trayTab = 1;
             ShowTrayCard(NoCell);
         }
 
@@ -2246,8 +2271,17 @@ namespace ModernImageViewer
 
         private void AutoPlayButton_Click(object sender, RoutedEventArgs e)
         {
-            if (_autoPlaySeconds > 0) StopAutoPlay();
-            else StartAutoPlay(SurpriseChoices.PlaySeconds);
+            if (_autoPlaySeconds > 0)
+            {
+                StopAutoPlay();
+            }
+            else
+            {
+                if (_activeShow != null && _activeShow.Scenes.Count > 0)
+                    _ = PlayStoryboardAsync();
+                else
+                    StartAutoPlay(SurpriseChoices.PlaySeconds);
+            }
         }
 
         /// <summary>
@@ -2264,7 +2298,10 @@ namespace ModernImageViewer
             if (IsSoloActive) return false;
             if (key == Windows.System.VirtualKey.Space)
             {
-                StartAutoPlay(SurpriseChoices.PlaySeconds);
+                if (_activeShow != null && _activeShow.Scenes.Count > 0)
+                    _ = PlayStoryboardAsync();
+                else
+                    StartAutoPlay(SurpriseChoices.PlaySeconds);
                 return true;
             }
             if (_isStoryboardPlayback && key is Windows.System.VirtualKey.Left or Windows.System.VirtualKey.Right)

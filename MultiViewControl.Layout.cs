@@ -205,14 +205,24 @@ namespace ModernImageViewer
             }
         }
 
-        /// <summary>Says how many images are on the canvas and how many are in the tray, once there are any in the tray.</summary>
+        /// <summary>Says how many images are in the tray when any are unplaced, and keeps the Storyboard button up-to-date.</summary>
         private void ShowShownBadge()
         {
             int tray = TrayImages().Count;
             int scenes = _activeShow?.VisibleSceneCount ?? 0;
-            ShownBadge.Visibility = (tray > 0 || scenes > 0) ? Visibility.Visible : Visibility.Collapsed;
-            ShownText.Text = scenes > 0 ? $"{ImagesOnCanvas()} on canvas, {tray} in tray · {scenes} scenes" : $"{ImagesOnCanvas()} on canvas, {tray} in tray";
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(ShownBadge, ShownText.Text);
+            ShownBadge.Visibility = tray > 0 ? Visibility.Visible : Visibility.Collapsed;
+            ShownText.Text = $"{tray} in tray";
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(ShownBadge, $"{tray} images in tray");
+            ToolTipService.SetToolTip(ShownBadge, $"Open the Image Tray ({tray} unplaced images). Click one to put it on canvas or remove from session.");
+
+            if (StoryboardText != null)
+            {
+                StoryboardText.Text = scenes > 0 ? $"Storyboard ({scenes})" : "Storyboard";
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(StoryboardButton, StoryboardText.Text);
+                ToolTipService.SetToolTip(StoryboardButton, scenes > 0
+                    ? $"Open Storyboard ({scenes} scenes drafted). Reorder, review, and edit your presentation (B)."
+                    : "Open Storyboard to compose, auto-draft, and sequence a presentation from your photos (B).");
+            }
         }
 
         private int VisibleCount(int count)
