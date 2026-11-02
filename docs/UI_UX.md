@@ -149,10 +149,10 @@ The playbar's wheel holds Undo, Redo, one Fill or Fit row, which names what it w
 
 ### Bottom Playbar Organization & Segmented Controls
 The Multi-View playbar is organized into five cohesive desktop functional clusters, separated by subtle 1px dividers:
-1. **Navigation & Ingestion**: `[ Back ]` and `[ + Add images ]`.
-2. **Drawer Views (`DrawerControl`)**: A unified segmented pill housing `[ 📥 Image Tray (N) ]` and `[ 🎬 Storyboard (N) ]`.
+1. **Navigation**: `[ Back ]`.
+2. **Drawer Views (`DrawerControl`)**: A unified segmented pill housing `[ 🗃 Image Pool (N) ]` and `[ 🎬 Storyboard (N) ]`.
    - Directly mirrors the dual-tab header inside the slide-up drawer panel.
-   - Dynamic counts: displays item/scene counts when non-zero (`Image Tray (3)`, `Storyboard (4)`) or plain labels when zero.
+   - Dynamic counts: displays total session photos (`Image Pool (18)`) and scene counts (`Storyboard (4)`) or plain labels when zero.
    - Active tab indicator: the button corresponding to the currently open drawer tab receives an active translucent background wash (`#40FFFFFF`) immediately upon opening, clearing when closed.
    - Light-dismiss protection: clicking outside the card dismisses the drawer unless the click lands within `DrawerControl`, allowing seamless toggling or switching between tabs.
 3. **Grid Layout (`CountsSwitch`)**: `[ Rows | Columns ]` segmented pill.
@@ -160,16 +160,16 @@ The Multi-View playbar is organized into five cohesive desktop functional cluste
 4. **Playback & Transport (`SurpriseControl`)**: Unified media transport cluster:
    - `[ 🔀 Surprise me ]`: One-click generative layout composer.
    - `[ ‹ ]`: Previous layout (Undo) or previous Storyboard scene (Left Arrow).
-   - `[ ▶ Play / ⏸ Pause ]`: Master auto-play toggle with live dwell time readout (Spacebar).
+   - `[ ▶ Play / ⏸ Pause ]`: Master auto-play toggle cleanly showing Play, Play Show, or Pause (Spacebar).
    - `[ › ]`: Next layout (Redo/Generate) or next Storyboard scene (Right Arrow).
    - `[ ^ ]`: Auto-Play Settings card toggle.
    - `[ ⛶ Fullscreen ]`: Seamless full-screen presentation mode (F11).
 5. **Canvas Framing & Utilities**: `[ Canvas ^ ]`, `[ Save/Load ]`, and `[ ⚙ Advanced ]`.
 
-**The Image Tray & Storyboard Drawer** is a unified multi-purpose slide-up sheet anchored over the lower canvas:
-- **Card Geometry & Cursor Stability**: The drawer uses a consistent, fixed card dimension (820×560 in standard Card mode, 1100×220 in Filmstrip mode). Switching between the Image Tray and Storyboard tabs preserves card position and dimensions exactly, keeping top header tab buttons pinned under the user's mouse cursor without layout jitter or target invalidation.
-- **Tab 1: Image Tray**: Displays unplaced session images with interactive thumbnail grid, search box, and session pool readouts (`"Session pool: 18 total photos (16 on canvas, 2 in tray)"`). Click an image to place it on the canvas; right-click to remove it from the session.
-  - **All-On-Canvas Empty State**: When 0 photos are in the tray (all session photos are on canvas), the tray displays a dedicated centered empty-state view explaining that all session photos are placed, with a direct `[ ➕ Add Images... ]` action button to import more photos from disk.
+**The Image Pool & Storyboard Drawer** is a unified multi-purpose slide-up sheet anchored over the lower canvas:
+- **Card Geometry & Cursor Stability**: The drawer uses a consistent, fixed card dimension (820×560 in standard Card mode, 1100×220 in Filmstrip mode). Switching between the Image Pool and Storyboard tabs preserves card position and dimensions exactly, keeping top header tab buttons pinned under the user's mouse cursor without layout jitter or target invalidation.
+- **Tab 1: Image Pool**: Displays session photos with unplaced images, quick search box, and a direct `[ ➕ Add Images ]` action button to add more images to the session pool from any folder. Shows session pool readouts (`"Image pool: 2 unplaced photos (18 total in session)"`). Click an unplaced thumbnail to place it on the canvas; right-click to remove it from the session.
+  - **All-On-Canvas Empty State**: When all session photos are currently placed on the canvas, the drawer displays a dedicated centered view explaining that all photos are on canvas, with a prominent `[ ➕ Add Images... ]` button to import more photos from disk.
 - **Tab 2: Storyboard**: The presentation sequencer and scene director.
   - **Manual Scene Capture**: Direct action buttons `[ 📷 + Add Canvas ]` and `[ 📷 Capture Current Canvas as Scene 1 ]` snapshot the current visual composition into an editable scene card.
   - **Auto-Drafting**: `[ 🪄 Auto-Draft Show ]` generates paced, balanced multi-card presentations from the entire photo session pool.

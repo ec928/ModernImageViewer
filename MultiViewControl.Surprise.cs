@@ -1322,7 +1322,7 @@ namespace ModernImageViewer
             var tabStrip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
             var poolTab = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton
             {
-                Content = $"📥 Image Tray ({all.Count})",
+                Content = $"🗃 Image Pool ({SessionPictures().Count})",
                 CornerRadius = new CornerRadius(14),
                 Padding = new Thickness(14, 6, 14, 6),
                 FontSize = 13,
@@ -1382,15 +1382,31 @@ namespace ModernImageViewer
             var heading = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
             var poolSubtitle = new TextBlock { FontSize = 12, Opacity = 0.7 };
 
-            var search = new TextBox { PlaceholderText = "Search names", MinWidth = 200 };
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(search, "Search the image tray");
+            var search = new TextBox { PlaceholderText = "Search names", MinWidth = 180 };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(search, "Search the image pool");
+
+            var poolControlsRight = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            var addImagesBtn = new Button
+            {
+                Content = "➕ Add Images",
+                Padding = new Thickness(12, 5, 12, 5),
+                CornerRadius = new CornerRadius(12),
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Background = winBlueDeep,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White),
+                BorderBrush = winBlue
+            };
+            addImagesBtn.Click += (_, _) => AddImagesRequested?.Invoke(this, EventArgs.Empty);
+            ToolTipService.SetToolTip(addImagesBtn, "Add more photos to the session pool from your folders");
+            poolControlsRight.Children.Add(addImagesBtn);
+            poolControlsRight.Children.Add(search);
 
             var poolControlsRow = new Grid { ColumnSpacing = 10 };
             poolControlsRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             poolControlsRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             poolControlsRow.Children.Add(heading);
-            Grid.SetColumn(search, 1);
-            poolControlsRow.Children.Add(search);
+            Grid.SetColumn(poolControlsRight, 1);
+            poolControlsRow.Children.Add(poolControlsRight);
 
             var hintStack = new StackPanel { Spacing = 2 };
             var hint = new TextBlock { Text = "Right-click an image to remove it from the session.", FontSize = 12, Opacity = 0.7 };
@@ -1462,24 +1478,24 @@ namespace ModernImageViewer
                 bool hasTray = all.Count > 0;
 
                 heading.Text = current.Count == all.Count
-                    ? (all.Count == 0 ? $"Image tray: 0 unplaced photos · Session pool: {sessionCount} total photos ({onCanvas} on canvas)"
-                                      : $"Image tray: {all.Count} unplaced {(all.Count == 1 ? "photo" : "photos")}. {click}")
-                    : current.Count == 0 ? "No image in the tray matches that name."
-                    : $"Image tray: {current.Count} of {all.Count}. {click}";
+                    ? (all.Count == 0 ? $"Image pool: {sessionCount} total photos ({onCanvas} on canvas, 0 unplaced)"
+                                      : $"Image pool: {all.Count} unplaced {(all.Count == 1 ? "photo" : "photos")} ({sessionCount} total in session). {click}")
+                    : current.Count == 0 ? "No image in the pool matches that name."
+                    : $"Image pool: {current.Count} of {all.Count} unplaced photos. {click}";
 
-                poolSubtitle.Text = $"Session pool: {sessionCount} total photos ({onCanvas} on canvas, {all.Count} in tray)";
+                poolSubtitle.Text = $"Session pool: {sessionCount} total photos ({onCanvas} on canvas, {all.Count} unplaced in tray)";
 
-                search.Visibility = hasTray ? Visibility.Visible : Visibility.Collapsed;
+                poolControlsRight.Visibility = hasTray ? Visibility.Visible : Visibility.Collapsed;
                 hintStack.Visibility = hasTray ? Visibility.Visible : Visibility.Collapsed;
                 thumbnails.Visibility = hasTray ? Visibility.Visible : Visibility.Collapsed;
                 emptyTrayPanel.Visibility = hasTray ? Visibility.Collapsed : Visibility.Visible;
 
                 if (!hasTray)
                 {
-                    emptyTrayTitle.Text = sessionCount > 0 ? "All Photos Are on Canvas" : "Image Tray is Empty";
+                    emptyTrayTitle.Text = sessionCount > 0 ? "All Photos Are on Canvas" : "Image Pool is Empty";
                     emptyTrayDesc.Text = sessionCount > 0
-                        ? $"All {sessionCount} photos in this session are currently placed on the canvas.\nRight-click any photo on the canvas and choose 'Move to Tray' to park it here, or add more photos."
-                        : "No photos have been added to the session yet.\nAdd photos from your folders to start arranging and composing presentations.";
+                        ? $"All {sessionCount} photos in this session are currently placed on the canvas.\nRight-click any photo on the canvas and choose 'Move to Tray' to park it here, or add more photos to the pool."
+                        : "No photos have been added to the session pool yet.\nAdd photos from your folders to start arranging and composing presentations.";
                 }
             }
 
@@ -1494,7 +1510,7 @@ namespace ModernImageViewer
                 current.Remove(path);
                 ShowHeading();
                 ShowTrayChanged();
-                poolTab.Content = $"📥 Image Tray ({all.Count})";
+                poolTab.Content = $"🗃 Image Pool ({SessionPictures().Count})";
                 if (all.Count > 0) search.Focus(FocusState.Programmatic);
             }
 
@@ -2483,7 +2499,7 @@ namespace ModernImageViewer
             bool hasScenes = _activeShow != null && _activeShow.Scenes.Count > 0;
             string glyph = playing ? "\uE769" : "\uE768";
             string text = playing
-                ? (isStory ? "Pause" : SurpriseChoices.PlayLabel)
+                ? "Pause"
                 : (hasScenes ? "Play Show" : "Play");
             AutoPlayIcon.Glyph = glyph;
             AutoPlayText.Text = text;

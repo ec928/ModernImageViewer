@@ -278,21 +278,11 @@
                             <TextBlock Text="Back" VerticalAlignment="Center" FontSize="13" />
                         </StackPanel>
                     </Button>
-                    <Button Click="AddImagesButton_Click"
-                            Style="{StaticResource QuietButtonStyle}"
-                            Padding="8,5"
-                            CornerRadius="12"
-                            ToolTipService.ToolTip="Find images in your folders. Images fill the canvas up to 16, and the rest go in the image tray. On a full canvas, the first 4 go on it as freeform images.">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE710;" FontSize="14" />
-                            <TextBlock Text="Add images" VerticalAlignment="Center" FontSize="13" />
-                        </StackPanel>
-                    </Button>
 
                     <!-- Subtle Section Divider 1 -->
                     <Rectangle Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,0" Opacity="0.5"/>
 
-                    <!-- Group 2: Drawer Views (Image Tray & Storyboard) -->
+                    <!-- Group 2: Drawer Views (Image Pool & Storyboard) -->
                     <Border x:Name="DrawerControl" CornerRadius="12" Background="#14FFFFFF" VerticalAlignment="Center">
                         <StackPanel Orientation="Horizontal">
                             <Button x:Name="ShownBadge"
@@ -301,11 +291,11 @@
                                     Padding="8,5"
                                     CornerRadius="12"
                                     VerticalAlignment="Center"
-                                    ToolTipService.ToolTip="Open the Image Tray with unplaced session images.">
+                                    ToolTipService.ToolTip="Open the Image Pool with session photos, search, and management.">
                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                     <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8B9;" FontSize="13" />
                                     <TextBlock x:Name="ShownText"
-                                               Text="Image Tray"
+                                               Text="Image Pool"
                                                VerticalAlignment="Center"
                                                FontSize="13"
                                                Typography.NumeralAlignment="Tabular" />

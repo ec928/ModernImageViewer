@@ -205,10 +205,12 @@ namespace ModernImageViewer
             }
         }
 
-        /// <summary>Updates the Image Tray and Storyboard buttons in the playbar drawer pill.</summary>
+        /// <summary>Updates the Image Pool and Storyboard buttons in the playbar drawer pill.</summary>
         private void ShowShownBadge()
         {
+            int total = SessionPictures().Count;
             int tray = TrayImages().Count;
+            int onCanvas = ImagesOnCanvas();
             int scenes = _activeShow?.VisibleSceneCount ?? 0;
             bool isTrayOpen = _trayCard != null && _trayTab == 0;
             bool isStoryOpen = _trayCard != null && _trayTab == 1;
@@ -217,14 +219,17 @@ namespace ModernImageViewer
             {
                 ShownBadge.Visibility = Visibility.Visible;
                 HoldFlyoutSource(ShownBadge, isTrayOpen);
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(ShownBadge, tray > 0 ? $"Image Tray ({tray})" : "Image Tray");
-                ToolTipService.SetToolTip(ShownBadge, tray > 0
-                    ? $"Open Image Tray ({tray} unplaced images). Click one to put it on canvas or remove from session."
-                    : "Open Image Tray to view session images or manage unplaced photos.");
+                string poolName = total > 0 ? $"Image Pool ({total})" : "Image Pool";
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(ShownBadge, poolName);
+                ToolTipService.SetToolTip(ShownBadge, total > 0
+                    ? (tray > 0
+                        ? $"Open Image Pool ({total} photos: {onCanvas} on canvas, {tray} in tray). View, search, add or arrange images."
+                        : $"Open Image Pool ({total} photos, all on canvas). View, search, add, or park photos in tray.")
+                    : "Open Image Pool to view, add, or manage session photos.");
             }
             if (ShownText != null)
             {
-                ShownText.Text = tray > 0 ? $"Image Tray ({tray})" : "Image Tray";
+                ShownText.Text = total > 0 ? $"Image Pool ({total})" : "Image Pool";
             }
 
             if (StoryboardButton != null)
