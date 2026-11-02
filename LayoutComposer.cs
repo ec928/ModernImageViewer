@@ -72,12 +72,12 @@ namespace ModernImageViewer
             }
         }
 
-        /// <summary>Where the camera may aim: the middle of the largest cells with faces in them, as shares of the canvas.</summary>
+        /// <summary>Where the camera may aim: the faces in the largest cells that have them, as shares of the canvas.</summary>
         public List<(double X, double Y)> CameraSubjects() => Cells
             .Where(c => c.Photo.Faces.Count > 0 && Width >= 1 && Height >= 1)
             .OrderByDescending(c => c.W * c.H)
             .Take(3)
-            .Select(c => (Math.Clamp((c.X + c.W / 2) / Width, 0, 1), Math.Clamp((c.Y + c.H / 2) / Height, 0, 1)))
+            .Select(c => LayoutComposer.SubjectOnCanvas(c, Width, Height))
             .ToList();
 
         public MultiViewLayoutFile ToLayoutFile()
@@ -274,6 +274,16 @@ namespace ModernImageViewer
 
         public bool Holds(string picture) => _known.Contains(picture);
 
+        public PictureDeck Clone()
+        {
+            var copy = new PictureDeck(Array.Empty<string>(), new Random(_random.Next()));
+            copy._order.AddRange(_order);
+            copy._known.UnionWith(_known);
+            copy._waiting.UnionWith(_waiting);
+            copy._added.AddRange(_added);
+            return copy;
+        }
+
         /// <summary>Pictures not seen before go first, so one just added shows up soon.</summary>
         public void Include(IEnumerable<string> pictures)
         {
@@ -425,7 +435,7 @@ namespace ModernImageViewer
         public static List<PhotoFacts> LeaveOutScreensAndRepeats(List<PhotoFacts> photos)
         {
             var kept = new List<PhotoFacts>();
-            foreach (var photo in photos.OrderByDescending(p => p.Featured))
+            foreach (var photo in photos.OrderByDescending(p => p.Featured).ThenByDescending(p => p.Sharpness))
             {
                 if (photo.Featured) { kept.Add(photo); continue; }
                 if (photo.ScreenLike) continue;
@@ -932,6 +942,37 @@ namespace ModernImageViewer
             double x = cx + cell.PanX + (u - 0.5) * cell.ImageWidth;
             double y = cy + cell.PanY + (v - 0.5) * cell.ImageHeight;
             return Turn(x, y, cx, cy, cell.Rotation);
+        }
+
+        /// <summary>Projects the faces inside a cell onto the canvas, accounting for crop pan, zoom, padding, and rotation.</summary>
+        public static (double X, double Y) SubjectOnCanvas(ComposedCell cell, double canvasW, double canvasH)
+        {
+            if (canvasW < 1 || canvasH < 1) return (0.5, 0.5);
+            if (cell.Photo.Faces.Count == 0)
+                return (Math.Clamp((cell.X + cell.W / 2) / canvasW, 0, 1), Math.Clamp((cell.Y + cell.H / 2) / canvasH, 0, 1));
+            double weightSum = 0, normX = 0, normY = 0;
+            foreach (var face in cell.Photo.Faces)
+            {
+                double w = Math.Max(0.0001, Math.Sqrt(face.Area));
+                normX += (face.X + face.W / 2) * w;
+                normY += (face.Y + face.H / 2) * w;
+                weightSum += w;
+            }
+            return PointForNormalized(cell, normX / weightSum, normY / weightSum, canvasW, canvasH);
+        }
+
+        public static (double X, double Y) PointForNormalized(ComposedCell cell, double normX, double normY, double canvasW, double canvasH)
+        {
+            double pad = cell.Frame.Padding;
+            double innerW = Math.Max(1, cell.W - 2 * pad);
+            double innerH = Math.Max(1, cell.H - 2 * pad);
+            double px = cell.X + pad + cell.PanX + normX * cell.ImageWidth;
+            double py = cell.Y + pad + cell.PanY + normY * cell.ImageHeight;
+            px = Math.Clamp(px, cell.X + pad, cell.X + pad + innerW);
+            py = Math.Clamp(py, cell.Y + pad, cell.Y + pad + innerH);
+            if (Math.Abs(cell.Rotation) > 0.01)
+                (px, py) = Turn(px, py, cell.X + cell.W / 2, cell.Y + cell.H / 2, cell.Rotation);
+            return (Math.Clamp(px / canvasW, 0, 1), Math.Clamp(py / canvasH, 0, 1));
         }
 
         private static (double X, double Y) Turn(double x, double y, double cx, double cy, double degrees)

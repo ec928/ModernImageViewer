@@ -36,6 +36,19 @@ namespace ModernImageViewer
         private Border? _surpriseCard;
         private Border? _autoPlayShield;
         private bool _autoPlayShieldPressed;
+        private PreparedSurprise? _preparedSurprise;
+        private System.Threading.CancellationTokenSource? _prepareCts;
+        private Task? _prepareTask;
+
+        private sealed record PreparedSurprise(
+            Composition Composition,
+            PictureDeck? Deck,
+            Dictionary<string, BitmapSource> DecodedBitmaps,
+            List<string> SessionPictures,
+            HashSet<string> FeaturedPictures,
+            string OptionsJson,
+            double Width,
+            double Height);
 
         private static string SurpriseOptionsPath => System.IO.Path.Combine(AppPaths.LocalDirectory, "surprise-options.json");
 
@@ -60,6 +73,7 @@ namespace ModernImageViewer
         private void ChangeSurpriseChoices(Action<SurpriseOptions> change)
         {
             change(SurpriseChoices);
+            CancelPreparedSurprise();
             try
             {
                 System.IO.Directory.CreateDirectory(AppPaths.LocalDirectory);
@@ -969,10 +983,6 @@ namespace ModernImageViewer
             bool playing = _autoPlaySeconds > 0;
             bool sameRun = _surpriseRun;
             var pictures = SessionPictures();
-            // The session is the whole set, tray included, so what the user removed stays out and a change to Most takes effect.
-            if (!SurpriseChoices.TakesTurns(pictures.Count)) _surpriseDeck = null;
-            else if (_surpriseDeck == null) _surpriseDeck = new PictureDeck(PicturesInOrder(), new Random());
-            else _surpriseDeck.MatchSession(pictures);
             if (pictures.Count < 2)
             {
                 if (!playing) AddImagesRequested?.Invoke(this, EventArgs.Empty);
@@ -984,19 +994,50 @@ namespace ModernImageViewer
             SurpriseButton.IsEnabled = false;
             try
             {
-                var options = SurpriseChoices;
-                var chosen = _surpriseDeck == null ? pictures : DealHand(_surpriseDeck, options);
-                var ready = DecodedBitmaps();
-                // A picture already showing as failed would only put its message into the design.
-                var failed = _cellRoots.Select(root => root?.Tag as CellParts).Where(parts => parts?.Bound.Failed == true)
-                    .Select(parts => parts!.Bound.Item.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
-                var facts = await ReadFactsAsync(chosen.Where(path => !failed.Contains(path)).ToList(), path => ready.TryGetValue(path, out var bitmap) ? (bitmap.PixelWidth, bitmap.PixelHeight) : null);
-                if (_surpriseDeck != null && options.SkipScreens) facts = LayoutComposer.LeaveOutScreensAndRepeats(facts);
+                var inFlight = _prepareTask;
+                if (inFlight != null)
+                {
+                    try { await inFlight; } catch { }
+                }
 
+                var options = SurpriseChoices;
                 double scale = XamlRoot?.RasterizationScale ?? 1;
                 double width = RootGrid.ActualWidth, height = RootGrid.ActualHeight;
-                string? avoid = sameRun ? _surpriseRecipe : null;
-                var composition = await Task.Run(() => LayoutComposer.Compose(facts, width, height, Random.Shared.Next(), avoid, scale, null, options));
+                var ready = DecodedBitmaps();
+                Composition? composition = null;
+
+                var prepared = _preparedSurprise;
+                _preparedSurprise = null;
+                if (prepared != null
+                    && Math.Abs(prepared.Width - width) < 1
+                    && Math.Abs(prepared.Height - height) < 1
+                    && prepared.OptionsJson == options.ToJson()
+                    && prepared.SessionPictures.SequenceEqual(pictures)
+                    && prepared.FeaturedPictures.SetEquals(_featuredPictures))
+                {
+                    composition = prepared.Composition;
+                    _surpriseDeck = prepared.Deck;
+                    foreach (var pair in prepared.DecodedBitmaps)
+                        ready.TryAdd(pair.Key, pair.Value);
+                }
+                else
+                {
+                    // The session is the whole set, tray included, so what the user removed stays out and a change to Most takes effect.
+                    if (!options.TakesTurns(pictures.Count)) _surpriseDeck = null;
+                    else if (_surpriseDeck == null) _surpriseDeck = new PictureDeck(PicturesInOrder(), new Random());
+                    else _surpriseDeck.MatchSession(pictures);
+
+                    var chosen = _surpriseDeck == null ? pictures : DealHand(_surpriseDeck, options);
+                    // A picture already showing as failed would only put its message into the design.
+                    var failed = _cellRoots.Select(root => root?.Tag as CellParts).Where(parts => parts?.Bound.Failed == true)
+                        .Select(parts => parts!.Bound.Item.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    var facts = await ReadFactsAsync(chosen.Where(path => !failed.Contains(path)).ToList(), path => ready.TryGetValue(path, out var bitmap) ? (bitmap.PixelWidth, bitmap.PixelHeight) : null);
+                    if (_surpriseDeck != null && options.SkipScreens) facts = LayoutComposer.LeaveOutScreensAndRepeats(facts);
+
+                    string? avoid = sameRun ? _surpriseRecipe : null;
+                    composition = await Task.Run(() => LayoutComposer.Compose(facts, width, height, Random.Shared.Next(), avoid, scale, null, options));
+                }
+
                 // The session was changed for other pictures while these were being read, and that wins.
                 if (composition == null || !SessionPictures().SequenceEqual(pictures)) return;
                 if (playing && _autoPlaySeconds == 0) return;
@@ -1005,6 +1046,7 @@ namespace ModernImageViewer
                 if (!sameRun) AutoSaveSession();
                 CaptureUndoPoint();
                 _cellBorderFlyout?.Hide();
+                var outgoingStep = fade ? OutgoingCameraStep(0.7) : (1.0, 0.0, 0.0);
                 Image? before = fade ? await CoverWithPictureOfCanvasAsync() : null;
                 // The cover holds the old layout where the camera had it, and the new one starts from nothing.
                 ResetCanvasCamera();
@@ -1034,13 +1076,103 @@ namespace ModernImageViewer
                 }
                 CaptureUndoPoint();
                 if (before != null && _autoPlaySeconds > 0) StartCanvasCamera(composition);
-                if (before != null) ChangeLayoutOver(before);
+                if (before != null) ChangeLayoutOver(before, outgoingStep);
+                StartPreparingNextSurprise();
             }
             finally
             {
                 _surpriseBusy = false;
                 _quietBar = false;
                 SurpriseButton.IsEnabled = true;
+            }
+        }
+
+        private void CancelPreparedSurprise()
+        {
+            _prepareCts?.Cancel();
+            _prepareCts?.Dispose();
+            _prepareCts = null;
+            _prepareTask = null;
+            _preparedSurprise = null;
+        }
+
+        /// <summary>Gets the next layout and its decoded pictures ready while the current one is on show, so the change does not wait on disk or face detection.</summary>
+        private void StartPreparingNextSurprise()
+        {
+            CancelPreparedSurprise();
+            var pictures = SessionPictures();
+            double width = RootGrid.ActualWidth, height = RootGrid.ActualHeight;
+            if (pictures.Count < 2 || width < 50 || height < 50) return;
+
+            var cts = new System.Threading.CancellationTokenSource();
+            _prepareCts = cts;
+            _prepareTask = PrepareNextSurpriseAsync(pictures, width, height, cts.Token);
+        }
+
+        private async Task PrepareNextSurpriseAsync(List<string> pictures, double width, double height, System.Threading.CancellationToken token)
+        {
+            try
+            {
+                var options = SurpriseChoices;
+                string optionsJson = options.ToJson();
+                var featured = _featuredPictures.ToHashSet(StringComparer.OrdinalIgnoreCase);
+                double scale = XamlRoot?.RasterizationScale ?? 1;
+                string? avoid = _surpriseRecipe;
+
+                PictureDeck? nextDeck = null;
+                if (options.TakesTurns(pictures.Count))
+                {
+                    nextDeck = _surpriseDeck != null ? _surpriseDeck.Clone() : new PictureDeck(PicturesInOrder(), new Random());
+                    nextDeck.MatchSession(pictures);
+                }
+                var chosen = nextDeck == null ? pictures : DealHand(nextDeck, options);
+                var ready = DecodedBitmaps();
+                var failed = _cellRoots.Select(root => root?.Tag as CellParts).Where(parts => parts?.Bound.Failed == true)
+                    .Select(parts => parts!.Bound.Item.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                var facts = await ReadFactsAsync(chosen.Where(path => !failed.Contains(path)).ToList(), path => ready.TryGetValue(path, out var bitmap) ? (bitmap.PixelWidth, bitmap.PixelHeight) : null);
+                if (token.IsCancellationRequested) return;
+                if (nextDeck != null && options.SkipScreens) facts = LayoutComposer.LeaveOutScreensAndRepeats(facts);
+
+                var composition = await Task.Run(() => LayoutComposer.Compose(facts, width, height, Random.Shared.Next(), avoid, scale, null, options), token);
+                if (composition == null || token.IsCancellationRequested) return;
+
+                var toPreload = composition.Cells.Select(c => c.Photo.Path)
+                    .Where(p => !string.IsNullOrEmpty(p) && !ready.ContainsKey(p))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                await PreloadBitmapsAsync(toPreload, ready, token);
+                if (token.IsCancellationRequested) return;
+
+                _preparedSurprise = new PreparedSurprise(composition, nextDeck, ready, pictures, featured, optionsJson, width, height);
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
+
+        private static async Task PreloadBitmapsAsync(List<string> paths, Dictionary<string, BitmapSource> ready, System.Threading.CancellationToken token)
+        {
+            foreach (string path in paths)
+            {
+                if (token.IsCancellationRequested) return;
+                try
+                {
+                    var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(path).AsTask(token);
+                    using var stream = await file.OpenReadAsync().AsTask(token);
+                    if (token.IsCancellationRequested) return;
+                    var bmp = new BitmapImage();
+                    await bmp.SetSourceAsync(stream).AsTask(token);
+                    if (bmp.PixelWidth > 0 && bmp.PixelHeight > 0)
+                        ready[path] = bmp;
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+                catch
+                {
+                }
             }
         }
 
@@ -1099,7 +1231,7 @@ namespace ModernImageViewer
         /// The new layout stays covered until its pictures have loaded, so they appear together. The cover is a picture of the old layout,
         /// so each transition only has to animate that.
         /// </summary>
-        private void ChangeLayoutOver(Image cover)
+        private void ChangeLayoutOver(Image cover, (double Scale, double X, double Y) outgoingStep = default)
         {
             var kind = LayoutTransitions.Choose(_autoPlaySeconds > 0 ? SurpriseChoices.TransitionVariety : 0, _lastTransition, Random.Shared);
             _lastTransition = kind;
@@ -1119,6 +1251,14 @@ namespace ModernImageViewer
             cover.RenderTransform = new Microsoft.UI.Xaml.Media.CompositeTransform();
             var smooth = new CubicEase { EasingMode = EasingMode.EaseInOut };
             Border? dark = null;
+            void ContinueOutgoing(int ms)
+            {
+                if (outgoingStep.Scale <= 1 && Math.Abs(outgoingStep.X) < 0.5 && Math.Abs(outgoingStep.Y) < 0.5) return;
+                Animate(cover, ScaleX, 1, outgoingStep.Scale, ms);
+                Animate(cover, ScaleY, 1, outgoingStep.Scale, ms);
+                Animate(cover, MoveX, 0, outgoingStep.X, ms);
+                Animate(cover, MoveY, 0, outgoingStep.Y, ms);
+            }
             switch (kind)
             {
                 case LayoutTransition.ZoomThrough:
@@ -1129,6 +1269,7 @@ namespace ModernImageViewer
                 case LayoutTransition.ThroughDark:
                     dark = new Border { Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x0A, 0x0A, 0x0A)), IsHitTestVisible = false };
                     AddOverCanvas(dark, 5990);
+                    ContinueOutgoing(400);
                     Animate(cover, "Opacity", 1, 0, 400);
                     Animate(dark, "Opacity", 1, 0, 550, after: 450);
                     break;
@@ -1138,6 +1279,7 @@ namespace ModernImageViewer
                     else Animate(cover, MoveX, 0, way == 0 ? -RootGrid.ActualWidth : RootGrid.ActualWidth, 850, ease: smooth);
                     break;
                 default:
+                    ContinueOutgoing(700);
                     Animate(cover, "Opacity", 1, 0, 700);
                     break;
             }
@@ -1165,6 +1307,7 @@ namespace ModernImageViewer
         /// <summary>A different session has different pictures to draw from.</summary>
         private void ForgetSurprise()
         {
+            CancelPreparedSurprise();
             StopAutoPlay();
             StopAutoPlayMusic();
             ResetCanvasCamera();

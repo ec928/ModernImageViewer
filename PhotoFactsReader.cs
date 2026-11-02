@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
@@ -18,12 +19,16 @@ namespace ModernImageViewer
         private const uint FaceEdge = 1280;
         private const int GridCells = 10;
         private const int CellPixels = 16;
+        private static readonly ConcurrentDictionary<string, PhotoFacts> Cache = new(StringComparer.OrdinalIgnoreCase);
+
+        public static bool TryGetCached(string path, out PhotoFacts? facts) => Cache.TryGetValue(path, out facts);
 
         public static async Task<FaceDetector?> CreateDetectorAsync() =>
             FaceDetector.IsSupported ? await FaceDetector.CreateAsync() : null;
 
         public static async Task<PhotoFacts?> ReadAsync(string path, FaceDetector? detector, CancellationToken token = default)
         {
+            if (Cache.TryGetValue(path, out var cached)) return cached;
             try
             {
                 var file = await StorageFile.GetFileFromPathAsync(path).AsTask(token);
@@ -64,7 +69,9 @@ namespace ModernImageViewer
                 tiny.CopyToBuffer(pixels.AsBuffer());
                 var (focusX, focusY) = FindFocus(pixels, side);
                 bool camera = await HasCameraAsync(decoder).ConfigureAwait(true);
-                return new PhotoFacts(path, width, height, faces, focusX, focusY, MainColor(pixels), LookOf(pixels, side), LayoutComposer.LooksLikeScreen(path, camera, width, height, faces, FlatShare(pixels, side)), sharpness, Brightness(pixels));
+                var facts = new PhotoFacts(path, width, height, faces, focusX, focusY, MainColor(pixels), LookOf(pixels, side), LayoutComposer.LooksLikeScreen(path, camera, width, height, faces, FlatShare(pixels, side)), sharpness, Brightness(pixels));
+                Cache[path] = facts;
+                return facts;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

@@ -72,6 +72,24 @@ namespace ModernImageViewer
             CompositionTarget.Rendering += CameraFrame;
         }
 
+        /// <summary>Where the cover of the outgoing layout would have moved over the fade, kept inside the screen so no edge shows.</summary>
+        private (double Scale, double X, double Y) OutgoingCameraStep(double fadeSeconds)
+        {
+            if (!_cameraRunning || _cameraGoingHome || _cameraMove == null) return (1, 0, 0);
+            double width = RootGrid.ActualWidth, height = RootGrid.ActualHeight;
+            if (width < 1 || height < 1) return (1, 0, 0);
+            double now = _cameraClock.Elapsed.TotalSeconds;
+            var v0 = _cameraMove.At(now);
+            var v1 = _cameraMove.At(now + fadeSeconds);
+            double rawX = (v0.X - v1.X) * width * v1.Zoom;
+            double rawY = (v0.Y - v1.Y) * height * v1.Zoom;
+            double minScale = 1 + 2 * Math.Max(Math.Abs(rawX) / width, Math.Abs(rawY) / height);
+            double scale = Math.Clamp(Math.Max(v1.Zoom / Math.Max(1, v0.Zoom), minScale), 1, 1.08);
+            double maxX = (scale - 1) * width / 2;
+            double maxY = (scale - 1) * height / 2;
+            return (scale, Math.Clamp(rawX, -maxX, maxX), Math.Clamp(rawY, -maxY, maxY));
+        }
+
         private void ResetCanvasCamera()
         {
             _cameraMove = null;

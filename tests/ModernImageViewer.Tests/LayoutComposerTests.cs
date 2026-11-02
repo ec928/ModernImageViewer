@@ -606,5 +606,27 @@ namespace ModernImageViewer.Tests
             }
             Assert.True(clean > 0, "no version was clean, so nothing was checked");
         }
+
+        [Fact]
+        public void Camera_subjects_project_face_coordinates_and_burst_filter_keeps_sharpest()
+        {
+            var photo = new PhotoFacts(@"C:\p\face.jpg", 1000, 1000, new List<UnitRect> { new(0.75, 0.15, 0.1, 0.1) });
+            var cell = new ComposedCell(photo, 100, 50, 400, 400, FrameLooks.Flush(), new CellGeometryDto(), Floating: false);
+            var pos = LayoutComposer.SubjectOnCanvas(cell, 1000, 1000);
+            Assert.Equal((100 + 0.8 * 400) / 1000.0, pos.X, 3);
+            Assert.Equal((50 + 0.2 * 400) / 1000.0, pos.Y, 3);
+
+            var soft = Photo(0) with { Look = 0xF0F0, Sharpness = 80 };
+            var sharp = Photo(1) with { Look = 0xF0F1, Sharpness = 950 };
+            var other = Photo(2) with { Look = 0x00FF00FF, Sharpness = 400 };
+            var kept = LayoutComposer.LeaveOutScreensAndRepeats(new List<PhotoFacts> { soft, sharp, other });
+            Assert.Equal(new[] { @"C:\p\1.jpg", @"C:\p\2.jpg" }, kept.Select(p => p.Path));
+
+            var deck = new PictureDeck(new[] { "a", "b", "c", "d" }, new Random(4));
+            deck.Deal(2);
+            var clone = deck.Clone();
+            clone.Deal(2);
+            Assert.Equal(2, deck.Deal(2).Count);
+        }
     }
 }

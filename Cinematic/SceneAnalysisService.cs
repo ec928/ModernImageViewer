@@ -1,4 +1,4 @@
-﻿using ModernImageViewer.Cinematic;
+using ModernImageViewer.Cinematic;
 using System;
 using System.Linq;
 using System.Numerics;
@@ -53,6 +53,33 @@ namespace ModernImageViewer.Cinematic.Services
                 intel.ImageSize = new Size(softwareBitmap.PixelWidth * dipRatioX, softwareBitmap.PixelHeight * dipRatioY);
 
                 bool targetFound = false;
+
+                if (useFaceAware && PhotoFactsReader.TryGetCached(filePath, out var cachedFacts) && cachedFacts != null)
+                {
+                    foreach (var face in cachedFacts.Faces)
+                    {
+                        intel.Faces.Add(new Rect(
+                            face.X * intel.ImageSize.Width,
+                            face.Y * intel.ImageSize.Height,
+                            face.W * intel.ImageSize.Width,
+                            face.H * intel.ImageSize.Height));
+                    }
+                    if (intel.Faces.Any())
+                    {
+                        var bestFace = intel.Faces.OrderByDescending(f => f.Width * f.Height).First();
+                        float cx = (float)(bestFace.X + (bestFace.Width / 2f));
+                        float cy = (float)(bestFace.Y + (bestFace.Height / 2f));
+                        float headroom = (float)(bestFace.Height * 0.30f);
+                        intel.SaliencyTarget = new Vector2(cx, cy - headroom);
+                    }
+                    else
+                    {
+                        intel.SaliencyTarget = new Vector2(
+                            (float)(intel.ImageSize.Width * cachedFacts.FocusX),
+                            (float)(intel.ImageSize.Height * cachedFacts.FocusY));
+                    }
+                    return (softwareBitmap, intel);
+                }
 
                 if (faceDetector != null && useFaceAware)
                 {
