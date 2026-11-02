@@ -91,7 +91,7 @@ namespace ModernImageViewer
             RootGrid.AddHandler(PointerPressedEvent, new PointerEventHandler((_, e) =>
             {
                 if (_surpriseCard != null && !IsInSurpriseCard(e.OriginalSource)) RemoveSurpriseCard();
-                if (_trayCard != null && !IsInside(e.OriginalSource, _trayCard) && !IsInside(e.OriginalSource, ShownBadge)) RemoveTrayCard();
+                if (_trayCard != null && !IsInside(e.OriginalSource, _trayCard) && !IsInside(e.OriginalSource, DrawerControl)) RemoveTrayCard();
             }), true);
             RootGrid.AddHandler(KeyDownEvent, new KeyEventHandler((_, e) =>
             {
@@ -2018,6 +2018,7 @@ namespace ModernImageViewer
             _trayCard.Padding = new Thickness(14);
             AddOverCanvas(_trayCard, 6500);
             HudMenu_Opened(this, EventArgs.Empty);
+            ShowShownBadge();
             if (_trayTab == 0) search.Loaded += (_, _) => search.Focus(FocusState.Programmatic);
         }
 
