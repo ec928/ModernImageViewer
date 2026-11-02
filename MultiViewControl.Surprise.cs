@@ -1933,10 +1933,12 @@ namespace ModernImageViewer
                 ShowShownBadge();
             }
 
+            bool isSyncingStoryboard = false;
             void HookCollectionChanged()
             {
                 scenesCollection.CollectionChanged += (_, _) =>
                 {
+                    if (isSyncingStoryboard) return;
                     if (_activeShow != null)
                     {
                         _activeShow.Scenes = scenesCollection.ToList();
@@ -1959,10 +1961,26 @@ namespace ModernImageViewer
 
             void SyncStoryboardUI()
             {
-                scenesCollection = new System.Collections.ObjectModel.ObservableCollection<ShowScene>(_activeShow?.Scenes ?? Enumerable.Empty<ShowScene>());
-                HookCollectionChanged();
-                scenesView.ItemsSource = scenesCollection;
+                isSyncingStoryboard = true;
+                try
+                {
+                    var targetScenes = (_activeShow?.Scenes ?? Enumerable.Empty<ShowScene>()).ToList();
+                    scenesCollection.Clear();
+                    foreach (var sc in targetScenes)
+                    {
+                        scenesCollection.Add(sc);
+                    }
+                    if (_activeShow != null)
+                    {
+                        _activeShow.Scenes = scenesCollection.ToList();
+                    }
+                }
+                finally
+                {
+                    isSyncingStoryboard = false;
+                }
                 UpdateStoryboardSummary();
+                RefreshCardBadges();
             }
 
             scenesView.ContainerContentChanging += (_, args) =>
@@ -2098,25 +2116,40 @@ namespace ModernImageViewer
 
                 if (bottomGrid?.Children.Count > 1 && bottomGrid.Children[1] is Button dupBtn)
                 {
-                    dupBtn.Click += (s, e) =>
+                    dupBtn.Tag = scene;
+                    if (dupBtn.CommandParameter == null)
                     {
-                        var clone = scene.Clone();
-                        int idx = scenesCollection.IndexOf(scene);
-                        scenesCollection.Insert(idx + 1, clone);
-                        _activeShow!.Scenes = scenesCollection.ToList();
-                        SyncStoryboardUI();
-                        ShowAutoPlayToast("Duplicated scene");
-                    };
+                        dupBtn.CommandParameter = true;
+                        dupBtn.Click += (s, _) =>
+                        {
+                            if (s is Button b && b.Tag is ShowScene targetScene)
+                            {
+                                var clone = targetScene.Clone();
+                                int curIdx = scenesCollection.IndexOf(targetScene);
+                                if (curIdx >= 0)
+                                {
+                                    scenesCollection.Insert(curIdx + 1, clone);
+                                    ShowAutoPlayToast("Duplicated scene");
+                                }
+                            }
+                        };
+                    }
                 }
                 if (bottomGrid?.Children.Count > 2 && bottomGrid.Children[2] is Button delBtn)
                 {
-                    delBtn.Click += (s, e) =>
+                    delBtn.Tag = scene;
+                    if (delBtn.CommandParameter == null)
                     {
-                        scenesCollection.Remove(scene);
-                        _activeShow?.Scenes.Remove(scene);
-                        SyncStoryboardUI();
-                        ShowAutoPlayToast("Removed scene");
-                    };
+                        delBtn.CommandParameter = true;
+                        delBtn.Click += (s, _) =>
+                        {
+                            if (s is Button b && b.Tag is ShowScene targetScene)
+                            {
+                                scenesCollection.Remove(targetScene);
+                                ShowAutoPlayToast("Removed scene");
+                            }
+                        };
+                    }
                 }
 
                 // Scene Context Menu
@@ -2152,8 +2185,7 @@ namespace ModernImageViewer
                 menu.Items.Add(MakeAdvancedItem("Remove Scene", "\uE74D", () =>
                 {
                     scenesCollection.Remove(scene);
-                    _activeShow?.Scenes.Remove(scene);
-                    SyncStoryboardUI();
+                    ShowAutoPlayToast("Removed scene");
                 }));
                 int idx = scenesCollection.IndexOf(scene);
                 if (idx > 0)
@@ -2164,9 +2196,6 @@ namespace ModernImageViewer
                         if (cur > 0)
                         {
                             scenesCollection.Move(cur, cur - 1);
-                            _activeShow!.Scenes = scenesCollection.ToList();
-                            UpdateStoryboardSummary();
-                            RefreshCardBadges();
                         }
                     }));
                 }
@@ -2178,9 +2207,6 @@ namespace ModernImageViewer
                         if (cur >= 0 && cur < scenesCollection.Count - 1)
                         {
                             scenesCollection.Move(cur, cur + 1);
-                            _activeShow!.Scenes = scenesCollection.ToList();
-                            UpdateStoryboardSummary();
-                            RefreshCardBadges();
                         }
                     }));
                 }
@@ -2237,12 +2263,12 @@ namespace ModernImageViewer
                     if (_activeShow == null)
                     {
                         _activeShow = appendedShow;
+                        SyncStoryboardUI();
                     }
                     else
                     {
                         foreach (var sc in appendedShow.Scenes)
                         {
-                            _activeShow.Scenes.Add(sc);
                             scenesCollection.Add(sc);
                         }
                     }
@@ -2253,7 +2279,7 @@ namespace ModernImageViewer
                     appendNewBtn.IsEnabled = true;
                     autoDraftBtn.IsEnabled = true;
                     emptyDraftBtn.IsEnabled = true;
-                    SyncStoryboardUI();
+                    UpdateStoryboardSummary();
                 }
             }
 
@@ -2301,23 +2327,37 @@ namespace ModernImageViewer
                 var pictures = SessionPictures();
                 if (pictures.Count == 0) return;
                 var file = BuildLayoutFile();
-                int onShow = ImagesOnCanvas();
-                string title = onShow == 1 ? "Custom Solo" : $"Custom Layout ({onShow})";
+                int onShow = ShownSlots;
+                var sceneFile = new MultiViewLayoutFile
+                {
+                    Created = file.Created,
+                    Canvas = file.Canvas,
+                    State = file.State,
+                    Mosaic = file.Mosaic,
+                    Photos = file.Photos.Where(p => p.Slot < onShow && !string.IsNullOrEmpty(p.Path)).ToList(),
+                    Freeform = file.Freeform != null ? new List<FreeformCellDto>(file.Freeform) : null
+                };
+                int photoCount = sceneFile.Photos.Count + (sceneFile.Freeform?.Count ?? 0);
+                if (photoCount == 0)
+                {
+                    ShowAutoPlayToast("Place at least one photo on the canvas to capture a scene");
+                    return;
+                }
+                string recipe = photoCount == 1 ? "Solo" : "Custom";
+                string title = photoCount == 1 ? "Custom Solo" : $"Custom Layout ({photoCount})";
                 var scene = new ShowScene
                 {
                     Id = Guid.NewGuid().ToString(),
                     Title = title,
-                    Recipe = "Custom",
-                    Layout = file,
+                    Recipe = recipe,
+                    Layout = sceneFile,
                     DwellSeconds = SurpriseChoices.PlaySeconds,
                     Transition = "Crossfade"
                 };
 
                 _activeShow ??= new ShowProject { Title = "Custom Presentation" };
-                _activeShow.Scenes.Add(scene);
-                SyncStoryboardUI();
-                RefreshCardBadges();
-                ShowAutoPlayToast($"Captured canvas as scene #{_activeShow.Scenes.Count}");
+                scenesCollection.Add(scene);
+                ShowAutoPlayToast($"Captured canvas as scene #{scenesCollection.Count}");
             }
 
             addCanvasBtn.Click += (_, _) => CaptureCurrentCanvasAsScene();
@@ -2331,7 +2371,7 @@ namespace ModernImageViewer
                 if (_activeShow != null)
                 {
                     _activeShow.Scenes.Clear();
-                    SyncStoryboardUI();
+                    scenesCollection.Clear();
                 }
             };
 
