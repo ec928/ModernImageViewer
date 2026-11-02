@@ -277,28 +277,48 @@
                             <TextBlock Text="Add images" VerticalAlignment="Center" FontSize="13" />
                         </StackPanel>
                     </Button>
-                    <Button x:Name="ShownBadge"
-                            Click="ShownBadge_Click"
-                            Visibility="Collapsed"
-                            Style="{StaticResource QuietButtonStyle}"
-                            Padding="8,5"
-                            CornerRadius="12"
-                            VerticalAlignment="Center"
-                            ToolTipService.ToolTip="Open the Image Tray with unplaced session images.">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8B9;" FontSize="13" />
-                            <TextBlock x:Name="ShownText"
-                                       VerticalAlignment="Center"
-                                       FontSize="13"
-                                       Typography.NumeralAlignment="Tabular"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        </StackPanel>
-                    </Button>
 
                     <!-- Subtle Section Divider 1 -->
                     <Rectangle Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,0" Opacity="0.5"/>
 
-                    <!-- Group 2: Layout & Composition -->
+                    <!-- Group 2: Drawer Views (Image Tray & Storyboard) -->
+                    <Border x:Name="DrawerControl" CornerRadius="12" Background="#14FFFFFF" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal">
+                            <Button x:Name="ShownBadge"
+                                    Click="ShownBadge_Click"
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    Padding="8,5"
+                                    CornerRadius="12"
+                                    VerticalAlignment="Center"
+                                    ToolTipService.ToolTip="Open the Image Tray with unplaced session images.">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8B9;" FontSize="13" />
+                                    <TextBlock x:Name="ShownText"
+                                               Text="Image Tray"
+                                               VerticalAlignment="Center"
+                                               FontSize="13"
+                                               Typography.NumeralAlignment="Tabular" />
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="StoryboardButton"
+                                    Click="StoryboardButton_Click"
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    Padding="8,5"
+                                    CornerRadius="12"
+                                    VerticalAlignment="Center"
+                                    ToolTipService.ToolTip="Open the Storyboard to auto-draft, sequence, and edit presentation scenes (B).">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon x:Name="StoryboardIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE8B7;" FontSize="14" />
+                                    <TextBlock x:Name="StoryboardText" Text="Storyboard" VerticalAlignment="Center" FontSize="13" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Subtle Section Divider (visible only when CountsSwitch is shown) -->
+                    <Rectangle x:Name="CountsDivider" Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,0" Opacity="0.5"/>
+
+                    <!-- Group 3: Layout & Composition -->
                     <Border x:Name="CountsSwitch" CornerRadius="12" Background="#14FFFFFF" VerticalAlignment="Center">
                         <StackPanel Orientation="Horizontal">
                             <Button x:Name="RowsSide"
@@ -328,20 +348,6 @@
 
                     <!-- Subtle Section Divider 2 -->
                     <Rectangle Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,0" Opacity="0.5"/>
-
-                    <!-- Storyboard Button: Always accessible to setup or play presentations without starting Surprise Me -->
-                    <Button x:Name="StoryboardButton"
-                            Click="StoryboardButton_Click"
-                            Style="{StaticResource QuietButtonStyle}"
-                            Padding="8,5"
-                            CornerRadius="12"
-                            VerticalAlignment="Center"
-                            ToolTipService.ToolTip="Open the Storyboard to auto-draft, sequence, and edit presentation scenes (B).">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon x:Name="StoryboardIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE8B7;" FontSize="14" />
-                            <TextBlock x:Name="StoryboardText" Text="Storyboard" VerticalAlignment="Center" FontSize="13" />
-                        </StackPanel>
-                    </Button>
 
                     <Border x:Name="SurpriseControl" CornerRadius="12" Background="#14FFFFFF" VerticalAlignment="Center">
                         <StackPanel Orientation="Horizontal">

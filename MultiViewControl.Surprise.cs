@@ -1991,6 +1991,7 @@ namespace ModernImageViewer
 
                 poolContainer.Visibility = _trayTab == 0 ? Visibility.Visible : Visibility.Collapsed;
                 storyContainer.Visibility = _trayTab == 1 ? Visibility.Visible : Visibility.Collapsed;
+                ShowShownBadge();
             }
 
             poolTab.Click += (_, _) => { _trayTab = 0; SyncTabs(); search.Focus(FocusState.Programmatic); };
@@ -2205,6 +2206,7 @@ namespace ModernImageViewer
             if (_trayCard == null) return;
             RootGrid.Children.Remove(_trayCard);
             _trayCard = null;
+            ShowShownBadge();
             HudMenu_Closed(this, EventArgs.Empty);
             // The search box had the keyboard, so the keys would go nowhere otherwise.
             FocusView();

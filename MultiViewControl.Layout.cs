@@ -205,16 +205,33 @@ namespace ModernImageViewer
             }
         }
 
-        /// <summary>Says how many images are in the tray when any are unplaced, and keeps the Storyboard button up-to-date.</summary>
+        /// <summary>Updates the Image Tray and Storyboard buttons in the playbar drawer pill.</summary>
         private void ShowShownBadge()
         {
             int tray = TrayImages().Count;
             int scenes = _activeShow?.VisibleSceneCount ?? 0;
-            ShownBadge.Visibility = tray > 0 ? Visibility.Visible : Visibility.Collapsed;
-            ShownText.Text = $"{tray} in tray";
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(ShownBadge, $"{tray} images in tray");
-            ToolTipService.SetToolTip(ShownBadge, $"Open the Image Tray ({tray} unplaced images). Click one to put it on canvas or remove from session.");
+            bool isTrayOpen = _trayCard != null && _trayTab == 0;
+            bool isStoryOpen = _trayCard != null && _trayTab == 1;
 
+            if (ShownBadge != null)
+            {
+                ShownBadge.Visibility = Visibility.Visible;
+                ShownBadge.Background = isTrayOpen ? new SolidColorBrush(Windows.UI.Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF)) : null;
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(ShownBadge, tray > 0 ? $"Image Tray ({tray})" : "Image Tray");
+                ToolTipService.SetToolTip(ShownBadge, tray > 0
+                    ? $"Open Image Tray ({tray} unplaced images). Click one to put it on canvas or remove from session."
+                    : "Open Image Tray to view session images or manage unplaced photos.");
+            }
+            if (ShownText != null)
+            {
+                ShownText.Text = tray > 0 ? $"Image Tray ({tray})" : "Image Tray";
+            }
+
+            if (StoryboardButton != null)
+            {
+                StoryboardButton.Visibility = Visibility.Visible;
+                StoryboardButton.Background = isStoryOpen ? new SolidColorBrush(Windows.UI.Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF)) : null;
+            }
             if (StoryboardText != null)
             {
                 StoryboardText.Text = scenes > 0 ? $"Storyboard ({scenes})" : "Storyboard";
@@ -328,9 +345,9 @@ namespace ModernImageViewer
             if (!show)
             {
                 CloseCountsCard();
-                // Surprise me keeps the bar its width, so the button stays under the pointer for the next click.
-                CountsSwitch.Visibility = _surpriseBusy ? Visibility.Visible : Visibility.Collapsed;
-                CountsSwitch.Opacity = 0;
+                CountsSwitch.Visibility = Visibility.Collapsed;
+                CountsSwitch.Opacity = 1;
+                if (CountsDivider != null) CountsDivider.Visibility = Visibility.Collapsed;
                 RowsSide.IsEnabled = false;
                 ColumnsSide.IsEnabled = false;
                 return;
@@ -339,6 +356,7 @@ namespace ModernImageViewer
             int lines = EffectiveLines();
             CountsSwitch.Visibility = Visibility.Visible;
             CountsSwitch.Opacity = 1;
+            if (CountsDivider != null) CountsDivider.Visibility = Visibility.Visible;
             RowsSideText.Text = _flipped ? "Rows" : lines + (lines == 1 ? " Row" : " Rows");
             ColumnsSideText.Text = _flipped ? lines + (lines == 1 ? " Column" : " Columns") : "Columns";
             ShowCountsSides();
