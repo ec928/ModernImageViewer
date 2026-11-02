@@ -337,25 +337,16 @@ namespace ModernImageViewer
             ToolTipService.SetToolTip(mostBox, "Maximum images per scene (1 to 16)");
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(mostBox, "Maximum images per scene");
 
-            var imagesSuffix = new TextBlock
-            {
-                Text = "images per scene",
-                FontSize = 13,
-                Opacity = 0.85,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(4, 0, 0, 0)
-            };
-
             var imageControlsPanel = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
                 Spacing = 8,
+                HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Center
             };
             imageControlsPanel.Children.Add(fewestBox);
             imageControlsPanel.Children.Add(toLabel);
             imageControlsPanel.Children.Add(mostBox);
-            imageControlsPanel.Children.Add(imagesSuffix);
 
             void SetImageRange(int f, int m)
             {
@@ -394,13 +385,13 @@ namespace ModernImageViewer
                 SetImageRange(f, m);
             };
 
-            var imagesRow = new Grid { MinHeight = 36, Margin = new Thickness(0, 2, 0, 2) };
-            imagesRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
-            imagesRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var imagesRow = new Grid { ColumnSpacing = 12, MinHeight = 36, Margin = new Thickness(0, 2, 0, 2) };
+            imagesRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            imagesRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
 
             var imagesLabel = new TextBlock
             {
-                Text = "Images",
+                Text = "Images per scene:",
                 VerticalAlignment = VerticalAlignment.Center,
                 FontSize = 13,
                 Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White)
@@ -1425,7 +1416,6 @@ namespace ModernImageViewer
             string click = intoSlot == NoCell ? "Click one to put it on the canvas."
                 : $"Click one to {(IsEmptyCell(_items[intoSlot]) ? "add it to" : "swap it into")} position {PositionOfSlot(intoSlot)}.";
             var heading = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-            var poolSubtitle = new TextBlock { FontSize = 12, Opacity = 0.7 };
 
             var search = new TextBox { PlaceholderText = "Search names", MinWidth = 180 };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(search, "Search the image pool");
@@ -1455,7 +1445,6 @@ namespace ModernImageViewer
 
             var hintStack = new StackPanel { Spacing = 2 };
             var hint = new TextBlock { Text = "Right-click an image to remove it from the session.", FontSize = 12, Opacity = 0.7 };
-            hintStack.Children.Add(poolSubtitle);
             hintStack.Children.Add(hint);
 
             var emptyTrayPanel = new StackPanel
@@ -1522,12 +1511,10 @@ namespace ModernImageViewer
                 bool hasTray = all.Count > 0;
 
                 heading.Text = current.Count == all.Count
-                    ? (all.Count == 0 ? $"Image pool: {sessionCount} total photos ({onCanvas} on canvas, 0 unplaced)"
-                                      : $"Image pool: {all.Count} unplaced {(all.Count == 1 ? "photo" : "photos")} ({sessionCount} total in session). {click}")
-                    : current.Count == 0 ? "No image in the pool matches that name."
-                    : $"Image pool: {current.Count} of {all.Count} unplaced photos. {click}";
-
-                poolSubtitle.Text = $"Session pool: {sessionCount} total photos ({onCanvas} on canvas, {all.Count} unplaced in tray)";
+                    ? (all.Count == 0 ? (sessionCount == 0 ? "" : $"{onCanvas} on the canvas.")
+                                      : $"{all.Count} unplaced. {click}")
+                    : current.Count == 0 ? "No image matches that name."
+                    : $"{current.Count} of {all.Count} unplaced. {click}";
 
                 poolControlsRight.Visibility = hasTray ? Visibility.Visible : Visibility.Collapsed;
                 hintStack.Visibility = hasTray ? Visibility.Visible : Visibility.Collapsed;
@@ -1770,8 +1757,6 @@ namespace ModernImageViewer
             {
                 int f = SurpriseChoices.FewestPictures;
                 int m = SurpriseChoices.MostPictures;
-                int totalPhotos = SessionPictures().Count;
-                string activeName = f == 1 && m == 1 ? "Solo 1" : (f == m ? $"{f} photos" : $"{f}–{m} photos");
 
                 if (!syncingStoryRange)
                 {
@@ -1785,18 +1770,6 @@ namespace ModernImageViewer
                     {
                         syncingStoryRange = false;
                     }
-                }
-
-
-
-                if (_activeShow != null && _activeShow.Scenes.Count > 0)
-                {
-                    autoDraftBtn.Content = $"✨ Re-Draft ({totalPhotos} · {activeName})";
-                }
-                else
-                {
-                    autoDraftBtn.Content = $"✨ Auto-Draft Show ({totalPhotos} · {activeName})";
-                    if (emptyDraftBtn != null) emptyDraftBtn.Content = $"✨ Auto-Draft Show ({totalPhotos} · {activeName})";
                 }
             }
 
@@ -1978,7 +1951,7 @@ namespace ModernImageViewer
                     double dur = _activeShow!.TotalEstimatedDuration;
                     if (unshown.Count > 0)
                     {
-                        storySummary.Text = $"Storyboard: {sceneCount} scenes · ~{dur:F0}s · {unshown.Count} new session photo{(unshown.Count == 1 ? "" : "s")} available";
+                        storySummary.Text = $"{sceneCount} scenes · ~{dur:F0}s · {unshown.Count} new photo{(unshown.Count == 1 ? "" : "s")}";
                         appendNewBtn.Visibility = Visibility.Visible;
                         appendNewBtn.Content = $"+ Append {unshown.Count} New Photos";
                         ToolTipService.SetToolTip(appendNewBtn, $"Drafts scenes for the {unshown.Count} new session photos and appends them to this show.");
@@ -1986,16 +1959,17 @@ namespace ModernImageViewer
                     }
                     else
                     {
-                        storySummary.Text = $"Storyboard: {sceneCount} scenes · ~{dur:F0}s · Session pool: {totalPhotos} photos";
+                        storySummary.Text = $"{sceneCount} scenes · ~{dur:F0}s · {totalPhotos} in this session";
                         appendNewBtn.Visibility = Visibility.Collapsed;
                         autoDraftBtn.Content = $"✨ Re-Draft Show ({totalPhotos})";
                     }
                 }
                 else
                 {
-                    storySummary.Text = $"Storyboard: no scenes yet · Session pool: {totalPhotos} photos";
+                    storySummary.Text = $"No scenes yet · {totalPhotos} in this session";
                     appendNewBtn.Visibility = Visibility.Collapsed;
-                    autoDraftBtn.Content = $"✨ Auto-Draft Show ({totalPhotos} photos)";
+                    autoDraftBtn.Content = $"✨ Auto-Draft Show ({totalPhotos})";
+                    if (emptyDraftBtn != null) emptyDraftBtn.Content = $"✨ Auto-Draft Show ({totalPhotos})";
                 }
 
                 SyncStoryImageRange();
