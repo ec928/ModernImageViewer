@@ -2726,16 +2726,13 @@ namespace ModernImageViewer
                             }
 
                             string motion = GetMotionLabel(curScene);
-                            bool isAuto = curScene.CameraOverride == null;
-                            var autoItem = new MenuFlyoutItem { Text = isAuto ? "✨ Auto (Smart Motion)  ✓" : "✨ Auto (Smart Motion)" };
-                            autoItem.Click += (_, _) => SetCamera(() => curScene.CameraOverride = null);
-                            flyout.Items.Add(autoItem);
-
                             bool isZoomIn = motion.Contains("Zoom In");
                             bool isZoomOut = motion.Contains("Zoom Out");
                             bool isPan = motion.Contains("Pan");
                             bool isStill = motion.Contains("Still");
+                            bool isAuto = curScene.CameraOverride == null;
 
+                            // 1. Concrete Camera Motions
                             var zoomInItem = new MenuFlyoutItem { Text = isZoomIn ? "⤢ Zoom In  ✓" : "⤢ Zoom In" };
                             zoomInItem.Click += (_, _) => SetCamera(() => curScene.CameraOverride = new CameraKeyframeOverride(new CameraViewDto(1.0, 0.5, 0.5), new CameraViewDto(1.25, 0.5, 0.5), "ZoomIn"));
                             flyout.Items.Add(zoomInItem);
@@ -2753,7 +2750,17 @@ namespace ModernImageViewer
                             flyout.Items.Add(stillItem);
 
                             flyout.Items.Add(new MenuFlyoutSeparator());
-                            var editCamItem = MakeAdvancedItem("🎯 Edit Camera Path…", "", () => EnterCameraDirector(curScene));
+
+                            // 2. Dynamic Runtime Mode (clearly separated from fixed motions)
+                            var autoItem = new MenuFlyoutItem { Text = isAuto ? "✨ Dynamic (Auto at Playback)  ✓" : "✨ Dynamic (Auto at Playback)" };
+                            ToolTipService.SetToolTip(autoItem, "Removes locked keyframes so motion is chosen dynamically on each playback loop");
+                            autoItem.Click += (_, _) => SetCamera(() => curScene.CameraOverride = null);
+                            flyout.Items.Add(autoItem);
+
+                            flyout.Items.Add(new MenuFlyoutSeparator());
+
+                            // 3. Visual Director Tooling
+                            var editCamItem = MakeAdvancedItem("🎯 Edit Camera Path…", "\uE714", () => EnterCameraDirector(curScene));
                             flyout.Items.Add(editCamItem);
 
                             flyout.Items.Add(new MenuFlyoutSeparator());
@@ -2871,13 +2878,9 @@ namespace ModernImageViewer
                             int idx = scenesCollection.IndexOf(sc);
                             await PlayStoryboardAsync(idx >= 0 ? idx : -1);
                         }));
-                        menu.Items.Add(MakeAdvancedItem("Apply to Canvas (Preview)", "", () =>
+                        menu.Items.Add(MakeAdvancedItem("Open Scene on Canvas", "\uE8B9", () =>
                         {
                             RemoveTrayCard();
-                            if (sc.Layout != null) ApplyLayoutFile(WithRestInTray(sc.Layout, SessionPictures()), restoreAspect: false);
-                        }));
-                        menu.Items.Add(MakeAdvancedItem("Preview on Canvas", "", () =>
-                        {
                             if (sc.Layout != null) ApplyLayoutFile(WithRestInTray(sc.Layout, SessionPictures()), restoreAspect: false);
                         }));
 
@@ -2893,17 +2896,14 @@ namespace ModernImageViewer
                             RefreshTrayCardIfOpen();
                         }
 
-                        bool isAutoSub = sc.CameraOverride == null;
-                        var autoSubItem = new MenuFlyoutItem { Text = isAutoSub ? "✨ Auto (Smart Motion)  ✓" : "✨ Auto (Smart Motion)" };
-                        autoSubItem.Click += (_, _) => SetCameraSub(() => sc.CameraOverride = null);
-                        motionSub.Items.Add(autoSubItem);
-
                         string motionSubStr = GetMotionLabel(sc);
                         bool isZIn = motionSubStr.Contains("Zoom In");
                         bool isZOut = motionSubStr.Contains("Zoom Out");
                         bool isP = motionSubStr.Contains("Pan");
                         bool isSt = motionSubStr.Contains("Still");
+                        bool isAutoSub = sc.CameraOverride == null;
 
+                        // 1. Concrete Camera Motions
                         var zInItem = new MenuFlyoutItem { Text = isZIn ? "⤢ Zoom In  ✓" : "⤢ Zoom In" };
                         zInItem.Click += (_, _) => SetCameraSub(() => sc.CameraOverride = new CameraKeyframeOverride(new CameraViewDto(1.0, 0.5, 0.5), new CameraViewDto(1.25, 0.5, 0.5), "ZoomIn"));
                         motionSub.Items.Add(zInItem);
@@ -2921,7 +2921,17 @@ namespace ModernImageViewer
                         motionSub.Items.Add(stItem);
 
                         motionSub.Items.Add(new MenuFlyoutSeparator());
-                        motionSub.Items.Add(MakeAdvancedItem("🎯 Edit Camera Path…", "", () => EnterCameraDirector(sc)));
+
+                        // 2. Dynamic Runtime Mode (clearly separated from fixed motions)
+                        var autoSubItem = new MenuFlyoutItem { Text = isAutoSub ? "✨ Dynamic (Auto at Playback)  ✓" : "✨ Dynamic (Auto at Playback)" };
+                        ToolTipService.SetToolTip(autoSubItem, "Removes locked keyframes so motion is chosen dynamically on each playback loop");
+                        autoSubItem.Click += (_, _) => SetCameraSub(() => sc.CameraOverride = null);
+                        motionSub.Items.Add(autoSubItem);
+
+                        motionSub.Items.Add(new MenuFlyoutSeparator());
+
+                        // 3. Visual Director Tooling
+                        motionSub.Items.Add(MakeAdvancedItem("🎯 Edit Camera Path…", "\uE714", () => EnterCameraDirector(sc)));
                         menu.Items.Add(motionSub);
 
                         // Quick Dwell Time Adjustment Submenu

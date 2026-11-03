@@ -612,7 +612,7 @@ namespace ModernImageViewer
 
         public static string GetMotionLabel(ShowScene scene)
         {
-            if (scene.CameraOverride == null) return "✨ Auto";
+            if (scene.CameraOverride == null) return "✨ Dynamic";
 
             if (!string.IsNullOrEmpty(scene.CameraOverride.Kind))
             {
@@ -622,7 +622,7 @@ namespace ModernImageViewer
                     "zoomout" => "⤡ Zoom Out",
                     "pan" or "drift" => "⇄ Pan",
                     "still" => "• Still",
-                    _ => "✨ Auto"
+                    _ => "✨ Dynamic"
                 };
             }
 
