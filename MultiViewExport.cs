@@ -126,10 +126,10 @@ namespace ModernImageViewer
             };
             panel.Children.Add(copyItem);
 
-            // Layout Save & Load
+            // Projects & Layouts Save & Load
             var imageColumn = panel;
             panel = new StackPanel { Spacing = 1 };
-            panel.Children.Add(CreateSectionHeader("Layouts"));
+            panel.Children.Add(CreateSectionHeader("Projects & Layouts"));
 
             var saveLayoutItem = CreateMenuItemButton("Save Layout as\u2026", icon: new FontIcon { Glyph = "\uE74E", FontSize = 13, Foreground = _menuWhiteSecondary });
             saveLayoutItem.Click += async (_, _) =>
@@ -147,9 +147,10 @@ namespace ModernImageViewer
             };
             panel.Children.Add(openLayoutItem);
 
+            var storyIconBrush = new SolidColorBrush(Color.FromArgb(255, 76, 194, 255));
             if (_activeShow != null && _activeShow.Scenes.Count > 0)
             {
-                var saveStoryItem = CreateMenuItemButton("Save Storyboard as\u2026", icon: new FontIcon { Glyph = "\uE8B7", FontSize = 13, Foreground = _menuWhiteSecondary });
+                var saveStoryItem = CreateMenuItemButton("Save Storyboard as\u2026", icon: new FontIcon { Glyph = "\uE714", FontSize = 13, Foreground = storyIconBrush });
                 saveStoryItem.Click += async (_, _) =>
                 {
                     SaveFlyout.Hide();
@@ -157,7 +158,7 @@ namespace ModernImageViewer
                 };
                 panel.Children.Add(saveStoryItem);
             }
-            var openStoryItem = CreateMenuItemButton("Open Storyboard\u2026", icon: new FontIcon { Glyph = "\uE8B7", FontSize = 13, Foreground = _menuWhiteSecondary });
+            var openStoryItem = CreateMenuItemButton("Open Storyboard\u2026", icon: new FontIcon { Glyph = "\uE714", FontSize = 13, Foreground = storyIconBrush });
             openStoryItem.Click += async (_, _) =>
             {
                 SaveFlyout.Hide();
@@ -283,7 +284,15 @@ namespace ModernImageViewer
                 int photos = file.Photos.Count(p => !string.IsNullOrEmpty(p.Path) && !p.Hidden) + (file.Freeform?.Count ?? 0);
                 var saved = File.GetLastWriteTime(path);
                 string when = saved.Date == DateTime.Today ? saved.ToString("HH:mm:ss") : saved.ToString("d MMM HH:mm:ss");
-                var row = CreateMenuItemButton(when, photos == 1 ? "1 image" : photos + " images");
+                int storyScenes = file.Storyboard?.Scenes?.Count ?? 0;
+                string rightText = storyScenes > 0
+                    ? (photos > 0 ? $"{photos} images · 🎬 {storyScenes}" : $"🎬 {storyScenes} scenes")
+                    : (photos == 1 ? "1 image" : $"{photos} images");
+                var row = CreateMenuItemButton(when, rightText);
+                if (storyScenes > 0)
+                    ToolTipService.SetToolTip(row, $"Autosaved session ({when}):\n{photos} images, {storyScenes} storyboard scenes.\nClick to restore.");
+                else
+                    ToolTipService.SetToolTip(row, $"Autosaved layout ({when}):\n{photos} images.\nClick to restore.");
                 row.Click += (_, _) =>
                 {
                     SaveFlyout.Hide();
@@ -380,7 +389,12 @@ namespace ModernImageViewer
             try
             {
                 if (!Directory.Exists(path)) return new SaveFolderInfo(false, new List<string>());
-                return new SaveFolderInfo(true, Directory.GetFiles(path, "*.mivlayout").OrderByDescending(File.GetLastWriteTimeUtc).ToList());
+                var files = Directory.EnumerateFiles(path, "*.*")
+                    .Where(f => f.EndsWith(".mivlayout", StringComparison.OrdinalIgnoreCase) ||
+                                f.EndsWith(ShowProject.FileExtension, StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(File.GetLastWriteTimeUtc)
+                    .ToList();
+                return new SaveFolderInfo(true, files);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -453,16 +467,19 @@ namespace ModernImageViewer
 
         private Button CreateLayoutFileRow(string layoutPath)
         {
+            bool isShow = layoutPath.EndsWith(ShowProject.FileExtension, StringComparison.OrdinalIgnoreCase);
+
             var content = new Grid { ColumnSpacing = 8, Margin = new Thickness(24, 0, 4, 0) };
             content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             var icon = new FontIcon
             {
-                Glyph = "\uE8A5",
+                Glyph = isShow ? "\uE714" : "\uE8A5",
                 FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
                 FontSize = 12,
-                Foreground = _menuWhiteSecondary,
+                Foreground = isShow ? new SolidColorBrush(Color.FromArgb(255, 76, 194, 255)) : _menuWhiteSecondary,
                 VerticalAlignment = VerticalAlignment.Center
             };
             Grid.SetColumn(icon, 0);
@@ -480,6 +497,21 @@ namespace ModernImageViewer
             Grid.SetColumn(label, 1);
             content.Children.Add(label);
 
+            if (isShow)
+            {
+                var typeTag = new TextBlock
+                {
+                    Text = "Show",
+                    FontSize = 10,
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    Foreground = new SolidColorBrush(Color.FromArgb(200, 76, 194, 255)),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 0, 4, 0)
+                };
+                Grid.SetColumn(typeTag, 2);
+                content.Children.Add(typeTag);
+            }
+
             var btn = new Button
             {
                 Style = (Style)Application.Current.Resources["SubtleButtonStyle"],
@@ -492,11 +524,12 @@ namespace ModernImageViewer
                 Margin = new Thickness(0, 0, 0, 1)
             };
 
-            ToolTipService.SetToolTip(btn, $"Load layout:\n{layoutPath}");
+            ToolTipService.SetToolTip(btn, isShow ? $"Load Storyboard presentation:\n{layoutPath}" : $"Load layout:\n{layoutPath}");
             btn.Click += async (_, _) =>
             {
                 SaveFlyout.Hide();
-                await LoadLayoutFromPathAsync(layoutPath);
+                if (isShow) await LoadStoryboardFromPathAsync(layoutPath);
+                else await LoadLayoutFromPathAsync(layoutPath);
             };
 
             var contextMenu = new MenuFlyout
@@ -506,13 +539,14 @@ namespace ModernImageViewer
             contextMenu.Opened += (_, _) => EnforceDarkFlyoutPresenter();
             var loadItem = new MenuFlyoutItem
             {
-                Text = "Load Layout",
-                Icon = new FontIcon { Glyph = "\uE8E5", FontSize = 13 }
+                Text = isShow ? "Load Storyboard" : "Load Layout",
+                Icon = new FontIcon { Glyph = isShow ? "\uE714" : "\uE8E5", FontSize = 13 }
             };
             loadItem.Click += async (_, _) =>
             {
                 SaveFlyout.Hide();
-                await LoadLayoutFromPathAsync(layoutPath);
+                if (isShow) await LoadStoryboardFromPathAsync(layoutPath);
+                else await LoadLayoutFromPathAsync(layoutPath);
             };
             contextMenu.Items.Add(loadItem);
 
@@ -1578,9 +1612,62 @@ namespace ModernImageViewer
             StorageFile? file = await picker.PickSaveFileAsync();
             if (file == null) return;
 
-            string json = _activeShow.ToJson();
-            await FileIO.WriteTextAsync(file, json);
-            ShowAutoPlayToast($"Saved Storyboard: {_activeShow.Scenes.Count} scenes");
+            try
+            {
+                string json = _activeShow.ToJson();
+                await FileIO.WriteTextAsync(file, json);
+                string? savedDir = Path.GetDirectoryName(file.Path);
+                if (!string.IsNullOrEmpty(savedDir)) MainWindow.Instance?.AddMultiViewSaveLocation(savedDir);
+                ShowAutoPlayToast($"Saved Storyboard: {_activeShow.Scenes.Count} scenes");
+            }
+            catch (Exception ex)
+            {
+                await ShowExportMessageAsync($"Failed to save Storyboard: {ex.Message}");
+            }
+        }
+
+        public async Task LoadStoryboardFromPathAsync(string filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+            {
+                await ShowExportMessageAsync($"File not found:\n{filePath}");
+                return;
+            }
+
+            try
+            {
+                string json = await File.ReadAllTextAsync(filePath);
+                var show = ShowProject.FromJson(json);
+                if (show != null && show.Scenes.Count > 0)
+                {
+                    string? openedDir = Path.GetDirectoryName(filePath);
+                    if (!string.IsNullOrEmpty(openedDir)) MainWindow.Instance?.AddMultiViewSaveLocation(openedDir);
+
+                    _activeShow = show;
+                    _trayTab = 1;
+
+                    // Automatically project the first scene of the storyboard onto canvas
+                    var firstScene = show.Scenes[0];
+                    _selectedShowScene = firstScene;
+                    if (firstScene.Layout != null)
+                    {
+                        ApplyLayoutFile(WithRestInTray(firstScene.Layout, SessionPictures()), restoreAspect: false);
+                    }
+
+                    ShowShownBadge();
+                    ShowAutoPlayState();
+                    ShowTrayCard(NoCell);
+                    ShowAutoPlayToast($"Loaded Storyboard: {show.Scenes.Count} scenes");
+                }
+                else
+                {
+                    await ShowExportMessageAsync("Storyboard file contains no scenes.");
+                }
+            }
+            catch (Exception ex)
+            {
+                await ShowExportMessageAsync($"Failed to load Storyboard: {ex.Message}");
+            }
         }
 
         private async Task OpenStoryboardFileAsync()
@@ -1597,23 +1684,7 @@ namespace ModernImageViewer
             StorageFile? file = await picker.PickSingleFileAsync();
             if (file == null) return;
 
-            try
-            {
-                string json = await FileIO.ReadTextAsync(file);
-                var show = ShowProject.FromJson(json);
-                if (show != null && show.Scenes.Count > 0)
-                {
-                    _activeShow = show;
-                    ShowShownBadge();
-                    ShowAutoPlayState();
-                    ShowTrayCard(NoCell);
-                    ShowAutoPlayToast($"Loaded Storyboard: {show.Scenes.Count} scenes");
-                }
-            }
-            catch (Exception ex)
-            {
-                await ShowExportMessageAsync($"Failed to load Storyboard: {ex.Message}");
-            }
+            await LoadStoryboardFromPathAsync(file.Path);
         }
 
         private async Task WriteLayoutFileAsync(StorageFile file, MultiViewLayoutFile layoutFile)
