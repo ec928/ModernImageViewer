@@ -52,7 +52,7 @@ Photos that are not on the canvas.
 - Add photos. Same as adding from a folder. Photos fill the canvas up to 16. The rest stay off the canvas. On a full canvas, the first 4 go on top of it.
 - Thumbnails. The tooltip is the file name. Right-click: Remove from image pool.
 - Right-click a photo to remove it.
-- Empty, with photos already on the canvas: All photos are on the canvas. The text says to use Take off canvas, or to add more photos.
+- Empty, with photos already on the canvas: All photos are on the canvas. The text says to use Move to Image Pool, or to add more photos.
 - Empty, with no photos: No photos yet. Add photos from a folder to start.
 - A search with no match: No photo matches that name.
 
@@ -174,7 +174,7 @@ Right-click:
 | Feature in Auto-Mix | A cell with a photo | Auto-Mix keeps using this photo and gives it the best place. |
 | Freeform | A grid cell with a photo | Lifts the photo off the grid, on top of it. |
 | Dock to Grid | A floating cell, when the grid has room | Puts it back in the grid. |
-| Take off canvas | A cell with a photo | Keeps the photo in the pool, not on the canvas. |
+| Move to Image Pool | A cell with a photo | Keeps the photo in the pool, not on the canvas. |
 
 Swap with, Copy to, and Move to name positions, not file names. The side of the row under the pointer picks Contents only or With attributes. The target cell shows its position number while the row is pointed at.
 
