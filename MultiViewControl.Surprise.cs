@@ -1522,8 +1522,16 @@ namespace ModernImageViewer
         /// <summary>When set, Play keeps using Surprise me even if a storyboard exists. Otherwise a storyboard is what Play walks.</summary>
         private bool _shuffleChosen;
 
-        private bool PlayUsesStoryboard() =>
-            _isStoryboardPlayback || (!_shuffleChosen && _activeShow != null && _activeShow.Scenes.Count > 0);
+        private bool PlayUsesStoryboard()
+        {
+            bool hasScenes = _activeShow != null && _activeShow.Scenes.Count > 0;
+            if (!hasScenes) return false;
+
+            if (_isStoryboardPlayback) return true;
+            if (_trayCard != null && _trayTab == 1) return true;
+
+            return !_shuffleChosen;
+        }
 
         /// <summary>The drafted title is "Gallery wall (1)". The card shows the name. The pictures are the count.</summary>
         private static string SceneCardTitle(ShowScene scene)
@@ -1714,13 +1722,33 @@ namespace ModernImageViewer
 
         private void StoryDeckButton_Click(object sender, RoutedEventArgs e)
         {
+            bool hasScenes = _activeShow != null && _activeShow.Scenes.Count > 0;
+            if (hasScenes)
+            {
+                _shuffleChosen = false;
+                _isStoryboardPlayback = false;
+            }
+
             if (_trayCard != null)
             {
+                // If drawer is open on Image Pool, switch to Storyboard tab
+                if (hasScenes && _trayTab != 1)
+                {
+                    _trayTab = 1;
+                    RefreshTrayCardIfOpen();
+                    ShowAutoPlayState();
+                    return;
+                }
+
                 RemoveTrayCard();
+                ShowAutoPlayState();
                 return;
             }
+
             StopAutoPlay();
+            if (hasScenes) _trayTab = 1;
             ShowTrayCard(NoCell);
+            ShowAutoPlayState();
         }
 
         private const int NoCell = -1;
@@ -1744,6 +1772,11 @@ namespace ModernImageViewer
             RemoveSurpriseCard();
             RemoveTrayCard();
             if (intoSlot != NoCell) _trayTab = 0; // Forced to pool if swapping into a cell
+            else if ((_activeShow?.Scenes.Count ?? 0) > 0)
+            {
+                _trayTab = 1;
+                _shuffleChosen = false;
+            }
 
             var all = TrayImages().Select(t => t.Path).ToList();
             var current = new System.Collections.ObjectModel.ObservableCollection<string>(all);
@@ -2158,7 +2191,36 @@ namespace ModernImageViewer
 
             Border MakeDivider() => new Border { Width = 1, Height = 16, Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x35, 0xFF, 0xFF, 0xFF)), VerticalAlignment = VerticalAlignment.Center };
 
+            var playShowDrawerBtn = new Button
+            {
+                Content = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 6,
+                    Children =
+                    {
+                        new FontIcon { Glyph = "\uE768", FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe Fluent Icons"), FontSize = 12 },
+                        new TextBlock { Text = "Play Show", VerticalAlignment = VerticalAlignment.Center, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold }
+                    }
+                },
+                Background = winBlueDeep,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White),
+                BorderBrush = winBlue,
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(12),
+                Padding = new Thickness(14, 4, 14, 4),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            ToolTipService.SetToolTip(playShowDrawerBtn, "Play this Storyboard presentation. Space does the same.");
+            playShowDrawerBtn.Click += async (_, _) =>
+            {
+                _shuffleChosen = false;
+                await PlayStoryboardAsync();
+            };
+
             var storyHeaderRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
+            storyHeaderRow.Children.Add(playShowDrawerBtn);
+            storyHeaderRow.Children.Add(MakeDivider());
             storyHeaderRow.Children.Add(autoDraftBtn);
             storyHeaderRow.Children.Add(MakeDivider());
             storyHeaderRow.Children.Add(storyPresetLeft);
@@ -2449,6 +2511,7 @@ namespace ModernImageViewer
 
                 clearShowBtn.Visibility = (_trayTab == 1 && hasScenes) ? Visibility.Visible : Visibility.Collapsed;
                 clearShowBtn.IsEnabled = hasScenes;
+                playShowDrawerBtn.Visibility = hasScenes ? Visibility.Visible : Visibility.Collapsed;
 
                 ShowAsPrimary(autoDraftBtn, !hasScenes);
 
@@ -3277,7 +3340,16 @@ namespace ModernImageViewer
             }
 
             poolTab.Click += (_, _) => { _trayTab = 0; SyncTabs(); if (all.Count > 0) search.Focus(FocusState.Programmatic); };
-            storyTab.Click += (_, _) => { _trayTab = 1; SyncTabs(); };
+            storyTab.Click += (_, _) =>
+            {
+                _trayTab = 1;
+                if ((_activeShow?.Scenes.Count ?? 0) > 0)
+                {
+                    _shuffleChosen = false;
+                }
+                SyncTabs();
+                ShowAutoPlayState();
+            };
 
             SyncTabs();
 
@@ -3774,8 +3846,15 @@ namespace ModernImageViewer
                 bool isDrawerOpen = _trayCard != null;
                 if (isDrawerOpen)
                 {
-                    PaintSelected(StoryDeckButton, StoryDeckText, StoryDeckIcon, false);
-                    HoldFlyoutSource(StoryDeckButton, true);
+                    if (storyboardMode)
+                    {
+                        PaintSelected(StoryDeckButton, StoryDeckText, StoryDeckIcon, true);
+                    }
+                    else
+                    {
+                        PaintSelected(StoryDeckButton, StoryDeckText, StoryDeckIcon, false);
+                        HoldFlyoutSource(StoryDeckButton, true);
+                    }
                 }
                 else
                 {
@@ -4004,6 +4083,10 @@ namespace ModernImageViewer
         {
             _shuffleChosen = true;
             _isStoryboardPlayback = false;
+            if (_trayCard != null && _trayTab == 1)
+            {
+                RemoveTrayCard();
+            }
             ShowAutoPlayState();
             RefreshPlayModeCard();
             await SurpriseAsync(fade: _autoPlaySeconds > 0);
