@@ -307,8 +307,8 @@
 
                     <Rectangle Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,0" Opacity="0.5"/>
 
-                    <!-- How it plays: the two modes, then previous, Play, next. -->
-                    <Border x:Name="SurpriseControl" CornerRadius="12" Background="#14FFFFFF" VerticalAlignment="Center">
+                    <!-- Playback Mode Selection: Storyboard vs Auto-Mix -->
+                    <Border x:Name="PlayModeControl" CornerRadius="12" Background="#14FFFFFF" VerticalAlignment="Center">
                         <StackPanel Orientation="Horizontal">
                             <Button x:Name="StoryboardButton"
                                     Click="StoryboardButton_Click"
@@ -316,7 +316,7 @@
                                     Padding="8,5"
                                     CornerRadius="12"
                                     VerticalAlignment="Center"
-                                    ToolTipService.ToolTip="Open the Storyboard to auto-draft, sequence, and edit presentation scenes (B).">
+                                    ToolTipService.ToolTip="Storyboard playback mode. Open the Storyboard to sequence and edit scenes (B).">
                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                     <FontIcon x:Name="StoryboardIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE8B7;" FontSize="14" />
                                     <TextBlock x:Name="StoryboardText" Text="Storyboard" VerticalAlignment="Center" FontSize="13" />
@@ -324,17 +324,24 @@
                             </Button>
                             <Button x:Name="SurpriseButton"
                                     Click="SurpriseButton_Click"
-                                    AutomationProperties.Name="Surprise me"
+                                    AutomationProperties.Name="Auto-Mix"
                                     Style="{StaticResource QuietButtonStyle}"
                                     Padding="8,5"
                                     CornerRadius="12"
-                                    ToolTipService.ToolTip="Surprise me is the playback mode. Click for one new layout now.">
+                                    ToolTipService.ToolTip="Auto-Mix playback mode. Continuously generates dynamic multi-photo layouts.">
                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                     <FontIcon x:Name="SurpriseIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE8B1;" FontSize="14" />
-                                    <TextBlock x:Name="SurpriseText" Text="Surprise me" VerticalAlignment="Center" FontSize="13" />
+                                    <TextBlock x:Name="SurpriseText" Text="Auto-Mix" VerticalAlignment="Center" FontSize="13" />
                                 </StackPanel>
                             </Button>
-                            <Rectangle Width="1" Height="16" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,0" Opacity="0.4"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Rectangle Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,0" Opacity="0.5"/>
+
+                    <!-- Centralized Dedicated Transport Zone -->
+                    <Border x:Name="SurpriseControl" CornerRadius="12" Background="#14FFFFFF" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal">
                             <Button x:Name="PrevLayoutButton"
                                     Click="PrevLayoutButton_Click"
                                     AutomationProperties.Name="Previous layout"
@@ -348,7 +355,7 @@
                                     Click="AutoPlayButton_Click"
                                     MinWidth="88"
                                     AutomationProperties.Name="Play auto-play"
-                                    ToolTipService.ToolTip="Play a new layout every few seconds. Space does the same."
+                                    ToolTipService.ToolTip="Play scenes or auto-mix layouts. Space does the same."
                                     Style="{StaticResource QuietButtonStyle}"
                                     Padding="8,5"
                                     CornerRadius="12">
@@ -368,8 +375,8 @@
                             </Button>
                             <Button x:Name="SurpriseCardButton"
                                     Click="SurpriseCardButton_Click"
-                                    AutomationProperties.Name="Auto-play options"
-                                    ToolTipService.ToolTip="Auto-play options (pacing, style, music and advanced settings)"
+                                    AutomationProperties.Name="Auto-Mix options"
+                                    ToolTipService.ToolTip="Auto-Mix options (pacing, style, music and advanced settings)"
                                     Style="{StaticResource QuietButtonStyle}"
                                     Padding="6,5"
                                     CornerRadius="12">

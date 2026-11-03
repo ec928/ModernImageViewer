@@ -15,11 +15,11 @@ One pill along the bottom, left to right. Dividers separate the groups. Rows and
 | Back | Back | Leaves multi-image for the tiles. Esc does the same when no card is open. The layout stays, and Multi-View returns to it. |
 | Image Pool | Image Pool, or Image Pool (N) | Opens or closes the image pool. N is every photo in the pool. A light plate shows while the pool tab is open. |
 | Storyboard | Storyboard, or Storyboard (N) | One of the two playback modes, and the button that opens the storyboard. N is the number of scenes. B does the same. Filled while Storyboard is the mode. |
-| Surprise me | Surprise me | The other playback mode. Clicking it chooses Surprise me and shows one new layout. Filled while Surprise me is the mode. |
+| Auto-Mix | Auto-Mix | The procedural playback mode. Clicking it chooses Auto-Mix and generates one new layout. Filled while Auto-Mix is the active mode. |
 | Previous | icon | Previous scene while a storyboard is playing. Otherwise the previous layout, which pauses play. Left arrow. |
-| Play | Play, Play Show, or Pause | Starts or pauses. Play Show when a storyboard is the mode and play is stopped. Play when Surprise me is the mode and play is stopped. Pause while something is running. Space does the same. Filled while running. |
+| Play | Play Show, Play Mix, or Pause | Starts or pauses. Play Show when a storyboard is the mode and play is stopped. Play Mix when Auto-Mix is the mode and play is stopped. Pause while something is running. Space does the same. Filled while running. |
 | Next | icon | Next scene, or the next layout. Right arrow. |
-| Play options | chevron | Opens or closes Auto-Play Settings. |
+| Play options | chevron | Opens or closes Auto-Mix Settings. |
 | Rows | Rows, or N Rows | Arranges the grid in rows and opens the grid layout card. R switches between rows and columns. The side in use has a light plate, brighter while the card is open. |
 | Columns | Columns, or N Columns | Arranges the grid in columns. Same card and same R key. |
 | Full screen | icon | Full screen. The tooltip says F11. |
@@ -27,15 +27,15 @@ One pill along the bottom, left to right. Dividers separate the groups. Rows and
 | Save/Load | Save/Load | Save the picture, or save and open a layout. Ctrl+S opens it. |
 | Advanced | gear | Undo, redo, fill or fit, and reset. |
 
-Storyboard and Surprise me sit together, then previous, Play, and next. Image Pool is its own group, before them. Rows and Columns are their own group, after playback. Full screen sits with Canvas and Save/Load.
+Playback Mode (Storyboard and Auto-Mix) sits in its own dedicated 2-segment pill. The Transport group (previous, Play, next, options) follows as a centralized control zone. Image Pool is its own shelf group before playback. Rows and Columns are their own group, after playback. Full screen sits with Canvas and Save/Load.
 
 ### Which mode is filled
 
-A storyboard plays by default once scenes exist. Surprise me plays when there is no storyboard, or after Surprise me has been chosen. Exactly one of those two buttons is filled, including while play is paused. Play is filled only while something is running.
+A storyboard plays by default once scenes exist. Auto-Mix plays when there is no storyboard, or after Auto-Mix has been chosen. Exactly one of those two buttons is filled, including while play is paused. Play is filled only while something is running.
 
-Choosing Storyboard again is the Storyboard button, Play Show inside the storyboard, or the Storyboard chip in Auto-Play Settings. Opening the storyboard from a closed panel pauses play, except when that click is the switch away from Surprise me while play is already running. Then play keeps going and the next picture is a scene.
+Choosing Storyboard again is the Storyboard button, Play Show inside the storyboard, or the Storyboard chip in Auto-Mix Settings. Opening the storyboard from a closed panel pauses play, except when that click is the switch away from Auto-Mix while play is already running. Then play keeps going and the next picture is a scene.
 
-Making the first show selects Storyboard. Replacing a show that already exists leaves a Surprise me choice in place. Clearing the storyboard, clearing the session, or opening a saved storyboard returns play to the storyboard.
+Making the first show selects Storyboard. Replacing a show that already exists leaves an Auto-Mix choice in place. Clearing the storyboard, clearing the session, or opening a saved storyboard returns play to the storyboard.
 
 ## Image pool and storyboard
 
@@ -72,7 +72,7 @@ The button row, when scenes exist:
 | Play Show | Plays the scenes in order and selects Storyboard. |
 | Clear | Asks first. The title is `Clear the storyboard?` Clear removes the scenes. Cancel is the default, so Enter does not clear. |
 
-Under the buttons: `Images per scene:` with two boxes, from 1 to 16, and the word `to` between them. The same range is used by Surprise me. While a show is being made, a line reads `Reading the photos...`, `Reading N new photos...`, or `Making scene i of n...`.
+Under the buttons: `Images per scene:` with two boxes, from 1 to 16, and the word `to` between them. The same range is used by Auto-Mix. While a show is being made, a line reads `Reading the photos...`, `Reading N new photos...`, or `Making scene i of n...`.
 
 A scene card is 176 by 136. One photo fills the card. More than one photo uses up to four tiles, and a `N photos` badge appears only when the scene has more than four. The corner is `#1`, `#2`, and so on. Beside it is the motion and the hold, such as `• Still · 12s`, `⤢ Zoom`, `⤡ Out`, `⇄ Pan`, or `⤢ Move`. The footer is the layout name, Duplicate scene, and Remove scene. Cards can be dragged into a new order.
 
@@ -87,7 +87,7 @@ Right-click a card:
 - Move Earlier, except on the first card
 - Move Later, except on the last card
 
-## Auto-Play Settings
+## Auto-Mix Settings
 
 Opened from the chevron in the playback group. Esc closes it. A click outside it closes it.
 
@@ -95,8 +95,8 @@ The first page:
 
 | Row | Control |
 |---|---|
-| Title | Auto-Play Settings, and a gear that opens the advanced page |
-| Play | Storyboard and Surprise me. Storyboard is disabled until a scene exists. The choice matches the playbar and takes effect on the next picture. |
+| Title | Auto-Mix Settings, and a gear that opens the advanced page |
+| Play | Storyboard and Auto-Mix. Storyboard is disabled until a scene exists. The choice matches the playbar and takes effect on the next picture. |
 | Images per scene | Two boxes, 1 to 16 |
 | Duration | A range from 3s to 30s. Thumbs together are one hold. Thumbs apart are a random hold. |
 | Smart pace | With a range, denser layouts hold longer. |
@@ -171,7 +171,7 @@ Right-click:
 | Shape | Always | Rectangle, Squircle, Circle / Oval, Arch / Tombstone, L-shape, Triangle, Right triangle, Rhombus / Diamond, Trapezoid, Parallelogram, Hexagon, Organic blob. Then Mirror shape, Flip shape, and Reset shape. Mirror and Flip are greyed out when they would change nothing. |
 | Layer | A floating cell, when more than one floats | Bring to front, Bring forward, Send backward, Send to back. |
 | Image | A cell with a photo | Replace image…, Clear cell, Rotate image left, Rotate image right, Mirror image, Flip image. |
-| Feature in Surprise me | A cell with a photo | Surprise me keeps using this photo and gives it the best place. |
+| Feature in Auto-Mix | A cell with a photo | Auto-Mix keeps using this photo and gives it the best place. |
 | Freeform | A grid cell with a photo | Lifts the photo off the grid, on top of it. |
 | Dock to Grid | A floating cell, when the grid has room | Puts it back in the grid. |
 | Take off canvas | A cell with a photo | Keeps the photo in the pool, not on the canvas. |

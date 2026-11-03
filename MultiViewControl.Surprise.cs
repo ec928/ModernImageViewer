@@ -415,7 +415,7 @@ namespace ModernImageViewer
                 var header = new Grid { ColumnSpacing = 8, Margin = new Thickness(0, 0, 0, 4) };
                 header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                var title = new TextBlock { Text = "Auto-Play Settings", FontSize = 14, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+                var title = new TextBlock { Text = "Auto-Mix Settings", FontSize = 14, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
                 var gearBtn = new Button
                 {
                     Content = Icon("\uE713", 13),
@@ -424,8 +424,8 @@ namespace ModernImageViewer
                     Style = SafeStyle("QuietButtonStyle"),
                     VerticalAlignment = VerticalAlignment.Center
                 };
-                ToolTipService.SetToolTip(gearBtn, "Advanced auto-play settings");
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(gearBtn, "Advanced auto-play settings");
+                ToolTipService.SetToolTip(gearBtn, "Advanced auto-mix settings");
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(gearBtn, "Advanced auto-mix settings");
                 gearBtn.Click += (_, _) => { _showingSurpriseAdvanced = true; ShowSurpriseCard(); };
                 Grid.SetColumn(gearBtn, 1);
                 header.Children.Add(title);
@@ -462,7 +462,7 @@ namespace ModernImageViewer
                 };
                 var shuffleChip = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton
                 {
-                    Content = "Surprise me",
+                    Content = "Auto-Mix",
                     Padding = new Thickness(12, 5, 12, 5),
                     FontSize = 13,
                     CornerRadius = new CornerRadius(8)
@@ -490,7 +490,7 @@ namespace ModernImageViewer
                     : "Make a show first.");
                 ToolTipService.SetToolTip(shuffleChip, "Play makes a new layout each time, from the image pool. The playbar shows the same choice.");
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(showChip, "Play the storyboard");
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(shuffleChip, "Play Surprise me");
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(shuffleChip, "Play Auto-Mix");
                 showChip.Click += (_, _) =>
                 {
                     if (!showAvailable)
@@ -518,7 +518,7 @@ namespace ModernImageViewer
                 Grid.SetColumn(playModeChips, 1);
                 playModeRow.Children.Add(playModeLabel);
                 playModeRow.Children.Add(playModeChips);
-                ToolTipService.SetToolTip(playModeRow, "Storyboard plays the scenes in order. Surprise me plays a new layout each time. The choice stays until you change it, and takes effect on the next picture.");
+                ToolTipService.SetToolTip(playModeRow, "Storyboard plays the scenes in order. Auto-Mix generates dynamic layouts each time. The choice stays until you change it, and takes effect on the next picture.");
                 body.Children.Add(playModeRow);
 
                 body.Children.Add(imagesRow);
@@ -3093,7 +3093,7 @@ namespace ModernImageViewer
             bool storyboardMode = PlayUsesStoryboard();
             bool hasScenes = _activeShow != null && _activeShow.Scenes.Count > 0;
             string glyph = playing ? "\uE769" : "\uE768";
-            string text = playing ? "Pause" : (storyboardMode ? "Play Show" : "Play");
+            string text = playing ? "Pause" : (storyboardMode ? "Play Show" : "Play Mix");
             AutoPlayIcon.Glyph = glyph;
             AutoPlayText.Text = text;
 
@@ -3132,10 +3132,10 @@ namespace ModernImageViewer
             PaintSelected(SurpriseButton, SurpriseText, SurpriseIcon, !storyboardMode);
             if (SurpriseButton != null)
             {
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(SurpriseButton, storyboardMode ? "Surprise me" : "Surprise me, selected");
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(SurpriseButton, storyboardMode ? "Auto-Mix" : "Auto-Mix, selected");
                 ToolTipService.SetToolTip(SurpriseButton, storyboardMode
-                    ? "Switch playback to Surprise me, and show one new layout now. Play keeps using it."
-                    : "Surprise me is on. Click for one new layout now.");
+                    ? "Switch playback to Auto-Mix, and show one new layout now. Play keeps using it."
+                    : "Auto-Mix is on. Click for one new layout now.");
             }
             if (PrevLayoutButton != null)
             {

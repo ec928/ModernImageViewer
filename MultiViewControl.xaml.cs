@@ -2155,11 +2155,11 @@ namespace ModernImageViewer
             if (!IsEmptyCell(item))
             {
                 string picture = item.Path;
-                var feature = MakeChoiceItem("Feature in Surprise me", _featuredPictures.Contains(picture), () =>
+                var feature = MakeChoiceItem("Feature in Auto-Mix", _featuredPictures.Contains(picture), () =>
                 {
                     if (!_featuredPictures.Remove(picture)) _featuredPictures.Add(picture);
                 });
-                ToolTipService.SetToolTip(feature, "Surprise me always uses this image and gives it the best place");
+                ToolTipService.SetToolTip(feature, "Auto-Mix always uses this image and gives it the best place");
                 menu.Items.Add(feature);
             }
 
