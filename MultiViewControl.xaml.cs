@@ -2197,8 +2197,8 @@ namespace ModernImageViewer
 
         private MenuFlyoutItem MoveToTrayItem(ImageItem item)
         {
-            var move = MakeAdvancedItem("Take off canvas", "\uE8B9", () => MoveCellToTray(item));
-            ToolTipService.SetToolTip(move, "Keeps the photo, but not on the canvas. Put it back from the image pool.");
+            var move = MakeAdvancedItem("Move to Image Pool", "\uE8B9", () => MoveCellToTray(item));
+            ToolTipService.SetToolTip(move, "Moves photo to Image Pool. Restore it anytime from the Image Pool panel.");
             return move;
         }
 

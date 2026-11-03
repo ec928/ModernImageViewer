@@ -21,7 +21,7 @@ namespace ModernImageViewer
 {
     public sealed partial class MultiViewControl
     {
-        public const string AddRuleText = "Photos fill the canvas up to 16. The rest stay off the canvas, in the image pool. On a full canvas, the first 4 go on top of it.";
+        public const string AddRuleText = "Up to 16 photos are placed directly on the canvas. Additional photos are saved to the Image Pool.";
 
         private const double DroppedCellShare = 0.45;
         private const double DroppedCellCascade = 28;
@@ -331,15 +331,16 @@ namespace ModernImageViewer
             int onCanvas = ImagesOnCanvas();
             if (selected.Count == 0)
             {
-                return onCanvas < MosaicLayout.MaxShown
-                    ? $"Room for {MosaicLayout.MaxShown - onCanvas} more on the canvas. Any beyond that stay off the canvas."
-                    : $"The canvas is full. The first {MosaicLayout.FreeformOnFullCanvas} go on top of it, and the rest stay off the canvas.";
+                int remaining = MosaicLayout.MaxShown - onCanvas;
+                return remaining > 0
+                    ? $"{remaining} canvas slots available. Additional photos go to Image Pool."
+                    : $"Canvas is full ({MosaicLayout.MaxShown}/{MosaicLayout.MaxShown}). New photos go to Image Pool.";
             }
             var fresh = NotYetHere(selected);
-            if (fresh.Count == 0) return $"{selected.Count} selected, already here";
+            if (fresh.Count == 0) return $"{selected.Count} selected (already in session)";
             var (cells, freeform, tray) = MosaicLayout.PlaceAdded(onCanvas, fresh.Count);
-            string canvas = freeform > 0 ? $"{freeform} on top of the canvas" : $"{cells} to the canvas";
-            return tray > 0 ? $"{selected.Count} selected: {canvas}, {tray} off the canvas" : $"{selected.Count} selected: {canvas}";
+            string canvas = freeform > 0 ? $"{freeform} floating" : $"{cells} to canvas";
+            return tray > 0 ? $"{selected.Count} selected: {canvas}, {tray} to Image Pool" : $"{selected.Count} selected: {canvas}";
         }
 
         public string? FirstImageFolder =>

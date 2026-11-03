@@ -294,6 +294,27 @@ namespace ModernImageViewer
                 return button;
             }
 
+            Button IconButton(string glyph, string name, string tip, RoutedEventHandler pressed)
+            {
+                var button = new Button
+                {
+                    Content = Icon(glyph, 12),
+                    Padding = new Thickness(8, 5, 8, 5),
+                    MinWidth = 32,
+                    Height = 28,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    CornerRadius = new CornerRadius(4),
+                    Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x2E, 0x2E, 0x2E)),
+                    BorderBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x44, 0xFF, 0xFF, 0xFF)),
+                    BorderThickness = new Thickness(1),
+                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White)
+                };
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, name);
+                ToolTipService.SetToolTip(button, tip);
+                button.Click += pressed;
+                return button;
+            }
+
 
             // Image count dual SpinNumberBox range control (Min to Max)
             Slider? fewestEach = null;
@@ -607,7 +628,7 @@ namespace ModernImageViewer
                     Margin = new Thickness(0, 2, 0, 4)
                 };
                 body.Children.Add(soundtrackHeader);
-                body.Children.Add(MusicRow(Icon, WordButton));
+                body.Children.Add(MusicRow(Icon, IconButton));
 
                 body.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle { Height = 1, Opacity = 0.15, Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White), Margin = new Thickness(0, 4, 0, 2) });
                 var openAdvBtn = new Button
@@ -619,10 +640,10 @@ namespace ModernImageViewer
                 };
                 var advStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
                 advStack.Children.Add(Icon("\uE713", 13));
-                advStack.Children.Add(new TextBlock { Text = "Advanced auto-play settings\u2026", FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
+                advStack.Children.Add(new TextBlock { Text = "Advanced auto-mix settings\u2026", FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
                 openAdvBtn.Content = advStack;
                 ToolTipService.SetToolTip(openAdvBtn, "Recipe odds, face intelligence, camera transitions and look");
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(openAdvBtn, "Advanced auto-play settings");
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(openAdvBtn, "Advanced auto-mix settings");
                 openAdvBtn.Click += (_, _) => { _showingSurpriseAdvanced = true; ShowSurpriseCard(); };
                 body.Children.Add(openAdvBtn);
             }
@@ -698,11 +719,11 @@ namespace ModernImageViewer
             var (imagesSection, imagesSummary) = Section("Images & faces", ImagesSummaryText());
             updateImagesSummary = () => imagesSummary.Text = ImagesSummaryText();
 
-            fewestEach = Slide(imagesSection, "Fewest each click", "The least a click uses, when there are more images than the most below.",
+            fewestEach = Slide(imagesSection, "Fewest photos per scene", "The minimum photos per scene. When more photos are available, each scene selects within this range.",
                 SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.FewestPictures,
                 v => $"{v:0}",
                 (o, v) => { if (!syncingImageRange) SetImageRange((int)v, (int)mostBox.Value); });
-            mostEach = Slide(imagesSection, "Most each click", "The most a click uses. The rest stay off the canvas, and clicks take turns through them.",
+            mostEach = Slide(imagesSection, "Most photos per scene", "The maximum photos per scene. Additional photos remain in the Image Pool and cycle across scenes.",
                 SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.MostPictures,
                 v => $"{v:0}",
                 (o, v) => { if (!syncingImageRange) SetImageRange((int)fewestBox.Value, (int)v); });
@@ -1169,7 +1190,7 @@ namespace ModernImageViewer
         }
 
         /// <summary>The song and its steps, on or off, and the way to the one set of music settings, which the main window's gear also opens.</summary>
-        private FrameworkElement MusicRow(Func<string, double, FontIcon> icon, Func<string, string, string, RoutedEventHandler, Button> wordButton)
+        private FrameworkElement MusicRow(Func<string, double, FontIcon> icon, Func<string, string, string, RoutedEventHandler, Button> iconButton)
         {
             var music = MainWindow.Instance?.MyMusic;
             WatchMusicSettings();
@@ -1319,8 +1340,8 @@ namespace ModernImageViewer
             trackLeft.Children.Add(_cardSongText);
 
             var trackButtons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) };
-            _cardPreviousSong = wordButton("\u2039 Song", "Previous song", "Previous song", (_, _) => _surpriseMusic?.PreviousSong());
-            _cardNextSong = wordButton("Song \u203A", "Next song", "Next song", (_, _) => _surpriseMusic?.NextSong());
+            _cardPreviousSong = iconButton("\uE892", "Previous track", "Previous track", (_, _) => _surpriseMusic?.PreviousSong());
+            _cardNextSong = iconButton("\uE893", "Next track", "Next track", (_, _) => _surpriseMusic?.NextSong());
 
             trackButtons.Children.Add(_cardPreviousSong);
             trackButtons.Children.Add(_cardNextSong);
@@ -1822,10 +1843,10 @@ namespace ModernImageViewer
                 bool hasTray = all.Count > 0;
 
                 heading.Text = current.Count == all.Count
-                    ? (all.Count == 0 ? (sessionCount == 0 ? "" : $"{onCanvas} on the canvas.")
-                                      : $"{all.Count} not on the canvas. {click}")
+                    ? (all.Count == 0 ? (sessionCount == 0 ? "" : $"{onCanvas} photos on canvas.")
+                                      : $"{all.Count} in pool. {click}")
                     : current.Count == 0 ? "No photo matches that name."
-                    : $"{current.Count} of {all.Count} not on the canvas. {click}";
+                    : $"{current.Count} of {all.Count} in pool. {click}";
 
                 poolControlsRight.Visibility = hasTray ? Visibility.Visible : Visibility.Collapsed;
                 hintStack.Visibility = hasTray ? Visibility.Visible : Visibility.Collapsed;
@@ -1836,7 +1857,7 @@ namespace ModernImageViewer
                 {
                     emptyTrayTitle.Text = sessionCount > 0 ? "All photos are on the canvas" : "No photos yet";
                     emptyTrayDesc.Text = sessionCount > 0
-                        ? "Right-click a photo and choose Take off canvas to put it here, or add more photos."
+                        ? "Right-click a photo and choose Move to Image Pool, or add more photos."
                         : "Add photos from a folder to start.";
                 }
             }
@@ -3168,13 +3189,13 @@ namespace ModernImageViewer
             {
                 _cardPreviousSong.IsEnabled = canStep;
                 _cardPreviousSong.Opacity = canStep ? 1.0 : 0.45;
-                ToolTipService.SetToolTip(_cardPreviousSong, canStep ? "Previous song" : "Set a music folder in Settings to play soundtrack");
+                ToolTipService.SetToolTip(_cardPreviousSong, canStep ? "Previous track" : "Set a music folder in Settings to play soundtrack");
             }
             if (_cardNextSong != null)
             {
                 _cardNextSong.IsEnabled = canStep;
                 _cardNextSong.Opacity = canStep ? 1.0 : 0.45;
-                ToolTipService.SetToolTip(_cardNextSong, canStep ? "Next song" : "Set a music folder in Settings to play soundtrack");
+                ToolTipService.SetToolTip(_cardNextSong, canStep ? "Next track" : "Set a music folder in Settings to play soundtrack");
             }
         }
 

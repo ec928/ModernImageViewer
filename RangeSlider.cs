@@ -420,6 +420,17 @@ namespace ModernImageViewer
 
             _startThumb.Outer.Stroke = (_activeDrag is DragTarget.Start or DragTarget.Span or DragTarget.Coalesced) ? activeStroke : defaultStroke;
             _endThumb.Outer.Stroke = (_activeDrag is DragTarget.End or DragTarget.Span or DragTarget.Coalesced) ? activeStroke : defaultStroke;
+
+            if (_activeDrag == DragTarget.Start)
+            {
+                Canvas.SetZIndex(_startThumb.Container, 3);
+                Canvas.SetZIndex(_endThumb.Container, 2);
+            }
+            else if (_activeDrag == DragTarget.End)
+            {
+                Canvas.SetZIndex(_startThumb.Container, 2);
+                Canvas.SetZIndex(_endThumb.Container, 3);
+            }
         }
 
         private void ResetThumbVisuals()

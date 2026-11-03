@@ -1114,6 +1114,7 @@ namespace ModernImageViewer
             if (_parkedCell == null)
             {
                 ViewTogetherText.Text = "Add images";
+                if (ViewTogetherIcon != null) ViewTogetherIcon.Glyph = "";
                 ToolTipService.SetToolTip(ViewTogetherButton, MultiViewControl.AddRuleText + " (Enter)");
                 int inFolder = Images.Count(img => !img.IsDirectory && !img.IsComicEntry && IsPictureFile(img.Path));
                 AddFolderText.Text = $"Add this folder ({inFolder})";
@@ -1134,6 +1135,7 @@ namespace ModernImageViewer
             ImageGrid.ContextFlyout = adding ? null : GridItemContextFlyout;
             ToolTipService.SetToolTip(ViewTogetherButton, adding ? "Add these images (Enter)" : "View Together (Enter)");
             ViewTogetherText.Text = adding ? "Add images" : "View Together";
+            if (ViewTogetherIcon != null) ViewTogetherIcon.Glyph = adding ? "" : "";
             ViewTogetherButton.IsEnabled = true;
             // For one picture the click is the choice, so there is nothing for the button to confirm.
             ViewTogetherButton.Visibility = adding && _parkedCell != null ? Visibility.Collapsed : Visibility.Visible;
