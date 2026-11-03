@@ -246,12 +246,26 @@ namespace ModernImageViewer
                 return slider;
             }
 
-            ToggleSwitch Toggle(StackPanel column, string label, string tip, bool value, Action<SurpriseOptions, bool> chosen)
+            ToggleSwitch Toggle(StackPanel column, string label, string tip, bool value, Action<SurpriseOptions, bool> chosen, string? subtitle = null)
             {
                 var row = new Grid { ColumnSpacing = 12, MinHeight = 34 };
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
-                var text = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White), TextTrimming = TextTrimming.None };
+
+                FrameworkElement leftElement;
+                if (!string.IsNullOrEmpty(subtitle))
+                {
+                    var labelStack = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center };
+                    var text = new TextBlock { Text = label, FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White), TextTrimming = TextTrimming.None };
+                    var sub = new TextBlock { Text = subtitle, FontSize = 11, Opacity = 0.6, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White), TextWrapping = TextWrapping.Wrap };
+                    labelStack.Children.Add(text);
+                    labelStack.Children.Add(sub);
+                    leftElement = labelStack;
+                }
+                else
+                {
+                    leftElement = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White), TextTrimming = TextTrimming.None };
+                }
 
                 var toggle = new ToggleSwitch
                 {
@@ -266,9 +280,9 @@ namespace ModernImageViewer
                 toggle.Toggled += (_, _) => ChangeSurpriseChoices(o => chosen(o, toggle.IsOn));
                 ToolTipService.SetToolTip(row, tip);
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(toggle, label);
-                Grid.SetColumn(text, 0);
+                Grid.SetColumn(leftElement, 0);
                 Grid.SetColumn(toggle, 1);
-                row.Children.Add(text);
+                row.Children.Add(leftElement);
                 row.Children.Add(toggle);
                 column.Children.Add(row);
                 return toggle;
@@ -559,9 +573,11 @@ namespace ModernImageViewer
                 durationRightGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
                 durationRightGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(62) });
 
+                string FormatDuration(int low, int high) => low == high ? $"{low:0}s" : $"{low:0}s - {high:0}s";
+
                 var durationReadout = new TextBlock
                 {
-                    Text = $"{initialFrom:0}s - {initialTo:0}s",
+                    Text = FormatDuration(initialFrom, initialTo),
                     VerticalAlignment = VerticalAlignment.Center,
                     HorizontalAlignment = HorizontalAlignment.Right,
                     TextAlignment = TextAlignment.Right,
@@ -585,7 +601,7 @@ namespace ModernImageViewer
                 {
                     int low = (int)Math.Round(range.Start);
                     int high = (int)Math.Round(range.End);
-                    durationReadout.Text = $"{low:0}s - {high:0}s";
+                    durationReadout.Text = FormatDuration(low, high);
                     bool isRange = low < high;
                     ChangeSurpriseChoices(o =>
                     {
@@ -612,7 +628,7 @@ namespace ModernImageViewer
 
                 body.Children.Add(durationRow);
 
-                Toggle(body, "Smart pace", "When duration has a range, holds dense multi-image layouts toward the longer end and solo/pair layouts toward the shorter end.", options.SmartPace, (o, on) => o.SmartPace = on);
+                Toggle(body, "Smart pace", "When duration has a range, holds dense multi-image layouts toward the longer end and solo/pair layouts toward the shorter end.", options.SmartPace, (o, on) => o.SmartPace = on, subtitle: "Adjusts hold time based on layout density");
 
                 Slide(body, "Motion", "How far the camera moves over each layout while it plays, from still to strong, with floating cells following it.", 0, 100, 5, options.MotionAmount * 100,
                     v => v < 1 ? "Off" : $"{v:0}%",

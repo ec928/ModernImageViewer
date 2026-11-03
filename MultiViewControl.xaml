@@ -348,9 +348,16 @@
                                     ToolTipService.ToolTip="Previous layout or scene (Left Arrow)"
                                     Style="{StaticResource QuietButtonStyle}"
                                     Padding="8,5"
-                                    MinWidth="30"
+                                    MinWidth="32"
                                     CornerRadius="12">
-                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE973;" FontSize="13" />
+                                <Viewbox Width="8" Height="13" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                    <Path Data="M 7 1.5 L 1.5 7 L 7 12.5"
+                                          Stroke="{ThemeResource TextFillColorPrimaryBrush}"
+                                          StrokeThickness="2.2"
+                                          StrokeStartLineCap="Round"
+                                          StrokeEndLineCap="Round"
+                                          StrokeLineJoin="Round" />
+                                </Viewbox>
                             </Button>
                             <Button x:Name="AutoPlayButton"
                                     Click="AutoPlayButton_Click"
@@ -371,9 +378,16 @@
                                     ToolTipService.ToolTip="Next layout or scene (Right Arrow)"
                                     Style="{StaticResource QuietButtonStyle}"
                                     Padding="8,5"
-                                    MinWidth="30"
+                                    MinWidth="32"
                                     CornerRadius="12">
-                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE974;" FontSize="13" />
+                                <Viewbox Width="8" Height="13" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                    <Path Data="M 1.5 1.5 L 7 7 L 1.5 12.5"
+                                          Stroke="{ThemeResource TextFillColorPrimaryBrush}"
+                                          StrokeThickness="2.2"
+                                          StrokeStartLineCap="Round"
+                                          StrokeEndLineCap="Round"
+                                          StrokeLineJoin="Round" />
+                                </Viewbox>
                             </Button>
                             <Button x:Name="SurpriseCardButton"
                                     Click="SurpriseCardButton_Click"
