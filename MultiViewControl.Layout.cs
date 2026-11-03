@@ -218,7 +218,6 @@ namespace ModernImageViewer
             if (StoryDeckButton != null)
             {
                 StoryDeckButton.Visibility = Visibility.Visible;
-                HoldFlyoutSource(StoryDeckButton, isDrawerOpen);
                 string deckName = scenes > 0 ? $"Story Deck ({scenes})" : total > 0 ? $"Story Deck ({total})" : "Story Deck";
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(StoryDeckButton, deckName);
                 ToolTipService.SetToolTip(StoryDeckButton, scenes > 0
