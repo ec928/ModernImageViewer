@@ -27,6 +27,10 @@ namespace ModernImageViewer
         private TextBlock? _endBadgeText;
         private Button? _startToggleBtn;
         private Button? _endToggleBtn;
+        private TextBlock? _directorSceneBadgeText;
+        private Button? _directorPrevSceneBtn;
+        private Button? _directorNextSceneBtn;
+        private bool _wasTrayOpenWhenEnteringCamera;
 
         private bool _activeIsStartKeyframe = true;
         private bool _isDraggingWireframe;
@@ -53,6 +57,7 @@ namespace ModernImageViewer
 
             _isEditingCamera = true;
             _editingCameraScene = scene;
+            _selectedShowScene = scene;
             _activeIsStartKeyframe = true;
 
             // Pause playback if active
@@ -61,6 +66,16 @@ namespace ModernImageViewer
                 _autoPlaySeconds = 0;
                 StopPlaybackProgress();
             }
+
+            // Close tray if open to give full canvas view, but remember to reopen on exit
+            _wasTrayOpenWhenEnteringCamera = _trayCard != null;
+            if (_trayCard != null)
+            {
+                RemoveTrayCard();
+            }
+
+            // Hide bottom HUD so it doesn't overlap canvas wireframes or controls
+            UnifiedHud.Visibility = Visibility.Collapsed;
 
             // Project scene on canvas
             if (scene.Layout != null)
@@ -96,39 +111,154 @@ namespace ModernImageViewer
             LayoutWireframes();
         }
 
+        private void SaveCurrentCameraKeyframes()
+        {
+            if (_editingCameraScene == null) return;
+
+            double zDiff = _curEndZoom - _curStartZoom;
+            double panDist = Math.Abs(_curEndX - _curStartX) + Math.Abs(_curEndY - _curStartY);
+            string calculatedKind = Math.Abs(zDiff) < 0.02 && panDist < 0.02
+                ? "Still"
+                : zDiff > 0.02
+                    ? "ZoomIn"
+                    : zDiff < -0.02
+                        ? "ZoomOut"
+                        : "Pan";
+
+            _editingCameraScene.CameraOverride = new CameraKeyframeOverride(
+                new CameraViewDto(_curStartZoom, _curStartX, _curStartY),
+                new CameraViewDto(_curEndZoom, _curEndX, _curEndY),
+                calculatedKind
+            )
+            {
+                StartCrop = CameraDirectorViewToRect(_curStartZoom, _curStartX, _curStartY),
+                EndCrop = CameraDirectorViewToRect(_curEndZoom, _curEndX, _curEndY)
+            };
+            _updateStorySummary?.Invoke();
+            RefreshTrayCardIfOpen();
+        }
+
+        public void SwitchToCameraScene(ShowScene newScene)
+        {
+            if (newScene == null) return;
+
+            _editingCameraScene = newScene;
+            _selectedShowScene = newScene;
+            _activeIsStartKeyframe = true;
+
+            if (newScene.Layout != null)
+            {
+                ApplyLayoutFile(WithRestInTray(newScene.Layout, SessionPictures()), restoreAspect: false);
+            }
+
+            ResetCanvasCamera();
+
+            if (newScene.CameraOverride != null)
+            {
+                _curStartZoom = Math.Max(1.0, newScene.CameraOverride.Start.Zoom);
+                _curStartX = Math.Clamp(newScene.CameraOverride.Start.X, 0.0, 1.0);
+                _curStartY = Math.Clamp(newScene.CameraOverride.Start.Y, 0.0, 1.0);
+
+                _curEndZoom = Math.Max(1.0, newScene.CameraOverride.End.Zoom);
+                _curEndX = Math.Clamp(newScene.CameraOverride.End.X, 0.0, 1.0);
+                _curEndY = Math.Clamp(newScene.CameraOverride.End.Y, 0.0, 1.0);
+            }
+            else
+            {
+                _curStartZoom = 1.0;
+                _curStartX = 0.5;
+                _curStartY = 0.5;
+
+                _curEndZoom = 1.25;
+                _curEndX = 0.5;
+                _curEndY = 0.5;
+            }
+
+            UpdateDirectorSceneBadge();
+            UpdateKeyframeToggles();
+            LayoutWireframes();
+        }
+
+        public void NavigateCameraScene(int delta)
+        {
+            if (!_isEditingCamera || _editingCameraScene == null || _activeShow == null) return;
+            var scenes = _activeShow.Scenes;
+            int curIdx = scenes.IndexOf(_editingCameraScene);
+            if (curIdx < 0) return;
+
+            int targetIdx = curIdx + delta;
+            if (targetIdx < 0 || targetIdx >= scenes.Count) return;
+
+            SaveCurrentCameraKeyframes();
+            SwitchToCameraScene(scenes[targetIdx]);
+        }
+
+        private void UpdateDirectorSceneBadge()
+        {
+            if (_editingCameraScene == null) return;
+
+            int curIdx = -1;
+            int total = 0;
+            if (_activeShow != null)
+            {
+                curIdx = _activeShow.Scenes.IndexOf(_editingCameraScene);
+                total = _activeShow.Scenes.Count;
+            }
+
+            string recipe = SceneCardTitle(_editingCameraScene);
+            if (_directorSceneBadgeText != null)
+            {
+                if (curIdx >= 0 && total > 0)
+                {
+                    _directorSceneBadgeText.Text = $"🎬 Scene #{curIdx + 1} of {total} · {recipe}";
+                }
+                else
+                {
+                    _directorSceneBadgeText.Text = $"🎬 Camera Director · {recipe}";
+                }
+            }
+
+            if (_directorPrevSceneBtn != null)
+            {
+                _directorPrevSceneBtn.IsEnabled = curIdx > 0;
+                _directorPrevSceneBtn.Opacity = curIdx > 0 ? 1.0 : 0.35;
+            }
+            if (_directorNextSceneBtn != null)
+            {
+                _directorNextSceneBtn.IsEnabled = curIdx >= 0 && curIdx < total - 1;
+                _directorNextSceneBtn.Opacity = (curIdx >= 0 && curIdx < total - 1) ? 1.0 : 0.35;
+            }
+        }
+
         public void ExitCameraDirector(bool save = true)
         {
             if (!_isEditingCamera) return;
 
-            if (save && _editingCameraScene != null)
+            var editedScene = _editingCameraScene;
+            if (save && editedScene != null)
             {
-                double zDiff = _curEndZoom - _curStartZoom;
-                double panDist = Math.Abs(_curEndX - _curStartX) + Math.Abs(_curEndY - _curStartY);
-                string calculatedKind = Math.Abs(zDiff) < 0.02 && panDist < 0.02
-                    ? "Still"
-                    : zDiff > 0.02
-                        ? "ZoomIn"
-                        : zDiff < -0.02
-                            ? "ZoomOut"
-                            : "Pan";
-
-                _editingCameraScene.CameraOverride = new CameraKeyframeOverride(
-                    new CameraViewDto(_curStartZoom, _curStartX, _curStartY),
-                    new CameraViewDto(_curEndZoom, _curEndX, _curEndY),
-                    calculatedKind
-                )
-                {
-                    StartCrop = CameraDirectorViewToRect(_curStartZoom, _curStartX, _curStartY),
-                    EndCrop = CameraDirectorViewToRect(_curEndZoom, _curEndX, _curEndY)
-                };
-                _updateStorySummary?.Invoke();
-                RefreshTrayCardIfOpen();
+                SaveCurrentCameraKeyframes();
             }
 
             TeardownCameraDirectorUI();
             _isEditingCamera = false;
             _editingCameraScene = null;
             ResetCanvasCamera();
+
+            // Restore bottom HUD
+            UnifiedHud.Visibility = Visibility.Visible;
+
+            // If the Story Deck was open when entering, reopen it with the cursor on the edited deck card
+            if (_wasTrayOpenWhenEnteringCamera)
+            {
+                _wasTrayOpenWhenEnteringCamera = false;
+                if (editedScene != null)
+                {
+                    _selectedShowScene = editedScene;
+                }
+                _trayTab = 1; // Storyboard tab
+                ShowTrayCard(NoCell);
+            }
         }
 
         public void ToggleCameraKeyframe()
@@ -164,7 +294,8 @@ namespace ModernImageViewer
                 VerticalAlignment = VerticalAlignment.Stretch,
                 IsHitTestVisible = true
             };
-            Canvas.SetZIndex(_cameraOverlayCanvas, 250);
+            Canvas.SetZIndex(_cameraOverlayCanvas, 90000);
+            _cameraOverlayCanvas.Translation = new Vector3(0, 0, 8000f);
 
             _trajectoryLine = new Line
             {
@@ -242,48 +373,71 @@ namespace ModernImageViewer
             _cameraOverlayCanvas.Children.Add(_endWireframe);
             RootGrid.Children.Add(_cameraOverlayCanvas);
 
-            // Floating Camera Director Toolbar
+            // Floating Camera Director Toolbar (Strictly above all canvas elements, circles & floating cards)
             _cameraDirectorBar = new Border
             {
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Top,
                 Margin = new Thickness(0, 24, 0, 0),
-                Background = new SolidColorBrush(Color.FromArgb(240, 26, 26, 26)),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(64, 255, 255, 255)),
+                Background = new SolidColorBrush(Color.FromArgb(245, 20, 20, 20)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(80, 255, 255, 255)),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(18),
-                Padding = new Thickness(10, 3, 10, 3),
-                Height = 36
+                CornerRadius = new CornerRadius(19),
+                Padding = new Thickness(8, 3, 8, 3),
+                Height = 38
             };
-            Canvas.SetZIndex(_cameraDirectorBar, 300);
+            Canvas.SetZIndex(_cameraDirectorBar, 100000);
+            _cameraDirectorBar.Translation = new Vector3(0, 0, 10000f);
 
             var barStack = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                Spacing = 6,
+                Spacing = 5,
                 VerticalAlignment = VerticalAlignment.Center
             };
 
-            // Title
-            var titleIcon = new FontIcon
+            // Previous Scene Stepper Button
+            _directorPrevSceneBtn = new Button
             {
-                FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
-                Glyph = "\uE714",
-                FontSize = 13,
-                Foreground = new SolidColorBrush(Color.FromArgb(240, 255, 255, 255)),
-                VerticalAlignment = VerticalAlignment.Center
+                Height = 28,
+                Width = 28,
+                Padding = new Thickness(0),
+                Background = new SolidColorBrush(Colors.Transparent),
+                BorderThickness = new Thickness(0),
+                CornerRadius = new CornerRadius(14),
+                IsTabStop = false,
+                Content = new FontIcon { FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), Glyph = "\uE76B", FontSize = 10, Foreground = new SolidColorBrush(Colors.White) }
             };
-            var titleText = new TextBlock
+            _directorPrevSceneBtn.Click += (_, _) => NavigateCameraScene(-1);
+            ToolTipService.SetToolTip(_directorPrevSceneBtn, "Previous scene (← / PageUp)");
+            barStack.Children.Add(_directorPrevSceneBtn);
+
+            // Active Scene Identity Badge Text
+            _directorSceneBadgeText = new TextBlock
             {
-                Text = "Camera Director",
                 FontSize = 12,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                 Foreground = new SolidColorBrush(Colors.White),
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(2, 0, 4, 0)
+                Margin = new Thickness(2, 0, 2, 0)
             };
-            barStack.Children.Add(titleIcon);
-            barStack.Children.Add(titleText);
+            barStack.Children.Add(_directorSceneBadgeText);
+
+            // Next Scene Stepper Button
+            _directorNextSceneBtn = new Button
+            {
+                Height = 28,
+                Width = 28,
+                Padding = new Thickness(0),
+                Background = new SolidColorBrush(Colors.Transparent),
+                BorderThickness = new Thickness(0),
+                CornerRadius = new CornerRadius(14),
+                IsTabStop = false,
+                Content = new FontIcon { FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), Glyph = "\uE76C", FontSize = 10, Foreground = new SolidColorBrush(Colors.White) }
+            };
+            _directorNextSceneBtn.Click += (_, _) => NavigateCameraScene(1);
+            ToolTipService.SetToolTip(_directorNextSceneBtn, "Next scene (→ / PageDown)");
+            barStack.Children.Add(_directorNextSceneBtn);
 
             barStack.Children.Add(MakeDirectorDivider());
 
@@ -358,6 +512,7 @@ namespace ModernImageViewer
             RootGrid.Children.Add(_cameraDirectorBar);
 
             RootGrid.SizeChanged += CameraDirector_SizeChanged;
+            UpdateDirectorSceneBadge();
             UpdateKeyframeToggles();
         }
 
@@ -386,6 +541,9 @@ namespace ModernImageViewer
             _endBadgeText = null;
             _startToggleBtn = null;
             _endToggleBtn = null;
+            _directorSceneBadgeText = null;
+            _directorPrevSceneBtn = null;
+            _directorNextSceneBtn = null;
         }
 
         private static Border MakeDirectorDivider() => new()

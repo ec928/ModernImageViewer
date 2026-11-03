@@ -1080,7 +1080,6 @@ namespace ModernImageViewer
 
         public bool HandleKeyDown(VirtualKey key)
         {
-            ShowHudFromUser();
             if (_isEditingCamera)
             {
                 if (key is VirtualKey.Escape or VirtualKey.Enter)
@@ -1098,8 +1097,19 @@ namespace ModernImageViewer
                     SelectCameraKeyframe(!_activeIsStartKeyframe);
                     return true;
                 }
+                if (key is VirtualKey.Left or VirtualKey.PageUp)
+                {
+                    NavigateCameraScene(-1);
+                    return true;
+                }
+                if (key is VirtualKey.Right or VirtualKey.PageDown)
+                {
+                    NavigateCameraScene(1);
+                    return true;
+                }
                 return true;
             }
+            ShowHudFromUser();
             // An open card keeps the keyboard. Letters typed in the tray's search are not shortcuts, and nothing behind the card changes.
             if (_trayCard != null || _surpriseCard != null)
             {
@@ -1259,6 +1269,7 @@ namespace ModernImageViewer
 
         private void ShowHudFromUser()
         {
+            if (_isEditingCamera) return;
             _hudTimer.Stop();
             _hudTimer.Start();
 

@@ -127,6 +127,16 @@ namespace ModernImageViewer
                         TriggerCameraPreview();
                         e.Handled = true;
                     }
+                    else if (e.Key is Windows.System.VirtualKey.Left or Windows.System.VirtualKey.PageUp)
+                    {
+                        NavigateCameraScene(-1);
+                        e.Handled = true;
+                    }
+                    else if (e.Key is Windows.System.VirtualKey.Right or Windows.System.VirtualKey.PageDown)
+                    {
+                        NavigateCameraScene(1);
+                        e.Handled = true;
+                    }
                 }
                 else if (_selectedSlot >= 0 && e.Key == Windows.System.VirtualKey.Escape)
                 {
@@ -2397,6 +2407,19 @@ namespace ModernImageViewer
                 }
             }
 
+            scenesView.Loaded += (_, _) =>
+            {
+                if (_selectedShowScene != null && scenesCollection.Contains(_selectedShowScene))
+                {
+                    DispatcherQueue.TryEnqueue(() =>
+                    {
+                        scenesView.SelectedItem = _selectedShowScene;
+                        scenesView.ScrollIntoView(_selectedShowScene);
+                        RefreshCardBadges();
+                    });
+                }
+            };
+
             void UpdateStoryboardSummary()
             {
                 var pictures = SessionPictures();
@@ -2760,7 +2783,13 @@ namespace ModernImageViewer
                             flyout.Items.Add(new MenuFlyoutSeparator());
 
                             // 3. Visual Director Tooling
-                            var editCamItem = MakeAdvancedItem("🎯 Edit Camera Path…", "\uE714", () => EnterCameraDirector(curScene));
+                            var editCamItem = MakeAdvancedItem("🎯 Edit Camera Path…", "\uE714", () =>
+                            {
+                                _selectedShowScene = curScene;
+                                scenesView.SelectedItem = curScene;
+                                RefreshCardBadges();
+                                EnterCameraDirector(curScene);
+                            });
                             flyout.Items.Add(editCamItem);
 
                             flyout.Items.Add(new MenuFlyoutSeparator());
@@ -2819,6 +2848,9 @@ namespace ModernImageViewer
                         {
                             if (s is Button b && b.Tag is ShowScene targetScene)
                             {
+                                _selectedShowScene = targetScene;
+                                scenesView.SelectedItem = targetScene;
+                                RefreshCardBadges();
                                 EnterCameraDirector(targetScene);
                             }
                         };
@@ -2931,7 +2963,13 @@ namespace ModernImageViewer
                         motionSub.Items.Add(new MenuFlyoutSeparator());
 
                         // 3. Visual Director Tooling
-                        motionSub.Items.Add(MakeAdvancedItem("🎯 Edit Camera Path…", "\uE714", () => EnterCameraDirector(sc)));
+                        motionSub.Items.Add(MakeAdvancedItem("🎯 Edit Camera Path…", "\uE714", () =>
+                        {
+                            _selectedShowScene = sc;
+                            scenesView.SelectedItem = sc;
+                            RefreshCardBadges();
+                            EnterCameraDirector(sc);
+                        }));
                         menu.Items.Add(motionSub);
 
                         // Quick Dwell Time Adjustment Submenu
