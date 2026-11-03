@@ -60,6 +60,7 @@ namespace ModernImageViewer
             public int SourceSlot { get; set; }
             public FrameworkElement Container { get; set; } = null!;
             public Border? NotchHandle { get; set; }
+            public Border? RotateHandle { get; set; }
             public int ZIndex { get; set; } = 5000;
         }
 

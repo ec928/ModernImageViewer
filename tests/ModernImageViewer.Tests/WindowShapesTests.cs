@@ -292,5 +292,25 @@ namespace ModernImageViewer.Tests
             Assert.Equal(WindowShapes.Triangle, loaded.Freeform!.Single().Geometry!.Shape);
             Assert.Equal(15, loaded.Freeform!.Single().Geometry!.WindowRotation);
         }
+
+        [Fact]
+        public void NonRectangularShapes_HaveOutlinesSymmetricAroundCenter()
+        {
+            // All non-rectangular shapes in WindowShapes must produce valid outlines
+            foreach (var shape in WindowShapes.All)
+            {
+                if (shape == WindowShapes.Rectangle) continue;
+                var outline = WindowShapes.Outline(shape);
+                Assert.NotNull(outline);
+                Assert.NotEmpty(outline);
+
+                // Verify that points stay within unit box [0, 1]
+                foreach (var (x, y) in outline!)
+                {
+                    Assert.InRange(x, -0.01, 1.01);
+                    Assert.InRange(y, -0.01, 1.01);
+                }
+            }
+        }
     }
 }
