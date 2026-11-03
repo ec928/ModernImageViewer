@@ -76,6 +76,8 @@ namespace ModernImageViewer
         {
             _undoTimer?.Stop();
             if (_restoringUndo || _surpriseSettling || _items.Count == 0 || _undoStack.Count == 0) return;
+            if (_isStoryboardPlayback) return;
+            SyncCanvasToSelectedScene(showToast: false);
             string now = UndoSnapshot();
             if (now == _undoStack[^1]) return;
             _undoStack.Add(now);
@@ -142,6 +144,7 @@ namespace ModernImageViewer
             if (ticket != _settleTicket) return;
             _surpriseSettling = false;
             if (_undoStack.Count > 0) _undoStack[^1] = UndoSnapshot();
+            SyncCanvasToSelectedScene(showToast: false);
         }
 
         /// <summary>Start again in place: four empty cells, no floating cells, default frames and canvas. It is one undo step.</summary>
@@ -224,7 +227,7 @@ namespace ModernImageViewer
             _reuseBitmaps = DecodedBitmaps();
             try
             {
-                ApplyLayoutFile(file, restoreAspect: false);
+                ApplyLayoutFile(file, restoreAspect: false, preserveUndo: true);
             }
             finally
             {

@@ -40,6 +40,8 @@ namespace ModernImageViewer
         private System.Threading.CancellationTokenSource? _prepareCts;
         private Task? _prepareTask;
         private Action? _updateStorySummary;
+        private Action? _refreshStoryboardCards;
+        private Action? _syncStorySceneSelection;
         private Action<int>? _onStoryboardPlaybackIndexChanged;
 
         private sealed record PreparedSurprise(
@@ -2125,6 +2127,23 @@ namespace ModernImageViewer
             };
             ToolTipService.SetToolTip(addCanvasBtn, "Adds the images on screen as a new scene.");
 
+            var updateSceneBtn = new Button
+            {
+                Content = "💾 Update Scene",
+                CornerRadius = new CornerRadius(12),
+                Padding = new Thickness(8, 4, 8, 4),
+                FontSize = 12,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                VerticalAlignment = VerticalAlignment.Center,
+                IsEnabled = _selectedShowScene != null
+            };
+            ToolTipService.SetToolTip(updateSceneBtn, "Saves current canvas layout and photos into the selected storyboard scene.");
+            updateSceneBtn.Click += (_, _) =>
+            {
+                SyncCanvasToSelectedScene(showToast: true);
+                CaptureUndoPoint();
+            };
+
             var onAccent = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White);
             void ShowAsPrimary(Button button, bool primary)
             {
@@ -2226,6 +2245,7 @@ namespace ModernImageViewer
             storyHeaderRow.Children.Add(storyPresetLeft);
             storyHeaderRow.Children.Add(MakeDivider());
             storyHeaderRow.Children.Add(addCanvasBtn);
+            storyHeaderRow.Children.Add(updateSceneBtn);
             storyHeaderRow.Children.Add(MakeDivider());
             storyHeaderRow.Children.Add(storySummary);
             headerMiddle.Children.Add(storyHeaderRow);
@@ -2450,7 +2470,7 @@ namespace ModernImageViewer
                 }
             }
 
-            void RefreshCardBadges()
+            void RefreshCardBadges(bool refreshImages = false)
             {
                 for (int i = 0; i < scenesCollection.Count; i++)
                 {
@@ -2482,6 +2502,10 @@ namespace ModernImageViewer
                             ToolTipService.SetToolTip(recipeText, recipeText.Text);
                         }
                         UpdateCardBorder(card, sc, i);
+                        if (refreshImages)
+                        {
+                            PopulateCardImages(card, sc, forceRefresh: true);
+                        }
                     }
                 }
             }
@@ -2532,6 +2556,7 @@ namespace ModernImageViewer
                     ToolTipService.SetToolTip(autoDraftBtn, "Auto-drafts scenes from the image pool, one screen at a time.");
                 }
 
+                updateSceneBtn.IsEnabled = _selectedShowScene != null && scenesCollection.Contains(_selectedShowScene);
                 SyncStoryImageRange();
                 storyTab.Content = hasScenes ? $"🎬 Storyboard ({sceneCount})" : "🎬 Storyboard";
                 ShowShownBadge();
@@ -2539,6 +2564,24 @@ namespace ModernImageViewer
             }
             updateStorySummary = UpdateStoryboardSummary;
             _updateStorySummary = UpdateStoryboardSummary;
+            _refreshStoryboardCards = () => RefreshCardBadges(refreshImages: true);
+
+            void SyncSceneSelection()
+            {
+                if (_selectedShowScene != null)
+                {
+                    var match = scenesCollection.FirstOrDefault(s => s.Id == _selectedShowScene.Id);
+                    if (match != null)
+                    {
+                        _selectedShowScene = match;
+                        scenesView.SelectedItem = match;
+                        scenesView.ScrollIntoView(match);
+                    }
+                }
+                UpdateStoryboardSummary();
+                RefreshCardBadges(refreshImages: true);
+            }
+            _syncStorySceneSelection = SyncSceneSelection;
 
             bool isSyncingStoryboard = false;
             void HookCollectionChanged()
@@ -2590,24 +2633,15 @@ namespace ModernImageViewer
                 RefreshCardBadges();
             }
 
-            scenesView.ContainerContentChanging += (_, args) =>
+            void PopulateCardImages(Grid card, ShowScene scene, bool forceRefresh = false)
             {
-                if (args.ItemContainer.ContentTemplateRoot is not Grid card) return;
-
                 var singleImg = card.Children.Count > 0 ? card.Children[0] as Image : null;
                 var twoImgGrid = card.Children.Count > 1 ? card.Children[1] as Grid : null;
                 var multiGrid = card.Children.Count > 2 ? card.Children[2] as Grid : null;
                 var multiBadge = card.Children.Count > 3 ? card.Children[3] as Border : null;
                 var multiText = (multiBadge?.Child as StackPanel)?.Children.Count > 1 ? (multiBadge.Child as StackPanel)!.Children[1] as TextBlock : null;
-                var topGrid = card.Children.Count > 4 ? card.Children[4] as Grid : null;
-                var badgeBorder = topGrid?.Children.Count > 0 ? topGrid.Children[0] as Border : null;
-                var badgeText = badgeBorder?.Child as TextBlock;
-                var dwellBorder = topGrid?.Children.Count > 1 ? topGrid.Children[1] as Border : null;
-                var dwellText = dwellBorder?.Child as TextBlock;
-                var bottomGrid = card.Children.Count > 5 ? card.Children[5] as Grid : null;
-                var recipeText = bottomGrid?.Children.Count > 0 ? bottomGrid.Children[0] as TextBlock : null;
 
-                if (args.InRecycleQueue)
+                if (forceRefresh)
                 {
                     if (singleImg != null) { singleImg.Tag = null; singleImg.Source = null; }
                     if (twoImgGrid != null)
@@ -2620,32 +2654,7 @@ namespace ModernImageViewer
                         foreach (var c in multiGrid.Children)
                             if (c is Image mi) { mi.Tag = null; mi.Source = null; }
                     }
-                    return;
                 }
-                if (args.Item is not ShowScene scene) return;
-
-                int sceneIdx = scenesCollection.IndexOf(scene);
-
-                string motionLabel = GetMotionLabel(scene);
-
-                if (badgeText != null)
-                {
-                    // Minimal compact badge hugging only the digits (#1, #12, etc.)
-                    badgeText.Text = sceneIdx >= 0 ? $"#{sceneIdx + 1}" : "";
-                }
-                if (dwellText != null)
-                {
-                    double d = scene.DwellSeconds ?? 12.0;
-                    dwellText.Text = $"{motionLabel} · {d:F0}s";
-                    ToolTipService.SetToolTip(dwellBorder, $"Duration: {d:F0}s · {motionLabel}");
-                }
-                if (recipeText != null)
-                {
-                    recipeText.Text = SceneCardTitle(scene);
-                    ToolTipService.SetToolTip(recipeText, recipeText.Text);
-                }
-
-                UpdateCardBorder(card, scene, sceneIdx);
 
                 // Empty slots are not photos. A circles layout keeps one empty grid cell under the pictures.
                 var allPhotos = scene.GetPhotoPaths().Where(p => !string.IsNullOrEmpty(p)).ToList();
@@ -2662,7 +2671,7 @@ namespace ModernImageViewer
                         return;
                     }
                     img.Visibility = Visibility.Visible;
-                    if (img.Tag as string == path && img.Source != null) return;
+                    if (!forceRefresh && img.Tag as string == path && img.Source != null) return;
                     img.Tag = path;
                     try
                     {
@@ -2804,6 +2813,63 @@ namespace ModernImageViewer
                         }
                     }
                 }
+            }
+
+            scenesView.ContainerContentChanging += (_, args) =>
+            {
+                if (args.ItemContainer.ContentTemplateRoot is not Grid card) return;
+
+                var singleImg = card.Children.Count > 0 ? card.Children[0] as Image : null;
+                var twoImgGrid = card.Children.Count > 1 ? card.Children[1] as Grid : null;
+                var multiGrid = card.Children.Count > 2 ? card.Children[2] as Grid : null;
+                var topGrid = card.Children.Count > 4 ? card.Children[4] as Grid : null;
+                var badgeBorder = topGrid?.Children.Count > 0 ? topGrid.Children[0] as Border : null;
+                var badgeText = badgeBorder?.Child as TextBlock;
+                var dwellBorder = topGrid?.Children.Count > 1 ? topGrid.Children[1] as Border : null;
+                var dwellText = dwellBorder?.Child as TextBlock;
+                var bottomGrid = card.Children.Count > 5 ? card.Children[5] as Grid : null;
+                var recipeText = bottomGrid?.Children.Count > 0 ? bottomGrid.Children[0] as TextBlock : null;
+
+                if (args.InRecycleQueue)
+                {
+                    if (singleImg != null) { singleImg.Tag = null; singleImg.Source = null; }
+                    if (twoImgGrid != null)
+                    {
+                        foreach (var c in twoImgGrid.Children)
+                            if (c is Image ti) { ti.Tag = null; ti.Source = null; }
+                    }
+                    if (multiGrid != null)
+                    {
+                        foreach (var c in multiGrid.Children)
+                            if (c is Image mi) { mi.Tag = null; mi.Source = null; }
+                    }
+                    return;
+                }
+                if (args.Item is not ShowScene scene) return;
+
+                int sceneIdx = scenesCollection.IndexOf(scene);
+
+                string motionLabel = GetMotionLabel(scene);
+
+                if (badgeText != null)
+                {
+                    // Minimal compact badge hugging only the digits (#1, #12, etc.)
+                    badgeText.Text = sceneIdx >= 0 ? $"#{sceneIdx + 1}" : "";
+                }
+                if (dwellText != null)
+                {
+                    double d = scene.DwellSeconds ?? 12.0;
+                    dwellText.Text = $"{motionLabel} · {d:F0}s";
+                    ToolTipService.SetToolTip(dwellBorder, $"Duration: {d:F0}s · {motionLabel}");
+                }
+                if (recipeText != null)
+                {
+                    recipeText.Text = SceneCardTitle(scene);
+                    ToolTipService.SetToolTip(recipeText, recipeText.Text);
+                }
+
+                UpdateCardBorder(card, scene, sceneIdx);
+                PopulateCardImages(card, scene, forceRefresh: false);
 
                 if (dwellBorder != null)
                 {
@@ -2992,6 +3058,11 @@ namespace ModernImageViewer
                             int idx = scenesCollection.IndexOf(sc);
                             await PlayStoryboardAsync(idx >= 0 ? idx : -1);
                         }));
+                        menu.Items.Add(MakeAdvancedItem("💾 Update Scene from Canvas", "\uE74E", () =>
+                        {
+                            SyncCanvasToSelectedScene(sc, showToast: true);
+                            CaptureUndoPoint();
+                        }));
 
                         menu.Items.Add(new MenuFlyoutSeparator());
 
@@ -3123,9 +3194,15 @@ namespace ModernImageViewer
             scenesView.ItemClick += (_, args) =>
             {
                 if (args.ClickedItem is not ShowScene scene) return;
+                if (_selectedShowScene != null && _selectedShowScene != scene && !_isStoryboardPlayback)
+                {
+                    SyncCanvasToSelectedScene(showToast: false);
+                    CaptureUndoPoint();
+                }
                 _selectedShowScene = scene;
                 _shuffleChosen = false;
                 scenesView.SelectedItem = scene;
+                if (updateSceneBtn != null) updateSceneBtn.IsEnabled = true;
                 for (int i = 0; i < scenesCollection.Count; i++)
                 {
                     var s = scenesCollection[i];
@@ -3135,7 +3212,11 @@ namespace ModernImageViewer
                     }
                 }
                 // Single-click previews on canvas without closing the panel
-                if (scene.Layout != null) ApplyLayoutFile(WithRestInTray(scene.Layout, SessionPictures()), restoreAspect: false);
+                if (scene.Layout != null)
+                {
+                    ApplyLayoutFile(WithRestInTray(scene.Layout, SessionPictures()), restoreAspect: false, preserveUndo: true);
+                    CaptureUndoPoint();
+                }
                 ShowAutoPlayState();
             };
 
@@ -3562,7 +3643,7 @@ namespace ModernImageViewer
             _reuseBitmaps = ready;
             try
             {
-                ApplyLayoutFile(WithRestInTray(scene.Layout, pictures), restoreAspect: false);
+                ApplyLayoutFile(WithRestInTray(scene.Layout, pictures), restoreAspect: false, preserveUndo: true);
             }
             finally
             {
@@ -3674,12 +3755,46 @@ namespace ModernImageViewer
             ShowShownBadge();
         }
 
+        public void SyncCanvasToSelectedScene(ShowScene? targetScene = null, bool showToast = false)
+        {
+            if (_isStoryboardPlayback) return;
+            var scene = targetScene ?? _selectedShowScene;
+            if (scene == null || _activeShow == null) return;
+
+            var file = BuildLayoutFile();
+            int onShow = ShownSlots;
+            var sceneFile = new MultiViewLayoutFile
+            {
+                Created = file.Created,
+                Canvas = file.Canvas,
+                State = file.State,
+                Mosaic = file.Mosaic,
+                Photos = file.Photos.Where(p => p.Slot < onShow && !string.IsNullOrEmpty(p.Path)).ToList(),
+                Freeform = file.Freeform != null ? new List<FreeformCellDto>(file.Freeform) : null,
+                ActiveSceneId = scene.Id
+            };
+
+            int photoCount = sceneFile.Photos.Count + (sceneFile.Freeform?.Count ?? 0);
+            if (photoCount == 0) return;
+
+            scene.Layout = MultiViewLayoutFile.FromJson(sceneFile.ToJson()) ?? sceneFile;
+            _activeShow.Modified = DateTime.UtcNow;
+            _refreshStoryboardCards?.Invoke();
+            _updateStorySummary?.Invoke();
+            if (showToast)
+            {
+                ShowAutoPlayToast($"Updated scene \"{scene.Title}\" from canvas");
+            }
+        }
+
         private void RemoveTrayCard()
         {
             if (_trayCard == null) return;
             RootGrid.Children.Remove(_trayCard);
             _trayCard = null;
             _updateStorySummary = null;
+            _refreshStoryboardCards = null;
+            _syncStorySceneSelection = null;
             _onStoryboardPlaybackIndexChanged = null;
             UpdatePlaybarReaction(0);
             ShowShownBadge();

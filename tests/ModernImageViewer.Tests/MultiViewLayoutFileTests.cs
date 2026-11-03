@@ -524,6 +524,32 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
+        public void SerializeAndDeserialize_PreservesActiveSceneIdAndEmbeddedStoryboard()
+        {
+            var project = new ShowProject { Title = "Active Scene Test" };
+            var scene1 = new ShowScene { Id = "scene-111", Title = "Scene 1" };
+            var scene2 = new ShowScene { Id = "scene-222", Title = "Scene 2" };
+            project.Scenes.Add(scene1);
+            project.Scenes.Add(scene2);
+
+            var file = new MultiViewLayoutFile
+            {
+                Storyboard = project,
+                ActiveSceneId = scene2.Id
+            };
+
+            string json = file.ToJson();
+            Assert.Contains(@"""activeSceneId"": ""scene-222""", json);
+
+            var loaded = MultiViewLayoutFile.FromJson(json);
+            Assert.NotNull(loaded?.Storyboard);
+            Assert.Equal("scene-222", loaded.ActiveSceneId);
+            Assert.Equal(2, loaded.Storyboard.Scenes.Count);
+            Assert.Equal("scene-111", loaded.Storyboard.Scenes[0].Id);
+            Assert.Equal("scene-222", loaded.Storyboard.Scenes[1].Id);
+        }
+
+        [Fact]
         public void ShowScene_Clone_CreatesDeepIndependentCopy()
         {
             var orig = new ShowScene

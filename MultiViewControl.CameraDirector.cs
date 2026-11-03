@@ -55,6 +55,11 @@ namespace ModernImageViewer
             if (scene == null) return;
             if (_isEditingCamera) ExitCameraDirector(save: true);
 
+            if (_selectedShowScene != null && _selectedShowScene != scene)
+            {
+                SyncCanvasToSelectedScene(showToast: false);
+            }
+
             _isEditingCamera = true;
             _editingCameraScene = scene;
             _selectedShowScene = scene;
@@ -81,7 +86,7 @@ namespace ModernImageViewer
             // Project scene on canvas
             if (scene.Layout != null)
             {
-                ApplyLayoutFile(WithRestInTray(scene.Layout, SessionPictures()), restoreAspect: false);
+                ApplyLayoutFile(WithRestInTray(scene.Layout, SessionPictures()), restoreAspect: false, preserveUndo: true);
             }
 
             ResetCanvasCamera();
@@ -150,7 +155,7 @@ namespace ModernImageViewer
 
             if (newScene.Layout != null)
             {
-                ApplyLayoutFile(WithRestInTray(newScene.Layout, SessionPictures()), restoreAspect: false);
+                ApplyLayoutFile(WithRestInTray(newScene.Layout, SessionPictures()), restoreAspect: false, preserveUndo: true);
             }
 
             ResetCanvasCamera();
