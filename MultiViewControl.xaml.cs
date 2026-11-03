@@ -120,6 +120,7 @@ namespace ModernImageViewer
 
         public void LoadImages(IEnumerable<ImageItem> items)
         {
+            DeselectCell();
             ForgetSurprise();
             ClearAllFreeformCards();
             _itemBorders.Clear();
@@ -293,6 +294,20 @@ namespace ModernImageViewer
         {
             ShowHudFromUser();
             CloseCountsCardOnPressOutsideCore(e);
+            if (_selectedSlot >= 0 && !IsInsideAnyCell(e.OriginalSource))
+            {
+                DeselectCell();
+            }
+        }
+
+        private bool IsInsideAnyCell(object? source)
+        {
+            for (var node = source as DependencyObject; node != null; node = VisualTreeHelper.GetParent(node))
+            {
+                if (node is FrameworkElement fe && fe.Tag is CellParts)
+                    return true;
+            }
+            return false;
         }
 
         private void CloseCountsCardOnPressOutsideCore(PointerRoutedEventArgs e)
@@ -1066,6 +1081,25 @@ namespace ModernImageViewer
         public bool HandleKeyDown(VirtualKey key)
         {
             ShowHudFromUser();
+            if (_isEditingCamera)
+            {
+                if (key is VirtualKey.Escape or VirtualKey.Enter)
+                {
+                    ExitCameraDirector(save: true);
+                    return true;
+                }
+                if (key == VirtualKey.Space)
+                {
+                    PreviewCameraMove();
+                    return true;
+                }
+                if (key == VirtualKey.Tab)
+                {
+                    SelectCameraKeyframe(!_activeIsStartKeyframe);
+                    return true;
+                }
+                return true;
+            }
             // An open card keeps the keyboard. Letters typed in the tray's search are not shortcuts, and nothing behind the card changes.
             if (_trayCard != null || _surpriseCard != null)
             {
@@ -1103,6 +1137,11 @@ namespace ModernImageViewer
                     if (IsCountsCardOpen)
                     {
                         CloseCountsCard();
+                        return true;
+                    }
+                    if (_selectedSlot >= 0)
+                    {
+                        DeselectCell();
                         return true;
                     }
                     CloseRequested?.Invoke(this, EventArgs.Empty);
@@ -1253,6 +1292,40 @@ namespace ModernImageViewer
         private int _hudMenusOpen;
         // Asked rather than counted: a menu whose cell goes away must not hold the playbar up for good.
         private MenuFlyout? _openCellMenu;
+        private int _selectedSlot = -1;
+
+        private CellParts? GetCellParts(int slot)
+        {
+            if (slot < 0 || slot >= _items.Count) return null;
+            if (slot < _cellRoots.Length && _cellRoots[slot]?.Tag is CellParts gridParts)
+                return gridParts;
+            var card = _freeformCards.FirstOrDefault(c => _items.IndexOf(c.Item) == slot);
+            if (card?.Container.Tag is CellParts cardParts)
+                return cardParts;
+            return null;
+        }
+
+        public void SelectCell(int slot)
+        {
+            if (_selectedSlot == slot) return;
+
+            if (_selectedSlot >= 0)
+            {
+                GetCellParts(_selectedSlot)?.SetSelected?.Invoke(false);
+            }
+
+            _selectedSlot = slot;
+
+            if (_selectedSlot >= 0)
+            {
+                GetCellParts(_selectedSlot)?.SetSelected?.Invoke(true);
+            }
+        }
+
+        public void DeselectCell()
+        {
+            SelectCell(-1);
+        }
 
         private void HudMenu_Opened(object? sender, object e)
         {
@@ -1310,6 +1383,7 @@ namespace ModernImageViewer
 
             foreach (var ctrl in _cellTopControls)
             {
+                if (ctrl is FrameworkElement fe && fe.Tag is bool isSel && isSel) continue;
                 ctrl.Opacity = 0.0;
                 ctrl.IsHitTestVisible = false;
             }
@@ -1584,6 +1658,8 @@ namespace ModernImageViewer
             bool isDragging = false;
             Point lastPoint = default;
             uint dragPointerId = 0;
+            Point dragStartPoint = default;
+            bool hasDraggedCell = false;
 
             bool isMovingCard = false;
             Point dragStartInRoot = default;
@@ -1626,6 +1702,8 @@ namespace ModernImageViewer
                             // Ctrl-mouse drag or Middle-button drag: PAN photo inside freeform cell!
                             isDragging = true;
                             lastPoint = e.GetCurrentPoint(cellGrid).Position;
+                            dragStartPoint = lastPoint;
+                            hasDraggedCell = false;
                             dragPointerId = e.Pointer.PointerId;
                             cellGrid.CapturePointer(e.Pointer);
                             e.Handled = true;
@@ -1647,6 +1725,8 @@ namespace ModernImageViewer
 
                     isDragging = true;
                     lastPoint = e.GetCurrentPoint(cellGrid).Position;
+                    dragStartPoint = lastPoint;
+                    hasDraggedCell = false;
                     dragPointerId = e.Pointer.PointerId;
                     cellGrid.CapturePointer(e.Pointer);
                     e.Handled = true;
@@ -1693,6 +1773,11 @@ namespace ModernImageViewer
                     double dx = currentPoint.X - lastPoint.X;
                     double dy = currentPoint.Y - lastPoint.Y;
 
+                    if (Math.Abs(currentPoint.X - dragStartPoint.X) > 4 || Math.Abs(currentPoint.Y - dragStartPoint.Y) > 4)
+                    {
+                        hasDraggedCell = true;
+                    }
+
                     transform.TranslateX += dx;
                     transform.TranslateY += dy;
                     ClampTranslation();
@@ -1705,6 +1790,7 @@ namespace ModernImageViewer
             // A tap, so a drag on an empty floating cell still moves it.
             cellGrid.Tapped += (s, e) =>
             {
+                SelectCell(Slot(photo.Item));
                 if (!IsEmptyCell(photo.Item) || IsBareCanvas(_items.IndexOf(photo.Item))) return;
                 e.Handled = true;
                 AddImageRequested?.Invoke(this, photo.Item);
@@ -1723,11 +1809,17 @@ namespace ModernImageViewer
 
                 if (e.Pointer.PointerId == dragPointerId)
                 {
+                    bool wasDragging = isDragging;
                     if (isDragging)
                     {
                         isDragging = false;
                         try { cellGrid.ReleasePointerCapture(e.Pointer); } catch { }
                         e.Handled = true;
+                    }
+
+                    if (!hasDraggedCell && !isMovingCard)
+                    {
+                        SelectCell(Slot(photo.Item));
                     }
                 }
             };
@@ -1817,12 +1909,33 @@ namespace ModernImageViewer
                 ClampTranslation();
             };
 
-            // Top-Right Auto-Hiding Caption Controls (Matches app's window caption style: Maximize and Close)
-            var topControls = new Grid
+            // Selection Border (Active tile indicator: 2px Fluent blue accent #4CC2FF)
+            var selectionBorder = new Border
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch,
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x4C, 0xC2, 0xFF)),
+                BorderThickness = new Thickness(2),
+                CornerRadius = new CornerRadius(4),
+                Margin = isFreeform ? new Thickness(0) : new Thickness(1),
+                IsHitTestVisible = false,
+                Visibility = Visibility.Collapsed
+            };
+            Canvas.SetZIndex(selectionBorder, 204);
+            slotGrid.Children.Add(selectionBorder);
+
+            // Top-Right Contextual Micro-HUD Pill
+            var topControls = new Border
             {
                 HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Top,
-                Margin = isFreeform ? new Thickness(0, 10, 22, 0) : new Thickness(0),
+                Margin = isFreeform ? new Thickness(0, 10, 22, 0) : new Thickness(0, 8, 8, 0),
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(234, 30, 30, 30)),
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(64, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(16),
+                Padding = new Thickness(4, 2, 4, 2),
+                Height = 32,
                 Opacity = 0.0,
                 IsHitTestVisible = false
             };
@@ -1833,13 +1946,33 @@ namespace ModernImageViewer
 
             bool isCellHovered = false;
             bool isMenuOpen = false;
+            bool isCellSelected = false;
+
+            void UpdateHudVisibility()
+            {
+                bool show = isCellSelected || isMenuOpen || (_isHudVisible && isCellHovered);
+                topControls.Opacity = show ? 1.0 : 0.0;
+                topControls.IsHitTestVisible = show;
+                topControls.Tag = isCellSelected;
+            }
+
             void SetCellHover(bool hovered)
             {
                 isCellHovered = hovered;
-                bool show = isMenuOpen || (_isHudVisible && isCellHovered);
-                topControls.Opacity = show ? 1.0 : 0.0;
-                topControls.IsHitTestVisible = show;
+                UpdateHudVisibility();
             }
+
+            void SetCellSelected(bool selected)
+            {
+                isCellSelected = selected;
+                if (selected)
+                {
+                    selectionBorder.CornerRadius = new CornerRadius(Math.Max(4, cellBorder.CornerRadius.TopLeft));
+                }
+                selectionBorder.Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
+                UpdateHudVisibility();
+            }
+
             // A floating cell's buttons can sit past its shape, where nothing is under the pointer, so they wait for it to arrive.
             DispatcherTimer? hoverOff = null;
             if (isFreeform)
@@ -1867,57 +2000,166 @@ namespace ModernImageViewer
                     SetCellHover(true);
             };
 
-            var topStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 0 };
-
-            // Maximize / Solo Button (Matches app's TopMaxButton style)
-            var maxBtn = new Button
+            Button MakePillButton(string glyph, string toolTip, int fontSize = 11)
             {
-                Width = 46,
-                Height = 32,
-                Padding = new Thickness(0),
-                Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
-                BorderThickness = new Thickness(0),
-                CornerRadius = new CornerRadius(0),
-                IsTabStop = false,
-                UseSystemFocusVisuals = false,
-                FocusVisualPrimaryThickness = new Thickness(0),
-                FocusVisualSecondaryThickness = new Thickness(0),
-                Content = new FontIcon { FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), Glyph = "\uE922", FontSize = 10, Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(240, 255, 255, 255)) }
+                var btn = new Button
+                {
+                    Width = 28,
+                    Height = 26,
+                    Padding = new Thickness(0),
+                    Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                    BorderThickness = new Thickness(0),
+                    CornerRadius = new CornerRadius(13),
+                    IsTabStop = false,
+                    UseSystemFocusVisuals = false,
+                    FocusVisualPrimaryThickness = new Thickness(0),
+                    FocusVisualSecondaryThickness = new Thickness(0),
+                    Content = new FontIcon
+                    {
+                        FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
+                        Glyph = glyph,
+                        FontSize = fontSize,
+                        Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(240, 255, 255, 255))
+                    }
+                };
+                btn.Resources["ButtonBackgroundPointerOver"] = new SolidColorBrush(Windows.UI.Color.FromArgb(32, 255, 255, 255));
+                btn.Resources["ButtonBackgroundPressed"] = new SolidColorBrush(Windows.UI.Color.FromArgb(20, 255, 255, 255));
+                btn.Resources["ButtonForegroundPointerOver"] = new SolidColorBrush(Microsoft.UI.Colors.White);
+                btn.Resources["ButtonForegroundPressed"] = new SolidColorBrush(Windows.UI.Color.FromArgb(200, 255, 255, 255));
+                ToolTipService.SetToolTip(btn, toolTip);
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(btn, toolTip);
+                return btn;
+            }
+
+            var topStack = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 2,
+                VerticalAlignment = VerticalAlignment.Center
             };
-            maxBtn.Resources["ButtonBackgroundPointerOver"] = new SolidColorBrush(Windows.UI.Color.FromArgb(24, 255, 255, 255));
-            maxBtn.Resources["ButtonBackgroundPressed"] = new SolidColorBrush(Windows.UI.Color.FromArgb(16, 255, 255, 255));
-            maxBtn.Resources["ButtonForegroundPointerOver"] = new SolidColorBrush(Microsoft.UI.Colors.White);
-            maxBtn.Resources["ButtonForegroundPressed"] = new SolidColorBrush(Windows.UI.Color.FromArgb(200, 255, 255, 255));
-            ToolTipService.SetToolTip(maxBtn, "Solo / Maximize");
+
+            // 1. Swap / Replace Button
+            var swapBtn = MakePillButton("\uE8AB", "Replace / Swap");
+            var swapMenu = new MenuFlyout
+            {
+                MenuFlyoutPresenterStyle = (Style)Resources["MultiViewMenuFlyoutPresenterStyle"]
+            };
+            swapMenu.Opening += (s, e) =>
+            {
+                swapMenu.Items.Clear();
+                int curSlot = Slot(photo.Item);
+                int inTray = TrayImages().Count;
+                var fromPool = MakeAdvancedItem(inTray > 0 ? $"From Image Pool ({inTray})\u2026" : "From Image Pool\u2026", "\uE8B9", () => ShowTrayCard(curSlot));
+                swapMenu.Items.Add(fromPool);
+
+                var browse = MakeAdvancedItem("Browse Image File\u2026", "\uE8E5", () => AddImageRequested?.Invoke(this, photo.Item));
+                swapMenu.Items.Add(browse);
+
+                if (!IsEmptyCell(photo.Item))
+                {
+                    var moveToPool = MakeAdvancedItem("Move to Image Pool", "\uE8DE", () => MoveCellToTray(photo.Item));
+                    swapMenu.Items.Add(moveToPool);
+                }
+
+                if (_items.Count > 1)
+                {
+                    swapMenu.Items.Add(new MenuFlyoutSeparator());
+                    swapMenu.Items.Add(MakeCellTargetMenu("Swap with Position\u2026", "\uE8AB", "Swap with", curSlot,
+                        (target, withAttr) => SwapItems(curSlot, target, withAttr)));
+                }
+            };
+            swapMenu.Opened += (s, e) =>
+            {
+                isMenuOpen = true;
+                _openCellMenu = swapMenu;
+                EnforceDarkFlyoutPresenter();
+                UpdateHudVisibility();
+            };
+            swapMenu.Closed += (s, e) =>
+            {
+                isMenuOpen = false;
+                if (ReferenceEquals(_openCellMenu, swapMenu)) _openCellMenu = null;
+                UpdateHudVisibility();
+            };
+            swapBtn.Flyout = swapMenu;
+            topStack.Children.Add(swapBtn);
+
+            // 2. Window Shape Button
+            var shapeBtn = MakePillButton("\uE7C5", "Window Shape");
+            var shapeMenu = new MenuFlyout
+            {
+                MenuFlyoutPresenterStyle = (Style)Resources["MultiViewMenuFlyoutPresenterStyle"]
+            };
+            shapeMenu.Opening += (s, e) =>
+            {
+                shapeMenu.Items.Clear();
+                var windowSub = MakeWindowMenu(photo.Item);
+                while (windowSub.Items.Count > 0)
+                {
+                    var mItem = windowSub.Items[0];
+                    windowSub.Items.RemoveAt(0);
+                    shapeMenu.Items.Add(mItem);
+                }
+            };
+            shapeMenu.Opened += (s, e) =>
+            {
+                isMenuOpen = true;
+                _openCellMenu = shapeMenu;
+                EnforceDarkFlyoutPresenter();
+                UpdateHudVisibility();
+            };
+            shapeMenu.Closed += (s, e) =>
+            {
+                isMenuOpen = false;
+                if (ReferenceEquals(_openCellMenu, shapeMenu)) _openCellMenu = null;
+                UpdateHudVisibility();
+            };
+            shapeBtn.Flyout = shapeMenu;
+            topStack.Children.Add(shapeBtn);
+
+            // 3. Frame & Border Button
+            var frameBtn = MakePillButton("\uE790", "Frame & Border");
+            frameBtn.Click += (s, e) => OpenCellBorderFlyout(photo.Item);
+            topStack.Children.Add(frameBtn);
+
+            // 4. Solo / Maximize Button
+            var maxBtn = MakePillButton("\uE922", "Solo / Maximize", fontSize: 10);
             maxBtn.Visibility = IsEmptyCell(photo.Item) ? Visibility.Collapsed : Visibility.Visible;
             maxBtn.Click += (s, e) => EnterSolo(Slot(photo.Item));
             topStack.Children.Add(maxBtn);
 
-            // Close / Remove Button (Matches app's TopCloseButton style with red hover)
-            var closeBtn = new Button
+            // Hairline separator
+            var sep = new Border
             {
-                Width = 46,
-                Height = 32,
-                Padding = new Thickness(0),
-                Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
-                BorderThickness = new Thickness(0),
-                CornerRadius = new CornerRadius(0),
-                IsTabStop = false,
-                UseSystemFocusVisuals = false,
-                FocusVisualPrimaryThickness = new Thickness(0),
-                FocusVisualSecondaryThickness = new Thickness(0),
-                Content = new FontIcon { FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), Glyph = "\uE8BB", FontSize = 10, Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(240, 255, 255, 255)) }
+                Width = 1,
+                Height = 14,
+                Margin = new Thickness(2, 0, 2, 0),
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(48, 255, 255, 255)),
+                VerticalAlignment = VerticalAlignment.Center
             };
+            topStack.Children.Add(sep);
+
+            // 5. Close / Remove Button
+            var closeBtn = MakePillButton("\uE8BB", "Remove cell", fontSize: 10);
             closeBtn.Resources["ButtonBackgroundPointerOver"] = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 196, 43, 28));
             closeBtn.Resources["ButtonBackgroundPressed"] = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 153, 27, 16));
             closeBtn.Resources["ButtonForegroundPointerOver"] = new SolidColorBrush(Microsoft.UI.Colors.White);
             closeBtn.Resources["ButtonForegroundPressed"] = new SolidColorBrush(Microsoft.UI.Colors.White);
-            ToolTipService.SetToolTip(closeBtn, "Remove cell");
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(closeBtn, "Remove cell");
             closeBtn.Click += (s, e) => RemoveItem(photo.Item);
             topStack.Children.Add(closeBtn);
 
-            topControls.Children.Add(topStack);
+            void UpdatePillCompactness(double w)
+            {
+                bool isTight = w > 0 && w < 110;
+                bool compact = w > 0 && w < 160;
+                shapeBtn.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+                frameBtn.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+                sep.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+                maxBtn.Visibility = (isTight || IsEmptyCell(photo.Item)) ? Visibility.Collapsed : Visibility.Visible;
+            }
+            slotGrid.SizeChanged += (s, e) => UpdatePillCompactness(e.NewSize.Width);
+
+            topControls.Child = topStack;
             // These sit on the cell, outside the shape's clip.
             slotGrid.Children.Add(topControls);
 
@@ -2078,7 +2320,7 @@ namespace ModernImageViewer
 
             imgContainer.Visibility = IsEmptyCell(photo.Item) ? Visibility.Collapsed : Visibility.Visible;
 
-            var parts = new CellParts(transform, updateLayout, topControls, fullImg, photo, positionBadge, badgeText, dashedStroke, rimGlowStroke, gutterBorder, imgContainer, placeholder, maxBtn);
+            var parts = new CellParts(transform, updateLayout, topControls, fullImg, photo, positionBadge, badgeText, dashedStroke, rimGlowStroke, gutterBorder, imgContainer, placeholder, maxBtn, SetCellSelected);
             cellBorder.Tag = parts;
             slotGrid.Tag = parts;
 
@@ -2368,7 +2610,7 @@ namespace ModernImageViewer
             public CellPhoto(ImageItem item) { Item = item; }
         }
 
-        private sealed record CellParts(CompositeTransform Transform, Action UpdateLayout, UIElement TopControls, Image Photo, CellPhoto Bound, Border PositionBadge, TextBlock BadgeText, Microsoft.UI.Xaml.Shapes.Rectangle DashedStroke, Microsoft.UI.Xaml.Shapes.Rectangle? RimGlowStroke = null, Border? GutterHost = null, FrameworkElement? ImageContainer = null, FrameworkElement? HiddenPlaceholder = null, Button? MaximizeButton = null);
+        private sealed record CellParts(CompositeTransform Transform, Action UpdateLayout, UIElement TopControls, Image Photo, CellPhoto Bound, Border PositionBadge, TextBlock BadgeText, Microsoft.UI.Xaml.Shapes.Rectangle DashedStroke, Microsoft.UI.Xaml.Shapes.Rectangle? RimGlowStroke = null, Border? GutterHost = null, FrameworkElement? ImageContainer = null, FrameworkElement? HiddenPlaceholder = null, Button? MaximizeButton = null, Action<bool>? SetSelected = null);
 
         /// <summary>
         /// Remove a photo and keep the other cells, so none of them decodes again. The layout is rebuilt
@@ -2376,6 +2618,7 @@ namespace ModernImageViewer
         /// </summary>
         private void RemoveItem(ImageItem item)
         {
+            DeselectCell();
             // The cell goes while its button handles the click, so the pointer release never reaches the canvas to record the step.
             NoteUserAction();
             var freeformCard = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, item));
@@ -2811,6 +3054,7 @@ namespace ModernImageViewer
 
         private void EnterSolo(int index)
         {
+            DeselectCell();
             if (!IsCanvasSlot(index) || IsEmptyCell(_items[index])) return;
             _soloIndex = index;
             var item = _items[index];

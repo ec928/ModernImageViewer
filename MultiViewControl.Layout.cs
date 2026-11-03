@@ -48,6 +48,7 @@ namespace ModernImageViewer
 
         private void BuildLayout()
         {
+            DeselectCell();
             if (!_applyingSegmentUnlock)
                 EndSegmentGesture();
 

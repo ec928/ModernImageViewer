@@ -134,5 +134,39 @@ namespace ModernImageViewer.Tests
                     cancellationToken: cts.Token);
             });
         }
+
+        [Fact]
+        public async Task DraftAsync_Produces_Varied_Cinematic_Motion_And_No_Consecutive_Repeats()
+        {
+            var photos = MakePhotos(60);
+            var options = new SurpriseOptions
+            {
+                FewestPictures = 1,
+                MostPictures = 3,
+                MotionAmount = 0.5,
+                CameraMode = "Auto"
+            };
+
+            var project = await ShowDirector.DraftAsync(
+                photos,
+                options,
+                canvasWidth: 1920,
+                canvasHeight: 1080,
+                projectTitle: "Diverse Presentation");
+
+            Assert.True(project.Scenes.Count >= 20);
+
+            var kinds = project.Scenes.Select(s => s.CameraOverride?.Kind).ToList();
+            
+            // Check for variety: must contain multiple distinct kinds
+            var distinct = kinds.Where(k => !string.IsNullOrEmpty(k)).Distinct().ToHashSet();
+            Assert.True(distinct.Count >= 3, $"Expected at least 3 distinct motion kinds, got: {string.Join(", ", distinct)}");
+
+            // Verify no consecutive repeats
+            for (int i = 1; i < kinds.Count; i++)
+            {
+                Assert.NotEqual(kinds[i - 1], kinds[i]);
+            }
+        }
     }
 }

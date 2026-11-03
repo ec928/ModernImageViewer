@@ -76,7 +76,7 @@ namespace ModernImageViewer
 
             string? lastRecipe = null;
             LayoutTransition? lastTransition = null;
-            CameraKind? lastCameraKind = null;
+            string? lastMotionKind = null;
             bool? lastWasLong = null;
 
             for (int i = 0; i < chunks.Count; i++)
@@ -115,17 +115,10 @@ namespace ModernImageViewer
                 // Transition selection
                 var transition = LayoutTransitions.Choose(options.TransitionVariety, lastTransition, random);
 
-                // Camera planning
+                // Camera planning: organic, varied motion sequence tailored to layout & avoiding consecutive repeats
                 var subjects = composition.CameraSubjects();
-                var move = CameraMove.Plan(
-                    subjects,
-                    options.MotionAmount,
-                    options.MotionZoomChance,
-                    options.MotionFaceChance,
-                    dwell,
-                    lastCameraKind,
-                    random,
-                    options.ForcedCameraKind);
+                string chosenMotion = ChooseMotionKind(composition, options, lastMotionKind, random);
+                lastMotionKind = chosenMotion;
 
                 var scene = new ShowScene
                 {
@@ -137,16 +130,47 @@ namespace ModernImageViewer
                     Transition = transition.ToString()
                 };
 
-                if (move != null)
+                if (chosenMotion == "Still" || options.MotionAmount <= 0.001)
                 {
-                    scene.CameraOverride = new CameraKeyframeOverride
+                    scene.CameraOverride = new CameraKeyframeOverride(
+                        new CameraViewDto(1.0, 0.5, 0.5),
+                        new CameraViewDto(1.0, 0.5, 0.5),
+                        "Still")
                     {
-                        Start = new CameraViewDto(move.Start.Zoom, move.Start.X, move.Start.Y),
-                        End = new CameraViewDto(move.End.Zoom, move.End.X, move.End.Y),
-                        StartCrop = CameraViewToRect(move.Start),
-                        EndCrop = CameraViewToRect(move.End)
+                        StartCrop = new NormalizedRectDto(0, 0, 1, 1),
+                        EndCrop = new NormalizedRectDto(0, 0, 1, 1)
                     };
-                    lastCameraKind = move.Kind;
+                }
+                else
+                {
+                    CameraKind kindToPlan = chosenMotion switch
+                    {
+                        "ZoomIn" => CameraKind.ZoomIn,
+                        "ZoomOut" => CameraKind.ZoomOut,
+                        _ => CameraKind.Drift
+                    };
+
+                    var move = CameraMove.Plan(
+                        subjects,
+                        options.MotionAmount,
+                        options.MotionZoomChance,
+                        options.MotionFaceChance,
+                        dwell,
+                        null,
+                        random,
+                        kindToPlan);
+
+                    if (move != null)
+                    {
+                        scene.CameraOverride = new CameraKeyframeOverride
+                        {
+                            Start = new CameraViewDto(move.Start.Zoom, move.Start.X, move.Start.Y),
+                            End = new CameraViewDto(move.End.Zoom, move.End.X, move.End.Y),
+                            StartCrop = CameraViewToRect(move.Start),
+                            EndCrop = CameraViewToRect(move.End),
+                            Kind = chosenMotion
+                        };
+                    }
                 }
 
                 project.Scenes.Add(scene);
@@ -159,6 +183,84 @@ namespace ModernImageViewer
             }
 
             return project;
+        }
+
+        /// <summary>
+        /// Selects an organic, varied camera motion for a scene to ensure the drafted presentation
+        /// feels like a professionally edited Ken Burns documentary rather than a repetitive loop.
+        /// Guaranteed to avoid consecutive repeats and provides a rich mix of Zoom In, Zoom Out, Pan, and Still.
+        /// </summary>
+        public static string ChooseMotionKind(
+            Composition composition,
+            SurpriseOptions options,
+            string? lastMotion,
+            Random random)
+        {
+            if (options.MotionAmount <= 0.001) return "Still";
+
+            int cellCount = composition.Cells.Count;
+
+            // Distribution weights tailored to layout complexity
+            double pZoomIn, pZoomOut, pPan, pStill;
+
+            if (cellCount >= 5)
+            {
+                // Complex multi-image collages (e.g. 5+ images): look best still or panning across
+                pStill = 0.35;
+                pPan = 0.35;
+                pZoomIn = 0.15;
+                pZoomOut = 0.15;
+            }
+            else if (cellCount == 1)
+            {
+                // Solo hero image: push in or reveal out are dramatic
+                pStill = 0.05;
+                pPan = 0.20;
+                pZoomIn = 0.40;
+                pZoomOut = 0.35;
+            }
+            else
+            {
+                // 2 to 4 images: balanced documentary cadence
+                pStill = 0.10;
+                pPan = 0.25;
+                pZoomIn = 0.35;
+                pZoomOut = 0.30;
+            }
+
+            // User preference bias from CameraMode setting (if not Auto)
+            if (string.Equals(options.CameraMode, SurpriseOptions.CameraZoomIn, StringComparison.OrdinalIgnoreCase))
+            {
+                pZoomIn = 0.50; pZoomOut = 0.20; pPan = 0.20; pStill = 0.10;
+            }
+            else if (string.Equals(options.CameraMode, SurpriseOptions.CameraZoomOut, StringComparison.OrdinalIgnoreCase))
+            {
+                pZoomOut = 0.50; pZoomIn = 0.20; pPan = 0.20; pStill = 0.10;
+            }
+            else if (string.Equals(options.CameraMode, SurpriseOptions.CameraDrift, StringComparison.OrdinalIgnoreCase))
+            {
+                pPan = 0.50; pZoomIn = 0.20; pZoomOut = 0.20; pStill = 0.10;
+            }
+
+            // Strict anti-repetition: zero out previous motion kind
+            if (lastMotion == "ZoomIn") pZoomIn = 0;
+            else if (lastMotion == "ZoomOut") pZoomOut = 0;
+            else if (lastMotion == "Pan") pPan = 0;
+            else if (lastMotion == "Still") pStill = 0;
+
+            double sum = pZoomIn + pZoomOut + pPan + pStill;
+            if (sum <= 0)
+            {
+                return lastMotion == "ZoomIn" ? "ZoomOut" : "ZoomIn";
+            }
+
+            double roll = random.NextDouble() * sum;
+            if (roll < pZoomIn) return "ZoomIn";
+            roll -= pZoomIn;
+            if (roll < pZoomOut) return "ZoomOut";
+            roll -= pZoomOut;
+            if (roll < pPan) return "Pan";
+            return "Still";
         }
 
         /// <summary>

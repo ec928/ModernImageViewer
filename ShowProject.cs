@@ -328,12 +328,16 @@ namespace ModernImageViewer
         [JsonPropertyName("endCrop")]
         public NormalizedRectDto? EndCrop { get; set; }
 
+        [JsonPropertyName("kind")]
+        public string? Kind { get; set; }
+
         public CameraKeyframeOverride() { }
 
-        public CameraKeyframeOverride(CameraViewDto start, CameraViewDto end)
+        public CameraKeyframeOverride(CameraViewDto start, CameraViewDto end, string? kind = null)
         {
             Start = start;
             End = end;
+            Kind = kind;
         }
 
         public CameraMove ToCameraMove(double seconds)

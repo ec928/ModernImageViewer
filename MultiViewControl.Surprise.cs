@@ -39,6 +39,8 @@ namespace ModernImageViewer
         private PreparedSurprise? _preparedSurprise;
         private System.Threading.CancellationTokenSource? _prepareCts;
         private Task? _prepareTask;
+        private Action? _updateStorySummary;
+        private Action<int>? _onStoryboardPlaybackIndexChanged;
 
         private sealed record PreparedSurprise(
             Composition Composition,
@@ -106,6 +108,29 @@ namespace ModernImageViewer
                 {
                     RemoveSurpriseCard();
                     RemoveTrayCard();
+                    e.Handled = true;
+                }
+                else if (_isEditingCamera)
+                {
+                    if (e.Key is Windows.System.VirtualKey.Escape or Windows.System.VirtualKey.Enter)
+                    {
+                        ExitCameraDirector(save: true);
+                        e.Handled = true;
+                    }
+                    else if (e.Key == Windows.System.VirtualKey.Tab)
+                    {
+                        ToggleCameraKeyframe();
+                        e.Handled = true;
+                    }
+                    else if (e.Key == Windows.System.VirtualKey.Space)
+                    {
+                        TriggerCameraPreview();
+                        e.Handled = true;
+                    }
+                }
+                else if (_selectedSlot >= 0 && e.Key == Windows.System.VirtualKey.Escape)
+                {
+                    DeselectCell();
                     e.Handled = true;
                 }
             }), true);
@@ -1483,6 +1508,7 @@ namespace ModernImageViewer
         private ShowProject? _activeShow;
         private int _showPlaybackIndex = -1;
         private bool _isStoryboardPlayback;
+        private ShowScene? _selectedShowScene;
         /// <summary>When set, Play keeps using Surprise me even if a storyboard exists. Otherwise a storyboard is what Play walks.</summary>
         private bool _shuffleChosen;
 
@@ -2241,6 +2267,9 @@ namespace ModernImageViewer
             var scenesView = new GridView
             {
                 ItemsSource = scenesCollection,
+                SelectedItem = (_selectedShowScene != null && scenesCollection.Contains(_selectedShowScene))
+                    ? _selectedShowScene
+                    : (_isStoryboardPlayback && _showPlaybackIndex >= 0 && _showPlaybackIndex < scenesCollection.Count ? scenesCollection[_showPlaybackIndex] : null),
                 SelectionMode = ListViewSelectionMode.Single,
                 CanReorderItems = true,
                 CanDragItems = true,
@@ -2294,12 +2323,20 @@ namespace ModernImageViewer
                     "        <ColumnDefinition Width=\"*\"/>" +
                     "        <ColumnDefinition Width=\"Auto\"/>" +
                     "        <ColumnDefinition Width=\"Auto\"/>" +
+                    "        <ColumnDefinition Width=\"Auto\"/>" +
+                    "        <ColumnDefinition Width=\"Auto\"/>" +
                     "      </Grid.ColumnDefinitions>" +
                     "      <TextBlock Text=\"Recipe\" FontSize=\"9.5\" Foreground=\"White\" VerticalAlignment=\"Center\" TextTrimming=\"CharacterEllipsis\"/>" +
-                    "      <Button Grid.Column=\"1\" Padding=\"2,1\" Margin=\"1,0\" Background=\"Transparent\" BorderThickness=\"0\" CornerRadius=\"3\" ToolTipService.ToolTip=\"Duplicate scene\">" +
+                    "      <Button Grid.Column=\"1\" Padding=\"3,1\" Margin=\"1,0\" Background=\"Transparent\" BorderThickness=\"0\" CornerRadius=\"3\" ToolTipService.ToolTip=\"Play show from this scene\">" +
+                    "        <FontIcon FontFamily=\"Segoe Fluent Icons\" Glyph=\"&#xE768;\" FontSize=\"9.5\" Foreground=\"#4CC2FF\"/>" +
+                    "      </Button>" +
+                    "      <Button Grid.Column=\"2\" Padding=\"3,1\" Margin=\"1,0\" Background=\"Transparent\" BorderThickness=\"0\" CornerRadius=\"3\" ToolTipService.ToolTip=\"Edit camera path\">" +
+                    "        <FontIcon FontFamily=\"Segoe Fluent Icons\" Glyph=\"&#xE714;\" FontSize=\"9.5\" Foreground=\"#B0FFFFFF\"/>" +
+                    "      </Button>" +
+                    "      <Button Grid.Column=\"3\" Padding=\"2,1\" Margin=\"1,0\" Background=\"Transparent\" BorderThickness=\"0\" CornerRadius=\"3\" ToolTipService.ToolTip=\"Duplicate scene\">" +
                     "        <FontIcon FontFamily=\"Segoe Fluent Icons\" Glyph=\"&#xE8C8;\" FontSize=\"8.5\" Foreground=\"#B0FFFFFF\"/>" +
                     "      </Button>" +
-                    "      <Button Grid.Column=\"2\" Padding=\"2,1\" Margin=\"1,0\" Background=\"Transparent\" BorderThickness=\"0\" CornerRadius=\"3\" ToolTipService.ToolTip=\"Remove scene\">" +
+                    "      <Button Grid.Column=\"4\" Padding=\"2,1\" Margin=\"1,0\" Background=\"Transparent\" BorderThickness=\"0\" CornerRadius=\"3\" ToolTipService.ToolTip=\"Remove scene\">" +
                     "        <FontIcon FontFamily=\"Segoe Fluent Icons\" Glyph=\"&#xE711;\" FontSize=\"8.5\" Foreground=\"#B0FFFFFF\"/>" +
                     "      </Button>" +
                     "    </Grid>" +
@@ -2316,6 +2353,31 @@ namespace ModernImageViewer
             ScrollViewer.SetHorizontalScrollMode(scenesView, ScrollMode.Disabled);
             ScrollViewer.SetVerticalScrollMode(scenesView, ScrollMode.Enabled);
 
+            var emeraldGreen = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x10, 0xB9, 0x81));
+            var inactiveCardBorder = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x35, 0xFF, 0xFF, 0xFF));
+
+            void UpdateCardBorder(Grid card, ShowScene scene, int index)
+            {
+                bool isPlayingScene = _isStoryboardPlayback && _showPlaybackIndex >= 0 && index == _showPlaybackIndex;
+                bool isSelectedScene = scenesView.SelectedItem == scene;
+
+                if (isPlayingScene)
+                {
+                    card.BorderThickness = new Thickness(2.5);
+                    card.BorderBrush = emeraldGreen;
+                }
+                else if (isSelectedScene)
+                {
+                    card.BorderThickness = new Thickness(2.5);
+                    card.BorderBrush = winBlue;
+                }
+                else
+                {
+                    card.BorderThickness = new Thickness(1);
+                    card.BorderBrush = inactiveCardBorder;
+                }
+            }
+
             void RefreshCardBadges()
             {
                 for (int i = 0; i < scenesCollection.Count; i++)
@@ -2330,11 +2392,7 @@ namespace ModernImageViewer
                         badgeBorder.Child is TextBlock badgeText)
                     {
                         badgeText.Text = $"#{i + 1}";
-                        bool isCur = _isStoryboardPlayback 
-                            ? (_showPlaybackIndex >= 0 && i == _showPlaybackIndex) 
-                            : (scenesView.SelectedItem == sc);
-                        card.BorderThickness = new Thickness(isCur ? 2.5 : 1);
-                        card.BorderBrush = isCur ? winBlue : new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x35, 0xFF, 0xFF, 0xFF));
+                        UpdateCardBorder(card, sc, i);
                     }
                 }
             }
@@ -2377,6 +2435,7 @@ namespace ModernImageViewer
                 ShowAutoPlayState();
             }
             updateStorySummary = UpdateStoryboardSummary;
+            _updateStorySummary = UpdateStoryboardSummary;
 
             bool isSyncingStoryboard = false;
             void HookCollectionChanged()
@@ -2447,16 +2506,16 @@ namespace ModernImageViewer
 
                 if (args.InRecycleQueue)
                 {
-                    if (singleImg != null) singleImg.Source = null;
+                    if (singleImg != null) { singleImg.Tag = null; singleImg.Source = null; }
                     if (twoImgGrid != null)
                     {
                         foreach (var c in twoImgGrid.Children)
-                            if (c is Image ti) ti.Source = null;
+                            if (c is Image ti) { ti.Tag = null; ti.Source = null; }
                     }
                     if (multiGrid != null)
                     {
                         foreach (var c in multiGrid.Children)
-                            if (c is Image mi) mi.Source = null;
+                            if (c is Image mi) { mi.Tag = null; mi.Source = null; }
                     }
                     return;
                 }
@@ -2464,17 +2523,7 @@ namespace ModernImageViewer
 
                 int sceneIdx = scenesCollection.IndexOf(scene);
 
-                string motionLabel = "• Still";
-                if (scene.CameraOverride != null)
-                {
-                    double zDiff = scene.CameraOverride.End.Zoom - scene.CameraOverride.Start.Zoom;
-                    double panDist = Math.Abs(scene.CameraOverride.End.X - scene.CameraOverride.Start.X) +
-                                     Math.Abs(scene.CameraOverride.End.Y - scene.CameraOverride.Start.Y);
-                    if (zDiff > 0.15) motionLabel = "⤢ Zoom";
-                    else if (zDiff < -0.15) motionLabel = "⤡ Out";
-                    else if (panDist > 0.15) motionLabel = "⇄ Pan";
-                    else motionLabel = "⤢ Move";
-                }
+                string motionLabel = GetMotionLabel(scene);
 
                 if (badgeText != null)
                 {
@@ -2493,15 +2542,35 @@ namespace ModernImageViewer
                     ToolTipService.SetToolTip(recipeText, recipeText.Text);
                 }
 
-                bool isActiveScene = _isStoryboardPlayback 
-                    ? (_showPlaybackIndex >= 0 && sceneIdx == _showPlaybackIndex) 
-                    : (scenesView.SelectedItem == scene);
-                card.BorderThickness = new Thickness(isActiveScene ? 2.5 : 1);
-                card.BorderBrush = isActiveScene ? winBlue : new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x35, 0xFF, 0xFF, 0xFF));
+                UpdateCardBorder(card, scene, sceneIdx);
 
                 // Empty slots are not photos. A circles layout keeps one empty grid cell under the pictures.
                 var allPhotos = scene.GetPhotoPaths().Where(p => !string.IsNullOrEmpty(p)).ToList();
                 int photoCount = allPhotos.Count;
+
+                void SetThumbnail(Image? img, string? path, int decodeWidth)
+                {
+                    if (img == null) return;
+                    if (string.IsNullOrEmpty(path))
+                    {
+                        img.Tag = null;
+                        img.Source = null;
+                        img.Visibility = Visibility.Collapsed;
+                        return;
+                    }
+                    img.Visibility = Visibility.Visible;
+                    if (img.Tag as string == path && img.Source != null) return;
+                    img.Tag = path;
+                    try
+                    {
+                        img.Source = new BitmapImage { DecodePixelWidth = decodeWidth, UriSource = new Uri(path) };
+                    }
+                    catch
+                    {
+                        img.Tag = null;
+                        img.Source = null;
+                    }
+                }
 
                 if (photoCount <= 1)
                 {
@@ -2511,11 +2580,7 @@ namespace ModernImageViewer
                     if (multiBadge != null) multiBadge.Visibility = Visibility.Collapsed;
 
                     string? leadPhoto = allPhotos.FirstOrDefault();
-                    if (singleImg != null && !string.IsNullOrEmpty(leadPhoto))
-                    {
-                        try { singleImg.Source = new BitmapImage { DecodePixelWidth = 480, UriSource = new Uri(leadPhoto) }; }
-                        catch { singleImg.Source = null; }
-                    }
+                    SetThumbnail(singleImg, leadPhoto, 480);
                 }
                 else if (photoCount == 2)
                 {
@@ -2570,16 +2635,8 @@ namespace ModernImageViewer
                             if (img1 != null) { Grid.SetRow(img1, 1); Grid.SetColumn(img1, 0); }
                         }
 
-                        if (img0 != null)
-                        {
-                            try { img0.Source = new BitmapImage { DecodePixelWidth = 360, UriSource = new Uri(allPhotos[0]) }; }
-                            catch { img0.Source = null; }
-                        }
-                        if (img1 != null)
-                        {
-                            try { img1.Source = new BitmapImage { DecodePixelWidth = 360, UriSource = new Uri(allPhotos[1]) }; }
-                            catch { img1.Source = null; }
-                        }
+                        SetThumbnail(img0, allPhotos.Count > 0 ? allPhotos[0] : null, 360);
+                        SetThumbnail(img1, allPhotos.Count > 1 ? allPhotos[1] : null, 360);
                     }
                 }
                 else
@@ -2606,28 +2663,23 @@ namespace ModernImageViewer
                             {
                                 Grid.SetRow(t0, 0); Grid.SetColumn(t0, 0);
                                 Grid.SetRowSpan(t0, 1); Grid.SetColumnSpan(t0, 2);
-                                t0.Visibility = Visibility.Visible;
-                                try { t0.Source = new BitmapImage { DecodePixelWidth = 360, UriSource = new Uri(allPhotos[0]) }; }
-                                catch { t0.Source = null; }
+                                SetThumbnail(t0, allPhotos.Count > 0 ? allPhotos[0] : null, 360);
                             }
                             if (multiGrid.Children.Count > 1 && multiGrid.Children[1] is Image t1)
                             {
                                 Grid.SetRow(t1, 1); Grid.SetColumn(t1, 0);
                                 Grid.SetRowSpan(t1, 1); Grid.SetColumnSpan(t1, 1);
-                                t1.Visibility = Visibility.Visible;
-                                try { t1.Source = new BitmapImage { DecodePixelWidth = 240, UriSource = new Uri(allPhotos[1]) }; }
-                                catch { t1.Source = null; }
+                                SetThumbnail(t1, allPhotos.Count > 1 ? allPhotos[1] : null, 240);
                             }
                             if (multiGrid.Children.Count > 2 && multiGrid.Children[2] is Image t2)
                             {
                                 Grid.SetRow(t2, 1); Grid.SetColumn(t2, 1);
                                 Grid.SetRowSpan(t2, 1); Grid.SetColumnSpan(t2, 1);
-                                t2.Visibility = Visibility.Visible;
-                                try { t2.Source = new BitmapImage { DecodePixelWidth = 240, UriSource = new Uri(allPhotos[2]) }; }
-                                catch { t2.Source = null; }
+                                SetThumbnail(t2, allPhotos.Count > 2 ? allPhotos[2] : null, 240);
                             }
                             if (multiGrid.Children.Count > 3 && multiGrid.Children[3] is Image t3)
                             {
+                                t3.Tag = null;
                                 t3.Source = null;
                                 t3.Visibility = Visibility.Collapsed;
                             }
@@ -2643,17 +2695,7 @@ namespace ModernImageViewer
                                     int c = i % 2;
                                     Grid.SetRow(tile, r); Grid.SetColumn(tile, c);
                                     Grid.SetRowSpan(tile, 1); Grid.SetColumnSpan(tile, 1);
-                                    if (i < allPhotos.Count)
-                                    {
-                                        tile.Visibility = Visibility.Visible;
-                                        try { tile.Source = new BitmapImage { DecodePixelWidth = 240, UriSource = new Uri(allPhotos[i]) }; }
-                                        catch { tile.Source = null; }
-                                    }
-                                    else
-                                    {
-                                        tile.Source = null;
-                                        tile.Visibility = Visibility.Collapsed;
-                                    }
+                                    SetThumbnail(tile, i < allPhotos.Count ? allPhotos[i] : null, 240);
                                 }
                             }
                         }
@@ -2662,31 +2704,120 @@ namespace ModernImageViewer
 
                 if (dwellBorder != null)
                 {
-                    ToolTipService.SetToolTip(dwellBorder, "Click to change how long this scene stays");
-                    dwellBorder.PointerPressed += (sender, e) =>
+                    dwellBorder.Tag = scene;
+                    if (dwellBorder.DataContext == null)
                     {
-                        e.Handled = true;
-                        var flyout = new MenuFlyout();
-                        if (Resources.TryGetValue("MultiViewMenuFlyoutPresenterStyle", out var style) && style is Style presenter)
-                            flyout.MenuFlyoutPresenterStyle = presenter;
-                        foreach (int secs in new[] { 5, 8, 12, 16, 20, 30 })
+                        dwellBorder.DataContext = true;
+                        ToolTipService.SetToolTip(dwellBorder, "Click to change camera motion (Zoom In, Zoom Out, Pan, Still) & hold time");
+                        dwellBorder.Tapped += (sender, e) =>
                         {
-                            int s = secs;
-                            bool isCurrent = Math.Abs((scene.DwellSeconds ?? 12.0) - s) < 0.5;
-                            var item = new MenuFlyoutItem { Text = isCurrent ? $"{s}s  ✓" : $"{s}s" };
-                            item.Click += (_, _) =>
+                            e.Handled = true;
+                            if (sender is not FrameworkElement fe || fe.Tag is not ShowScene curScene) return;
+                            var flyout = new MenuFlyout();
+                            if (Resources.TryGetValue("MultiViewMenuFlyoutPresenterStyle", out var style) && style is Style presenter)
+                                flyout.MenuFlyoutPresenterStyle = presenter;
+
+                            void SetCamera(Action act)
                             {
-                                scene.DwellSeconds = s;
-                                if (dwellText != null) dwellText.Text = $"{motionLabel} · {s}s";
+                                act();
                                 UpdateStoryboardSummary();
-                            };
-                            flyout.Items.Add(item);
-                        }
-                        flyout.ShowAt(dwellBorder);
-                    };
+                                RefreshCardBadges();
+                                RefreshTrayCardIfOpen();
+                            }
+
+                            string motion = GetMotionLabel(curScene);
+                            bool isAuto = curScene.CameraOverride == null;
+                            var autoItem = new MenuFlyoutItem { Text = isAuto ? "✨ Auto (Smart Motion)  ✓" : "✨ Auto (Smart Motion)" };
+                            autoItem.Click += (_, _) => SetCamera(() => curScene.CameraOverride = null);
+                            flyout.Items.Add(autoItem);
+
+                            bool isZoomIn = motion.Contains("Zoom In");
+                            bool isZoomOut = motion.Contains("Zoom Out");
+                            bool isPan = motion.Contains("Pan");
+                            bool isStill = motion.Contains("Still");
+
+                            var zoomInItem = new MenuFlyoutItem { Text = isZoomIn ? "⤢ Zoom In  ✓" : "⤢ Zoom In" };
+                            zoomInItem.Click += (_, _) => SetCamera(() => curScene.CameraOverride = new CameraKeyframeOverride(new CameraViewDto(1.0, 0.5, 0.5), new CameraViewDto(1.25, 0.5, 0.5), "ZoomIn"));
+                            flyout.Items.Add(zoomInItem);
+
+                            var zoomOutItem = new MenuFlyoutItem { Text = isZoomOut ? "⤡ Zoom Out  ✓" : "⤡ Zoom Out" };
+                            zoomOutItem.Click += (_, _) => SetCamera(() => curScene.CameraOverride = new CameraKeyframeOverride(new CameraViewDto(1.25, 0.5, 0.5), new CameraViewDto(1.0, 0.5, 0.5), "ZoomOut"));
+                            flyout.Items.Add(zoomOutItem);
+
+                            var panItem = new MenuFlyoutItem { Text = isPan ? "⇄ Pan Across  ✓" : "⇄ Pan Across" };
+                            panItem.Click += (_, _) => SetCamera(() => curScene.CameraOverride = new CameraKeyframeOverride(new CameraViewDto(1.15, 0.40, 0.5), new CameraViewDto(1.15, 0.60, 0.5), "Pan"));
+                            flyout.Items.Add(panItem);
+
+                            var stillItem = new MenuFlyoutItem { Text = isStill ? "• Still (No Motion)  ✓" : "• Still (No Motion)" };
+                            stillItem.Click += (_, _) => SetCamera(() => curScene.CameraOverride = new CameraKeyframeOverride(new CameraViewDto(1.0, 0.5, 0.5), new CameraViewDto(1.0, 0.5, 0.5), "Still"));
+                            flyout.Items.Add(stillItem);
+
+                            flyout.Items.Add(new MenuFlyoutSeparator());
+                            var editCamItem = MakeAdvancedItem("🎯 Edit Camera Path…", "", () => EnterCameraDirector(curScene));
+                            flyout.Items.Add(editCamItem);
+
+                            flyout.Items.Add(new MenuFlyoutSeparator());
+
+                            var holdSub = new MenuFlyoutSubItem { Text = "Hold time" };
+                            foreach (int secs in new[] { 5, 8, 12, 16, 20, 30 })
+                            {
+                                int s = secs;
+                                bool isCurrent = Math.Abs((curScene.DwellSeconds ?? 12.0) - s) < 0.5;
+                                var item = new MenuFlyoutItem { Text = isCurrent ? $"{s}s  ✓" : $"{s}s" };
+                                item.Click += (_, _) =>
+                                {
+                                    curScene.DwellSeconds = s;
+                                    UpdateStoryboardSummary();
+                                    RefreshCardBadges();
+                                    RefreshTrayCardIfOpen();
+                                };
+                                holdSub.Items.Add(item);
+                            }
+                            flyout.Items.Add(holdSub);
+
+                            flyout.ShowAt(fe);
+                        };
+                    }
                 }
 
-                if (bottomGrid?.Children.Count > 1 && bottomGrid.Children[1] is Button dupBtn)
+                var playBtn = bottomGrid?.Children.Count > 1 ? bottomGrid.Children[1] as Button : null;
+                var camBtn = bottomGrid?.Children.Count > 2 ? bottomGrid.Children[2] as Button : null;
+                var dupBtn = bottomGrid?.Children.Count > 3 ? bottomGrid.Children[3] as Button : null;
+                var delBtn = bottomGrid?.Children.Count > 4 ? bottomGrid.Children[4] as Button : null;
+
+                if (playBtn != null)
+                {
+                    playBtn.Tag = scene;
+                    if (playBtn.CommandParameter == null)
+                    {
+                        playBtn.CommandParameter = true;
+                        playBtn.Click += async (s, e) =>
+                        {
+                            if (s is Button b && b.Tag is ShowScene targetScene)
+                            {
+                                _selectedShowScene = targetScene;
+                                int idx = scenesCollection.IndexOf(targetScene);
+                                await PlayStoryboardAsync(idx >= 0 ? idx : -1);
+                            }
+                        };
+                    }
+                }
+                if (camBtn != null)
+                {
+                    camBtn.Tag = scene;
+                    if (camBtn.CommandParameter == null)
+                    {
+                        camBtn.CommandParameter = true;
+                        camBtn.Click += (s, _) =>
+                        {
+                            if (s is Button b && b.Tag is ShowScene targetScene)
+                            {
+                                EnterCameraDirector(targetScene);
+                            }
+                        };
+                    }
+                }
+                if (dupBtn != null)
                 {
                     dupBtn.Tag = scene;
                     if (dupBtn.CommandParameter == null)
@@ -2707,7 +2838,7 @@ namespace ModernImageViewer
                         };
                     }
                 }
-                if (bottomGrid?.Children.Count > 2 && bottomGrid.Children[2] is Button delBtn)
+                if (delBtn != null)
                 {
                     delBtn.Tag = scene;
                     if (delBtn.CommandParameter == null)
@@ -2725,89 +2856,224 @@ namespace ModernImageViewer
                 }
 
                 // Scene Context Menu
-                var menu = new MenuFlyout();
-                if (Resources.TryGetValue("MultiViewMenuFlyoutPresenterStyle", out var style) && style is Style presenter) menu.MenuFlyoutPresenterStyle = presenter;
-                menu.Items.Add(MakeAdvancedItem("Apply to Canvas & Close", "\uE768", () =>
+                // Lazy Scene Context Menu (constructed on demand when right-clicked)
+                if (args.ItemContainer.Tag == null)
                 {
-                    RemoveTrayCard();
-                    if (scene.Layout != null) ApplyLayoutFile(WithRestInTray(scene.Layout, SessionPictures()), restoreAspect: false);
-                }));
-                menu.Items.Add(MakeAdvancedItem("Preview on Canvas", "\uE890", () =>
-                {
-                    if (scene.Layout != null) ApplyLayoutFile(WithRestInTray(scene.Layout, SessionPictures()), restoreAspect: false);
-                }));
-
-                // Quick Dwell Time Adjustment Submenu
-                var dwellSub = new MenuFlyoutSubItem { Text = "Hold time" };
-                foreach (int secs in new[] { 5, 8, 12, 16, 20, 30 })
-                {
-                    int s = secs;
-                    bool isCurrent = Math.Abs((scene.DwellSeconds ?? 12.0) - s) < 0.5;
-                    var item = new MenuFlyoutItem { Text = isCurrent ? $"{s}s  ✓" : $"{s}s" };
-                    item.Click += (_, _) =>
+                    args.ItemContainer.Tag = true;
+                    args.ItemContainer.ContextRequested += (sender, e) =>
                     {
-                        scene.DwellSeconds = s;
-                        if (dwellText != null) dwellText.Text = $"{motionLabel} · {s}s";
-                        UpdateStoryboardSummary();
+                        if (sender is not GridViewItem gvi || gvi.Content is not ShowScene sc) return;
+                        var menu = new MenuFlyout();
+                        if (Resources.TryGetValue("MultiViewMenuFlyoutPresenterStyle", out var style) && style is Style presenter) menu.MenuFlyoutPresenterStyle = presenter;
+                        menu.Items.Add(MakeAdvancedItem("▶ Play Show from Here", "", async () =>
+                        {
+                            _selectedShowScene = sc;
+                            int idx = scenesCollection.IndexOf(sc);
+                            await PlayStoryboardAsync(idx >= 0 ? idx : -1);
+                        }));
+                        menu.Items.Add(MakeAdvancedItem("Apply to Canvas (Preview)", "", () =>
+                        {
+                            RemoveTrayCard();
+                            if (sc.Layout != null) ApplyLayoutFile(WithRestInTray(sc.Layout, SessionPictures()), restoreAspect: false);
+                        }));
+                        menu.Items.Add(MakeAdvancedItem("Preview on Canvas", "", () =>
+                        {
+                            if (sc.Layout != null) ApplyLayoutFile(WithRestInTray(sc.Layout, SessionPictures()), restoreAspect: false);
+                        }));
+
+                        menu.Items.Add(new MenuFlyoutSeparator());
+
+                        // Camera Motion Submenu
+                        var motionSub = new MenuFlyoutSubItem { Text = "Camera Motion" };
+                        void SetCameraSub(Action act)
+                        {
+                            act();
+                            UpdateStoryboardSummary();
+                            RefreshCardBadges();
+                            RefreshTrayCardIfOpen();
+                        }
+
+                        bool isAutoSub = sc.CameraOverride == null;
+                        var autoSubItem = new MenuFlyoutItem { Text = isAutoSub ? "✨ Auto (Smart Motion)  ✓" : "✨ Auto (Smart Motion)" };
+                        autoSubItem.Click += (_, _) => SetCameraSub(() => sc.CameraOverride = null);
+                        motionSub.Items.Add(autoSubItem);
+
+                        string motionSubStr = GetMotionLabel(sc);
+                        bool isZIn = motionSubStr.Contains("Zoom In");
+                        bool isZOut = motionSubStr.Contains("Zoom Out");
+                        bool isP = motionSubStr.Contains("Pan");
+                        bool isSt = motionSubStr.Contains("Still");
+
+                        var zInItem = new MenuFlyoutItem { Text = isZIn ? "⤢ Zoom In  ✓" : "⤢ Zoom In" };
+                        zInItem.Click += (_, _) => SetCameraSub(() => sc.CameraOverride = new CameraKeyframeOverride(new CameraViewDto(1.0, 0.5, 0.5), new CameraViewDto(1.25, 0.5, 0.5), "ZoomIn"));
+                        motionSub.Items.Add(zInItem);
+
+                        var zOutItem = new MenuFlyoutItem { Text = isZOut ? "⤡ Zoom Out  ✓" : "⤡ Zoom Out" };
+                        zOutItem.Click += (_, _) => SetCameraSub(() => sc.CameraOverride = new CameraKeyframeOverride(new CameraViewDto(1.25, 0.5, 0.5), new CameraViewDto(1.0, 0.5, 0.5), "ZoomOut"));
+                        motionSub.Items.Add(zOutItem);
+
+                        var pItem = new MenuFlyoutItem { Text = isP ? "⇄ Pan Across  ✓" : "⇄ Pan Across" };
+                        pItem.Click += (_, _) => SetCameraSub(() => sc.CameraOverride = new CameraKeyframeOverride(new CameraViewDto(1.15, 0.40, 0.5), new CameraViewDto(1.15, 0.60, 0.5), "Pan"));
+                        motionSub.Items.Add(pItem);
+
+                        var stItem = new MenuFlyoutItem { Text = isSt ? "• Still (No Motion)  ✓" : "• Still (No Motion)" };
+                        stItem.Click += (_, _) => SetCameraSub(() => sc.CameraOverride = new CameraKeyframeOverride(new CameraViewDto(1.0, 0.5, 0.5), new CameraViewDto(1.0, 0.5, 0.5), "Still"));
+                        motionSub.Items.Add(stItem);
+
+                        motionSub.Items.Add(new MenuFlyoutSeparator());
+                        motionSub.Items.Add(MakeAdvancedItem("🎯 Edit Camera Path…", "", () => EnterCameraDirector(sc)));
+                        menu.Items.Add(motionSub);
+
+                        // Quick Dwell Time Adjustment Submenu
+                        var dwellSub = new MenuFlyoutSubItem { Text = "Hold time" };
+                        foreach (int secs in new[] { 5, 8, 12, 16, 20, 30 })
+                        {
+                            int s = secs;
+                            bool isCurrent = Math.Abs((sc.DwellSeconds ?? 12.0) - s) < 0.5;
+                            var item = new MenuFlyoutItem { Text = isCurrent ? $"{s}s  ✓" : $"{s}s" };
+                            item.Click += (_, _) =>
+                            {
+                                sc.DwellSeconds = s;
+                                UpdateStoryboardSummary();
+                                RefreshCardBadges();
+                            };
+                            dwellSub.Items.Add(item);
+                        }
+                        menu.Items.Add(dwellSub);
+
+                        menu.Items.Add(new MenuFlyoutSeparator());
+                        menu.Items.Add(MakeAdvancedItem("Duplicate Scene", "", () =>
+                        {
+                            var clone = sc.Clone();
+                            int curIdx = scenesCollection.IndexOf(sc);
+                            if (curIdx >= 0)
+                            {
+                                scenesCollection.Insert(curIdx + 1, clone);
+                                ShowAutoPlayToast("Duplicated scene");
+                            }
+                        }));
+                        menu.Items.Add(MakeAdvancedItem("Remove Scene", "", () =>
+                        {
+                            scenesCollection.Remove(sc);
+                            ShowAutoPlayToast("Removed scene");
+                        }));
+                        int curScIdx = scenesCollection.IndexOf(sc);
+                        if (curScIdx > 0)
+                        {
+                            menu.Items.Add(MakeAdvancedItem("Move Earlier", "", () =>
+                            {
+                                int cur = scenesCollection.IndexOf(sc);
+                                if (cur > 0)
+                                {
+                                    scenesCollection.Move(cur, cur - 1);
+                                }
+                            }));
+                        }
+                        if (curScIdx >= 0 && curScIdx < scenesCollection.Count - 1)
+                        {
+                            menu.Items.Add(MakeAdvancedItem("Move Later", "", () =>
+                            {
+                                int cur = scenesCollection.IndexOf(sc);
+                                if (cur >= 0 && cur < scenesCollection.Count - 1)
+                                {
+                                    scenesCollection.Move(cur, cur + 1);
+                                }
+                            }));
+                        }
+
+                        if (e.TryGetPosition(gvi, out var p))
+                        {
+                            menu.ShowAt(gvi, new Microsoft.UI.Xaml.Controls.Primitives.FlyoutShowOptions { Position = p });
+                        }
+                        else
+                        {
+                            menu.ShowAt(gvi);
+                        }
+                        e.Handled = true;
                     };
-                    dwellSub.Items.Add(item);
                 }
-                menu.Items.Add(dwellSub);
-
-                menu.Items.Add(MakeAdvancedItem("Remove Scene", "\uE74D", () =>
-                {
-                    scenesCollection.Remove(scene);
-                    ShowAutoPlayToast("Removed scene");
-                }));
-                int idx = scenesCollection.IndexOf(scene);
-                if (idx > 0)
-                {
-                    menu.Items.Add(MakeAdvancedItem("Move Earlier", "\uE76B", () =>
-                    {
-                        int cur = scenesCollection.IndexOf(scene);
-                        if (cur > 0)
-                        {
-                            scenesCollection.Move(cur, cur - 1);
-                        }
-                    }));
-                }
-                if (idx >= 0 && idx < scenesCollection.Count - 1)
-                {
-                    menu.Items.Add(MakeAdvancedItem("Move Later", "\uE76C", () =>
-                    {
-                        int cur = scenesCollection.IndexOf(scene);
-                        if (cur >= 0 && cur < scenesCollection.Count - 1)
-                        {
-                            scenesCollection.Move(cur, cur + 1);
-                        }
-                    }));
-                }
-                args.ItemContainer.ContextFlyout = menu;
             };
 
             scenesView.ItemClick += (_, args) =>
             {
                 if (args.ClickedItem is not ShowScene scene) return;
+                _selectedShowScene = scene;
                 scenesView.SelectedItem = scene;
-                foreach (var s in scenesCollection)
+                for (int i = 0; i < scenesCollection.Count; i++)
                 {
+                    var s = scenesCollection[i];
                     if (scenesView.ContainerFromItem(s) is GridViewItem gvi && gvi.ContentTemplateRoot is Grid c)
                     {
-                        bool sel = ReferenceEquals(s, scene);
-                        c.BorderThickness = new Thickness(sel ? 2.5 : 1);
-                        c.BorderBrush = sel ? winBlue : new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x35, 0xFF, 0xFF, 0xFF));
+                        UpdateCardBorder(c, s, i);
                     }
                 }
                 // Single-click previews on canvas without closing the panel
                 if (scene.Layout != null) ApplyLayoutFile(WithRestInTray(scene.Layout, SessionPictures()), restoreAspect: false);
             };
 
-            scenesView.DoubleTapped += (_, _) =>
+            scenesView.DoubleTapped += async (s, e) =>
             {
-                if (scenesView.SelectedItem is ShowScene scene && scene.Layout != null)
+                if (scenesView.SelectedItem is ShowScene scene)
                 {
-                    RemoveTrayCard();
-                    ApplyLayoutFile(WithRestInTray(scene.Layout, SessionPictures()), restoreAspect: false);
+                    _selectedShowScene = scene;
+                    int idx = scenesCollection.IndexOf(scene);
+                    await PlayStoryboardAsync(idx >= 0 ? idx : -1);
+                }
+            };
+
+            scenesView.KeyDown += async (s, e) =>
+            {
+                if (scenesView.SelectedItem is not ShowScene selectedScene) return;
+
+                if (e.Key == Windows.System.VirtualKey.Space)
+                {
+                    e.Handled = true;
+                    if (_autoPlaySeconds > 0)
+                    {
+                        StopAutoPlay();
+                        ShowAutoPlayToast("Paused");
+                    }
+                    else
+                    {
+                        int idx = scenesCollection.IndexOf(selectedScene);
+                        await PlayStoryboardAsync(idx >= 0 ? idx : -1);
+                    }
+                }
+                else if (e.Key == Windows.System.VirtualKey.Delete)
+                {
+                    e.Handled = true;
+                    scenesCollection.Remove(selectedScene);
+                    ShowAutoPlayToast("Removed scene");
+                }
+                else if (e.Key == Windows.System.VirtualKey.D && Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
+                {
+                    e.Handled = true;
+                    var clone = selectedScene.Clone();
+                    int curIdx = scenesCollection.IndexOf(selectedScene);
+                    if (curIdx >= 0)
+                    {
+                        scenesCollection.Insert(curIdx + 1, clone);
+                        scenesView.SelectedItem = clone;
+                        ShowAutoPlayToast("Duplicated scene");
+                    }
+                }
+                else if (e.Key == Windows.System.VirtualKey.Enter)
+                {
+                    e.Handled = true;
+                    int idx = scenesCollection.IndexOf(selectedScene);
+                    await PlayStoryboardAsync(idx >= 0 ? idx : -1);
+                }
+            };
+
+            _onStoryboardPlaybackIndexChanged = idx =>
+            {
+                if (idx >= 0 && idx < scenesCollection.Count)
+                {
+                    var activeScene = scenesCollection[idx];
+                    _selectedShowScene = activeScene;
+                    scenesView.SelectedItem = activeScene;
+                    scenesView.ScrollIntoView(activeScene);
+                    RefreshCardBadges();
                 }
             };
 
@@ -3070,22 +3336,38 @@ namespace ModernImageViewer
             if (_trayTab == 0 && all.Count > 0) search.Loaded += (_, _) => search.Focus(FocusState.Programmatic);
         }
 
-        private async Task PlayStoryboardAsync()
+        private async Task PlayStoryboardAsync(int startIndex = -1)
         {
             if (_activeShow == null || _activeShow.Scenes.Count == 0) return;
+
+            var visibleScenes = _activeShow.Scenes.Where(s => !s.IsHidden).ToList();
+            if (visibleScenes.Count == 0) return;
+
+            int targetIndex = startIndex;
+            if (targetIndex < 0 && _selectedShowScene != null)
+            {
+                targetIndex = visibleScenes.IndexOf(_selectedShowScene);
+            }
+            if (targetIndex < 0 || targetIndex >= visibleScenes.Count)
+            {
+                targetIndex = 0;
+            }
+
             RemoveTrayCard();
             StopAutoPlay();
             CaptureUndoPoint();
             _isStoryboardPlayback = true;
-            _showPlaybackIndex = 0;
+            _showPlaybackIndex = targetIndex;
             _autoPlaySeconds = 12;
             AddAutoPlayShield();
             StartAutoPlayMusic();
             ShowAutoPlayState();
-            ShowAutoPlayToast($"Playing Storyboard: {_activeShow.Scenes.Count} scenes");
 
-            var firstScene = _activeShow.Scenes.FirstOrDefault(s => !s.IsHidden);
-            _layoutSeconds = (int)(firstScene?.DwellSeconds ?? SurpriseChoices.NextPlaySeconds(Random.Shared));
+            var startScene = visibleScenes[targetIndex];
+            _selectedShowScene = startScene;
+            _onStoryboardPlaybackIndexChanged?.Invoke(targetIndex);
+            _layoutSeconds = (int)(startScene.DwellSeconds ?? SurpriseChoices.NextPlaySeconds(Random.Shared));
+            ShowAutoPlayToast($"Playing Scene {targetIndex + 1} of {visibleScenes.Count}: {startScene.Title ?? startScene.Recipe ?? "Scene"}");
             var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(Math.Max(1, _layoutSeconds)) };
             _autoPlayTimer = timer;
             timer.Tick += async (_, _) =>
@@ -3127,6 +3409,8 @@ namespace ModernImageViewer
 
             int currentIndex = _showPlaybackIndex;
             var scene = visibleScenes[currentIndex];
+            _selectedShowScene = scene;
+            _onStoryboardPlaybackIndexChanged?.Invoke(currentIndex);
             _layoutSeconds = (int)(scene.DwellSeconds ?? SurpriseChoices.NextPlaySeconds(Random.Shared));
 
             var pictures = SessionPictures();
@@ -3163,6 +3447,23 @@ namespace ModernImageViewer
                 var move = scene.CameraOverride.ToCameraMove(_layoutSeconds + CameraOverrunSeconds);
                 if (move != null)
                 {
+                    RunCamera(move, goingHome: false);
+                }
+            }
+            else
+            {
+                var move = CameraMove.Plan(
+                    Array.Empty<(double, double)>(),
+                    SurpriseChoices.MotionAmount,
+                    SurpriseChoices.MotionZoomChance,
+                    SurpriseChoices.MotionFaceChance,
+                    _layoutSeconds + CameraOverrunSeconds,
+                    _lastCameraKind,
+                    Random.Shared,
+                    SurpriseChoices.ForcedCameraKind);
+                if (move != null)
+                {
+                    _lastCameraKind = move.Kind;
                     RunCamera(move, goingHome: false);
                 }
             }
@@ -3228,6 +3529,8 @@ namespace ModernImageViewer
             if (_trayCard == null) return;
             RootGrid.Children.Remove(_trayCard);
             _trayCard = null;
+            _updateStorySummary = null;
+            _onStoryboardPlaybackIndexChanged = null;
             UpdatePlaybarReaction(0);
             ShowShownBadge();
             HudMenu_Closed(this, EventArgs.Empty);
@@ -3261,6 +3564,7 @@ namespace ModernImageViewer
 
         private async void StartAutoPlay(int seconds)
         {
+            DeselectCell();
             if (PlayUsesStoryboard())
             {
                 await PlayStoryboardAsync();

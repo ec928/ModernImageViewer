@@ -355,7 +355,21 @@ namespace ModernImageViewer
         public void OpenCellBorderFlyout(ImageItem item)
         {
             int slot = Slot(item);
-            if (slot < 0 || (uint)slot >= (uint)_cellRoots.Length) return;
+            if (slot < 0) return;
+            var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, item));
+            if (card != null)
+            {
+                OpenFrameCard(item, GetBorderForItem(item), () =>
+                {
+                    if (CardBorder(card.Container) is Border cb)
+                    {
+                        ApplyBorderToCellBorder(cb, cb.Child as Grid, item);
+                        ApplyWindowGeometry(card);
+                    }
+                }, card.Container, "Position " + PositionOfSlot(slot));
+                return;
+            }
+            if ((uint)slot >= (uint)_cellRoots.Length) return;
             OpenFrameCard(item, GetBorderForItem(item), () => ApplyBorderToCell(slot), _cellRoots[slot] ?? (FrameworkElement)this, "Position " + PositionOfSlot(slot));
         }
 
