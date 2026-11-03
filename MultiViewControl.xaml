@@ -285,19 +285,19 @@
                     <!-- Subtle Section Divider 1 -->
                     <Rectangle Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,0" Opacity="0.5"/>
 
-                    <!-- Photos loaded. Not a playback mode. -->
+                    <!-- Story Deck Drawer Toggle -->
                     <Border x:Name="DrawerControl" CornerRadius="12" Background="#14FFFFFF" VerticalAlignment="Center">
-                        <Button x:Name="ShownBadge"
-                                Click="ShownBadge_Click"
+                        <Button x:Name="StoryDeckButton"
+                                Click="StoryDeckButton_Click"
                                 Style="{StaticResource QuietButtonStyle}"
                                 Padding="8,5"
                                 CornerRadius="12"
                                 VerticalAlignment="Center"
-                                ToolTipService.ToolTip="Open Image Pool to view, add, or remove images.">
+                                ToolTipService.ToolTip="Toggle Story Deck drawer (Pool and Storyboard). Press B.">
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8B9;" FontSize="13" />
-                                <TextBlock x:Name="ShownText"
-                                           Text="Image Pool"
+                                <FontIcon x:Name="StoryDeckIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE8B7;" FontSize="13" />
+                                <TextBlock x:Name="StoryDeckText"
+                                           Text="Story Deck"
                                            VerticalAlignment="Center"
                                            FontSize="13"
                                            Typography.NumeralAlignment="Tabular" />
@@ -307,34 +307,20 @@
 
                     <Rectangle Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,0" Opacity="0.5"/>
 
-                    <!-- Playback Mode Selection: Storyboard vs Auto-Mix -->
+                    <!-- Playback Mode: Auto-Mix -->
                     <Border x:Name="PlayModeControl" CornerRadius="12" Background="#14FFFFFF" VerticalAlignment="Center">
-                        <StackPanel Orientation="Horizontal">
-                            <Button x:Name="StoryboardButton"
-                                    Click="StoryboardButton_Click"
-                                    Style="{StaticResource QuietButtonStyle}"
-                                    Padding="8,5"
-                                    CornerRadius="12"
-                                    VerticalAlignment="Center"
-                                    ToolTipService.ToolTip="Storyboard playback mode. Open the Storyboard to sequence and edit scenes (B).">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <FontIcon x:Name="StoryboardIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE8B7;" FontSize="14" />
-                                    <TextBlock x:Name="StoryboardText" Text="Storyboard" VerticalAlignment="Center" FontSize="13" />
-                                </StackPanel>
-                            </Button>
-                            <Button x:Name="SurpriseButton"
-                                    Click="SurpriseButton_Click"
-                                    AutomationProperties.Name="Auto-Mix"
-                                    Style="{StaticResource QuietButtonStyle}"
-                                    Padding="8,5"
-                                    CornerRadius="12"
-                                    ToolTipService.ToolTip="Auto-Mix playback mode. Continuously generates dynamic multi-image layouts.">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <FontIcon x:Name="SurpriseIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE8B1;" FontSize="14" />
-                                    <TextBlock x:Name="SurpriseText" Text="Auto-Mix" VerticalAlignment="Center" FontSize="13" />
-                                </StackPanel>
-                            </Button>
-                        </StackPanel>
+                        <Button x:Name="SurpriseButton"
+                                Click="SurpriseButton_Click"
+                                AutomationProperties.Name="Auto-Mix"
+                                Style="{StaticResource QuietButtonStyle}"
+                                Padding="8,5"
+                                CornerRadius="12"
+                                ToolTipService.ToolTip="Auto-Mix playback mode. Continuously generates dynamic multi-image layouts.">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon x:Name="SurpriseIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE8B1;" FontSize="14" />
+                                <TextBlock x:Name="SurpriseText" Text="Auto-Mix" VerticalAlignment="Center" FontSize="13" />
+                            </StackPanel>
+                        </Button>
                     </Border>
 
                     <Rectangle Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,0" Opacity="0.5"/>

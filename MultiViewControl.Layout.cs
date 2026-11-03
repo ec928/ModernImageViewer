@@ -205,36 +205,31 @@ namespace ModernImageViewer
             }
         }
 
-        /// <summary>Updates the Image Pool and Storyboard buttons in the playbar drawer pill.</summary>
+        /// <summary>Updates the Story Deck button in the playbar.</summary>
         private void ShowShownBadge()
         {
             int total = SessionPictures().Count;
             int tray = TrayImages().Count;
             int onCanvas = ImagesOnCanvas();
             int scenes = _activeShow?.VisibleSceneCount ?? 0;
-            bool isTrayOpen = _trayCard != null && _trayTab == 0;
+            bool isDrawerOpen = _trayCard != null;
 
-            if (ShownBadge != null)
+            if (StoryDeckButton != null)
             {
-                ShownBadge.Visibility = Visibility.Visible;
-                HoldFlyoutSource(ShownBadge, isTrayOpen);
-                string poolName = total > 0 ? $"Image Pool ({total})" : "Image Pool";
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(ShownBadge, poolName);
-                ToolTipService.SetToolTip(ShownBadge, total > 0
-                    ? (tray > 0
-                        ? $"{total} images. {onCanvas} on canvas, {tray} in pool."
-                        : $"{total} images, all on canvas.")
-                    : "Open Image Pool to view, add, or remove images.");
+                StoryDeckButton.Visibility = Visibility.Visible;
+                HoldFlyoutSource(StoryDeckButton, isDrawerOpen);
+                string deckName = scenes > 0 ? $"Story Deck ({scenes})" : total > 0 ? $"Story Deck ({total})" : "Story Deck";
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(StoryDeckButton, deckName);
+                ToolTipService.SetToolTip(StoryDeckButton, scenes > 0
+                    ? $"Story Deck: {scenes} scenes, {total} images. Click to toggle drawer (B)."
+                    : total > 0
+                        ? $"Story Deck: {total} images ({tray} in pool, {onCanvas} on canvas). Click to toggle drawer (B)."
+                        : "Story Deck: Manage image pool and storyboard scenes. Click to toggle drawer (B).");
             }
-            if (ShownText != null)
+            if (StoryDeckText != null)
             {
-                ShownText.Text = total > 0 ? $"Image Pool ({total})" : "Image Pool";
+                StoryDeckText.Text = scenes > 0 ? $"Story Deck ({scenes})" : total > 0 ? $"Story Deck ({total})" : "Story Deck";
             }
-
-            if (StoryboardButton != null)
-                StoryboardButton.Visibility = Visibility.Visible;
-            if (StoryboardText != null)
-                StoryboardText.Text = scenes > 0 ? $"Storyboard ({scenes})" : "Storyboard";
 
             ShowAutoPlayState();
         }

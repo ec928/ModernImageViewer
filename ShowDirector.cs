@@ -52,10 +52,6 @@ namespace ModernImageViewer
             CancellationToken cancellationToken)
         {
             var usable = rawPhotos.Where(p => p.Width >= 1 && p.Height >= 1).ToList();
-            if (options.SkipScreens)
-            {
-                usable = LayoutComposer.LeaveOutScreensAndRepeats(usable);
-            }
 
             if (usable.Count == 0)
             {
