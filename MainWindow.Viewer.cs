@@ -760,7 +760,7 @@ namespace ModernImageViewer
             {
                 if (!await Task.Run(() => HasSupportedImages(targetFolder)))
                 {
-                    ViewerControl?.ShowNotification($"No photos in {Path.GetFileName(targetFolder)}");
+                    ViewerControl?.ShowNotification($"No images in {Path.GetFileName(targetFolder)}");
                     return;
                 }
                 await ScanFolder(targetFolder);
@@ -2701,7 +2701,7 @@ namespace ModernImageViewer
             int photos = Images.Count;
             HeaderCountText.Text = inArchive
                 ? (photos == 1 ? "1 page" : $"{photos} pages")
-                : (photos == 1 ? "1 photo" : $"{photos} photos");
+                : (photos == 1 ? "1 image" : $"{photos} images");
             if (HeaderPathFlyoutText != null) HeaderPathFlyoutText.Text = CurrentLocationText();
             UpdateEmptyFolderState();
         }
@@ -2721,7 +2721,7 @@ namespace ModernImageViewer
             }
             else
             {
-                if (EmptyFolderTitle != null) EmptyFolderTitle.Text = _scanError ?? "No photos in this folder";
+                if (EmptyFolderTitle != null) EmptyFolderTitle.Text = _scanError ?? "No images in this folder";
                 if (EmptyFolderSubfoldersButton != null)
                 {
                     if (_childFolders.Count > 0)
@@ -3699,7 +3699,7 @@ namespace ModernImageViewer
             Visibility photoVis = isPhoto && !item.IsComicArchive ? Visibility.Visible : Visibility.Collapsed;
             Visibility fileMutateVis = isPhoto && !item.IsComicEntry ? Visibility.Visible : Visibility.Collapsed;
             if (GridMenuOpenItem != null)
-                GridMenuOpenItem.Text = item.IsDirectory ? "Open Folder" : (item.IsComicArchive ? "Open Comic Book" : "Open Photo");
+                GridMenuOpenItem.Text = item.IsDirectory ? "Open Folder" : (item.IsComicArchive ? "Open Comic Book" : "Open Image");
             if (GridMenuSelectItem != null)
             {
                 GridMenuSelectItem.Visibility = fileMutateVis;

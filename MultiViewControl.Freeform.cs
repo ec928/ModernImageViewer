@@ -21,7 +21,7 @@ namespace ModernImageViewer
 {
     public sealed partial class MultiViewControl
     {
-        public const string AddRuleText = "Up to 16 photos are placed directly on the canvas. Additional photos are saved to the Image Pool.";
+        public const string AddRuleText = "Up to 16 images are placed directly on the canvas. Additional images are saved to the Image Pool.";
 
         private const double DroppedCellShare = 0.45;
         private const double DroppedCellCascade = 28;
@@ -333,8 +333,8 @@ namespace ModernImageViewer
             {
                 int remaining = MosaicLayout.MaxShown - onCanvas;
                 return remaining > 0
-                    ? $"{remaining} canvas slots available. Additional photos go to Image Pool."
-                    : $"Canvas is full ({MosaicLayout.MaxShown}/{MosaicLayout.MaxShown}). New photos go to Image Pool.";
+                    ? $"{remaining} canvas slots available. Additional images go to Image Pool."
+                    : $"Canvas is full ({MosaicLayout.MaxShown}/{MosaicLayout.MaxShown}). New images go to Image Pool.";
             }
             var fresh = NotYetHere(selected);
             if (fresh.Count == 0) return $"{selected.Count} selected (already in session)";

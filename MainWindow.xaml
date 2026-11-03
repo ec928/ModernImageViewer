@@ -612,7 +612,7 @@
                             </Border.Shadow>
                             <StackPanel Spacing="12" HorizontalAlignment="Center">
                                 <FontIcon Glyph="&#xEB9F;" FontFamily="Segoe Fluent Icons" FontSize="44" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center"/>
-                                <TextBlock x:Name="EmptyFolderTitle" Text="No photos in this folder" FontSize="16" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center"/>
+                                <TextBlock x:Name="EmptyFolderTitle" Text="No images in this folder" FontSize="16" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center"/>
                                 <TextBlock Text="Drag and drop image files or comic archives here to browse, or choose another folder." TextWrapping="Wrap" TextAlignment="Center" MaxWidth="400" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" Margin="0,-4,0,6"/>
                                 <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Center">
                                     <Button x:Name="EmptyFolderSubfoldersButton" Click="ListMode_Click" Visibility="Collapsed" Style="{StaticResource SubtleButtonStyle}" Padding="12,6" CornerRadius="6">
@@ -636,7 +636,7 @@
                             </Border.Shadow>
                             <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                                 <ProgressRing x:Name="LoadingRing" Width="20" Height="20" IsActive="False" />
-                                <TextBlock Text="Loading photos&#x2026;" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
+                                <TextBlock Text="Loading images&#x2026;" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
                             </StackPanel>
                         </Border>
                     </Grid>
@@ -661,7 +661,7 @@
                                 <Button x:Name="AddFolderButton" Click="AddFolder_Click" Visibility="Collapsed" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" AutomationProperties.Name="Add this folder">
                                     <TextBlock x:Name="AddFolderText" Text="Add this folder" FontSize="13" VerticalAlignment="Center"/>
                                 </Button>
-                                <Button x:Name="AddSubfoldersButton" Click="AddSubfolders_Click" Visibility="Collapsed" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" AutomationProperties.Name="Add with subfolders" ToolTipService.ToolTip="Add this folder and all subfolders. Photos fill canvas up to 16; additional photos are placed in Image Pool.">
+                                <Button x:Name="AddSubfoldersButton" Click="AddSubfolders_Click" Visibility="Collapsed" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" AutomationProperties.Name="Add with subfolders" ToolTipService.ToolTip="Add this folder and all subfolders. Images fill canvas up to 16; additional images are placed in Image Pool.">
                                     <TextBlock Text="With subfolders" FontSize="13" VerticalAlignment="Center"/>
                                 </Button>
 

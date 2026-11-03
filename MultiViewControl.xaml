@@ -293,7 +293,7 @@
                                 Padding="8,5"
                                 CornerRadius="12"
                                 VerticalAlignment="Center"
-                                ToolTipService.ToolTip="Open Image Pool to view, add, or remove photos.">
+                                ToolTipService.ToolTip="Open Image Pool to view, add, or remove images.">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8B9;" FontSize="13" />
                                 <TextBlock x:Name="ShownText"
@@ -328,7 +328,7 @@
                                     Style="{StaticResource QuietButtonStyle}"
                                     Padding="8,5"
                                     CornerRadius="12"
-                                    ToolTipService.ToolTip="Auto-Mix playback mode. Continuously generates dynamic multi-photo layouts.">
+                                    ToolTipService.ToolTip="Auto-Mix playback mode. Continuously generates dynamic multi-image layouts.">
                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                     <FontIcon x:Name="SurpriseIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE8B1;" FontSize="14" />
                                     <TextBlock x:Name="SurpriseText" Text="Auto-Mix" VerticalAlignment="Center" FontSize="13" />
@@ -347,9 +347,10 @@
                                     AutomationProperties.Name="Previous layout"
                                     ToolTipService.ToolTip="Previous layout or scene (Left Arrow)"
                                     Style="{StaticResource QuietButtonStyle}"
-                                    Padding="7,5"
+                                    Padding="8,5"
+                                    MinWidth="30"
                                     CornerRadius="12">
-                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE76B;" FontSize="12" />
+                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE973;" FontSize="13" />
                             </Button>
                             <Button x:Name="AutoPlayButton"
                                     Click="AutoPlayButton_Click"
@@ -369,9 +370,10 @@
                                     AutomationProperties.Name="Next layout"
                                     ToolTipService.ToolTip="Next layout or scene (Right Arrow)"
                                     Style="{StaticResource QuietButtonStyle}"
-                                    Padding="7,5"
+                                    Padding="8,5"
+                                    MinWidth="30"
                                     CornerRadius="12">
-                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE76C;" FontSize="12" />
+                                <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE974;" FontSize="13" />
                             </Button>
                             <Button x:Name="SurpriseCardButton"
                                     Click="SurpriseCardButton_Click"
@@ -380,7 +382,7 @@
                                     Style="{StaticResource QuietButtonStyle}"
                                     Padding="6,5"
                                     CornerRadius="12">
-                                <FontIcon x:Name="SurpriseCardArrow" FontFamily="Segoe Fluent Icons" Glyph="&#xE70E;" FontSize="11" />
+                                <FontIcon x:Name="SurpriseCardArrow" FontFamily="Segoe Fluent Icons" Glyph="&#xE971;" FontSize="12" />
                             </Button>
                         </StackPanel>
                     </Border>

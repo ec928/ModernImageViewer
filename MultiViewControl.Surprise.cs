@@ -612,7 +612,7 @@ namespace ModernImageViewer
 
                 body.Children.Add(durationRow);
 
-                Toggle(body, "Smart pace", "When duration has a range, holds dense multi-photo layouts toward the longer end and solo/pair layouts toward the shorter end.", options.SmartPace, (o, on) => o.SmartPace = on);
+                Toggle(body, "Smart pace", "When duration has a range, holds dense multi-image layouts toward the longer end and solo/pair layouts toward the shorter end.", options.SmartPace, (o, on) => o.SmartPace = on);
 
                 Slide(body, "Motion", "How far the camera moves over each layout while it plays, from still to strong, with floating cells following it.", 0, 100, 5, options.MotionAmount * 100,
                     v => v < 1 ? "Off" : $"{v:0}%",
@@ -719,11 +719,11 @@ namespace ModernImageViewer
             var (imagesSection, imagesSummary) = Section("Images & faces", ImagesSummaryText());
             updateImagesSummary = () => imagesSummary.Text = ImagesSummaryText();
 
-            fewestEach = Slide(imagesSection, "Fewest photos per scene", "The minimum photos per scene. When more photos are available, each scene selects within this range.",
+            fewestEach = Slide(imagesSection, "Fewest images per scene", "The minimum images per scene. When more images are available, each scene selects within this range.",
                 SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.FewestPictures,
                 v => $"{v:0}",
                 (o, v) => { if (!syncingImageRange) SetImageRange((int)v, (int)mostBox.Value); });
-            mostEach = Slide(imagesSection, "Most photos per scene", "The maximum photos per scene. Additional photos remain in the Image Pool and cycle across scenes.",
+            mostEach = Slide(imagesSection, "Most images per scene", "The maximum images per scene. Additional images remain in the Image Pool and cycle across scenes.",
                 SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.MostPictures,
                 v => $"{v:0}",
                 (o, v) => { if (!syncingImageRange) SetImageRange((int)fewestBox.Value, (int)v); });
@@ -877,7 +877,7 @@ namespace ModernImageViewer
                 v => $"{v:0}%",
                 (o, v) => o.MotionZoomChance = v / 100);
 
-            Slide(cameraSection, "Aims at faces", "The odds that the camera heads toward a large photo with faces in it.",
+            Slide(cameraSection, "Aims at faces", "The odds that the camera heads toward a large image with faces in it.",
                 0, 100, 5, options.MotionFaceChance * 100,
                 v => $"{v:0}%",
                 (o, v) => o.MotionFaceChance = v / 100);
@@ -962,7 +962,7 @@ namespace ModernImageViewer
                 0.25, 3, 0.25, options.GapScale,
                 v => $"{v:0.##}\u00D7",
                 (o, v) => o.GapScale = v);
-            Slide(lookSection, "Hero size", "The hero photo's height against the canvas.",
+            Slide(lookSection, "Hero size", "The hero image's height against the canvas.",
                 40, 90, 1, options.HeroSize * 100,
                 v => $"{v:0}%",
                 (o, v) => o.HeroSize = v / 100);
@@ -1146,7 +1146,7 @@ namespace ModernImageViewer
             AddOverCanvas(_surpriseCard, 6500);
             PlaceSurpriseCard();
             SurpriseCardButton.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF));
-            SurpriseCardArrow.Glyph = "\uE70D";
+            SurpriseCardArrow.Glyph = "\uE972";
             ShowAutoPlayState();
             HudMenu_Opened(this, EventArgs.Empty);
         }
@@ -1424,7 +1424,7 @@ namespace ModernImageViewer
             _cardNextSong = null;
             _showingSurpriseAdvanced = false;
             SurpriseCardButton.ClearValue(Control.BackgroundProperty);
-            SurpriseCardArrow.Glyph = "\uE70E";
+            SurpriseCardArrow.Glyph = "\uE971";
             HudMenu_Closed(this, EventArgs.Empty);
         }
 
@@ -1764,7 +1764,7 @@ namespace ModernImageViewer
             var poolControlsRight = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
             var addImagesBtn = new Button
             {
-                Content = "Add photos",
+                Content = "Add images",
                 Padding = new Thickness(12, 5, 12, 5),
                 CornerRadius = new CornerRadius(12),
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
@@ -1773,7 +1773,7 @@ namespace ModernImageViewer
                 BorderBrush = winBlue
             };
             addImagesBtn.Click += (_, _) => AddImagesRequested?.Invoke(this, EventArgs.Empty);
-            ToolTipService.SetToolTip(addImagesBtn, "Add photos from a folder");
+            ToolTipService.SetToolTip(addImagesBtn, "Add images from a folder");
             poolControlsRight.Children.Add(addImagesBtn);
             poolControlsRight.Children.Add(search);
 
@@ -1785,7 +1785,7 @@ namespace ModernImageViewer
             poolControlsRow.Children.Add(poolControlsRight);
 
             var hintStack = new StackPanel { Spacing = 2 };
-            var hint = new TextBlock { Text = "Right-click a photo to remove it.", FontSize = 12, Opacity = 0.7 };
+            var hint = new TextBlock { Text = "Right-click an image to remove it.", FontSize = 12, Opacity = 0.7 };
             hintStack.Children.Add(hint);
 
             var emptyTrayPanel = new StackPanel
@@ -1811,7 +1811,7 @@ namespace ModernImageViewer
                             };
             var emptyTrayAddBtn = new Button
             {
-                Content = "Add photos",
+                Content = "Add images",
                 Background = winBlueDeep,
                 Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White),
                 BorderBrush = winBlue,
@@ -1843,9 +1843,9 @@ namespace ModernImageViewer
                 bool hasTray = all.Count > 0;
 
                 heading.Text = current.Count == all.Count
-                    ? (all.Count == 0 ? (sessionCount == 0 ? "" : $"{onCanvas} photos on canvas.")
+                    ? (all.Count == 0 ? (sessionCount == 0 ? "" : $"{onCanvas} images on canvas.")
                                       : $"{all.Count} in pool. {click}")
-                    : current.Count == 0 ? "No photo matches that name."
+                    : current.Count == 0 ? "No image matches that name."
                     : $"{current.Count} of {all.Count} in pool. {click}";
 
                 poolControlsRight.Visibility = hasTray ? Visibility.Visible : Visibility.Collapsed;
@@ -1855,10 +1855,10 @@ namespace ModernImageViewer
 
                 if (!hasTray)
                 {
-                    emptyTrayTitle.Text = sessionCount > 0 ? "All photos are on the canvas" : "No photos yet";
+                    emptyTrayTitle.Text = sessionCount > 0 ? "All images are on the canvas" : "No images yet";
                     emptyTrayDesc.Text = sessionCount > 0
-                        ? "Right-click a photo and choose Move to Image Pool, or add more photos."
-                        : "Add photos from a folder to start.";
+                        ? "Right-click an image and choose Move to Image Pool, or add more images."
+                        : "Add images from a folder to start.";
                 }
             }
 
@@ -1958,7 +1958,7 @@ namespace ModernImageViewer
                 Padding = new Thickness(12, 6, 12, 6),
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
             };
-            ToolTipService.SetToolTip(addCanvasBtn, "Adds the photos on screen as a new scene.");
+            ToolTipService.SetToolTip(addCanvasBtn, "Adds the images on screen as a new scene.");
 
             var autoDraftBtn = new Button
             {
@@ -1970,7 +1970,7 @@ namespace ModernImageViewer
                 Padding = new Thickness(14, 6, 14, 6),
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
             };
-            ToolTipService.SetToolTip(autoDraftBtn, "Makes a show from these photos. Replaces the scenes you have now.");
+            ToolTipService.SetToolTip(autoDraftBtn, "Makes a show from these images. Replaces the scenes you have now.");
 
             var playShowBtn = new Button
             {
@@ -2038,7 +2038,7 @@ namespace ModernImageViewer
                 Height = 30,
                 VerticalAlignment = VerticalAlignment.Center
             };
-            ToolTipService.SetToolTip(storyFewestBox, "Fewest photos in a scene, from 1 to 16");
+            ToolTipService.SetToolTip(storyFewestBox, "Fewest images in a scene, from 1 to 16");
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(storyFewestBox, "Minimum images per scene");
 
             var storyToLabel = new TextBlock
@@ -2059,7 +2059,7 @@ namespace ModernImageViewer
                 Height = 30,
                 VerticalAlignment = VerticalAlignment.Center
             };
-            ToolTipService.SetToolTip(storyMostBox, "Most photos in a scene, from 1 to 16");
+            ToolTipService.SetToolTip(storyMostBox, "Most images in a scene, from 1 to 16");
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(storyMostBox, "Maximum images per scene");
 
             storyPresetLeft.Children.Add(storyFewestBox);
@@ -2132,7 +2132,7 @@ namespace ModernImageViewer
                 Margin = new Thickness(0, 2, 0, 4)
             };
             var progressRing = new ProgressRing { IsActive = true, Width = 16, Height = 16, Foreground = winBlue };
-            var progressText = new TextBlock { Text = "Reading the photos...", VerticalAlignment = VerticalAlignment.Center, FontSize = 12 };
+            var progressText = new TextBlock { Text = "Reading images...", VerticalAlignment = VerticalAlignment.Center, FontSize = 12 };
             draftProgressRow.Children.Add(progressRing);
             draftProgressRow.Children.Add(progressText);
 
@@ -2147,7 +2147,7 @@ namespace ModernImageViewer
             var emptyIcon = new FontIcon { Glyph = "\uE8B7", FontSize = 40, Foreground = winBlue };
             var emptyDesc = new TextBlock
             {
-                Text = "Makes a show from these photos, one screen at a time.",
+                Text = "Makes a show from these images, one screen at a time.",
                 FontSize = 13,
                 Opacity = 0.85,
                 MaxWidth = 440,
@@ -2177,7 +2177,7 @@ namespace ModernImageViewer
                 HorizontalAlignment = HorizontalAlignment.Center,
                 Margin = new Thickness(0, 4, 0, 0)
             };
-            ToolTipService.SetToolTip(emptyAddCanvasBtn, "The photos on screen become the first scene.");
+            ToolTipService.SetToolTip(emptyAddCanvasBtn, "The images on screen become the first scene.");
 
             emptyPanel.Children.Add(emptyIcon);
             emptyPanel.Children.Add(emptyDesc);
@@ -2222,7 +2222,7 @@ namespace ModernImageViewer
                     "    <Border HorizontalAlignment=\"Right\" VerticalAlignment=\"Bottom\" Margin=\"0,0,5,37\" Background=\"#E0000000\" CornerRadius=\"4\" Padding=\"5,2\" IsHitTestVisible=\"False\" Visibility=\"Collapsed\">" +
                     "      <StackPanel Orientation=\"Horizontal\" Spacing=\"4\">" +
                     "        <FontIcon FontFamily=\"Segoe Fluent Icons\" Glyph=\"&#xE8A9;\" FontSize=\"10\" Foreground=\"#4CC2FF\"/>" +
-                    "        <TextBlock Text=\"9 photos\" FontSize=\"10\" Foreground=\"White\" FontWeight=\"SemiBold\"/>" +
+                    "        <TextBlock Text=\"9 images\" FontSize=\"10\" Foreground=\"White\" FontWeight=\"SemiBold\"/>" +
                     "      </StackPanel>" +
                     "    </Border>" +
                     "    <Grid VerticalAlignment=\"Top\" Margin=\"5\" ColumnSpacing=\"4\">" +
@@ -2301,8 +2301,8 @@ namespace ModernImageViewer
                     {
                         storySummary.Text = $"{sceneCount} scenes · {length} · {unshown.Count} not in the show";
                         appendNewBtn.Visibility = Visibility.Visible;
-                        appendNewBtn.Content = unshown.Count == 1 ? "+ Add 1 new photo" : $"+ Add {unshown.Count} new photos";
-                        ToolTipService.SetToolTip(appendNewBtn, $"Adds scenes for the {unshown.Count} photo{(unshown.Count == 1 ? "" : "s")} that are not in the show yet.");
+                        appendNewBtn.Content = unshown.Count == 1 ? "+ Add 1 new image" : $"+ Add {unshown.Count} new images";
+                        ToolTipService.SetToolTip(appendNewBtn, $"Adds scenes for the {unshown.Count} image{(unshown.Count == 1 ? "" : "s")} that are not in the show yet.");
                         autoDraftBtn.Content = "Replace show";
                     }
                     else
@@ -2316,7 +2316,7 @@ namespace ModernImageViewer
                 {
                     storySummary.Text = totalPhotos == 0
                         ? "No scenes yet"
-                        : $"No scenes yet · {totalPhotos} photo{(totalPhotos == 1 ? "" : "s")}";
+                        : $"No scenes yet · {totalPhotos} image{(totalPhotos == 1 ? "" : "s")}";
                     appendNewBtn.Visibility = Visibility.Collapsed;
                     autoDraftBtn.Content = "Make a show";
                     if (emptyDraftBtn != null) emptyDraftBtn.Content = "Make a show";
@@ -2464,7 +2464,7 @@ namespace ModernImageViewer
                     {
                         bool moreThanShown = photoCount > 4;
                         multiBadge.Visibility = moreThanShown ? Visibility.Visible : Visibility.Collapsed;
-                        if (moreThanShown && multiText != null) multiText.Text = $"{photoCount} photos";
+                        if (moreThanShown && multiText != null) multiText.Text = $"{photoCount} images";
                     }
 
                     if (multiGrid != null)
@@ -2641,7 +2641,7 @@ namespace ModernImageViewer
                 autoDraftBtn.IsEnabled = false;
                 emptyDraftBtn.IsEnabled = false;
                 draftProgressRow.Visibility = Visibility.Visible;
-                progressText.Text = unshown.Count == 1 ? "Reading 1 new photo..." : $"Reading {unshown.Count} new photos...";
+                progressText.Text = unshown.Count == 1 ? "Reading 1 new image..." : $"Reading {unshown.Count} new images...";
 
                 try
                 {
@@ -2691,7 +2691,7 @@ namespace ModernImageViewer
                 emptyDraftBtn.IsEnabled = false;
                 appendNewBtn.IsEnabled = false;
                 draftProgressRow.Visibility = Visibility.Visible;
-                progressText.Text = "Reading the photos...";
+                progressText.Text = "Reading images...";
 
                 try
                 {
@@ -2744,7 +2744,7 @@ namespace ModernImageViewer
                 int photoCount = sceneFile.Photos.Count + (sceneFile.Freeform?.Count ?? 0);
                 if (photoCount == 0)
                 {
-                    ShowAutoPlayToast("Put at least one photo on the canvas first");
+                    ShowAutoPlayToast("Put at least one image on the canvas first");
                     return;
                 }
                 bool firstScene = _activeShow == null || _activeShow.Scenes.Count == 0;
@@ -3144,7 +3144,7 @@ namespace ModernImageViewer
                 string storyName = StoryboardText?.Text ?? "Storyboard";
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(StoryboardButton, storyboardMode ? storyName + ", selected" : storyName);
                 ToolTipService.SetToolTip(StoryboardButton, !hasScenes
-                    ? "Open the storyboard to make a show from these photos. Press B."
+                    ? "Open the storyboard to make a show from these images. Press B."
                     : storyboardMode
                         ? "Storyboard is on. Play walks these scenes. Click to open the storyboard. Press B."
                         : "Storyboard is off. Click to play the storyboard instead. Press B.");

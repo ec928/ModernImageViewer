@@ -170,8 +170,8 @@ namespace ModernImageViewer
                     icon.Glyph = failed ? "\uE783" : "\uE739";
                     title.Text = empty ? "Empty cell" : System.IO.File.Exists(_items[slot].Path) ? "Can't open this file" : "File not found";
                     detail.Text = !empty ? _items[slot].Name ?? string.Empty
-                        : TrayImages().Count > 0 ? "Click to add a photo\nRight-click for photos not on the canvas"
-                        : "Click to add a photo";
+                        : TrayImages().Count > 0 ? "Click to add an image\nRight-click for images in the pool"
+                        : "Click to add an image";
                 }
             }
             parts.Bound.ApplyGeometry?.Invoke();

@@ -2128,7 +2128,7 @@ namespace ModernImageViewer
                 if (inTray > 0 && !IsEmptyCell(item))
                 {
                     var fromTray = MakeAdvancedItem($"Not on the canvas ({inTray})\u2026", "\uE8B9", () => ShowTrayCard(curSlot));
-                    ToolTipService.SetToolTip(fromTray, "Photos that are not on the canvas. Pick one by looking at it.");
+                    ToolTipService.SetToolTip(fromTray, "Images that are in the pool. Pick one to place it on the canvas.");
                     swapMenu.Items.Insert(0, fromTray);
                     swapMenu.Items.Insert(1, new MenuFlyoutSeparator());
                 }
@@ -2198,7 +2198,7 @@ namespace ModernImageViewer
         private MenuFlyoutItem MoveToTrayItem(ImageItem item)
         {
             var move = MakeAdvancedItem("Move to Image Pool", "\uE8B9", () => MoveCellToTray(item));
-            ToolTipService.SetToolTip(move, "Moves photo to Image Pool. Restore it anytime from the Image Pool panel.");
+            ToolTipService.SetToolTip(move, "Moves image to Image Pool. Restore it anytime from the Image Pool panel.");
             return move;
         }
 

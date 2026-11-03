@@ -222,9 +222,9 @@ namespace ModernImageViewer
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(ShownBadge, poolName);
                 ToolTipService.SetToolTip(ShownBadge, total > 0
                     ? (tray > 0
-                        ? $"{total} photos. {onCanvas} on the canvas, {tray} not on the canvas."
-                        : $"{total} photos, all on the canvas.")
-                    : "Open Image Pool to view, add, or remove photos.");
+                        ? $"{total} images. {onCanvas} on canvas, {tray} in pool."
+                        : $"{total} images, all on canvas.")
+                    : "Open Image Pool to view, add, or remove images.");
             }
             if (ShownText != null)
             {
