@@ -1523,7 +1523,7 @@ namespace ModernImageViewer
         private bool _shuffleChosen;
 
         private bool PlayUsesStoryboard() =>
-            !_shuffleChosen && _activeShow != null && _activeShow.Scenes.Count > 0;
+            _isStoryboardPlayback || (!_shuffleChosen && _activeShow != null && _activeShow.Scenes.Count > 0);
 
         /// <summary>The drafted title is "Gallery wall (1)". The card shows the name. The pictures are the count.</summary>
         private static string SceneCardTitle(ShowScene scene)
@@ -2368,7 +2368,7 @@ namespace ModernImageViewer
 
             void UpdateCardBorder(Grid card, ShowScene scene, int index)
             {
-                bool isPlayingScene = _isStoryboardPlayback && _showPlaybackIndex >= 0 && index == _showPlaybackIndex;
+                bool isPlayingScene = _isStoryboardPlayback && (_selectedShowScene != null ? scene == _selectedShowScene : (_showPlaybackIndex >= 0 && index == _showPlaybackIndex));
                 bool isSelectedScene = scenesView.SelectedItem == scene;
 
                 if (isPlayingScene)
@@ -2803,6 +2803,7 @@ namespace ModernImageViewer
                             var editCamItem = MakeAdvancedItem("🎯 Edit Camera Path…", "\uE714", () =>
                             {
                                 _selectedShowScene = curScene;
+                                _shuffleChosen = false;
                                 scenesView.SelectedItem = curScene;
                                 RefreshCardBadges();
                                 EnterCameraDirector(curScene);
@@ -2866,6 +2867,7 @@ namespace ModernImageViewer
                             if (s is Button b && b.Tag is ShowScene targetScene)
                             {
                                 _selectedShowScene = targetScene;
+                                _shuffleChosen = false;
                                 scenesView.SelectedItem = targetScene;
                                 RefreshCardBadges();
                                 EnterCameraDirector(targetScene);
@@ -2978,6 +2980,7 @@ namespace ModernImageViewer
                         motionSub.Items.Add(MakeAdvancedItem("🎯 Edit Camera Path…", "\uE714", () =>
                         {
                             _selectedShowScene = sc;
+                            _shuffleChosen = false;
                             scenesView.SelectedItem = sc;
                             RefreshCardBadges();
                             EnterCameraDirector(sc);
@@ -3058,6 +3061,7 @@ namespace ModernImageViewer
             {
                 if (args.ClickedItem is not ShowScene scene) return;
                 _selectedShowScene = scene;
+                _shuffleChosen = false;
                 scenesView.SelectedItem = scene;
                 for (int i = 0; i < scenesCollection.Count; i++)
                 {
@@ -3069,6 +3073,7 @@ namespace ModernImageViewer
                 }
                 // Single-click previews on canvas without closing the panel
                 if (scene.Layout != null) ApplyLayoutFile(WithRestInTray(scene.Layout, SessionPictures()), restoreAspect: false);
+                ShowAutoPlayState();
             };
 
             scenesView.DoubleTapped += async (s, e) =>
@@ -3164,7 +3169,9 @@ namespace ModernImageViewer
                         ActualHeight,
                         "Auto-Drafted Presentation",
                         progress);
-                    if (firstShow) _shuffleChosen = false;
+                    _shuffleChosen = false;
+                    _isStoryboardPlayback = false;
+                    _showPlaybackIndex = 0;
                 }
                 finally
                 {
@@ -3195,8 +3202,7 @@ namespace ModernImageViewer
                     ShowAutoPlayToast("Put at least one image on the canvas first");
                     return;
                 }
-                bool firstScene = _activeShow == null || _activeShow.Scenes.Count == 0;
-                if (firstScene) _shuffleChosen = false;
+                _shuffleChosen = false;
                 string recipe = photoCount == 1 ? "Solo" : "Custom";
                 string title = photoCount == 1 ? "Custom Solo" : $"Custom Layout ({photoCount})";
                 var scene = new ShowScene
@@ -3417,16 +3423,17 @@ namespace ModernImageViewer
             StopAutoPlay();
             CaptureUndoPoint();
             _isStoryboardPlayback = true;
+            _shuffleChosen = false;
             _showPlaybackIndex = targetIndex;
             _autoPlaySeconds = 12;
             AddAutoPlayShield();
             StartAutoPlayMusic();
-            ShowAutoPlayState();
 
             var startScene = visibleScenes[targetIndex];
             _selectedShowScene = startScene;
             _onStoryboardPlaybackIndexChanged?.Invoke(targetIndex);
             _layoutSeconds = (int)(startScene.DwellSeconds ?? SurpriseChoices.NextPlaySeconds(Random.Shared));
+            ShowAutoPlayState();
             ShowAutoPlayToast($"Playing Scene {targetIndex + 1} of {visibleScenes.Count}: {startScene.Title ?? startScene.Recipe ?? "Scene"}");
             var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(Math.Max(1, _layoutSeconds)) };
             _autoPlayTimer = timer;
@@ -3534,9 +3541,11 @@ namespace ModernImageViewer
             int totalDisplay = visibleScenes.Count;
             string sceneName = scene.Title ?? scene.Recipe ?? $"Scene {displayIndex}";
             ShowAutoPlayToast($"Scene {displayIndex} of {totalDisplay}: {sceneName}");
-            StartPlaybackProgress(_layoutSeconds);
+            if (_autoPlaySeconds > 0) StartPlaybackProgress(_layoutSeconds);
+            else StopPlaybackProgress();
 
             _showPlaybackIndex = (currentIndex + 1) % visibleScenes.Count;
+            ShowAutoPlayState();
         }
 
         private void RefreshTrayCardIfOpen()
@@ -3554,7 +3563,15 @@ namespace ModernImageViewer
             if (visibleScenes.Count == 0) return;
 
             int target;
-            if (_showPlaybackIndex < 0)
+            if (_selectedShowScene != null)
+            {
+                int current = visibleScenes.IndexOf(_selectedShowScene);
+                if (current < 0) current = 0;
+                target = back
+                    ? (current - 1 + visibleScenes.Count) % visibleScenes.Count
+                    : (current + 1) % visibleScenes.Count;
+            }
+            else if (_showPlaybackIndex < 0)
             {
                 target = back ? visibleScenes.Count - 1 : 0;
             }
@@ -3566,6 +3583,7 @@ namespace ModernImageViewer
                     : (current + 1) % visibleScenes.Count;
             }
 
+            _shuffleChosen = false;
             _showPlaybackIndex = target;
             await PlayNextStoryboardSceneAsync(fade: true);
 
@@ -3679,7 +3697,17 @@ namespace ModernImageViewer
             CaptureUndoPoint();
             _surpriseMusic?.SetPlaying(false);
             ShowAutoPlayState();
-            ShowAutoPlayToast("Paused");
+            if (PlayUsesStoryboard() && _activeShow != null && _activeShow.Scenes.Count > 0)
+            {
+                var visibleScenes = _activeShow.Scenes.Where(s => !s.IsHidden).ToList();
+                int idx = _selectedShowScene != null ? visibleScenes.IndexOf(_selectedShowScene) : -1;
+                int cur = (idx >= 0 ? idx : 0) + 1;
+                ShowAutoPlayToast($"Paused · Scene {cur} of {visibleScenes.Count}");
+            }
+            else
+            {
+                ShowAutoPlayToast("Paused Auto-Mix");
+            }
         }
 
         /// <summary>The bar shows Play while a show is running, and exactly one of Storyboard and Surprise me as the playback mode.</summary>
@@ -3688,38 +3716,90 @@ namespace ModernImageViewer
             bool playing = _autoPlaySeconds > 0;
             bool storyboardMode = PlayUsesStoryboard();
             bool hasScenes = _activeShow != null && _activeShow.Scenes.Count > 0;
+            var visibleScenes = hasScenes ? _activeShow!.Scenes.Where(s => !s.IsHidden).ToList() : null;
+            int totalScenes = visibleScenes?.Count ?? 0;
+            if (totalScenes == 0) storyboardMode = false;
+
+            int curScene = 1;
+            string currentSceneTitle = "Scene 1";
+            if (storyboardMode && visibleScenes != null && visibleScenes.Count > 0)
+            {
+                int idx = _selectedShowScene != null ? visibleScenes.IndexOf(_selectedShowScene) : -1;
+                if (idx < 0 && _showPlaybackIndex >= 0 && _showPlaybackIndex < visibleScenes.Count)
+                {
+                    idx = _showPlaybackIndex;
+                }
+                if (idx >= 0)
+                {
+                    curScene = idx + 1;
+                    var sc = visibleScenes[idx];
+                    currentSceneTitle = sc.Title ?? sc.Recipe ?? $"Scene {curScene}";
+                }
+            }
+
             string glyph = playing ? "\uE769" : "\uE768";
-            string text = playing ? "Pause" : (storyboardMode ? "Play Show" : "Play Mix");
+            string text;
+            if (playing)
+            {
+                text = storyboardMode ? $"Show · {curScene}/{totalScenes}" : "Auto-Mix";
+            }
+            else
+            {
+                text = storyboardMode
+                    ? (curScene > 1 && curScene <= totalScenes ? $"Play Show · {curScene}/{totalScenes}" : "Play Show")
+                    : "Play Mix";
+            }
+
             AutoPlayIcon.Glyph = glyph;
             AutoPlayText.Text = text;
 
             string playTip = playing
                 ? (storyboardMode
-                    ? "Pause the storyboard. Space does the same. Left and Right move between scenes."
-                    : "Pause. Space does the same. Left and Right move between layouts.")
+                    ? $"Pause the storyboard show (Scene {curScene} of {totalScenes}: {currentSceneTitle}). Space does the same. Left and Right move between scenes."
+                    : "Pause Auto-Mix. Space does the same. Left and Right move between layouts.")
                 : (storyboardMode
-                    ? $"Play the storyboard ({_activeShow!.Scenes.Count} {(_activeShow.Scenes.Count == 1 ? "scene" : "scenes")}, {ShowLength(_activeShow.TotalEstimatedDuration)}). Space does the same."
+                    ? (curScene > 1 && curScene <= totalScenes
+                        ? $"Resume the storyboard show at Scene {curScene} of {totalScenes} ({currentSceneTitle}). Space does the same."
+                        : $"Play the storyboard ({totalScenes} {(totalScenes == 1 ? "scene" : "scenes")}, {ShowLength(_activeShow!.TotalEstimatedDuration)}). Space does the same.")
                     : (hasScenes
                         ? $"Play a new layout every {SurpriseChoices.PlayWords}, from the image pool. Space does the same."
                         : $"Play a new layout every {SurpriseChoices.PlayWords}. Space does the same."));
 
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(AutoPlayButton, playing ? "Pause, selected" : "Play");
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(AutoPlayButton, playing ? $"Pause, {text}" : text);
             ToolTipService.SetToolTip(AutoPlayButton, playTip);
             PaintSelected(AutoPlayButton, AutoPlayText, AutoPlayIcon, playing);
 
             if (StoryDeckButton != null)
             {
                 bool isDrawerOpen = _trayCard != null;
-                HoldFlyoutSource(StoryDeckButton, isDrawerOpen);
+                if (isDrawerOpen)
+                {
+                    PaintSelected(StoryDeckButton, StoryDeckText, StoryDeckIcon, false);
+                    HoldFlyoutSource(StoryDeckButton, true);
+                }
+                else
+                {
+                    HoldFlyoutSource(StoryDeckButton, false);
+                    PaintSelected(StoryDeckButton, StoryDeckText, StoryDeckIcon, storyboardMode);
+                }
+
+                string deckTip = hasScenes
+                    ? (storyboardMode
+                        ? $"Story Deck is active ({totalScenes} scenes). Click to toggle drawer (B)."
+                        : $"Story Deck ({totalScenes} scenes). Click to toggle drawer (B).")
+                    : "Story Deck: Manage image pool and storyboard scenes. Click to toggle drawer (B).";
+                ToolTipService.SetToolTip(StoryDeckButton, deckTip);
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(StoryDeckButton,
+                    storyboardMode ? $"{StoryDeckText?.Text ?? "Story Deck"}, selected" : (StoryDeckText?.Text ?? "Story Deck"));
             }
 
             PaintSelected(SurpriseButton, SurpriseText, SurpriseIcon, !storyboardMode);
             if (SurpriseButton != null)
             {
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(SurpriseButton, storyboardMode ? "Auto-Mix" : "Auto-Mix, selected");
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(SurpriseButton, !storyboardMode ? "Auto-Mix, selected" : "Auto-Mix");
                 ToolTipService.SetToolTip(SurpriseButton, storyboardMode
-                    ? "Switch playback to Auto-Mix, and show one new layout now. Play keeps using it."
-                    : "Auto-Mix is on. Click for one new layout now.");
+                    ? "Switch playback to Auto-Mix, and show one new layout now."
+                    : "Auto-Mix is active. Click for one new layout now.");
             }
             if (PrevLayoutButton != null)
             {

@@ -355,7 +355,7 @@
                                     CornerRadius="12">
                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                     <FontIcon x:Name="AutoPlayIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE768;" FontSize="13" />
-                                    <TextBlock x:Name="AutoPlayText" Text="Play" VerticalAlignment="Center" FontSize="13" />
+                                    <TextBlock x:Name="AutoPlayText" Text="Play" VerticalAlignment="Center" FontSize="13" Typography.NumeralAlignment="Tabular" />
                                 </StackPanel>
                             </Button>
                             <Button x:Name="NextLayoutButton"

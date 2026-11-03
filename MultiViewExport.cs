@@ -1644,6 +1644,9 @@ namespace ModernImageViewer
                     if (!string.IsNullOrEmpty(openedDir)) MainWindow.Instance?.AddMultiViewSaveLocation(openedDir);
 
                     _activeShow = show;
+                    _shuffleChosen = false;
+                    _isStoryboardPlayback = false;
+                    _showPlaybackIndex = 0;
                     _trayTab = 1;
 
                     // Automatically project the first scene of the storyboard onto canvas
@@ -1892,6 +1895,8 @@ namespace ModernImageViewer
                     scene.KeepCanvasPhotos();
                 _activeShow = layoutFile.Storyboard;
                 _shuffleChosen = false;
+                _isStoryboardPlayback = false;
+                _showPlaybackIndex = 0;
             }
 
             for (int i = 0; i < _cellRoots.Length; i++)
