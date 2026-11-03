@@ -677,7 +677,7 @@ namespace ModernImageViewer
                     SpeedChanged();
                 };
 
-                ToolTipService.SetToolTip(durationRow, "Hold time per layout before advancing. Drag thumbs apart for a random range, together for a fixed duration. Double-click to set a single fixed hold time.");
+                ToolTipService.SetToolTip(durationRow, "Slide duration per layout before advancing. Drag thumbs apart for a random range, together for a fixed duration. Double-click to set a single fixed duration.");
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(durationSlider, "Duration");
 
                 Grid.SetColumn(durationSlider, 0);
@@ -692,7 +692,7 @@ namespace ModernImageViewer
 
                 body.Children.Add(durationRow);
 
-                Toggle(body, "Smart pace", "When duration has a range, holds dense multi-image layouts toward the longer end and solo/pair layouts toward the shorter end.", options.SmartPace, (o, on) => o.SmartPace = on, subtitle: "Adjusts hold time based on layout density");
+                Toggle(body, "Smart pace", "When duration has a range, holds dense multi-image layouts toward the longer end and solo/pair layouts toward the shorter end.", options.SmartPace, (o, on) => o.SmartPace = on, subtitle: "Adjusts duration based on layout density");
 
                 Slide(body, "Motion", "How far the camera moves over each layout while it plays, from still to strong, with floating cells following it.", 0, 100, 5, options.MotionAmount * 100,
                     v => v < 1 ? "Off" : $"{v:0}%",
@@ -2394,14 +2394,31 @@ namespace ModernImageViewer
                 {
                     var sc = scenesCollection[i];
                     if (scenesView.ContainerFromItem(sc) is GridViewItem item &&
-                        item.ContentTemplateRoot is Grid card &&
-                        card.Children.Count > 4 &&
-                        card.Children[4] is Grid topGrid &&
-                        topGrid.Children.Count > 0 &&
-                        topGrid.Children[0] is Border badgeBorder &&
-                        badgeBorder.Child is TextBlock badgeText)
+                        item.ContentTemplateRoot is Grid card)
                     {
-                        badgeText.Text = $"#{i + 1}";
+                        if (card.Children.Count > 4 && card.Children[4] is Grid topGrid)
+                        {
+                            if (topGrid.Children.Count > 0 &&
+                                topGrid.Children[0] is Border badgeBorder &&
+                                badgeBorder.Child is TextBlock badgeText)
+                            {
+                                badgeText.Text = $"#{i + 1}";
+                            }
+                            if (topGrid.Children.Count > 1 &&
+                                topGrid.Children[1] is Border dwellBorder &&
+                                dwellBorder.Child is TextBlock dwellText)
+                            {
+                                string motionLabel = GetMotionLabel(sc);
+                                double d = sc.DwellSeconds ?? 12.0;
+                                dwellText.Text = $"{motionLabel} · {d:F0}s";
+                                ToolTipService.SetToolTip(dwellBorder, $"Duration: {d:F0}s · {motionLabel}");
+                            }
+                        }
+                        if (card.Children.Count > 5 && card.Children[5] is Grid bottomGrid && bottomGrid.Children.Count > 0 && bottomGrid.Children[0] is TextBlock recipeText)
+                        {
+                            recipeText.Text = SceneCardTitle(sc);
+                            ToolTipService.SetToolTip(recipeText, recipeText.Text);
+                        }
                         UpdateCardBorder(card, sc, i);
                     }
                 }
@@ -2557,7 +2574,7 @@ namespace ModernImageViewer
                 {
                     double d = scene.DwellSeconds ?? 12.0;
                     dwellText.Text = $"{motionLabel} · {d:F0}s";
-                    ToolTipService.SetToolTip(dwellBorder, $"Holds {d:F0} seconds. {motionLabel}");
+                    ToolTipService.SetToolTip(dwellBorder, $"Duration: {d:F0}s · {motionLabel}");
                 }
                 if (recipeText != null)
                 {
@@ -2731,7 +2748,7 @@ namespace ModernImageViewer
                     if (dwellBorder.DataContext == null)
                     {
                         dwellBorder.DataContext = true;
-                        ToolTipService.SetToolTip(dwellBorder, "Click to change camera motion (Zoom In, Zoom Out, Pan, Still) & hold time");
+                        ToolTipService.SetToolTip(dwellBorder, "Click to change camera motion & duration");
                         dwellBorder.Tapped += (sender, e) =>
                         {
                             e.Handled = true;
@@ -2794,7 +2811,7 @@ namespace ModernImageViewer
 
                             flyout.Items.Add(new MenuFlyoutSeparator());
 
-                            var holdSub = new MenuFlyoutSubItem { Text = "Hold time" };
+                            var holdSub = new MenuFlyoutSubItem { Text = "Duration" };
                             foreach (int secs in new[] { 5, 8, 12, 16, 20, 30 })
                             {
                                 int s = secs;
@@ -2910,11 +2927,6 @@ namespace ModernImageViewer
                             int idx = scenesCollection.IndexOf(sc);
                             await PlayStoryboardAsync(idx >= 0 ? idx : -1);
                         }));
-                        menu.Items.Add(MakeAdvancedItem("Open Scene on Canvas", "\uE8B9", () =>
-                        {
-                            RemoveTrayCard();
-                            if (sc.Layout != null) ApplyLayoutFile(WithRestInTray(sc.Layout, SessionPictures()), restoreAspect: false);
-                        }));
 
                         menu.Items.Add(new MenuFlyoutSeparator());
 
@@ -2972,8 +2984,8 @@ namespace ModernImageViewer
                         }));
                         menu.Items.Add(motionSub);
 
-                        // Quick Dwell Time Adjustment Submenu
-                        var dwellSub = new MenuFlyoutSubItem { Text = "Hold time" };
+                        // Quick Duration Adjustment Submenu
+                        var dwellSub = new MenuFlyoutSubItem { Text = "Duration" };
                         foreach (int secs in new[] { 5, 8, 12, 16, 20, 30 })
                         {
                             int s = secs;
