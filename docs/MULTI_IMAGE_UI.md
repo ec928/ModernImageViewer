@@ -155,11 +155,16 @@ The last section in Advanced Settings holds the settings Cinematic storyboard us
 | Duration | 5 to 20 seconds |
 | Smart pace | On |
 | Motion | 50% |
-| Transition variety | Crossfade |
 
 Reset to defaults resets these along with the rest. Use for this storyboard is not a saved setting: it belongs to the open storyboard and is saved with it.
 
-**Transition variety**, here and under Camera & transitions: 0% always crossfades between scenes. Higher mixes in zooms, fades through black and slides; at 100%, about 7 in 10 scene changes are one of those. The same kind is never used twice in a row, except a crossfade.
+A Cinematic storyboard uses your main Transitions settings.
+
+### Transitions
+
+Under Camera & transitions, each kind of scene change has its own slider, on the same Off to Often scale as the designs: **Crossfade**, **Zoom through**, **Fade through black** and **Slide**. They are odds against each other. The line under them gives the mix they make, for example `Mix: crossfade 65% · zoom through 14% · fade through black 14% · slide 8%`. The same kind never comes twice in a row, except a crossfade, and the mix allows for that. With all four off, every change is a crossfade. They apply to Auto-Mix while it plays and to the scenes a storyboard makes; each storyboard scene keeps the transition it was made with and plays it. A change made by hand in Auto-Mix is a crossfade.
+
+These replace the single Transition variety slider. A saved Transition variety is converted once to odds giving the same mix.
 
 ## Save / Load (Storyboards & Layouts)
 
