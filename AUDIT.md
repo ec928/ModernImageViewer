@@ -1,6 +1,7 @@
 # ModernImageViewer Verified Code Audit (Triaged)
 
 **Date:** 2026-11-01  
+**Resolved:** every item in Part 1 was fixed in v0.29.3 (see the `docs/REVIEW.md` log). Kept as a record.  
 **Status:** Double-checked against source code, [`docs/ARCHITECTURE.md`](file:///c:/Users/chan_/OneDrive/Apps/0-Development/ModernImageViewer/docs/ARCHITECTURE.md), and [`docs/UI_UX.md`](file:///c:/Users/chan_/OneDrive/Apps/0-Development/ModernImageViewer/docs/UI_UX.md).
 
 ---

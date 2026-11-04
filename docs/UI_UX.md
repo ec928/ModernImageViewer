@@ -122,14 +122,14 @@ The Single Viewer and Multi-View Solo/Maximize modes share an **identical** HUD 
 
 ## 6. Multi-View UI & Interaction Patterns
 
-The current multi-image screen, including the playbar and its menus, is `MULTI_IMAGE_UI.md`. The description below is older and disagrees with that screen in several places, including the playbar order, a filmstrip drawer, and tray wording.
+The playbar, the drawer (Image Pool and Storyboard), scene cards, Camera Director and Save/Load are described control by control in `MULTI_IMAGE_UI.md`, which is kept to the screen. This section holds the rules behind them.
 
 Multi-View shows up to 16 grid cells in fluid mosaics, with floating cells above them. Its right-click menu is grouped by what the user is doing:
 
 ```
 Add image...  (empty cell only, first in the menu)
-Add from image tray (N)...  (empty cell, when the tray holds any)
-Swap with...              >   Image tray (N)... (when the tray holds any, not on an empty cell)
+Not on the canvas (N)...  (empty cell, when the Image Pool holds any)
+Swap with...              >   Not on the canvas (N)... (when the Image Pool holds any, not on an empty cell)
                               Contents only | With attributes
 Copy to...                >   Position 1    | Position 1
 Move to...                >   Position 2... | Position 2...
@@ -142,52 +142,21 @@ Shape  (Mirror, Flip and Reset grey out where they would do nothing) >
 Layer  (floating cells)   >   Bring to front, Bring forward, Send backward, Send to back
 Image                     >   Replace image..., Clear cell,
                               Rotate image left / right, Mirror image, Flip image
+Feature in Auto-Mix  (any cell with an image)
 --------------------------
 Freeform  (or Dock to Grid, which a grid of 16 cells with none empty leaves out)
-Move to Tray  (any cell with an image)
+Move to Image Pool  (any cell with an image)
 ```
 
-The playbar's wheel holds Undo, Redo, one Fill or Fit row, which names what it will switch to and has no shortcut, and Reset canvas and images, which never asks because Undo and Autosaved bring the layout back. Add images sends the user to the folders to pick images, and the window keeps its size while they do. One rule covers the picker, a whole folder and a drop: below 16 images on the canvas they fill empty cells, then join the grid up to 16, and the rest go in the image tray; at 16 or more the first 4 float and the rest go in the tray. The picker's bar says the split before anything happens. With no folder open, as after opening a saved layout, the picker opens at the first image's folder. Clicking an empty cell does the same for one image. The Canvas button holds Aspect ratio, Surface, Color and Frame & Border, which is the cell card without Apply to all cells. Save/Load holds Copy to clipboard and the last three autosaved sessions, timed to the second. Replacing a session never asks, because it can be had back from there. Back, Esc and the tile and list buttons leave the session waiting, and the Multi-View button returns to it.
+Add images sends the user to the folders to pick images, and the window keeps its size while they do. One rule covers the picker, a whole folder and a drop: below 16 images on the canvas they fill empty cells, then join the grid up to 16, and the rest go in the Image Pool; at 16 or more the first 4 float and the rest go in the Image Pool. The picker's bar says the split before anything happens. With no folder open, as after opening a saved layout, the picker opens at the first image's folder. Clicking an empty cell does the same for one image. The Canvas button holds Aspect ratio, Surface, Color and Frame & Border, which is the cell card without Apply to all cells. Save/Load holds Copy to clipboard and the last three autosaved sessions, timed to the second. Back, Esc and the tile and list buttons leave the session waiting, and the Multi-View button returns to it.
 
-### Bottom Playbar Organization & Segmented Controls
-The Multi-View playbar is organized into five cohesive desktop functional clusters, separated by subtle 1px dividers:
-1. **Navigation**: `[ Back ]`.
-2. **Drawer Views (`DrawerControl`)**: A unified segmented pill housing `[ 🗃 Image Pool (N) ]` and `[ 🎬 Storyboard (N) ]`.
-   - Directly mirrors the dual-tab header inside the slide-up drawer panel.
-   - Dynamic counts: displays total session photos (`Image Pool (18)`) and scene counts (`Storyboard (4)`) or plain labels when zero.
-   - Active tab indicator: the button corresponding to the currently open drawer tab receives an active translucent background wash (`#40FFFFFF`) immediately upon opening, clearing when closed.
-   - Light-dismiss protection: clicking outside the card dismisses the drawer unless the click lands within `DrawerControl`, allowing seamless toggling or switching between tabs.
-3. **Grid Layout (`CountsSwitch`)**: `[ Rows | Columns ]` segmented pill.
-   - **Auto-Collapse Rule**: When only a single image or empty canvas is active (`shown <= 1`), `CountsSwitch` and its preceding divider (`CountsDivider`) collapse completely (`Visibility.Collapsed`), preventing phantom gaps and double dividers.
-4. **Playback & Transport (`SurpriseControl`)**: Unified media transport cluster:
-   - `[ 🔀 Surprise me ]`: One-click generative layout composer.
-   - `[ ‹ ]`: Previous layout (Undo) or previous Storyboard scene (Left Arrow).
-   - `[ ▶ Play / ⏸ Pause ]`: Master auto-play toggle cleanly showing Play, Play Show, or Pause (Spacebar).
-   - `[ › ]`: Next layout (Redo/Generate) or next Storyboard scene (Right Arrow).
-   - `[ ^ ]`: Auto-Play Settings card toggle.
-   - `[ ⛶ Fullscreen ]`: Seamless full-screen presentation mode (F11).
-5. **Canvas Framing & Utilities**: `[ Canvas ^ ]`, `[ Save/Load ]`, and `[ ⚙ Advanced ]`.
+**Nothing destructive asks; Undo is the safety net.** Reset canvas and images, replacing a session, Remove cell and removing a scene never ask, because Undo and Autosaved bring them back. So Undo and Redo sit on the playbar, not only in the gear. The exceptions ask first: Clear (the storyboard), Replace show and Clear pool, each with Cancel as the default, and Reset to defaults in Auto-Mix Settings.
 
-**The Image Pool & Storyboard Drawer** is a unified multi-purpose slide-up sheet anchored over the lower canvas:
-- **Card Geometry & Cursor Stability**: The drawer uses a consistent, fixed card dimension (820×560 in standard Card mode, 1100×220 in Filmstrip mode). Switching between the Image Pool and Storyboard tabs preserves card position and dimensions exactly, keeping top header tab buttons pinned under the user's mouse cursor without layout jitter or target invalidation.
-- **Tab 1: Image Pool**: Displays session photos with unplaced images, quick search box, and a direct `[ ➕ Add Images ]` action button to add more images to the session pool from any folder. Shows session pool readouts (`"Image pool: 2 unplaced photos (18 total in session)"`). Click an unplaced thumbnail to place it on the canvas; right-click to remove it from the session.
-  - **All-On-Canvas Empty State**: When all session photos are currently placed on the canvas, the drawer displays a dedicated centered view explaining that all photos are on canvas, with a prominent `[ ➕ Add Images... ]` button to import more photos from disk.
-- **Tab 2: Storyboard**: The presentation sequencer and scene director.
-  - **Pacing Preset Selector**: Quick chips directly in the Storyboard header (`[ Solo 1 | Mix 1–4 | Collage 2–6 | Wall 9–16 ]`) allow instant selection of layout style before or after drafting, with live descriptive feedback and dynamic button labels (e.g. `✨ Re-Draft (181 · Solo 1)`).
-  - **Multi-Photo Card Previews**: Multi-photo scenes render a 2×2 mini-collage thumbnail of 4 pictures from the scene alongside a prominent `[ ⊞ N photos ]` pill badge on the preview. Solo scenes render full-bleed single-photo previews.
-  - **Collision-Free Card Headers**: Scene numbers/titles (`#10 Gallery wall`) and dwell/motion timers (`⤢ Zoom · 11s`) sit in a structured 2-column header with ellipsis text trimming, completely eliminating badge collisions or overlapping text.
-  - **Manual Scene Capture**: Direct action buttons `[ 📷 + Add Canvas ]` and `[ 📷 Capture Current Canvas as Scene 1 ]` snapshot the current visual composition into an editable scene card.
-  - **Auto-Drafting**: `[ 🪄 Auto-Draft Show ]` generates paced, balanced multi-card presentations from the entire photo session pool.
-  - **Interactive Mouse Drag-and-Drop Reordering**: Grab any card header/thumbnail to drag and drop cards into any sequence. Card badges (`#1`, `#2`, `#3`...) auto-renumber in real-time.
-  - **Camera Motion Badges**: Cards display visual badges for motion type and dwell time (`⤢ Zoom · 12s`, `⇄ Pan · 14s`, `• Still · 8s`).
-  - **Quick Dwell Time Menu**: Right-click context menu on any scene card allows instant dwell time adjustments (`5s`, `8s`, `12s`, `16s`, `20s`, `30s`).
-  - **Continuous Playback**: Advancing across scenes preserves bitmaps and card sequences without layout state resets.
+**One control per decision on the bar.** The drawer button only opens and closes the drawer, and names the tab it opens with that tab's count. The Storyboard | Auto-Mix switch only chooses what Play plays, and choosing changes nothing on the canvas. Play only plays and pauses; Next makes a new layout in Auto-Mix. A selected side, and Play while running, use the drawer's blue (#0078D4), the same as its selected tab and Play Show; the open-drawer plate is a light wash. Clicking a scene card or editing its camera path never changes the mode.
 
-**Surprise me & Unified Transport** sits on the playbar as a cohesive media transport group. Primary navigation (`Previous`, `Play/Pause`, `Next`) resides directly on the bar for instantaneous access and clear alignment with keyboard shortcuts (Left Arrow, Space, Right Arrow). The slide-up **Auto-Play Settings** card is purely dedicated to presentation parameters (images per layout, dwell duration slider, smart pacing, camera motion intensity, and soundtrack music controls), completely eliminating duplicate or competing playback buttons.
+**Camera motion** during auto-play moves the finished layout as one picture, with the zoom, drift and pacing of a Cinematic show. It is a transform over the layers, never a change to the layout. Floating cells sit nearer than the grid, so they follow the camera a little further, and float a few pixels and under a degree, leaving their saved place and turn alone. All of it moves composition visuals, not XAML transforms: a `RenderTransform` changing every frame leaves images soft, and the `Rotation` and `Scale` properties stop the app when they meet the `RotateTransform` of a turned cell. Layout changes animate the cover: a crossfade most often, then a zoom through, a fade through dark, or least often a slide. Nothing spins or flips. Auto-Mix Settings leads with one Motion slider, with the finer odds folded away under Camera and transitions. Pausing glides back to the whole layout. `CameraMove` plans a view as a zoom and a centre, and keeps picture to every edge.
 
-**Camera motion** during auto-play moves the finished layout as one picture, with the zoom, drift and pacing of a Cinematic show. It is a transform over the layers, never a change to the layout. Floating cells sit nearer than the grid, so they follow the camera a little further, and float a few pixels and under a degree, leaving their saved place and turn alone. All of it moves composition visuals, not XAML transforms: a `RenderTransform` changing every frame leaves images soft, and the `Rotation` and `Scale` properties stop the app when they meet the `RotateTransform` of a turned cell. Layout changes animate the cover: a crossfade most often, then a zoom through, a fade through dark, or least often a slide. Nothing spins or flips. The card leads with one Motion slider, with the finer odds folded away under Camera and transitions. Pausing glides back to the whole layout. `CameraMove` plans a view as a zoom and a centre, and keeps picture to every edge.
-
-**Music** has one home, the gear's Music settings, which the Surprise me card opens and summarises in the same words. The card has no volume of its own. A Cinematic show can have its own music, with its own volume, and otherwise follows those settings. Each owns a `MusicBed`; only one sounds at a time, the last started, and the other carries on when it stops. Asking a bed for what it is already playing leaves the song alone, so saving settings does not restart it. When music cannot play, the image carries on and the user is told why; that is never recorded as a choice of no music.
+**Music** has one home, the gear's Music settings, which Auto-Mix Settings opens and summarises in the same words. A Cinematic show can have its own music, with its own volume, and otherwise follows those settings. Each owns a `MusicBed`; only one sounds at a time, the last started, and the other carries on when it stops. Asking a bed for what it is already playing leaves the song alone, so saving settings does not restart it. When music cannot play, the image carries on and the user is told why; that is never recorded as a choice of no music.
 
 Swap with, Copy to and Move to name positions only, never file names, so the two columns stay about the width of a single column of named entries. Each row is one menu entry, and the side of the row under the pointer is the column chosen, shown by a highlight on that half. Pointing at a target marks its cell's badge, with "+ attributes" for the second column. The same layout appears with any number of cells, down to one row with two images.
 
