@@ -442,6 +442,37 @@ namespace ModernImageViewer
                 return button;
             }
 
+            // "More settings" for a section: a gear and a label, the same everywhere.
+            Button MoreButton(string text, string name, string tip, RoutedEventHandler pressed)
+            {
+                var stack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+                stack.Children.Add(Icon("\uE713", 12));
+                stack.Children.Add(new TextBlock { Text = text, FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
+                var button = WordButton(text, name, tip, pressed);
+                button.Content = stack;
+                return button;
+            }
+
+            // A section's heading, with its "more settings" button on the right.
+            Grid SectionHeading(string text, Button more)
+            {
+                var row = new Grid { ColumnSpacing = 8, Margin = new Thickness(0, 4, 0, 2) };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                var heading = new TextBlock
+                {
+                    Text = text,
+                    FontSize = 13,
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White),
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                Grid.SetColumn(more, 1);
+                row.Children.Add(heading);
+                row.Children.Add(more);
+                return row;
+            }
+
             Button IconButton(string glyph, string name, string tip, RoutedEventHandler pressed)
             {
                 var button = new Button
@@ -580,20 +611,7 @@ namespace ModernImageViewer
                 header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 var title = new TextBlock { Text = "Layout Generator Settings", FontSize = 14, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
-                var gearBtn = new Button
-                {
-                    Content = Icon("\uE713", 13),
-                    Padding = new Thickness(6, 4, 6, 4),
-                    CornerRadius = new CornerRadius(6),
-                    Style = SafeStyle("QuietButtonStyle"),
-                    VerticalAlignment = VerticalAlignment.Center
-                };
-                ToolTipService.SetToolTip(gearBtn, "Advanced Layout Generator settings");
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(gearBtn, "Advanced Layout Generator settings");
-                gearBtn.Click += (_, _) => { _showingSurpriseAdvanced = true; ShowSurpriseCard(); };
-                Grid.SetColumn(gearBtn, 1);
                 header.Children.Add(title);
-                header.Children.Add(gearBtn);
                 body.Children.Add(header);
                 // One generator serves both: without this, the settings read as Auto-Mix's alone.
                 body.Children.Add(new TextBlock
@@ -606,6 +624,10 @@ namespace ModernImageViewer
                 });
 
 
+                // Each section's heading has its "more settings" on the right, as the same gear-and-label button.
+                body.Children.Add(SectionHeading("Layout", MoreButton("Advanced\u2026", "Advanced Layout Generator settings",
+                    "Faces, designs, camera and transitions, look, and the Cinematic storyboard settings",
+                    (_, _) => { _showingSurpriseAdvanced = true; ShowSurpriseCard(); })));
                 body.Children.Add(imagesRow);
 
                 int initialFrom = options.AutoPlayRandom ? options.RandomFewestSeconds : options.PlaySeconds;
@@ -685,44 +707,13 @@ namespace ModernImageViewer
                     (o, a, b) => { o.MotionLeast = a / 100; o.MotionMost = b / 100; });
 
                 body.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle { Height = 1, Opacity = 0.15, Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White), Margin = new Thickness(0, 6, 0, 4) });
-                var soundtrackHeader = new TextBlock
-                {
-                    Text = "Soundtrack",
-                    FontSize = 13,
-                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White),
-                    Margin = new Thickness(0, 2, 0, 4)
-                };
                 // The music library's own settings (folder, ratings, which shows play music) open from here, so
                 // everything about the soundtrack is in this one place.
-                var soundtrackRow = new Grid { ColumnSpacing = 8 };
-                soundtrackRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                soundtrackRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                var configureMusic = WordButton("Configure\u2026", "Configure music",
+                body.Children.Add(SectionHeading("Soundtrack", MoreButton("Configure\u2026", "Configure music",
                     "The music folder, the lowest rating played, and whether Auto-Mix and Cinematic play music.",
-                    (_, _) => MainWindow.Instance?.OpenMusicSettings());
-                Grid.SetColumn(configureMusic, 1);
-                soundtrackRow.Children.Add(soundtrackHeader);
-                soundtrackRow.Children.Add(configureMusic);
-                body.Children.Add(soundtrackRow);
+                    (_, _) => MainWindow.Instance?.OpenMusicSettings())));
                 body.Children.Add(MusicRow(Icon, IconButton));
 
-                body.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle { Height = 1, Opacity = 0.15, Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White), Margin = new Thickness(0, 4, 0, 2) });
-                var openAdvBtn = new Button
-                {
-                    HorizontalAlignment = HorizontalAlignment.Stretch,
-                    Padding = new Thickness(10, 7, 10, 7),
-                    CornerRadius = new CornerRadius(6),
-                    Margin = new Thickness(0, 2, 0, 0)
-                };
-                var advStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
-                advStack.Children.Add(Icon("\uE713", 13));
-                advStack.Children.Add(new TextBlock { Text = "Advanced settings\u2026", FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
-                openAdvBtn.Content = advStack;
-                ToolTipService.SetToolTip(openAdvBtn, "Design odds, faces, camera and transitions, look, and the Cinematic storyboard overrides");
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(openAdvBtn, "Advanced Layout Generator settings");
-                openAdvBtn.Click += (_, _) => { _showingSurpriseAdvanced = true; ShowSurpriseCard(); };
-                body.Children.Add(openAdvBtn);
             }
             else
             {
