@@ -928,6 +928,36 @@ namespace ModernImageViewer
             }
         }
 
+        /// <summary>A storyboard opened from Explorer, the command line or a drop starts its own session, as a layout does.</summary>
+        public async void OpenShowFromFilePath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path) || MultiViewControl == null) return;
+            try
+            {
+                if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible)
+                {
+                    ClosePreviewInternal();
+                }
+
+                // The session being replaced goes to Autosaved, and none of its images join the show's pool.
+                MultiViewControl.AutoSaveSession();
+                MultiViewControl.Clear();
+                _multiViewParked = false;
+                _parkedCell = null;
+                _returnToPanel = false;
+                _multiViewKept = false;
+                SetMultiModeTip();
+                BeginMultiViewCanvas();
+                MultiViewControl.Visibility = Visibility.Visible;
+                MultiViewControl.FocusView();
+                await MultiViewControl.LoadStoryboardFromPathAsync(path);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Failed to open storyboard file: {ex.Message}");
+            }
+        }
+
         public void OpenMultiView(IList<ImageItem> items)
         {
             if (_multiViewParked)

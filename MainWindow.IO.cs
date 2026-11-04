@@ -49,6 +49,12 @@ namespace ModernImageViewer
                 return;
             }
 
+            if (filePath.EndsWith(ShowProject.FileExtension, StringComparison.OrdinalIgnoreCase))
+            {
+                OpenShowFromFilePath(filePath);
+                return;
+            }
+
             if (ComicArchive.IsComicArchivePath(filePath))
             {
                 await ScanFolder(filePath, openFirstPage: true);
