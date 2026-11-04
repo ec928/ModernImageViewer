@@ -38,12 +38,12 @@
                 <Button Content="Remove" Click="BtnSeqRemove_Click"
                         IsEnabled="{x:Bind ViewModel.CanHideOrRemove, Mode=OneWay}"
                         ToolTipService.ToolTip="Takes it out of this show. The file stays on disk." />
-                <Button Content="Duplicate" Click="BtnSeqDuplicate_Click" ToolTipService.ToolTip="Adds a copy after this picture" />
-                <Button Content="Add pictures" Click="BtnSeqAddFromFolder_Click"
-                        ToolTipService.ToolTip="Adds the pictures in a folder that are not already here. You can also drop files on this strip." />
+                <Button Content="Duplicate" Click="BtnSeqDuplicate_Click" ToolTipService.ToolTip="Adds a copy after this image" />
+                <Button Content="Add images" Click="BtnSeqAddFromFolder_Click"
+                        ToolTipService.ToolTip="Adds the images in a folder that are not already here. You can also drop files on this strip." />
                 <Border Width="1" Height="18" Background="#55FFFFFF" Margin="6,0" />
                 <Button Content="Start over" Click="BtnSeqNew_Click"
-                        ToolTipService.ToolTip="Back to the pictures this show opened with, with no changes" />
+                        ToolTipService.ToolTip="Back to the images this show opened with, with no changes" />
             </StackPanel>
             <ListView x:Name="SequenceStrip" Grid.Row="1"
                       ItemsSource="{x:Bind ViewModel.Track, Mode=OneWay}"
@@ -158,7 +158,7 @@
                 <Border Width="1" Height="24" Background="{ThemeResource SurfaceStrokeColorDefaultBrush}" Margin="4,0" />
 
                 <ToggleButton x:Name="BtnEditShow" IsTabStop="False" UseSystemFocusVisuals="False" Click="BtnEditShow_Click" Height="44" Padding="14,0" Background="Transparent" BorderThickness="0" CornerRadius="22"
-                              Content="Edit show" ToolTipService.ToolTip="Pauses the show and opens its pictures and this slide's settings" />
+                              Content="Edit show" ToolTipService.ToolTip="Pauses the show and opens its images and this slide's settings" />
 
                 <Border Width="1" Height="24" Background="{ThemeResource SurfaceStrokeColorDefaultBrush}" Margin="4,0" />
 
@@ -243,7 +243,7 @@
                                     <SymbolIcon Symbol="Forward" />
                                 </Button>
                             </Grid>
-                            <TextBlock Text="Drag the Start and End boxes on the picture to set where the camera goes." FontSize="12" TextWrapping="Wrap" Opacity="0.85" />
+                            <TextBlock Text="Drag the Start and End boxes on the image to set where the camera goes." FontSize="12" TextWrapping="Wrap" Opacity="0.85" />
                             <Button Content="Preview" Click="BtnPreview_Click" HorizontalAlignment="Stretch" ToolTipService.ToolTip="Plays this slide as it will appear" />
                             <Grid ColumnSpacing="8">
                                 <Grid.ColumnDefinitions>
@@ -309,7 +309,7 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <Button Content="Save show" Click="BtnExport_Click" HorizontalAlignment="Stretch" ToolTipService.ToolTip="Saves the pictures, order, framing and music to a file" />
+                            <Button Content="Save show" Click="BtnExport_Click" HorizontalAlignment="Stretch" ToolTipService.ToolTip="Saves the images, order, framing and music to a file" />
                             <Button Content="Open show" Click="BtnLoad_Click" HorizontalAlignment="Stretch" Grid.Column="1" ToolTipService.ToolTip="Opens a saved show in this window" />
                         </Grid>
                     </StackPanel>

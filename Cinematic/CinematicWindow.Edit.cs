@@ -748,7 +748,7 @@ namespace ModernImageViewer.Cinematic
                 if (show == null)
                 {
                     await ViewerEngine.ShowMessageAsync(RootGrid.XamlRoot, "Could not open the show",
-                        missing > 0 ? "None of its pictures are still on disk." : "This file is not a saved show.");
+                        missing > 0 ? "None of its images are still on disk." : "This file is not a saved show.");
                     return;
                 }
                 DiscardPreload();
@@ -765,7 +765,7 @@ namespace ModernImageViewer.Cinematic
         {
             if (missingPictures <= 0 && !ViewModel.MusicWasMissing) return;
             var lines = new List<string>();
-            if (missingPictures > 0) lines.Add(missingPictures == 1 ? "1 picture is no longer on disk, so the rest will play." : $"{missingPictures} pictures are no longer on disk, so the rest will play.");
+            if (missingPictures > 0) lines.Add(missingPictures == 1 ? "1 image is no longer on disk, so the rest will play." : $"{missingPictures} images are no longer on disk, so the rest will play.");
             if (ViewModel.MusicWasMissing) lines.Add("Its music is no longer on disk, so it will play without music.");
             await ViewerEngine.ShowMessageAsync(RootGrid.XamlRoot, "Part of this show is missing", string.Join(" ", lines));
         }

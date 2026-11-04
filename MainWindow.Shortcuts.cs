@@ -21,9 +21,9 @@ namespace ModernImageViewer
             ("Folder view", new[]
             {
                 ("Arrow keys, Page Up, Page Down, Home, End", "Move the cursor"),
-                ("Enter", "Open the picture, or view the selected pictures together"),
-                ("Space", "Select or deselect the picture"),
-                ("Ctrl+click, Shift+click", "Select several pictures"),
+                ("Enter", "Open the image, or view the selected images together"),
+                ("Space", "Select or deselect the image"),
+                ("Ctrl+click, Shift+click", "Select several images"),
                 ("Backspace", "Up one folder"),
                 ("F2", "Rename"),
                 ("F5", "Refresh"),
@@ -33,8 +33,8 @@ namespace ModernImageViewer
             }),
             ("Viewer", new[]
             {
-                ("Left, Right", "Previous and next picture"),
-                ("Home, End", "First and last picture"),
+                ("Left, Right", "Previous and next image"),
+                ("Home, End", "First and last image"),
                 ("B", "Two pages at once, in a comic book"),
                 ("Space", "Play or pause an animation"),
                 (", and .", "Previous and next frame of an animation"),
@@ -56,8 +56,10 @@ namespace ModernImageViewer
                 ("Ctrl+C", "Copy the canvas as an image"),
                 ("Ctrl+S", "Save or load"),
                 ("Alt+drag", "Swap two images"),
-                ("Space", "Pause or start Surprise me auto-play"),
-                ("Left, Right", "Previous and next layout, after Surprise me"),
+                ("Space", "Play or pause the storyboard or Auto-Mix"),
+                ("Left, Right", "Previous and next scene or layout, while playing"),
+                ("B", "Storyboard"),
+                ("F11", "Full screen"),
                 ("Esc", "Pause auto-play if it is playing, otherwise back to the folder"),
             }),
             ("Cinematic", new[]

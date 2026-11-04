@@ -408,7 +408,7 @@ namespace ModernImageViewer.Cinematic
             }
             if (_nothingToPlayShown || RootGrid.XamlRoot == null) return;
             _nothingToPlayShown = true;
-            _ = ViewerEngine.ShowMessageAsync(RootGrid.XamlRoot, "Nothing to play", "None of these pictures could be opened.");
+            _ = ViewerEngine.ShowMessageAsync(RootGrid.XamlRoot, "Nothing to play", "None of these images could be opened.");
         }
 
         // Auto chooses a slide's moves once, so what Edit show displays is what plays, however many times the show comes round.

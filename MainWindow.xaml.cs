@@ -626,7 +626,7 @@ namespace ModernImageViewer
                     offset += 24;
                 }
                 if (items.Count > MaxDraggedOutWindows)
-                    _ = ViewerEngine.ShowMessageAsync(RootGrid.XamlRoot, "Detach", $"Opened the first {MaxDraggedOutWindows} of {items.Count} pictures.");
+                    _ = ViewerEngine.ShowMessageAsync(RootGrid.XamlRoot, "Detach", $"Opened the first {MaxDraggedOutWindows} of {items.Count} images.");
             }
         }
 
@@ -658,7 +658,7 @@ namespace ModernImageViewer
                 if (show == null)
                 {
                     await ViewerEngine.ShowMessageAsync(RootGrid.XamlRoot, "Could not open the show",
-                        missing > 0 ? "None of its pictures are still on disk." : "This file is not a saved show.");
+                        missing > 0 ? "None of its images are still on disk." : "This file is not a saved show.");
                     return;
                 }
                 var window = new ModernImageViewer.Cinematic.CinematicWindow(ModernImageViewer.Cinematic.ViewModels.CinematicViewModel.PathsOnDisk(show), 0, show, missing);

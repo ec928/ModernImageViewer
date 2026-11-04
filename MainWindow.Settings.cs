@@ -38,7 +38,7 @@ namespace ModernImageViewer
             string? folder = _currentSettings.MusicFolder;
             var (rating, unrated) = MusicChoices.RatingControls(_currentSettings.MusicLowestStars, _currentSettings.MusicIncludesUnrated);
             var inCinematic = SettingsCard.Switch("Cinematic shows", _currentSettings.MusicInCinematic);
-            var inSurprise = SettingsCard.Switch("Surprise me auto-play", _currentSettings.MusicInSurprise);
+            var inSurprise = SettingsCard.Switch("Auto-Mix", _currentSettings.MusicInSurprise);
             var volume = new Slider { Minimum = 0, Maximum = 100, Value = _currentSettings.MusicVolume, Width = 150, VerticalAlignment = VerticalAlignment.Center };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(volume, "Music volume");
             var volumeText = new TextBlock { Width = 38, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Opacity = SettingsCard.Quiet };
@@ -101,7 +101,7 @@ namespace ModernImageViewer
             panel.Children.Add(SettingsCard.Section("Play during"));
             panel.Children.Add(SettingsCard.Card(
                 SettingsCard.Row("\uE714", "Cinematic shows", "A saved show with its own music plays that instead.", inCinematic).Row,
-                SettingsCard.Row("\uE8B1", "Surprise me auto-play", null, inSurprise).Row));
+                SettingsCard.Row("\uE8B1", "Auto-Mix", null, inSurprise).Row));
             panel.Children.Add(SettingsCard.Section("Sound"));
             panel.Children.Add(SettingsCard.Card(SettingsCard.Row("\uE767", "Volume", null, volumeRow).Row));
 
@@ -138,7 +138,7 @@ namespace ModernImageViewer
             var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
             buttons.Children.Add(choose);
             buttons.Children.Add(paint);
-            var (row, name, detail) = SettingsCard.Row("\uE70F", EditorName(editor), "Edit Image opens pictures in this program.", buttons);
+            var (row, name, detail) = SettingsCard.Row("\uE70F", EditorName(editor), "Edit Image opens images in this program.", buttons);
             name.SetValue(Microsoft.UI.Xaml.Automation.AutomationProperties.AutomationIdProperty, "ImageEditorText");
             choose.Click += async (_, _) =>
             {

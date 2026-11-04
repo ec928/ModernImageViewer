@@ -403,7 +403,7 @@ namespace ModernImageViewer
             }
             NoteUserAction();
             if (tray > 0)
-                ShowAutoPlayToast($"Added {fresh.Count} images: {cells + freeform} on the canvas, {tray} in the tray");
+                ShowAutoPlayToast($"Added {fresh.Count} images: {cells + freeform} on the canvas, {tray} in the Image Pool");
             ShowShownBadge();
             RefreshTrayCardIfOpen();
         }

@@ -59,13 +59,13 @@
                     <Run Text="&#x2022;  "/><Run Text="Favourite folders" FontWeight="SemiBold"/><Run Text=" &#x2014; star up to 10 folders in the Favourites and Recent Folders menu to keep them; they stay until you remove them."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Multi-View" FontWeight="SemiBold"/><Run Text=" &#x2014; compare up to 16 images in rows or columns of your choosing, with hero layouts, draggable edges, and Alt+drag to swap. Add a whole folder, and what does not fit waits in the image tray."/>
+                    <Run Text="&#x2022;  "/><Run Text="Multi-View" FontWeight="SemiBold"/><Run Text=" &#x2014; compare up to 16 images in rows or columns of your choosing, with hero layouts, draggable edges, and Alt+drag to swap. Add a whole folder, and what does not fit waits in the Image Pool."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
                     <Run Text="&#x2022;  "/><Run Text="Collages" FontWeight="SemiBold"/><Run Text=" &#x2014; frame each cell, rotate and mirror images, float cells above the grid in shapes, drop in images from File Explorer, choose the canvas, undo and redo, save layouts, and export to JPEG, PNG, or the clipboard."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Surprise me" FontWeight="SemiBold"/><Run Text=" &#x2014; one click arranges your images into a new designed layout, avoiding cutting or covering the faces it finds. Click again for another, press Play for a new one every few seconds, with a slow camera move, varied transitions and your music, and shape the odds on its card."/>
+                    <Run Text="&#x2022;  "/><Run Text="Auto-Mix" FontWeight="SemiBold"/><Run Text=" &#x2014; arranges your images into a new designed layout, avoiding cutting or covering the faces it finds. Next makes another, and Play makes a new one every few seconds, with a slow camera move, varied transitions and your music. Shape the odds in Auto-Mix Settings."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
                     <Run Text="&#x2022;  "/><Run Text="Window &amp; Tile Size presets" FontWeight="SemiBold"/><Run Text=" &#x2014; save up to three window and tile size states (Ctrl+1, Ctrl+2, Ctrl+3) to jump between compact browsing and wide two-page layouts."/>
@@ -90,11 +90,11 @@
                     <Run Text="&#x2022;  "/><Run Text="Cinematic slideshow" FontWeight="SemiBold"/><Run Text=" &#x2014; press Play for automated Ken Burns camera moves with smart subject framing and smooth crossfades between slides."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Custom direction" FontWeight="SemiBold"/><Run Text=" &#x2014; Edit show lets you hide, reorder and duplicate pictures, and set start and end frames and timing for a slide."/>
+                    <Run Text="&#x2022;  "/><Run Text="Custom direction" FontWeight="SemiBold"/><Run Text=" &#x2014; Edit show lets you hide, reorder and duplicate images, and set start and end frames and timing for a slide."/>
                 </TextBlock>
 
                 <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Music" FontWeight="SemiBold"/><Run Text=" &#x2014; random songs from your folder at or above a star rating, under Cinematic shows and Surprise me auto-play. Set it from the gear in the main window."/>
+                    <Run Text="&#x2022;  "/><Run Text="Music" FontWeight="SemiBold"/><Run Text=" &#x2014; random songs from your folder at or above a star rating, under Cinematic shows and Auto-Mix. Set it from the gear in the main window."/>
                 </TextBlock>
 
                 <TextBlock Text="Performance and formats" Style="{StaticResource AboutSectionHeader}"/>
