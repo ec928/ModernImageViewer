@@ -243,8 +243,51 @@ namespace ModernImageViewer
             CameraDrift => CameraKind.Drift,
             _ => null
         };
-        /// <summary>How far the camera moves over each layout during auto-play, 0 to 1. 0 is still.</summary>
-        public double MotionAmount { get; set; } = 0.5;
+        /// <summary>How far the camera moves over each layout, 0 to 1, as a range: each layout picks within it. 0 is still.</summary>
+        public double MotionLeast { get; set; } = 0.4;
+        public double MotionMost { get; set; } = 0.6;
+
+        /// <summary>The single "Motion" of earlier versions, read only to convert a saved file to a range of that one value.</summary>
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public double? MotionAmount { get; set; }
+
+        public bool HasMotion => Math.Max(MotionLeast, MotionMost) > 0.001;
+
+        public double PickMotion(Random random)
+        {
+            double least = Math.Min(MotionLeast, MotionMost), most = Math.Max(MotionLeast, MotionMost);
+            return least + random.NextDouble() * (most - least);
+        }
+
+        /// <summary>
+        /// How each move eases, as odds against each other in <see cref="CameraCurves.All"/>'s order: Steady, Gentle, Smooth,
+        /// Cinematic, Settle, Snap. Gentle is the most common; Snap, on zooms only, starts off.
+        /// </summary>
+        public double CurveSteadyOdds { get; set; } = 1;
+        public double CurveGentleOdds { get; set; } = MostFavouredDesign;
+        public double CurveSmoothOdds { get; set; } = 1;
+        public double CurveCinematicOdds { get; set; } = 0.5;
+        public double CurveSettleOdds { get; set; } = 0.25;
+        public double CurveSnapOdds { get; set; }
+
+        [System.Text.Json.Serialization.JsonIgnore]
+        public double[] CurveOdds => new[] { CurveSteadyOdds, CurveGentleOdds, CurveSmoothOdds, CurveCinematicOdds, CurveSettleOdds, CurveSnapOdds };
+
+        /// <summary>How far a pan's path bends, 0 to 1 of Cinematic Slideshow's bend, as a range.</summary>
+        public double PathBendLeast { get; set; }
+        public double PathBendMost { get; set; } = 0.5;
+
+        /// <summary>How far the view turns over a move, in degrees, as a range. Off by default.</summary>
+        public double TurnLeast { get; set; }
+        public double TurnMost { get; set; }
+        public const double MostTurn = 6;
+
+        /// <summary>The chance that a scene with a face, held long enough, is two shots: a wide shot, then a snap zoom or a cut to the face.</summary>
+        public double TwoShotChance { get; set; } = 0.25;
+
+        /// <summary>The camera settings a planned move follows. Two shots only when the camera mode is Auto: a chosen mode is one kind of move.</summary>
+        public CameraStyle CameraStyle() => new(CurveOdds, PathBendLeast, PathBendMost, TurnLeast, TurnMost,
+            string.Equals(CameraMode, CameraAuto, StringComparison.OrdinalIgnoreCase) ? TwoShotChance : 0);
         /// <summary>The odds that it zooms rather than drifts.</summary>
         public double MotionZoomChance { get; set; } = 0.5;
         /// <summary>The odds that it aims at a cell with faces, where there is one.</summary>
@@ -386,7 +429,24 @@ namespace ModernImageViewer
                 read.RandomMostSeconds = Math.Clamp(read.RandomMostSeconds, FewestSeconds, MostSeconds);
                 if (read.RandomMostSeconds < read.RandomFewestSeconds) read.RandomMostSeconds = read.RandomFewestSeconds;
                 read.Cinematic = CinematicOverrides.Checked(read.Cinematic);
-                read.MotionAmount = Math.Clamp(read.MotionAmount, 0, 1);
+                if (read.MotionAmount is double motion)
+                {
+                    read.MotionLeast = read.MotionMost = motion;
+                    read.MotionAmount = null;
+                }
+                read.MotionLeast = Math.Clamp(read.MotionLeast, 0, 1);
+                read.MotionMost = Math.Clamp(read.MotionMost, read.MotionLeast, 1);
+                read.CurveSteadyOdds = Math.Clamp(read.CurveSteadyOdds, 0, MostFavouredDesign);
+                read.CurveGentleOdds = Math.Clamp(read.CurveGentleOdds, 0, MostFavouredDesign);
+                read.CurveSmoothOdds = Math.Clamp(read.CurveSmoothOdds, 0, MostFavouredDesign);
+                read.CurveCinematicOdds = Math.Clamp(read.CurveCinematicOdds, 0, MostFavouredDesign);
+                read.CurveSettleOdds = Math.Clamp(read.CurveSettleOdds, 0, MostFavouredDesign);
+                read.CurveSnapOdds = Math.Clamp(read.CurveSnapOdds, 0, MostFavouredDesign);
+                read.PathBendLeast = Math.Clamp(read.PathBendLeast, 0, 1);
+                read.PathBendMost = Math.Clamp(read.PathBendMost, read.PathBendLeast, 1);
+                read.TurnLeast = Math.Clamp(read.TurnLeast, 0, MostTurn);
+                read.TurnMost = Math.Clamp(read.TurnMost, read.TurnLeast, MostTurn);
+                read.TwoShotChance = Math.Clamp(read.TwoShotChance, 0, 1);
                 read.MotionZoomChance = Math.Clamp(read.MotionZoomChance, 0, 1);
                 read.MotionFaceChance = Math.Clamp(read.MotionFaceChance, 0, 1);
                 // A file from before the four odds: about the mix its single slider gave, so nobody's look changes.
@@ -429,8 +489,12 @@ namespace ModernImageViewer
         public int FewestSeconds { get; set; } = 5;
         public int MostSeconds { get; set; } = 20;
         public bool SmartPace { get; set; } = true;
-        public double MotionAmount { get; set; } = 0.5;
-        // Transitions are not overridden: a Cinematic storyboard uses the main Transitions settings (Ed, 2026-11-04).
+        public double MotionLeast { get; set; } = 0.4;
+        public double MotionMost { get; set; } = 0.6;
+        /// <summary>The single Motion of earlier versions, read only to convert a saved file.</summary>
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public double? MotionAmount { get; set; }
+        // Transitions and movement curves are not overridden: a Cinematic storyboard uses the main Transitions settings (Ed, 2026-11-04).
 
         public void ApplyTo(SurpriseOptions options)
         {
@@ -444,7 +508,8 @@ namespace ModernImageViewer
             options.RandomFewestSeconds = FewestSeconds;
             options.RandomMostSeconds = MostSeconds;
             options.SmartPace = SmartPace;
-            options.MotionAmount = MotionAmount;
+            options.MotionLeast = MotionLeast;
+            options.MotionMost = MotionMost;
         }
 
         /// <summary>Anything missing or out of range in the saved file comes back as its default or its limit.</summary>
@@ -458,7 +523,13 @@ namespace ModernImageViewer
             c.SoloWholeOdds = Math.Clamp(c.SoloWholeOdds, 0, SurpriseOptions.MostFavouredDesign);
             c.FewestSeconds = Math.Clamp(c.FewestSeconds, SurpriseOptions.FewestSeconds, SurpriseOptions.MostSeconds);
             c.MostSeconds = Math.Clamp(c.MostSeconds, c.FewestSeconds, SurpriseOptions.MostSeconds);
-            c.MotionAmount = Math.Clamp(c.MotionAmount, 0, 1);
+            if (c.MotionAmount is double motion)
+            {
+                c.MotionLeast = c.MotionMost = motion;
+                c.MotionAmount = null;
+            }
+            c.MotionLeast = Math.Clamp(c.MotionLeast, 0, 1);
+            c.MotionMost = Math.Clamp(c.MotionMost, c.MotionLeast, 1);
             return c;
         }
     }

@@ -6,18 +6,119 @@ namespace ModernImageViewer
 {
     public enum CameraKind { ZoomIn, ZoomOut, Drift }
 
-    /// <summary>What the camera sees: how far in, and the centre of the view as shares of the picture. Independent of size, so a resized window keeps the move.</summary>
-    public readonly record struct CameraView(double Zoom, double X, double Y)
+    /// <summary>
+    /// What the camera sees: how far in, the centre of the view as shares of the picture, and how far it is turned, in
+    /// degrees. Independent of size, so a resized window keeps the move.
+    /// </summary>
+    public readonly record struct CameraView(double Zoom, double X, double Y, double Angle = 0)
     {
         public static readonly CameraView Whole = new(1, 0.5, 0.5);
 
-        /// <summary>The nearest view with picture all the way to its edges.</summary>
+        /// <summary>The nearest view with picture all the way to its edges. A turn is covered when it is drawn (<see cref="TurnCover"/>).</summary>
         public CameraView Covered()
         {
             double zoom = Math.Max(1, Zoom);
             double margin = 0.5 / zoom;
-            return new CameraView(zoom, Math.Clamp(X, margin, 1 - margin), Math.Clamp(Y, margin, 1 - margin));
+            return new CameraView(zoom, Math.Clamp(X, margin, 1 - margin), Math.Clamp(Y, margin, 1 - margin), Angle);
         }
+
+        /// <summary>
+        /// How much more to zoom so a view turned this far still has picture in every corner, on a canvas of this shape. A
+        /// view the canvas covers unturned has its centre at least half its own size from every edge; turned, its outline
+        /// reaches cos + sin times the longer side's share further, so the zoom grows by that.
+        /// </summary>
+        public static double TurnCover(double angleDegrees, double width, double height)
+        {
+            if (Math.Abs(angleDegrees) < 0.001 || width < 1 || height < 1) return 1;
+            double a = Math.Abs(angleDegrees) * Math.PI / 180;
+            return Math.Cos(a) + Math.Sin(a) * Math.Max(width / height, height / width);
+        }
+    }
+
+    /// <summary>How a move gets going and comes to rest. Each has a use: see <see cref="CameraCurves.Ease"/>.</summary>
+    public enum CameraCurve { Steady, Gentle, Smooth, Cinematic, Settle, Snap }
+
+    public static class CameraCurves
+    {
+        public static readonly CameraCurve[] All = { CameraCurve.Steady, CameraCurve.Gentle, CameraCurve.Smooth, CameraCurve.Cinematic, CameraCurve.Settle, CameraCurve.Snap };
+
+        /// <summary>
+        /// Steady: the same speed throughout, so it is still moving through a crossfade. Gentle: a sine ease, the mildest
+        /// start and stop. Smooth: smoothstep, what every move used before there was a choice. Cinematic: a cubic ease, as
+        /// Cinematic Slideshow moves, lingering at both ends. Settle: under way at once, gliding to rest. Snap: slow, a quick
+        /// push, then a long settle, Cinematic Slideshow's snap zoom.
+        /// </summary>
+        public static double Ease(CameraCurve curve, double t)
+        {
+            t = Math.Clamp(t, 0, 1);
+            switch (curve)
+            {
+                case CameraCurve.Steady: return t;
+                case CameraCurve.Gentle: return -(Math.Cos(Math.PI * t) - 1) / 2;
+                case CameraCurve.Cinematic: return t < 0.5 ? 4 * t * t * t : 1 - Math.Pow(-2 * t + 2, 3) / 2;
+                case CameraCurve.Settle: return 1 - Math.Pow(1 - t, 3);
+                case CameraCurve.Snap:
+                    if (t < 0.15) return t * 0.2;
+                    if (t < 0.45)
+                    {
+                        double p = (t - 0.15) / 0.30;
+                        double snap = p < 0.5 ? 16 * Math.Pow(p, 5) : 1 - Math.Pow(-2 * p + 2, 5) / 2;
+                        return 0.03 + snap * 0.92;
+                    }
+                    return 0.95 + (1 - Math.Pow(1 - (t - 0.45) / 0.55, 3)) * 0.05;
+                default: return t * t * (3 - 2 * t);
+            }
+        }
+
+        /// <summary>A stored curve's name; anything unknown, including none, is Smooth, as every move was before.</summary>
+        public static CameraCurve Parse(string? name) => Enum.TryParse<CameraCurve>(name, out var c) ? c : CameraCurve.Smooth;
+
+        /// <summary>
+        /// One curve from odds against each other, in <see cref="All"/>'s order. Snap is only for a zoom: on a drift it
+        /// reads as a jolt. With nothing left on, Smooth.
+        /// </summary>
+        public static CameraCurve Pick(IReadOnlyList<double> odds, bool zoom, Random random)
+        {
+            var w = All.Select((c, i) => i < odds.Count && (zoom || c != CameraCurve.Snap) ? Math.Max(0, odds[i]) : 0).ToArray();
+            double sum = w.Sum();
+            if (sum <= 0) return CameraCurve.Smooth;
+            double roll = random.NextDouble() * sum;
+            for (int i = 0; i < w.Length; i++)
+            {
+                if (roll < w[i]) return All[i];
+                roll -= w[i];
+            }
+            return CameraCurve.Smooth;
+        }
+
+        /// <summary>The share each curve takes of zoom moves (Snap included) and of drifts (Snap left out).</summary>
+        public static (IReadOnlyDictionary<CameraCurve, double> Zooms, IReadOnlyDictionary<CameraCurve, double> Drifts) Shares(IReadOnlyList<double> odds)
+        {
+            IReadOnlyDictionary<CameraCurve, double> For(bool zoom)
+            {
+                var w = All.Select((c, i) => i < odds.Count && (zoom || c != CameraCurve.Snap) ? Math.Max(0, odds[i]) : 0).ToArray();
+                double sum = w.Sum();
+                return All.Select((c, i) => (c, sum <= 0 ? (c == CameraCurve.Smooth ? 1 : 0) : w[i] / sum)).ToDictionary(p => p.c, p => p.Item2);
+            }
+            return (For(true), For(false));
+        }
+    }
+
+    /// <summary>
+    /// One shot of a move: from one view to another over its share of the time, eased by its curve. Bow bends a pan's
+    /// path to one side, as a share of its length (positive one way, negative the other). A shot whose start is not where
+    /// the shot before it ended is a cut.
+    /// </summary>
+    public sealed record CameraShot(CameraView From, CameraView To, double Share, CameraCurve Curve, double Bow);
+
+    /// <summary>
+    /// How a planned move may vary, from the Layout Generator settings: the odds of each curve, how far a pan bends, how
+    /// far the view turns (degrees, a range), and the chance of a two-shot scene where there is a face. None is the plain
+    /// move every scene had before these were settings.
+    /// </summary>
+    public sealed record CameraStyle(IReadOnlyList<double> CurveOdds, double BowLeast, double BowMost, double TurnLeast, double TurnMost, double TwoShotChance)
+    {
+        public static readonly CameraStyle Plain = new(new double[] { 0, 0, 1, 0, 0, 0 }, 0, 0, 0, 0, 0);
     }
 
     /// <summary>How a floating cell sits at a moment, on top of its place in the layout, which does not change.</summary>
@@ -161,36 +262,80 @@ namespace ModernImageViewer
         private const double WidestZoom = 1.03;
         private const int TriesForADifferentMove = 8;
 
+        // At a curved path's full amount, how far a pan bows to one side, as a share of its length: Cinematic Slideshow's.
+        public const double MostBow = 0.13;
+        // A two-shot scene needs time for both shots to read.
+        public const double ShortestTwoShotSeconds = 8;
+
         public CameraKind Kind { get; }
-        public CameraView Start { get; }
-        public CameraView End { get; }
+        public IReadOnlyList<CameraShot> Shots { get; }
+        public CameraView Start => Shots[0].From;
+        public CameraView End => Shots[^1].To;
         public double Seconds { get; }
 
-        public CameraMove(CameraKind kind, CameraView start, CameraView end, double seconds)
+        /// <summary>One shot, Smooth and straight unless told otherwise: the move every scene had before there was a choice.</summary>
+        public CameraMove(CameraKind kind, CameraView start, CameraView end, double seconds, CameraCurve curve = CameraCurve.Smooth, double bow = 0)
+            : this(kind, new[] { new CameraShot(start, end, 1, curve, bow) }, seconds) { }
+
+        public CameraMove(CameraKind kind, IReadOnlyList<CameraShot> shots, double seconds)
         {
             Kind = kind;
-            Start = start;
-            End = end;
+            Shots = shots.Count > 0 ? shots : new[] { new CameraShot(CameraView.Whole, CameraView.Whole, 1, CameraCurve.Smooth, 0) };
             Seconds = seconds;
         }
 
-        /// <summary>Eased at both ends. Zoom changes by the same ratio over time, which reads as steady where a straight line would seem to slow down.</summary>
+        /// <summary>
+        /// Each shot takes its share of the time, eased by its curve. Zoom changes by the same ratio over time, which reads
+        /// as steady where a straight line would seem to slow down. A bent path bows to one side most at its middle.
+        /// </summary>
         public CameraView At(double elapsedSeconds)
         {
             double t = Seconds <= 0 ? 1 : Math.Clamp(elapsedSeconds / Seconds, 0, 1);
-            double eased = t * t * (3 - 2 * t);
-            double zoom = Math.Exp(Lerp(Math.Log(Math.Max(1, Start.Zoom)), Math.Log(Math.Max(1, End.Zoom)), eased));
-            return new CameraView(zoom, Lerp(Start.X, End.X, eased), Lerp(Start.Y, End.Y, eased)).Covered();
+            double total = Shots.Sum(s => Math.Max(0, s.Share));
+            if (total <= 0) total = 1;
+            double reached = 0;
+            var shot = Shots[^1];
+            double local = 1;
+            foreach (var s in Shots)
+            {
+                double length = Math.Max(0, s.Share) / total;
+                if (t <= reached + length || ReferenceEquals(s, Shots[^1]))
+                {
+                    shot = s;
+                    local = length <= 0 ? 1 : Math.Clamp((t - reached) / length, 0, 1);
+                    break;
+                }
+                reached += length;
+            }
+
+            double eased = CameraCurves.Ease(shot.Curve, local);
+            double zoom = Math.Exp(Lerp(Math.Log(Math.Max(1, shot.From.Zoom)), Math.Log(Math.Max(1, shot.To.Zoom)), eased));
+            double x = Lerp(shot.From.X, shot.To.X, eased), y = Lerp(shot.From.Y, shot.To.Y, eased);
+            double dx = shot.To.X - shot.From.X, dy = shot.To.Y - shot.From.Y;
+            double travel = Math.Sqrt(dx * dx + dy * dy);
+            if (shot.Bow != 0 && travel > 0.005)
+            {
+                double off = shot.Bow * travel * Math.Sin(Math.PI * eased);
+                x += -dy / travel * off;
+                y += dx / travel * off;
+            }
+            return new CameraView(zoom, x, y, Lerp(shot.From.Angle, shot.To.Angle, eased)).Covered();
         }
 
         /// <summary>
         /// A move for this long, or none with no amount. The amount is 0 to 1. The same zoom looks rushed on a short layout and timid on a long one, so it scales with time.
-        /// Never the same kind twice running, while another is possible.
+        /// Never the same kind twice running, while another is possible. The style gives its curve, bend, turn, and the chance
+        /// that a scene with a face becomes two shots; without one, it is the plain move.
         /// </summary>
-        public static CameraMove? Plan(IReadOnlyList<(double X, double Y)> subjects, double amount, double zoomChance, double aimChance, double seconds, CameraKind? last, Random random, CameraKind? forcedKind = null)
+        public static CameraMove? Plan(IReadOnlyList<(double X, double Y)> subjects, double amount, double zoomChance, double aimChance, double seconds, CameraKind? last, Random random, CameraKind? forcedKind = null, CameraStyle? style = null)
         {
             if (amount <= 0 || seconds <= 0) return null;
+            style ??= CameraStyle.Plain;
             double intensity = Math.Min(amount, 1) * MostIntensity * Math.Clamp(seconds / 12.0, 0.6, 1.25);
+
+            if (subjects.Count > 0 && seconds >= ShortestTwoShotSeconds && style.TwoShotChance > 0 && random.NextDouble() < style.TwoShotChance)
+                return PlanTwoShots(subjects[random.Next(subjects.Count)], intensity, seconds, random, style);
+
             (double X, double Y) aim = subjects.Count > 0 && random.NextDouble() < aimChance
                 ? subjects[random.Next(subjects.Count)]
                 : (0.5 + (random.NextDouble() - 0.5) * 0.3, 0.5 + (random.NextDouble() - 0.5) * 0.3);
@@ -207,6 +352,9 @@ namespace ModernImageViewer
                     kind = ChooseKind(zoomChance, random);
             }
 
+            var curve = CameraCurves.Pick(style.CurveOdds, kind != CameraKind.Drift, random);
+            (double From, double To) turn = Turn(style, random);
+
             if (kind == CameraKind.Drift)
             {
                 double zoom = Math.Max(1.06, 1 + intensity * 0.75);
@@ -217,14 +365,65 @@ namespace ModernImageViewer
                 double along = Math.Clamp((sideways ? aim.X : aim.Y) - travel / 2, margin, Math.Max(margin, 1 - margin - travel));
                 double from = along, to = along + travel;
                 if (random.Next(2) == 0) (from, to) = (to, from);
-                var start = sideways ? new CameraView(zoom, from, aim.Y) : new CameraView(zoom, aim.X, from);
-                var end = sideways ? new CameraView(zoom, to, aim.Y) : new CameraView(zoom, aim.X, to);
-                return new CameraMove(kind, start.Covered(), end.Covered(), seconds);
+                var start = sideways ? new CameraView(zoom, from, aim.Y, turn.From) : new CameraView(zoom, aim.X, from, turn.From);
+                var end = sideways ? new CameraView(zoom, to, aim.Y, turn.To) : new CameraView(zoom, aim.X, to, turn.To);
+                return new CameraMove(kind, start.Covered(), end.Covered(), seconds, curve, Bow(style, random));
             }
 
             var wide = new CameraView(WidestZoom, aim.X, aim.Y).Covered();
             var close = new CameraView(Math.Max(WidestZoom + 0.02, 1 + intensity * 1.5), aim.X, aim.Y).Covered();
-            return kind == CameraKind.ZoomIn ? new CameraMove(kind, wide, close, seconds) : new CameraMove(kind, close, wide, seconds);
+            return kind == CameraKind.ZoomIn
+                ? new CameraMove(kind, wide with { Angle = turn.From }, close with { Angle = turn.To }, seconds, curve)
+                : new CameraMove(kind, close with { Angle = turn.From }, wide with { Angle = turn.To }, seconds, curve);
+        }
+
+        /// <summary>
+        /// Two shots, as Cinematic Slideshow makes them where there is a face: a slow wide shot, then either a snap zoom in to
+        /// the face, or a cut to the face and a slow push in.
+        /// </summary>
+        private static CameraMove PlanTwoShots((double X, double Y) face, double intensity, double seconds, Random random, CameraStyle style)
+        {
+            var calm = CameraCurves.Pick(style.CurveOdds, zoom: false, random);
+            (double From, double To) turn = Turn(style, random);
+            double wideZoom = 1.06 + intensity * 0.3;
+            double closeZoom = Math.Max(1.35, 1 + intensity * 2.5);
+            // The wide shot drifts a little toward the face, so the second shot follows on from it.
+            var wideFrom = new CameraView(wideZoom, 0.5 + (0.5 - face.X) * 0.15, 0.5 + (0.5 - face.Y) * 0.15, turn.From).Covered();
+            var wideTo = new CameraView(wideZoom, 0.5 + (face.X - 0.5) * 0.15, 0.5 + (face.Y - 0.5) * 0.15, turn.From).Covered();
+            var close = new CameraView(closeZoom, face.X, face.Y, turn.To).Covered();
+
+            if (random.Next(2) == 0)
+            {
+                // Discovery: the wide shot, then a snap zoom in on the face.
+                return new CameraMove(CameraKind.ZoomIn, new[]
+                {
+                    new CameraShot(wideFrom, wideTo, 0.55, calm, Bow(style, random)),
+                    new CameraShot(wideTo, close, 0.45, CameraCurve.Snap, 0)
+                }, seconds);
+            }
+            // Reveal: the wide shot, then a cut to the face, pushing in slowly.
+            var nearer = new CameraView(closeZoom * 1.08, face.X, face.Y, turn.To).Covered();
+            return new CameraMove(CameraKind.ZoomIn, new[]
+            {
+                new CameraShot(wideFrom, wideTo, 0.5, calm, Bow(style, random)),
+                new CameraShot(close, nearer, 0.5, CameraCurves.Pick(style.CurveOdds, zoom: false, random), 0)
+            }, seconds);
+        }
+
+        private static double Bow(CameraStyle style, Random random)
+        {
+            double least = Math.Clamp(Math.Min(style.BowLeast, style.BowMost), 0, 1), most = Math.Clamp(Math.Max(style.BowLeast, style.BowMost), 0, 1);
+            double amount = least + random.NextDouble() * (most - least);
+            return amount * MostBow * (random.Next(2) == 0 ? 1 : -1);
+        }
+
+        /// <summary>A turn from the range, through the middle: from half of it one way to half the other.</summary>
+        private static (double From, double To) Turn(CameraStyle style, Random random)
+        {
+            double least = Math.Max(0, Math.Min(style.TurnLeast, style.TurnMost)), most = Math.Max(0, Math.Max(style.TurnLeast, style.TurnMost));
+            if (most <= 0) return (0, 0);
+            double degrees = (least + random.NextDouble() * (most - least)) * (random.Next(2) == 0 ? 1 : -1);
+            return (-degrees / 2, degrees / 2);
         }
 
         private static CameraKind ChooseKind(double zoomChance, Random random)

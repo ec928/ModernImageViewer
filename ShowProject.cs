@@ -388,13 +388,8 @@ namespace ModernImageViewer
                 Layout = MultiViewLayoutFile.FromJson(Layout.ToJson()) ?? new MultiViewLayoutFile(),
                 DwellSeconds = DwellSeconds,
                 Transition = Transition,
-                CameraOverride = CameraOverride != null ? new CameraKeyframeOverride
-                {
-                    Start = new CameraViewDto(CameraOverride.Start.Zoom, CameraOverride.Start.X, CameraOverride.Start.Y),
-                    End = new CameraViewDto(CameraOverride.End.Zoom, CameraOverride.End.X, CameraOverride.End.Y),
-                    StartCrop = CameraOverride.StartCrop != null ? new NormalizedRectDto(CameraOverride.StartCrop.X, CameraOverride.StartCrop.Y, CameraOverride.StartCrop.Width, CameraOverride.StartCrop.Height) : null,
-                    EndCrop = CameraOverride.EndCrop != null ? new NormalizedRectDto(CameraOverride.EndCrop.X, CameraOverride.EndCrop.Y, CameraOverride.EndCrop.Width, CameraOverride.EndCrop.Height) : null
-                } : null,
+                // The whole path, curve, bend, turn and later shots included: copied field by field, those were lost.
+                CameraOverride = CameraOverride?.Copy(),
                 IsHidden = IsHidden,
                 Recipe = Recipe
             };
@@ -418,6 +413,22 @@ namespace ModernImageViewer
         [JsonPropertyName("kind")]
         public string? Kind { get; set; }
 
+        /// <summary>The first shot's curve, by name (<see cref="CameraCurve"/>). None, as in files from before, is Smooth.</summary>
+        [JsonPropertyName("curve")]
+        public string? Curve { get; set; }
+
+        /// <summary>How far the first shot's path bends to one side, as a share of its length. 0 is straight.</summary>
+        [JsonPropertyName("bow")]
+        public double Bow { get; set; }
+
+        /// <summary>The first shot's share of the scene's time, against the shots after it. Alone, it is all of it.</summary>
+        [JsonPropertyName("share")]
+        public double Share { get; set; } = 1;
+
+        /// <summary>Shots after the first, in order. None, as in files from before, is a one-shot scene.</summary>
+        [JsonPropertyName("shots")]
+        public List<CameraShotDto>? Shots { get; set; }
+
         public CameraKeyframeOverride() { }
 
         public CameraKeyframeOverride(CameraViewDto start, CameraViewDto end, string? kind = null)
@@ -427,13 +438,88 @@ namespace ModernImageViewer
             Kind = kind;
         }
 
+        public int ShotCount => 1 + (Shots?.Count ?? 0);
+
+        /// <summary>Every shot, the first included, with the start of each: a shot that continues starts where the one before ended.</summary>
+        public List<CameraShot> ToShots()
+        {
+            static CameraView View(CameraViewDto d) => new CameraView(d.Zoom, d.X, d.Y, d.Angle).Covered();
+            var shots = new List<CameraShot> { new(View(Start), View(End), Share > 0 ? Share : 1, CameraCurves.Parse(Curve), Bow) };
+            foreach (var s in Shots ?? new List<CameraShotDto>())
+            {
+                var from = s.From != null ? View(s.From) : shots[^1].To;
+                shots.Add(new CameraShot(from, View(s.To), s.Share > 0 ? s.Share : 1, CameraCurves.Parse(s.Curve), s.Bow));
+            }
+            return shots;
+        }
+
         public CameraMove ToCameraMove(double seconds)
         {
-            var startView = new CameraView(Start.Zoom, Start.X, Start.Y).Covered();
-            var endView = new CameraView(End.Zoom, End.X, End.Y).Covered();
-            var kind = End.Zoom > Start.Zoom ? CameraKind.ZoomIn : End.Zoom < Start.Zoom ? CameraKind.ZoomOut : CameraKind.Drift;
-            return new CameraMove(kind, startView, endView, seconds);
+            var shots = ToShots();
+            var startView = shots[0].From;
+            var endView = shots[^1].To;
+            var kind = endView.Zoom > startView.Zoom ? CameraKind.ZoomIn : endView.Zoom < startView.Zoom ? CameraKind.ZoomOut : CameraKind.Drift;
+            return new CameraMove(kind, shots, seconds);
         }
+
+        /// <summary>A planned move as a scene stores it, every shot kept. A shot that starts where the one before ended continues; any other is a cut.</summary>
+        public static CameraKeyframeOverride FromMove(CameraMove move, string? kind)
+        {
+            static CameraViewDto Dto(CameraView v) => new(v.Zoom, v.X, v.Y) { Angle = v.Angle };
+            var first = move.Shots[0];
+            var made = new CameraKeyframeOverride(Dto(first.From), Dto(first.To), kind)
+            {
+                Curve = first.Curve.ToString(),
+                Bow = first.Bow,
+                Share = first.Share,
+                StartCrop = Crop(first.From),
+                EndCrop = Crop(move.Shots[^1].To)
+            };
+            for (int i = 1; i < move.Shots.Count; i++)
+            {
+                var s = move.Shots[i];
+                bool cut = s.From != move.Shots[i - 1].To;
+                (made.Shots ??= new List<CameraShotDto>()).Add(new CameraShotDto
+                {
+                    From = cut ? Dto(s.From) : null,
+                    To = Dto(s.To),
+                    Share = s.Share,
+                    Curve = s.Curve.ToString(),
+                    Bow = s.Bow
+                });
+            }
+            return made;
+        }
+
+        /// <summary>The part of the canvas a view shows, as Cinematic shows describe a frame.</summary>
+        public static NormalizedRectDto Crop(CameraView view)
+        {
+            double w = 1.0 / Math.Max(1.0, view.Zoom);
+            return new NormalizedRectDto(Math.Clamp(view.X - w / 2, 0, 1 - w), Math.Clamp(view.Y - w / 2, 0, 1 - w), w, w);
+        }
+
+        /// <summary>A separate copy, every shot included, so editing one scene never changes another.</summary>
+        public CameraKeyframeOverride Copy() =>
+            System.Text.Json.JsonSerializer.Deserialize<CameraKeyframeOverride>(System.Text.Json.JsonSerializer.Serialize(this)) ?? new CameraKeyframeOverride();
+    }
+
+    /// <summary>A shot after a scene's first. With no From, it continues from where the shot before ended; with one, it is a cut.</summary>
+    public sealed class CameraShotDto
+    {
+        [JsonPropertyName("from")]
+        public CameraViewDto? From { get; set; }
+
+        [JsonPropertyName("to")]
+        public CameraViewDto To { get; set; } = new(1.0, 0.5, 0.5);
+
+        [JsonPropertyName("share")]
+        public double Share { get; set; } = 1;
+
+        [JsonPropertyName("curve")]
+        public string? Curve { get; set; }
+
+        [JsonPropertyName("bow")]
+        public double Bow { get; set; }
     }
 
     public sealed class CameraViewDto
@@ -446,6 +532,10 @@ namespace ModernImageViewer
 
         [JsonPropertyName("y")]
         public double Y { get; set; } = 0.5;
+
+        /// <summary>How far the frame is turned, in degrees. 0, as in files from before, is straight.</summary>
+        [JsonPropertyName("angle")]
+        public double Angle { get; set; }
 
         public CameraViewDto() { }
 

@@ -65,7 +65,7 @@ namespace ModernImageViewer
                 {
                     DefaultDwellSeconds = options.AutoPlayRandom ? (options.RandomFewestSeconds + options.RandomMostSeconds) / 2.0 : 12.0,
                     SmartPace = options.SmartPace,
-                    CameraMotionAmount = options.MotionAmount,
+                    CameraMotionAmount = (options.MotionLeast + options.MotionMost) / 2,
                     CameraMode = options.CameraMode
                 }
             };
@@ -180,7 +180,9 @@ namespace ModernImageViewer
                 Transition = transition.ToString()
             };
 
-            if (chosenMotion == "Still" || options.MotionAmount <= 0.001)
+            // Each scene its own strength, from the Motion range.
+            double amount = options.PickMotion(random);
+            if (chosenMotion == "Still" || amount <= 0.001)
             {
                 scene.CameraOverride = new CameraKeyframeOverride(
                     new CameraViewDto(1.0, 0.5, 0.5),
@@ -202,24 +204,19 @@ namespace ModernImageViewer
 
                 var move = CameraMove.Plan(
                     subjects,
-                    options.MotionAmount,
+                    amount,
                     options.MotionZoomChance,
                     options.MotionFaceChance,
                     dwell,
                     null,
                     random,
-                    kindToPlan);
+                    kindToPlan,
+                    options.CameraStyle());
 
                 if (move != null)
                 {
-                    scene.CameraOverride = new CameraKeyframeOverride
-                    {
-                        Start = new CameraViewDto(move.Start.Zoom, move.Start.X, move.Start.Y),
-                        End = new CameraViewDto(move.End.Zoom, move.End.X, move.End.Y),
-                        StartCrop = CameraViewToRect(move.Start),
-                        EndCrop = CameraViewToRect(move.End),
-                        Kind = chosenMotion
-                    };
+                    // Every shot, its curve, bend and turn: the scene plays what was planned.
+                    scene.CameraOverride = CameraKeyframeOverride.FromMove(move, move.Shots.Count > 1 ? "TwoShot" : chosenMotion);
                 }
             }
 
@@ -237,7 +234,7 @@ namespace ModernImageViewer
             string? lastMotion,
             Random random)
         {
-            if (options.MotionAmount <= 0.001) return "Still";
+            if (!options.HasMotion) return "Still";
 
             int cellCount = composition.Cells.Count;
 
@@ -368,14 +365,5 @@ namespace ModernImageViewer
             return result;
         }
 
-        private static NormalizedRectDto CameraViewToRect(CameraView view)
-        {
-            double z = Math.Max(1.0, view.Zoom);
-            double w = 1.0 / z;
-            double h = 1.0 / z;
-            double x = Math.Clamp(view.X - w / 2.0, 0.0, 1.0 - w);
-            double y = Math.Clamp(view.Y - h / 2.0, 0.0, 1.0 - h);
-            return new NormalizedRectDto(x, y, w, h);
-        }
     }
 }
