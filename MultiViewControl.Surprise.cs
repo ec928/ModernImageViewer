@@ -426,8 +426,6 @@ namespace ModernImageViewer
             }
 
             // Image count dual SpinNumberBox range control (Min to Max)
-            Slider? fewestEach = null;
-            Slider? mostEach = null;
             Action? updateImagesSummary = null;
             bool syncingImageRange = false;
 
@@ -486,8 +484,6 @@ namespace ModernImageViewer
                     if (fewestBox.Value != f) fewestBox.Value = f;
                     if (mostBox.Value != m) mostBox.Value = m;
                     ChangeSurpriseChoices(o => { o.FewestPictures = f; o.MostPictures = m; });
-                    if (fewestEach != null && Math.Abs(fewestEach.Value - f) > 0.01) fewestEach.Value = f;
-                    if (mostEach != null && Math.Abs(mostEach.Value - m) > 0.01) mostEach.Value = m;
                     updateImagesSummary?.Invoke();
                 }
                 finally
@@ -659,7 +655,18 @@ namespace ModernImageViewer
                     Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White),
                     Margin = new Thickness(0, 2, 0, 4)
                 };
-                body.Children.Add(soundtrackHeader);
+                // The music library's own settings (folder, ratings, which shows play music) open from here, so
+                // everything about the soundtrack is in this one place.
+                var soundtrackRow = new Grid { ColumnSpacing = 8 };
+                soundtrackRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                soundtrackRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                var configureMusic = WordButton("Configure\u2026", "Configure music",
+                    "The music folder, the lowest rating played, and whether Auto-Mix and Cinematic play music.",
+                    (_, _) => MainWindow.Instance?.OpenMusicSettings());
+                Grid.SetColumn(configureMusic, 1);
+                soundtrackRow.Children.Add(soundtrackHeader);
+                soundtrackRow.Children.Add(configureMusic);
+                body.Children.Add(soundtrackRow);
                 body.Children.Add(MusicRow(Icon, IconButton));
 
                 body.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle { Height = 1, Opacity = 0.15, Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White), Margin = new Thickness(0, 4, 0, 2) });
@@ -751,16 +758,8 @@ namespace ModernImageViewer
             var (imagesSection, imagesSummary) = Section("Images & faces", ImagesSummaryText());
             updateImagesSummary = () => imagesSummary.Text = ImagesSummaryText();
 
-            fewestEach = Slide(imagesSection, "Fewest images per scene", "The minimum images per scene. When more images are available, each scene selects within this range.",
-                SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.FewestPictures,
-                v => $"{v:0}",
-                (o, v) => { if (!syncingImageRange) SetImageRange((int)v, (int)mostBox.Value); });
-            mostEach = Slide(imagesSection, "Most images per scene", "The maximum images per scene. Additional images remain in the Image Pool and cycle across scenes.",
-                SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.MostPictures,
-                v => $"{v:0}",
-                (o, v) => { if (!syncingImageRange) SetImageRange((int)fewestBox.Value, (int)v); });
-            fewestEach.ValueChanged += (_, e) => { if (!syncingImageRange && mostEach.Value < e.NewValue) mostEach.Value = e.NewValue; };
-            mostEach.ValueChanged += (_, e) => { if (!syncingImageRange && fewestEach.Value > e.NewValue) fewestEach.Value = e.NewValue; };
+            // The same number boxes as the first page (which is not shown while this one is), not a second kind of control.
+            imagesSection.Children.Add(imagesRow);
 
             Slide(imagesSection, "Same folder and date", "The odds that a click takes images that are neighbours when sorted by folder, then file date.",
                 0, 100, 5, options.TogetherChance * 100,
@@ -942,61 +941,6 @@ namespace ModernImageViewer
                 (o, v) => o.MotionFaceChance = v / 100);
             TransitionGroup(cameraSection, () => cameraSummary.Text = CameraSummaryText());
 
-            // 4. Soundtrack & audio
-            string MusicSummaryText()
-            {
-                var m = MainWindow.Instance?.MyMusic;
-                return m?.HasFolder == true ? m.Summary : "No folder";
-            }
-            var (musicSection, musicSummary) = Section("Soundtrack & audio", MusicSummaryText());
-
-            string folderPath = MainWindow.Instance?.MyMusic?.Folder ?? "No music folder configured";
-            var folderRow = new Grid { ColumnSpacing = 12, MinHeight = 48, Margin = new Thickness(0, 2, 0, 4) };
-            folderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            folderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
-
-            var folderStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-            folderStack.Children.Add(new TextBlock { Text = "Music library", FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) });
-            var folderSub = new TextBlock
-            {
-                Text = folderPath,
-                FontSize = 11,
-                Opacity = 0.65,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                MaxWidth = 250,
-                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White)
-            };
-            ToolTipService.SetToolTip(folderSub, folderPath);
-            ToolTipService.SetToolTip(folderStack, folderPath);
-            folderStack.Children.Add(folderSub);
-
-            var openMusicBtn = WordButton("Configure\u2026", "Open music library settings", "Change music folder, rating filters and playback behavior", (_, _) => MainWindow.Instance?.OpenMusicSettings());
-            openMusicBtn.HorizontalAlignment = HorizontalAlignment.Right;
-            openMusicBtn.VerticalAlignment = VerticalAlignment.Center;
-
-            Grid.SetColumn(folderStack, 0);
-            Grid.SetColumn(openMusicBtn, 1);
-            folderRow.Children.Add(folderStack);
-            folderRow.Children.Add(openMusicBtn);
-            musicSection.Children.Add(folderRow);
-
-            var mus = MainWindow.Instance?.MyMusic;
-            var lowestRatingText = mus?.LowestStars > 0 ? $"{mus.LowestStars:0}\u2605 and up" : "All ratings";
-            var ratingRow = new Grid { ColumnSpacing = 12, MinHeight = 34 };
-            ratingRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            ratingRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
-            var ratingText = new TextBlock { Text = "Rating filter", VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
-            var ratingValue = new TextBlock { Text = lowestRatingText, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, FontSize = 12, Opacity = 0.82, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
-            Grid.SetColumn(ratingText, 0);
-            Grid.SetColumn(ratingValue, 1);
-            ratingRow.Children.Add(ratingText);
-            ratingRow.Children.Add(ratingValue);
-            musicSection.Children.Add(ratingRow);
-
-            Toggle(musicSection, "Auto-play soundtrack", "Automatically play music while auto-play is running.",
-                mus?.InSurprise != false,
-                (_, on) => { MainWindow.Instance?.SetMusicInSurprise(on); musicSummary.Text = MusicSummaryText(); });
-
             // 5. Look
             string LookSummaryText()
             {
@@ -1018,10 +962,45 @@ namespace ModernImageViewer
                 0.25, 3, 0.25, options.GapScale,
                 v => $"{v:0.##}\u00D7",
                 (o, v) => o.GapScale = v);
-            Slide(lookSection, "Hero size", "The hero image's height against the canvas.",
-                40, 90, 1, options.HeroSize * 100,
-                v => $"{v:0}%",
-                (o, v) => o.HeroSize = v / 100);
+            {
+                // A range like Duration: each Hero layout picks its hero's height from it.
+                var row = new Grid { ColumnSpacing = 12, MinHeight = 34 };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
+                var label = new TextBlock { Text = "Hero size", VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
+                var right = new Grid { Width = 230, ColumnSpacing = 8, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+                right.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(146) });
+                right.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(76) });
+                string Sizes(int low, int high) => low == high ? $"{low}%" : $"{low}% - {high}%";
+                int from = (int)Math.Round(options.HeroSmallest * 100), to = (int)Math.Round(options.HeroLargest * 100);
+                var readout = new TextBlock { Text = Sizes(from, to), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, FontSize = 12, Opacity = 0.82, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
+                var range = new RangeSlider
+                {
+                    Minimum = SurpriseOptions.HeroLowest * 100,
+                    Maximum = SurpriseOptions.HeroHighest * 100,
+                    StepFrequency = 1,
+                    RangeStart = from,
+                    RangeEnd = to,
+                    Width = 146,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                range.RangeChanged += (_, r) =>
+                {
+                    int low = (int)Math.Round(r.Start), high = (int)Math.Round(r.End);
+                    readout.Text = Sizes(low, high);
+                    ChangeSurpriseChoices(o => { o.HeroSmallest = low / 100.0; o.HeroLargest = Math.Max(low, high) / 100.0; });
+                };
+                ToolTipService.SetToolTip(row, "The hero image's height against the canvas. Each Hero layout picks a height in this range; drag the ends together for one size.");
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(range, "Hero size");
+                Grid.SetColumn(range, 0);
+                Grid.SetColumn(readout, 1);
+                right.Children.Add(range);
+                right.Children.Add(readout);
+                Grid.SetColumn(right, 1);
+                row.Children.Add(label);
+                row.Children.Add(right);
+                lookSection.Children.Add(row);
+            }
             Slide(lookSection, "Most tilt", "How far Scattered prints can turn.",
                 0, 20, 0.5, options.MostTilt,
                 v => v < 0.1 ? "0\u00B0" : $"{v:0.0}\u00B0",
