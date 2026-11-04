@@ -109,80 +109,120 @@ namespace ModernImageViewer
 
                 if (composition == null) continue;
 
-                // Pacing: adaptive dwell calculation
-                double dwell = options.NextPlaySeconds(random, composition.Cells.Count, ref lastWasLong);
-
-                // Transition selection
-                var transition = LayoutTransitions.Choose(options.TransitionVariety, lastTransition, random);
-
-                // Camera planning: organic, varied motion sequence tailored to layout & avoiding consecutive repeats
-                var subjects = composition.CameraSubjects();
-                string chosenMotion = ChooseMotionKind(composition, options, lastMotionKind, random);
-                lastMotionKind = chosenMotion;
-
-                var scene = new ShowScene
-                {
-                    Id = Guid.NewGuid().ToString(),
-                    Title = $"{composition.Recipe} ({composition.Cells.Count})",
-                    Recipe = composition.Recipe,
-                    Layout = composition.ToLayoutFile(),
-                    DwellSeconds = dwell,
-                    Transition = transition.ToString()
-                };
-
-                if (chosenMotion == "Still" || options.MotionAmount <= 0.001)
-                {
-                    scene.CameraOverride = new CameraKeyframeOverride(
-                        new CameraViewDto(1.0, 0.5, 0.5),
-                        new CameraViewDto(1.0, 0.5, 0.5),
-                        "Still")
-                    {
-                        StartCrop = new NormalizedRectDto(0, 0, 1, 1),
-                        EndCrop = new NormalizedRectDto(0, 0, 1, 1)
-                    };
-                }
-                else
-                {
-                    CameraKind kindToPlan = chosenMotion switch
-                    {
-                        "ZoomIn" => CameraKind.ZoomIn,
-                        "ZoomOut" => CameraKind.ZoomOut,
-                        _ => CameraKind.Drift
-                    };
-
-                    var move = CameraMove.Plan(
-                        subjects,
-                        options.MotionAmount,
-                        options.MotionZoomChance,
-                        options.MotionFaceChance,
-                        dwell,
-                        null,
-                        random,
-                        kindToPlan);
-
-                    if (move != null)
-                    {
-                        scene.CameraOverride = new CameraKeyframeOverride
-                        {
-                            Start = new CameraViewDto(move.Start.Zoom, move.Start.X, move.Start.Y),
-                            End = new CameraViewDto(move.End.Zoom, move.End.X, move.End.Y),
-                            StartCrop = CameraViewToRect(move.Start),
-                            EndCrop = CameraViewToRect(move.End),
-                            Kind = chosenMotion
-                        };
-                    }
-                }
-
+                var scene = BuildScene(composition, options, random, ref lastMotionKind, lastTransition, ref lastWasLong, out var transition);
                 project.Scenes.Add(scene);
 
                 lastRecipe = composition.Recipe;
                 lastTransition = transition;
 
                 double percent = (double)(i + 1) / totalChunks * 100.0;
-                progress?.Report(new ShowDraftProgress(i + 1, totalChunks, scene.Title, percent));
+                progress?.Report(new ShowDraftProgress(i + 1, totalChunks, scene.Title ?? "", percent));
             }
 
             return project;
+        }
+
+        /// <summary>
+        /// One more scene for a show, from the first of <paramref name="photos"/> in their order, as many as the
+        /// images-per-scene range allows. It avoids repeating the previous scene's design, move and transition.
+        /// Null when nothing can be laid out.
+        /// </summary>
+        public static Task<ShowScene?> DraftSceneAsync(IReadOnlyList<PhotoFacts> photos, SurpriseOptions? options,
+            double canvasWidth, double canvasHeight, ShowScene? previous)
+        {
+            options ??= new SurpriseOptions();
+            double width = Math.Max(320, canvasWidth);
+            double height = Math.Max(240, canvasHeight);
+            return Task.Run(() =>
+            {
+                var usable = photos.Where(p => p.Width >= 1 && p.Height >= 1).ToList();
+                if (usable.Count == 0) return null;
+
+                var random = new Random(Random.Shared.Next());
+                int fewest = Math.Clamp(options.FewestPictures, 1, MosaicLayout.MaxShown);
+                int most = Math.Clamp(options.MostPictures, fewest, MosaicLayout.MaxShown);
+                var chunk = usable.Take(Math.Min(usable.Count, random.Next(fewest, most + 1))).ToList();
+
+                var composition = LayoutComposer.Compose(chunk, width, height, random.Next(), avoid: previous?.Recipe, rasterScale: 1.0, only: null, options: options)
+                    ?? LayoutComposer.Compose(new[] { chunk[0] }, width, height, random.Next(), options: options);
+                if (composition == null) return (ShowScene?)null;
+
+                string? lastMotion = previous?.CameraOverride?.Kind;
+                bool? lastWasLong = null;
+                LayoutTransition? lastTransition = Enum.TryParse<LayoutTransition>(previous?.Transition, out var parsed) ? parsed : null;
+                return BuildScene(composition, options, random, ref lastMotion, lastTransition, ref lastWasLong, out _);
+            });
+        }
+
+        /// <summary>One scene from a finished composition: its hold, the transition into it, and a camera path planned once, aimed at faces by the options.</summary>
+        private static ShowScene BuildScene(Composition composition, SurpriseOptions options, Random random,
+            ref string? lastMotionKind, LayoutTransition? lastTransition, ref bool? lastWasLong, out LayoutTransition transition)
+        {
+            // Pacing: adaptive dwell calculation
+            double dwell = options.NextPlaySeconds(random, composition.Cells.Count, ref lastWasLong);
+
+            // Transition selection
+            transition = LayoutTransitions.Choose(options.TransitionVariety, lastTransition, random);
+
+            // Camera planning: organic, varied motion sequence tailored to layout & avoiding consecutive repeats
+            var subjects = composition.CameraSubjects();
+            string chosenMotion = ChooseMotionKind(composition, options, lastMotionKind, random);
+            lastMotionKind = chosenMotion;
+
+            var scene = new ShowScene
+            {
+                Id = Guid.NewGuid().ToString(),
+                Title = $"{composition.Recipe} ({composition.Cells.Count})",
+                Recipe = composition.Recipe,
+                Layout = composition.ToLayoutFile(),
+                DwellSeconds = dwell,
+                Transition = transition.ToString()
+            };
+
+            if (chosenMotion == "Still" || options.MotionAmount <= 0.001)
+            {
+                scene.CameraOverride = new CameraKeyframeOverride(
+                    new CameraViewDto(1.0, 0.5, 0.5),
+                    new CameraViewDto(1.0, 0.5, 0.5),
+                    "Still")
+                {
+                    StartCrop = new NormalizedRectDto(0, 0, 1, 1),
+                    EndCrop = new NormalizedRectDto(0, 0, 1, 1)
+                };
+            }
+            else
+            {
+                CameraKind kindToPlan = chosenMotion switch
+                {
+                    "ZoomIn" => CameraKind.ZoomIn,
+                    "ZoomOut" => CameraKind.ZoomOut,
+                    _ => CameraKind.Drift
+                };
+
+                var move = CameraMove.Plan(
+                    subjects,
+                    options.MotionAmount,
+                    options.MotionZoomChance,
+                    options.MotionFaceChance,
+                    dwell,
+                    null,
+                    random,
+                    kindToPlan);
+
+                if (move != null)
+                {
+                    scene.CameraOverride = new CameraKeyframeOverride
+                    {
+                        Start = new CameraViewDto(move.Start.Zoom, move.Start.X, move.Start.Y),
+                        End = new CameraViewDto(move.End.Zoom, move.End.X, move.End.Y),
+                        StartCrop = CameraViewToRect(move.Start),
+                        EndCrop = CameraViewToRect(move.End),
+                        Kind = chosenMotion
+                    };
+                }
+            }
+
+            return scene;
         }
 
         /// <summary>

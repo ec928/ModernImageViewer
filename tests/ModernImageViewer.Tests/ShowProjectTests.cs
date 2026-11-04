@@ -275,6 +275,40 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
+        public void ImagesNotInShow_KeepsPoolOrder_AndLeavesOutEveryImageAScenesShows()
+        {
+            var show = new ShowProject();
+            var scene = new ShowScene();
+            scene.Layout.Photos.Add(new PhotoSlotDto { Slot = 0, Path = @"C:\p\b.jpg" });
+            scene.Layout.Freeform = new List<FreeformCellDto> { new() { Path = @"C:\P\D.JPG" } };
+            show.Scenes.Add(scene);
+
+            var fresh = show.ImagesNotInShow(new[] { @"C:\p\a.jpg", @"C:\p\b.jpg", @"C:\p\c.jpg", @"C:\p\d.jpg", @"C:\p\a.jpg", "" });
+
+            Assert.Equal(new[] { @"C:\p\a.jpg", @"C:\p\c.jpg" }, fresh);
+        }
+
+        [Fact]
+        public async System.Threading.Tasks.Task DraftSceneAsync_UsesOnlyTheGivenImages_WithinTheRange()
+        {
+            var facts = Enumerable.Range(0, 10)
+                .Select(i => new PhotoFacts($@"C:\p\{i}.jpg", 1600, 1200, Array.Empty<UnitRect>(), 0.5, 0.5, "#808080"))
+                .ToList();
+            var options = new SurpriseOptions { FewestPictures = 2, MostPictures = 4 };
+
+            for (int run = 0; run < 20; run++)
+            {
+                var scene = await ShowDirector.DraftSceneAsync(facts, options, 1920, 1080, previous: null);
+
+                Assert.NotNull(scene);
+                var paths = scene!.GetPhotoPaths().ToList();
+                Assert.InRange(paths.Count, 2, 4);
+                Assert.All(paths, p => Assert.Contains(p, facts.Select(f => f.Path)));
+                Assert.NotNull(scene.CameraOverride);
+            }
+        }
+
+        [Fact]
         public void ThumbnailBoxes_ThreeImagesInOneRow_AreThreeColumns()
         {
             var scene = new ShowScene();

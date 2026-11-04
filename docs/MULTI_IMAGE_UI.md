@@ -59,7 +59,7 @@ The toolbar:
 |---|---|---|
 | Play Show | Play Show | Plays from the selected scene and chooses Storyboard. Shown when scenes exist. |
 | Add this layout | Add this layout | The images on the canvas become a new scene at the end. |
-| Update scene | Update scene | Stores the canvas in the selected scene. |
+| Add new layout | Add new layout | Makes one new scene at the end, from images no scene uses yet, as many as Images per scene allows, and shows it on the canvas. Once every image is in the show, it picks from the whole Image Pool. Each click is one Undo step. |
 | Make a show | Make a show, or Replace show | Makes scenes from the Image Pool. When scenes exist it reads Replace show and asks before it replaces them. |
 | Images per scene | `(min–max) ▾` | The fewest and most images in a scene, 1 to 16, for the next show made. Auto-Mix uses the same range. |
 | Summary | `N scenes · length` | Scenes and running time. |
@@ -79,7 +79,7 @@ Cards can be dragged into a new order.
 - **Click a card**: shows that scene on the canvas and leaves the drawer open.
 - **Double-click a card**: shows the scene and closes the drawer.
 - **Click the camera and hold badge**: the camera choices (Zoom in, Zoom out, Pan across, Still, then Dynamic, chosen at playback), then Edit camera path…, then Duration (5s, 8s, 12s, 16s, 20s, 30s). The current choice of each is ticked as a radio item.
-- **Right-click a card** (or Shift+F10): Play show from here, Update scene from canvas, Camera motion (the same choices as the badge), Duration, Duplicate scene, Remove scene, Move earlier, Move later.
+- **Right-click a card** (or Shift+F10): Play show from here, Update scene from canvas (copies the canvas into that card's scene), Camera motion (the same choices as the badge), Duration, Duplicate scene, Remove scene, Move earlier, Move later.
 - **Remove scene** never asks. It says `Removed scene. Ctrl+Z brings it back.`, and Undo does. Removing, duplicating or moving a scene is one Undo step, by button, menu, Delete key or drag. Make a show and Replace show are one step each, and Undo can go back to before the storyboard existed.
 
 ## Camera Director (Visual Keyframe Editor)

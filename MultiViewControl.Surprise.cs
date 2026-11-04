@@ -2099,22 +2099,18 @@ namespace ModernImageViewer
             };
             ToolTipService.SetToolTip(addCanvasBtn, "Adds the images on screen as a new scene.");
 
-            var updateSceneBtn = new Button
+            // Grows the show one scene at a time, without replacing it. "Update scene" stood here; while a scene is on the
+            // canvas its edits are already kept, so it nearly always had nothing to store. The card menu still has it.
+            var addNewBtn = new Button
             {
-                Content = "Update scene",
+                Content = "Add new layout",
                 CornerRadius = new CornerRadius(12),
                 Padding = new Thickness(8, 4, 8, 4),
                 FontSize = 12,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                VerticalAlignment = VerticalAlignment.Center,
-                IsEnabled = _selectedShowScene != null
+                VerticalAlignment = VerticalAlignment.Center
             };
-            ToolTipService.SetToolTip(updateSceneBtn, "Stores the canvas in the selected scene.");
-            updateSceneBtn.Click += (_, _) =>
-            {
-                SyncCanvasToSelectedScene(showToast: true, commitCanvas: true);
-                CaptureUndoPoint();
-            };
+            ToolTipService.SetToolTip(addNewBtn, "Makes one new scene at the end of the show, from images not in it yet. Once every image is in the show, from the whole Image Pool.");
 
             var onAccent = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White);
             void ShowAsPrimary(Button button, bool primary)
@@ -2234,7 +2230,7 @@ namespace ModernImageViewer
             storyHeaderRow.Children.Add(playShowDrawerBtn);
             storyHeaderRow.Children.Add(MakeDivider());
             storyHeaderRow.Children.Add(addCanvasBtn);
-            storyHeaderRow.Children.Add(updateSceneBtn);
+            storyHeaderRow.Children.Add(addNewBtn);
             storyHeaderRow.Children.Add(MakeDivider());
             storyHeaderRow.Children.Add(autoDraftBtn);
             storyHeaderRow.Children.Add(draftRangeBtn);
@@ -2549,7 +2545,7 @@ namespace ModernImageViewer
                     ToolTipService.SetToolTip(autoDraftBtn, "Makes a show from the image pool, one screen at a time.");
                 }
 
-                updateSceneBtn.IsEnabled = _selectedShowScene != null && scenesCollection.Contains(_selectedShowScene);
+                addNewBtn.IsEnabled = totalPhotos > 0;
                 SyncStoryImageRange();
                 storyTab.Content = StoryTabLabel();
                 ShowShownBadge();
@@ -2972,7 +2968,6 @@ namespace ModernImageViewer
                 _selectedShowScene = scene;
                 _canvasSceneId = null;
                 scenesView.SelectedItem = scene;
-                if (updateSceneBtn != null) updateSceneBtn.IsEnabled = true;
                 for (int i = 0; i < scenesCollection.Count; i++)
                 {
                     var s = scenesCollection[i];
@@ -3159,6 +3154,58 @@ namespace ModernImageViewer
                 ShowAutoPlayToast($"Added this layout as scene {scenesCollection.Count}");
             }
 
+            // One new scene at the end, from images no scene uses yet, so new images join the show without
+            // Replace show. With every image already in the show, it picks from the whole Image Pool.
+            async Task AddNewLayoutAsync()
+            {
+                var pool = SessionPictures();
+                if (pool.Count == 0) return;
+                var fresh = _activeShow?.ImagesNotInShow(pool) ?? pool;
+                bool reusing = fresh.Count == 0;
+                var candidates = reusing ? pool.OrderBy(_ => Random.Shared.Next()).ToList() : fresh;
+                var chosen = candidates.Take(Math.Clamp(SurpriseChoices.MostPictures, 1, MosaicLayout.MaxShown)).ToList();
+
+                addNewBtn.IsEnabled = false;
+                draftProgressRow.Visibility = Visibility.Visible;
+                progressText.Text = "Making a scene...";
+                try
+                {
+                    var ready = DecodedBitmaps();
+                    var facts = await ReadFactsAsync(chosen, path => ready.TryGetValue(path, out var bitmap) ? (bitmap.PixelWidth, bitmap.PixelHeight) : null);
+                    var previous = scenesCollection.Count > 0 ? scenesCollection[^1] : null;
+                    var scene = await ShowDirector.DraftSceneAsync(facts, SurpriseChoices, ActualWidth, ActualHeight, previous);
+                    if (scene == null)
+                    {
+                        ShowAutoPlayToast("Could not make a layout from these images");
+                        return;
+                    }
+
+                    // The scene on the canvas keeps its edits before the new one replaces it.
+                    if (_selectedShowScene != null && !_isStoryboardPlayback) SyncCanvasToSelectedScene(showToast: false);
+                    _activeShow ??= new ShowProject { Title = "Custom Presentation" };
+                    scenesCollection.Add(scene);
+                    _selectedShowScene = scene;
+                    scenesView.SelectedItem = scene;
+                    scenesView.ScrollIntoView(scene);
+                    if (scene.Layout != null)
+                    {
+                        ApplyLayoutFile(WithRestInTray(scene.Layout, SessionPictures()), restoreAspect: false, preserveUndo: true);
+                        _canvasSceneId = scene.Id;
+                    }
+                    RefreshCardBadges();
+                    int images = scene.PhotoCount;
+                    ShowAutoPlayToast(reusing
+                        ? $"Added scene {scenesCollection.Count}. Every image was already in the show, so it reuses some."
+                        : $"Added scene {scenesCollection.Count} with {images} new {(images == 1 ? "image" : "images")}");
+                }
+                finally
+                {
+                    draftProgressRow.Visibility = Visibility.Collapsed;
+                    addNewBtn.IsEnabled = SessionPictures().Count > 0;
+                }
+            }
+
+            addNewBtn.Click += async (_, _) => await AddNewLayoutAsync();
             addCanvasBtn.Click += (_, _) => CaptureCurrentCanvasAsScene();
             autoDraftBtn.Click += async (_, _) => await RunAutoDraftAsync();
             clearShowBtn.Click += async (_, _) =>

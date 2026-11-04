@@ -99,6 +99,15 @@ namespace ModernImageViewer
             string json = await File.ReadAllTextAsync(filePath);
             return FromJson(json);
         }
+        /// <summary>The images in <paramref name="pool"/> that no scene shows, in the pool's order, so a new scene can grow the show.</summary>
+        public List<string> ImagesNotInShow(IEnumerable<string> pool)
+        {
+            var used = new HashSet<string>(GetPhotoPaths(), StringComparer.OrdinalIgnoreCase);
+            return pool.Where(p => !string.IsNullOrEmpty(p) && !used.Contains(p))
+                       .Distinct(StringComparer.OrdinalIgnoreCase)
+                       .ToList();
+        }
+
         /// <summary>Returns all unique photo paths referenced across all scenes in this project.</summary>
         public IEnumerable<string> GetPhotoPaths()
         {
