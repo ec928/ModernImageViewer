@@ -49,6 +49,27 @@ namespace ModernImageViewer
         private double _curEndX = 0.5;
         private double _curEndY = 0.5;
 
+        private double _curStartAngle;
+        private double _curEndAngle;
+
+        /// <summary>One shot as the Director edits it. Cut: it starts somewhere other than where the shot before ended.</summary>
+        private sealed class DirectorShot
+        {
+            public CameraView From;
+            public CameraView To;
+            public double Share = 1;
+            public CameraCurve Curve = CameraCurve.Smooth;
+            public double Bow;
+            public bool Cut;
+        }
+
+        // Every shot of the scene being edited; the Start and End frames are the selected shot's.
+        private List<DirectorShot> _directorShots = new();
+        private int _shotIndex;
+        private TextBlock? _shotBadgeText;
+        private StackPanel? _shotStepper;
+        private DropDownButton? _curveButton;
+
         private bool _isPreviewingCameraMove;
 
         // Faces in the scene on the canvas, in RootGrid's space, largest first, and their outlines on the overlay.
@@ -100,27 +121,7 @@ namespace ModernImageViewer
 
             ResetCanvasCamera();
 
-            // Load existing camera keyframes or default
-            if (scene.CameraOverride != null)
-            {
-                _curStartZoom = Math.Max(1.0, scene.CameraOverride.Start.Zoom);
-                _curStartX = Math.Clamp(scene.CameraOverride.Start.X, 0.0, 1.0);
-                _curStartY = Math.Clamp(scene.CameraOverride.Start.Y, 0.0, 1.0);
-
-                _curEndZoom = Math.Max(1.0, scene.CameraOverride.End.Zoom);
-                _curEndX = Math.Clamp(scene.CameraOverride.End.X, 0.0, 1.0);
-                _curEndY = Math.Clamp(scene.CameraOverride.End.Y, 0.0, 1.0);
-            }
-            else
-            {
-                _curStartZoom = 1.0;
-                _curStartX = 0.5;
-                _curStartY = 0.5;
-
-                _curEndZoom = 1.25;
-                _curEndX = 0.5;
-                _curEndY = 0.5;
-            }
+            LoadDirectorShots(scene);
 
             BuildCameraDirectorUI();
             LayoutWireframes();
@@ -130,28 +131,117 @@ namespace ModernImageViewer
         private void SaveCurrentCameraKeyframes()
         {
             if (_editingCameraScene == null) return;
+            StoreCurrentShot();
 
-            double zDiff = _curEndZoom - _curStartZoom;
-            double panDist = Math.Abs(_curEndX - _curStartX) + Math.Abs(_curEndY - _curStartY);
-            string calculatedKind = Math.Abs(zDiff) < 0.02 && panDist < 0.02
-                ? "Still"
-                : zDiff > 0.02
-                    ? "ZoomIn"
-                    : zDiff < -0.02
-                        ? "ZoomOut"
-                        : "Pan";
-
-            _editingCameraScene.CameraOverride = new CameraKeyframeOverride(
-                new CameraViewDto(_curStartZoom, _curStartX, _curStartY),
-                new CameraViewDto(_curEndZoom, _curEndX, _curEndY),
-                calculatedKind
-            )
+            var move = DirectorMove(1);
+            string calculatedKind;
+            if (move.Shots.Count > 1)
             {
-                StartCrop = CameraDirectorViewToRect(_curStartZoom, _curStartX, _curStartY),
-                EndCrop = CameraDirectorViewToRect(_curEndZoom, _curEndX, _curEndY)
-            };
+                calculatedKind = "TwoShot";
+            }
+            else
+            {
+                double zDiff = move.End.Zoom - move.Start.Zoom;
+                double panDist = Math.Abs(move.End.X - move.Start.X) + Math.Abs(move.End.Y - move.Start.Y);
+                calculatedKind = Math.Abs(zDiff) < 0.02 && panDist < 0.02
+                    ? "Still"
+                    : zDiff > 0.02
+                        ? "ZoomIn"
+                        : zDiff < -0.02
+                            ? "ZoomOut"
+                            : "Pan";
+            }
+
+            // Every shot, with its curve, bend and turn, so editing one frame never loses the rest of the path.
+            _editingCameraScene.CameraOverride = CameraKeyframeOverride.FromMove(move, calculatedKind);
             _updateStorySummary?.Invoke();
             RefreshTrayCardIfOpen();
+        }
+
+        /// <summary>The scene's shots into the Director, the first one selected. A scene with no path gets the default wide-to-in.</summary>
+        private void LoadDirectorShots(ShowScene scene)
+        {
+            _directorShots = new List<DirectorShot>();
+            if (scene.CameraOverride != null)
+            {
+                var shots = scene.CameraOverride.ToShots();
+                for (int i = 0; i < shots.Count; i++)
+                {
+                    _directorShots.Add(new DirectorShot
+                    {
+                        From = shots[i].From,
+                        To = shots[i].To,
+                        Share = shots[i].Share,
+                        Curve = shots[i].Curve,
+                        Bow = shots[i].Bow,
+                        Cut = i > 0 && shots[i].From != shots[i - 1].To
+                    });
+                }
+            }
+            if (_directorShots.Count == 0)
+                _directorShots.Add(new DirectorShot { From = new CameraView(1.0, 0.5, 0.5), To = new CameraView(1.25, 0.5, 0.5) });
+            _shotIndex = 0;
+            _activeIsStartKeyframe = true;
+            LoadShot(0);
+        }
+
+        private void LoadShot(int index)
+        {
+            _shotIndex = Math.Clamp(index, 0, _directorShots.Count - 1);
+            var s = _directorShots[_shotIndex];
+            _curStartZoom = Math.Max(1.0, s.From.Zoom);
+            _curStartX = Math.Clamp(s.From.X, 0.0, 1.0);
+            _curStartY = Math.Clamp(s.From.Y, 0.0, 1.0);
+            _curStartAngle = s.From.Angle;
+            _curEndZoom = Math.Max(1.0, s.To.Zoom);
+            _curEndX = Math.Clamp(s.To.X, 0.0, 1.0);
+            _curEndY = Math.Clamp(s.To.Y, 0.0, 1.0);
+            _curEndAngle = s.To.Angle;
+        }
+
+        /// <summary>
+        /// The frames being edited back into their shot. A shot that continues starts where the one before ends, so moving
+        /// either of those frames moves the other with it.
+        /// </summary>
+        private void StoreCurrentShot()
+        {
+            if (_directorShots.Count == 0) return;
+            var s = _directorShots[_shotIndex];
+            s.From = new CameraView(_curStartZoom, _curStartX, _curStartY, _curStartAngle);
+            s.To = new CameraView(_curEndZoom, _curEndX, _curEndY, _curEndAngle);
+            if (_shotIndex > 0 && !s.Cut) _directorShots[_shotIndex - 1].To = s.From;
+            if (_shotIndex < _directorShots.Count - 1 && !_directorShots[_shotIndex + 1].Cut) _directorShots[_shotIndex + 1].From = s.To;
+        }
+
+        /// <summary>All the shots as one move, each taking its share of the time.</summary>
+        private CameraMove DirectorMove(double seconds)
+        {
+            var shots = _directorShots.Select(s => new CameraShot(s.From.Covered(), s.To.Covered(), s.Share, s.Curve, s.Bow)).ToList();
+            var kind = shots[^1].To.Zoom > shots[0].From.Zoom ? CameraKind.ZoomIn : shots[^1].To.Zoom < shots[0].From.Zoom ? CameraKind.ZoomOut : CameraKind.Drift;
+            return new CameraMove(kind, shots, seconds);
+        }
+
+        private void SelectShot(int index)
+        {
+            if (index < 0 || index >= _directorShots.Count || index == _shotIndex) return;
+            StoreCurrentShot();
+            LoadShot(index);
+            _activeIsStartKeyframe = true;
+            UpdateShotControls();
+            UpdateKeyframeToggles();
+            LayoutWireframes();
+        }
+
+        /// <summary>The shot stepper shows only with more than one shot; the curve menu names the selected shot's curve.</summary>
+        private void UpdateShotControls()
+        {
+            if (_shotStepper != null) _shotStepper.Visibility = _directorShots.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
+            if (_shotBadgeText != null)
+            {
+                var s = _directorShots[_shotIndex];
+                _shotBadgeText.Text = $"Shot {_shotIndex + 1} of {_directorShots.Count}" + (s.Cut ? " · cut" : "");
+            }
+            if (_curveButton != null) _curveButton.Content = $"Curve: {_directorShots[_shotIndex].Curve}";
         }
 
         public void SwitchToCameraScene(ShowScene newScene)
@@ -171,28 +261,10 @@ namespace ModernImageViewer
 
             ResetCanvasCamera();
 
-            if (newScene.CameraOverride != null)
-            {
-                _curStartZoom = Math.Max(1.0, newScene.CameraOverride.Start.Zoom);
-                _curStartX = Math.Clamp(newScene.CameraOverride.Start.X, 0.0, 1.0);
-                _curStartY = Math.Clamp(newScene.CameraOverride.Start.Y, 0.0, 1.0);
-
-                _curEndZoom = Math.Max(1.0, newScene.CameraOverride.End.Zoom);
-                _curEndX = Math.Clamp(newScene.CameraOverride.End.X, 0.0, 1.0);
-                _curEndY = Math.Clamp(newScene.CameraOverride.End.Y, 0.0, 1.0);
-            }
-            else
-            {
-                _curStartZoom = 1.0;
-                _curStartX = 0.5;
-                _curStartY = 0.5;
-
-                _curEndZoom = 1.25;
-                _curEndX = 0.5;
-                _curEndY = 0.5;
-            }
+            LoadDirectorShots(newScene);
 
             UpdateDirectorSceneBadge();
+            UpdateShotControls();
             UpdateKeyframeToggles();
             LayoutWireframes();
             ShowFaceOutlines();
@@ -292,16 +364,6 @@ namespace ModernImageViewer
         {
             if (!_isEditingCamera) return;
             PreviewCameraMove();
-        }
-
-        private static NormalizedRectDto CameraDirectorViewToRect(double zoom, double cx, double cy)
-        {
-            double z = Math.Max(1.0, zoom);
-            double w = 1.0 / z;
-            double h = 1.0 / z;
-            double x = Math.Clamp(cx - w / 2.0, 0.0, 1.0 - w);
-            double y = Math.Clamp(cy - h / 2.0, 0.0, 1.0 - h);
-            return new NormalizedRectDto(x, y, w, h);
         }
 
         private void BuildCameraDirectorUI()
@@ -480,6 +542,67 @@ namespace ModernImageViewer
             barStack.Children.Add(_startToggleBtn);
             barStack.Children.Add(_endToggleBtn);
 
+            // A scene of more than one shot: which shot Start and End belong to.
+            _shotStepper = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
+            Button ShotStep(string glyph, int delta, string tip)
+            {
+                var b = new Button
+                {
+                    Height = 28,
+                    Width = 24,
+                    Padding = new Thickness(0),
+                    Background = new SolidColorBrush(Colors.Transparent),
+                    BorderThickness = new Thickness(0),
+                    CornerRadius = new CornerRadius(12),
+                    IsTabStop = false,
+                    Content = new FontIcon { FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), Glyph = glyph, FontSize = 9, Foreground = new SolidColorBrush(Colors.White) }
+                };
+                b.Click += (_, _) => SelectShot(_shotIndex + delta);
+                ToolTipService.SetToolTip(b, tip);
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(b, tip);
+                return b;
+            }
+            _shotBadgeText = new TextBlock { FontSize = 11.5, Foreground = new SolidColorBrush(Color.FromArgb(230, 255, 255, 255)), VerticalAlignment = VerticalAlignment.Center };
+            _shotStepper.Children.Add(MakeDirectorDivider());
+            _shotStepper.Children.Add(ShotStep("", -1, "Previous shot"));
+            _shotStepper.Children.Add(_shotBadgeText);
+            _shotStepper.Children.Add(ShotStep("", 1, "Next shot"));
+            barStack.Children.Add(_shotStepper);
+
+            // How the selected shot gets going and comes to rest.
+            var curveMenu = new MenuFlyout();
+            foreach (var c in CameraCurves.All)
+            {
+                var item = new RadioMenuFlyoutItem { Text = c.ToString(), GroupName = "DirectorCurve" };
+                var curve = c;
+                item.Click += (_, _) =>
+                {
+                    _directorShots[_shotIndex].Curve = curve;
+                    UpdateShotControls();
+                };
+                curveMenu.Items.Add(item);
+            }
+            curveMenu.Opening += (_, _) =>
+            {
+                foreach (var item in curveMenu.Items.OfType<RadioMenuFlyoutItem>())
+                    item.IsChecked = item.Text == _directorShots[_shotIndex].Curve.ToString();
+            };
+            _curveButton = new DropDownButton
+            {
+                Height = 28,
+                Padding = new Thickness(10, 0, 8, 0),
+                Background = new SolidColorBrush(Colors.Transparent),
+                BorderThickness = new Thickness(0),
+                CornerRadius = new CornerRadius(14),
+                IsTabStop = false,
+                FontSize = 11.5,
+                Foreground = new SolidColorBrush(Color.FromArgb(220, 255, 255, 255)),
+                Flyout = curveMenu
+            };
+            ToolTipService.SetToolTip(_curveButton, "How the selected shot gets going and comes to rest");
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(_curveButton, "Curve");
+            barStack.Children.Add(_curveButton);
+
             barStack.Children.Add(MakeDirectorDivider());
 
             // Preview Move button
@@ -516,12 +639,14 @@ namespace ModernImageViewer
                 _curStartZoom = 1.0;
                 _curStartX = 0.5;
                 _curStartY = 0.5;
+                _curStartAngle = 0;
                 _curEndZoom = 1.25;
                 _curEndX = 0.5;
                 _curEndY = 0.5;
+                _curEndAngle = 0;
                 LayoutWireframes();
             };
-            ToolTipService.SetToolTip(resetBtn, "Reset Start and End frames to default wide-to-in framing");
+            ToolTipService.SetToolTip(resetBtn, "Reset this shot's Start and End frames to the default wide-to-in framing, untilted");
             barStack.Children.Add(resetBtn);
 
             _aimFaceBtn = new Button
@@ -550,7 +675,7 @@ namespace ModernImageViewer
                 Content = new TextBlock { Text = "Exact…", FontSize = 11.5, Foreground = new SolidColorBrush(Color.FromArgb(220, 255, 255, 255)) },
                 Flyout = MakeExactFrameFlyout()
             };
-            ToolTipService.SetToolTip(exactBtn, "Type the selected frame's zoom and centre");
+            ToolTipService.SetToolTip(exactBtn, "Type the selected frame's zoom, centre and turn");
             barStack.Children.Add(exactBtn);
 
             barStack.Children.Add(MakeDirectorDivider());
@@ -589,6 +714,7 @@ namespace ModernImageViewer
 
             RootGrid.SizeChanged += CameraDirector_SizeChanged;
             UpdateDirectorSceneBadge();
+            UpdateShotControls();
             UpdateKeyframeToggles();
         }
 
@@ -732,9 +858,11 @@ namespace ModernImageViewer
             var zoomBox = new NumberBox { Header = "Zoom", Minimum = 1, Maximum = MostDirectorZoom, SmallChange = 0.05, LargeChange = 0.25, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact, Width = 170 };
             var acrossBox = new NumberBox { Header = "Across (% of the width)", Minimum = 0, Maximum = 100, SmallChange = 1, LargeChange = 10, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact, Width = 170 };
             var downBox = new NumberBox { Header = "Down (% of the height)", Minimum = 0, Maximum = 100, SmallChange = 1, LargeChange = 10, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact, Width = 170 };
+            var turnBox = new NumberBox { Header = "Turn (degrees)", Minimum = -SurpriseOptions.MostTurn, Maximum = SurpriseOptions.MostTurn, SmallChange = 0.5, LargeChange = 1, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact, Width = 170 };
             zoomBox.NumberFormatter = new Windows.Globalization.NumberFormatting.DecimalFormatter { FractionDigits = 2, IntegerDigits = 1 };
+            turnBox.NumberFormatter = new Windows.Globalization.NumberFormatting.DecimalFormatter { FractionDigits = 1, IntegerDigits = 1 };
             var note = new TextBlock { FontSize = 11, Opacity = 0.7, TextWrapping = TextWrapping.Wrap, MaxWidth = 170 };
-            var panel = new StackPanel { Spacing = 8, Children = { note, zoomBox, acrossBox, downBox } };
+            var panel = new StackPanel { Spacing = 8, Children = { note, zoomBox, acrossBox, downBox, turnBox } };
             var flyout = new Flyout { Content = panel, Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.Bottom };
             bool loading = false;
             flyout.Opening += (_, _) =>
@@ -744,16 +872,20 @@ namespace ModernImageViewer
                 zoomBox.Value = Math.Round(_activeIsStartKeyframe ? _curStartZoom : _curEndZoom, 2);
                 acrossBox.Value = Math.Round((_activeIsStartKeyframe ? _curStartX : _curEndX) * 100);
                 downBox.Value = Math.Round((_activeIsStartKeyframe ? _curStartY : _curEndY) * 100);
+                turnBox.Value = Math.Round(_activeIsStartKeyframe ? _curStartAngle : _curEndAngle, 1);
                 loading = false;
             };
             void Apply()
             {
                 if (loading || double.IsNaN(zoomBox.Value) || double.IsNaN(acrossBox.Value) || double.IsNaN(downBox.Value)) return;
+                double turn = double.IsNaN(turnBox.Value) ? 0 : Math.Clamp(turnBox.Value, -SurpriseOptions.MostTurn, SurpriseOptions.MostTurn);
+                if (_activeIsStartKeyframe) _curStartAngle = turn; else _curEndAngle = turn;
                 SetSelectedFrame(zoomBox.Value, acrossBox.Value / 100, downBox.Value / 100);
             }
             zoomBox.ValueChanged += (_, _) => Apply();
             acrossBox.ValueChanged += (_, _) => Apply();
             downBox.ValueChanged += (_, _) => Apply();
+            turnBox.ValueChanged += (_, _) => Apply();
             return flyout;
         }
 
@@ -785,6 +917,9 @@ namespace ModernImageViewer
             _directorSceneBadgeText = null;
             _directorPrevSceneBtn = null;
             _directorNextSceneBtn = null;
+            _shotBadgeText = null;
+            _shotStepper = null;
+            _curveButton = null;
         }
 
         private static Border MakeDirectorDivider() => new()
@@ -970,9 +1105,10 @@ namespace ModernImageViewer
             _cameraOverlayCanvas.Width = W;
             _cameraOverlayCanvas.Height = H;
 
-            // Start wireframe layout
-            double sW = Math.Max(24, W / _curStartZoom);
-            double sH = Math.Max(24, H / _curStartZoom);
+            // Start wireframe layout. A turned frame is what playback shows: zoomed a little further, so it stays on the canvas.
+            double sZoom = _curStartZoom * CameraView.TurnCover(_curStartAngle, W, H);
+            double sW = Math.Max(24, W / sZoom);
+            double sH = Math.Max(24, H / sZoom);
             double sLeft = Math.Clamp(_curStartX * W - sW / 2.0, 0.0, W - sW);
             double sTop = Math.Clamp(_curStartY * H - sH / 2.0, 0.0, H - sH);
 
@@ -980,11 +1116,14 @@ namespace ModernImageViewer
             _startWireframe.Height = sH;
             Canvas.SetLeft(_startWireframe, sLeft);
             Canvas.SetTop(_startWireframe, sTop);
-            if (_startBadgeText != null) _startBadgeText.Text = $"Start · {_curStartZoom:F2}x";
+            // A turned frame drawn turned: the overlay is only an outline, so a XAML turn is safe here.
+            _startWireframe.RenderTransform = new RotateTransform { Angle = _curStartAngle, CenterX = sW / 2, CenterY = sH / 2 };
+            if (_startBadgeText != null) _startBadgeText.Text = $"Start · {_curStartZoom:F2}x" + (Math.Abs(_curStartAngle) >= 0.05 ? $" · {_curStartAngle:0.#}°" : "");
 
             // End wireframe layout
-            double eW = Math.Max(24, W / _curEndZoom);
-            double eH = Math.Max(24, H / _curEndZoom);
+            double eZoom = _curEndZoom * CameraView.TurnCover(_curEndAngle, W, H);
+            double eW = Math.Max(24, W / eZoom);
+            double eH = Math.Max(24, H / eZoom);
             double eLeft = Math.Clamp(_curEndX * W - eW / 2.0, 0.0, W - eW);
             double eTop = Math.Clamp(_curEndY * H - eH / 2.0, 0.0, H - eH);
 
@@ -992,7 +1131,8 @@ namespace ModernImageViewer
             _endWireframe.Height = eH;
             Canvas.SetLeft(_endWireframe, eLeft);
             Canvas.SetTop(_endWireframe, eTop);
-            if (_endBadgeText != null) _endBadgeText.Text = $"End · {_curEndZoom:F2}x";
+            _endWireframe.RenderTransform = new RotateTransform { Angle = _curEndAngle, CenterX = eW / 2, CenterY = eH / 2 };
+            if (_endBadgeText != null) _endBadgeText.Text = $"End · {_curEndZoom:F2}x" + (Math.Abs(_curEndAngle) >= 0.05 ? $" · {_curEndAngle:0.#}°" : "");
 
             if (_startBadge != null)
             {
@@ -1023,14 +1163,12 @@ namespace ModernImageViewer
             // Hide overlay wireframes so the viewer sees the cinematics cleanly
             if (_cameraOverlayCanvas != null) _cameraOverlayCanvas.Opacity = 0.0;
 
-            var startView = new CameraView(_curStartZoom, _curStartX, _curStartY).Covered();
-            var endView = new CameraView(_curEndZoom, _curEndX, _curEndY).Covered();
-            var kind = _curEndZoom > _curStartZoom ? CameraKind.ZoomIn : _curEndZoom < _curStartZoom ? CameraKind.ZoomOut : CameraKind.Drift;
-            var move = new CameraMove(kind, startView, endView, 2.5);
+            // Every shot, with its curve, 2.5 seconds each.
+            StoreCurrentShot();
+            double seconds = 2.5 * _directorShots.Count;
+            RunCamera(DirectorMove(seconds), goingHome: false);
 
-            RunCamera(move, goingHome: false);
-
-            await Task.Delay(2600);
+            await Task.Delay((int)(seconds * 1000) + 100);
 
             SendCanvasCameraHome();
             await Task.Delay(500);
@@ -1051,6 +1189,7 @@ namespace ModernImageViewer
                     "zoomout" => "⤡ Zoom out",
                     "pan" or "drift" => "⇄ Pan",
                     "still" => "• Still",
+                    "twoshot" => "Two shots",
                     _ => "Dynamic"
                 };
             }

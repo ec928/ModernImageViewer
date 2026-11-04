@@ -38,7 +38,8 @@ namespace ModernImageViewer
         private void StartCanvasCamera(Composition composition)
         {
             var options = SurpriseChoices;
-            var move = CameraMove.Plan(composition.CameraSubjects(), options.MotionAmount, options.MotionZoomChance, options.MotionFaceChance, _layoutSeconds + CameraOverrunSeconds, _lastCameraKind, Random.Shared, options.ForcedCameraKind);
+            double amount = options.PickMotion(Random.Shared);
+            var move = CameraMove.Plan(composition.CameraSubjects(), amount, options.MotionZoomChance, options.MotionFaceChance, _layoutSeconds + CameraOverrunSeconds, _lastCameraKind, Random.Shared, options.ForcedCameraKind, options.CameraStyle());
             if (move == null)
             {
                 ResetCanvasCamera();
@@ -48,7 +49,7 @@ namespace ModernImageViewer
             var cards = _freeformCards.Where(c => !IsEmptyCell(c.Item)).OrderBy(c => c.ZIndex).ToList();
             _floats.Clear();
             for (int i = 0; i < cards.Count; i++)
-                _floats.Add((cards[i], new CellFloat(i, cards.Count, options.MotionAmount, Random.Shared)));
+                _floats.Add((cards[i], new CellFloat(i, cards.Count, amount, Random.Shared)));
             _floatClock.Restart();
             RunCamera(move, goingHome: false);
         }
@@ -159,14 +160,24 @@ namespace ModernImageViewer
         private void ShowCameraView(CameraView view)
         {
             double width = RootGrid.ActualWidth, height = RootGrid.ActualHeight;
-            double panX = width / 2 - view.X * width * view.Zoom;
-            double panY = height / 2 - view.Y * height * view.Zoom;
+            // A turned view zooms a little further, so no corner of the canvas shows past the picture.
+            double zoom = view.Zoom * CameraView.TurnCover(view.Angle, width, height);
+            double panX = width / 2 - view.X * width * zoom;
+            double panY = height / 2 - view.Y * height * zoom;
+            var turn = Matrix4x4.Identity;
             foreach (var layer in CameraLayers)
             {
                 var at = layer.ActualOffset;
+                if (Math.Abs(view.Angle) > 0.001)
+                {
+                    // About the middle of the canvas, in the layer's own space.
+                    var middle = new Vector3((float)(width / 2 - at.X), (float)(height / 2 - at.Y), 0);
+                    turn = Matrix4x4.CreateTranslation(-middle) * Matrix4x4.CreateRotationZ((float)(view.Angle * Math.PI / 180)) * Matrix4x4.CreateTranslation(middle);
+                }
                 ElementCompositionPreview.GetElementVisual(layer).TransformMatrix =
-                    Matrix4x4.CreateScale((float)view.Zoom)
-                    * Matrix4x4.CreateTranslation((float)(at.X * view.Zoom + panX - at.X), (float)(at.Y * view.Zoom + panY - at.Y), 0);
+                    Matrix4x4.CreateScale((float)zoom)
+                    * Matrix4x4.CreateTranslation((float)(at.X * zoom + panX - at.X), (float)(at.Y * zoom + panY - at.Y), 0)
+                    * turn;
             }
         }
 

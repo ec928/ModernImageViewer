@@ -342,6 +342,44 @@ namespace ModernImageViewer
                 return slider;
             }
 
+            // The standard control for a setting that varies: two thumbs, and each layout picks within them. Ends together
+            // is one value.
+            void RangeRow(StackPanel column, string label, string tip, double min, double max, double step, double low, double high,
+                Func<double, double, string> format, Action<SurpriseOptions, double, double> chosen, Action? changed = null)
+            {
+                var row = new Grid { ColumnSpacing = 12, MinHeight = 34 };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
+                var text = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
+                var right = new Grid { Width = 230, ColumnSpacing = 8, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+                right.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(146) });
+                right.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(76) });
+                double Snap(double v) => Math.Clamp(Math.Round(v / step) * step, min, max);
+                low = Snap(low);
+                high = Math.Max(low, Snap(high));
+                var readout = new TextBlock { Text = format(low, high), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, FontSize = 12, Opacity = 0.82, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
+                var range = new RangeSlider { Minimum = min, Maximum = max, StepFrequency = step, RangeStart = low, RangeEnd = high, Width = 146, VerticalAlignment = VerticalAlignment.Center };
+                range.RangeChanged += (_, r) =>
+                {
+                    double a = Snap(r.Start), b = Math.Max(a, Snap(r.End));
+                    readout.Text = format(a, b);
+                    ChangeSurpriseChoices(o => chosen(o, a, b));
+                    changed?.Invoke();
+                };
+                ToolTipService.SetToolTip(row, tip);
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(range, label);
+                Grid.SetColumn(range, 0);
+                Grid.SetColumn(readout, 1);
+                right.Children.Add(range);
+                right.Children.Add(readout);
+                Grid.SetColumn(right, 1);
+                row.Children.Add(text);
+                row.Children.Add(right);
+                column.Children.Add(row);
+            }
+
+            static string Percents(double a, double b) => b < 0.5 ? "Off" : Math.Abs(a - b) < 0.5 ? $"{a:0}%" : $"{a:0}% - {b:0}%";
+
             ToggleSwitch Toggle(StackPanel column, string label, string tip, bool value, Action<SurpriseOptions, bool> chosen, string? subtitle = null)
             {
                 var row = new Grid { ColumnSpacing = 12, MinHeight = 34 };
@@ -642,9 +680,9 @@ namespace ModernImageViewer
 
                 Toggle(body, "Smart pace", "When duration has a range, holds dense multi-image layouts toward the longer end and solo/pair layouts toward the shorter end.", options.SmartPace, (o, on) => o.SmartPace = on, subtitle: "Adjusts duration based on layout density");
 
-                Slide(body, "Motion", "How far the camera moves over each layout while it plays, from still to strong, with floating cells following it.", 0, 100, 5, options.MotionAmount * 100,
-                    v => v < 1 ? "Off" : $"{v:0}%",
-                    (o, v) => o.MotionAmount = v / 100);
+                RangeRow(body, "Motion", "How far the camera moves over each layout while it plays, from still to strong, with floating cells following it. Each layout picks within the range; ends together is one strength.",
+                    0, 100, 5, options.MotionLeast * 100, options.MotionMost * 100, Percents,
+                    (o, a, b) => { o.MotionLeast = a / 100; o.MotionMost = b / 100; });
 
                 body.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle { Height = 1, Opacity = 0.15, Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White), Margin = new Thickness(0, 6, 0, 4) });
                 var soundtrackHeader = new TextBlock
@@ -939,6 +977,7 @@ namespace ModernImageViewer
                 0, 100, 5, options.MotionFaceChance * 100,
                 v => $"{v:0}%",
                 (o, v) => o.MotionFaceChance = v / 100);
+            MovementGroup(cameraSection);
             TransitionGroup(cameraSection, () => cameraSummary.Text = CameraSummaryText());
 
             // 5. Look
@@ -1122,6 +1161,57 @@ namespace ModernImageViewer
                 Margin = new Thickness(0, -4, 0, 6)
             });
 
+            // How the camera moves within a scene: two shots where there is a face, the curve each move eases by (odds, as
+            // the designs), how far a pan's path bends, and how far the view turns. Each varies within its range.
+            void MovementGroup(StackPanel column)
+            {
+                Slide(column, "Two-shot scenes", "The chance that a scene with a face, held 8 seconds or more, is two shots.",
+                    0, 100, 5, options.TwoShotChance * 100,
+                    v => v < 1 ? "Off" : $"{v:0}%",
+                    (o, v) => o.TwoShotChance = v / 100);
+                Note(column, "A wide shot, then a snap zoom or a cut to the face, as Cinematic Slideshow does. Only with the camera on Auto, in a scene held 8 seconds or more.");
+
+                column.Children.Add(new TextBlock
+                {
+                    Text = "Movement curves",
+                    FontSize = 12,
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    Opacity = 0.85,
+                    Margin = new Thickness(0, 10, 0, 2)
+                });
+                Note(column, "How each move gets going and comes to rest. Snap is used on zooms only. All off is Smooth.");
+                var mix = new TextBlock { FontSize = 11, Opacity = 0.75, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 6) };
+                void ShowMix()
+                {
+                    var shares = CameraCurves.Shares(SurpriseChoices.CurveOdds).Zooms;
+                    mix.Text = "Mix: " + string.Join(" · ", CameraCurves.All
+                        .Where(c => shares[c] >= 0.005)
+                        .Select(c => $"{c.ToString().ToLowerInvariant()} {shares[c] * 100:0}%"));
+                }
+                void Curve(string name, string tip, double odds, Action<SurpriseOptions, double> set)
+                {
+                    double initial = odds <= 0 ? -1.2 : Math.Log(Math.Max(SurpriseOptions.RarestDesign, odds), DesignOddsBase);
+                    Slide(column, name, tip + " Far left turns it off.", -1.2, 1.0, 0.1, initial, FormatDesignStep,
+                        (o, v) => { set(o, v <= -1.1 ? 0 : Math.Pow(DesignOddsBase, v)); ShowMix(); });
+                }
+                Curve("Steady", "The same speed throughout, so it is still moving through a crossfade.", options.CurveSteadyOdds, (o, v) => o.CurveSteadyOdds = v);
+                Curve("Gentle", "The mildest start and stop.", options.CurveGentleOdds, (o, v) => o.CurveGentleOdds = v);
+                Curve("Smooth", "A soft start and stop: how every move eased before there was a choice.", options.CurveSmoothOdds, (o, v) => o.CurveSmoothOdds = v);
+                Curve("Cinematic", "Lingers at both ends and moves quicker in the middle, as Cinematic Slideshow does.", options.CurveCinematicOdds, (o, v) => o.CurveCinematicOdds = v);
+                Curve("Settle", "Under way at once, then glides to rest.", options.CurveSettleOdds, (o, v) => o.CurveSettleOdds = v);
+                Curve("Snap", "Slow, a quick push, then a long settle: Cinematic Slideshow's snap zoom. Zooms only.", options.CurveSnapOdds, (o, v) => o.CurveSnapOdds = v);
+                column.Children.Add(mix);
+                ShowMix();
+
+                RangeRow(column, "Curved path", "How far a pan's path bows to one side, up to Cinematic Slideshow's bend. Each pan picks within the range.",
+                    0, 100, 5, options.PathBendLeast * 100, options.PathBendMost * 100, Percents,
+                    (o, a, b) => { o.PathBendLeast = a / 100; o.PathBendMost = b / 100; });
+                RangeRow(column, "Rotation", "How far the view turns over a move, in degrees. Each move picks within the range; it zooms in just enough to keep every corner covered.",
+                    0, SurpriseOptions.MostTurn, 0.5, options.TurnLeast, options.TurnMost,
+                    (a, b) => b < 0.25 ? "Off" : Math.Abs(a - b) < 0.25 ? $"{a:0.#}°" : $"{a:0.#}° - {b:0.#}°",
+                    (o, a, b) => { o.TurnLeast = a; o.TurnMost = b; });
+            }
+
             // How a change of scene is made: one odds slider per kind, on the designs' Off to Often scale, and a line
             // giving the mix they make, so the words on the sliders never have to stand for a percentage.
             void TransitionGroup(StackPanel column, Action changed)
@@ -1291,9 +1381,9 @@ namespace ModernImageViewer
                 cineSection.Children.Add(row);
             }
             Toggle(cineSection, "Smart pace", "Alternate shorter and longer scenes, like Cinematic Slideshow.", options.Cinematic.SmartPace, (o, on) => o.Cinematic.SmartPace = on);
-            Slide(cineSection, "Motion", "How much the camera moves during each scene. Cinematic Slideshow always moves.", 0, 100, 5, options.Cinematic.MotionAmount * 100,
-                v => v < 1 ? "Off" : $"{v:0}%",
-                (o, v) => o.Cinematic.MotionAmount = v / 100);
+            RangeRow(cineSection, "Motion", "How much the camera moves during each scene. Cinematic Slideshow always moves. Each scene picks within the range.",
+                0, 100, 5, options.Cinematic.MotionLeast * 100, options.Cinematic.MotionMost * 100, Percents,
+                (o, a, b) => { o.Cinematic.MotionLeast = a / 100; o.Cinematic.MotionMost = b / 100; });
 
             // Reset to defaults
             var resetRow = new Grid { ColumnSpacing = 6, MinHeight = 32 };
@@ -3853,13 +3943,14 @@ namespace ModernImageViewer
             {
                 var move = CameraMove.Plan(
                     Array.Empty<(double, double)>(),
-                    showSettings.MotionAmount,
+                    showSettings.PickMotion(Random.Shared),
                     showSettings.MotionZoomChance,
                     showSettings.MotionFaceChance,
                     _layoutSeconds + CameraOverrunSeconds,
                     _lastCameraKind,
                     Random.Shared,
-                    showSettings.ForcedCameraKind);
+                    showSettings.ForcedCameraKind,
+                    showSettings.CameraStyle());
                 if (move != null)
                 {
                     _lastCameraKind = move.Kind;
