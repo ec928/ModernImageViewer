@@ -35,6 +35,32 @@ namespace ModernImageViewer
         [JsonPropertyName("activeSceneId")]
         public string? ActiveSceneId { get; set; }
 
+        /// <summary>
+        /// A copy of a scene's layout with other images after it in the pool. The scene's own slots stay as they are, empty ones
+        /// included, and the original is not changed. A layout with no grid slot, as a scene of floating prints may have been
+        /// stored, gets an empty one first: otherwise the first pool image took slot 0 and showed on the canvas, and storing
+        /// the canvas then added it to the scene.
+        /// </summary>
+        public static MultiViewLayoutFile WithPoolAfter(MultiViewLayoutFile file, IEnumerable<string> pool)
+        {
+            var copy = FromJson(file.ToJson()) ?? new MultiViewLayoutFile();
+            int framed = copy.State?.FramedSlots ?? 0;
+            if (framed > 0) copy.Photos.RemoveAll(photo => photo.Slot >= framed);
+            if (copy.Photos.Count == 0) copy.Photos.Add(new PhotoSlotDto { Slot = 0, Path = string.Empty });
+
+            var used = new HashSet<string>(copy.Photos.Select(p => p.Path ?? string.Empty), StringComparer.OrdinalIgnoreCase);
+            foreach (var cell in copy.Freeform ?? new List<FreeformCellDto>()) used.Add(cell.Path ?? string.Empty);
+            var rest = pool.Where(used.Add).ToList();
+            if (rest.Count > 0)
+            {
+                copy.State ??= new LayoutStateDto();
+                copy.State.FramedSlots = copy.Photos.Count;
+                foreach (string path in rest)
+                    copy.Photos.Add(new PhotoSlotDto { Slot = copy.Photos.Count, Path = path, Name = System.IO.Path.GetFileName(path) });
+            }
+            return copy;
+        }
+
         public string ToJson()
         {
             return JsonSerializer.Serialize(this, new JsonSerializerOptions

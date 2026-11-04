@@ -218,6 +218,7 @@ namespace ModernImageViewer
             int count = storyboard ? scenes : offCanvas;
             string label = count > 0 ? $"{name} ({count})" : name;
             if (StoryDeckText != null) StoryDeckText.Text = label;
+            _refreshPoolTab?.Invoke();
             if (StoryDeckIcon != null) StoryDeckIcon.Glyph = storyboard ? "" : "";
             if (StoryDeckButton != null)
             {

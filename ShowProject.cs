@@ -267,6 +267,9 @@ namespace ModernImageViewer
         [JsonPropertyName("recipe")]
         public string? Recipe { get; set; }
 
+        /// <summary>What a scene card is read out as, rather than the type's name.</summary>
+        public override string ToString() => Title ?? Recipe ?? "Scene";
+
         [JsonIgnore]
         public int PhotoCount
         {

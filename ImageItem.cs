@@ -17,6 +17,12 @@ namespace ModernImageViewer
     public partial class ImageItem : INotifyPropertyChanged
     {
         private string _name = string.Empty;
+        /// <summary>
+        /// A tile or list row with no name of its own is read out by this, so a screen reader says the file's name
+        /// rather than "ModernImageViewer.ImageItem".
+        /// </summary>
+        public override string ToString() => Name;
+
         public string Name
         {
             get => _name;

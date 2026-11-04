@@ -275,6 +275,59 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
+        public void WithPoolAfter_ASceneOfFloatingPrints_KeepsAnEmptyGridCell_AndThePoolOffTheCanvas()
+        {
+            // Stored the old way: the empty grid cell was dropped, leaving only floating prints.
+            var scene = new MultiViewLayoutFile();
+            scene.Freeform = new List<FreeformCellDto> { new() { Path = @"C:\p\a.jpg" }, new() { Path = @"C:\p\b.jpg" } };
+
+            var shown = MultiViewLayoutFile.WithPoolAfter(scene, new[] { @"C:\p\a.jpg", @"C:\p\pool1.jpg", @"C:\p\pool2.jpg" });
+
+            Assert.Equal(string.Empty, shown.Photos[0].Path);
+            Assert.Equal(1, shown.State.FramedSlots);
+            Assert.Equal(new[] { @"C:\p\pool1.jpg", @"C:\p\pool2.jpg" }, shown.Photos.Skip(1).Select(p => p.Path));
+            Assert.Empty(scene.Photos);
+        }
+
+        [Fact]
+        public void WithPoolAfter_ReplacesAnOldPool_AndLeavesTheSceneAlone()
+        {
+            var scene = new MultiViewLayoutFile();
+            scene.State.FramedSlots = 2;
+            scene.Photos.Add(new PhotoSlotDto { Slot = 0, Path = @"C:\p\a.jpg" });
+            scene.Photos.Add(new PhotoSlotDto { Slot = 1, Path = string.Empty });
+            scene.Photos.Add(new PhotoSlotDto { Slot = 2, Path = @"C:\p\old.jpg" });
+
+            var shown = MultiViewLayoutFile.WithPoolAfter(scene, new[] { @"C:\p\new.jpg" });
+
+            Assert.Equal(new[] { @"C:\p\a.jpg", string.Empty, @"C:\p\new.jpg" }, shown.Photos.Select(p => p.Path));
+            Assert.Equal(2, shown.State.FramedSlots);
+            Assert.Equal(3, scene.Photos.Count);
+        }
+
+        [Fact]
+        public void PickSolo_FollowsTheOdds_AndShowsWholeWhenFillingWouldCrop()
+        {
+            var random = new Random(7);
+            var options = new SurpriseOptions { SoloFillOdds = 0, SoloMattedOdds = 0, SoloWholeOdds = 1 };
+            Assert.All(Enumerable.Range(0, 50), _ => Assert.Equal(SurpriseOptions.SoloWhole, options.PickSolo(true, random)));
+
+            options = new SurpriseOptions { SoloFillOdds = 1, SoloMattedOdds = 0, SoloWholeOdds = 0 };
+            Assert.All(Enumerable.Range(0, 50), _ => Assert.Equal(SurpriseOptions.SoloFill, options.PickSolo(true, random)));
+            // Filling that would crop too much is never chosen, whatever the odds.
+            Assert.All(Enumerable.Range(0, 50), _ => Assert.Equal(SurpriseOptions.SoloWhole, options.PickSolo(false, random)));
+
+            // Even odds land near a third each.
+            options = new SurpriseOptions { SoloFillOdds = 1, SoloMattedOdds = 1, SoloWholeOdds = 1 };
+            var counts = Enumerable.Range(0, 3000).Select(_ => options.PickSolo(true, random)).GroupBy(w => w).ToDictionary(g => g.Key, g => g.Count());
+            Assert.All(new[] { SurpriseOptions.SoloFill, SurpriseOptions.SoloMatted, SurpriseOptions.SoloWhole }, w => Assert.InRange(counts[w], 850, 1150));
+
+            // All off still shows the image.
+            options = new SurpriseOptions { SoloFillOdds = 0, SoloMattedOdds = 0, SoloWholeOdds = 0 };
+            Assert.Equal(SurpriseOptions.SoloWhole, options.PickSolo(true, random));
+        }
+
+        [Fact]
         public void ImagesNotInShow_KeepsPoolOrder_AndLeavesOutEveryImageAScenesShows()
         {
             var show = new ShowProject();

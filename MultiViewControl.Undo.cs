@@ -263,7 +263,8 @@ namespace ModernImageViewer
             // A removed or reordered scene comes back with the snapshot, so open scene cards are redrawn from it.
             // Redrawing closes the old drawer, which counts as a closed menu; that is not a new step, and
             // taking one would clear Redo.
-            if (_trayCard != null && _trayTab == 1)
+            // Whichever tab is showing: the other tab's cards would otherwise be the old show when switched to.
+            if (_trayCard != null)
             {
                 RefreshTrayCardIfOpen();
                 _undoTimer?.Stop();
