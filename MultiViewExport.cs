@@ -129,7 +129,7 @@ namespace ModernImageViewer
             // Projects & Layouts Save & Load
             var imageColumn = panel;
             panel = new StackPanel { Spacing = 1 };
-            panel.Children.Add(CreateSectionHeader("Projects & Layouts"));
+            panel.Children.Add(CreateSectionHeader("Storyboards & Layouts"));
 
             var saveLayoutItem = CreateMenuItemButton("Save Layout as\u2026", icon: new FontIcon { Glyph = "\uE74E", FontSize = 13, Foreground = _menuWhiteSecondary });
             saveLayoutItem.Click += async (_, _) =>
@@ -461,7 +461,10 @@ namespace ModernImageViewer
         private void AddFolderAndLayouts(StackPanel panel, string path, bool isFavourite, List<string> layoutFiles, int shown)
         {
             panel.Children.Add(CreateFolderRow(path, isFavourite, layoutFiles.Count - shown));
-            foreach (var layoutPath in layoutFiles.Take(shown))
+            var sortedFiles = layoutFiles
+                .OrderByDescending(f => f.EndsWith(ShowProject.FileExtension, StringComparison.OrdinalIgnoreCase))
+                .ThenBy(f => Path.GetFileName(f));
+            foreach (var layoutPath in sortedFiles.Take(shown))
                 panel.Children.Add(CreateLayoutFileRow(layoutPath));
         }
 

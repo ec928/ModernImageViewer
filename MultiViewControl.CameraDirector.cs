@@ -22,6 +22,8 @@ namespace ModernImageViewer
         private Border? _cameraDirectorBar;
         private Border? _startWireframe;
         private Border? _endWireframe;
+        private Border? _startBadge;
+        private Border? _endBadge;
         private Line? _trajectoryLine;
         private TextBlock? _startBadgeText;
         private TextBlock? _endBadgeText;
@@ -319,21 +321,20 @@ namespace ModernImageViewer
             _startWireframe = new Border
             {
                 BorderBrush = new SolidColorBrush(Color.FromArgb(255, 16, 185, 129)),
-                Background = new SolidColorBrush(Color.FromArgb(24, 16, 185, 129)),
+                Background = new SolidColorBrush(Color.FromArgb(28, 16, 185, 129)),
                 BorderThickness = new Thickness(3),
                 CornerRadius = new CornerRadius(4),
                 IsHitTestVisible = true
             };
 
-            var startBadge = new Border
+            _startBadge = new Border
             {
-                Background = new SolidColorBrush(Color.FromArgb(210, 6, 46, 30)),
+                Background = new SolidColorBrush(Color.FromArgb(230, 6, 46, 30)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(200, 16, 185, 129)),
+                BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(4),
                 Padding = new Thickness(8, 3, 8, 3),
-                Margin = new Thickness(6),
-                HorizontalAlignment = HorizontalAlignment.Left,
-                VerticalAlignment = VerticalAlignment.Top,
-                IsHitTestVisible = false
+                IsHitTestVisible = true
             };
             _startBadgeText = new TextBlock
             {
@@ -342,28 +343,32 @@ namespace ModernImageViewer
                 FontSize = 11,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
             };
-            startBadge.Child = _startBadgeText;
-            _startWireframe.Child = startBadge;
+            _startBadge.Child = _startBadgeText;
+            ToolTipService.SetToolTip(_startBadge, "Start Keyframe — click to select and edit");
+            _startBadge.PointerPressed += (s, e) =>
+            {
+                SelectCameraKeyframe(true);
+                e.Handled = true;
+            };
 
             // End Wireframe (Ruby Coral #EF4444)
             _endWireframe = new Border
             {
                 BorderBrush = new SolidColorBrush(Color.FromArgb(255, 239, 68, 68)),
-                Background = new SolidColorBrush(Color.FromArgb(24, 239, 68, 68)),
+                Background = new SolidColorBrush(Color.FromArgb(28, 239, 68, 68)),
                 BorderThickness = new Thickness(2),
                 CornerRadius = new CornerRadius(4),
                 IsHitTestVisible = true
             };
 
-            var endBadge = new Border
+            _endBadge = new Border
             {
-                Background = new SolidColorBrush(Color.FromArgb(210, 58, 16, 16)),
+                Background = new SolidColorBrush(Color.FromArgb(230, 58, 16, 16)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(200, 239, 68, 68)),
+                BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(4),
                 Padding = new Thickness(8, 3, 8, 3),
-                Margin = new Thickness(6),
-                HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Bottom,
-                IsHitTestVisible = false
+                IsHitTestVisible = true
             };
             _endBadgeText = new TextBlock
             {
@@ -372,14 +377,24 @@ namespace ModernImageViewer
                 FontSize = 11,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
             };
-            endBadge.Child = _endBadgeText;
-            _endWireframe.Child = endBadge;
+            _endBadge.Child = _endBadgeText;
+            ToolTipService.SetToolTip(_endBadge, "End Keyframe — click to select and edit");
+            _endBadge.PointerPressed += (s, e) =>
+            {
+                SelectCameraKeyframe(false);
+                e.Handled = true;
+            };
+
+            Canvas.SetZIndex(_startBadge, 300);
+            Canvas.SetZIndex(_endBadge, 300);
 
             AttachWireframeEvents(_startWireframe, isStart: true);
             AttachWireframeEvents(_endWireframe, isStart: false);
 
             _cameraOverlayCanvas.Children.Add(_startWireframe);
             _cameraOverlayCanvas.Children.Add(_endWireframe);
+            _cameraOverlayCanvas.Children.Add(_startBadge);
+            _cameraOverlayCanvas.Children.Add(_endBadge);
             RootGrid.Children.Add(_cameraOverlayCanvas);
 
             // Floating Camera Director Toolbar (Strictly above all canvas elements, circles & floating cards)
@@ -545,6 +560,8 @@ namespace ModernImageViewer
             }
             _startWireframe = null;
             _endWireframe = null;
+            _startBadge = null;
+            _endBadge = null;
             _trajectoryLine = null;
             _startBadgeText = null;
             _endBadgeText = null;
@@ -598,9 +615,17 @@ namespace ModernImageViewer
                 _endToggleBtn.BorderBrush = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255));
 
                 _startWireframe.BorderThickness = new Thickness(3.5);
-                _endWireframe.BorderThickness = new Thickness(1.8);
+                _startWireframe.Opacity = 1.0;
+                _startWireframe.Background = new SolidColorBrush(Color.FromArgb(32, 16, 185, 129));
                 Canvas.SetZIndex(_startWireframe, 252);
-                Canvas.SetZIndex(_endWireframe, 251);
+
+                _endWireframe.BorderThickness = new Thickness(1.8);
+                _endWireframe.Opacity = 0.55;
+                _endWireframe.Background = new SolidColorBrush(Color.FromArgb(12, 239, 68, 68));
+                Canvas.SetZIndex(_endWireframe, 250);
+
+                if (_startBadge != null) _startBadge.Opacity = 1.0;
+                if (_endBadge != null) _endBadge.Opacity = 0.70;
             }
             else
             {
@@ -610,9 +635,17 @@ namespace ModernImageViewer
                 _startToggleBtn.BorderBrush = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255));
 
                 _endWireframe.BorderThickness = new Thickness(3.5);
-                _startWireframe.BorderThickness = new Thickness(1.8);
+                _endWireframe.Opacity = 1.0;
+                _endWireframe.Background = new SolidColorBrush(Color.FromArgb(32, 239, 68, 68));
                 Canvas.SetZIndex(_endWireframe, 252);
-                Canvas.SetZIndex(_startWireframe, 251);
+
+                _startWireframe.BorderThickness = new Thickness(1.8);
+                _startWireframe.Opacity = 0.55;
+                _startWireframe.Background = new SolidColorBrush(Color.FromArgb(12, 16, 185, 129));
+                Canvas.SetZIndex(_startWireframe, 250);
+
+                if (_endBadge != null) _endBadge.Opacity = 1.0;
+                if (_startBadge != null) _startBadge.Opacity = 0.70;
             }
         }
 
@@ -745,6 +778,20 @@ namespace ModernImageViewer
             Canvas.SetLeft(_endWireframe, eLeft);
             Canvas.SetTop(_endWireframe, eTop);
             if (_endBadgeText != null) _endBadgeText.Text = $"🔴 End · {_curEndZoom:F2}x";
+
+            if (_startBadge != null)
+            {
+                Canvas.SetLeft(_startBadge, sLeft + 6);
+                Canvas.SetTop(_startBadge, sTop + 6);
+            }
+
+            if (_endBadge != null)
+            {
+                double endBadgeW = _endBadge.ActualWidth > 0 ? _endBadge.ActualWidth : 95;
+                double endBadgeH = _endBadge.ActualHeight > 0 ? _endBadge.ActualHeight : 24;
+                Canvas.SetLeft(_endBadge, Math.Max(0, eLeft + eW - endBadgeW - 6));
+                Canvas.SetTop(_endBadge, Math.Max(0, eTop + eH - endBadgeH - 6));
+            }
 
             // Vector Trajectory Line
             _trajectoryLine.X1 = sLeft + sW / 2.0;

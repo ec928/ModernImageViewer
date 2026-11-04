@@ -2160,22 +2160,14 @@ namespace ModernImageViewer
                 }
             }
 
-            // Storyboard Pacing & Images Range Selector (Min to Max SpinNumberBoxes)
-            var storyPresetLeft = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
-            storyPresetLeft.Children.Add(new TextBlock
-            {
-                Text = "Images per scene:",
-                FontSize = 12,
-                VerticalAlignment = VerticalAlignment.Center
-            });
-
+            // Storyboard Pacing & Images Range Selector (Min to Max SpinNumberBoxes inside compact Flyout)
             bool syncingStoryRange = false;
             var storyFewestBox = new SpinNumberBox
             {
                 Minimum = 1,
                 Maximum = MosaicLayout.MaxShown,
                 Value = SurpriseChoices.FewestPictures,
-                Width = 76,
+                Width = 72,
                 Height = 28,
                 VerticalAlignment = VerticalAlignment.Center
             };
@@ -2188,7 +2180,7 @@ namespace ModernImageViewer
                 FontSize = 12,
                 Opacity = 0.7,
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(2, 0, 2, 0)
+                Margin = new Thickness(4, 0, 4, 0)
             };
 
             var storyMostBox = new SpinNumberBox
@@ -2196,16 +2188,45 @@ namespace ModernImageViewer
                 Minimum = 1,
                 Maximum = MosaicLayout.MaxShown,
                 Value = SurpriseChoices.MostPictures,
-                Width = 76,
+                Width = 72,
                 Height = 28,
                 VerticalAlignment = VerticalAlignment.Center
             };
             ToolTipService.SetToolTip(storyMostBox, "Most images in a scene, from 1 to 16");
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(storyMostBox, "Maximum images per scene");
 
-            storyPresetLeft.Children.Add(storyFewestBox);
-            storyPresetLeft.Children.Add(storyToLabel);
-            storyPresetLeft.Children.Add(storyMostBox);
+            var rangeFlyoutStack = new StackPanel { Spacing = 8, Padding = new Thickness(6) };
+            var rangeHeader = new TextBlock
+            {
+                Text = "Images per scene:",
+                FontSize = 12,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+            };
+            var rangeInputsRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
+            rangeInputsRow.Children.Add(storyFewestBox);
+            rangeInputsRow.Children.Add(storyToLabel);
+            rangeInputsRow.Children.Add(storyMostBox);
+            rangeFlyoutStack.Children.Add(rangeHeader);
+            rangeFlyoutStack.Children.Add(rangeInputsRow);
+
+            var draftRangeFlyout = new Flyout { Content = rangeFlyoutStack };
+
+            var draftRangeText = new TextBlock
+            {
+                Text = $"({SurpriseChoices.FewestPictures}–{SurpriseChoices.MostPictures}) ▾",
+                FontSize = 11,
+                VerticalAlignment = VerticalAlignment.Center,
+                Opacity = 0.9
+            };
+            var draftRangeBtn = new Button
+            {
+                Content = draftRangeText,
+                Flyout = draftRangeFlyout,
+                CornerRadius = new CornerRadius(12),
+                Padding = new Thickness(8, 4, 8, 4),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            ToolTipService.SetToolTip(draftRangeBtn, "Adjust images per scene range for auto-drafting");
 
             Border MakeDivider() => new Border { Width = 1, Height = 16, Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x35, 0xFF, 0xFF, 0xFF)), VerticalAlignment = VerticalAlignment.Center };
 
@@ -2239,12 +2260,11 @@ namespace ModernImageViewer
             var storyHeaderRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
             storyHeaderRow.Children.Add(playShowDrawerBtn);
             storyHeaderRow.Children.Add(MakeDivider());
-            storyHeaderRow.Children.Add(autoDraftBtn);
-            storyHeaderRow.Children.Add(MakeDivider());
-            storyHeaderRow.Children.Add(storyPresetLeft);
-            storyHeaderRow.Children.Add(MakeDivider());
             storyHeaderRow.Children.Add(addCanvasBtn);
             storyHeaderRow.Children.Add(updateSceneBtn);
+            storyHeaderRow.Children.Add(MakeDivider());
+            storyHeaderRow.Children.Add(autoDraftBtn);
+            storyHeaderRow.Children.Add(draftRangeBtn);
             storyHeaderRow.Children.Add(MakeDivider());
             storyHeaderRow.Children.Add(storySummary);
             headerMiddle.Children.Add(storyHeaderRow);
@@ -2296,6 +2316,7 @@ namespace ModernImageViewer
                     {
                         if (storyFewestBox.Value != f) storyFewestBox.Value = f;
                         if (storyMostBox.Value != m) storyMostBox.Value = m;
+                        draftRangeText.Text = $"({f}–{m}) ▾";
                     }
                     finally
                     {
@@ -2355,6 +2376,10 @@ namespace ModernImageViewer
 
             // Storyboard scenes gridview with mouse drag-and-drop reordering (2-row horizontal filmstrip)
             var scenesCollection = new System.Collections.ObjectModel.ObservableCollection<ShowScene>(_activeShow?.Scenes ?? Enumerable.Empty<ShowScene>());
+            if (_selectedShowScene == null && scenesCollection.Count > 0)
+            {
+                _selectedShowScene = scenesCollection[0];
+            }
             var scenesView = new GridView
             {
                 ItemsSource = scenesCollection,
@@ -3132,6 +3157,7 @@ namespace ModernImageViewer
                                 sc.DwellSeconds = s;
                                 UpdateStoryboardSummary();
                                 RefreshCardBadges();
+                                RefreshTrayCardIfOpen();
                             };
                             dwellSub.Items.Add(item);
                         }
