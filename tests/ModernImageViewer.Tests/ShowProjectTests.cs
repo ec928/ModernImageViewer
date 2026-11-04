@@ -253,5 +253,25 @@ namespace ModernImageViewer.Tests
             Assert.Equal(2, draft.Layout.Photos.Count);
             Assert.Equal(2, draft.GetPhotoPaths().Count());
         }
+
+        [Fact]
+        public void Canvas_is_stored_only_into_the_scene_it_is_showing()
+        {
+            Assert.False(ShowProject.ShouldStoreCanvas(canvasSceneId: null, sceneId: "scene-1", explicitCommit: false));
+            Assert.False(ShowProject.ShouldStoreCanvas(canvasSceneId: "scene-2", sceneId: "scene-1", explicitCommit: false));
+            Assert.True(ShowProject.ShouldStoreCanvas(canvasSceneId: "scene-1", sceneId: "scene-1", explicitCommit: false));
+            Assert.True(ShowProject.ShouldStoreCanvas(canvasSceneId: null, sceneId: "scene-1", explicitCommit: true));
+            Assert.False(ShowProject.ShouldStoreCanvas(canvasSceneId: "scene-1", sceneId: null, explicitCommit: true));
+        }
+
+        [Fact]
+        public void Play_transport_says_pause_while_running()
+        {
+            Assert.Equal("Pause", ShowProject.PlayTransportText(playing: true, storyboard: true, sceneNumber: 4, sceneCount: 33));
+            Assert.Equal("Pause", ShowProject.PlayTransportText(playing: true, storyboard: false, sceneNumber: 1, sceneCount: 0));
+            Assert.Equal("Play Show", ShowProject.PlayTransportText(playing: false, storyboard: true, sceneNumber: 1, sceneCount: 33));
+            Assert.Equal("Play Show · 4/33", ShowProject.PlayTransportText(playing: false, storyboard: true, sceneNumber: 4, sceneCount: 33));
+            Assert.Equal("Play Mix", ShowProject.PlayTransportText(playing: false, storyboard: false, sceneNumber: 1, sceneCount: 0));
+        }
     }
 }

@@ -1520,6 +1520,8 @@ namespace ModernImageViewer
         private int _showPlaybackIndex = -1;
         private bool _isStoryboardPlayback;
         private ShowScene? _selectedShowScene;
+        /// <summary>The scene whose layout is on the canvas. Null when the canvas is a mix or was never loaded from the selected scene.</summary>
+        private string? _canvasSceneId;
         /// <summary>When set, Play keeps using Surprise me even if a storyboard exists. Otherwise a storyboard is what Play walks.</summary>
         private bool _shuffleChosen;
 
@@ -2139,7 +2141,7 @@ namespace ModernImageViewer
             ToolTipService.SetToolTip(updateSceneBtn, "Saves current canvas layout and photos into the selected storyboard scene.");
             updateSceneBtn.Click += (_, _) =>
             {
-                SyncCanvasToSelectedScene(showToast: true);
+                SyncCanvasToSelectedScene(showToast: true, commitCanvas: true);
                 CaptureUndoPoint();
             };
 
@@ -2376,10 +2378,6 @@ namespace ModernImageViewer
 
             // Storyboard scenes gridview with mouse drag-and-drop reordering (2-row horizontal filmstrip)
             var scenesCollection = new System.Collections.ObjectModel.ObservableCollection<ShowScene>(_activeShow?.Scenes ?? Enumerable.Empty<ShowScene>());
-            if (_selectedShowScene == null && scenesCollection.Count > 0)
-            {
-                _selectedShowScene = scenesCollection[0];
-            }
             var scenesView = new GridView
             {
                 ItemsSource = scenesCollection,
@@ -3084,7 +3082,7 @@ namespace ModernImageViewer
                         }));
                         menu.Items.Add(MakeAdvancedItem("💾 Update Scene from Canvas", "\uE74E", () =>
                         {
-                            SyncCanvasToSelectedScene(sc, showToast: true);
+                            SyncCanvasToSelectedScene(sc, showToast: true, commitCanvas: true);
                             CaptureUndoPoint();
                         }));
 
@@ -3225,6 +3223,7 @@ namespace ModernImageViewer
                     CaptureUndoPoint();
                 }
                 _selectedShowScene = scene;
+                _canvasSceneId = null;
                 _shuffleChosen = false;
                 scenesView.SelectedItem = scene;
                 if (updateSceneBtn != null) updateSceneBtn.IsEnabled = true;
@@ -3240,6 +3239,7 @@ namespace ModernImageViewer
                 if (scene.Layout != null)
                 {
                     ApplyLayoutFile(WithRestInTray(scene.Layout, SessionPictures()), restoreAspect: false, preserveUndo: true);
+                    _canvasSceneId = scene.Id;
                     CaptureUndoPoint();
                 }
                 ShowAutoPlayState();
@@ -3313,13 +3313,35 @@ namespace ModernImageViewer
 
             async Task RunAutoDraftAsync()
             {
+                var pictures = SessionPictures();
+                if (pictures.Count == 0) return;
+
+                int sceneCount = _activeShow?.Scenes.Count ?? 0;
+                if (sceneCount > 0)
+                {
+                    var dialog = new ContentDialog
+                    {
+                        Title = "Replace the storyboard?",
+                        Content = sceneCount == 1
+                            ? "This replaces the scene with a new draft."
+                            : $"This replaces all {sceneCount} scenes with a new draft.",
+                        PrimaryButtonText = "Replace",
+                        CloseButtonText = "Cancel",
+                        DefaultButton = ContentDialogButton.Close,
+                        XamlRoot = XamlRoot,
+                        RequestedTheme = MainWindow.Instance?.CurrentRequestedTheme ?? ElementTheme.Default
+                    };
+                    DialogFooter.MainButtonOnRight(dialog);
+                    if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+                }
+
                 autoDraftBtn.IsEnabled = false;
                 draftProgressRow.Visibility = Visibility.Visible;
                 progressText.Text = "Reading images...";
 
                 try
                 {
-                    var pictures = SessionPictures();
+                    pictures = SessionPictures();
                     if (pictures.Count == 0) return;
 
                     var ready = DecodedBitmaps();
@@ -3330,7 +3352,6 @@ namespace ModernImageViewer
                         progressText.Text = $"Making scene {p.CompletedScenes} of {p.TotalEstimatedScenes}...";
                     });
 
-                    bool firstShow = _activeShow == null || _activeShow.Scenes.Count == 0;
                     _activeShow = await ShowDirector.DraftAsync(
                         facts,
                         SurpriseChoices,
@@ -3338,6 +3359,8 @@ namespace ModernImageViewer
                         ActualHeight,
                         "Auto-Drafted Presentation",
                         progress);
+                    _selectedShowScene = null;
+                    _canvasSceneId = null;
                     _shuffleChosen = false;
                     _isStoryboardPlayback = false;
                     _showPlaybackIndex = 0;
@@ -3386,6 +3409,8 @@ namespace ModernImageViewer
 
                 _activeShow ??= new ShowProject { Title = "Custom Presentation" };
                 scenesCollection.Add(scene);
+                _selectedShowScene = scene;
+                _canvasSceneId = scene.Id;
                 ShowAutoPlayToast($"Added this layout as scene {scenesCollection.Count}");
             }
 
@@ -3409,6 +3434,8 @@ namespace ModernImageViewer
                 if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
                 _shuffleChosen = false;
                 _isStoryboardPlayback = false;
+                _selectedShowScene = null;
+                _canvasSceneId = null;
                 _activeShow.Scenes.Clear();
                 scenesCollection.Clear();
             };
@@ -3612,6 +3639,7 @@ namespace ModernImageViewer
 
             var startScene = visibleScenes[targetIndex];
             _selectedShowScene = startScene;
+            _canvasSceneId = null;
             _onStoryboardPlaybackIndexChanged?.Invoke(targetIndex);
             _layoutSeconds = (int)(startScene.DwellSeconds ?? SurpriseChoices.NextPlaySeconds(Random.Shared));
             ShowAutoPlayState();
@@ -3658,6 +3686,7 @@ namespace ModernImageViewer
             int currentIndex = _showPlaybackIndex;
             var scene = visibleScenes[currentIndex];
             _selectedShowScene = scene;
+            _canvasSceneId = null;
             _onStoryboardPlaybackIndexChanged?.Invoke(currentIndex);
             _layoutSeconds = (int)(scene.DwellSeconds ?? SurpriseChoices.NextPlaySeconds(Random.Shared));
 
@@ -3672,6 +3701,7 @@ namespace ModernImageViewer
             try
             {
                 ApplyLayoutFile(WithRestInTray(scene.Layout, pictures), restoreAspect: false, preserveUndo: true);
+                _canvasSceneId = scene.Id;
             }
             finally
             {
@@ -3786,11 +3816,12 @@ namespace ModernImageViewer
             ShowShownBadge();
         }
 
-        public void SyncCanvasToSelectedScene(ShowScene? targetScene = null, bool showToast = false, bool force = false)
+        public void SyncCanvasToSelectedScene(ShowScene? targetScene = null, bool showToast = false, bool force = false, bool commitCanvas = false)
         {
             if (_isStoryboardPlayback && !force) return;
             var scene = targetScene ?? _selectedShowScene;
             if (scene == null || _activeShow == null) return;
+            if (!ShowProject.ShouldStoreCanvas(_canvasSceneId, scene.Id, commitCanvas)) return;
 
             var file = BuildLayoutFile();
             int onShow = ShownSlots;
@@ -3809,6 +3840,7 @@ namespace ModernImageViewer
             if (photoCount == 0) return;
 
             scene.Layout = MultiViewLayoutFile.FromJson(sceneFile.ToJson()) ?? sceneFile;
+            if (commitCanvas) _canvasSceneId = scene.Id;
             _activeShow.Modified = DateTime.UtcNow;
             _refreshStoryboardCards?.Invoke();
             _updateStorySummary?.Invoke();
@@ -3958,17 +3990,7 @@ namespace ModernImageViewer
             }
 
             string glyph = playing ? "\uE769" : "\uE768";
-            string text;
-            if (playing)
-            {
-                text = storyboardMode ? $"Show · {curScene}/{totalScenes}" : "Auto-Mix";
-            }
-            else
-            {
-                text = storyboardMode
-                    ? (curScene > 1 && curScene <= totalScenes ? $"Play Show · {curScene}/{totalScenes}" : "Play Show")
-                    : "Play Mix";
-            }
+            string text = ShowProject.PlayTransportText(playing, storyboardMode, curScene, totalScenes);
 
             AutoPlayIcon.Glyph = glyph;
             AutoPlayText.Text = text;
@@ -4331,6 +4353,7 @@ namespace ModernImageViewer
                 if (options.KeepCanvas) composition.KeepCanvas(_canvasColor, _canvasSurface, _canvasFrame);
                 if (!sameRun) AutoSaveSession();
                 CaptureUndoPoint();
+                _canvasSceneId = null;
                 _cellBorderFlyout?.Hide();
                 var outgoingStep = fade ? OutgoingCameraStep(0.7) : (1.0, 0.0, 0.0);
                 Image? before = fade ? await CoverWithPictureOfCanvasAsync() : null;

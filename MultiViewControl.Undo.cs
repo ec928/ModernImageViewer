@@ -161,6 +161,7 @@ namespace ModernImageViewer
             try
             {
                 ApplyLayoutFile(blank, restoreAspect: false);
+                _canvasSceneId = null;
             }
             finally
             {

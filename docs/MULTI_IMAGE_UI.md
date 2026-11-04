@@ -16,7 +16,7 @@ One pill along the bottom, left to right. Dividers separate the groups. Rows and
 | Story Deck | Story Deck, or Story Deck (N) | Opens or closes the Storyboard drawer. N is the number of scenes. Filled with an accent border while Storyboard is the playback mode. |
 | Auto-Mix | Auto-Mix | The procedural playback mode. Clicking it chooses Auto-Mix and generates a new procedural layout. Filled while Auto-Mix is the active mode. |
 | Previous | icon | Previous scene while a storyboard is playing. Otherwise previous layout. Left arrow / PageUp. |
-| Play | Play Show · i/N, Show · i/N, Play Mix, or Pause | Dynamic play/pause transport button. When Storyboard mode is active: shows `Play Show · i/N` (paused) or `Show · i/N` (playing). When Auto-Mix mode is active: shows `Play Mix` or `Auto-Mix`. Space does the same. Filled while running. |
+| Play | Play Show, Play Show · i/N, Play Mix, or Pause | Starts or pauses. Stopped on a storyboard: `Play Show`, or `Play Show · i/N` when resuming past the first scene. Stopped on Auto-Mix: `Play Mix`. While either is running, the label is `Pause`. Space does the same. Filled while running. |
 | Next | icon | Next scene, or next layout. Right arrow / PageDown. |
 | Play options | chevron | Opens or closes Auto-Mix Settings. |
 | Rows | Rows, or N Rows | Arranges the grid in rows and opens the grid layout card. R switches between rows and columns. |
@@ -30,7 +30,7 @@ Playback Mode (Story Deck and Auto-Mix) sits as a dedicated 2-segment mode selec
 
 ### Which mode is active
 
-A storyboard plays by default once scenes exist. Auto-Mix plays when there is no storyboard, or after Auto-Mix has been clicked. Exactly one of those two buttons is active, including while playback is paused. The Play button dynamically reflects the active mode (`Play Show · 4/33` vs `Play Mix`).
+A storyboard plays by default once scenes exist. Auto-Mix plays when there is no storyboard, or after Auto-Mix has been clicked. Exactly one of those two buttons is active, including while playback is paused. While nothing is running, Play reads `Play Show`, `Play Show · 4/33`, or `Play Mix`. While something is running, Play reads `Pause`.
 
 Clicking Story Deck switches the playback target back to Storyboard mode. If the drawer is already open, clicking Story Deck closes it. If closed, it opens the drawer.
 
@@ -63,7 +63,7 @@ When scenes exist, the drawer top toolbar provides a compact, non-overflowing co
 | Play Show | `▶ Play Show` | Starts playback from the active scene and locks Storyboard mode. |
 | Add Layout | `+ Add Layout` | Appends current canvas layout and photos as a new scene at the end of the show. |
 | Update Scene | `💾 Update Scene` | Saves current canvas layout and photo positions into the selected storyboard scene. |
-| Auto-Draft | `✨ Auto-Draft` | Automatically drafts scenes from the session pool using smart layout combinations. |
+| Auto-Draft | `✨ Auto-Draft` | Drafts scenes from the images. When scenes already exist the button reads Re-draft and asks before it replaces them. |
 | Draft Range | `(min–max) ▾` | Compact flyout button to adjust the minimum and maximum images per scene (1 to 16). |
 | Summary | `N scenes · length` | Displays total scenes and estimated show runtime. |
 | Clear | `Clear` | Confirmation dialog to clear all scenes from the show. |
@@ -120,7 +120,7 @@ When viewing a storyboard scene on the canvas, any manual layout adjustment auto
 - Resizing a freeform card handle commits the new size.
 - Rotating a card commits the new rotation angle.
 - Dragging a mosaic grid splitter commits the updated row/column weights.
-- Starting playback or pausing automatically executes a force-sync, ensuring no edits are ever reverted or lost when pressing Play.
+- Play, pause, and leaving a scene write the canvas back only when that scene is the one on the canvas. A mix, or a scene marked selected before it was shown, is not written over the scene. Update Scene still stores the canvas when asked.
 - Full undo history (`Ctrl+Z` / `Ctrl+Y`) is preserved across scene navigation and editing.
 
 ## Save / Load (Storyboards & Layouts)

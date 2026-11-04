@@ -1596,7 +1596,8 @@ namespace ModernImageViewer
             if (_activeShow != null && _activeShow.Scenes.Count > 0)
             {
                 layoutFile.Storyboard = _activeShow;
-                layoutFile.ActiveSceneId = _selectedShowScene?.Id;
+                if (ShowProject.ShouldStoreCanvas(_canvasSceneId, _selectedShowScene?.Id, explicitCommit: false))
+                    layoutFile.ActiveSceneId = _selectedShowScene!.Id;
             }
 
             return layoutFile;
@@ -1657,9 +1658,11 @@ namespace ModernImageViewer
                     // Automatically project the first scene of the storyboard onto canvas
                     var firstScene = show.Scenes[0];
                     _selectedShowScene = firstScene;
+                    _canvasSceneId = null;
                     if (firstScene.Layout != null)
                     {
                         ApplyLayoutFile(WithRestInTray(firstScene.Layout, SessionPictures()), restoreAspect: false);
+                        _canvasSceneId = firstScene.Id;
                     }
 
                     ShowShownBadge();
@@ -1904,9 +1907,18 @@ namespace ModernImageViewer
                 _showPlaybackIndex = 0;
                 if (!string.IsNullOrEmpty(layoutFile.ActiveSceneId))
                 {
-                    _selectedShowScene = _activeShow.Scenes.FirstOrDefault(s => s.Id == layoutFile.ActiveSceneId) ?? _selectedShowScene;
+                    var match = _activeShow.Scenes.FirstOrDefault(s => s.Id == layoutFile.ActiveSceneId);
+                    if (match != null)
+                    {
+                        _selectedShowScene = match;
+                        _canvasSceneId = match.Id;
+                    }
+                    else
+                        _canvasSceneId = null;
                     _syncStorySceneSelection?.Invoke();
                 }
+                else
+                    _canvasSceneId = null;
             }
 
             for (int i = 0; i < _cellRoots.Length; i++)

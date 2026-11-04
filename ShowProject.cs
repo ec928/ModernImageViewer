@@ -47,6 +47,27 @@ namespace ModernImageViewer
             Scenes.Where(s => !s.IsHidden)
                   .Sum(s => s.DwellSeconds ?? GlobalDefaults.DefaultDwellSeconds);
 
+        /// <summary>
+        /// The canvas is stored into a scene when the user asked to, or when this scene is the one on the canvas.
+        /// A selected scene that is not showing is left as it was.
+        /// </summary>
+        public static bool ShouldStoreCanvas(string? canvasSceneId, string? sceneId, bool explicitCommit)
+        {
+            if (string.IsNullOrEmpty(sceneId)) return false;
+            if (explicitCommit) return true;
+            return string.Equals(canvasSceneId, sceneId, StringComparison.Ordinal);
+        }
+
+        /// <summary>The transport button names the action. While a show or a mix is running, that action is pause.</summary>
+        public static string PlayTransportText(bool playing, bool storyboard, int sceneNumber, int sceneCount)
+        {
+            if (playing) return "Pause";
+            if (!storyboard) return "Play Mix";
+            if (sceneNumber > 1 && sceneNumber <= sceneCount)
+                return $"Play Show · {sceneNumber}/{sceneCount}";
+            return "Play Show";
+        }
+
         public string ToJson()
         {
             return JsonSerializer.Serialize(this, new JsonSerializerOptions

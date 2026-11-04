@@ -286,6 +286,10 @@ namespace ModernImageViewer
 
             _activeShow = null;
 
+            _selectedShowScene = null;
+
+            _canvasSceneId = null;
+
             _shuffleChosen = false;
 
             _isStoryboardPlayback = false;
@@ -3222,8 +3226,6 @@ namespace ModernImageViewer
                     e.Handled = true;
 
                     
-                    SyncCanvasToSelectedScene(showToast: false);
-                    CaptureUndoPoint();
                     return;
 
                 }
@@ -3290,6 +3292,8 @@ namespace ModernImageViewer
 
                     try { cellGrid.ReleasePointerCapture(e.Pointer); } catch { }
 
+                    CaptureUndoPoint();
+
                     e.Handled = true;
 
                     return;
@@ -3341,6 +3345,8 @@ namespace ModernImageViewer
                     HideSnapGuides();
 
                     try { cellGrid.ReleasePointerCapture(e.Pointer); } catch { }
+
+                    CaptureUndoPoint();
 
                 }
 
