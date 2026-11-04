@@ -869,10 +869,14 @@ namespace ModernImageViewer
                 stylePresetChips.Add((chip, set));
                 stylePresetPanel.Children.Add(chip);
             }
-            AddDesignPreset("All", "All 6 layout styles enabled", LayoutComposer.Recipes.ToArray());
-            AddDesignPreset("Clean grids", "Editorial grids and filmstrips without tilted prints or circle cutouts", "Hero and companions", "Balanced mosaic", "Filmstrip");
-            AddDesignPreset("Framed", "Matted gallery walls and hero layouts", "Gallery wall", "Hero and companions");
-            AddDesignPreset("Scrapbook", "Playful tilted prints, circle cutouts, and gallery mats", "Scattered prints", "Circles", "Gallery wall");
+            // Real design names only: these named designs that no longer exist, so Clean grids turned every design off.
+            AddDesignPreset("All", $"All {LayoutComposer.Recipes.Length} designs", LayoutComposer.Recipes.ToArray());
+            AddDesignPreset("Clean grids", "Straight grids only: Edge to edge and Gallery wall. No tilted prints, slants or circles.",
+                LayoutComposer.EdgeToEdge, LayoutComposer.GalleryWall);
+            AddDesignPreset("Framed", "Framed layouts only: Gallery wall and Hero spotlight.",
+                LayoutComposer.GalleryWall, LayoutComposer.HeroSpotlight);
+            AddDesignPreset("Scrapbook", "Playful layouts: Scattered prints, Circles and Gallery wall.",
+                LayoutComposer.ScatteredPrints, LayoutComposer.Circles, LayoutComposer.GalleryWall);
             designsSection.Children.Add(stylePresetPanel);
 
             string FormatDesignStep(double v) =>
@@ -898,6 +902,76 @@ namespace ModernImageViewer
                         if (!syncingDesignPresets) SyncDesignPresetChips();
                     });
                 designSliders[design] = ds;
+
+                // A design's own settings sit under it, set in, named for what they change on screen.
+                StackPanel Detail()
+                {
+                    var panel = new StackPanel { Margin = new Thickness(16, 0, 0, 6) };
+                    designsSection.Children.Add(panel);
+                    return panel;
+                }
+                if (design == LayoutComposer.GalleryWall)
+                {
+                    var detail = Detail();
+                    var frameColor = new ComboBox { Width = 230, HorizontalAlignment = HorizontalAlignment.Right, ItemsSource = SurpriseOptions.Cards.ToList(), SelectedItem = options.Card };
+                    frameColor.SelectionChanged += (_, _) =>
+                    {
+                        if (frameColor.SelectedItem is string name) ChangeSurpriseChoices(o => o.Card = name);
+                    };
+                    Row(detail, "Frame color", "The color of the frame round each image and the canvas edge. Any: each layout picks white, black or a tone from its images.", frameColor);
+                    Slide(detail, "Frame width", "How wide the frame between the images and round the edge is. 1x is the usual width.",
+                        0.25, 3, 0.25, options.GapScale,
+                        v => $"{v:0.##}×",
+                        (o, v) => o.GapScale = v);
+                }
+                else if (design == LayoutComposer.HeroSpotlight)
+                {
+                    // A range like Duration: each Hero layout picks its hero's height from it.
+                    var detail = Detail();
+                    var row = new Grid { ColumnSpacing = 12, MinHeight = 34 };
+                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
+                    var label = new TextBlock { Text = "Hero size", VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
+                    var right = new Grid { Width = 230, ColumnSpacing = 8, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+                    right.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(146) });
+                    right.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(76) });
+                    string Sizes(int low, int high) => low == high ? $"{low}%" : $"{low}% - {high}%";
+                    int from = (int)Math.Round(options.HeroSmallest * 100), to = (int)Math.Round(options.HeroLargest * 100);
+                    var readout = new TextBlock { Text = Sizes(from, to), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, FontSize = 12, Opacity = 0.82, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
+                    var range = new RangeSlider
+                    {
+                        Minimum = SurpriseOptions.HeroLowest * 100,
+                        Maximum = SurpriseOptions.HeroHighest * 100,
+                        StepFrequency = 1,
+                        RangeStart = from,
+                        RangeEnd = to,
+                        Width = 146,
+                        VerticalAlignment = VerticalAlignment.Center
+                    };
+                    range.RangeChanged += (_, r) =>
+                    {
+                        int low = (int)Math.Round(r.Start), high = (int)Math.Round(r.End);
+                        readout.Text = Sizes(low, high);
+                        ChangeSurpriseChoices(o => { o.HeroSmallest = low / 100.0; o.HeroLargest = Math.Max(low, high) / 100.0; });
+                    };
+                    ToolTipService.SetToolTip(row, "The height of the hero image against the canvas. Each Hero spotlight layout picks a height in this range; drag the ends together for one size.");
+                    Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(range, "Hero size");
+                    Grid.SetColumn(range, 0);
+                    Grid.SetColumn(readout, 1);
+                    right.Children.Add(range);
+                    right.Children.Add(readout);
+                    Grid.SetColumn(right, 1);
+                    row.Children.Add(label);
+                    row.Children.Add(right);
+                    detail.Children.Add(row);
+                }
+                else if (design == LayoutComposer.ScatteredPrints)
+                {
+                    Slide(Detail(), "Print tilt", "How far a print can turn. Each print turns between about a quarter of this and all of it, either way.",
+                        0, 20, 0.5, options.MostTilt,
+                        v => v < 0.1 ? "0°" : $"up to {v:0.0}°",
+                        (o, v) => o.MostTilt = v);
+                }
             }
             // A layout of one image: the same odds scale as the designs above, so it reads and works the same way.
             designsSection.Children.Add(new TextBlock
@@ -974,70 +1048,9 @@ namespace ModernImageViewer
             var (transitionSection, transitionSummary) = Section("Transitions", TransitionSummaryText());
             TransitionGroup(transitionSection, () => transitionSummary.Text = TransitionSummaryText());
 
-            // 5. Look
-            string LookSummaryText()
-            {
-                string progress = SurpriseChoices.ProgressOn ? SurpriseChoices.ProgressEdge : "Progress off";
-                return $"{SurpriseChoices.Card} \u00B7 {SurpriseChoices.MostTilt:0.#}\u00B0 \u00B7 {progress}";
-            }
-            var (lookSection, lookSummary) = Section("Look", LookSummaryText());
-            var card = new ComboBox { Width = 230, HorizontalAlignment = HorizontalAlignment.Right, ItemsSource = SurpriseOptions.Cards.ToList(), SelectedItem = options.Card };
-            card.SelectionChanged += (_, _) =>
-            {
-                if (card.SelectedItem is string name)
-                {
-                    ChangeSurpriseChoices(o => o.Card = name);
-                    lookSummary.Text = LookSummaryText();
-                }
-            };
-            Row(lookSection, "Gallery card", "The color of the card the images are set into.", card);
-            Slide(lookSection, "Gallery gaps", "1x is the usual gap between images on a Gallery wall.",
-                0.25, 3, 0.25, options.GapScale,
-                v => $"{v:0.##}\u00D7",
-                (o, v) => o.GapScale = v);
-            {
-                // A range like Duration: each Hero layout picks its hero's height from it.
-                var row = new Grid { ColumnSpacing = 12, MinHeight = 34 };
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
-                var label = new TextBlock { Text = "Hero size", VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
-                var right = new Grid { Width = 230, ColumnSpacing = 8, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-                right.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(146) });
-                right.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(76) });
-                string Sizes(int low, int high) => low == high ? $"{low}%" : $"{low}% - {high}%";
-                int from = (int)Math.Round(options.HeroSmallest * 100), to = (int)Math.Round(options.HeroLargest * 100);
-                var readout = new TextBlock { Text = Sizes(from, to), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, FontSize = 12, Opacity = 0.82, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
-                var range = new RangeSlider
-                {
-                    Minimum = SurpriseOptions.HeroLowest * 100,
-                    Maximum = SurpriseOptions.HeroHighest * 100,
-                    StepFrequency = 1,
-                    RangeStart = from,
-                    RangeEnd = to,
-                    Width = 146,
-                    VerticalAlignment = VerticalAlignment.Center
-                };
-                range.RangeChanged += (_, r) =>
-                {
-                    int low = (int)Math.Round(r.Start), high = (int)Math.Round(r.End);
-                    readout.Text = Sizes(low, high);
-                    ChangeSurpriseChoices(o => { o.HeroSmallest = low / 100.0; o.HeroLargest = Math.Max(low, high) / 100.0; });
-                };
-                ToolTipService.SetToolTip(row, "The hero image's height against the canvas. Each Hero layout picks a height in this range; drag the ends together for one size.");
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(range, "Hero size");
-                Grid.SetColumn(range, 0);
-                Grid.SetColumn(readout, 1);
-                right.Children.Add(range);
-                right.Children.Add(readout);
-                Grid.SetColumn(right, 1);
-                row.Children.Add(label);
-                row.Children.Add(right);
-                lookSection.Children.Add(row);
-            }
-            Slide(lookSection, "Most tilt", "How far Scattered prints can turn.",
-                0, 20, 0.5, options.MostTilt,
-                v => v < 0.1 ? "0\u00B0" : $"{v:0.0}\u00B0",
-                (o, v) => { o.MostTilt = v; lookSummary.Text = LookSummaryText(); });
+            // 5. Canvas & progress: what applies to every design. Each design's own settings are under it in Designs.
+            string LookSummaryText() => SurpriseChoices.ProgressOn ? $"Progress {SurpriseChoices.ProgressEdge.ToLowerInvariant()}" : "Progress off";
+            var (lookSection, lookSummary) = Section("Canvas & progress", LookSummaryText());
             Toggle(lookSection, "Keep my canvas", "Keep the canvas color, surface and frame as they are now, instead of the design's.",
                 options.KeepCanvas, (o, on) => o.KeepCanvas = on);
 
@@ -1090,7 +1103,7 @@ namespace ModernImageViewer
                 edgeChips.Add(chip);
                 edgePanel.Children.Add(chip);
             }
-            AddLookChoice(lookSection, "Edge", "Which side of the screen the progress line sits on. It fills from the left, or from the top on a side edge.", edgePanel);
+            AddLookChoice(lookSection, "Progress edge","Which side of the screen the progress line sits on. It fills from the left, or from the top on a side edge.", edgePanel);
 
             var colorPanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3 };
             var colorSwatches = new List<(Border Shell, string Name)>();
@@ -1143,7 +1156,7 @@ namespace ModernImageViewer
                 colorSwatches.Add((shell, name));
                 colorPanel.Children.Add(swatch);
             }
-            AddLookChoice(lookSection, "Effect color", "The color of the progress line and its glow. Accent follows the Windows accent color.", colorPanel);
+            AddLookChoice(lookSection, "Progress color","The color of the progress line and its glow. Accent follows the Windows accent color.", colorPanel);
 
             // A line of explanation under a setting whose name does not say enough on its own.
             void Note(StackPanel column, string text) => column.Children.Add(new TextBlock
