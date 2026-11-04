@@ -364,7 +364,10 @@ namespace ModernImageViewer.Tests
             var crossed = SurpriseOptions.FromJson("{\"AutoPlaySeconds\":15,\"RandomFewestSeconds\":30,\"RandomMostSeconds\":5}");
             Assert.Equal(15, crossed.AutoPlaySeconds);
             Assert.True(crossed.RandomMostSeconds >= crossed.RandomFewestSeconds);
-            Assert.Equal(5, SurpriseOptions.FromJson("{\"RandomFewestSeconds\":7}").RandomFewestSeconds);
+            // Any whole second the Duration slider can set is kept; only values out of range are brought back into it.
+            Assert.Equal(7, SurpriseOptions.FromJson("{\"RandomFewestSeconds\":7}").RandomFewestSeconds);
+            Assert.Equal(SurpriseOptions.FewestSeconds, SurpriseOptions.FromJson("{\"RandomFewestSeconds\":1}").RandomFewestSeconds);
+            Assert.Equal(SurpriseOptions.MostSeconds, SurpriseOptions.FromJson("{\"RandomMostSeconds\":500}").RandomMostSeconds);
             Assert.False(new SurpriseOptions().TakesTurns(16));
             Assert.True(new SurpriseOptions().TakesTurns(17));
             Assert.True(new SurpriseOptions { MostPictures = 9 }.TakesTurns(14));
@@ -589,7 +592,10 @@ namespace ModernImageViewer.Tests
         [Theory]
         [InlineData(5, 5)]
         [InlineData(30, 30)]
-        [InlineData(7, 0)]
+        // The Duration slider sets any whole second, so 7 is kept; out of range is brought into it.
+        [InlineData(7, 7)]
+        [InlineData(1, 3)]
+        [InlineData(500, 60)]
         [InlineData(-5, 0)]
         public void The_auto_play_interval_is_saved_and_a_bad_one_is_off(int saved, int expected)
         {

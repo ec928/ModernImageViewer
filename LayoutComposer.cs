@@ -189,7 +189,7 @@ namespace ModernImageViewer
 
         /// <summary>
         /// How a layout of one image shows it, as odds against each other, 0 being off: filling the screen (cropped), in a
-        /// matted card, or whole as a framed print. An image that filling would cut a face from, or crop by more than a third,
+        /// matted card, or whole as a framed print. An image that filling would cut a face from, or show less than 65% of,
         /// is always shown whole. The defaults are the odds the designs had before they were a setting.
         /// </summary>
         public double SoloFillOdds { get; set; } = 2;
@@ -219,6 +219,8 @@ namespace ModernImageViewer
         public int AutoPlaySeconds { get; set; }
         public static readonly int[] AutoPlayChoices = { 0, 3, 5, 8, 10, 15, 20, 30 };
         public static readonly int[] RandomPlayChoices = { 3, 5, 8, 10, 15, 20, 30, 45, 60 };
+        /// <summary>The shortest and longest hold a saved setting may have, in seconds.</summary>
+        public const int FewestSeconds = 3, MostSeconds = 60;
         public bool AutoPlayRandom { get; set; }
         public bool SmartPace { get; set; } = true;
         public int RandomFewestSeconds { get; set; } = 5;
@@ -282,6 +284,34 @@ namespace ModernImageViewer
             return Math.Clamp((int)Math.Round(pick), low, high);
         }
 
+        /// <summary>
+        /// Whether a hold of this many seconds was the long half of the range, so the next scene drafted on its own can take
+        /// the other half, as a whole show drafted at once does. Null when it cannot tell.
+        /// </summary>
+        public bool? WasLong(double? seconds)
+        {
+            if (seconds is not double s || !AutoPlayRandom || !SmartPace) return null;
+            int low = Math.Min(RandomFewestSeconds, RandomMostSeconds);
+            int high = Math.Max(RandomFewestSeconds, RandomMostSeconds);
+            if (low == high) return null;
+            return s > (low + high) / 2.0;
+        }
+
+        /// <summary>The Layout Generator settings that Cinematic storyboard uses in place of these. Everything not in it comes from here.</summary>
+        public CinematicOverrides Cinematic { get; set; } = new();
+
+        /// <summary>
+        /// These settings with a set of overrides applied, by its name; this same object when the name is none or unknown.
+        /// A copy, so the saved settings are never changed by it.
+        /// </summary>
+        public SurpriseOptions WithOverrides(string? overrides)
+        {
+            if (!string.Equals(overrides, CinematicOverrides.Name, StringComparison.OrdinalIgnoreCase)) return this;
+            var copy = FromJson(ToJson());
+            (Cinematic ?? new CinematicOverrides()).ApplyTo(copy);
+            return copy;
+        }
+
         public string PlayLabel => AutoPlayRandom ? $"{RandomFewestSeconds}\u2013{RandomMostSeconds} s" : $"{PlaySeconds} s";
         public string PlayWords => AutoPlayRandom ? $"{RandomFewestSeconds} to {RandomMostSeconds} seconds" : $"{PlaySeconds} seconds";
 
@@ -312,10 +342,13 @@ namespace ModernImageViewer
                 read.SoloMattedOdds = Math.Clamp(read.SoloMattedOdds, 0, MostFavouredDesign);
                 read.SoloWholeOdds = Math.Clamp(read.SoloWholeOdds, 0, MostFavouredDesign);
                 if (!Cards.Contains(read.Card)) read.Card = CardAny;
-                if (!AutoPlayChoices.Contains(read.AutoPlaySeconds)) read.AutoPlaySeconds = 0;
-                if (!RandomPlayChoices.Contains(read.RandomFewestSeconds)) read.RandomFewestSeconds = 5;
-                if (!RandomPlayChoices.Contains(read.RandomMostSeconds)) read.RandomMostSeconds = 15;
+                // Any whole second in range: the Duration slider sets values off the old menu lists, such as 7 to 12, and
+                // checking against those lists put 5 to 15 back on the next launch.
+                read.AutoPlaySeconds = read.AutoPlaySeconds <= 0 ? 0 : Math.Clamp(read.AutoPlaySeconds, FewestSeconds, MostSeconds);
+                read.RandomFewestSeconds = Math.Clamp(read.RandomFewestSeconds, FewestSeconds, MostSeconds);
+                read.RandomMostSeconds = Math.Clamp(read.RandomMostSeconds, FewestSeconds, MostSeconds);
                 if (read.RandomMostSeconds < read.RandomFewestSeconds) read.RandomMostSeconds = read.RandomFewestSeconds;
+                read.Cinematic = CinematicOverrides.Checked(read.Cinematic);
                 read.MotionAmount = Math.Clamp(read.MotionAmount, 0, 1);
                 read.MotionZoomChance = Math.Clamp(read.MotionZoomChance, 0, 1);
                 read.MotionFaceChance = Math.Clamp(read.MotionFaceChance, 0, 1);
@@ -331,6 +364,59 @@ namespace ModernImageViewer
         }
 
         public string ToJson() => System.Text.Json.JsonSerializer.Serialize(this);
+    }
+
+    /// <summary>
+    /// The Layout Generator settings Cinematic storyboard puts in place of the main ones, so the one generator makes
+    /// layouts like Cinematic Slideshow's: one image filling the screen, holds alternating short and long between 5 and
+    /// 20 seconds, the camera always moving, and crossfades. Defaults, not fixed: each is a setting.
+    /// </summary>
+    public sealed class CinematicOverrides
+    {
+        public const string Name = "Cinematic";
+
+        public int FewestPictures { get; set; } = 1;
+        public int MostPictures { get; set; } = 1;
+        public double SoloFillOdds { get; set; } = SurpriseOptions.MostFavouredDesign;
+        public double SoloMattedOdds { get; set; }
+        public double SoloWholeOdds { get; set; }
+        public int FewestSeconds { get; set; } = 5;
+        public int MostSeconds { get; set; } = 20;
+        public bool SmartPace { get; set; } = true;
+        public double MotionAmount { get; set; } = 0.5;
+        public double TransitionVariety { get; set; }
+
+        public void ApplyTo(SurpriseOptions options)
+        {
+            options.FewestPictures = FewestPictures;
+            options.MostPictures = MostPictures;
+            options.SoloFillOdds = SoloFillOdds;
+            options.SoloMattedOdds = SoloMattedOdds;
+            options.SoloWholeOdds = SoloWholeOdds;
+            options.AutoPlayRandom = FewestSeconds < MostSeconds;
+            options.AutoPlaySeconds = FewestSeconds;
+            options.RandomFewestSeconds = FewestSeconds;
+            options.RandomMostSeconds = MostSeconds;
+            options.SmartPace = SmartPace;
+            options.MotionAmount = MotionAmount;
+            options.TransitionVariety = TransitionVariety;
+        }
+
+        /// <summary>Anything missing or out of range in the saved file comes back as its default or its limit.</summary>
+        public static CinematicOverrides Checked(CinematicOverrides? read)
+        {
+            var c = read ?? new CinematicOverrides();
+            c.FewestPictures = Math.Clamp(c.FewestPictures, SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown);
+            c.MostPictures = Math.Clamp(c.MostPictures, c.FewestPictures, MosaicLayout.MaxShown);
+            c.SoloFillOdds = Math.Clamp(c.SoloFillOdds, 0, SurpriseOptions.MostFavouredDesign);
+            c.SoloMattedOdds = Math.Clamp(c.SoloMattedOdds, 0, SurpriseOptions.MostFavouredDesign);
+            c.SoloWholeOdds = Math.Clamp(c.SoloWholeOdds, 0, SurpriseOptions.MostFavouredDesign);
+            c.FewestSeconds = Math.Clamp(c.FewestSeconds, SurpriseOptions.FewestSeconds, SurpriseOptions.MostSeconds);
+            c.MostSeconds = Math.Clamp(c.MostSeconds, c.FewestSeconds, SurpriseOptions.MostSeconds);
+            c.MotionAmount = Math.Clamp(c.MotionAmount, 0, 1);
+            c.TransitionVariety = Math.Clamp(c.TransitionVariety, 0, 1);
+            return c;
+        }
     }
 
     /// <summary>Hands out a large set of pictures a few at a time, every one of them before any comes round again.</summary>

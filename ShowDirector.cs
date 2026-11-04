@@ -148,7 +148,8 @@ namespace ModernImageViewer
                 if (composition == null) return (ShowScene?)null;
 
                 string? lastMotion = previous?.CameraOverride?.Kind;
-                bool? lastWasLong = null;
+                // Short and long take turns across scenes drafted one at a time, as they do in a show drafted at once.
+                bool? lastWasLong = options.WasLong(previous?.DwellSeconds);
                 LayoutTransition? lastTransition = Enum.TryParse<LayoutTransition>(previous?.Transition, out var parsed) ? parsed : null;
                 return BuildScene(composition, options, random, ref lastMotion, lastTransition, ref lastWasLong, out _);
             });

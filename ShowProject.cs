@@ -39,6 +39,12 @@ namespace ModernImageViewer
         [JsonPropertyName("scenes")]
         public List<ShowScene> Scenes { get; set; } = new();
 
+        /// <summary>
+        /// The overrides the Layout Generator used for this show, by name ("Cinematic"), so a scene added to it later is made
+        /// the same way. Null: the main Layout Generator settings.
+        /// </summary>
+        public string? GeneratorOverrides { get; set; }
+
         [JsonIgnore]
         public int VisibleSceneCount => Scenes.Count(s => !s.IsHidden);
 
