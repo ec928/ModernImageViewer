@@ -30,7 +30,7 @@ One pill along the bottom, left to right. Dividers separate the groups. Rows and
 
 ### Which mode is active
 
-The mode switch shows it: exactly one side is filled, including while play is paused. A storyboard is the mode once scenes exist, until Auto-Mix is chosen. Opening the drawer, or either of its tabs, does not change the mode. Play Show in the drawer, a scene card's play button and Play show from here choose Storyboard, because they play it. So do clicking a scene card, which shows that scene, and editing a scene's camera path.
+The mode switch shows it: exactly one side is filled, including while play is paused. A storyboard is the mode once scenes exist, until Auto-Mix is chosen. Opening the drawer, or either of its tabs, does not change the mode. Play Show in the drawer, a scene card's play button and Play show from here choose Storyboard, because they play it. Clicking a scene card shows that scene and editing its camera path opens Camera Director; neither changes the mode.
 
 ## Image Pool and storyboard drawer
 
@@ -80,7 +80,7 @@ Cards can be dragged into a new order.
 - **Double-click a card**: shows the scene and closes the drawer.
 - **Click the camera and hold badge**: the camera choices (Zoom in, Zoom out, Pan across, Still, then Dynamic, chosen at playback), then Edit camera path…, then Duration (5s, 8s, 12s, 16s, 20s, 30s). The current choice of each is ticked as a radio item.
 - **Right-click a card** (or Shift+F10): Play show from here, Update scene from canvas, Camera motion (the same choices as the badge), Duration, Duplicate scene, Remove scene, Move earlier, Move later.
-- **Remove scene** never asks. It says `Removed scene. Ctrl+Z brings it back.`, and Undo does. Removing, duplicating or moving a scene is one Undo step, by button, menu, Delete key or drag.
+- **Remove scene** never asks. It says `Removed scene. Ctrl+Z brings it back.`, and Undo does. Removing, duplicating or moving a scene is one Undo step, by button, menu, Delete key or drag. Make a show and Replace show are one step each, and Undo can go back to before the storyboard existed.
 
 ## Camera Director (Visual Keyframe Editor)
 
