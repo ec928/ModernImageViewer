@@ -277,9 +277,10 @@ namespace ModernImageViewer
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
                 var text = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White), TextTrimming = TextTrimming.None };
 
+                // The readout fits the longest word a slider shows ("Crossfade"); at 62 it was cut off.
                 var rightGrid = new Grid { Width = 230, ColumnSpacing = 8, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-                rightGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
-                rightGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(62) });
+                rightGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(146) });
+                rightGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(76) });
 
                 var readout = new TextBlock
                 {
@@ -298,7 +299,7 @@ namespace ModernImageViewer
                     StepFrequency = step,
                     SmallChange = step,
                     Value = value,
-                    Width = 160,
+                    Width = 146,
                     Foreground = winBlue,
                     VerticalAlignment = VerticalAlignment.Center
                 };
@@ -572,8 +573,8 @@ namespace ModernImageViewer
                 var durationLabel = new TextBlock { Text = "Duration", VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
 
                 var durationRightGrid = new Grid { Width = 230, ColumnSpacing = 8, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-                durationRightGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
-                durationRightGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(62) });
+                durationRightGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(146) });
+                durationRightGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(76) });
 
                 string FormatDuration(int low, int high) => low == high ? $"{low:0}s" : $"{low:0}s - {high:0}s";
 
@@ -595,7 +596,7 @@ namespace ModernImageViewer
                     StepFrequency = 1,
                     RangeStart = initialFrom,
                     RangeEnd = initialTo,
-                    Width = 160,
+                    Width = 146,
                     VerticalAlignment = VerticalAlignment.Center
                 };
 
@@ -1134,14 +1135,14 @@ namespace ModernImageViewer
             var (cineSection, cineSummary) = Section("Cinematic storyboard", CinematicSummaryText());
             cineSection.Children.Add(new TextBlock
             {
-                Text = "Cinematic storyboard uses the settings above, with these in place of them.",
+                Text = "Cinematic storyboard uses these settings. For everything else, it uses the settings above.",
                 FontSize = 11,
                 Opacity = 0.6,
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 6)
             });
             Slider? cineFewest = null, cineMost = null;
-            cineFewest = Slide(cineSection, "Fewest images per scene", "The fewest images in a Cinematic storyboard scene. Cinematic Slideshow shows one.",
+            cineFewest = Slide(cineSection, "Fewest images per scene", "The fewest images in each scene. Cinematic Slideshow shows one.",
                 SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.Cinematic.FewestPictures,
                 v => $"{v:0}",
                 (o, v) =>
@@ -1150,7 +1151,7 @@ namespace ModernImageViewer
                     if (o.Cinematic.MostPictures < (int)v) o.Cinematic.MostPictures = (int)v;
                     cineSummary.Text = CinematicSummaryText();
                 });
-            cineMost = Slide(cineSection, "Most images per scene", "The most images in a Cinematic storyboard scene.",
+            cineMost = Slide(cineSection, "Most images per scene", "The most images in each scene.",
                 SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.Cinematic.MostPictures,
                 v => $"{v:0}",
                 (o, v) =>
@@ -1168,9 +1169,17 @@ namespace ModernImageViewer
                 Slide(cineSection, name, tip, -1.2, 1.0, 0.1, initial, FormatDesignStep,
                     (o, v) => set(o, v <= -1.1 ? 0 : Math.Pow(DesignOddsBase, v)));
             }
-            CineOddsSlide("Single image: fill the screen", "Cropped to fill the screen, as Cinematic Slideshow does. An image that would lose too much, or a face, is shown whole.", options.Cinematic.SoloFillOdds, (o, v) => o.Cinematic.SoloFillOdds = v);
-            CineOddsSlide("Single image: matted", "In a card with a mat round it. Far left turns it off.", options.Cinematic.SoloMattedOdds, (o, v) => o.Cinematic.SoloMattedOdds = v);
-            CineOddsSlide("Single image: whole", "Not cropped: a framed print on a canvas tinted from the image. Far left turns it off.", options.Cinematic.SoloWholeOdds, (o, v) => o.Cinematic.SoloWholeOdds = v);
+            cineSection.Children.Add(new TextBlock
+            {
+                Text = "Single images",
+                FontSize = 12,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Opacity = 0.85,
+                Margin = new Thickness(0, 10, 0, 2)
+            });
+            CineOddsSlide("Fill the screen", "Crop the image to fill the screen, like Cinematic Slideshow. If that would cut off a face or too much of the image, it is shown whole instead.", options.Cinematic.SoloFillOdds, (o, v) => o.Cinematic.SoloFillOdds = v);
+            CineOddsSlide("Matted", "Show the image in a card with a mat around it. Far left turns this off.", options.Cinematic.SoloMattedOdds, (o, v) => o.Cinematic.SoloMattedOdds = v);
+            CineOddsSlide("Whole image", "Show the whole image as a framed print, on a background tinted to match it. Far left turns this off.", options.Cinematic.SoloWholeOdds, (o, v) => o.Cinematic.SoloWholeOdds = v);
 
             {
                 var row = new Grid { ColumnSpacing = 12, MinHeight = 34 };
@@ -1178,13 +1187,13 @@ namespace ModernImageViewer
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
                 var label = new TextBlock { Text = "Duration", VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
                 var right = new Grid { Width = 230, ColumnSpacing = 8, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-                right.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
-                right.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(62) });
+                right.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(146) });
+                right.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(76) });
                 string Hold(int low, int high) => low == high ? $"{low}s" : $"{low}s - {high}s";
                 int from = Math.Clamp(options.Cinematic.FewestSeconds, 3, 30);
                 int to = Math.Clamp(Math.Max(from, options.Cinematic.MostSeconds), 3, 30);
                 var readout = new TextBlock { Text = Hold(from, to), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, FontSize = 12, Opacity = 0.82, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
-                var range = new RangeSlider { Minimum = 3, Maximum = 30, StepFrequency = 1, RangeStart = from, RangeEnd = to, Width = 160, VerticalAlignment = VerticalAlignment.Center };
+                var range = new RangeSlider { Minimum = 3, Maximum = 30, StepFrequency = 1, RangeStart = from, RangeEnd = to, Width = 146, VerticalAlignment = VerticalAlignment.Center };
                 range.RangeChanged += (_, r) =>
                 {
                     int low = (int)Math.Round(r.Start), high = (int)Math.Round(r.End);
@@ -1192,7 +1201,7 @@ namespace ModernImageViewer
                     ChangeSurpriseChoices(o => { o.Cinematic.FewestSeconds = low; o.Cinematic.MostSeconds = Math.Max(low, high); });
                     cineSummary.Text = CinematicSummaryText();
                 };
-                ToolTipService.SetToolTip(row, "How long each Cinematic storyboard scene holds. Cinematic Slideshow takes 5 to 20 seconds, short and long in turn.");
+                ToolTipService.SetToolTip(row, "How long each scene stays on screen. Cinematic Slideshow uses 5 to 20 seconds.");
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(range, "Cinematic storyboard duration");
                 Grid.SetColumn(range, 0);
                 Grid.SetColumn(readout, 1);
@@ -1203,11 +1212,11 @@ namespace ModernImageViewer
                 row.Children.Add(right);
                 cineSection.Children.Add(row);
             }
-            Toggle(cineSection, "Smart pace", "Short and long holds take turns, as in Cinematic Slideshow.", options.Cinematic.SmartPace, (o, on) => o.Cinematic.SmartPace = on);
-            Slide(cineSection, "Motion", "How far the camera moves over each scene. Cinematic Slideshow always moves.", 0, 100, 5, options.Cinematic.MotionAmount * 100,
+            Toggle(cineSection, "Smart pace", "Alternate shorter and longer scenes, like Cinematic Slideshow.", options.Cinematic.SmartPace, (o, on) => o.Cinematic.SmartPace = on);
+            Slide(cineSection, "Motion", "How much the camera moves during each scene. Cinematic Slideshow always moves.", 0, 100, 5, options.Cinematic.MotionAmount * 100,
                 v => v < 1 ? "Off" : $"{v:0}%",
                 (o, v) => o.Cinematic.MotionAmount = v / 100);
-            Slide(cineSection, "Transition variety", "How often a change of scene zooms through, fades through dark or slides, rather than a crossfade. Cinematic Slideshow crossfades.",
+            Slide(cineSection, "Transition variety", "How often a scene changes with a zoom, a fade through black or a slide instead of a crossfade. Cinematic Slideshow always crossfades.",
                 0, 100, 5, options.Cinematic.TransitionVariety * 100,
                 v => v < 1 ? "Crossfade" : $"{v:0}%",
                 (o, v) => o.Cinematic.TransitionVariety = v / 100);
@@ -1384,8 +1393,8 @@ namespace ModernImageViewer
             var volLabel = new TextBlock { Text = "Volume", VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
 
             var volRightGrid = new Grid { Width = 230, ColumnSpacing = 8, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-            volRightGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
-            volRightGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(62) });
+            volRightGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(146) });
+            volRightGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(76) });
 
             double initialVol = music?.Volume ?? 60;
             var volReadout = new TextBlock
@@ -1405,7 +1414,7 @@ namespace ModernImageViewer
                 StepFrequency = 1,
                 SmallChange = 5,
                 Value = initialVol,
-                Width = 160,
+                Width = 146,
                 Foreground = winBlue,
                 VerticalAlignment = VerticalAlignment.Center,
                 IsEnabled = isMusicActive
@@ -2337,7 +2346,7 @@ namespace ModernImageViewer
                 Padding = new Thickness(8, 4, 8, 4),
                 VerticalAlignment = VerticalAlignment.Center
             };
-            ToolTipService.SetToolTip(draftRangeBtn, "Images per scene for this show's new scenes. A Cinematic storyboard has its own range; otherwise Auto-Mix uses the same one.");
+            ToolTipService.SetToolTip(draftRangeBtn, "How many images each new scene in this show gets. For a Cinematic storyboard, this changes the Cinematic setting.");
 
             Border MakeDivider() => new Border { Width = 1, Height = 16, Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x35, 0xFF, 0xFF, 0xFF)), VerticalAlignment = VerticalAlignment.Center };
 
