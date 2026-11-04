@@ -19,7 +19,7 @@ One pill along the bottom, left to right. Dividers separate the groups. Rows and
 | Previous | icon | Previous scene while a storyboard is playing. Otherwise the previous layout. Left arrow. |
 | Play | Play Show, Play Show · i/N, Play Mix, or Pause | Starts or pauses. Stopped on a storyboard: `Play Show`, or `Play Show · i/N` when resuming past the first scene. Stopped on Auto-Mix: `Play Mix`. While either is running: `Pause`. Space does the same. Filled while running. |
 | Next | icon | Next scene, or the next layout, made new when there is none ahead. Right arrow. |
-| Play options | chevron | Opens or closes Auto-Mix Settings. |
+| Play options | chevron | Opens or closes Layout Generator Settings, the settings the Layout Generator makes layouts with, for Auto-Mix and for storyboards. |
 | Rows | Rows, or N Rows | Arranges the grid in rows and opens the grid layout card. R switches between rows and columns. B, R, H, + and − work only without Ctrl or Alt held, so Ctrl+B still toggles the sidebar. |
 | Columns | Columns, or N Columns | Arranges the grid in columns. Same card and same R key. |
 | Full screen | icon | Full screen toggle (F11). |
@@ -82,9 +82,13 @@ Cards can be dragged into a new order.
 - **Right-click a card** (or Shift+F10): Play show from here, Update scene from canvas (copies the canvas into that card's scene), Camera motion (the same choices as the badge), Duration, Duplicate scene, Remove scene, Move earlier, Move later.
 - **Remove scene** never asks. It says `Removed scene. Ctrl+Z brings it back.`, and Undo does. Removing, duplicating or moving a scene is one Undo step, by button, menu, Delete key or drag. Make a show and Replace show are one step each, and Undo can go back to before the storyboard existed.
 
-## Play storyboard, from the folders
+## Play storyboard and Cinematic storyboard, from the folders
 
 **Play storyboard** in the sidebar, under Cinematic Slideshow, plays the whole folder; the same button on the selection bar plays the selected images. Either opens Multi-View with those images, starts a new storyboard and plays it once its first two scenes are made, so a large folder starts within seconds. While it plays it keeps making scenes from images not in it yet, until every image is in the show. It stops making scenes if the show is replaced or cleared.
+
+**Cinematic storyboard**, under Play storyboard in the sidebar, and its button on the selection bar do the same with the Layout Generator's Cinematic overrides. By default that is one image per scene filling the screen, holds of 5 to 20 seconds taking turns short and long, the camera always moving, and crossfades, as Cinematic Slideshow plays. The show keeps the overrides for every scene made for it: Add new layout, Replace show, and the drawer's images-per-scene picker, which shows and changes the Cinematic range on such a show. The drawer's summary starts with "Cinematic", and a saved show keeps them when it is opened again. Clear ends the show, so the next one is made with the main settings; Undo brings the Cinematic show back. Play storyboard, and shows made before this, use the main settings.
+
+While a storyboard is still being made, Add new layout and the build never take the same image: each leaves out the images the other is making a scene from.
 
 ## Camera Director (Visual Keyframe Editor)
 
@@ -121,9 +125,17 @@ When viewing a storyboard scene on the canvas, any manual layout adjustment auto
 - Play, pause, and leaving a scene write the canvas back only when that scene is the one on the canvas. A mix, or a scene marked selected before it was shown, is not written over the scene. Update Scene still stores the canvas when asked.
 - Full undo history (`Ctrl+Z` / `Ctrl+Y`) is preserved across scene navigation and editing.
 
-## Auto-Mix Settings: single images
+## Layout Generator Settings
 
-Under Advanced Settings > Designs, after the six design sliders, **Single images** sets how a layout of one image shows it, on the same Off to Often scale as the designs: **Fill the screen** (cropped), **Matted** (in a card with a mat) and **Whole image** (not cropped: a framed print on a canvas tinted from the image). They are odds against each other, so with all three at Normal each comes up about a third of the time. The defaults are More, Normal and Normal, the odds single images had before this was a setting. An image that filling would show less than 65% of, or cut a face from, is never filled; it is matted or shown whole by the other two odds. They apply to Auto-Mix, Make a show, Add new layout and Play storyboard.
+Opened from the chevron beside Play. The Layout Generator is the one generator that makes layouts, live in Auto-Mix and as scenes in storyboards (Make a show, Add new layout, Play storyboard, Cinematic storyboard); the panel says so at the top. The main page has images per scene, duration, smart pace, motion and the soundtrack; **Advanced settings…** has the rest in sections, one open at a time.
+
+### Single images
+
+Under Advanced Settings > Designs, after the six design sliders, **Single images** sets how a layout of one image shows it, on the same Off to Often scale as the designs: **Fill the screen** (cropped), **Matted** (in a card with a mat) and **Whole image** (not cropped: a framed print on a canvas tinted from the image). They are odds against each other, so with all three at Normal each comes up about a third of the time. The defaults are More, Normal and Normal, the odds single images had before this was a setting. An image that filling would show less than 65% of, or cut a face from, is always shown whole. They apply to Auto-Mix, Make a show, Add new layout and Play storyboard; Cinematic storyboard has its own.
+
+### Cinematic storyboard
+
+The last section in Advanced Settings holds the settings Cinematic storyboard uses in place of the ones above; everything not in it, such as faces, designs and the look, comes from the main settings. Its defaults: images per scene 1 to 1; single images Fill the screen at Often, Matted and Whole image Off; duration 5 to 20 seconds; smart pace on; motion 50%; transition variety Crossfade. Reset to defaults resets these with the rest.
 
 ## Save / Load (Storyboards & Layouts)
 
