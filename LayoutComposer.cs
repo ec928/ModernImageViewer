@@ -178,8 +178,17 @@ namespace ModernImageViewer
         /// <summary>How much of a face must show for it to count as uncut.</summary>
         public double FaceShown { get; set; } = 0.85;
         public double MostTilt { get; set; } = 6.5;
-        /// <summary>The hero's height as a share of the canvas, give or take a tenth.</summary>
-        public double HeroSize { get; set; } = 0.72;
+        /// <summary>The hero's height as a share of the canvas: each layout picks within this range.</summary>
+        public double HeroSmallest { get; set; } = 0.62;
+        public double HeroLargest { get; set; } = 0.82;
+        public const double HeroLowest = 0.3, HeroHighest = 1.0;
+
+        /// <summary>
+        /// The single "Hero size" of earlier versions, which was always used as a tenth either side of it, read only to
+        /// convert a saved file to that range.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public double? HeroSize { get; set; }
         public double GapScale { get; set; } = 1;
         public string Card { get; set; } = CardAny;
         public bool KeepCanvas { get; set; }
@@ -353,7 +362,15 @@ namespace ModernImageViewer
                 read.Variety = Math.Clamp(read.Variety, 1, 12);
                 read.FaceShown = Math.Clamp(read.FaceShown, 0.5, 1);
                 read.MostTilt = Math.Clamp(read.MostTilt, 0, 20);
-                read.HeroSize = Math.Clamp(read.HeroSize, 0.4, 0.9);
+                if (read.HeroSize is double hero)
+                {
+                    double centre = Math.Clamp(hero, 0.4, 0.9);
+                    read.HeroSmallest = centre - 0.1;
+                    read.HeroLargest = centre + 0.1;
+                    read.HeroSize = null;
+                }
+                read.HeroSmallest = Math.Clamp(read.HeroSmallest, HeroLowest, HeroHighest);
+                read.HeroLargest = Math.Clamp(read.HeroLargest, read.HeroSmallest, HeroHighest);
                 read.GapScale = Math.Clamp(read.GapScale, 0.25, 3);
                 read.FewestPictures = Math.Clamp(read.FewestPictures, FewestAllowed, MosaicLayout.MaxShown);
                 read.MostPictures = Math.Clamp(read.MostPictures, read.FewestPictures, MosaicLayout.MaxShown);
@@ -762,7 +779,8 @@ namespace ModernImageViewer
 
             string[] shapes = { WindowShapes.Arch, WindowShapes.Oval, WindowShapes.Squircle, WindowShapes.Hexagon };
             string shape = shapes[look % shapes.Length];
-            double cardH = h * (options.HeroSize - 0.1 + random.NextDouble() * 0.2);
+            double low = Math.Min(options.HeroSmallest, options.HeroLargest), high = Math.Max(options.HeroSmallest, options.HeroLargest);
+            double cardH = h * (low + random.NextDouble() * (high - low));
             double aspect = shape switch
             {
                 WindowShapes.Arch => 0.72 + random.NextDouble() * 0.12,

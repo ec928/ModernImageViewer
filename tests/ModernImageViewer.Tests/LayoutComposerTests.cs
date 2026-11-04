@@ -364,7 +364,9 @@ namespace ModernImageViewer.Tests
             Assert.Equal(1, read.Variety);
             Assert.Equal(1, read.FaceShown);
             Assert.Equal(20, read.MostTilt);
-            Assert.Equal(0.4, read.HeroSize);
+            // An old single hero size of 0 is brought to 0.4 first, as before, then becomes its range.
+            Assert.Equal(0.3, read.HeroSmallest, 6);
+            Assert.Equal(0.5, read.HeroLargest, 6);
             Assert.Equal(0.25, read.GapScale);
             Assert.Equal(14, read.FewestPictures);
             Assert.Equal(14, read.MostPictures);
@@ -443,9 +445,37 @@ namespace ModernImageViewer.Tests
         [Fact]
         public void Hero_size_follows_the_setting()
         {
-            double Height(double size) => Enumerable.Range(0, 30)
-                .Select(seed => LayoutComposer.Compose(Photos(6), 1280, 720, seed, null, 1, LayoutComposer.HeroSpotlight, new SurpriseOptions { HeroSize = size })!.Cells.Single(c => c.Floating).H).Average();
-            Assert.True(Height(0.9) > Height(0.4) * 1.3);
+            double Height(double low, double high) => Enumerable.Range(0, 30)
+                .Select(seed => LayoutComposer.Compose(Photos(6), 1280, 720, seed, null, 1, LayoutComposer.HeroSpotlight, new SurpriseOptions { HeroSmallest = low, HeroLargest = high })!.Cells.Single(c => c.Floating).H).Average();
+            Assert.True(Height(0.9, 0.9) > Height(0.4, 0.4) * 1.3);
+        }
+
+        [Fact]
+        public void Hero_size_stays_inside_its_range()
+        {
+            List<double> Heights(double low, double high) => Enumerable.Range(0, 40)
+                .Select(seed => LayoutComposer.Compose(Photos(6), 1280, 720, seed, null, 1, LayoutComposer.HeroSpotlight, new SurpriseOptions { HeroSmallest = low, HeroLargest = high }))
+                .Where(c => c != null)
+                .Select(c => c!.Cells.Single(x => x.Floating).H / 720)
+                .ToList();
+            var small = Heights(0.5, 0.55);
+            var large = Heights(0.8, 0.85);
+            Assert.NotEmpty(small);
+            Assert.NotEmpty(large);
+            // The card adds its frame to the hero, so compare two ranges rather than one against fixed numbers.
+            Assert.True(small.Max() < large.Min(), $"largest of 50-55% {small.Max():0.000}, smallest of 80-85% {large.Min():0.000}");
+        }
+
+        [Fact]
+        public void A_saved_hero_size_becomes_the_range_it_stood_for()
+        {
+            var read = SurpriseOptions.FromJson("{\"HeroSize\":0.72}");
+            Assert.Equal(0.62, read.HeroSmallest, 6);
+            Assert.Equal(0.82, read.HeroLargest, 6);
+            Assert.DoesNotContain("HeroSize", read.ToJson());
+            var bad = SurpriseOptions.FromJson("{\"HeroSmallest\":2,\"HeroLargest\":0.1}");
+            Assert.Equal(SurpriseOptions.HeroHighest, bad.HeroSmallest);
+            Assert.Equal(SurpriseOptions.HeroHighest, bad.HeroLargest);
         }
 
         [Fact]
