@@ -4810,17 +4810,26 @@ namespace ModernImageViewer
             await NextRenderedFrameAsync();
         }
 
-        private Task NextRenderedFrameAsync()
+        /// <summary>
+        /// The next drawn frame, or a quarter second, whichever comes first: a minimized window draws no frames, and the
+        /// scene change must not wait on one.
+        /// </summary>
+        private async Task NextRenderedFrameAsync()
         {
             var drawn = new TaskCompletionSource();
-            void Once(object? sender, object e)
+            void Once(object? sender, object e) => drawn.TrySetResult();
+            Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += Once;
+            try
+            {
+                await Task.WhenAny(drawn.Task, Task.Delay(MostWaitForFrameMs));
+            }
+            finally
             {
                 Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= Once;
-                drawn.TrySetResult();
             }
-            Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += Once;
-            return drawn.Task;
         }
+
+        private const int MostWaitForFrameMs = 250;
 
         private LayoutTransition? _lastTransition;
 

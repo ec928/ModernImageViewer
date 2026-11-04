@@ -220,6 +220,8 @@ namespace ModernImageViewer
                 }
             }
 
+            // What the scene stores and plays, as a scene built on its own reads it back: a drift that became two shots is a two-shot.
+            lastMotionKind = scene.CameraOverride?.Kind ?? chosenMotion;
             return scene;
         }
 

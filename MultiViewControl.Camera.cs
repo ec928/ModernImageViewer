@@ -116,16 +116,28 @@ namespace ModernImageViewer
             var panXKeys = compositor.CreateScalarKeyFrameAnimation();
             var panYKeys = compositor.CreateScalarKeyFrameAnimation();
             var angleKeys = compositor.CreateScalarKeyFrameAnimation();
+            float endZoom = 1, endPanX = 0, endPanY = 0, endAngle = 0;
             for (int i = 0; i <= samples; i++)
             {
                 float progress = i / (float)samples;
                 var view = move.At(fromSeconds + remaining * progress);
                 double zoom = view.Zoom * CameraView.TurnCover(view.Angle, width, height);
-                zoomKeys.InsertKeyFrame(progress, (float)zoom, linear);
-                panXKeys.InsertKeyFrame(progress, (float)(width / 2 - view.X * width * zoom), linear);
-                panYKeys.InsertKeyFrame(progress, (float)(height / 2 - view.Y * height * zoom), linear);
-                angleKeys.InsertKeyFrame(progress, (float)(view.Angle * Math.PI / 180), linear);
+                endZoom = (float)zoom;
+                endPanX = (float)(width / 2 - view.X * width * zoom);
+                endPanY = (float)(height / 2 - view.Y * height * zoom);
+                endAngle = (float)(view.Angle * Math.PI / 180);
+                zoomKeys.InsertKeyFrame(progress, endZoom, linear);
+                panXKeys.InsertKeyFrame(progress, endPanX, linear);
+                panYKeys.InsertKeyFrame(progress, endPanY, linear);
+                angleKeys.InsertKeyFrame(progress, endAngle, linear);
             }
+            // The values under the animation are the move's end, so the camera stays there once the keyframes run out,
+            // whatever the compositor does with a finished animation: a move outlasted by its scene (a Director preview,
+            // a busy UI thread) holds its last frame instead of falling back to the whole layout.
+            _cameraProps.InsertScalar("Zoom", endZoom);
+            _cameraProps.InsertScalar("PanX", endPanX);
+            _cameraProps.InsertScalar("PanY", endPanY);
+            _cameraProps.InsertScalar("Angle", endAngle);
             foreach (var keys in new[] { zoomKeys, panXKeys, panYKeys, angleKeys })
                 keys.Duration = TimeSpan.FromSeconds(remaining);
 
