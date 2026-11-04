@@ -115,6 +115,8 @@ Floating at the top of the canvas, strictly elevated above all cards:
 - **Exact…**: Zoom, across and down (the frame's centre, as a percentage of the canvas), and turn (degrees), typed for the selected frame. A turned frame is drawn turned, at the size playback shows it: zoomed a little further so no corner of the canvas shows.
 - **Shot 1 of 2**: In a scene of more than one shot, steps between its shots; Start and End are the selected shot's frames. A shot that follows on starts where the one before ends, so moving one of those frames moves the other; "cut" marks a shot that starts somewhere else. Preview Move plays every shot, 2.5 seconds each.
 - **Curve**: How the selected shot gets going and comes to rest (see Movement curves).
+
+On the frames: drag a frame to move it, scroll over it to zoom, and drag the round handle to turn it, the same handle and gesture as turning a cell. The handle sits inside the selected frame's top edge, or its bottom edge when the top is under the toolbar. A turn goes up to 6° either way, the Rotation limit in Camera settings, so Shift steps by whole degrees rather than a cell's 15.
 - **Face outlines**: Every face found in the scene is outlined with a dashed box, where the image shows it: its crop, zoom and turn included. Faces that had not been read yet, as in a scene added by hand, are read when the editor opens.
 - **Done**: Commits the custom camera keyframes and returns to the storyboard. Enter does the same.
 

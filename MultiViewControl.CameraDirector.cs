@@ -52,6 +52,14 @@ namespace ModernImageViewer
         private double _curStartAngle;
         private double _curEndAngle;
 
+        // The cells' rotate handle, on the selected frame: the same look and the same drag. Camera turns stop at
+        // MostTurn, so Shift steps by whole degrees, not the cells' 15.
+        private Border? _turnHandle;
+        private bool _turningFrame;
+        private double _turnPointerStart;
+        private double _turnAngleStart;
+        private const double TurnHandleInset = 26;
+
         /// <summary>One shot as the Director edits it. Cut: it starts somewhere other than where the shot before ended.</summary>
         private sealed class DirectorShot
         {
@@ -466,6 +474,8 @@ namespace ModernImageViewer
             _cameraOverlayCanvas.Children.Add(_endWireframe);
             _cameraOverlayCanvas.Children.Add(_startBadge);
             _cameraOverlayCanvas.Children.Add(_endBadge);
+            _turnHandle = MakeFrameTurnHandle();
+            _cameraOverlayCanvas.Children.Add(_turnHandle);
             RootGrid.Children.Add(_cameraOverlayCanvas);
 
             // Floating Camera Director Toolbar (Strictly above all canvas elements, circles & floating cards)
@@ -908,6 +918,8 @@ namespace ModernImageViewer
             _aimFaceBtn = null;
             _startWireframe = null;
             _endWireframe = null;
+            _turnHandle = null;
+            _turningFrame = false;
             _startBadge = null;
             _endBadge = null;
             _trajectoryLine = null;
@@ -998,6 +1010,7 @@ namespace ModernImageViewer
                 if (_endBadge != null) _endBadge.Opacity = 1.0;
                 if (_startBadge != null) _startBadge.Opacity = 0.70;
             }
+            PlaceTurnHandle();
         }
 
         private void AttachWireframeEvents(Border wireframe, bool isStart)
@@ -1154,6 +1167,87 @@ namespace ModernImageViewer
             _trajectoryLine.Y1 = sTop + sH / 2.0;
             _trajectoryLine.X2 = eLeft + eW / 2.0;
             _trajectoryLine.Y2 = eTop + eH / 2.0;
+
+            PlaceTurnHandle();
+        }
+
+        /// <summary>The selected frame's centre on the overlay, and its turn.</summary>
+        private (double X, double Y, double HalfHeight, double Angle)? SelectedFrameCentre()
+        {
+            var frame = _activeIsStartKeyframe ? _startWireframe : _endWireframe;
+            if (frame == null || double.IsNaN(frame.Width)) return null;
+            return (Canvas.GetLeft(frame) + frame.Width / 2, Canvas.GetTop(frame) + frame.Height / 2, frame.Height / 2,
+                _activeIsStartKeyframe ? _curStartAngle : _curEndAngle);
+        }
+
+        /// <summary>Just inside the selected frame's top edge, at its middle, turned with it: where a cell's handle sits.</summary>
+        private void PlaceTurnHandle()
+        {
+            if (_turnHandle == null || SelectedFrameCentre() is not { } c) return;
+            double reach = c.HalfHeight - TurnHandleInset;
+            double radians = c.Angle * Math.PI / 180;
+            double x = c.X + reach * Math.Sin(radians);
+            double y = c.Y - reach * Math.Cos(radians);
+            // A frame reaching the top of the canvas would put it under the Director's bar: then inside the bottom edge.
+            if (_cameraDirectorBar != null && _cameraOverlayCanvas != null && _cameraDirectorBar.ActualHeight > 0)
+            {
+                double barBottom = _cameraDirectorBar.TransformToVisual(_cameraOverlayCanvas).TransformPoint(new Point(0, _cameraDirectorBar.ActualHeight)).Y;
+                if (y - _turnHandle.Height / 2 < barBottom + 8)
+                {
+                    x = c.X - reach * Math.Sin(radians);
+                    y = c.Y + reach * Math.Cos(radians);
+                }
+            }
+            Canvas.SetLeft(_turnHandle, x - _turnHandle.Width / 2);
+            Canvas.SetTop(_turnHandle, y - _turnHandle.Height / 2);
+        }
+
+        private Border MakeFrameTurnHandle()
+        {
+            var handle = MakeWindowHandle(28, "");
+            handle.Opacity = 1;
+            Canvas.SetZIndex(handle, 310);
+            ToolTipService.SetToolTip(handle, $"Drag to turn the selected frame, up to {SurpriseOptions.MostTurn:0}° either way. Hold Shift for whole degrees.");
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(handle, "Turn frame");
+            double PointerAngle(Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+            {
+                var p = e.GetCurrentPoint(_cameraOverlayCanvas).Position;
+                var c = SelectedFrameCentre() ?? (0, 0, 0, 0);
+                return Math.Atan2(p.Y - c.Y, p.X - c.X) * 180 / Math.PI;
+            }
+            handle.PointerPressed += (_, e) =>
+            {
+                _turningFrame = true;
+                _turnPointerStart = PointerAngle(e);
+                _turnAngleStart = _activeIsStartKeyframe ? _curStartAngle : _curEndAngle;
+                handle.CapturePointer(e.Pointer);
+                e.Handled = true;
+            };
+            handle.PointerMoved += (_, e) =>
+            {
+                if (!_turningFrame) return;
+                double change = PointerAngle(e) - _turnPointerStart;
+                if (change > 180) change -= 360;
+                if (change < -180) change += 360;
+                double angle = Math.Clamp(_turnAngleStart + change, -SurpriseOptions.MostTurn, SurpriseOptions.MostTurn);
+                bool shift = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
+                    .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+                angle = shift ? Math.Round(angle) : Math.Round(angle, 1);
+                if (_activeIsStartKeyframe) _curStartAngle = angle; else _curEndAngle = angle;
+                LayoutWireframes();
+                e.Handled = true;
+            };
+            void EndTurn(object _, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+            {
+                if (!_turningFrame) return;
+                _turningFrame = false;
+                try { handle.ReleasePointerCapture(e.Pointer); } catch { }
+                e.Handled = true;
+            }
+            handle.PointerReleased += EndTurn;
+            handle.PointerCanceled += EndTurn;
+            handle.PointerCaptureLost += (_, _) => _turningFrame = false;
+            return handle;
         }
 
         private async void PreviewCameraMove()
