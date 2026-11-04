@@ -984,15 +984,27 @@ namespace ModernImageViewer
                 if (_heroPosition >= positions) _heroPosition = 0;
             }
         }
+        private static bool IsKeyDown(VirtualKey key) =>
+            Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(key).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+
         public bool HandleKeyDown(VirtualKey key)
         {
             if (_isEditingCamera)
             {
-                if (key is VirtualKey.Escape or VirtualKey.Enter)
+                // Esc leaves without keeping this scene's changes; Enter keeps them, as Done does.
+                if (key == VirtualKey.Escape)
+                {
+                    ExitCameraDirector(save: false);
+                    return true;
+                }
+                if (key == VirtualKey.Enter)
                 {
                     ExitCameraDirector(save: true);
                     return true;
                 }
+                // Full screen belongs to the window. Everything else stays here: the bar is hidden,
+                // and Undo or Save/Load would change the canvas under the frames being edited.
+                if (key == VirtualKey.F11) return false;
                 if (key == VirtualKey.Space)
                 {
                     PreviewCameraMove();
@@ -1045,6 +1057,12 @@ namespace ModernImageViewer
                 }
                 return false;
             }
+            // The single-key shortcuts below are plain keys only. With Ctrl or Alt held they belong to the
+            // window: Ctrl+B is the sidebar, and Ctrl+minus is not a request for fewer lines.
+            bool chorded = IsKeyDown(VirtualKey.Control) || IsKeyDown(VirtualKey.Menu);
+            if (chorded && key is VirtualKey.Add or VirtualKey.Subtract or (VirtualKey)187 or (VirtualKey)189
+                    or VirtualKey.B or VirtualKey.R or VirtualKey.H)
+                return false;
             switch (key)
             {
                 case VirtualKey.Escape:

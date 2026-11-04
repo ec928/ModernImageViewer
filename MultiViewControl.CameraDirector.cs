@@ -530,7 +530,21 @@ namespace ModernImageViewer
                 Content = new TextBlock { Text = "Done", FontSize = 11.5, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = new SolidColorBrush(Colors.White) }
             };
             doneBtn.Click += (_, _) => ExitCameraDirector(save: true);
-            ToolTipService.SetToolTip(doneBtn, "Save camera path and exit (Esc / Enter)");
+            ToolTipService.SetToolTip(doneBtn, "Save camera path and exit (Enter)");
+
+            var cancelBtn = new Button
+            {
+                Height = 28,
+                Padding = new Thickness(10, 0, 10, 0),
+                Background = new SolidColorBrush(Colors.Transparent),
+                BorderThickness = new Thickness(0),
+                CornerRadius = new CornerRadius(14),
+                IsTabStop = false,
+                Content = new TextBlock { Text = "Cancel", FontSize = 11.5, Foreground = new SolidColorBrush(Color.FromArgb(180, 255, 255, 255)) }
+            };
+            cancelBtn.Click += (_, _) => ExitCameraDirector(save: false);
+            ToolTipService.SetToolTip(cancelBtn, "Leave without keeping this scene's changes (Esc). A scene you stepped away from keeps its path.");
+            barStack.Children.Add(cancelBtn);
             barStack.Children.Add(doneBtn);
 
             _cameraDirectorBar.Child = barStack;
