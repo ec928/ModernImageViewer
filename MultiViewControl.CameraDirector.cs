@@ -63,7 +63,6 @@ namespace ModernImageViewer
             _isEditingCamera = true;
             _editingCameraScene = scene;
             _selectedShowScene = scene;
-            _shuffleChosen = false;
             _activeIsStartKeyframe = true;
 
             // Pause playback if active
@@ -151,7 +150,6 @@ namespace ModernImageViewer
 
             _editingCameraScene = newScene;
             _selectedShowScene = newScene;
-            _shuffleChosen = false;
             _activeIsStartKeyframe = true;
 
             _canvasSceneId = null;
@@ -257,7 +255,6 @@ namespace ModernImageViewer
 
             // Restore bottom HUD
             UnifiedHud.Visibility = Visibility.Visible;
-            _shuffleChosen = false;
             ShowAutoPlayState();
 
             // If the Story Deck was open when entering, reopen it with the cursor on the edited deck card

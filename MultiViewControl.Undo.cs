@@ -250,6 +250,16 @@ namespace ModernImageViewer
                 _reuseBitmaps = null;
                 _restoringUndo = false;
             }
+            // A step from before the storyboard existed, or after it was cleared, has none. Loading a layout
+            // keeps the current show, because Auto-Mix and scene previews load layouts too; Undo must not.
+            if (file.Storyboard == null || file.Storyboard.Scenes.Count == 0)
+            {
+                _activeShow = null;
+                _selectedShowScene = null;
+                _canvasSceneId = null;
+                _isStoryboardPlayback = false;
+                ShowShownBadge();
+            }
             // A removed or reordered scene comes back with the snapshot, so open scene cards are redrawn from it.
             // Redrawing closes the old drawer, which counts as a closed menu; that is not a new step, and
             // taking one would clear Redo.

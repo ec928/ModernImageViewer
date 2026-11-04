@@ -2567,10 +2567,10 @@ namespace ModernImageViewer
                 RefreshTrayCardIfOpen();
             }
 
+            // Editing a scene's camera, or clicking its card, does not change what Play plays: only the switch does.
             void EditCameraPath(ShowScene scene)
             {
                 _selectedShowScene = scene;
-                _shuffleChosen = false;
                 scenesView.SelectedItem = scene;
                 RefreshCardBadges();
                 EnterCameraDirector(scene);
@@ -2831,7 +2831,6 @@ namespace ModernImageViewer
                             if (s is Button b && b.Tag is ShowScene targetScene)
                             {
                                 _selectedShowScene = targetScene;
-                                _shuffleChosen = false;
                                 scenesView.SelectedItem = targetScene;
                                 RefreshCardBadges();
                                 EnterCameraDirector(targetScene);
@@ -2972,7 +2971,6 @@ namespace ModernImageViewer
                 }
                 _selectedShowScene = scene;
                 _canvasSceneId = null;
-                _shuffleChosen = false;
                 scenesView.SelectedItem = scene;
                 if (updateSceneBtn != null) updateSceneBtn.IsEnabled = true;
                 for (int i = 0; i < scenesCollection.Count; i++)
@@ -3114,6 +3112,9 @@ namespace ModernImageViewer
                     draftProgressRow.Visibility = Visibility.Collapsed;
                     autoDraftBtn.IsEnabled = true;
                     SyncStoryboardUI();
+                    // The click's own step was taken while the show was still being made, so the new show is
+                    // its own step here, and Undo puts the old one back.
+                    CaptureUndoPoint();
                 }
             }
 
@@ -3563,7 +3564,8 @@ namespace ModernImageViewer
             int onShow = ShownSlots;
             var sceneFile = new MultiViewLayoutFile
             {
-                Created = file.Created,
+                // The scene keeps its own creation time; a fresh one on every store made each Undo step differ.
+                Created = scene.Layout?.Created ?? file.Created,
                 Canvas = file.Canvas,
                 State = file.State,
                 Mosaic = file.Mosaic,
@@ -3575,8 +3577,16 @@ namespace ModernImageViewer
             int photoCount = sceneFile.Photos.Count + (sceneFile.Freeform?.Count ?? 0);
             if (photoCount == 0) return;
 
-            scene.Layout = MultiViewLayoutFile.FromJson(sceneFile.ToJson()) ?? sceneFile;
+            var stored = MultiViewLayoutFile.FromJson(sceneFile.ToJson()) ?? sceneFile;
             if (commitCanvas) _canvasSceneId = scene.Id;
+            // Undo compares whole sessions, the show included. Storing a canvas the scene already holds, and
+            // stamping the show as modified, made every Undo press take a new step and undo only that one.
+            if (scene.Layout != null && stored.ToJson() == scene.Layout.ToJson())
+            {
+                if (showToast) ShowAutoPlayToast($"Scene \"{scene.Title}\" already matches the canvas");
+                return;
+            }
+            scene.Layout = stored;
             _activeShow.Modified = DateTime.UtcNow;
             _refreshStoryboardCards?.Invoke();
             _updateStorySummary?.Invoke();
@@ -3994,10 +4004,13 @@ namespace ModernImageViewer
                 return;
             }
 
-            button.Background = Application.Current.Resources["AccentFillColorDefaultBrush"] as Microsoft.UI.Xaml.Media.Brush;
+            // The same blue as the drawer's selected tab and its Play Show, so one surface has one "selected" look.
+            // The theme's accent fill drew a grey plate dimmer than the open-drawer one, and a slate or grey
+            // Windows accent does the same.
+            button.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x00, 0x78, 0xD4));
             button.ClearValue(Control.BorderBrushProperty);
             button.ClearValue(Control.BorderThicknessProperty);
-            var onAccent = Application.Current.Resources["TextOnAccentFillColorPrimaryBrush"] as Microsoft.UI.Xaml.Media.Brush;
+            var onAccent = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White);
             if (label != null) label.Foreground = onAccent;
             if (icon != null) icon.Foreground = onAccent;
         }

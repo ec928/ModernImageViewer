@@ -271,8 +271,9 @@
                 <Grid>
                     <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                     <!-- Group 1: Session Navigation -->
-                    <Button Click="CloseButton_Click" 
-                            Style="{StaticResource QuietButtonStyle}" 
+                    <Button Click="CloseButton_Click"
+                            AutomationProperties.Name="Back"
+                            Style="{StaticResource QuietButtonStyle}"
                             Padding="8,5" 
                             CornerRadius="12" 
                             ToolTipService.ToolTip="Back to the tiles (Esc). Your layout stays, and the Multi-View button returns to it.">
