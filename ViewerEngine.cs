@@ -226,6 +226,13 @@ namespace ModernImageViewer
                 || ext.Equals(".tiff", StringComparison.OrdinalIgnoreCase);
         }
 
+        public static bool IsGif(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return false;
+            string ext = Path.GetExtension(path);
+            return ext.Equals(".gif", StringComparison.OrdinalIgnoreCase);
+        }
+
         public static async Task<Windows.Storage.Streams.IRandomAccessStream?> OpenImageStreamAsync(string path, CancellationToken token = default)
         {
             if (ComicArchive.IsEntryPath(path) || ComicArchive.IsComicArchivePath(path))

@@ -2935,6 +2935,7 @@ namespace ModernImageViewer
                 {
 
                     var bmp = new BitmapImage();
+                    bmp.AutoPlay = true;
 
                     bmp.UriSource = new Uri(current.Path, UriKind.Absolute);
 

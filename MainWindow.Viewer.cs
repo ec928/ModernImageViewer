@@ -288,27 +288,55 @@ namespace ModernImageViewer
                     targetEntry = cachedEntry;
                 }
 
+                bool isGif = ViewerEngine.IsGif(currentItem.Path);
+
+                if (targetEntry != null && isGif && targetEntry.AnimationFrames == null)
+                {
+                    // Existing cache entry is only a still preview; evict so we decode full animation frames
+                    ImageCache.Evict(currentItem.Path);
+                    targetEntry = null;
+                }
+
                 if (targetEntry == null || (targetEntry.GpuBitmap == null && targetEntry.AnimationFrames == null))
                 {
-                    _fastDecodeTask = ViewerEngine.DecodeFastPreviewAsync(currentItem.Path, fastToken);
-                    var result = await _fastDecodeTask;
-
-                    if (fastToken.IsCancellationRequested || myLoadId != _currentImageLoadId) { result?.Release(); return; }
-
-                    if (result != null && result.Bitmap != null)
+                    if (isGif)
                     {
-                        result.GpuBitmap = ViewerEngine.CreateGpuBitmap(result.Bitmap);
-                        result.Bitmap.Dispose();
-                        result.Bitmap = null;
-                    }
+                        var hfTask = ViewerEngine.DecodeHighFidelityAsync(currentItem.Path, fastToken);
+                        var hfResult = await hfTask;
 
-                    if (result != null && (result.GpuBitmap != null || result.AnimationFrames != null))
-                    {
-                        ImageCache.Publish(currentItem.Path, result);
-                        if (ImageCache.TryGet(currentItem.Path, out var published) && published != null)
-                            result = published;
+                        if (fastToken.IsCancellationRequested || myLoadId != _currentImageLoadId) { hfResult?.Release(); return; }
+
+                        if (hfResult != null)
+                        {
+                            ViewerEngine.FinalizeHighFidelityGpuResources(hfResult);
+                            ImageCache.Publish(currentItem.Path, hfResult);
+                            if (ImageCache.TryGet(currentItem.Path, out var pub) && pub != null)
+                                hfResult = pub;
+                        }
+                        targetEntry = hfResult;
                     }
-                    targetEntry = result;
+                    else
+                    {
+                        _fastDecodeTask = ViewerEngine.DecodeFastPreviewAsync(currentItem.Path, fastToken);
+                        var result = await _fastDecodeTask;
+
+                        if (fastToken.IsCancellationRequested || myLoadId != _currentImageLoadId) { result?.Release(); return; }
+
+                        if (result != null && result.Bitmap != null)
+                        {
+                            result.GpuBitmap = ViewerEngine.CreateGpuBitmap(result.Bitmap);
+                            result.Bitmap.Dispose();
+                            result.Bitmap = null;
+                        }
+
+                        if (result != null && (result.GpuBitmap != null || result.AnimationFrames != null))
+                        {
+                            ImageCache.Publish(currentItem.Path, result);
+                            if (ImageCache.TryGet(currentItem.Path, out var published) && published != null)
+                                result = published;
+                        }
+                        targetEntry = result;
+                    }
                 }
 
                 if (targetEntry == null || (targetEntry.GpuBitmap == null && targetEntry.AnimationFrames == null))
@@ -458,15 +486,21 @@ namespace ModernImageViewer
             double nativeH = ViewerControl.LogicalHeight;
             if (nativeW <= 1 || nativeH <= 1) return;
 
+            bool isGifPromote = ViewerEngine.IsGif(path);
             int have = 0;
             if (ImageCache.TryGet(path, out var cached) && cached != null)
             {
                 if (cached.AnimationCapped) return;
+                if (cached.AnimationFrames != null && isGifPromote) return; // already fully decoded and animated
                 have = cached.DecodedLongEdge;
             }
 
             int edge = ViewerMath.NextDecodeEdge(nativeW, nativeH, ViewerControl.CurrentZoom, ViewerControl.FitZoom, have, (int)ViewerEngine.HighFidelityMaxEdge);
-            if (edge <= 0) return;
+            if (edge <= 0)
+            {
+                if (isGifPromote && (cached == null || cached.AnimationFrames == null)) edge = (int)Math.Max(nativeW, nativeH);
+                else return;
+            }
             if (_promoteEdge >= edge && _hfTask is { IsCompleted: false }) return;
 
             int promoteId = _currentImageLoadId;
