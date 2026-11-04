@@ -18,7 +18,9 @@ A high-performance, hardware-accelerated image viewer built for creators, 3D art
 
 **Favourite Folders** — Star up to 10 folders in the Favourites and Recent Folders menu to keep them above your 10 most recent folders. A favourite stays until you remove it, even when its drive is unplugged, and Clear Recent Folders leaves favourites alone.
 
-**Multi-View** — Compare up to 16 images in one window, or build them into a collage. Set the rows and columns, give photos a hero spot, drag the edges between them, frame each cell, float cells above the grid in shapes, and save the result as a JPEG or PNG or copy it to the clipboard. Layouts can be saved and reopened. See [Multi-View](#-multi-view) below.
+**Multi-View & Storyboard Presentations** — Compare up to 16 images in one window or craft dynamic presentations. Build grids and freeform collages, arrange scenes in the Storyboard drawer, orchestrate custom Ken Burns camera moves with the visual Camera Director, and save shows as `.mivshow` projects. Layouts can be exported as high-resolution images or reopened at any time. See [Multi-View](#-multi-view) below.
+
+**Hardware-Accelerated Animated GIFs** — Instant multi-frame GIF playback directly in GPU memory with interactive playback controls (play, pause, frame-by-frame stepping) across single viewer and multi-view canvases.
 
 **Cinematic (beta)** — A slideshow that varies its pace and camera moves by itself, with full screen and music: one file, or random songs from a folder at or above a star rating. **Edit show** lets you reorder, hide, remove and duplicate pictures and set where the camera goes on a slide. Save a show and open it again from the main window. It is still being hardened; save often.
 
@@ -127,6 +129,14 @@ Drag images in from File Explorer to add them, and they follow the same rule as 
 
 Floating cells keep their share of the canvas when the window changes size. Save/Load lists your last three sessions under **Autosaved**, from when you left or replaced them or closed the app. Save a layout to keep it for good.
 
+### Storyboard Presentations & Camera Director
+
+Multi-View pairs procedural Auto-Mix playback with a rich Storyboard presentation engine:
+- **Story Deck**: Open the Storyboard drawer from the playbar (`Story Deck (N)` or press **B**). Add canvas layouts to the show, reorder scenes by dragging filmstrip cards, duplicate or remove scenes, and preview the full show (`▶ Play Show`).
+- **Camera Director (Visual Keyframe Editor)**: Left-click the camera motion badge on any scene card and choose `🎯 Edit Camera Path…` to enter visual keyframing mode. Pan and zoom (1.0x to 2.5x) the emerald Start (`🟢`) and ruby End (`🔴`) wireframes with live 2.5-second motion preview. Top-level badges at Z-index 300 let you easily select overlapping keyframes.
+- **Canvas Layout Auto-Sync**: Any manual changes made to a scene on the canvas (moving floating cards, resizing handles, rotating images, or dragging splitters) automatically sync directly to the scene in memory. Starting playback or pausing automatically executes a force-sync, ensuring no edits are ever lost.
+- **Storyboards & Layouts**: Save presentations as `.mivshow` files or single layouts as `.mivlayout` files from the `Save/Load` (**Ctrl+S**) menu, with `.mivshow` files prioritized at the top of recent folders.
+
 ## ⌨️ Shortcuts
 
 | | |
@@ -147,6 +157,9 @@ Floating cells keep their share of the canvas when the window changes size. Save
 | **Space** / **Esc** in Multi-View | Pause Surprise me auto-play. **Space** starts it again |
 | **← / →** in Multi-View | Previous / next layout, once Surprise me has made some |
 | **Tab** | Show or hide the sidebar (tile grid and multi-view) |
+| **B** in Multi-View | Toggle Story Deck (Storyboard drawer) |
+| **Ctrl+S** in Multi-View | Open Storyboards & Layouts menu |
+| **Ctrl+Z / Ctrl+Y** in Multi-View | Undo / redo layout and scene edits |
 
 The sidebar also opens when the pointer reaches the left edge.
 

@@ -51,13 +51,18 @@ A scan asks whether the folder exists off the UI thread, because an unreachable 
 
 A debounced `FileSystemWatcher` on `_currentDirectory` runs `RefreshFolderInPlaceAsync` when the grid is showing (preview closed). It merges the new list into `Images` (`ListMerge`), so the selection, scroll position, cursor and other thumbnails stay. F5 is the full `ScanFolder`. Events while the preview is open or a scan is running set a dirty flag and run when the preview closes / the scan finishes. A rename is dirty if either the old or new extension is supported.
 
-## GIF compositing
+## GIF compositing & Animation Playback
 
 Multi-frame decode reads `/imgdesc/Left`, `/imgdesc/Top`, `/grctlext/Delay`, `/grctlext/Disposal`. Frames are composited onto a canvas sized to the (possibly 16384-clamped) logical screen, not each frame's bitmap size.
 
 Disposal: 0/1 keep, 2 restore background (punch frame rect), 3 restore to previous (snapshot before draw).
 
-Every frame is held whole on the GPU, so `ViewerMath.AnimationBudget` caps an animation at 2 GB: smaller first, down to half size, then the first frames only, with a HUD message. Compositing still runs on the UI thread, so a long animation pauses the window while it does.
+Every frame is held whole on the GPU, so `ViewerMath.AnimationBudget` caps an animation at 2 GB: smaller first, down to half size, then the first frames only, with a HUD message.
+
+**Animation Engine**:
+- Animated GIFs (`.gif`) bypass the 1-frame fast preview tier and decode directly via `DecodeHighFidelityAsync` so `AnimationFrames` are ready on open.
+- When `AnimationFrames` contains multiple frames, `ImageViewerControl` activates the animation HUD (`[◀] [⏸] [▶]  1 / N`). Space toggles play/pause; Left and Right navigate individual frames.
+- MultiView cells and Solo view explicitly enable `BitmapImage.AutoPlay = true` for hardware-accelerated animated GIF display on the canvas.
 
 ## Threads
 
@@ -142,6 +147,13 @@ Changing the line count, a line's count or the hero builds a new layout and rese
 Never close a thumbnail's `SoftwareBitmap` after `SetBitmapAsync`, and never dispose its `SoftwareBitmapSource`. Closing the bitmap when the call completed caused a crash when switching between the tile grid and Multi-View: WinUI failed fast in `AsyncCopyToSurfaceTask::CopyOperation` on a background thread, with RO_E_CLOSED on the stack and nothing in `crash.log`. WinUI most likely copies from the bitmap again after the call completes, such as when a tile is recreated during a resize. The source can be on screen in several places at once: its tile, a cell's placeholder, the viewer and the preview. Both are left to the garbage collector. A native fail fast like this leaves a dump in `%LocalAppData%\CrashDumps`, and Microsoft's public symbols for `Microsoft.UI.Xaml.dll` name its stack.
 
 A cell's grid thumbnail is only a placeholder: it is removed when the photo loads, and `CellParts.Photo` names the photo's `Image`. Save JPEG takes each photo's native size from that `Image`; reading the first `Image` in the cell found the ~250 px thumbnail and capped the export at thumbnail resolution.
+
+### Storyboard, Camera Director & Canvas Auto-Sync
+
+- **Canvas Auto-Sync**: When a storyboard scene is active on the canvas, card drops (`PointerReleased`), freeform resize gestures (`PointerReleased` on resize handles), rotations (`EndTurn`), and mosaic splitter drags (`EndSegmentGesture`) automatically commit canvas coordinates, z-indices, and weights to `_selectedShowScene.Layout` in memory and capture an undo restore point.
+- **Playback Protection**: `PlayStoryboardAsync` and `StepStoryboardScene` execute a forced sync before any transition, and `StopAutoPlay` resets playback flags so pause never reverts changes.
+- **Camera Director**: Visual keyframe editor hosted in `MultiViewControl.CameraDirector.cs`. Overlays Start (emerald) and End (ruby coral) interactive wireframes with Z-index 300 clickable badges (`🟢 Start · 1.0x` and `🔴 End · 1.25x`), mouse wheel zoom (1.0x to 2.5x), and live 2.5s Ken Burns move preview.
+- **Persistence & Save/Load**: Storyboard presentations (`.mivshow`) and canvas layouts (`.mivlayout`) are managed under the unified "Storyboards & Layouts" flyout, with folder listings prioritizing `.mivshow` files with filmstrip icons and blue `Show` badges.
 
 ## Bare Alt
 
