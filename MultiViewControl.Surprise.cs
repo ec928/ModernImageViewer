@@ -86,10 +86,6 @@ namespace ModernImageViewer
             }
         }
 
-        /// <summary>How the scene changes are chosen (LayoutTransitions.Choose): at 100%, 7 in 10 are not a crossfade.</summary>
-        private const string TransitionVarietyNote =
-            "0% always crossfades between scenes. Higher mixes in zooms, fades through black and slides; at 100%, about 7 in 10 scene changes are one of those.";
-
         /// <summary>
         /// Turns the Cinematic overrides on or off for the open storyboard, from the toggle in Layout Generator Settings.
         /// With no storyboard yet, it starts an empty one, so the next scenes made for it follow the toggle.
@@ -908,7 +904,7 @@ namespace ModernImageViewer
                 (o, v) => o.Variety = (int)v);
 
             // 3. Camera & transitions
-            string CameraSummaryText() => $"{SurpriseChoices.CameraMode} \u00B7 {SurpriseChoices.TransitionVariety * 100:0}%";
+            string CameraSummaryText() => $"{SurpriseChoices.CameraMode} \u00B7 {SurpriseChoices.TransitionShares()[LayoutTransition.Crossfade] * 100:0}% crossfade";
             var (cameraSection, cameraSummary) = Section("Camera & transitions", CameraSummaryText());
             Slider? zoomVsDriftSlider = null;
             var camChips = new List<(Microsoft.UI.Xaml.Controls.Primitives.ToggleButton Chip, string Mode)>();
@@ -944,11 +940,7 @@ namespace ModernImageViewer
                 0, 100, 5, options.MotionFaceChance * 100,
                 v => $"{v:0}%",
                 (o, v) => o.MotionFaceChance = v / 100);
-            Slide(cameraSection, "Transition variety", TransitionVarietyNote,
-                0, 100, 5, options.TransitionVariety * 100,
-                v => v < 1 ? "Crossfade" : $"{v:0}%",
-                (o, v) => { o.TransitionVariety = v / 100; cameraSummary.Text = CameraSummaryText(); });
-            Note(cameraSection, TransitionVarietyNote);
+            TransitionGroup(cameraSection, () => cameraSummary.Text = CameraSummaryText());
 
             // 4. Soundtrack & audio
             string MusicSummaryText()
@@ -1151,6 +1143,46 @@ namespace ModernImageViewer
                 Margin = new Thickness(0, -4, 0, 6)
             });
 
+            // How a change of scene is made: one odds slider per kind, on the designs' Off to Often scale, and a line
+            // giving the mix they make, so the words on the sliders never have to stand for a percentage.
+            void TransitionGroup(StackPanel column, Action changed)
+            {
+                column.Children.Add(new TextBlock
+                {
+                    Text = "Transitions",
+                    FontSize = 12,
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    Opacity = 0.85,
+                    Margin = new Thickness(0, 10, 0, 2)
+                });
+                Note(column, "How one layout or scene changes to the next. The same kind never comes twice in a row, except a crossfade. All off is a crossfade.");
+                var mix = new TextBlock { FontSize = 11, Opacity = 0.75, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 6) };
+                void ShowMix()
+                {
+                    var shares = SurpriseChoices.TransitionShares();
+                    string Part(LayoutTransition kind, string name) => shares[kind] >= 0.005 ? $"{name} {shares[kind] * 100:0}%" : "";
+                    mix.Text = "Mix: " + string.Join(" · ", new[]
+                    {
+                        Part(LayoutTransition.Crossfade, "crossfade"),
+                        Part(LayoutTransition.ZoomThrough, "zoom through"),
+                        Part(LayoutTransition.ThroughDark, "fade through black"),
+                        Part(LayoutTransition.Slide, "slide")
+                    }.Where(p => p.Length > 0));
+                }
+                void Kind(string name, string tip, double odds, Action<SurpriseOptions, double> set)
+                {
+                    double initial = odds <= 0 ? -1.2 : Math.Log(Math.Max(SurpriseOptions.RarestDesign, odds), DesignOddsBase);
+                    Slide(column, name, tip + " Far left turns it off.", -1.2, 1.0, 0.1, initial, FormatDesignStep,
+                        (o, v) => { set(o, v <= -1.1 ? 0 : Math.Pow(DesignOddsBase, v)); ShowMix(); changed(); });
+                }
+                Kind("Crossfade", "One scene dissolves into the next.", options.CrossfadeOdds, (o, v) => o.CrossfadeOdds = v);
+                Kind("Zoom through", "The camera pushes through into the next scene.", options.ZoomThroughOdds, (o, v) => o.ZoomThroughOdds = v);
+                Kind("Fade through black", "Out to black, then in to the next scene.", options.ThroughDarkOdds, (o, v) => o.ThroughDarkOdds = v);
+                Kind("Slide", "The next scene slides in from the side.", options.SlideOdds, (o, v) => o.SlideOdds = v);
+                column.Children.Add(mix);
+                ShowMix();
+            }
+
             // 6. Cinematic storyboard: the settings it puts in place of the ones above. Not a second set of everything:
             // only what makes the one generator's layouts like Cinematic Slideshow's. Whether they are in use belongs to
             // the storyboard, so Auto-Mix is never affected.
@@ -1283,11 +1315,6 @@ namespace ModernImageViewer
             Slide(cineSection, "Motion", "How much the camera moves during each scene. Cinematic Slideshow always moves.", 0, 100, 5, options.Cinematic.MotionAmount * 100,
                 v => v < 1 ? "Off" : $"{v:0}%",
                 (o, v) => o.Cinematic.MotionAmount = v / 100);
-            Slide(cineSection, "Transition variety", TransitionVarietyNote + " Cinematic Slideshow always crossfades.",
-                0, 100, 5, options.Cinematic.TransitionVariety * 100,
-                v => v < 1 ? "Crossfade" : $"{v:0}%",
-                (o, v) => o.Cinematic.TransitionVariety = v / 100);
-            Note(cineSection, TransitionVarietyNote + " Cinematic Slideshow always crossfades.");
 
             // Reset to defaults
             var resetRow = new Grid { ColumnSpacing = 6, MinHeight = 32 };
@@ -3861,7 +3888,10 @@ namespace ModernImageViewer
                 }
             }
 
-            if (before != null) ChangeLayoutOver(before, outgoingStep);
+            // The scene's own transition, chosen when it was made and shown on nothing else. It used to be rolled again
+            // here from the current settings, so what a scene stored was never what played.
+            if (before != null)
+                ChangeLayoutOver(before, outgoingStep, Enum.TryParse<LayoutTransition>(scene.Transition, out var planned) ? planned : LayoutTransition.Crossfade);
 
             int displayIndex = currentIndex + 1;
             int totalDisplay = visibleScenes.Count;
@@ -4667,9 +4697,12 @@ namespace ModernImageViewer
         /// The new layout stays covered until its pictures have loaded, so they appear together. The cover is a picture of the old layout,
         /// so each transition only has to animate that.
         /// </summary>
-        private void ChangeLayoutOver(Image cover, (double Scale, double X, double Y) outgoingStep = default)
+        /// <param name="planned">A storyboard scene's own transition, made with it. Otherwise Auto-Mix picks one from the
+        /// odds while it plays, and a change by hand is a crossfade.</param>
+        private void ChangeLayoutOver(Image cover, (double Scale, double X, double Y) outgoingStep = default, LayoutTransition? planned = null)
         {
-            var kind = LayoutTransitions.Choose(_autoPlaySeconds > 0 ? SurpriseChoices.TransitionVariety : 0, _lastTransition, Random.Shared);
+            var kind = planned
+                ?? (_autoPlaySeconds > 0 ? SurpriseChoices.PickTransition(_lastTransition, Random.Shared) : LayoutTransition.Crossfade);
             _lastTransition = kind;
             var story = new Storyboard();
             void Animate(DependencyObject target, string property, double from, double to, int ms, int after = 0, EasingFunctionBase? ease = null)
