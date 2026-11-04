@@ -139,7 +139,7 @@ When viewing a storyboard scene on the canvas, any manual layout adjustment auto
 
 ## Layout Generator Settings
 
-Opened from the chevron beside Play. The Layout Generator is the one generator that makes layouts, live in Auto-Mix and as scenes in storyboards (Make a show, Add new layout, Play storyboard, Cinematic storyboard); the panel says so at the top. The main page has images per scene, duration, smart pace, motion and the soundtrack, whose **Configure...** opens the music settings (folder, lowest rating, which shows play music); **Advanced settings…** has the rest in sections, one open at a time.
+Opened from the chevron beside Play. The Layout Generator is the one generator that makes layouts, live in Auto-Mix and as scenes in storyboards (Make a show, Add new layout, Play storyboard, Cinematic storyboard); the panel says so at the top. The main page has two sections, each heading with its "more settings" on the right as the same gear-and-label button: **Layout** (images per scene, duration, smart pace, motion), whose **Advanced…** opens the rest in sections, one open at a time; and **Soundtrack**, whose **Configure…** opens the music settings (folder, lowest rating, which shows play music).
 
 ### Single images
 
