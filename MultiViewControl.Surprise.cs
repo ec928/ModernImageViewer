@@ -804,7 +804,7 @@ namespace ModernImageViewer
                 0, 100, 5, options.ZoomChance * 100,
                 v => v < 1 ? "Off" : $"{v:0}%",
                 (o, v) => { o.ZoomChance = v / 100; updateImagesSummary(); });
-            Slide(imagesSection, "Uncut face shown", "How much of a face must show for it to count as uncut. Lower allows bolder layouts.",
+            Slide(imagesSection, "Face kept in frame, at least", "How much of a face a layout must keep in its frame. Lower lets a layout crop faces more boldly.",
                 50, 100, 5, options.FaceShown * 100,
                 v => $"{v:0}%",
                 (o, v) => o.FaceShown = v / 100);
@@ -973,6 +973,12 @@ namespace ModernImageViewer
                         (o, v) => o.MostTilt = v);
                 }
             }
+            // For every design, so it sits with them and not under Single images.
+            Slide(designsSection, "Pick from the best", "Each time, the generator makes several layouts and scores them. This is how many of the best it picks from: Best always takes the top one, more gives more variety.",
+                1, 12, 1, options.Variety,
+                v => (int)v == 1 ? "Best" : $"Top {(int)v}",
+                (o, v) => o.Variety = (int)v);
+
             // A layout of one image: the same odds scale as the designs above, so it reads and works the same way.
             designsSection.Children.Add(new TextBlock
             {
@@ -999,11 +1005,6 @@ namespace ModernImageViewer
             SoloSlide("Fill the screen", "Cropped to fill the screen. Far left turns it off.", options.SoloFillOdds, (o, v) => o.SoloFillOdds = v);
             SoloSlide("Matted", "In a card with a mat round it. Far left turns it off.", options.SoloMattedOdds, (o, v) => o.SoloMattedOdds = v);
             SoloSlide("Whole image", "Not cropped: a framed print on a canvas tinted from the image. Far left turns it off.", options.SoloWholeOdds, (o, v) => o.SoloWholeOdds = v);
-
-            Slide(designsSection, "Version variety", "How many of the highest-scored candidate layouts it picks from. 1 always picks the single best layout.",
-                1, 12, 1, options.Variety,
-                v => (int)v == 1 ? "Best" : $"Top {(int)v}",
-                (o, v) => o.Variety = (int)v);
 
             // 3. Camera: how it moves within a scene. 4. Transitions: how one scene changes to the next.
             string CameraSummaryText() => SurpriseChoices.CameraMode;
