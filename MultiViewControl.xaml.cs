@@ -1103,7 +1103,7 @@ namespace ModernImageViewer
                     ChangeLines(-1);
                     return true;
                 case VirtualKey.B:
-                    StoryDeckButton_Click(StoryDeckButton, new RoutedEventArgs());
+                    ToggleStoryboardDrawer();
                     return true;
                 case VirtualKey.R:
                     ToggleRowsColumns();

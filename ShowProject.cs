@@ -305,6 +305,54 @@ namespace ModernImageViewer
             }
         }
 
+        /// <summary>
+        /// Where each image of this scene sits, as shares of the canvas, so a scene card can draw the scene's own split.
+        /// Grid images follow the saved split, or the line counts when none was saved. Floating images come last, on top.
+        /// </summary>
+        public IReadOnlyList<(string Path, double X, double Y, double W, double H)> ThumbnailBoxes()
+        {
+            var boxes = new List<(string Path, double X, double Y, double W, double H)>();
+            var layout = Layout;
+            if (layout?.Photos == null) return boxes;
+
+            int framed = layout.State?.FramedSlots ?? 0;
+            var grid = layout.Photos.Where(p => framed <= 0 || p.Slot < framed).OrderBy(p => p.Slot).ToList();
+            int n = Math.Min(grid.Count, MosaicLayout.MaxShown);
+            if (n > 0)
+            {
+                MosaicLayout tree;
+                if (layout.Mosaic != null && layout.Mosaic.FitsPhotos(n))
+                {
+                    tree = layout.Mosaic.ToMosaicLayout();
+                }
+                else
+                {
+                    var saved = layout.State?.LineCounts;
+                    int[] counts = saved != null && saved.Count > 0 && saved.All(c => c > 0) && saved.Sum() == n
+                        ? saved.ToArray()
+                        : MosaicLayout.LineCounts(n, layout.State?.Lines ?? MosaicLayout.DefaultLines(n));
+                    tree = MosaicLayout.FromCounts(counts, rows: !(layout.State?.Flipped ?? false));
+                }
+                foreach (var (leaf, box) in MosaicMath.Boxes(tree, 1, 1).OrderBy(b => b.Key))
+                {
+                    if (leaf < 0 || leaf >= n || string.IsNullOrEmpty(grid[leaf].Path)) continue;
+                    boxes.Add((grid[leaf].Path, box.X, box.Y, box.W, box.H));
+                }
+            }
+
+            double width = layout.Canvas?.Width ?? 0;
+            double height = layout.Canvas?.Height ?? 0;
+            if (layout.Freeform != null && width > 0 && height > 0)
+            {
+                foreach (var cell in layout.Freeform.OrderBy(c => c.ZIndex))
+                {
+                    if (string.IsNullOrEmpty(cell.Path)) continue;
+                    boxes.Add((cell.Path, cell.X / width, cell.Y / height, cell.Width / width, cell.Height / height));
+                }
+            }
+            return boxes;
+        }
+
         /// <summary>Drops image-pool slots that were written into this scene by showing it.</summary>
         public void KeepCanvasPhotos()
         {

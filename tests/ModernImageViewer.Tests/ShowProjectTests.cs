@@ -273,5 +273,54 @@ namespace ModernImageViewer.Tests
             Assert.Equal("Play Show · 4/33", ShowProject.PlayTransportText(playing: false, storyboard: true, sceneNumber: 4, sceneCount: 33));
             Assert.Equal("Play Mix", ShowProject.PlayTransportText(playing: false, storyboard: false, sceneNumber: 1, sceneCount: 0));
         }
+
+        [Fact]
+        public void ThumbnailBoxes_ThreeImagesInOneRow_AreThreeColumns()
+        {
+            var scene = new ShowScene();
+            scene.Layout.State.Lines = 1;
+            for (int i = 0; i < 3; i++)
+                scene.Layout.Photos.Add(new PhotoSlotDto { Slot = i, Path = $@"C:\p\{i}.jpg" });
+
+            var boxes = scene.ThumbnailBoxes();
+
+            Assert.Equal(3, boxes.Count);
+            for (int i = 0; i < 3; i++)
+            {
+                Assert.Equal($@"C:\p\{i}.jpg", boxes[i].Path);
+                Assert.Equal(i / 3.0, boxes[i].X, 6);
+                Assert.Equal(0, boxes[i].Y, 6);
+                Assert.Equal(1 / 3.0, boxes[i].W, 6);
+                Assert.Equal(1, boxes[i].H, 6);
+            }
+        }
+
+        [Fact]
+        public void ThumbnailBoxes_FollowSavedSplit_LeaveOutPool_AndScaleFloatingCells()
+        {
+            var scene = new ShowScene();
+            scene.Layout.Canvas.Width = 1600;
+            scene.Layout.Canvas.Height = 900;
+            scene.Layout.State.FramedSlots = 2;
+            scene.Layout.Photos.Add(new PhotoSlotDto { Slot = 0, Path = @"C:\p\a.jpg" });
+            scene.Layout.Photos.Add(new PhotoSlotDto { Slot = 1, Path = @"C:\p\b.jpg" });
+            scene.Layout.Photos.Add(new PhotoSlotDto { Slot = 2, Path = @"C:\p\pool.jpg" });
+            // A banner across the top, a quarter of the height, over the second image.
+            scene.Layout.Mosaic = new MosaicNodeDto
+            {
+                Vertical = false,
+                Weights = new List<double> { 1, 3 },
+                Children = new List<MosaicNodeDto> { new() { Leaf = 0 }, new() { Leaf = 1 } }
+            };
+            scene.Layout.Freeform = new List<FreeformCellDto> { new() { Path = @"C:\p\f.jpg", X = 800, Y = 450, Width = 400, Height = 225 } };
+
+            var boxes = scene.ThumbnailBoxes();
+
+            Assert.Equal(new[] { @"C:\p\a.jpg", @"C:\p\b.jpg", @"C:\p\f.jpg" }, boxes.Select(b => b.Path));
+            Assert.Equal(0.25, boxes[0].H, 6);
+            Assert.Equal(0.25, boxes[1].Y, 6);
+            Assert.Equal(1, boxes[1].W, 6);
+            Assert.Equal((0.5, 0.5, 0.25, 0.25), (boxes[2].X, boxes[2].Y, boxes[2].W, boxes[2].H));
+        }
     }
 }

@@ -206,29 +206,29 @@ namespace ModernImageViewer
             }
         }
 
-        /// <summary>Updates the Story Deck button in the playbar.</summary>
+        /// <summary>The drawer button names the tab it opens, with what that tab shows: images off the canvas, or scenes.</summary>
         private void ShowShownBadge()
         {
-            int total = SessionPictures().Count;
-            int tray = TrayImages().Count;
-            int onCanvas = ImagesOnCanvas();
+            int offCanvas = TrayImages().Count;
             int scenes = _activeShow?.VisibleSceneCount ?? 0;
-            bool isDrawerOpen = _trayCard != null;
+            bool storyboard = _trayTab == 1;
+            bool open = _trayCard != null;
 
+            string name = storyboard ? "Storyboard" : "Image Pool";
+            int count = storyboard ? scenes : offCanvas;
+            string label = count > 0 ? $"{name} ({count})" : name;
+            if (StoryDeckText != null) StoryDeckText.Text = label;
+            if (StoryDeckIcon != null) StoryDeckIcon.Glyph = storyboard ? "" : "";
             if (StoryDeckButton != null)
             {
-                StoryDeckButton.Visibility = Visibility.Visible;
-                string deckName = scenes > 0 ? $"Story Deck ({scenes})" : total > 0 ? $"Story Deck ({total})" : "Story Deck";
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(StoryDeckButton, deckName);
-                ToolTipService.SetToolTip(StoryDeckButton, scenes > 0
-                    ? $"Story Deck: {scenes} scenes, {total} images. Click to toggle drawer (B)."
-                    : total > 0
-                        ? $"Story Deck: {total} images ({tray} in pool, {onCanvas} on canvas). Click to toggle drawer (B)."
-                        : "Story Deck: Manage image pool and storyboard scenes. Click to toggle drawer (B).");
-            }
-            if (StoryDeckText != null)
-            {
-                StoryDeckText.Text = scenes > 0 ? $"Story Deck ({scenes})" : total > 0 ? $"Story Deck ({total})" : "Story Deck";
+                string what = storyboard
+                    ? (scenes == 1 ? "1 scene" : $"{scenes} scenes")
+                    : (offCanvas == 1 ? "1 image not on the canvas" : $"{offCanvas} images not on the canvas");
+                string tip = open
+                    ? $"Close the {name.ToLowerInvariant()}. B opens the storyboard."
+                    : $"Open the {(storyboard ? "storyboard" : "image pool")}: {what}. B opens the storyboard.";
+                ToolTipService.SetToolTip(StoryDeckButton, tip);
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(StoryDeckButton, label);
             }
 
             ShowAutoPlayState();

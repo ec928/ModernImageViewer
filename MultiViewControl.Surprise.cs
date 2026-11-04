@@ -159,6 +159,8 @@ namespace ModernImageViewer
         private void UpdateTrayCardDimensions()
         {
             if (_trayCard == null) return;
+            // A smaller window must not leave a tall drawer over the playbar.
+            _trayDrawerHeight = Math.Min(_trayDrawerHeight, MaxDrawerHeight());
             _trayCard.Margin = new Thickness(0);
             _trayCard.Height = _trayDrawerHeight;
             _trayCard.Width = double.NaN;
@@ -175,22 +177,18 @@ namespace ModernImageViewer
                 return;
             }
 
-            const double singleRowThreshold = 220;
-            if (drawerHeight <= singleRowThreshold)
-            {
-                // Docked 1-row mode: playbar sits exactly 16px above the drawer's splitter
-                UnifiedHud.Margin = new Thickness(0, 0, 0, drawerHeight + 16);
-                UnifiedHud.Opacity = 1.0;
-                UnifiedHud.IsHitTestVisible = true;
-            }
-            else
-            {
-                // Multi-row slide sorter: fade out playbar smoothly so the user has full management space
-                double fade = Math.Clamp(1.0 - (drawerHeight - singleRowThreshold) / 25.0, 0.0, 1.0);
-                UnifiedHud.Opacity = fade;
-                UnifiedHud.IsHitTestVisible = fade > 0.05;
-                UnifiedHud.Margin = new Thickness(0, 0, 0, drawerHeight + 16);
-            }
+            // The playbar always sits above the drawer. The drawer cannot grow past it (MaxDrawerHeight),
+            // because Back, Play and Save/Load must stay in reach however the drawer is sized.
+            UnifiedHud.Margin = new Thickness(0, 0, 0, drawerHeight + 16);
+            UnifiedHud.Opacity = 1.0;
+            UnifiedHud.IsHitTestVisible = true;
+        }
+
+        /// <summary>The tallest drawer that still leaves the playbar, and a strip of canvas, above it.</summary>
+        private double MaxDrawerHeight()
+        {
+            double bar = UnifiedHud.ActualHeight > 0 ? UnifiedHud.ActualHeight : 48;
+            return Math.Max(SingleRowDrawerHeight, RootGrid.ActualHeight - bar - 16 - 40);
         }
 
         private const double SurpriseCardWidth = 530;
@@ -535,94 +533,6 @@ namespace ModernImageViewer
                 header.Children.Add(gearBtn);
                 body.Children.Add(header);
 
-                bool showAvailable = _activeShow != null && _activeShow.Scenes.Count > 0;
-                bool showOn = PlayUsesStoryboard();
-                var playModeRow = new Grid { ColumnSpacing = 12, MinHeight = 36 };
-                playModeRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                playModeRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(280) });
-                var playModeLabel = new TextBlock
-                {
-                    Text = "Play",
-                    VerticalAlignment = VerticalAlignment.Center,
-                    FontSize = 13,
-                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White)
-                };
-                var playModeChips = new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 6,
-                    HorizontalAlignment = HorizontalAlignment.Right,
-                    VerticalAlignment = VerticalAlignment.Center
-                };
-                var showChip = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton
-                {
-                    Content = "Storyboard",
-                    IsEnabled = showAvailable,
-                    Padding = new Thickness(12, 5, 12, 5),
-                    FontSize = 13,
-                    CornerRadius = new CornerRadius(8),
-                    Opacity = showAvailable ? 1 : 0.45
-                };
-                var shuffleChip = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton
-                {
-                    Content = "Auto-Mix",
-                    Padding = new Thickness(12, 5, 12, 5),
-                    FontSize = 13,
-                    CornerRadius = new CornerRadius(8)
-                };
-                void PaintPlayChip(Microsoft.UI.Xaml.Controls.Primitives.ToggleButton chip, bool on)
-                {
-                    chip.IsChecked = on;
-                    if (on)
-                    {
-                        chip.Background = winBlueDeep;
-                        chip.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White);
-                        chip.BorderBrush = winBlue;
-                    }
-                    else
-                    {
-                        chip.ClearValue(Control.BackgroundProperty);
-                        chip.ClearValue(Control.ForegroundProperty);
-                        chip.ClearValue(Control.BorderBrushProperty);
-                    }
-                }
-                PaintPlayChip(showChip, showOn);
-                PaintPlayChip(shuffleChip, !showOn);
-                ToolTipService.SetToolTip(showChip, showAvailable
-                    ? "Play walks the storyboard. Arrows move between scenes. The playbar shows the same choice."
-                    : "Make a show first.");
-                ToolTipService.SetToolTip(shuffleChip, "Play makes a new layout each time, from the image pool. The playbar shows the same choice.");
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(showChip, "Play the storyboard");
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(shuffleChip, "Play Auto-Mix");
-                showChip.Click += (_, _) =>
-                {
-                    if (!showAvailable)
-                    {
-                        PaintPlayChip(showChip, false);
-                        PaintPlayChip(shuffleChip, true);
-                        return;
-                    }
-                    _shuffleChosen = false;
-                    if (_autoPlaySeconds > 0) _isStoryboardPlayback = true;
-                    PaintPlayChip(showChip, true);
-                    PaintPlayChip(shuffleChip, false);
-                    ShowAutoPlayState();
-                };
-                shuffleChip.Click += (_, _) =>
-                {
-                    _shuffleChosen = true;
-                    _isStoryboardPlayback = false;
-                    PaintPlayChip(showChip, false);
-                    PaintPlayChip(shuffleChip, true);
-                    ShowAutoPlayState();
-                };
-                playModeChips.Children.Add(showChip);
-                playModeChips.Children.Add(shuffleChip);
-                Grid.SetColumn(playModeChips, 1);
-                playModeRow.Children.Add(playModeLabel);
-                playModeRow.Children.Add(playModeChips);
-                ToolTipService.SetToolTip(playModeRow, "Storyboard plays the scenes in order. Auto-Mix generates dynamic layouts each time. The choice stays until you change it, and takes effect on the next picture.");
-                body.Children.Add(playModeRow);
 
                 body.Children.Add(imagesRow);
 
@@ -1534,7 +1444,6 @@ namespace ModernImageViewer
             if (!hasScenes) return false;
 
             if (_isStoryboardPlayback) return true;
-            if (_trayCard != null && _trayTab == 1) return true;
 
             return !_shuffleChosen;
         }
@@ -1726,35 +1635,99 @@ namespace ModernImageViewer
             return -1;
         }
 
+        private const string SceneRemovedToast = "Removed scene. Ctrl+Z brings it back.";
+
+        /// <summary>
+        /// The camera choices for a scene, used by its time badge and by its right-click menu, so the two cannot drift apart.
+        /// The current choice is a radio item, as the sort menu's is.
+        /// </summary>
+        private static void FillCameraMenu(IList<MenuFlyoutItemBase> items, ShowScene scene, Action changed, Action editPath)
+        {
+            // The badge's label already reads the kind, or the geometry when no kind was stored.
+            string label = GetMotionLabel(scene);
+            string current = scene.CameraOverride == null ? "Dynamic"
+                : label.Contains("Zoom in") ? "ZoomIn"
+                : label.Contains("Zoom out") ? "ZoomOut"
+                : label.Contains("Pan") ? "Pan"
+                : label.Contains("Still") ? "Still" : "";
+            const string group = "SceneCamera";
+
+            void Add(string text, string kind, Func<CameraKeyframeOverride?> make, string? tip = null)
+            {
+                var item = new RadioMenuFlyoutItem { Text = text, GroupName = group, IsChecked = current == kind };
+                if (tip != null) ToolTipService.SetToolTip(item, tip);
+                item.Click += (_, _) => { scene.CameraOverride = make(); changed(); };
+                items.Add(item);
+            }
+
+            Add("Zoom in", "ZoomIn", () => new CameraKeyframeOverride(new CameraViewDto(1.0, 0.5, 0.5), new CameraViewDto(1.25, 0.5, 0.5), "ZoomIn"));
+            Add("Zoom out", "ZoomOut", () => new CameraKeyframeOverride(new CameraViewDto(1.25, 0.5, 0.5), new CameraViewDto(1.0, 0.5, 0.5), "ZoomOut"));
+            Add("Pan across", "Pan", () => new CameraKeyframeOverride(new CameraViewDto(1.15, 0.40, 0.5), new CameraViewDto(1.15, 0.60, 0.5), "Pan"));
+            Add("Still", "Still", () => new CameraKeyframeOverride(new CameraViewDto(1.0, 0.5, 0.5), new CameraViewDto(1.0, 0.5, 0.5), "Still"));
+            items.Add(new MenuFlyoutSeparator());
+            Add("Dynamic, chosen at playback", "Dynamic", () => null, "No fixed path: the camera move is chosen each time the scene plays");
+            items.Add(new MenuFlyoutSeparator());
+            var edit = new MenuFlyoutItem { Text = "Edit camera path…", Icon = new FontIcon { Glyph = "" } };
+            edit.Click += (_, _) => editPath();
+            items.Add(edit);
+        }
+
+        private static void FillDurationMenu(IList<MenuFlyoutItemBase> items, ShowScene scene, Action changed)
+        {
+            double now = scene.DwellSeconds ?? 12.0;
+            foreach (int seconds in new[] { 5, 8, 12, 16, 20, 30 })
+            {
+                int s = seconds;
+                var item = new RadioMenuFlyoutItem { Text = $"{s}s", GroupName = "SceneDuration", IsChecked = Math.Abs(now - s) < 0.5 };
+                item.Click += (_, _) => { scene.DwellSeconds = s; changed(); };
+                items.Add(item);
+            }
+        }
+
+        /// <summary>The count is what the tab shows: images that are not on the canvas.</summary>
+        private string PoolTabLabel()
+        {
+            int n = TrayImages().Count;
+            return n > 0 ? $"Image Pool ({n})" : "Image Pool";
+        }
+
+        private string StoryTabLabel()
+        {
+            int n = _activeShow?.VisibleSceneCount ?? 0;
+            return n > 0 ? $"Storyboard ({n})" : "Storyboard";
+        }
+
+        /// <summary>Opens or closes the drawer on the tab it was last left on. It never changes what Play plays.</summary>
         private void StoryDeckButton_Click(object sender, RoutedEventArgs e)
         {
-            bool hasScenes = _activeShow != null && _activeShow.Scenes.Count > 0;
-            if (hasScenes)
-            {
-                _shuffleChosen = false;
-                _isStoryboardPlayback = false;
-            }
-
-            if (_trayCard != null)
-            {
-                // If drawer is open on Image Pool, switch to Storyboard tab
-                if (hasScenes && _trayTab != 1)
-                {
-                    _trayTab = 1;
-                    RefreshTrayCardIfOpen();
-                    ShowAutoPlayState();
-                    return;
-                }
-
-                RemoveTrayCard();
-                ShowAutoPlayState();
-                return;
-            }
-
-            StopAutoPlay();
-            if (hasScenes) _trayTab = 1;
-            ShowTrayCard(NoCell);
+            if (_trayCard != null) RemoveTrayCard();
+            else ShowTrayCard(NoCell);
             ShowAutoPlayState();
+        }
+
+        /// <summary>B: the drawer on its Storyboard tab, or closed again if that is what is showing.</summary>
+        private void ToggleStoryboardDrawer()
+        {
+            if (_trayCard != null && _trayTab == 1)
+            {
+                RemoveTrayCard();
+            }
+            else
+            {
+                _trayTab = 1;
+                ShowTrayCard(NoCell);
+            }
+            ShowAutoPlayState();
+        }
+
+        /// <summary>Play walks the storyboard from now on. Nothing on the canvas changes; while playing, the next picture is a scene.</summary>
+        private void StoryboardModeButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_activeShow == null || _activeShow.Scenes.Count == 0) return;
+            _shuffleChosen = false;
+            if (_autoPlaySeconds > 0) _isStoryboardPlayback = true;
+            ShowAutoPlayState();
+            RefreshPlayModeCard();
         }
 
         private const int NoCell = -1;
@@ -1778,11 +1751,6 @@ namespace ModernImageViewer
             RemoveSurpriseCard();
             RemoveTrayCard();
             if (intoSlot != NoCell) _trayTab = 0; // Forced to pool if swapping into a cell
-            else if ((_activeShow?.Scenes.Count ?? 0) > 0)
-            {
-                _trayTab = 1;
-                _shuffleChosen = false;
-            }
 
             var all = TrayImages().Select(t => t.Path).ToList();
             var current = new System.Collections.ObjectModel.ObservableCollection<string>(all);
@@ -1801,7 +1769,7 @@ namespace ModernImageViewer
             var tabStrip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(0, 0, 14, 0), VerticalAlignment = VerticalAlignment.Center };
             var poolTab = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton
             {
-                Content = $"🗃 Pool ({SessionPictures().Count})",
+                Content = PoolTabLabel(),
                 CornerRadius = new CornerRadius(14),
                 Padding = new Thickness(10, 4, 10, 4),
                 FontSize = 12,
@@ -1809,7 +1777,7 @@ namespace ModernImageViewer
             };
             var storyTab = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton
             {
-                Content = _activeShow != null && _activeShow.Scenes.Count > 0 ? $"🎬 Storyboard ({_activeShow.Scenes.Count})" : "🎬 Storyboard",
+                Content = StoryTabLabel(),
                 CornerRadius = new CornerRadius(14),
                 Padding = new Thickness(10, 4, 10, 4),
                 FontSize = 12,
@@ -1864,7 +1832,7 @@ namespace ModernImageViewer
 
             var addImagesBtn = new Button
             {
-                Content = "+ Add Images",
+                Content = "Add images",
                 Padding = new Thickness(10, 4, 10, 4),
                 CornerRadius = new CornerRadius(12),
                 FontSize = 12,
@@ -1879,7 +1847,7 @@ namespace ModernImageViewer
 
             var clearPoolBtn = new Button
             {
-                Content = "Clear Pool",
+                Content = "Clear pool",
                 Padding = new Thickness(8, 4, 8, 4),
                 CornerRadius = new CornerRadius(12),
                 FontSize = 12,
@@ -1964,7 +1932,7 @@ namespace ModernImageViewer
                 var dialog = new ContentDialog
                 {
                     Title = "Clear the image pool?",
-                    Content = tray.Count == 1 ? "This removes 1 image from the pool." : $"This removes all {tray.Count} images from the pool. Images on the canvas will stay.",
+                    Content = tray.Count == 1 ? "This removes 1 image from the Image Pool." : $"This removes all {tray.Count} images from the Image Pool. Images on the canvas will stay.",
                     PrimaryButtonText = "Clear",
                     CloseButtonText = "Cancel",
                     DefaultButton = ContentDialogButton.Close,
@@ -1998,7 +1966,7 @@ namespace ModernImageViewer
                 search.Text = string.Empty;
                 ShowHeading();
                 ShowTrayChanged();
-                poolTab.Content = $"🗃 Pool ({SessionPictures().Count})";
+                poolTab.Content = PoolTabLabel();
                 updateStorySummary?.Invoke();
             }
             clearPoolBtn.Click += async (_, _) => await ClearPoolAsync();
@@ -2041,7 +2009,7 @@ namespace ModernImageViewer
                 current.Remove(path);
                 ShowHeading();
                 ShowTrayChanged();
-                poolTab.Content = $"🗃 Pool ({SessionPictures().Count})";
+                poolTab.Content = PoolTabLabel();
                 updateStorySummary?.Invoke();
                 if (all.Count > 0) search.Focus(FocusState.Programmatic);
             }
@@ -2108,7 +2076,7 @@ namespace ModernImageViewer
 
             var autoDraftBtn = new Button
             {
-                Content = "✨ Auto-Draft",
+                Content = "Make a show",
                 Background = winBlueDeep,
                 Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White),
                 BorderBrush = winBlue,
@@ -2118,11 +2086,11 @@ namespace ModernImageViewer
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                 VerticalAlignment = VerticalAlignment.Center
             };
-            ToolTipService.SetToolTip(autoDraftBtn, "Auto-drafts scenes from the image pool, one screen at a time.");
+            ToolTipService.SetToolTip(autoDraftBtn, "Makes a show from the image pool, one screen at a time.");
 
             var addCanvasBtn = new Button
             {
-                Content = "+ Add Layout",
+                Content = "Add this layout",
                 CornerRadius = new CornerRadius(12),
                 Padding = new Thickness(8, 4, 8, 4),
                 FontSize = 12,
@@ -2133,7 +2101,7 @@ namespace ModernImageViewer
 
             var updateSceneBtn = new Button
             {
-                Content = "💾 Update Scene",
+                Content = "Update scene",
                 CornerRadius = new CornerRadius(12),
                 Padding = new Thickness(8, 4, 8, 4),
                 FontSize = 12,
@@ -2141,7 +2109,7 @@ namespace ModernImageViewer
                 VerticalAlignment = VerticalAlignment.Center,
                 IsEnabled = _selectedShowScene != null
             };
-            ToolTipService.SetToolTip(updateSceneBtn, "Saves current canvas layout and photos into the selected storyboard scene.");
+            ToolTipService.SetToolTip(updateSceneBtn, "Stores the canvas in the selected scene.");
             updateSceneBtn.Click += (_, _) =>
             {
                 SyncCanvasToSelectedScene(showToast: true, commitCanvas: true);
@@ -2231,7 +2199,7 @@ namespace ModernImageViewer
                 Padding = new Thickness(8, 4, 8, 4),
                 VerticalAlignment = VerticalAlignment.Center
             };
-            ToolTipService.SetToolTip(draftRangeBtn, "Adjust images per scene range for auto-drafting");
+            ToolTipService.SetToolTip(draftRangeBtn, "Images per scene when making a show. Auto-Mix uses the same range.");
 
             Border MakeDivider() => new Border { Width = 1, Height = 16, Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x35, 0xFF, 0xFF, 0xFF)), VerticalAlignment = VerticalAlignment.Center };
 
@@ -2255,7 +2223,7 @@ namespace ModernImageViewer
                 Padding = new Thickness(14, 4, 14, 4),
                 VerticalAlignment = VerticalAlignment.Center
             };
-            ToolTipService.SetToolTip(playShowDrawerBtn, "Play this Storyboard presentation. Space does the same.");
+            ToolTipService.SetToolTip(playShowDrawerBtn, "Play the storyboard. Space does the same.");
             playShowDrawerBtn.Click += async (_, _) =>
             {
                 _shuffleChosen = false;
@@ -2352,7 +2320,7 @@ namespace ModernImageViewer
                 Spacing = 16,
                 Margin = new Thickness(12, 6, 12, 6)
             };
-            var emptyIcon = new FontIcon { Glyph = "\uE8B7", FontSize = 30, Foreground = winBlue, VerticalAlignment = VerticalAlignment.Center };
+            var emptyIcon = new FontIcon { Glyph = "\uE786", FontSize = 30, Foreground = winBlue, VerticalAlignment = VerticalAlignment.Center };
             var storyTextStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Spacing = 2 };
             var emptyTitle = new TextBlock
             {
@@ -2362,7 +2330,7 @@ namespace ModernImageViewer
             };
             var emptyDesc = new TextBlock
             {
-                Text = "Click '✨ Auto-Draft' on the toolbar above to generate scenes, or '+ Add Layout'.",
+                Text = "Make a show from the image pool, or use Add this layout for the images on the canvas.",
                 FontSize = 12,
                 Opacity = 0.75
             };
@@ -2397,12 +2365,12 @@ namespace ModernImageViewer
                 ItemTemplate = (DataTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(
                     "<DataTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\">" +
                     "  <Grid Width=\"200\" Height=\"136\" CornerRadius=\"6\" Background=\"#20FFFFFF\" BorderBrush=\"#35FFFFFF\" BorderThickness=\"1\">" +
-                    "    <Image Stretch=\"UniformToFill\" Margin=\"0,0,0,24\" IsHitTestVisible=\"False\"/>" +
-                    "    <Grid Margin=\"0,0,0,24\" IsHitTestVisible=\"False\" Visibility=\"Collapsed\">" +
+                    "    <Image Stretch=\"UniformToFill\" Margin=\"0,0,0,28\" IsHitTestVisible=\"False\"/>" +
+                    "    <Grid Margin=\"0,0,0,28\" IsHitTestVisible=\"False\" Visibility=\"Collapsed\">" +
                     "      <Image Stretch=\"UniformToFill\" Margin=\"0.5\"/>" +
                     "      <Image Stretch=\"UniformToFill\" Margin=\"0.5\"/>" +
                     "    </Grid>" +
-                    "    <Grid Margin=\"0,0,0,24\" IsHitTestVisible=\"False\" Visibility=\"Collapsed\">" +
+                    "    <Grid Margin=\"0,0,0,28\" IsHitTestVisible=\"False\" Visibility=\"Collapsed\">" +
                     "      <Grid.RowDefinitions>" +
                     "        <RowDefinition Height=\"*\"/>" +
                     "        <RowDefinition Height=\"*\"/>" +
@@ -2416,7 +2384,7 @@ namespace ModernImageViewer
                     "      <Image Grid.Row=\"1\" Grid.Column=\"0\" Stretch=\"UniformToFill\" Margin=\"0.5\"/>" +
                     "      <Image Grid.Row=\"1\" Grid.Column=\"1\" Stretch=\"UniformToFill\" Margin=\"0.5\"/>" +
                     "    </Grid>" +
-                    "    <Border HorizontalAlignment=\"Right\" VerticalAlignment=\"Bottom\" Margin=\"0,0,3,27\" Background=\"#E0000000\" CornerRadius=\"3\" Padding=\"3,1\" IsHitTestVisible=\"False\" Visibility=\"Collapsed\">" +
+                    "    <Border HorizontalAlignment=\"Right\" VerticalAlignment=\"Bottom\" Margin=\"0,0,3,31\" Background=\"#E0000000\" CornerRadius=\"3\" Padding=\"3,1\" IsHitTestVisible=\"False\" Visibility=\"Collapsed\">" +
                     "      <StackPanel Orientation=\"Horizontal\" Spacing=\"3\">" +
                     "        <FontIcon FontFamily=\"Segoe Fluent Icons\" Glyph=\"&#xE8A9;\" FontSize=\"8.5\" Foreground=\"#4CC2FF\"/>" +
                     "        <TextBlock Text=\"9 images\" FontSize=\"8.5\" Foreground=\"White\" FontWeight=\"SemiBold\"/>" +
@@ -2435,7 +2403,7 @@ namespace ModernImageViewer
                     "        <TextBlock Text=\"⏱ 12s\" FontSize=\"8.5\" Foreground=\"#4CC2FF\"/>" +
                     "      </Border>" +
                     "    </Grid>" +
-                    "    <Grid VerticalAlignment=\"Bottom\" Height=\"24\" Background=\"#F0161616\" Padding=\"4,1\">" +
+                    "    <Grid VerticalAlignment=\"Bottom\" Height=\"28\" Background=\"#F0161616\" Padding=\"4,1\">" +
                     "      <Grid.ColumnDefinitions>" +
                     "        <ColumnDefinition Width=\"*\"/>" +
                     "        <ColumnDefinition Width=\"Auto\"/>" +
@@ -2444,17 +2412,17 @@ namespace ModernImageViewer
                     "        <ColumnDefinition Width=\"Auto\"/>" +
                     "      </Grid.ColumnDefinitions>" +
                     "      <TextBlock Text=\"Recipe\" FontSize=\"9.5\" Foreground=\"White\" VerticalAlignment=\"Center\" TextTrimming=\"CharacterEllipsis\"/>" +
-                    "      <Button Grid.Column=\"1\" Padding=\"3,1\" Margin=\"1,0\" Background=\"Transparent\" BorderThickness=\"0\" CornerRadius=\"3\" ToolTipService.ToolTip=\"Play show from this scene\">" +
-                    "        <FontIcon FontFamily=\"Segoe Fluent Icons\" Glyph=\"&#xE768;\" FontSize=\"9.5\" Foreground=\"#4CC2FF\"/>" +
+                    "      <Button Grid.Column=\"1\" MinWidth=\"26\" MinHeight=\"24\" Padding=\"4,2\" Margin=\"1,0\" Background=\"Transparent\" BorderThickness=\"0\" CornerRadius=\"4\" ToolTipService.ToolTip=\"Play show from this scene\" AutomationProperties.Name=\"Play show from this scene\">" +
+                    "        <FontIcon FontFamily=\"Segoe Fluent Icons, Segoe MDL2 Assets\" Glyph=\"&#xE768;\" FontSize=\"11\" Foreground=\"#4CC2FF\"/>" +
                     "      </Button>" +
-                    "      <Button Grid.Column=\"2\" Padding=\"3,1\" Margin=\"1,0\" Background=\"Transparent\" BorderThickness=\"0\" CornerRadius=\"3\" ToolTipService.ToolTip=\"Edit camera path\">" +
-                    "        <FontIcon FontFamily=\"Segoe Fluent Icons\" Glyph=\"&#xE714;\" FontSize=\"9.5\" Foreground=\"#B0FFFFFF\"/>" +
+                    "      <Button Grid.Column=\"2\" MinWidth=\"26\" MinHeight=\"24\" Padding=\"4,2\" Margin=\"1,0\" Background=\"Transparent\" BorderThickness=\"0\" CornerRadius=\"4\" ToolTipService.ToolTip=\"Edit camera path\" AutomationProperties.Name=\"Edit camera path\">" +
+                    "        <FontIcon FontFamily=\"Segoe Fluent Icons, Segoe MDL2 Assets\" Glyph=\"&#xE714;\" FontSize=\"11\" Foreground=\"#B0FFFFFF\"/>" +
                     "      </Button>" +
-                    "      <Button Grid.Column=\"3\" Padding=\"2,1\" Margin=\"1,0\" Background=\"Transparent\" BorderThickness=\"0\" CornerRadius=\"3\" ToolTipService.ToolTip=\"Duplicate scene\">" +
-                    "        <FontIcon FontFamily=\"Segoe Fluent Icons\" Glyph=\"&#xE8C8;\" FontSize=\"8.5\" Foreground=\"#B0FFFFFF\"/>" +
+                    "      <Button Grid.Column=\"3\" MinWidth=\"26\" MinHeight=\"24\" Padding=\"4,2\" Margin=\"1,0\" Background=\"Transparent\" BorderThickness=\"0\" CornerRadius=\"4\" ToolTipService.ToolTip=\"Duplicate scene\" AutomationProperties.Name=\"Duplicate scene\">" +
+                    "        <FontIcon FontFamily=\"Segoe Fluent Icons, Segoe MDL2 Assets\" Glyph=\"&#xE8C8;\" FontSize=\"11\" Foreground=\"#B0FFFFFF\"/>" +
                     "      </Button>" +
-                    "      <Button Grid.Column=\"4\" Padding=\"2,1\" Margin=\"1,0\" Background=\"Transparent\" BorderThickness=\"0\" CornerRadius=\"3\" ToolTipService.ToolTip=\"Remove scene\">" +
-                    "        <FontIcon FontFamily=\"Segoe Fluent Icons\" Glyph=\"&#xE711;\" FontSize=\"8.5\" Foreground=\"#B0FFFFFF\"/>" +
+                    "      <Button Grid.Column=\"4\" MinWidth=\"26\" MinHeight=\"24\" Padding=\"4,2\" Margin=\"6,0,1,0\" Background=\"Transparent\" BorderThickness=\"0\" CornerRadius=\"4\" ToolTipService.ToolTip=\"Remove scene. Ctrl+Z brings it back.\" AutomationProperties.Name=\"Remove scene\">" +
+                    "        <FontIcon FontFamily=\"Segoe Fluent Icons, Segoe MDL2 Assets\" Glyph=\"&#xE711;\" FontSize=\"11\" Foreground=\"#B0FFFFFF\"/>" +
                     "      </Button>" +
                     "    </Grid>" +
                     "  </Grid>" +
@@ -2568,28 +2536,45 @@ namespace ModernImageViewer
                 {
                     double dur = _activeShow!.TotalEstimatedDuration;
                     string length = ShowLength(dur);
-                    storySummary.Text = $"{sceneCount} scenes · {length}";
-                    autoDraftBtn.Content = "🔄 Re-draft";
-                    ToolTipService.SetToolTip(autoDraftBtn, "Re-drafts scenes from the image pool using current images-per-scene settings.");
+                    storySummary.Text = $"{sceneCount} {(sceneCount == 1 ? "scene" : "scenes")} · {length}";
+                    autoDraftBtn.Content = "Replace show";
+                    ToolTipService.SetToolTip(autoDraftBtn, "Makes a new show from the image pool and replaces these scenes. It asks first.");
                 }
                 else
                 {
                     storySummary.Text = totalPhotos == 0
                         ? "No scenes yet"
                         : $"No scenes yet · {totalPhotos} image{(totalPhotos == 1 ? "" : "s")}";
-                    autoDraftBtn.Content = "✨ Auto-Draft";
-                    ToolTipService.SetToolTip(autoDraftBtn, "Auto-drafts scenes from the image pool, one screen at a time.");
+                    autoDraftBtn.Content = "Make a show";
+                    ToolTipService.SetToolTip(autoDraftBtn, "Makes a show from the image pool, one screen at a time.");
                 }
 
                 updateSceneBtn.IsEnabled = _selectedShowScene != null && scenesCollection.Contains(_selectedShowScene);
                 SyncStoryImageRange();
-                storyTab.Content = hasScenes ? $"🎬 Storyboard ({sceneCount})" : "🎬 Storyboard";
+                storyTab.Content = StoryTabLabel();
                 ShowShownBadge();
                 ShowAutoPlayState();
             }
             updateStorySummary = UpdateStoryboardSummary;
             _updateStorySummary = UpdateStoryboardSummary;
             _refreshStoryboardCards = () => RefreshCardBadges(refreshImages: true);
+
+            // A scene's camera or duration changed from one of its menus.
+            void SceneMenuChanged()
+            {
+                UpdateStoryboardSummary();
+                RefreshCardBadges();
+                RefreshTrayCardIfOpen();
+            }
+
+            void EditCameraPath(ShowScene scene)
+            {
+                _selectedShowScene = scene;
+                _shuffleChosen = false;
+                scenesView.SelectedItem = scene;
+                RefreshCardBadges();
+                EnterCameraDirector(scene);
+            }
 
             void SyncSceneSelection()
             {
@@ -2617,8 +2602,20 @@ namespace ModernImageViewer
                     if (_activeShow != null)
                     {
                         _activeShow.Scenes = scenesCollection.ToList();
+                        // A removed scene is no longer selected or on the canvas. Left in place, every later
+                        // Undo step stored the canvas into it, and Undo could not get back past the removal.
+                        if (_selectedShowScene != null && !scenesCollection.Contains(_selectedShowScene))
+                        {
+                            _selectedShowScene = null;
+                            _canvasSceneId = null;
+                        }
                         UpdateStoryboardSummary();
                         RefreshCardBadges();
+                        // Removing a scene does not ask, so each change to the list is its own Undo step,
+                        // however it was made: footer button, menu, Delete key or a drag. Taken once the
+                        // selection has settled, as a pointer release is; taken at once, the selection that
+                        // follows a removal became a second step and Undo stopped on it.
+                        NoteUserAction();
                     }
                 };
             }
@@ -2658,185 +2655,64 @@ namespace ModernImageViewer
                 RefreshCardBadges();
             }
 
+            // The picture area of a card: the card less its footer.
+            const double CardPictureWidth = 200;
+            const double CardPictureHeight = 136 - 28;
+
             void PopulateCardImages(Grid card, ShowScene scene, bool forceRefresh = false)
             {
                 var singleImg = card.Children.Count > 0 ? card.Children[0] as Image : null;
                 var twoImgGrid = card.Children.Count > 1 ? card.Children[1] as Grid : null;
-                var multiGrid = card.Children.Count > 2 ? card.Children[2] as Grid : null;
+                var host = card.Children.Count > 2 ? card.Children[2] as Grid : null;
                 var multiBadge = card.Children.Count > 3 ? card.Children[3] as Border : null;
                 var multiText = (multiBadge?.Child as StackPanel)?.Children.Count > 1 ? (multiBadge.Child as StackPanel)!.Children[1] as TextBlock : null;
+                if (host == null) return;
 
-                if (forceRefresh)
+                // The card draws the scene's own split, so a three-column scene looks like three columns.
+                if (singleImg != null) { singleImg.Source = null; singleImg.Visibility = Visibility.Collapsed; }
+                if (twoImgGrid != null) twoImgGrid.Visibility = Visibility.Collapsed;
+                host.Visibility = Visibility.Visible;
+
+                var boxes = scene.ThumbnailBoxes();
+                string signature = string.Join("|", boxes.Select(b => $"{b.Path}@{b.X:F3},{b.Y:F3},{b.W:F3},{b.H:F3}"));
+                if (!forceRefresh && host.Tag as string == signature && host.Children.Count > 0) return;
+                host.Tag = signature;
+
+                host.RowDefinitions.Clear();
+                host.ColumnDefinitions.Clear();
+                host.Children.Clear();
+                foreach (var box in boxes)
                 {
-                    if (singleImg != null) { singleImg.Tag = null; singleImg.Source = null; }
-                    if (twoImgGrid != null)
+                    double w = Math.Max(1, box.W * CardPictureWidth - 1);
+                    double h = Math.Max(1, box.H * CardPictureHeight - 1);
+                    var tile = new Image
                     {
-                        foreach (var c in twoImgGrid.Children)
-                            if (c is Image ti) { ti.Tag = null; ti.Source = null; }
-                    }
-                    if (multiGrid != null)
-                    {
-                        foreach (var c in multiGrid.Children)
-                            if (c is Image mi) { mi.Tag = null; mi.Source = null; }
-                    }
-                }
-
-                // Empty slots are not photos. A circles layout keeps one empty grid cell under the pictures.
-                var allPhotos = scene.GetPhotoPaths().Where(p => !string.IsNullOrEmpty(p)).ToList();
-                int photoCount = allPhotos.Count;
-
-                void SetThumbnail(Image? img, string? path, int decodeWidth)
-                {
-                    if (img == null) return;
-                    if (string.IsNullOrEmpty(path))
-                    {
-                        img.Tag = null;
-                        img.Source = null;
-                        img.Visibility = Visibility.Collapsed;
-                        return;
-                    }
-                    img.Visibility = Visibility.Visible;
-                    if (!forceRefresh && img.Tag as string == path && img.Source != null) return;
-                    img.Tag = path;
+                        Stretch = Microsoft.UI.Xaml.Media.Stretch.UniformToFill,
+                        Width = w,
+                        Height = h,
+                        HorizontalAlignment = HorizontalAlignment.Left,
+                        VerticalAlignment = VerticalAlignment.Top,
+                        Margin = new Thickness(box.X * CardPictureWidth + 0.5, box.Y * CardPictureHeight + 0.5, 0, 0)
+                    };
                     try
                     {
-                        img.Source = new BitmapImage { DecodePixelWidth = decodeWidth, UriSource = new Uri(path) };
+                        // Small tiles decode small. A solo scene is the whole card.
+                        int decode = (int)Math.Clamp(w * 2, 96, 480);
+                        tile.Source = new BitmapImage { DecodePixelWidth = decode, UriSource = new Uri(box.Path) };
                     }
-                    catch
+                    catch (UriFormatException)
                     {
-                        img.Tag = null;
-                        img.Source = null;
+                        tile.Source = null;
                     }
+                    host.Children.Add(tile);
                 }
 
-                if (photoCount <= 1)
+                int photoCount = boxes.Count;
+                if (multiBadge != null)
                 {
-                    if (singleImg != null) singleImg.Visibility = Visibility.Visible;
-                    if (twoImgGrid != null) twoImgGrid.Visibility = Visibility.Collapsed;
-                    if (multiGrid != null) multiGrid.Visibility = Visibility.Collapsed;
-                    if (multiBadge != null) multiBadge.Visibility = Visibility.Collapsed;
-
-                    string? leadPhoto = allPhotos.FirstOrDefault();
-                    SetThumbnail(singleImg, leadPhoto, 480);
-                }
-                else if (photoCount == 2)
-                {
-                    if (singleImg != null) singleImg.Visibility = Visibility.Collapsed;
-                    if (twoImgGrid != null) twoImgGrid.Visibility = Visibility.Visible;
-                    if (multiGrid != null) multiGrid.Visibility = Visibility.Collapsed;
-                    if (multiBadge != null) multiBadge.Visibility = Visibility.Collapsed;
-
-                    if (twoImgGrid != null && twoImgGrid.Children.Count >= 2)
-                    {
-                        var img0 = twoImgGrid.Children[0] as Image;
-                        var img1 = twoImgGrid.Children[1] as Image;
-
-                        // Determine if split is vertical (side-by-side columns) or horizontal (stacked rows)
-                        bool isVerticalSplit = false;
-                        if (scene.Layout?.Mosaic != null)
-                        {
-                            isVerticalSplit = scene.Layout.Mosaic.Vertical;
-                        }
-                        else if (scene.Layout?.Freeform != null && scene.Layout.Freeform.Count >= 2)
-                        {
-                            var f0 = scene.Layout.Freeform[0];
-                            var f1 = scene.Layout.Freeform[1];
-                            isVerticalSplit = Math.Abs(f0.X - f1.X) > Math.Abs(f0.Y - f1.Y);
-                        }
-                        else if (scene.Layout?.State != null && scene.Layout.State.Lines == 1)
-                        {
-                            isVerticalSplit = true;
-                        }
-
-                        twoImgGrid.RowDefinitions.Clear();
-                        twoImgGrid.ColumnDefinitions.Clear();
-
-                        if (isVerticalSplit)
-                        {
-                            // 2 Columns side-by-side
-                            twoImgGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                            twoImgGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                            twoImgGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-                            if (img0 != null) { Grid.SetRow(img0, 0); Grid.SetColumn(img0, 0); }
-                            if (img1 != null) { Grid.SetRow(img1, 0); Grid.SetColumn(img1, 1); }
-                        }
-                        else
-                        {
-                            // 2 Rows stacked top and bottom (e.g. Edge-to-edge landscape scenes)
-                            twoImgGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                            twoImgGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                            twoImgGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-                            if (img0 != null) { Grid.SetRow(img0, 0); Grid.SetColumn(img0, 0); }
-                            if (img1 != null) { Grid.SetRow(img1, 1); Grid.SetColumn(img1, 0); }
-                        }
-
-                        SetThumbnail(img0, allPhotos.Count > 0 ? allPhotos[0] : null, 360);
-                        SetThumbnail(img1, allPhotos.Count > 1 ? allPhotos[1] : null, 360);
-                    }
-                }
-                else
-                {
-                    // 3+ Photos
-                    if (singleImg != null) singleImg.Visibility = Visibility.Collapsed;
-                    if (twoImgGrid != null) twoImgGrid.Visibility = Visibility.Collapsed;
-                    if (multiGrid != null) multiGrid.Visibility = Visibility.Visible;
-
-                    // Badge if more than 4 photos
-                    if (multiBadge != null)
-                    {
-                        bool moreThanShown = photoCount > 4;
-                        multiBadge.Visibility = moreThanShown ? Visibility.Visible : Visibility.Collapsed;
-                        if (moreThanShown && multiText != null) multiText.Text = $"{photoCount} images";
-                    }
-
-                    if (multiGrid != null)
-                    {
-                        if (photoCount == 3)
-                        {
-                            // Top banner spans 2 cols, bottom has 2 squares
-                            if (multiGrid.Children.Count > 0 && multiGrid.Children[0] is Image t0)
-                            {
-                                Grid.SetRow(t0, 0); Grid.SetColumn(t0, 0);
-                                Grid.SetRowSpan(t0, 1); Grid.SetColumnSpan(t0, 2);
-                                SetThumbnail(t0, allPhotos.Count > 0 ? allPhotos[0] : null, 360);
-                            }
-                            if (multiGrid.Children.Count > 1 && multiGrid.Children[1] is Image t1)
-                            {
-                                Grid.SetRow(t1, 1); Grid.SetColumn(t1, 0);
-                                Grid.SetRowSpan(t1, 1); Grid.SetColumnSpan(t1, 1);
-                                SetThumbnail(t1, allPhotos.Count > 1 ? allPhotos[1] : null, 240);
-                            }
-                            if (multiGrid.Children.Count > 2 && multiGrid.Children[2] is Image t2)
-                            {
-                                Grid.SetRow(t2, 1); Grid.SetColumn(t2, 1);
-                                Grid.SetRowSpan(t2, 1); Grid.SetColumnSpan(t2, 1);
-                                SetThumbnail(t2, allPhotos.Count > 2 ? allPhotos[2] : null, 240);
-                            }
-                            if (multiGrid.Children.Count > 3 && multiGrid.Children[3] is Image t3)
-                            {
-                                t3.Tag = null;
-                                t3.Source = null;
-                                t3.Visibility = Visibility.Collapsed;
-                            }
-                        }
-                        else
-                        {
-                            // Standard 2x2 grid for 4+ photos
-                            for (int i = 0; i < 4 && i < multiGrid.Children.Count; i++)
-                            {
-                                if (multiGrid.Children[i] is Image tile)
-                                {
-                                    int r = i / 2;
-                                    int c = i % 2;
-                                    Grid.SetRow(tile, r); Grid.SetColumn(tile, c);
-                                    Grid.SetRowSpan(tile, 1); Grid.SetColumnSpan(tile, 1);
-                                    SetThumbnail(tile, i < allPhotos.Count ? allPhotos[i] : null, 240);
-                                }
-                            }
-                        }
-                    }
+                    bool many = photoCount > 4;
+                    multiBadge.Visibility = many ? Visibility.Visible : Visibility.Collapsed;
+                    if (many && multiText != null) multiText.Text = $"{photoCount} images";
                 }
             }
 
@@ -2911,76 +2787,10 @@ namespace ModernImageViewer
                             if (Resources.TryGetValue("MultiViewMenuFlyoutPresenterStyle", out var style) && style is Style presenter)
                                 flyout.MenuFlyoutPresenterStyle = presenter;
 
-                            void SetCamera(Action act)
-                            {
-                                act();
-                                UpdateStoryboardSummary();
-                                RefreshCardBadges();
-                                RefreshTrayCardIfOpen();
-                            }
-
-                            string motion = GetMotionLabel(curScene);
-                            bool isZoomIn = motion.Contains("Zoom In");
-                            bool isZoomOut = motion.Contains("Zoom Out");
-                            bool isPan = motion.Contains("Pan");
-                            bool isStill = motion.Contains("Still");
-                            bool isAuto = curScene.CameraOverride == null;
-
-                            // 1. Concrete Camera Motions
-                            var zoomInItem = new MenuFlyoutItem { Text = isZoomIn ? "⤢ Zoom In  ✓" : "⤢ Zoom In" };
-                            zoomInItem.Click += (_, _) => SetCamera(() => curScene.CameraOverride = new CameraKeyframeOverride(new CameraViewDto(1.0, 0.5, 0.5), new CameraViewDto(1.25, 0.5, 0.5), "ZoomIn"));
-                            flyout.Items.Add(zoomInItem);
-
-                            var zoomOutItem = new MenuFlyoutItem { Text = isZoomOut ? "⤡ Zoom Out  ✓" : "⤡ Zoom Out" };
-                            zoomOutItem.Click += (_, _) => SetCamera(() => curScene.CameraOverride = new CameraKeyframeOverride(new CameraViewDto(1.25, 0.5, 0.5), new CameraViewDto(1.0, 0.5, 0.5), "ZoomOut"));
-                            flyout.Items.Add(zoomOutItem);
-
-                            var panItem = new MenuFlyoutItem { Text = isPan ? "⇄ Pan Across  ✓" : "⇄ Pan Across" };
-                            panItem.Click += (_, _) => SetCamera(() => curScene.CameraOverride = new CameraKeyframeOverride(new CameraViewDto(1.15, 0.40, 0.5), new CameraViewDto(1.15, 0.60, 0.5), "Pan"));
-                            flyout.Items.Add(panItem);
-
-                            var stillItem = new MenuFlyoutItem { Text = isStill ? "• Still (No Motion)  ✓" : "• Still (No Motion)" };
-                            stillItem.Click += (_, _) => SetCamera(() => curScene.CameraOverride = new CameraKeyframeOverride(new CameraViewDto(1.0, 0.5, 0.5), new CameraViewDto(1.0, 0.5, 0.5), "Still"));
-                            flyout.Items.Add(stillItem);
-
+                            FillCameraMenu(flyout.Items, curScene, SceneMenuChanged, () => EditCameraPath(curScene));
                             flyout.Items.Add(new MenuFlyoutSeparator());
-
-                            // 2. Dynamic Runtime Mode (clearly separated from fixed motions)
-                            var autoItem = new MenuFlyoutItem { Text = isAuto ? "✨ Dynamic (Auto at Playback)  ✓" : "✨ Dynamic (Auto at Playback)" };
-                            ToolTipService.SetToolTip(autoItem, "Removes locked keyframes so motion is chosen dynamically on each playback loop");
-                            autoItem.Click += (_, _) => SetCamera(() => curScene.CameraOverride = null);
-                            flyout.Items.Add(autoItem);
-
-                            flyout.Items.Add(new MenuFlyoutSeparator());
-
-                            // 3. Visual Director Tooling
-                            var editCamItem = MakeAdvancedItem("🎯 Edit Camera Path…", "\uE714", () =>
-                            {
-                                _selectedShowScene = curScene;
-                                _shuffleChosen = false;
-                                scenesView.SelectedItem = curScene;
-                                RefreshCardBadges();
-                                EnterCameraDirector(curScene);
-                            });
-                            flyout.Items.Add(editCamItem);
-
-                            flyout.Items.Add(new MenuFlyoutSeparator());
-
                             var holdSub = new MenuFlyoutSubItem { Text = "Duration" };
-                            foreach (int secs in new[] { 5, 8, 12, 16, 20, 30 })
-                            {
-                                int s = secs;
-                                bool isCurrent = Math.Abs((curScene.DwellSeconds ?? 12.0) - s) < 0.5;
-                                var item = new MenuFlyoutItem { Text = isCurrent ? $"{s}s  ✓" : $"{s}s" };
-                                item.Click += (_, _) =>
-                                {
-                                    curScene.DwellSeconds = s;
-                                    UpdateStoryboardSummary();
-                                    RefreshCardBadges();
-                                    RefreshTrayCardIfOpen();
-                                };
-                                holdSub.Items.Add(item);
-                            }
+                            FillDurationMenu(holdSub.Items, curScene, SceneMenuChanged);
                             flyout.Items.Add(holdSub);
 
                             flyout.ShowAt(fe);
@@ -3061,7 +2871,7 @@ namespace ModernImageViewer
                             if (s is Button b && b.Tag is ShowScene targetScene)
                             {
                                 scenesCollection.Remove(targetScene);
-                                ShowAutoPlayToast("Removed scene");
+                                ShowAutoPlayToast(SceneRemovedToast);
                             }
                         };
                     }
@@ -3077,13 +2887,13 @@ namespace ModernImageViewer
                         if (sender is not GridViewItem gvi || gvi.Content is not ShowScene sc) return;
                         var menu = new MenuFlyout();
                         if (Resources.TryGetValue("MultiViewMenuFlyoutPresenterStyle", out var style) && style is Style presenter) menu.MenuFlyoutPresenterStyle = presenter;
-                        menu.Items.Add(MakeAdvancedItem("▶ Play Show from Here", "", async () =>
+                        menu.Items.Add(MakeAdvancedItem("Play show from here", "\uE768", async () =>
                         {
                             _selectedShowScene = sc;
                             int idx = scenesCollection.IndexOf(sc);
                             await PlayStoryboardAsync(idx >= 0 ? idx : -1);
                         }));
-                        menu.Items.Add(MakeAdvancedItem("💾 Update Scene from Canvas", "\uE74E", () =>
+                        menu.Items.Add(MakeAdvancedItem("Update scene from canvas", "\uE74E", () =>
                         {
                             SyncCanvasToSelectedScene(sc, showToast: true, commitCanvas: true);
                             CaptureUndoPoint();
@@ -3091,81 +2901,16 @@ namespace ModernImageViewer
 
                         menu.Items.Add(new MenuFlyoutSeparator());
 
-                        // Camera Motion Submenu
-                        var motionSub = new MenuFlyoutSubItem { Text = "Camera Motion" };
-                        void SetCameraSub(Action act)
-                        {
-                            act();
-                            UpdateStoryboardSummary();
-                            RefreshCardBadges();
-                            RefreshTrayCardIfOpen();
-                        }
-
-                        string motionSubStr = GetMotionLabel(sc);
-                        bool isZIn = motionSubStr.Contains("Zoom In");
-                        bool isZOut = motionSubStr.Contains("Zoom Out");
-                        bool isP = motionSubStr.Contains("Pan");
-                        bool isSt = motionSubStr.Contains("Still");
-                        bool isAutoSub = sc.CameraOverride == null;
-
-                        // 1. Concrete Camera Motions
-                        var zInItem = new MenuFlyoutItem { Text = isZIn ? "⤢ Zoom In  ✓" : "⤢ Zoom In" };
-                        zInItem.Click += (_, _) => SetCameraSub(() => sc.CameraOverride = new CameraKeyframeOverride(new CameraViewDto(1.0, 0.5, 0.5), new CameraViewDto(1.25, 0.5, 0.5), "ZoomIn"));
-                        motionSub.Items.Add(zInItem);
-
-                        var zOutItem = new MenuFlyoutItem { Text = isZOut ? "⤡ Zoom Out  ✓" : "⤡ Zoom Out" };
-                        zOutItem.Click += (_, _) => SetCameraSub(() => sc.CameraOverride = new CameraKeyframeOverride(new CameraViewDto(1.25, 0.5, 0.5), new CameraViewDto(1.0, 0.5, 0.5), "ZoomOut"));
-                        motionSub.Items.Add(zOutItem);
-
-                        var pItem = new MenuFlyoutItem { Text = isP ? "⇄ Pan Across  ✓" : "⇄ Pan Across" };
-                        pItem.Click += (_, _) => SetCameraSub(() => sc.CameraOverride = new CameraKeyframeOverride(new CameraViewDto(1.15, 0.40, 0.5), new CameraViewDto(1.15, 0.60, 0.5), "Pan"));
-                        motionSub.Items.Add(pItem);
-
-                        var stItem = new MenuFlyoutItem { Text = isSt ? "• Still (No Motion)  ✓" : "• Still (No Motion)" };
-                        stItem.Click += (_, _) => SetCameraSub(() => sc.CameraOverride = new CameraKeyframeOverride(new CameraViewDto(1.0, 0.5, 0.5), new CameraViewDto(1.0, 0.5, 0.5), "Still"));
-                        motionSub.Items.Add(stItem);
-
-                        motionSub.Items.Add(new MenuFlyoutSeparator());
-
-                        // 2. Dynamic Runtime Mode (clearly separated from fixed motions)
-                        var autoSubItem = new MenuFlyoutItem { Text = isAutoSub ? "✨ Dynamic (Auto at Playback)  ✓" : "✨ Dynamic (Auto at Playback)" };
-                        ToolTipService.SetToolTip(autoSubItem, "Removes locked keyframes so motion is chosen dynamically on each playback loop");
-                        autoSubItem.Click += (_, _) => SetCameraSub(() => sc.CameraOverride = null);
-                        motionSub.Items.Add(autoSubItem);
-
-                        motionSub.Items.Add(new MenuFlyoutSeparator());
-
-                        // 3. Visual Director Tooling
-                        motionSub.Items.Add(MakeAdvancedItem("🎯 Edit Camera Path…", "\uE714", () =>
-                        {
-                            _selectedShowScene = sc;
-                            _shuffleChosen = false;
-                            scenesView.SelectedItem = sc;
-                            RefreshCardBadges();
-                            EnterCameraDirector(sc);
-                        }));
+                        var motionSub = new MenuFlyoutSubItem { Text = "Camera motion" };
+                        FillCameraMenu(motionSub.Items, sc, SceneMenuChanged, () => EditCameraPath(sc));
                         menu.Items.Add(motionSub);
 
-                        // Quick Duration Adjustment Submenu
                         var dwellSub = new MenuFlyoutSubItem { Text = "Duration" };
-                        foreach (int secs in new[] { 5, 8, 12, 16, 20, 30 })
-                        {
-                            int s = secs;
-                            bool isCurrent = Math.Abs((sc.DwellSeconds ?? 12.0) - s) < 0.5;
-                            var item = new MenuFlyoutItem { Text = isCurrent ? $"{s}s  ✓" : $"{s}s" };
-                            item.Click += (_, _) =>
-                            {
-                                sc.DwellSeconds = s;
-                                UpdateStoryboardSummary();
-                                RefreshCardBadges();
-                                RefreshTrayCardIfOpen();
-                            };
-                            dwellSub.Items.Add(item);
-                        }
+                        FillDurationMenu(dwellSub.Items, sc, SceneMenuChanged);
                         menu.Items.Add(dwellSub);
 
                         menu.Items.Add(new MenuFlyoutSeparator());
-                        menu.Items.Add(MakeAdvancedItem("Duplicate Scene", "", () =>
+                        menu.Items.Add(MakeAdvancedItem("Duplicate scene", "\uE8C8", () =>
                         {
                             var clone = sc.Clone();
                             int curIdx = scenesCollection.IndexOf(sc);
@@ -3175,15 +2920,15 @@ namespace ModernImageViewer
                                 ShowAutoPlayToast("Duplicated scene");
                             }
                         }));
-                        menu.Items.Add(MakeAdvancedItem("Remove Scene", "", () =>
+                        menu.Items.Add(MakeAdvancedItem("Remove scene", "\uE74D", () =>
                         {
                             scenesCollection.Remove(sc);
-                            ShowAutoPlayToast("Removed scene");
+                            ShowAutoPlayToast(SceneRemovedToast);
                         }));
                         int curScIdx = scenesCollection.IndexOf(sc);
                         if (curScIdx > 0)
                         {
-                            menu.Items.Add(MakeAdvancedItem("Move Earlier", "", () =>
+                            menu.Items.Add(MakeAdvancedItem("Move earlier", "\uE76B", () =>
                             {
                                 int cur = scenesCollection.IndexOf(sc);
                                 if (cur > 0)
@@ -3194,7 +2939,7 @@ namespace ModernImageViewer
                         }
                         if (curScIdx >= 0 && curScIdx < scenesCollection.Count - 1)
                         {
-                            menu.Items.Add(MakeAdvancedItem("Move Later", "", () =>
+                            menu.Items.Add(MakeAdvancedItem("Move later", "\uE76C", () =>
                             {
                                 int cur = scenesCollection.IndexOf(sc);
                                 if (cur >= 0 && cur < scenesCollection.Count - 1)
@@ -3248,14 +2993,10 @@ namespace ModernImageViewer
                 ShowAutoPlayState();
             };
 
-            scenesView.DoubleTapped += async (s, e) =>
+            // The first click of the pair has already put the scene on the canvas.
+            scenesView.DoubleTapped += (s, e) =>
             {
-                if (scenesView.SelectedItem is ShowScene scene)
-                {
-                    _selectedShowScene = scene;
-                    int idx = scenesCollection.IndexOf(scene);
-                    await PlayStoryboardAsync(idx >= 0 ? idx : -1);
-                }
+                if (scenesView.SelectedItem is ShowScene) RemoveTrayCard();
             };
 
             scenesView.KeyDown += async (s, e) =>
@@ -3280,7 +3021,7 @@ namespace ModernImageViewer
                 {
                     e.Handled = true;
                     scenesCollection.Remove(selectedScene);
-                    ShowAutoPlayToast("Removed scene");
+                    ShowAutoPlayToast(SceneRemovedToast);
                 }
                 else if (e.Key == Windows.System.VirtualKey.D && Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
                 {
@@ -3476,16 +3217,7 @@ namespace ModernImageViewer
             }
 
             poolTab.Click += (_, _) => { _trayTab = 0; SyncTabs(); if (all.Count > 0) search.Focus(FocusState.Programmatic); };
-            storyTab.Click += (_, _) =>
-            {
-                _trayTab = 1;
-                if ((_activeShow?.Scenes.Count ?? 0) > 0)
-                {
-                    _shuffleChosen = false;
-                }
-                SyncTabs();
-                ShowAutoPlayState();
-            };
+            storyTab.Click += (_, _) => { _trayTab = 1; SyncTabs(); };
 
             SyncTabs();
 
@@ -3541,7 +3273,7 @@ namespace ModernImageViewer
                 double currentY = e.GetCurrentPoint(RootGrid).Position.Y;
                 double deltaY = dragStartY - currentY;
                 double minH = SingleRowDrawerHeight;
-                double maxH = Math.Max(450, RootGrid.ActualHeight - 80);
+                double maxH = MaxDrawerHeight();
                 double targetH = Math.Clamp(dragStartHeight + deltaY, minH, maxH);
                 _trayDrawerHeight = targetH;
                 _trayCard.Height = targetH;
@@ -3569,7 +3301,7 @@ namespace ModernImageViewer
             splitter.DoubleTapped += (_, e) =>
             {
                 if (_trayCard == null) return;
-                double expandedH = Math.Min(380, RootGrid.ActualHeight - 80);
+                double expandedH = Math.Min(380, MaxDrawerHeight());
                 double target = _trayDrawerHeight > SingleRowDrawerHeight + 30 ? SingleRowDrawerHeight : expandedH;
                 _trayDrawerHeight = target;
                 _trayCard.Height = target;
@@ -3592,6 +3324,7 @@ namespace ModernImageViewer
 
             // Docked at the very bottom of the screen
             _trayCard = NewCard(body);
+            _trayDrawerHeight = Math.Min(_trayDrawerHeight, MaxDrawerHeight());
             _trayCard.Height = _trayDrawerHeight;
             _trayCard.HorizontalAlignment = HorizontalAlignment.Stretch;
             _trayCard.VerticalAlignment = VerticalAlignment.Bottom;
@@ -4014,44 +3747,31 @@ namespace ModernImageViewer
             ToolTipService.SetToolTip(AutoPlayButton, playTip);
             PaintSelected(AutoPlayButton, AutoPlayText, AutoPlayIcon, playing);
 
+            // The drawer button shows the open-panel plate only. The mode lives on its own switch.
             if (StoryDeckButton != null)
             {
-                bool isDrawerOpen = _trayCard != null;
-                if (isDrawerOpen)
-                {
-                    if (storyboardMode)
-                    {
-                        PaintSelected(StoryDeckButton, StoryDeckText, StoryDeckIcon, true);
-                    }
-                    else
-                    {
-                        PaintSelected(StoryDeckButton, StoryDeckText, StoryDeckIcon, false);
-                        HoldFlyoutSource(StoryDeckButton, true);
-                    }
-                }
-                else
-                {
-                    HoldFlyoutSource(StoryDeckButton, false);
-                    PaintSelected(StoryDeckButton, StoryDeckText, StoryDeckIcon, storyboardMode);
-                }
-
-                string deckTip = hasScenes
-                    ? (storyboardMode
-                        ? $"Story Deck is active ({totalScenes} scenes). Click to toggle drawer (B)."
-                        : $"Story Deck ({totalScenes} scenes). Click to toggle drawer (B).")
-                    : "Story Deck: Manage image pool and storyboard scenes. Click to toggle drawer (B).";
-                ToolTipService.SetToolTip(StoryDeckButton, deckTip);
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(StoryDeckButton,
-                    storyboardMode ? $"{StoryDeckText?.Text ?? "Story Deck"}, selected" : (StoryDeckText?.Text ?? "Story Deck"));
+                PaintSelected(StoryDeckButton, StoryDeckText, StoryDeckIcon, false);
+                HoldFlyoutSource(StoryDeckButton, _trayCard != null);
             }
 
+            if (StoryboardModeButton != null)
+            {
+                StoryboardModeButton.IsEnabled = hasScenes;
+                PaintSelected(StoryboardModeButton, StoryboardModeText, StoryboardModeIcon, storyboardMode);
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(StoryboardModeButton, storyboardMode ? "Storyboard, selected" : "Storyboard");
+                ToolTipService.SetToolTip(StoryboardModeButton, !hasScenes
+                    ? "Play walks a storyboard once there is one. Make a show in the storyboard (B)."
+                    : storyboardMode
+                        ? $"Play walks the storyboard: {totalScenes} {(totalScenes == 1 ? "scene" : "scenes")}, in order."
+                        : "Play the storyboard instead. Nothing on the canvas changes.");
+            }
             PaintSelected(SurpriseButton, SurpriseText, SurpriseIcon, !storyboardMode);
             if (SurpriseButton != null)
             {
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(SurpriseButton, !storyboardMode ? "Auto-Mix, selected" : "Auto-Mix");
                 ToolTipService.SetToolTip(SurpriseButton, storyboardMode
-                    ? "Switch playback to Auto-Mix, and show one new layout now."
-                    : "Auto-Mix is active. Click for one new layout now.");
+                    ? "Play Auto-Mix instead: a new layout each time, from the image pool. Nothing on the canvas changes."
+                    : "Play makes a new layout each time, from the image pool. Next (Right Arrow) makes one now.");
             }
             if (PrevLayoutButton != null)
             {
@@ -4251,18 +3971,13 @@ namespace ModernImageViewer
             _autoPlayShieldPressed = false;
         }
 
-        /// <summary>Chooses Surprise me as the playback mode, and shows one new layout now. Play keeps using it.</summary>
-        private async void SurpriseButton_Click(object sender, RoutedEventArgs e)
+        /// <summary>Play makes a new layout each time from now on. Nothing on the canvas changes; Next makes one now.</summary>
+        private void SurpriseButton_Click(object sender, RoutedEventArgs e)
         {
             _shuffleChosen = true;
             _isStoryboardPlayback = false;
-            if (_trayCard != null && _trayTab == 1)
-            {
-                RemoveTrayCard();
-            }
             ShowAutoPlayState();
             RefreshPlayModeCard();
-            await SurpriseAsync(fade: _autoPlaySeconds > 0);
         }
 
         /// <summary>The same accent fill Play uses while it is running. A white plate is the open-panel look, so it is not used for a mode.</summary>

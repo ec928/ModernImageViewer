@@ -26,6 +26,16 @@ namespace ModernImageViewer
         private bool CanUndo => _undoStack.Count > 1;
         private bool CanRedo => _redoStack.Count > 0;
 
+        private void UndoBarButton_Click(object sender, RoutedEventArgs e) => Undo();
+        private void RedoBarButton_Click(object sender, RoutedEventArgs e) => Redo();
+
+        /// <summary>The bar's Undo and Redo grey out when there is nothing to take back or bring back.</summary>
+        private void ShowUndoState()
+        {
+            if (UndoBarButton != null) UndoBarButton.IsEnabled = CanUndo;
+            if (RedoBarButton != null) RedoBarButton.IsEnabled = CanRedo;
+        }
+
         private void AttachUndoWatchers()
         {
             RootGrid.AddHandler(PointerReleasedEvent, new PointerEventHandler((_, _) => NoteUserAction()), true);
@@ -83,6 +93,7 @@ namespace ModernImageViewer
             _undoStack.Add(now);
             if (_undoStack.Count > MaxUndoSteps + 1) _undoStack.RemoveAt(0);
             _redoStack.Clear();
+            ShowUndoState();
         }
 
         /// <summary>
@@ -101,6 +112,7 @@ namespace ModernImageViewer
             _undoStack.Clear();
             _redoStack.Clear();
             if (_items.Count > 0) _undoStack.Add(UndoSnapshot());
+            ShowUndoState();
         }
 
         private void ClearUndo()
@@ -108,6 +120,7 @@ namespace ModernImageViewer
             _undoTimer?.Stop();
             _undoStack.Clear();
             _redoStack.Clear();
+            ShowUndoState();
         }
 
         private void Undo()
@@ -118,6 +131,7 @@ namespace ModernImageViewer
             _undoStack.RemoveAt(_undoStack.Count - 1);
             RestoreSnapshot(_undoStack[^1]);
             SettleRestoredStep();
+            ShowUndoState();
         }
 
         private void Redo()
@@ -129,6 +143,7 @@ namespace ModernImageViewer
             _undoStack.Add(next);
             RestoreSnapshot(next);
             SettleRestoredStep();
+            ShowUndoState();
         }
 
         /// <summary>
@@ -234,6 +249,14 @@ namespace ModernImageViewer
             {
                 _reuseBitmaps = null;
                 _restoringUndo = false;
+            }
+            // A removed or reordered scene comes back with the snapshot, so open scene cards are redrawn from it.
+            // Redrawing closes the old drawer, which counts as a closed menu; that is not a new step, and
+            // taking one would clear Redo.
+            if (_trayCard != null && _trayTab == 1)
+            {
+                RefreshTrayCardIfOpen();
+                _undoTimer?.Stop();
             }
         }
     }

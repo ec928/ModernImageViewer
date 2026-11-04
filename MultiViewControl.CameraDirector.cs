@@ -220,11 +220,11 @@ namespace ModernImageViewer
             {
                 if (curIdx >= 0 && total > 0)
                 {
-                    _directorSceneBadgeText.Text = $"🎬 Scene #{curIdx + 1} of {total} · {recipe}";
+                    _directorSceneBadgeText.Text = $"Scene {curIdx + 1} of {total} · {recipe}";
                 }
                 else
                 {
-                    _directorSceneBadgeText.Text = $"🎬 Camera Director · {recipe}";
+                    _directorSceneBadgeText.Text = $"Camera Director · {recipe}";
                 }
             }
 
@@ -339,13 +339,13 @@ namespace ModernImageViewer
             };
             _startBadgeText = new TextBlock
             {
-                Text = "🟢 Start · 1.0x",
+                Text = "Start · 1.0x",
                 Foreground = new SolidColorBrush(Color.FromArgb(255, 16, 185, 129)),
                 FontSize = 11,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
             };
             _startBadge.Child = _startBadgeText;
-            ToolTipService.SetToolTip(_startBadge, "Start Keyframe — click to select and edit");
+            ToolTipService.SetToolTip(_startBadge, "Start frame — click to select and edit");
             _startBadge.PointerPressed += (s, e) =>
             {
                 SelectCameraKeyframe(true);
@@ -373,13 +373,13 @@ namespace ModernImageViewer
             };
             _endBadgeText = new TextBlock
             {
-                Text = "🔴 End · 1.25x",
+                Text = "End · 1.25x",
                 Foreground = new SolidColorBrush(Color.FromArgb(255, 239, 68, 68)),
                 FontSize = 11,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
             };
             _endBadge.Child = _endBadgeText;
-            ToolTipService.SetToolTip(_endBadge, "End Keyframe — click to select and edit");
+            ToolTipService.SetToolTip(_endBadge, "End frame — click to select and edit");
             _endBadge.PointerPressed += (s, e) =>
             {
                 SelectCameraKeyframe(false);
@@ -467,8 +467,8 @@ namespace ModernImageViewer
             barStack.Children.Add(MakeDirectorDivider());
 
             // Start & End Keyframe selectors
-            _startToggleBtn = MakeDirectorPillButton("🟢 Start", isStart: true);
-            _endToggleBtn = MakeDirectorPillButton("🔴 End", isStart: false);
+            _startToggleBtn = MakeDirectorPillButton("Start", isStart: true);
+            _endToggleBtn = MakeDirectorPillButton("End", isStart: false);
             barStack.Children.Add(_startToggleBtn);
             barStack.Children.Add(_endToggleBtn);
 
@@ -605,7 +605,7 @@ namespace ModernImageViewer
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(14),
                 IsTabStop = false,
-                Content = new TextBlock { Text = text, FontSize = 11.5, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold }
+                Content = new TextBlock { Text = text, FontSize = 11.5, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = new SolidColorBrush(isStart ? Color.FromArgb(255, 16, 185, 129) : Color.FromArgb(255, 239, 68, 68)) }
             };
             btn.Click += (_, _) => SelectCameraKeyframe(isStart);
             return btn;
@@ -780,7 +780,7 @@ namespace ModernImageViewer
             _startWireframe.Height = sH;
             Canvas.SetLeft(_startWireframe, sLeft);
             Canvas.SetTop(_startWireframe, sTop);
-            if (_startBadgeText != null) _startBadgeText.Text = $"🟢 Start · {_curStartZoom:F2}x";
+            if (_startBadgeText != null) _startBadgeText.Text = $"Start · {_curStartZoom:F2}x";
 
             // End wireframe layout
             double eW = Math.Max(24, W / _curEndZoom);
@@ -792,7 +792,7 @@ namespace ModernImageViewer
             _endWireframe.Height = eH;
             Canvas.SetLeft(_endWireframe, eLeft);
             Canvas.SetTop(_endWireframe, eTop);
-            if (_endBadgeText != null) _endBadgeText.Text = $"🔴 End · {_curEndZoom:F2}x";
+            if (_endBadgeText != null) _endBadgeText.Text = $"End · {_curEndZoom:F2}x";
 
             if (_startBadge != null)
             {
@@ -841,17 +841,17 @@ namespace ModernImageViewer
 
         public static string GetMotionLabel(ShowScene scene)
         {
-            if (scene.CameraOverride == null) return "✨ Dynamic";
+            if (scene.CameraOverride == null) return "Dynamic";
 
             if (!string.IsNullOrEmpty(scene.CameraOverride.Kind))
             {
                 return scene.CameraOverride.Kind.ToLowerInvariant() switch
                 {
-                    "zoomin" => "⤢ Zoom In",
-                    "zoomout" => "⤡ Zoom Out",
+                    "zoomin" => "⤢ Zoom in",
+                    "zoomout" => "⤡ Zoom out",
                     "pan" or "drift" => "⇄ Pan",
                     "still" => "• Still",
-                    _ => "✨ Dynamic"
+                    _ => "Dynamic"
                 };
             }
 
@@ -860,8 +860,8 @@ namespace ModernImageViewer
                              Math.Abs(scene.CameraOverride.End.Y - scene.CameraOverride.Start.Y);
 
             if (Math.Abs(zDiff) < 0.02 && panDist < 0.02) return "• Still";
-            if (zDiff > 0.02) return "⤢ Zoom In";
-            if (zDiff < -0.02) return "⤡ Zoom Out";
+            if (zDiff > 0.02) return "⤢ Zoom in";
+            if (zDiff < -0.02) return "⤡ Zoom out";
             if (panDist > 0.02) return "⇄ Pan";
             return "• Still";
         }

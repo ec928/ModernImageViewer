@@ -285,19 +285,18 @@
                     <!-- Subtle Section Divider 1 -->
                     <Rectangle Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,0" Opacity="0.5"/>
 
-                    <!-- Story Deck Drawer Toggle -->
+                    <!-- The drawer. The button names the tab it opens, with that tab's count. -->
                     <Border x:Name="DrawerControl" CornerRadius="12" Background="#14FFFFFF" VerticalAlignment="Center">
                         <Button x:Name="StoryDeckButton"
                                 Click="StoryDeckButton_Click"
                                 Style="{StaticResource QuietButtonStyle}"
                                 Padding="8,5"
                                 CornerRadius="12"
-                                VerticalAlignment="Center"
-                                ToolTipService.ToolTip="Toggle Story Deck drawer (Pool and Storyboard). Press B.">
+                                VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                <FontIcon x:Name="StoryDeckIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE8B7;" FontSize="13" />
+                                <FontIcon x:Name="StoryDeckIcon" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE8B9;" FontSize="13" />
                                 <TextBlock x:Name="StoryDeckText"
-                                           Text="Story Deck"
+                                           Text="Image Pool"
                                            VerticalAlignment="Center"
                                            FontSize="13"
                                            Typography.NumeralAlignment="Tabular" />
@@ -307,20 +306,30 @@
 
                     <Rectangle Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,0" Opacity="0.5"/>
 
-                    <!-- Playback Mode: Auto-Mix -->
+                    <!-- What Play plays. Choosing a side changes nothing on the canvas. -->
                     <Border x:Name="PlayModeControl" CornerRadius="12" Background="#14FFFFFF" VerticalAlignment="Center">
-                        <Button x:Name="SurpriseButton"
-                                Click="SurpriseButton_Click"
-                                AutomationProperties.Name="Auto-Mix"
-                                Style="{StaticResource QuietButtonStyle}"
-                                Padding="8,5"
-                                CornerRadius="12"
-                                ToolTipService.ToolTip="Auto-Mix playback mode. Continuously generates dynamic multi-image layouts.">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <FontIcon x:Name="SurpriseIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE8B1;" FontSize="14" />
-                                <TextBlock x:Name="SurpriseText" Text="Auto-Mix" VerticalAlignment="Center" FontSize="13" />
-                            </StackPanel>
-                        </Button>
+                        <StackPanel Orientation="Horizontal">
+                            <Button x:Name="StoryboardModeButton"
+                                    Click="StoryboardModeButton_Click"
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    Padding="8,5"
+                                    CornerRadius="12">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon x:Name="StoryboardModeIcon" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE786;" FontSize="13" />
+                                    <TextBlock x:Name="StoryboardModeText" Text="Storyboard" VerticalAlignment="Center" FontSize="13" />
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="SurpriseButton"
+                                    Click="SurpriseButton_Click"
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    Padding="8,5"
+                                    CornerRadius="12">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon x:Name="SurpriseIcon" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE8B1;" FontSize="14" />
+                                    <TextBlock x:Name="SurpriseText" Text="Auto-Mix" VerticalAlignment="Center" FontSize="13" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
                     </Border>
 
                     <Rectangle Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,0" Opacity="0.5"/>
@@ -453,7 +462,7 @@
                             Style="{StaticResource QuietButtonStyle}"
                             Padding="8,5"
                             CornerRadius="12"
-                            ToolTipService.ToolTip="Export JPEG or Save/Load layout (Ctrl+S)">
+                            ToolTipService.ToolTip="Save the canvas as JPEG or PNG, copy it, or save and open layouts and storyboards (Ctrl+S)">
                         <Button.Flyout>
                             <Flyout x:Name="SaveFlyout" 
                                     Placement="Top"
@@ -481,6 +490,30 @@
                             <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE74E;" FontSize="14" />
                             <TextBlock x:Name="SaveText" Text="Save/Load" VerticalAlignment="Center" FontSize="13" />
                         </StackPanel>
+                    </Button>
+
+                    <!-- Undo is the safety net for actions that do not ask first, so it stays in sight. -->
+                    <Button x:Name="UndoBarButton"
+                            Click="UndoBarButton_Click"
+                            AllowFocusOnInteraction="False"
+                            Style="{StaticResource QuietButtonStyle}"
+                            Padding="8,5"
+                            CornerRadius="12"
+                            IsEnabled="False"
+                            AutomationProperties.Name="Undo"
+                            ToolTipService.ToolTip="Undo (Ctrl+Z)">
+                        <FontIcon FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE7A7;" FontSize="14" />
+                    </Button>
+                    <Button x:Name="RedoBarButton"
+                            Click="RedoBarButton_Click"
+                            AllowFocusOnInteraction="False"
+                            Style="{StaticResource QuietButtonStyle}"
+                            Padding="8,5"
+                            CornerRadius="12"
+                            IsEnabled="False"
+                            AutomationProperties.Name="Redo"
+                            ToolTipService.ToolTip="Redo (Ctrl+Y)">
+                        <FontIcon FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE7A6;" FontSize="14" />
                     </Button>
 
                     <Button x:Name="AdvancedButton"

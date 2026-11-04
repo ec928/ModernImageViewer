@@ -286,7 +286,7 @@ namespace ModernImageViewer
                 string when = saved.Date == DateTime.Today ? saved.ToString("HH:mm:ss") : saved.ToString("d MMM HH:mm:ss");
                 int storyScenes = file.Storyboard?.Scenes?.Count ?? 0;
                 string rightText = storyScenes > 0
-                    ? (photos > 0 ? $"{photos} images · 🎬 {storyScenes}" : $"🎬 {storyScenes} scenes")
+                    ? (photos > 0 ? $"{photos} images · {storyScenes} scenes" : $"{storyScenes} scenes")
                     : (photos == 1 ? "1 image" : $"{photos} images");
                 var row = CreateMenuItemButton(when, rightText);
                 if (storyScenes > 0)
