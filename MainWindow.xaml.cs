@@ -843,22 +843,35 @@ namespace ModernImageViewer
         }
 
         private void PlayStoryboardFolder_Click(object sender, RoutedEventArgs e) =>
-            PlayStoryboard(Images.Where(img => !img.IsDirectory && !img.IsComicArchive && !img.IsComicEntry).ToList());
+            PlayStoryboard(FolderImagesForStoryboard(), overrides: null);
 
-        private void MultiSelectStoryboard_Click(object sender, RoutedEventArgs e)
+        private void PlayCinematicStoryboardFolder_Click(object sender, RoutedEventArgs e) =>
+            PlayStoryboard(FolderImagesForStoryboard(), CinematicOverrides.Name);
+
+        private List<ImageItem> FolderImagesForStoryboard() =>
+            Images.Where(img => !img.IsDirectory && !img.IsComicArchive && !img.IsComicEntry).ToList();
+
+        private void MultiSelectStoryboard_Click(object sender, RoutedEventArgs e) => PlaySelectedAsStoryboard(overrides: null);
+
+        private void MultiSelectCinematicStoryboard_Click(object sender, RoutedEventArgs e) => PlaySelectedAsStoryboard(CinematicOverrides.Name);
+
+        private void PlaySelectedAsStoryboard(string? overrides)
         {
             var selectedItems = ImageGrid.SelectedItems.OfType<ImageItem>().Where(i => !i.IsDirectory && !i.IsComicArchive && !i.IsComicEntry).ToList();
             if (selectedItems.Count == 0) return;
             ImageGrid.SelectedItems.Clear();
-            PlayStoryboard(selectedItems);
+            PlayStoryboard(selectedItems, overrides);
         }
 
-        /// <summary>The storyboard counterpart of Cinematic Slideshow: these images in Multi-View, made into a show that plays at once.</summary>
-        private void PlayStoryboard(IList<ImageItem> items)
+        /// <summary>
+        /// The storyboard counterpart of Cinematic Slideshow: these images in Multi-View, made into a show that plays at once,
+        /// by the Layout Generator with its main settings or with a named set of overrides.
+        /// </summary>
+        private void PlayStoryboard(IList<ImageItem> items, string? overrides)
         {
             if (items.Count == 0 || MultiViewControl == null || _multiViewParked) return;
             OpenMultiView(items);
-            _ = MultiViewControl.MakeAndPlayStoryboardAsync();
+            _ = MultiViewControl.MakeAndPlayStoryboardAsync(overrides);
         }
 
         private void MultiSelectCinematic_Click(object sender, RoutedEventArgs e)

@@ -65,7 +65,7 @@
                     <Run Text="&#x2022;  "/><Run Text="Collages" FontWeight="SemiBold"/><Run Text=" &#x2014; frame each cell, rotate and mirror images, float cells above the grid in shapes, drop in images from File Explorer, choose the canvas, undo and redo, save layouts, and export to JPEG, PNG, or the clipboard."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Auto-Mix" FontWeight="SemiBold"/><Run Text=" &#x2014; arranges your images into a new designed layout, avoiding cutting or covering the faces it finds. Next makes another, and Play makes a new one every few seconds, with a slow camera move, varied transitions and your music. Shape the odds in Auto-Mix Settings."/>
+                    <Run Text="&#x2022;  "/><Run Text="Auto-Mix" FontWeight="SemiBold"/><Run Text=" &#x2014; arranges your images into a new designed layout, avoiding cutting or covering the faces it finds. Next makes another, and Play makes a new one every few seconds, with a slow camera move, varied transitions and your music. Shape the odds in Layout Generator Settings, which make the layouts for storyboards too."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
                     <Run Text="&#x2022;  "/><Run Text="Window &amp; Tile Size presets" FontWeight="SemiBold"/><Run Text=" &#x2014; save up to three window and tile size states (Ctrl+1, Ctrl+2, Ctrl+3) to jump between compact browsing and wide two-page layouts."/>

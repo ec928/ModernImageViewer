@@ -351,6 +351,7 @@
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
                                 <Button Style="{StaticResource SidebarToolButtonStyle}" Click="PlayCinematicFolder_Click" HorizontalAlignment="Stretch" Height="26" Padding="8,0" CornerRadius="4" IsTabStop="False" ToolTipService.ToolTip="Play Cinematic Slideshow">
                                     <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
@@ -366,6 +367,13 @@
                                     <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
                                         <FontIcon FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE786;" FontSize="14"/>
                                         <TextBlock Text="Play storyboard" FontSize="12"/>
+                                    </StackPanel>
+                                </Button>
+                                <!-- The same, made by the one Layout Generator with its Cinematic overrides: one image filling the screen, Cinematic's pace and crossfades. -->
+                                <Button Grid.Row="2" Grid.ColumnSpan="2" Style="{StaticResource SidebarToolButtonStyle}" Click="PlayCinematicStoryboardFolder_Click" HorizontalAlignment="Stretch" Height="26" Padding="8,0" CornerRadius="4" IsTabStop="False" ToolTipService.ToolTip="Make a storyboard of this folder in Multi-View the way Cinematic Slideshow plays, and play it. The Cinematic storyboard settings are in Layout Generator Settings, Advanced." AutomationProperties.Name="Cinematic storyboard">
+                                    <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+                                        <FontIcon FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE714;" FontSize="14"/>
+                                        <TextBlock Text="Cinematic storyboard" FontSize="12"/>
                                     </StackPanel>
                                 </Button>
                             </Grid>
@@ -683,6 +691,9 @@
                                 </Button>
                                 <Button x:Name="MultiSelectStoryboardButton" Click="MultiSelectStoryboard_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" ToolTipService.ToolTip="Play storyboard: make a storyboard of these images and play it" AutomationProperties.Name="Play storyboard">
                                     <FontIcon FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE786;" FontSize="14" />
+                                </Button>
+                                <Button x:Name="MultiSelectCinematicStoryboardButton" Click="MultiSelectCinematicStoryboard_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" ToolTipService.ToolTip="Cinematic storyboard: make a storyboard of these images the way Cinematic Slideshow plays, and play it" AutomationProperties.Name="Cinematic storyboard">
+                                    <FontIcon FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE714;" FontSize="14" />
                                 </Button>
 
                                 <Rectangle x:Name="MultiSelectDeleteRule" Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,0" Opacity="0.5"/>

@@ -1207,6 +1207,7 @@ namespace ModernImageViewer
             MultiSelectPlayRule.Visibility = other;
             MultiSelectPlayButton.Visibility = other;
             MultiSelectStoryboardButton.Visibility = other;
+            MultiSelectCinematicStoryboardButton.Visibility = other;
             MultiSelectDeleteRule.Visibility = other;
             MultiSelectDeleteButton.Visibility = other;
             var wholeFolder = adding && _parkedCell == null ? Visibility.Visible : Visibility.Collapsed;

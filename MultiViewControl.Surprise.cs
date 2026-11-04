@@ -44,6 +44,16 @@ namespace ModernImageViewer
         private Action? _refreshPoolTab;
         private Action? _refreshStoryboardCards;
         private Action? _syncStorySceneSelection;
+        /// <summary>
+        /// The open drawer's way to take a scene the storyboard build added behind it. The drawer keeps its own list and
+        /// writes it back to the show on any change, so a scene added only to the show was dropped by the next drawer action.
+        /// </summary>
+        private Action<ShowProject, ShowScene>? _sceneAddedBehindDrawer;
+        /// <summary>
+        /// Images a scene is being made from right now. The storyboard build and Add new layout both take images not in the
+        /// show yet; without this, one pressed during the build could take the same image as the scene the build was making.
+        /// </summary>
+        private readonly HashSet<string> _imagesBeingDrafted = new(StringComparer.OrdinalIgnoreCase);
         private Action<int>? _onStoryboardPlaybackIndexChanged;
 
         private sealed record PreparedSurprise(
@@ -75,6 +85,9 @@ namespace ModernImageViewer
                 return _surpriseOptions = SurpriseOptions.FromJson(json);
             }
         }
+
+        /// <summary>The Layout Generator settings for a show: the main ones, with the show's overrides applied when it has any.</summary>
+        private SurpriseOptions GeneratorSettingsFor(ShowProject? show) => SurpriseChoices.WithOverrides(show?.GeneratorOverrides);
 
         private void ChangeSurpriseChoices(Action<SurpriseOptions> change)
         {
@@ -518,7 +531,7 @@ namespace ModernImageViewer
                 var header = new Grid { ColumnSpacing = 8, Margin = new Thickness(0, 0, 0, 4) };
                 header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                var title = new TextBlock { Text = "Auto-Mix Settings", FontSize = 14, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+                var title = new TextBlock { Text = "Layout Generator Settings", FontSize = 14, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
                 var gearBtn = new Button
                 {
                     Content = Icon("\uE713", 13),
@@ -527,13 +540,22 @@ namespace ModernImageViewer
                     Style = SafeStyle("QuietButtonStyle"),
                     VerticalAlignment = VerticalAlignment.Center
                 };
-                ToolTipService.SetToolTip(gearBtn, "Advanced auto-mix settings");
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(gearBtn, "Advanced auto-mix settings");
+                ToolTipService.SetToolTip(gearBtn, "Advanced Layout Generator settings");
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(gearBtn, "Advanced Layout Generator settings");
                 gearBtn.Click += (_, _) => { _showingSurpriseAdvanced = true; ShowSurpriseCard(); };
                 Grid.SetColumn(gearBtn, 1);
                 header.Children.Add(title);
                 header.Children.Add(gearBtn);
                 body.Children.Add(header);
+                // One generator serves both: without this, the settings read as Auto-Mix's alone.
+                body.Children.Add(new TextBlock
+                {
+                    Text = "The Layout Generator makes the layouts for Auto-Mix and for storyboards.",
+                    FontSize = 11,
+                    Opacity = 0.65,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, -4, 0, 2)
+                });
 
 
                 body.Children.Add(imagesRow);
@@ -636,10 +658,10 @@ namespace ModernImageViewer
                 };
                 var advStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
                 advStack.Children.Add(Icon("\uE713", 13));
-                advStack.Children.Add(new TextBlock { Text = "Advanced auto-mix settings\u2026", FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
+                advStack.Children.Add(new TextBlock { Text = "Advanced settings\u2026", FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
                 openAdvBtn.Content = advStack;
-                ToolTipService.SetToolTip(openAdvBtn, "Recipe odds, face intelligence, camera transitions and look");
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(openAdvBtn, "Advanced auto-mix settings");
+                ToolTipService.SetToolTip(openAdvBtn, "Design odds, faces, camera and transitions, look, and the Cinematic storyboard overrides");
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(openAdvBtn, "Advanced Layout Generator settings");
                 openAdvBtn.Click += (_, _) => { _showingSurpriseAdvanced = true; ShowSurpriseCard(); };
                 body.Children.Add(openAdvBtn);
             }
@@ -846,7 +868,7 @@ namespace ModernImageViewer
             });
             designsSection.Children.Add(new TextBlock
             {
-                Text = "How a layout of one image shows it. An image that filling would crop by more than a third, or cut a face from, is always shown whole.",
+                Text = "How a layout of one image shows it. An image that filling would show less than 65% of, or cut a face from, is always shown whole.",
                 FontSize = 11,
                 Opacity = 0.6,
                 TextWrapping = TextWrapping.Wrap,
@@ -1099,6 +1121,96 @@ namespace ModernImageViewer
                 colorPanel.Children.Add(swatch);
             }
             AddLookChoice(lookSection, "Effect color", "The color of the progress line and its glow. Accent follows the Windows accent color.", colorPanel);
+
+            // 6. Cinematic storyboard: the settings it puts in place of the ones above. Not a second set of everything:
+            // only what makes the one generator's layouts like Cinematic Slideshow's.
+            string CinematicSummaryText()
+            {
+                var c = SurpriseChoices.Cinematic;
+                string images = c.FewestPictures == c.MostPictures ? $"{c.FewestPictures}" : $"{c.FewestPictures}–{c.MostPictures}";
+                string hold = c.FewestSeconds == c.MostSeconds ? $"{c.FewestSeconds}s" : $"{c.FewestSeconds}–{c.MostSeconds}s";
+                return $"{images} · {hold}";
+            }
+            var (cineSection, cineSummary) = Section("Cinematic storyboard", CinematicSummaryText());
+            cineSection.Children.Add(new TextBlock
+            {
+                Text = "Cinematic storyboard uses the settings above, with these in place of them.",
+                FontSize = 11,
+                Opacity = 0.6,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 6)
+            });
+            Slider? cineFewest = null, cineMost = null;
+            cineFewest = Slide(cineSection, "Fewest images per scene", "The fewest images in a Cinematic storyboard scene. Cinematic Slideshow shows one.",
+                SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.Cinematic.FewestPictures,
+                v => $"{v:0}",
+                (o, v) =>
+                {
+                    o.Cinematic.FewestPictures = (int)v;
+                    if (o.Cinematic.MostPictures < (int)v) o.Cinematic.MostPictures = (int)v;
+                    cineSummary.Text = CinematicSummaryText();
+                });
+            cineMost = Slide(cineSection, "Most images per scene", "The most images in a Cinematic storyboard scene.",
+                SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.Cinematic.MostPictures,
+                v => $"{v:0}",
+                (o, v) =>
+                {
+                    o.Cinematic.MostPictures = (int)v;
+                    if (o.Cinematic.FewestPictures > (int)v) o.Cinematic.FewestPictures = (int)v;
+                    cineSummary.Text = CinematicSummaryText();
+                });
+            cineFewest.ValueChanged += (_, e) => { if (cineMost.Value < e.NewValue) cineMost.Value = e.NewValue; };
+            cineMost.ValueChanged += (_, e) => { if (cineFewest.Value > e.NewValue) cineFewest.Value = e.NewValue; };
+
+            void CineOddsSlide(string name, string tip, double odds, Action<SurpriseOptions, double> set)
+            {
+                double initial = odds <= 0 ? -1.2 : Math.Log(Math.Max(SurpriseOptions.RarestDesign, odds), DesignOddsBase);
+                Slide(cineSection, name, tip, -1.2, 1.0, 0.1, initial, FormatDesignStep,
+                    (o, v) => set(o, v <= -1.1 ? 0 : Math.Pow(DesignOddsBase, v)));
+            }
+            CineOddsSlide("Single image: fill the screen", "Cropped to fill the screen, as Cinematic Slideshow does. An image that would lose too much, or a face, is shown whole.", options.Cinematic.SoloFillOdds, (o, v) => o.Cinematic.SoloFillOdds = v);
+            CineOddsSlide("Single image: matted", "In a card with a mat round it. Far left turns it off.", options.Cinematic.SoloMattedOdds, (o, v) => o.Cinematic.SoloMattedOdds = v);
+            CineOddsSlide("Single image: whole", "Not cropped: a framed print on a canvas tinted from the image. Far left turns it off.", options.Cinematic.SoloWholeOdds, (o, v) => o.Cinematic.SoloWholeOdds = v);
+
+            {
+                var row = new Grid { ColumnSpacing = 12, MinHeight = 34 };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
+                var label = new TextBlock { Text = "Duration", VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
+                var right = new Grid { Width = 230, ColumnSpacing = 8, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+                right.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
+                right.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(62) });
+                string Hold(int low, int high) => low == high ? $"{low}s" : $"{low}s - {high}s";
+                int from = Math.Clamp(options.Cinematic.FewestSeconds, 3, 30);
+                int to = Math.Clamp(Math.Max(from, options.Cinematic.MostSeconds), 3, 30);
+                var readout = new TextBlock { Text = Hold(from, to), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, FontSize = 12, Opacity = 0.82, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
+                var range = new RangeSlider { Minimum = 3, Maximum = 30, StepFrequency = 1, RangeStart = from, RangeEnd = to, Width = 160, VerticalAlignment = VerticalAlignment.Center };
+                range.RangeChanged += (_, r) =>
+                {
+                    int low = (int)Math.Round(r.Start), high = (int)Math.Round(r.End);
+                    readout.Text = Hold(low, high);
+                    ChangeSurpriseChoices(o => { o.Cinematic.FewestSeconds = low; o.Cinematic.MostSeconds = Math.Max(low, high); });
+                    cineSummary.Text = CinematicSummaryText();
+                };
+                ToolTipService.SetToolTip(row, "How long each Cinematic storyboard scene holds. Cinematic Slideshow takes 5 to 20 seconds, short and long in turn.");
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(range, "Cinematic storyboard duration");
+                Grid.SetColumn(range, 0);
+                Grid.SetColumn(readout, 1);
+                right.Children.Add(range);
+                right.Children.Add(readout);
+                Grid.SetColumn(right, 1);
+                row.Children.Add(label);
+                row.Children.Add(right);
+                cineSection.Children.Add(row);
+            }
+            Toggle(cineSection, "Smart pace", "Short and long holds take turns, as in Cinematic Slideshow.", options.Cinematic.SmartPace, (o, on) => o.Cinematic.SmartPace = on);
+            Slide(cineSection, "Motion", "How far the camera moves over each scene. Cinematic Slideshow always moves.", 0, 100, 5, options.Cinematic.MotionAmount * 100,
+                v => v < 1 ? "Off" : $"{v:0}%",
+                (o, v) => o.Cinematic.MotionAmount = v / 100);
+            Slide(cineSection, "Transition variety", "How often a change of scene zooms through, fades through dark or slides, rather than a crossfade. Cinematic Slideshow crossfades.",
+                0, 100, 5, options.Cinematic.TransitionVariety * 100,
+                v => v < 1 ? "Crossfade" : $"{v:0}%",
+                (o, v) => o.Cinematic.TransitionVariety = v / 100);
 
             // Reset to defaults
             var resetRow = new Grid { ColumnSpacing = 6, MinHeight = 32 };
@@ -2165,7 +2277,7 @@ namespace ModernImageViewer
             {
                 Minimum = 1,
                 Maximum = MosaicLayout.MaxShown,
-                Value = SurpriseChoices.FewestPictures,
+                Value = GeneratorSettingsFor(_activeShow).FewestPictures,
                 Width = 72,
                 Height = 28,
                 VerticalAlignment = VerticalAlignment.Center
@@ -2186,7 +2298,7 @@ namespace ModernImageViewer
             {
                 Minimum = 1,
                 Maximum = MosaicLayout.MaxShown,
-                Value = SurpriseChoices.MostPictures,
+                Value = GeneratorSettingsFor(_activeShow).MostPictures,
                 Width = 72,
                 Height = 28,
                 VerticalAlignment = VerticalAlignment.Center
@@ -2212,7 +2324,7 @@ namespace ModernImageViewer
 
             var draftRangeText = new TextBlock
             {
-                Text = $"({SurpriseChoices.FewestPictures}–{SurpriseChoices.MostPictures}) ▾",
+                Text = $"({GeneratorSettingsFor(_activeShow).FewestPictures}–{GeneratorSettingsFor(_activeShow).MostPictures}) ▾",
                 FontSize = 11,
                 VerticalAlignment = VerticalAlignment.Center,
                 Opacity = 0.9
@@ -2225,7 +2337,7 @@ namespace ModernImageViewer
                 Padding = new Thickness(8, 4, 8, 4),
                 VerticalAlignment = VerticalAlignment.Center
             };
-            ToolTipService.SetToolTip(draftRangeBtn, "Images per scene when making a show. Auto-Mix uses the same range.");
+            ToolTipService.SetToolTip(draftRangeBtn, "Images per scene for this show's new scenes. A Cinematic storyboard has its own range; otherwise Auto-Mix uses the same one.");
 
             Border MakeDivider() => new Border { Width = 1, Height = 16, Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x35, 0xFF, 0xFF, 0xFF)), VerticalAlignment = VerticalAlignment.Center };
 
@@ -2278,7 +2390,13 @@ namespace ModernImageViewer
                 {
                     if (storyFewestBox.Value != f) storyFewestBox.Value = f;
                     if (storyMostBox.Value != m) storyMostBox.Value = m;
-                    ChangeSurpriseChoices(o => { o.FewestPictures = f; o.MostPictures = m; });
+                    // The range this show's new scenes use: its overrides' when it has them, else the main one.
+                    bool cinematic = _activeShow?.GeneratorOverrides == CinematicOverrides.Name;
+                    ChangeSurpriseChoices(o =>
+                    {
+                        if (cinematic) { o.Cinematic.FewestPictures = f; o.Cinematic.MostPictures = m; }
+                        else { o.FewestPictures = f; o.MostPictures = m; }
+                    });
                     SyncStoryImageRange();
                 }
                 finally
@@ -2305,8 +2423,9 @@ namespace ModernImageViewer
 
             void SyncStoryImageRange()
             {
-                int f = SurpriseChoices.FewestPictures;
-                int m = SurpriseChoices.MostPictures;
+                var showSettings = GeneratorSettingsFor(_activeShow);
+                int f = showSettings.FewestPictures;
+                int m = showSettings.MostPictures;
 
                 if (!syncingStoryRange)
                 {
@@ -2549,6 +2668,7 @@ namespace ModernImageViewer
                 int sceneCount = _activeShow?.Scenes.Count ?? 0;
                 bool hasScenes = sceneCount > 0;
 
+                SyncStoryImageRange();
                 emptyPanel.Visibility = hasScenes ? Visibility.Collapsed : Visibility.Visible;
                 scenesView.Visibility = hasScenes ? Visibility.Visible : Visibility.Collapsed;
 
@@ -2562,7 +2682,9 @@ namespace ModernImageViewer
                 {
                     double dur = _activeShow!.TotalEstimatedDuration;
                     string length = ShowLength(dur);
-                    storySummary.Text = $"{sceneCount} {(sceneCount == 1 ? "scene" : "scenes")} · {length}";
+                    // Names the overrides a show was made with, so it is clear what Add new layout will use.
+                    string made = _activeShow.GeneratorOverrides is string set ? $"{set} · " : "";
+                    storySummary.Text = $"{made}{sceneCount} {(sceneCount == 1 ? "scene" : "scenes")} · {length}";
                     autoDraftBtn.Content = "Replace show";
                     ToolTipService.SetToolTip(autoDraftBtn, "Makes a new show from the image pool and replaces these scenes. It asks first.");
                 }
@@ -2649,6 +2771,16 @@ namespace ModernImageViewer
                 };
             }
             HookCollectionChanged();
+            _sceneAddedBehindDrawer = (show, scene) =>
+            {
+                // Only while these cards are that show's, and without writing back: the show already has it.
+                if (!ReferenceEquals(show, _activeShow) || scenesCollection.Contains(scene)) return;
+                if (!scenesCollection.All(s => show.Scenes.Contains(s))) return;
+                isSyncingStoryboard = true;
+                try { scenesCollection.Add(scene); }
+                finally { isSyncingStoryboard = false; }
+                RefreshCardBadges();
+            };
 
             scenesView.DragItemsCompleted += (_, _) =>
             {
@@ -3122,13 +3254,16 @@ namespace ModernImageViewer
                         progressText.Text = $"Making scene {p.CompletedScenes} of {p.TotalEstimatedScenes}...";
                     });
 
+                    // Replace show keeps the show's overrides: a Cinematic storyboard is replaced by another one.
+                    string? overrides = _activeShow?.GeneratorOverrides;
                     _activeShow = await ShowDirector.DraftAsync(
                         facts,
-                        SurpriseChoices,
+                        GeneratorSettingsFor(_activeShow),
                         ActualWidth,
                         ActualHeight,
-                        "Auto-Drafted Presentation",
+                        overrides != null ? $"{overrides} storyboard" : "Auto-Drafted Presentation",
                         progress);
+                    _activeShow.GeneratorOverrides = overrides;
                     _selectedShowScene = null;
                     _canvasSceneId = null;
                     _shuffleChosen = false;
@@ -3177,7 +3312,7 @@ namespace ModernImageViewer
                     Title = title,
                     Recipe = recipe,
                     Layout = sceneFile,
-                    DwellSeconds = SurpriseChoices.PlaySeconds,
+                    DwellSeconds = GeneratorSettingsFor(_activeShow).PlaySeconds,
                     Transition = "Crossfade"
                 };
 
@@ -3194,20 +3329,23 @@ namespace ModernImageViewer
             {
                 var pool = SessionPictures();
                 if (pool.Count == 0) return;
-                var fresh = _activeShow?.ImagesNotInShow(pool) ?? pool;
+                var fresh = (_activeShow?.ImagesNotInShow(pool) ?? pool).Where(p => !_imagesBeingDrafted.Contains(p)).ToList();
                 bool reusing = fresh.Count == 0;
                 var candidates = reusing ? pool.OrderBy(_ => Random.Shared.Next()).ToList() : fresh;
-                var chosen = candidates.Take(Math.Clamp(SurpriseChoices.MostPictures, 1, MosaicLayout.MaxShown)).ToList();
+                // A show made by Cinematic storyboard grows with the same overrides.
+                var settings = GeneratorSettingsFor(_activeShow);
+                var chosen = candidates.Take(Math.Clamp(settings.MostPictures, 1, MosaicLayout.MaxShown)).ToList();
 
                 addNewBtn.IsEnabled = false;
                 draftProgressRow.Visibility = Visibility.Visible;
                 progressText.Text = "Making a scene...";
+                _imagesBeingDrafted.UnionWith(chosen);
                 try
                 {
                     var ready = DecodedBitmaps();
                     var facts = await ReadFactsAsync(chosen, path => ready.TryGetValue(path, out var bitmap) ? (bitmap.PixelWidth, bitmap.PixelHeight) : null);
                     var previous = scenesCollection.Count > 0 ? scenesCollection[^1] : null;
-                    var scene = await ShowDirector.DraftSceneAsync(facts, SurpriseChoices, ActualWidth, ActualHeight, previous);
+                    var scene = await ShowDirector.DraftSceneAsync(facts, settings, ActualWidth, ActualHeight, previous);
                     if (scene == null)
                     {
                         ShowAutoPlayToast("Could not make a layout from these images");
@@ -3234,6 +3372,7 @@ namespace ModernImageViewer
                 }
                 finally
                 {
+                    _imagesBeingDrafted.ExceptWith(chosen);
                     draftProgressRow.Visibility = Visibility.Collapsed;
                     addNewBtn.IsEnabled = SessionPictures().Count > 0;
                 }
@@ -3263,7 +3402,10 @@ namespace ModernImageViewer
                 _selectedShowScene = null;
                 _canvasSceneId = null;
                 _activeShow.Scenes.Clear();
+                // Clearing ends the show, so the next one is made with the main settings.
+                _activeShow.GeneratorOverrides = null;
                 scenesCollection.Clear();
+                SyncStoryImageRange();
             };
 
             storyContainer.Children.Add(draftProgressRow);
@@ -3433,7 +3575,9 @@ namespace ModernImageViewer
         /// scenes and goes on making scenes, from images not in it yet, while it plays, until every image is in it. Reading a
         /// large folder's faces first would keep the screen still for minutes. Stops if the show is replaced or cleared.
         /// </summary>
-        public async Task MakeAndPlayStoryboardAsync()
+        /// <param name="overrides">Null for the main Layout Generator settings, or the name of a set of overrides
+        /// (<see cref="CinematicOverrides.Name"/>) that the show keeps for every scene made for it.</param>
+        public async Task MakeAndPlayStoryboardAsync(string? overrides = null)
         {
             int ticket = ++_storyboardBuildTicket;
             // The session has only just opened: wait for the canvas to have its size, so scenes take its shape.
@@ -3441,7 +3585,12 @@ namespace ModernImageViewer
 
             StopAutoPlay();
             RemoveTrayCard();
-            var show = new ShowProject { Title = "Storyboard" };
+            bool cinematic = string.Equals(overrides, CinematicOverrides.Name, StringComparison.OrdinalIgnoreCase);
+            var show = new ShowProject
+            {
+                Title = cinematic ? "Cinematic storyboard" : "Storyboard",
+                GeneratorOverrides = cinematic ? CinematicOverrides.Name : null
+            };
             _activeShow = show;
             _selectedShowScene = null;
             _canvasSceneId = null;
@@ -3454,19 +3603,31 @@ namespace ModernImageViewer
             bool started = false;
             while (Current())
             {
-                var fresh = show.ImagesNotInShow(SessionPictures());
+                var fresh = show.ImagesNotInShow(SessionPictures()).Where(p => !_imagesBeingDrafted.Contains(p)).ToList();
                 if (fresh.Count == 0) break;
-                var chosen = fresh.Take(Math.Clamp(SurpriseChoices.MostPictures, 1, MosaicLayout.MaxShown)).ToList();
-                var ready = DecodedBitmaps();
-                var facts = await ReadFactsAsync(chosen, path => ready.TryGetValue(path, out var bitmap) ? (bitmap.PixelWidth, bitmap.PixelHeight) : null);
-                if (!Current()) return;
-                var previous = show.Scenes.Count > 0 ? show.Scenes[^1] : null;
-                var scene = await ShowDirector.DraftSceneAsync(facts, SurpriseChoices, ActualWidth, ActualHeight, previous);
-                if (!Current()) return;
-                // What is left cannot be laid out, such as files that will not open.
-                if (scene == null) break;
+                // Read for each scene, so a setting changed while it plays applies to the scenes still to come.
+                var settings = GeneratorSettingsFor(show);
+                var chosen = fresh.Take(Math.Clamp(settings.MostPictures, 1, MosaicLayout.MaxShown)).ToList();
+                _imagesBeingDrafted.UnionWith(chosen);
+                ShowScene? scene;
+                try
+                {
+                    var ready = DecodedBitmaps();
+                    var facts = await ReadFactsAsync(chosen, path => ready.TryGetValue(path, out var bitmap) ? (bitmap.PixelWidth, bitmap.PixelHeight) : null);
+                    if (!Current()) return;
+                    var previous = show.Scenes.Count > 0 ? show.Scenes[^1] : null;
+                    scene = await ShowDirector.DraftSceneAsync(facts, settings, ActualWidth, ActualHeight, previous);
+                    if (!Current()) return;
+                    // What is left cannot be laid out, such as files that will not open.
+                    if (scene == null) break;
+                    show.Scenes.Add(scene);
+                }
+                finally
+                {
+                    _imagesBeingDrafted.ExceptWith(chosen);
+                }
 
-                show.Scenes.Add(scene);
+                _sceneAddedBehindDrawer?.Invoke(show, scene);
                 _updateStorySummary?.Invoke();
                 ShowShownBadge();
                 if (!started && show.Scenes.Count >= ScenesBeforePlay)
@@ -3517,7 +3678,7 @@ namespace ModernImageViewer
             _selectedShowScene = startScene;
             _canvasSceneId = null;
             _onStoryboardPlaybackIndexChanged?.Invoke(targetIndex);
-            _layoutSeconds = (int)(startScene.DwellSeconds ?? SurpriseChoices.NextPlaySeconds(Random.Shared));
+            _layoutSeconds = (int)(startScene.DwellSeconds ?? GeneratorSettingsFor(_activeShow).NextPlaySeconds(Random.Shared));
             ShowAutoPlayState();
             ShowAutoPlayToast($"Playing Scene {targetIndex + 1} of {visibleScenes.Count}: {startScene.Title ?? startScene.Recipe ?? "Scene"}");
             var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(Math.Max(1, _layoutSeconds)) };
@@ -3564,7 +3725,8 @@ namespace ModernImageViewer
             _selectedShowScene = scene;
             _canvasSceneId = null;
             _onStoryboardPlaybackIndexChanged?.Invoke(currentIndex);
-            _layoutSeconds = (int)(scene.DwellSeconds ?? SurpriseChoices.NextPlaySeconds(Random.Shared));
+            var showSettings = GeneratorSettingsFor(_activeShow);
+            _layoutSeconds = (int)(scene.DwellSeconds ?? showSettings.NextPlaySeconds(Random.Shared));
 
             var pictures = SessionPictures();
             var ready = DecodedBitmaps();
@@ -3608,13 +3770,13 @@ namespace ModernImageViewer
             {
                 var move = CameraMove.Plan(
                     Array.Empty<(double, double)>(),
-                    SurpriseChoices.MotionAmount,
-                    SurpriseChoices.MotionZoomChance,
-                    SurpriseChoices.MotionFaceChance,
+                    showSettings.MotionAmount,
+                    showSettings.MotionZoomChance,
+                    showSettings.MotionFaceChance,
                     _layoutSeconds + CameraOverrunSeconds,
                     _lastCameraKind,
                     Random.Shared,
-                    SurpriseChoices.ForcedCameraKind);
+                    showSettings.ForcedCameraKind);
                 if (move != null)
                 {
                     _lastCameraKind = move.Kind;
@@ -3745,6 +3907,7 @@ namespace ModernImageViewer
             _refreshPoolTab = null;
             _refreshStoryboardCards = null;
             _syncStorySceneSelection = null;
+            _sceneAddedBehindDrawer = null;
             _onStoryboardPlaybackIndexChanged = null;
             UpdatePlaybarReaction(0);
             ShowShownBadge();

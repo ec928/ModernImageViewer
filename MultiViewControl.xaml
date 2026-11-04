@@ -387,8 +387,8 @@
                             </Button>
                             <Button x:Name="SurpriseCardButton"
                                     Click="SurpriseCardButton_Click"
-                                    AutomationProperties.Name="Auto-Mix options"
-                                    ToolTipService.ToolTip="Auto-Mix options (pacing, style, music and advanced settings)"
+                                    AutomationProperties.Name="Layout Generator Settings"
+                                    ToolTipService.ToolTip="Layout Generator Settings: how layouts are made for Auto-Mix and storyboards, the pace, the music and advanced settings"
                                     Style="{StaticResource QuietButtonStyle}"
                                     Padding="6,5"
                                     CornerRadius="12">
