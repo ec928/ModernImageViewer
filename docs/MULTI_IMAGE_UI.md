@@ -90,9 +90,10 @@ Cards can be dragged into a new order.
 
 A Cinematic storyboard stays Cinematic. While it is open, Add new layout and Replace show make Cinematic scenes, and the images-per-scene picker in the drawer changes the Cinematic setting. The drawer's summary starts with "Cinematic", and it stays Cinematic when saved and opened again.
 
-To go back to your main settings, either:
+To go back to your main settings, do one of these:
 
-- press **Clear** in the drawer (Undo brings the Cinematic storyboard back), or
+- turn off **Use for this storyboard** in Layout Generator Settings, under Advanced > Cinematic storyboard. Scenes already made stay as they are; new ones use your main settings. Turning it on does the reverse for any storyboard.
+- press **Clear** in the drawer (Undo brings the Cinematic storyboard back).
 - start a new storyboard with **Play storyboard**.
 
 Auto-Mix always uses your main settings.
@@ -148,6 +149,7 @@ The last section in Advanced Settings holds the settings Cinematic storyboard us
 
 | Setting | Default |
 |---|---|
+| Use for this storyboard | Off; on for a storyboard started with Cinematic storyboard |
 | Images per scene | 1 to 1 |
 | Single images | Fill the screen Often, Matted Off, Whole image Off |
 | Duration | 5 to 20 seconds |
@@ -155,7 +157,9 @@ The last section in Advanced Settings holds the settings Cinematic storyboard us
 | Motion | 50% |
 | Transition variety | Crossfade |
 
-Reset to defaults resets these along with the rest.
+Reset to defaults resets these along with the rest. Use for this storyboard is not a saved setting: it belongs to the open storyboard and is saved with it.
+
+**Transition variety**, here and under Camera & transitions: 0% always crossfades between scenes. Higher mixes in zooms, fades through black and slides; at 100%, about 7 in 10 scene changes are one of those. The same kind is never used twice in a row, except a crossfade.
 
 ## Save / Load (Storyboards & Layouts)
 
