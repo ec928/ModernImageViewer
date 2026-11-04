@@ -82,6 +82,10 @@ Cards can be dragged into a new order.
 - **Right-click a card** (or Shift+F10): Play show from here, Update scene from canvas (copies the canvas into that card's scene), Camera motion (the same choices as the badge), Duration, Duplicate scene, Remove scene, Move earlier, Move later.
 - **Remove scene** never asks. It says `Removed scene. Ctrl+Z brings it back.`, and Undo does. Removing, duplicating or moving a scene is one Undo step, by button, menu, Delete key or drag. Make a show and Replace show are one step each, and Undo can go back to before the storyboard existed.
 
+## Play storyboard, from the folders
+
+**Play storyboard** in the sidebar, under Cinematic Slideshow, plays the whole folder; the same button on the selection bar plays the selected images. Either opens Multi-View with those images, starts a new storyboard and plays it once its first two scenes are made, so a large folder starts within seconds. While it plays it keeps making scenes from images not in it yet, until every image is in the show. It stops making scenes if the show is replaced or cleared.
+
 ## Camera Director (Visual Keyframe Editor)
 
 Opened with Edit camera path… from a scene card's badge or menu, or the camera button on the card. Closes chrome and bottom HUD to provide an unobstructed full-canvas visual keyframe editor.
@@ -93,6 +97,9 @@ Floating at the top of the canvas, strictly elevated above all cards:
 - **Preview Move**: Plays a live 2.5-second Ken Burns camera transition between Start and End keyframes.
 - **Reset**: Reverts camera keyframes to default framing.
 - **Cancel**: Leaves without keeping this scene's changes. Esc does the same. A scene left with the steppers has already kept its path.
+- **Aim at face**: Centres the selected frame on a face and zooms so the face fills about a third of it, up to 2.5×. Largest face first; each click moves to the next. Greyed out when no face was found in the scene.
+- **Exact…**: Zoom, and across and down (the frame's centre, as a percentage of the canvas), typed for the selected frame.
+- **Face outlines**: Every face found in the scene is outlined with a dashed box, where the image shows it: its crop, zoom and turn included. Faces that had not been read yet, as in a scene added by hand, are read when the editor opens.
 - **Done**: Commits the custom camera keyframes and returns to the storyboard. Enter does the same.
 
 While it is open, Space previews, Tab switches Start and End, Left and Right step scenes, F1 still lists the keys, and F11 still toggles full screen. Other keys do nothing, so Undo and Save/Load cannot change the canvas under the frames.
@@ -113,6 +120,10 @@ When viewing a storyboard scene on the canvas, any manual layout adjustment auto
 - Dragging a mosaic grid splitter commits the updated row/column weights.
 - Play, pause, and leaving a scene write the canvas back only when that scene is the one on the canvas. A mix, or a scene marked selected before it was shown, is not written over the scene. Update Scene still stores the canvas when asked.
 - Full undo history (`Ctrl+Z` / `Ctrl+Y`) is preserved across scene navigation and editing.
+
+## Auto-Mix Settings: single images
+
+Under Advanced Settings > Designs, after the six design sliders, **Single images** sets how a layout of one image shows it, on the same Off to Often scale as the designs: **Fill the screen** (cropped), **Matted** (in a card with a mat) and **Whole image** (not cropped: a framed print on a canvas tinted from the image). They are odds against each other, so with all three at Normal each comes up about a third of the time. The defaults are More, Normal and Normal, the odds single images had before this was a setting. An image that filling would show less than 65% of, or cut a face from, is never filled; it is matted or shown whole by the other two odds. They apply to Auto-Mix, Make a show, Add new layout and Play storyboard.
 
 ## Save / Load (Storyboards & Layouts)
 
