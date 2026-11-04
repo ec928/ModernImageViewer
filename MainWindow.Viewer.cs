@@ -3263,7 +3263,9 @@ namespace ModernImageViewer
         private void SyncTitleBarTheme()
         {
             if (_appWindow == null || !Microsoft.UI.Windowing.AppWindowTitleBar.IsCustomizationSupported()) return;
+            // While the window closes, a theme change can still arrive after the title bar is gone.
             var titleBar = _appWindow.TitleBar;
+            if (titleBar == null) return;
             bool isDark = (RootGrid?.ActualTheme ?? ElementTheme.Default) == ElementTheme.Dark;
 
             titleBar.ButtonBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0);
