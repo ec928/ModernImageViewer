@@ -86,9 +86,18 @@ Cards can be dragged into a new order.
 
 **Play storyboard** in the sidebar, under Cinematic Slideshow, plays the whole folder; the same button on the selection bar plays the selected images. Either opens Multi-View with those images, starts a new storyboard and plays it once its first two scenes are made, so a large folder starts within seconds. While it plays it keeps making scenes from images not in it yet, until every image is in the show. It stops making scenes if the show is replaced or cleared.
 
-**Cinematic storyboard**, under Play storyboard in the sidebar, and its button on the selection bar do the same with the Layout Generator's Cinematic overrides. By default that is one image per scene filling the screen, holds of 5 to 20 seconds taking turns short and long, the camera always moving, and crossfades, as Cinematic Slideshow plays. The show keeps the overrides for every scene made for it: Add new layout, Replace show, and the drawer's images-per-scene picker, which shows and changes the Cinematic range on such a show. The drawer's summary starts with "Cinematic", and a saved show keeps them when it is opened again. Clear ends the show, so the next one is made with the main settings; Undo brings the Cinematic show back. Play storyboard, and shows made before this, use the main settings.
+**Cinematic storyboard**, under Play storyboard in the sidebar (and on the selection bar), makes a storyboard that looks like Cinematic Slideshow. By default each scene is one image filling the screen, for 5 to 20 seconds, with the camera moving and a crossfade between scenes. You can change this in Layout Generator Settings, under Advanced.
 
-While a storyboard is still being made, Add new layout and the build never take the same image: each leaves out the images the other is making a scene from.
+A Cinematic storyboard stays Cinematic. While it is open, Add new layout and Replace show make Cinematic scenes, and the images-per-scene picker in the drawer changes the Cinematic setting. The drawer's summary starts with "Cinematic", and it stays Cinematic when saved and opened again.
+
+To go back to your main settings, either:
+
+- press **Clear** in the drawer (Undo brings the Cinematic storyboard back), or
+- start a new storyboard with **Play storyboard**.
+
+Auto-Mix always uses your main settings.
+
+If you press Add new layout while a storyboard is still being made, the new scene never repeats an image the storyboard is using.
 
 ## Camera Director (Visual Keyframe Editor)
 
@@ -135,7 +144,18 @@ Under Advanced Settings > Designs, after the six design sliders, **Single images
 
 ### Cinematic storyboard
 
-The last section in Advanced Settings holds the settings Cinematic storyboard uses in place of the ones above; everything not in it, such as faces, designs and the look, comes from the main settings. Its defaults: images per scene 1 to 1; single images Fill the screen at Often, Matted and Whole image Off; duration 5 to 20 seconds; smart pace on; motion 50%; transition variety Crossfade. Reset to defaults resets these with the rest.
+The last section in Advanced Settings holds the settings Cinematic storyboard uses. For everything else, such as faces, designs and the look, it uses the settings above. The defaults:
+
+| Setting | Default |
+|---|---|
+| Images per scene | 1 to 1 |
+| Single images | Fill the screen Often, Matted Off, Whole image Off |
+| Duration | 5 to 20 seconds |
+| Smart pace | On |
+| Motion | 50% |
+| Transition variety | Crossfade |
+
+Reset to defaults resets these along with the rest.
 
 ## Save / Load (Storyboards & Layouts)
 
