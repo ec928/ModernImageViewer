@@ -58,7 +58,9 @@ namespace ModernImageViewer
         private void SendCanvasCameraHome()
         {
             if (!_cameraRunning) return;
-            RunCamera(new CameraMove(CameraKind.ZoomOut, _cameraView, CameraView.Whole, CameraHomeSeconds), goingHome: true);
+            // Where the camera is now, from the clock: the compositor moves it, so the last UI frame can be behind.
+            var now = _cameraMove != null ? _cameraMove.At(_cameraClock.Elapsed.TotalSeconds) : _cameraView;
+            RunCamera(new CameraMove(CameraKind.ZoomOut, now, CameraView.Whole, CameraHomeSeconds), goingHome: true);
         }
 
         private void RunCamera(CameraMove move, bool goingHome)
@@ -66,11 +68,101 @@ namespace ModernImageViewer
             _cameraMove = move;
             _cameraGoingHome = goingHome;
             _cameraClock.Restart();
+            AnimateCamera(move, 0);
             if (_cameraRunning) return;
             _cameraRunning = true;
             ClipRootToCanvas();
             RootGrid.SizeChanged += CameraRoot_SizeChanged;
             CompositionTarget.Rendering += CameraFrame;
+        }
+
+        // The camera as values the compositor animates, and each layer's transform worked out from them there. The
+        // compositor runs on its own thread, so work on the UI thread (a scene being built, a layout being applied) no
+        // longer stops the camera: moved here, once a frame, any of that held it still for those frames.
+        private Microsoft.UI.Composition.CompositionPropertySet? _cameraProps;
+        private const double CameraSamplesPerSecond = 30;
+
+        private const string LayerExpression =
+            "Matrix4x4.CreateFromScale(Vector3(cam.Zoom, cam.Zoom, 1))"
+            + " * Matrix4x4.CreateFromTranslation(Vector3(atX * cam.Zoom + cam.PanX - atX, atY * cam.Zoom + cam.PanY - atY, 0))"
+            + " * Matrix4x4.CreateFromTranslation(Vector3(-midX, -midY, 0))"
+            + " * Matrix4x4.CreateFromAxisAngle(Vector3(0, 0, 1), cam.Angle)"
+            + " * Matrix4x4.CreateFromTranslation(Vector3(midX, midY, 0))";
+
+        /// <summary>
+        /// The move from this many seconds in, sampled into keyframes the compositor plays: zoom (with the extra a turn
+        /// needs), the pan that puts the view's centre in the middle, and the turn, about the middle of the canvas. Each
+        /// layer follows by an expression that holds its own place in the canvas, such as the grid inside a frame, so the
+        /// zoom is worked out from the canvas and not from the layer.
+        /// </summary>
+        private void AnimateCamera(CameraMove move, double fromSeconds)
+        {
+            double width = RootGrid.ActualWidth, height = RootGrid.ActualHeight;
+            if (width < 1 || height < 1) return;
+            var compositor = ElementCompositionPreview.GetElementVisual(RootGrid).Compositor;
+            if (_cameraProps == null)
+            {
+                _cameraProps = compositor.CreatePropertySet();
+                _cameraProps.InsertScalar("Zoom", 1);
+                _cameraProps.InsertScalar("PanX", 0);
+                _cameraProps.InsertScalar("PanY", 0);
+                _cameraProps.InsertScalar("Angle", 0);
+            }
+
+            double remaining = Math.Max(0.05, move.Seconds - fromSeconds);
+            int samples = Math.Max(2, (int)Math.Ceiling(remaining * CameraSamplesPerSecond));
+            var linear = compositor.CreateLinearEasingFunction();
+            var zoomKeys = compositor.CreateScalarKeyFrameAnimation();
+            var panXKeys = compositor.CreateScalarKeyFrameAnimation();
+            var panYKeys = compositor.CreateScalarKeyFrameAnimation();
+            var angleKeys = compositor.CreateScalarKeyFrameAnimation();
+            for (int i = 0; i <= samples; i++)
+            {
+                float progress = i / (float)samples;
+                var view = move.At(fromSeconds + remaining * progress);
+                double zoom = view.Zoom * CameraView.TurnCover(view.Angle, width, height);
+                zoomKeys.InsertKeyFrame(progress, (float)zoom, linear);
+                panXKeys.InsertKeyFrame(progress, (float)(width / 2 - view.X * width * zoom), linear);
+                panYKeys.InsertKeyFrame(progress, (float)(height / 2 - view.Y * height * zoom), linear);
+                angleKeys.InsertKeyFrame(progress, (float)(view.Angle * Math.PI / 180), linear);
+            }
+            foreach (var keys in new[] { zoomKeys, panXKeys, panYKeys, angleKeys })
+                keys.Duration = TimeSpan.FromSeconds(remaining);
+
+            // Each layer's own place in the canvas, as it is now: a new layout can move the grid inside its frame.
+            foreach (var layer in CameraLayers)
+            {
+                var at = layer.ActualOffset;
+                var follow = compositor.CreateExpressionAnimation(LayerExpression);
+                follow.SetReferenceParameter("cam", _cameraProps);
+                follow.SetScalarParameter("atX", at.X);
+                follow.SetScalarParameter("atY", at.Y);
+                follow.SetScalarParameter("midX", (float)(width / 2 - at.X));
+                follow.SetScalarParameter("midY", (float)(height / 2 - at.Y));
+                ElementCompositionPreview.GetElementVisual(layer).StartAnimation("TransformMatrix", follow);
+            }
+            _cameraProps.StartAnimation("Zoom", zoomKeys);
+            _cameraProps.StartAnimation("PanX", panXKeys);
+            _cameraProps.StartAnimation("PanY", panYKeys);
+            _cameraProps.StartAnimation("Angle", angleKeys);
+        }
+
+        private void StopCameraAnimations()
+        {
+            if (_cameraProps != null)
+            {
+                foreach (string name in new[] { "Zoom", "PanX", "PanY", "Angle" }) _cameraProps.StopAnimation(name);
+                _cameraProps.InsertScalar("Zoom", 1);
+                _cameraProps.InsertScalar("PanX", 0);
+                _cameraProps.InsertScalar("PanY", 0);
+                _cameraProps.InsertScalar("Angle", 0);
+            }
+            foreach (var layer in CameraLayers)
+            {
+                var visual = ElementCompositionPreview.GetElementVisual(layer);
+                visual.StopAnimation("TransformMatrix");
+                visual.TransformMatrix = Matrix4x4.Identity;
+            }
         }
 
         /// <summary>Where the cover of the outgoing layout would have moved over the fade, kept inside the screen so no edge shows.</summary>
@@ -101,7 +193,7 @@ namespace ModernImageViewer
             _cameraRunning = false;
             CompositionTarget.Rendering -= CameraFrame;
             RootGrid.SizeChanged -= CameraRoot_SizeChanged;
-            foreach (var layer in CameraLayers) ElementCompositionPreview.GetElementVisual(layer).TransformMatrix = Matrix4x4.Identity;
+            StopCameraAnimations();
             RootGrid.ClearValue(UIElement.ClipProperty);
         }
 
@@ -115,7 +207,7 @@ namespace ModernImageViewer
                 return;
             }
             _cameraView = _cameraMove.At(elapsed);
-            ShowCameraView(_cameraView);
+            // The canvas moves on the compositor (AnimateCamera); here only the floating cells' small drift.
             ShowFloatingCells(_cameraView, _cameraGoingHome ? 1 - elapsed / _cameraMove.Seconds : 1);
         }
 
@@ -156,32 +248,12 @@ namespace ModernImageViewer
             _floatClock.Reset();
         }
 
-        /// <summary>Each layer has its own place in the canvas, such as the grid inside a frame, so the zoom is worked out from the canvas and not from the layer.</summary>
-        private void ShowCameraView(CameraView view)
+        private void CameraRoot_SizeChanged(object sender, SizeChangedEventArgs e)
         {
-            double width = RootGrid.ActualWidth, height = RootGrid.ActualHeight;
-            // A turned view zooms a little further, so no corner of the canvas shows past the picture.
-            double zoom = view.Zoom * CameraView.TurnCover(view.Angle, width, height);
-            double panX = width / 2 - view.X * width * zoom;
-            double panY = height / 2 - view.Y * height * zoom;
-            var turn = Matrix4x4.Identity;
-            foreach (var layer in CameraLayers)
-            {
-                var at = layer.ActualOffset;
-                if (Math.Abs(view.Angle) > 0.001)
-                {
-                    // About the middle of the canvas, in the layer's own space.
-                    var middle = new Vector3((float)(width / 2 - at.X), (float)(height / 2 - at.Y), 0);
-                    turn = Matrix4x4.CreateTranslation(-middle) * Matrix4x4.CreateRotationZ((float)(view.Angle * Math.PI / 180)) * Matrix4x4.CreateTranslation(middle);
-                }
-                ElementCompositionPreview.GetElementVisual(layer).TransformMatrix =
-                    Matrix4x4.CreateScale((float)zoom)
-                    * Matrix4x4.CreateTranslation((float)(at.X * zoom + panX - at.X), (float)(at.Y * zoom + panY - at.Y), 0)
-                    * turn;
-            }
+            ClipRootToCanvas();
+            // The keyframes hold pixels for the old size: carry on from where the move is, for the new one.
+            if (_cameraMove != null) AnimateCamera(_cameraMove, _cameraClock.Elapsed.TotalSeconds);
         }
-
-        private void CameraRoot_SizeChanged(object sender, SizeChangedEventArgs e) => ClipRootToCanvas();
 
         // A zoomed layer reaches past the canvas, which must not draw over the rest of the window.
         private void ClipRootToCanvas() =>

@@ -620,6 +620,7 @@ namespace ModernImageViewer
             prevStack.Children.Add(new TextBlock { Text = "Preview Move", FontSize = 11.5, Foreground = new SolidColorBrush(Colors.White) });
             previewBtn.Content = prevStack;
             previewBtn.Click += (_, _) => PreviewCameraMove();
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(previewBtn, "Preview move");
             ToolTipService.SetToolTip(previewBtn, "Play live 2.5s Ken Burns move between Start and End (Space)");
             barStack.Children.Add(previewBtn);
 

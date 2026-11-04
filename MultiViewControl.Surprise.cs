@@ -3733,6 +3733,39 @@ namespace ModernImageViewer
 
         private int _storyboardBuildTicket;
         private const int ScenesBeforePlay = 2;
+        private const int ScenesAheadWhilePlaying = 3;
+        // Released at each change of scene, so the storyboard build makes its next scene then, mid-hold.
+        private readonly System.Threading.SemaphoreSlim _storyboardAdvanced = new(0, 1);
+        // Scenes were built while the show played and the summary and badge have not been brought up to date.
+        private bool _storyCountsStale;
+        private bool IsPlayingStoryboard => _isStoryboardPlayback && _autoPlaySeconds > 0;
+
+        // The next storyboard scene's images, decoded while the current one holds.
+        private readonly Dictionary<string, BitmapSource> _storyPreloaded = new(StringComparer.OrdinalIgnoreCase);
+        private System.Threading.CancellationTokenSource? _storyPreloadCts;
+
+        private void PreloadStoryScene(ShowScene next)
+        {
+            _storyPreloadCts?.Cancel();
+            _storyPreloadCts?.Dispose();
+            var cts = new System.Threading.CancellationTokenSource();
+            _storyPreloadCts = cts;
+            var have = DecodedBitmaps();
+            var paths = next.GetPhotoPaths()
+                .Where(p => !string.IsNullOrEmpty(p) && !have.ContainsKey(p) && !_storyPreloaded.ContainsKey(p))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (paths.Count > 0) _ = PreloadBitmapsAsync(paths, _storyPreloaded, cts.Token);
+        }
+
+        /// <summary>When a show stops playing, the counts it put off.</summary>
+        private void CatchUpStoryCounts()
+        {
+            if (!_storyCountsStale) return;
+            _storyCountsStale = false;
+            _updateStorySummary?.Invoke();
+            ShowShownBadge();
+        }
 
         /// <summary>
         /// Play storyboard, from the folders: a new storyboard of the session's images that starts playing after its first
@@ -3767,6 +3800,13 @@ namespace ModernImageViewer
             bool started = false;
             while (Current())
             {
+                // While the show plays, stay only a few scenes ahead of the screen. Building a scene is UI work, and
+                // building them all at once made the camera judder through the first part of the show. Woken by each
+                // change of scene; the timeout notices a pause, after which the rest are built at once.
+                while (Current() && started && IsPlayingStoryboard && show.Scenes.Count - _showPlaybackIndex >= ScenesAheadWhilePlaying)
+                    await _storyboardAdvanced.WaitAsync(TimeSpan.FromSeconds(2));
+                if (!Current()) return;
+
                 var fresh = show.ImagesNotInShow(SessionPictures()).Where(p => !_imagesBeingDrafted.Contains(p)).ToList();
                 if (fresh.Count == 0) break;
                 // Read for each scene, so a setting changed while it plays applies to the scenes still to come.
@@ -3792,8 +3832,13 @@ namespace ModernImageViewer
                 }
 
                 _sceneAddedBehindDrawer?.Invoke(show, scene);
-                _updateStorySummary?.Invoke();
-                ShowShownBadge();
+                // The summary and the badge wait for a pause: nothing shows them while the show plays.
+                if (IsPlayingStoryboard) _storyCountsStale = true;
+                else
+                {
+                    _updateStorySummary?.Invoke();
+                    ShowShownBadge();
+                }
                 if (!started && show.Scenes.Count >= ScenesBeforePlay)
                 {
                     started = true;
@@ -3894,6 +3939,8 @@ namespace ModernImageViewer
 
             var pictures = SessionPictures();
             var ready = DecodedBitmaps();
+            foreach (var pair in _storyPreloaded) ready.TryAdd(pair.Key, pair.Value);
+            _storyPreloaded.Clear();
             var outgoingStep = fade ? OutgoingCameraStep(0.7) : (1.0, 0.0, 0.0);
             Image? before = fade ? await CoverWithPictureOfCanvasAsync() : null;
             ResetCanvasCamera();
@@ -3963,6 +4010,9 @@ namespace ModernImageViewer
 
             _showPlaybackIndex = (currentIndex + 1) % visibleScenes.Count;
             ShowAutoPlayState();
+            if (_storyboardAdvanced.CurrentCount == 0) _storyboardAdvanced.Release();
+            // The next scene's images load while this one holds, as Auto-Mix's next layout does, so its change does not wait on them.
+            if (_autoPlaySeconds > 0) PreloadStoryScene(visibleScenes[_showPlaybackIndex]);
         }
 
         private void RefreshTrayCardIfOpen()
@@ -4166,6 +4216,9 @@ namespace ModernImageViewer
             SyncCanvasToSelectedScene(showToast: false);
             CaptureUndoPoint();
             _surpriseMusic?.SetPlaying(false);
+            CatchUpStoryCounts();
+            // Wakes the storyboard build, which may now make the rest of its scenes.
+            if (_storyboardAdvanced.CurrentCount == 0) _storyboardAdvanced.Release();
             ShowAutoPlayState();
             if (PlayUsesStoryboard() && _activeShow != null && _activeShow.Scenes.Count > 0)
             {
@@ -4745,11 +4798,28 @@ namespace ModernImageViewer
             }
         }
 
+        /// <summary>
+        /// Until the new layout's pictures have loaded, then one drawn frame so they are on screen. It used to look every
+        /// 50 ms and then always wait another 50: with the pictures loaded ahead, that fixed wait was most of the pause
+        /// at each change, the old picture standing still on screen.
+        /// </summary>
         private async Task WaitForPicturesAsync()
         {
-            for (int waited = 0; waited < MostWaitForPicturesMs && AnyPhotoLoading(); waited += 50)
-                await Task.Delay(50);
-            await Task.Delay(50);
+            for (int waited = 0; waited < MostWaitForPicturesMs && AnyPhotoLoading(); waited += 15)
+                await Task.Delay(15);
+            await NextRenderedFrameAsync();
+        }
+
+        private Task NextRenderedFrameAsync()
+        {
+            var drawn = new TaskCompletionSource();
+            void Once(object? sender, object e)
+            {
+                Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= Once;
+                drawn.TrySetResult();
+            }
+            Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += Once;
+            return drawn.Task;
         }
 
         private LayoutTransition? _lastTransition;
