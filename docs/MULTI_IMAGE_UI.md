@@ -84,7 +84,7 @@ Cards can be dragged into a new order.
 
 ## Play storyboard and Cinematic storyboard, from the folders
 
-**Play storyboard** in the sidebar, under Cinematic Slideshow, plays the whole folder; the same button on the selection bar plays the selected images. Either opens Multi-View with those images, starts a new storyboard and plays it once its first two scenes are made, so a large folder starts within seconds. While it plays it keeps making scenes from images not in it yet, until every image is in the show. It stops making scenes if the show is replaced or cleared.
+**Play storyboard** in the sidebar, under Cinematic Slideshow, plays the whole folder; the same button on the selection bar plays the selected images. Either opens Multi-View with those images, starts a new storyboard and plays it once its first two scenes are made, so a large folder starts within seconds. While it plays it makes the next scenes from images not in it yet, a few ahead of the screen, one at a time, so building never competes with the show; when it is paused it makes the rest. It goes on until every image is in the show, and stops if the show is replaced or cleared. The drawer's summary and the Image Pool count catch up when the show pauses.
 
 **Cinematic storyboard**, under Play storyboard in the sidebar (and on the selection bar), makes a storyboard that looks like Cinematic Slideshow. By default each scene is one image filling the screen, for 5 to 20 seconds, with the camera moving and a crossfade between scenes. You can change this in Layout Generator Settings, under Advanced.
 
