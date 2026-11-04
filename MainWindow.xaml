@@ -343,11 +343,15 @@
                         </Grid.RowDefinitions>
 
                         <Border Grid.Row="0" Margin="10,4,10,8" Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="6" Padding="2">
-                            <Grid ColumnSpacing="2">
+                            <Grid ColumnSpacing="2" RowSpacing="2">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
                                 <Button Style="{StaticResource SidebarToolButtonStyle}" Click="PlayCinematicFolder_Click" HorizontalAlignment="Stretch" Height="26" Padding="8,0" CornerRadius="4" IsTabStop="False" ToolTipService.ToolTip="Play Cinematic Slideshow">
                                     <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
                                         <SymbolIcon Symbol="Play"/>
@@ -356,6 +360,13 @@
                                 </Button>
                                 <Button Grid.Column="1" Style="{StaticResource SidebarToolButtonStyle}" Click="OpenCinematicShow_Click" Height="26" Padding="8,0" CornerRadius="4" IsTabStop="False" ToolTipService.ToolTip="Open a saved Cinematic show. Storyboards open from Save/Load in Multi-View." AutomationProperties.Name="Open Cinematic show">
                                     <TextBlock Text="Open show" FontSize="12"/>
+                                </Button>
+                                <!-- One click to a storyboard of the folder: it starts after the first scenes and makes the rest while it plays. -->
+                                <Button Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource SidebarToolButtonStyle}" Click="PlayStoryboardFolder_Click" HorizontalAlignment="Stretch" Height="26" Padding="8,0" CornerRadius="4" IsTabStop="False" ToolTipService.ToolTip="Make a storyboard of this folder in Multi-View and play it. It starts after the first scenes and makes the rest as it plays." AutomationProperties.Name="Play storyboard">
+                                    <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+                                        <FontIcon FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE786;" FontSize="14"/>
+                                        <TextBlock Text="Play storyboard" FontSize="12"/>
+                                    </StackPanel>
                                 </Button>
                             </Grid>
                         </Border>
@@ -669,6 +680,9 @@
 
                                 <Button x:Name="MultiSelectPlayButton" Click="MultiSelectCinematic_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" ToolTipService.ToolTip="Play Cinematic Slideshow" AutomationProperties.Name="Play Cinematic Slideshow">
                                     <SymbolIcon Symbol="Play" />
+                                </Button>
+                                <Button x:Name="MultiSelectStoryboardButton" Click="MultiSelectStoryboard_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" ToolTipService.ToolTip="Play storyboard: make a storyboard of these images and play it" AutomationProperties.Name="Play storyboard">
+                                    <FontIcon FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE786;" FontSize="14" />
                                 </Button>
 
                                 <Rectangle x:Name="MultiSelectDeleteRule" Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,0" Opacity="0.5"/>

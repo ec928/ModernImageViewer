@@ -842,6 +842,25 @@ namespace ModernImageViewer
             CloseMultiView();
         }
 
+        private void PlayStoryboardFolder_Click(object sender, RoutedEventArgs e) =>
+            PlayStoryboard(Images.Where(img => !img.IsDirectory && !img.IsComicArchive && !img.IsComicEntry).ToList());
+
+        private void MultiSelectStoryboard_Click(object sender, RoutedEventArgs e)
+        {
+            var selectedItems = ImageGrid.SelectedItems.OfType<ImageItem>().Where(i => !i.IsDirectory && !i.IsComicArchive && !i.IsComicEntry).ToList();
+            if (selectedItems.Count == 0) return;
+            ImageGrid.SelectedItems.Clear();
+            PlayStoryboard(selectedItems);
+        }
+
+        /// <summary>The storyboard counterpart of Cinematic Slideshow: these images in Multi-View, made into a show that plays at once.</summary>
+        private void PlayStoryboard(IList<ImageItem> items)
+        {
+            if (items.Count == 0 || MultiViewControl == null || _multiViewParked) return;
+            OpenMultiView(items);
+            _ = MultiViewControl.MakeAndPlayStoryboardAsync();
+        }
+
         private void MultiSelectCinematic_Click(object sender, RoutedEventArgs e)
         {
             var selectedItems = ImageGrid.SelectedItems.OfType<ImageItem>().Where(i => !i.IsDirectory).ToList();
