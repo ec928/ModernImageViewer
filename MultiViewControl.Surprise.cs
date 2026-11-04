@@ -86,6 +86,23 @@ namespace ModernImageViewer
             }
         }
 
+        /// <summary>How the scene changes are chosen (LayoutTransitions.Choose): at 100%, 7 in 10 are not a crossfade.</summary>
+        private const string TransitionVarietyNote =
+            "0% always crossfades between scenes. Higher mixes in zooms, fades through black and slides; at 100%, about 7 in 10 scene changes are one of those.";
+
+        /// <summary>
+        /// Turns the Cinematic overrides on or off for the open storyboard, from the toggle in Layout Generator Settings.
+        /// With no storyboard yet, it starts an empty one, so the next scenes made for it follow the toggle.
+        /// </summary>
+        private void UseCinematicOverrides(bool on)
+        {
+            if ((_activeShow?.GeneratorOverrides == CinematicOverrides.Name) == on) return;
+            _activeShow ??= new ShowProject { Title = "Storyboard" };
+            _activeShow.GeneratorOverrides = on ? CinematicOverrides.Name : null;
+            _updateStorySummary?.Invoke();
+            NoteUserAction();
+        }
+
         /// <summary>The Layout Generator settings for a show: the main ones, with the show's overrides applied when it has any.</summary>
         private SurpriseOptions GeneratorSettingsFor(ShowProject? show) => SurpriseChoices.WithOverrides(show?.GeneratorOverrides);
 
@@ -927,10 +944,11 @@ namespace ModernImageViewer
                 0, 100, 5, options.MotionFaceChance * 100,
                 v => $"{v:0}%",
                 (o, v) => o.MotionFaceChance = v / 100);
-            Slide(cameraSection, "Transition variety", "How often a change of layout zooms through, fades through dark or slides, rather than a crossfade.",
+            Slide(cameraSection, "Transition variety", TransitionVarietyNote,
                 0, 100, 5, options.TransitionVariety * 100,
                 v => v < 1 ? "Crossfade" : $"{v:0}%",
                 (o, v) => { o.TransitionVariety = v / 100; cameraSummary.Text = CameraSummaryText(); });
+            Note(cameraSection, TransitionVarietyNote);
 
             // 4. Soundtrack & audio
             string MusicSummaryText()
@@ -1123,14 +1141,26 @@ namespace ModernImageViewer
             }
             AddLookChoice(lookSection, "Effect color", "The color of the progress line and its glow. Accent follows the Windows accent color.", colorPanel);
 
+            // A line of explanation under a setting whose name does not say enough on its own.
+            void Note(StackPanel column, string text) => column.Children.Add(new TextBlock
+            {
+                Text = text,
+                FontSize = 11,
+                Opacity = 0.6,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, -4, 0, 6)
+            });
+
             // 6. Cinematic storyboard: the settings it puts in place of the ones above. Not a second set of everything:
-            // only what makes the one generator's layouts like Cinematic Slideshow's.
+            // only what makes the one generator's layouts like Cinematic Slideshow's. Whether they are in use belongs to
+            // the storyboard, so Auto-Mix is never affected.
+            bool CinematicOn() => _activeShow?.GeneratorOverrides == CinematicOverrides.Name;
             string CinematicSummaryText()
             {
                 var c = SurpriseChoices.Cinematic;
                 string images = c.FewestPictures == c.MostPictures ? $"{c.FewestPictures}" : $"{c.FewestPictures}–{c.MostPictures}";
                 string hold = c.FewestSeconds == c.MostSeconds ? $"{c.FewestSeconds}s" : $"{c.FewestSeconds}–{c.MostSeconds}s";
-                return $"{images} · {hold}";
+                return $"{(CinematicOn() ? "On" : "Off")} · {images} · {hold}";
             }
             var (cineSection, cineSummary) = Section("Cinematic storyboard", CinematicSummaryText());
             cineSection.Children.Add(new TextBlock
@@ -1141,27 +1171,64 @@ namespace ModernImageViewer
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 6)
             });
-            Slider? cineFewest = null, cineMost = null;
-            cineFewest = Slide(cineSection, "Fewest images per scene", "The fewest images in each scene. Cinematic Slideshow shows one.",
-                SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.Cinematic.FewestPictures,
-                v => $"{v:0}",
-                (o, v) =>
+
+            var cineOn = Toggle(cineSection, "Use for this storyboard",
+                "On: new scenes in the open storyboard, from Add new layout or Replace show, use these settings. Auto-Mix never uses them.",
+                CinematicOn(), (_, _) => { },
+                subtitle: "On when it was started with Cinematic storyboard; off for any other storyboard.");
+            cineOn.Toggled += (_, _) =>
+            {
+                UseCinematicOverrides(cineOn.IsOn);
+                cineSummary.Text = CinematicSummaryText();
+            };
+
+            {
+                // The same boxes as Images per scene on the first page.
+                bool syncingCine = false;
+                SpinNumberBox CineBox(int value, string name, string tip)
                 {
-                    o.Cinematic.FewestPictures = (int)v;
-                    if (o.Cinematic.MostPictures < (int)v) o.Cinematic.MostPictures = (int)v;
-                    cineSummary.Text = CinematicSummaryText();
-                });
-            cineMost = Slide(cineSection, "Most images per scene", "The most images in each scene.",
-                SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown, 1, options.Cinematic.MostPictures,
-                v => $"{v:0}",
-                (o, v) =>
+                    var box = new SpinNumberBox { Minimum = 1, Maximum = MosaicLayout.MaxShown, Value = value, Width = 84, Height = 32, VerticalAlignment = VerticalAlignment.Center };
+                    ToolTipService.SetToolTip(box, tip);
+                    Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(box, name);
+                    return box;
+                }
+                var cineFewestBox = CineBox(options.Cinematic.FewestPictures, "Cinematic minimum images per scene", "Fewest images in each scene (1 to 16). Cinematic Slideshow shows one.");
+                var cineMostBox = CineBox(options.Cinematic.MostPictures, "Cinematic maximum images per scene", "Most images in each scene (1 to 16).");
+                void SetCineRange(int f, int m)
                 {
-                    o.Cinematic.MostPictures = (int)v;
-                    if (o.Cinematic.FewestPictures > (int)v) o.Cinematic.FewestPictures = (int)v;
-                    cineSummary.Text = CinematicSummaryText();
-                });
-            cineFewest.ValueChanged += (_, e) => { if (cineMost.Value < e.NewValue) cineMost.Value = e.NewValue; };
-            cineMost.ValueChanged += (_, e) => { if (cineFewest.Value > e.NewValue) cineFewest.Value = e.NewValue; };
+                    f = Math.Clamp(f, 1, MosaicLayout.MaxShown);
+                    m = Math.Clamp(m, f, MosaicLayout.MaxShown);
+                    if (syncingCine) return;
+                    syncingCine = true;
+                    try
+                    {
+                        if (cineFewestBox.Value != f) cineFewestBox.Value = f;
+                        if (cineMostBox.Value != m) cineMostBox.Value = m;
+                        ChangeSurpriseChoices(o => { o.Cinematic.FewestPictures = f; o.Cinematic.MostPictures = m; });
+                        cineSummary.Text = CinematicSummaryText();
+                        _updateStorySummary?.Invoke();
+                    }
+                    finally
+                    {
+                        syncingCine = false;
+                    }
+                }
+                cineFewestBox.ValueChanged += (_, v) => { if (!syncingCine) SetCineRange(v, Math.Max(v, cineMostBox.Value)); };
+                cineMostBox.ValueChanged += (_, v) => { if (!syncingCine) SetCineRange(Math.Min(v, cineFewestBox.Value), v); };
+
+                var boxes = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+                boxes.Children.Add(cineFewestBox);
+                boxes.Children.Add(new TextBlock { Text = "to", FontSize = 13, Opacity = 0.7, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 0, 2, 0) });
+                boxes.Children.Add(cineMostBox);
+                var row = new Grid { ColumnSpacing = 12, MinHeight = 36, Margin = new Thickness(0, 2, 0, 2) };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
+                var label = new TextBlock { Text = "Images per scene:", VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
+                Grid.SetColumn(boxes, 1);
+                row.Children.Add(label);
+                row.Children.Add(boxes);
+                cineSection.Children.Add(row);
+            }
 
             void CineOddsSlide(string name, string tip, double odds, Action<SurpriseOptions, double> set)
             {
@@ -1216,10 +1283,11 @@ namespace ModernImageViewer
             Slide(cineSection, "Motion", "How much the camera moves during each scene. Cinematic Slideshow always moves.", 0, 100, 5, options.Cinematic.MotionAmount * 100,
                 v => v < 1 ? "Off" : $"{v:0}%",
                 (o, v) => o.Cinematic.MotionAmount = v / 100);
-            Slide(cineSection, "Transition variety", "How often a scene changes with a zoom, a fade through black or a slide instead of a crossfade. Cinematic Slideshow always crossfades.",
+            Slide(cineSection, "Transition variety", TransitionVarietyNote + " Cinematic Slideshow always crossfades.",
                 0, 100, 5, options.Cinematic.TransitionVariety * 100,
                 v => v < 1 ? "Crossfade" : $"{v:0}%",
                 (o, v) => o.Cinematic.TransitionVariety = v / 100);
+            Note(cineSection, TransitionVarietyNote + " Cinematic Slideshow always crossfades.");
 
             // Reset to defaults
             var resetRow = new Grid { ColumnSpacing = 6, MinHeight = 32 };
