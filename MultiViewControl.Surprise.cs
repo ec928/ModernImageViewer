@@ -105,6 +105,9 @@ namespace ModernImageViewer
             }), true);
             RootGrid.AddHandler(KeyDownEvent, new KeyEventHandler((_, e) =>
             {
+                // A key the window's pass already acted on is done. Acting again on the same Esc closed the
+                // drawer that leaving Camera Director had just reopened.
+                if (e.Handled) return;
                 // Here as well as with the other keys, because the window leaves Esc alone while a text box has focus.
                 if ((_surpriseCard != null || _trayCard != null) && e.Key == Windows.System.VirtualKey.Escape)
                 {
@@ -116,7 +119,7 @@ namespace ModernImageViewer
                 {
                     if (e.Key is Windows.System.VirtualKey.Escape or Windows.System.VirtualKey.Enter)
                     {
-                        ExitCameraDirector(save: true);
+                        ExitCameraDirector(save: e.Key == Windows.System.VirtualKey.Enter);
                         e.Handled = true;
                     }
                     else if (e.Key == Windows.System.VirtualKey.Tab)
