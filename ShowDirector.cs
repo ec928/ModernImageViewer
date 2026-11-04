@@ -163,7 +163,7 @@ namespace ModernImageViewer
             double dwell = options.NextPlaySeconds(random, composition.Cells.Count, ref lastWasLong);
 
             // Transition selection
-            transition = LayoutTransitions.Choose(options.TransitionVariety, lastTransition, random);
+            transition = options.PickTransition(lastTransition, random);
 
             // Camera planning: organic, varied motion sequence tailored to layout & avoiding consecutive repeats
             var subjects = composition.CameraSubjects();

@@ -240,8 +240,28 @@ namespace ModernImageViewer
         public double MotionZoomChance { get; set; } = 0.5;
         /// <summary>The odds that it aims at a cell with faces, where there is one.</summary>
         public double MotionFaceChance { get; set; } = 0.7;
-        /// <summary>How often a change of layout is something other than a crossfade, 0 to 1.</summary>
-        public double TransitionVariety { get; set; } = 0.5;
+        /// <summary>
+        /// How each change of layout is made, as odds against each other on the designs' Off to Often scale, 0 being off.
+        /// All off is a crossfade. The defaults keep a crossfade the most common and a slide, which stands out most, the rarest.
+        /// </summary>
+        public double CrossfadeOdds { get; set; } = MostFavouredDesign;
+        public double ZoomThroughOdds { get; set; } = 1;
+        public double ThroughDarkOdds { get; set; } = 1;
+        public double SlideOdds { get; set; } = 0.25;
+
+        /// <summary>
+        /// The single "Transition variety" of earlier versions, read only to convert a saved file to the four odds. It
+        /// capped the other kinds at 7 in 10, so its percentage never meant what it said.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public double? TransitionVariety { get; set; }
+
+        public LayoutTransition PickTransition(LayoutTransition? last, Random random) =>
+            LayoutTransitions.Pick(CrossfadeOdds, ZoomThroughOdds, ThroughDarkOdds, SlideOdds, last, random);
+
+        /// <summary>The share of changes each kind takes in a long run, the no-repeat rule included.</summary>
+        public IReadOnlyDictionary<LayoutTransition, double> TransitionShares() =>
+            LayoutTransitions.Shares(CrossfadeOdds, ZoomThroughOdds, ThroughDarkOdds, SlideOdds);
 
         public const string ProgressBottom = "Bottom";
         public const string ProgressTop = "Top";
@@ -352,7 +372,16 @@ namespace ModernImageViewer
                 read.MotionAmount = Math.Clamp(read.MotionAmount, 0, 1);
                 read.MotionZoomChance = Math.Clamp(read.MotionZoomChance, 0, 1);
                 read.MotionFaceChance = Math.Clamp(read.MotionFaceChance, 0, 1);
-                read.TransitionVariety = Math.Clamp(read.TransitionVariety, 0, 1);
+                // A file from before the four odds: about the mix its single slider gave, so nobody's look changes.
+                if (read.TransitionVariety is double variety)
+                {
+                    (read.CrossfadeOdds, read.ZoomThroughOdds, read.ThroughDarkOdds, read.SlideOdds) = LayoutTransitions.OddsFromVariety(variety);
+                    read.TransitionVariety = null;
+                }
+                read.CrossfadeOdds = Math.Clamp(read.CrossfadeOdds, 0, MostFavouredDesign);
+                read.ZoomThroughOdds = Math.Clamp(read.ZoomThroughOdds, 0, MostFavouredDesign);
+                read.ThroughDarkOdds = Math.Clamp(read.ThroughDarkOdds, 0, MostFavouredDesign);
+                read.SlideOdds = Math.Clamp(read.SlideOdds, 0, MostFavouredDesign);
                 if (string.IsNullOrEmpty(read.ProgressEdge) || !ProgressEdges.Contains(read.ProgressEdge)) read.ProgressEdge = ProgressBottom;
                 if (string.IsNullOrEmpty(read.ProgressColor) || !ProgressColors.Contains(read.ProgressColor)) read.ProgressColor = ProgressAccent;
                 return read;
@@ -369,7 +398,7 @@ namespace ModernImageViewer
     /// <summary>
     /// The Layout Generator settings Cinematic storyboard puts in place of the main ones, so the one generator makes
     /// layouts like Cinematic Slideshow's: one image filling the screen, holds alternating short and long between 5 and
-    /// 20 seconds, the camera always moving, and crossfades. Defaults, not fixed: each is a setting.
+    /// 20 seconds, and the camera always moving. Defaults, not fixed: each is a setting.
     /// </summary>
     public sealed class CinematicOverrides
     {
@@ -384,7 +413,7 @@ namespace ModernImageViewer
         public int MostSeconds { get; set; } = 20;
         public bool SmartPace { get; set; } = true;
         public double MotionAmount { get; set; } = 0.5;
-        public double TransitionVariety { get; set; }
+        // Transitions are not overridden: a Cinematic storyboard uses the main Transitions settings (Ed, 2026-11-04).
 
         public void ApplyTo(SurpriseOptions options)
         {
@@ -399,7 +428,6 @@ namespace ModernImageViewer
             options.RandomMostSeconds = MostSeconds;
             options.SmartPace = SmartPace;
             options.MotionAmount = MotionAmount;
-            options.TransitionVariety = TransitionVariety;
         }
 
         /// <summary>Anything missing or out of range in the saved file comes back as its default or its limit.</summary>
@@ -414,7 +442,6 @@ namespace ModernImageViewer
             c.FewestSeconds = Math.Clamp(c.FewestSeconds, SurpriseOptions.FewestSeconds, SurpriseOptions.MostSeconds);
             c.MostSeconds = Math.Clamp(c.MostSeconds, c.FewestSeconds, SurpriseOptions.MostSeconds);
             c.MotionAmount = Math.Clamp(c.MotionAmount, 0, 1);
-            c.TransitionVariety = Math.Clamp(c.TransitionVariety, 0, 1);
             return c;
         }
     }

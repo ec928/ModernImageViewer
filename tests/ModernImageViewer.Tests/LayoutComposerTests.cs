@@ -253,25 +253,6 @@ namespace ModernImageViewer.Tests
             Assert.True(front.X < back.X && back.X < 0, "the view moved right, so a nearer cell moves further left");
         }
 
-        [Fact]
-        public void Transitions_take_their_odds_from_variety()
-        {
-            var random = new Random(8);
-            for (int i = 0; i < 500; i++) Assert.Equal(LayoutTransition.Crossfade, LayoutTransitions.Choose(0, null, random));
-            var seen = new Dictionary<LayoutTransition, int>();
-            LayoutTransition? last = null;
-            for (int i = 0; i < 4000; i++)
-            {
-                var next = LayoutTransitions.Choose(0.5, last, random);
-                if (next != LayoutTransition.Crossfade) Assert.NotEqual(last, next);
-                seen[next] = seen.GetValueOrDefault(next) + 1;
-                last = next;
-            }
-            Assert.Equal(4, seen.Count);
-            Assert.True(seen[LayoutTransition.Crossfade] > 2000, "a crossfade stays the most common by default");
-            Assert.True(seen[LayoutTransition.Slide] < seen[LayoutTransition.ZoomThrough], "slide comes up least");
-        }
-
         private static SurpriseOptions Zoomed(double most) => new() { MostZoom = most };
 
         [Fact]

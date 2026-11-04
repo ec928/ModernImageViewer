@@ -10,14 +10,14 @@ namespace ModernImageViewer.Tests
         [Fact]
         public void WithOverrides_Cinematic_ReplacesOnlyItsSettings_AndLeavesTheSavedOnesAlone()
         {
-            var main = new SurpriseOptions { FewestPictures = 4, MostPictures = 9, MostZoom = 3, TransitionVariety = 0.8, Card = SurpriseOptions.CardBlack };
+            var main = new SurpriseOptions { FewestPictures = 4, MostPictures = 9, MostZoom = 3, SlideOdds = 4, Card = SurpriseOptions.CardBlack };
 
             var cine = main.WithOverrides(CinematicOverrides.Name);
 
             Assert.NotSame(main, cine);
             Assert.Equal(1, cine.FewestPictures);
             Assert.Equal(1, cine.MostPictures);
-            Assert.Equal(0, cine.TransitionVariety);
+
             Assert.Equal(0, cine.SoloMattedOdds);
             Assert.True(cine.AutoPlayRandom);
             Assert.Equal(5, cine.RandomFewestSeconds);
@@ -25,9 +25,10 @@ namespace ModernImageViewer.Tests
             // Not overridden: comes from the main settings.
             Assert.Equal(3, cine.MostZoom);
             Assert.Equal(SurpriseOptions.CardBlack, cine.Card);
+            Assert.Equal(4, cine.SlideOdds);
             // The saved settings are unchanged.
             Assert.Equal(4, main.FewestPictures);
-            Assert.Equal(0.8, main.TransitionVariety);
+
 
             Assert.Same(main, main.WithOverrides(null));
             Assert.Same(main, main.WithOverrides("Nonsense"));
@@ -40,21 +41,21 @@ namespace ModernImageViewer.Tests
             options.Cinematic.MostPictures = 3;
             options.Cinematic.FewestSeconds = 8;
             options.Cinematic.MostSeconds = 12;
-            options.Cinematic.TransitionVariety = 0.4;
+
 
             var read = SurpriseOptions.FromJson(options.ToJson());
             Assert.Equal(3, read.Cinematic.MostPictures);
             Assert.Equal(8, read.Cinematic.FewestSeconds);
             Assert.Equal(12, read.Cinematic.MostSeconds);
-            Assert.Equal(0.4, read.Cinematic.TransitionVariety);
+
             Assert.Equal(12, read.WithOverrides(CinematicOverrides.Name).RandomMostSeconds);
 
             // A file from before the overrides, or with them out of range.
             Assert.Equal(1, SurpriseOptions.FromJson("{}").Cinematic.MostPictures);
-            var bad = SurpriseOptions.FromJson("{\"Cinematic\":{\"FewestPictures\":40,\"MostPictures\":2,\"TransitionVariety\":7}}");
+            var bad = SurpriseOptions.FromJson("{\"Cinematic\":{\"FewestPictures\":40,\"MostPictures\":2}}");
             Assert.Equal(MosaicLayout.MaxShown, bad.Cinematic.FewestPictures);
             Assert.Equal(MosaicLayout.MaxShown, bad.Cinematic.MostPictures);
-            Assert.Equal(1, bad.Cinematic.TransitionVariety);
+
         }
 
         [Fact]
@@ -96,7 +97,7 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
-        public async System.Threading.Tasks.Task CinematicScene_IsOneImage_FillingTheScreen_WithACrossfade()
+        public async System.Threading.Tasks.Task CinematicScene_IsOneImage_FillingTheScreen()
         {
             var facts = Enumerable.Range(0, 5)
                 .Select(i => new PhotoFacts($@"C:\p\{i}.jpg", 1920, 1080, Array.Empty<UnitRect>(), 0.5, 0.5, "#808080"))
@@ -108,7 +109,6 @@ namespace ModernImageViewer.Tests
                 var scene = await ShowDirector.DraftSceneAsync(facts, cine, 1920, 1080, previous: null);
 
                 Assert.Single(scene!.GetPhotoPaths());
-                Assert.Equal("Crossfade", scene.Transition);
                 Assert.Equal(LayoutComposer.EdgeToEdge, scene.Recipe);
             }
         }

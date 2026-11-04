@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace ModernImageViewer
 {
@@ -70,20 +71,82 @@ namespace ModernImageViewer
 
     public static class LayoutTransitions
     {
-        // The most that are anything other than a crossfade, which suits photographs best and stays common.
-        private const double MostOther = 0.7;
+        private static readonly LayoutTransition[] Kinds = { LayoutTransition.Crossfade, LayoutTransition.ZoomThrough, LayoutTransition.ThroughDark, LayoutTransition.Slide };
 
-        /// <summary>Variety is 0 to 1, and 0 is always a crossfade. Slide stands out most, so it comes up least. The same one is not used twice running, except a crossfade.</summary>
-        public static LayoutTransition Choose(double variety, LayoutTransition? last, Random random)
+        /// <summary>The odds of each kind for the next change: the one just used is left out, except a crossfade.</summary>
+        private static double[] Weights(double crossfade, double zoomThrough, double throughDark, double slide, LayoutTransition? last)
         {
-            if (random.NextDouble() >= Math.Clamp(variety, 0, 1) * MostOther) return LayoutTransition.Crossfade;
-            for (int i = 0; i < 8; i++)
+            var w = new[] { Math.Max(0, crossfade), Math.Max(0, zoomThrough), Math.Max(0, throughDark), Math.Max(0, slide) };
+            if (last is LayoutTransition l && l != LayoutTransition.Crossfade) w[Array.IndexOf(Kinds, l)] = 0;
+            return w;
+        }
+
+        /// <summary>
+        /// One change of layout, from four odds against each other. The same one is not used twice running, except a
+        /// crossfade; with every odds off, or nothing else left, it is a crossfade.
+        /// </summary>
+        public static LayoutTransition Pick(double crossfade, double zoomThrough, double throughDark, double slide, LayoutTransition? last, Random random)
+        {
+            var w = Weights(crossfade, zoomThrough, throughDark, slide, last);
+            double sum = w.Sum();
+            if (sum <= 0) return LayoutTransition.Crossfade;
+            double roll = random.NextDouble() * sum;
+            for (int i = 0; i < w.Length; i++)
             {
-                double pick = random.NextDouble();
-                var choice = pick < 0.4 ? LayoutTransition.ZoomThrough : pick < 0.8 ? LayoutTransition.ThroughDark : LayoutTransition.Slide;
-                if (choice != last) return choice;
+                if (roll < w[i]) return Kinds[i];
+                roll -= w[i];
             }
             return LayoutTransition.Crossfade;
+        }
+
+        /// <summary>The share of changes each kind takes over a long run of <see cref="Pick"/>, the no-repeat rule included.</summary>
+        public static IReadOnlyDictionary<LayoutTransition, double> Shares(double crossfade, double zoomThrough, double throughDark, double slide)
+        {
+            // The kind just used decides the odds of the next, so the long run is where repeating that settles.
+            var share = new double[] { 1, 0, 0, 0 };
+            for (int step = 0; step < 400; step++)
+            {
+                var next = new double[4];
+                for (int from = 0; from < 4; from++)
+                {
+                    if (share[from] == 0) continue;
+                    var w = Weights(crossfade, zoomThrough, throughDark, slide, Kinds[from]);
+                    double sum = w.Sum();
+                    if (sum <= 0) { next[0] += share[from]; continue; }
+                    for (int to = 0; to < 4; to++) next[to] += share[from] * w[to] / sum;
+                }
+                // Half a step each time: the same long run, but it settles even where kinds alternate
+                // (one kind on, never twice running, so every other change is a crossfade).
+                for (int i = 0; i < 4; i++) share[i] = (share[i] + next[i]) / 2;
+            }
+            return Kinds.Select((k, i) => (k, share[i])).ToDictionary(p => p.k, p => p.Item2);
+        }
+
+        /// <summary>
+        /// The four odds giving about the mix the earlier single "Transition variety" slider gave: at most 7 in 10 not a
+        /// crossfade, those split zoom through 2, through dark 2, slide 1.
+        /// </summary>
+        public static (double Crossfade, double ZoomThrough, double ThroughDark, double Slide) OddsFromVariety(double variety)
+        {
+            double other = Math.Clamp(variety, 0, 1) * 0.7;
+            if (other <= 0) return (1, 0, 0, 0);
+            const double zoom = 1, dark = 1, slide = 0.5;
+            double Other(double c, double k) => 1 - Shares(c, zoom * k, dark * k, slide * k)[LayoutTransition.Crossfade];
+
+            // Searched rather than worked out, so the no-repeat rule is allowed for: the mix shown is the mix given.
+            double top = SurpriseOptions.MostFavouredDesign;
+            if (Other(top, 1) <= other)
+            {
+                // Crossfade at its top odds is still too few: make it rarer.
+                double lo = 0, hi = top;
+                for (int i = 0; i < 40; i++) { double mid = (lo + hi) / 2; if (Other(mid, 1) > other) lo = mid; else hi = mid; }
+                return ((lo + hi) / 2, zoom, dark, slide);
+            }
+            // Too many changes for crossfade's top odds: keep it at the top and make the others rarer instead.
+            double klo = 0, khi = 1;
+            for (int i = 0; i < 40; i++) { double mid = (klo + khi) / 2; if (Other(top, mid) < other) klo = mid; else khi = mid; }
+            double k = (klo + khi) / 2;
+            return (top, zoom * k, dark * k, slide * k);
         }
     }
 
