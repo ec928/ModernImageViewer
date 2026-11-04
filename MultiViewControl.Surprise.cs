@@ -395,7 +395,6 @@ namespace ModernImageViewer
                 return button;
             }
 
-
             // Image count dual SpinNumberBox range control (Min to Max)
             Slider? fewestEach = null;
             Slider? mostEach = null;
@@ -3572,9 +3571,12 @@ namespace ModernImageViewer
                 targetIndex = 0;
             }
 
+            // Sync current canvas before touching any playback state
+            SyncCanvasToSelectedScene(showToast: false, force: true);
+            CaptureUndoPoint();
+
             RemoveTrayCard();
             StopAutoPlay();
-            CaptureUndoPoint();
             _isStoryboardPlayback = true;
             _shuffleChosen = false;
             _showPlaybackIndex = targetIndex;
@@ -3715,6 +3717,9 @@ namespace ModernImageViewer
             var visibleScenes = _activeShow.Scenes.Where(s => !s.IsHidden).ToList();
             if (visibleScenes.Count == 0) return;
 
+            SyncCanvasToSelectedScene(showToast: false, force: true);
+            CaptureUndoPoint();
+
             int target;
             if (_selectedShowScene != null)
             {
@@ -3755,9 +3760,9 @@ namespace ModernImageViewer
             ShowShownBadge();
         }
 
-        public void SyncCanvasToSelectedScene(ShowScene? targetScene = null, bool showToast = false)
+        public void SyncCanvasToSelectedScene(ShowScene? targetScene = null, bool showToast = false, bool force = false)
         {
-            if (_isStoryboardPlayback) return;
+            if (_isStoryboardPlayback && !force) return;
             var scene = targetScene ?? _selectedShowScene;
             if (scene == null || _activeShow == null) return;
 
@@ -3876,11 +3881,13 @@ namespace ModernImageViewer
         {
             if (_autoPlaySeconds == 0) return;
             _autoPlaySeconds = 0;
+            _isStoryboardPlayback = false;
             StopPlaybackProgress();
             _autoPlayTimer?.Stop();
             _autoPlayTimer = null;
             if (!_autoPlayShieldPressed) RemoveAutoPlayShield();
             SendCanvasCameraHome();
+            SyncCanvasToSelectedScene(showToast: false);
             CaptureUndoPoint();
             _surpriseMusic?.SetPlaying(false);
             ShowAutoPlayState();

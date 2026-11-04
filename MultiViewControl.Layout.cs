@@ -824,6 +824,8 @@ namespace ModernImageViewer
                 catch { }
             }
             _hudTimer.Start();
+            SyncCanvasToSelectedScene(showToast: false);
+            CaptureUndoPoint();
         }
 
         private void FadeSplitterLines()

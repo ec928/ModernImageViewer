@@ -1,6766 +1,6121 @@
-using Microsoft.UI.Input;
-
-using Microsoft.UI.Xaml;
-
-using Microsoft.UI.Xaml.Automation;
-
-using Microsoft.UI.Xaml.Controls;
-
-using Microsoft.UI.Xaml.Controls.Primitives;
-
-using Microsoft.UI.Xaml.Input;
-
-using Microsoft.UI.Xaml.Media;
-
-using Microsoft.UI.Xaml.Media.Imaging;
-
-using Microsoft.UI.Xaml.Shapes;
-
-using System;
-using System.Numerics;
-
-using System.Collections.Generic;
-
-using System.Linq;
-
-using Windows.Foundation;
-
-using Windows.System;
-
-
-
-namespace ModernImageViewer
-
-{
-
-    public sealed partial class MultiViewControl : UserControl
-
-    {
-
-        public event EventHandler? CloseRequested;
-
-        public event EventHandler? AddImagesRequested;
-
-        public event EventHandler<ImageItem>? AddImageRequested;
-
-
-
-        // When set, this many frames stay on screen and later photos wait off screen.
-
-        private int _framedSlots;
-
-
-
-        /// <summary>The window should become this width/height ratio. Dragging the window is the custom shape.</summary>
-
-        public event Action<double>? CanvasAspectChosen;
-
-
-
-        private readonly List<ImageItem> _items = new();
-
-
-
-        private readonly List<CompositeTransform> _cellTransforms = new();
-
-        private readonly List<Action> _layoutUpdaters = new();
-
-        private readonly List<UIElement> _cellTopControls = new();
-
-        private bool _isFillMode = true; // Default to Fill for zero wasted space
-
-
-
-        private readonly DispatcherTimer _hudTimer;
-
-        private bool _isHudVisible = true;
-
-        private bool _isPointerOverHud = false;
-
-        private Point _lastHudPointer;
-
-        private bool _haveHudPointer;
-
-
-
-        private int _soloIndex = -1;
-
-        private int _lines = 1;
-
-        private int[]? _lineCounts;
-
-        private const double CountsCardGap = 8;
-
-        private TextBlock? _lineCountLabel;
-
-        private ScrollViewer? _countsScroll;
-
-        private double _countsScrollOffset;
-
-        private double _countsScrollAcross;
-
-        private readonly List<LayoutLineSlot> _lineSlots = new();
-
-        private TextBlock? _layoutSubtitle;
-
-        private RepeatButton? _lineLess;
-
-        private RepeatButton? _lineMore;
-
-        private Button? _evenButton;
-
-        private bool _openLayoutIsRows;
-
-        private FrameworkElement? _columnChartHost;
-
-        private double _columnChartWidth;
-
-
-
-        private sealed class LayoutLineSlot
-
-        {
-
-            public Border Strip = null!;
-
-            public TextBlock Value = null!;
-
-            public RepeatButton Less = null!;
-
-            public RepeatButton More = null!;
-
-            public string Name = "";
-
-            public bool Vertical;
-
-        }
-
-        private bool _flipped;
-
-        private bool _heroActive;
-
-        private HeroKind _heroKind = HeroKind.Banner;
-
-        private int _heroPosition;
-
-
-
-        // Solo drag tracking. A click on the black around the photo is not a drag.
-
-        private bool _isSoloDragging = false;
-
-        private bool _soloBackgroundClick = false;
-
-        private Point _lastSoloPoint = default;
-
-        private Point _soloBackgroundStart = default;
-
-        private uint _soloPointerId = 0;
-
-
-
-        public MultiViewControl()
-
-        {
-
-            this.InitializeComponent();
-
-
-
-            _hudTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2.5) };
-
-            _hudTimer.Tick += HudTimer_Tick;
-
-
-
-            RootGrid.PointerMoved += SegmentGesture_PointerMoved;
-
-            RootGrid.PointerReleased += SegmentGesture_PointerReleased;
-
-            RootGrid.PointerCaptureLost += SegmentGesture_PointerReleased;
-
-            AttachUndoWatchers();
-
-            RootGrid.AddHandler(PointerPressedEvent, new PointerEventHandler(CloseCountsCardOnPressOutside), true);
-
-            CountsCard.SizeChanged += (_, _) => PlaceCountsCard();
-
-            UnifiedHud.SizeChanged += (_, _) => PlaceCountsCard();
-
-            RootGrid.SizeChanged += (_, _) => PlaceCountsCard();
-
-            SizeChanged += (_, e) =>
-
-            {
-
-                RefreshCanvasLabel();
-
-                if (FreeformCanvas != null && e.NewSize.Width > 0 && e.NewSize.Height > 0)
-
-                {
-
-                    FreeformCanvas.Width = e.NewSize.Width;
-
-                    FreeformCanvas.Height = e.NewSize.Height;
-
-                    RescaleFreeformCards(e.NewSize.Width, e.NewSize.Height);
-
-                    DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, RebaseUntouchedUndo);
-
-                }
-
-                if (_autoPlaySeconds > 0) ApplyPlayEdge(CurrentPlayPercent());
-
-            };
-
-
-
-            SetupSoloInteractions();
-
-        }
-
-
-
-        public bool IsSoloActive => SoloContainer.Visibility == Visibility.Visible;
-
-
-
-        /// <summary>Hold keyboard focus on the grid itself, so the first photo's caption button does not draw a focus box.</summary>
-
-        public void FocusView()
-
-        {
-
-            if (!RootGrid.Focus(FocusState.Programmatic))
-
-                Focus(FocusState.Programmatic);
-
-        }
-
-
-
-        public void LoadImages(IEnumerable<ImageItem> items)
-
-        {
-
-            DeselectCell();
-
-            ForgetSurprise();
-
-            ClearAllFreeformCards();
-
-            _itemBorders.Clear();
-
-            _cellGeometry.Clear();
-
-            SetCanvas(null, null);
-
-            SetCanvasFrame(null);
-
-            _cellRoots = Array.Empty<FrameworkElement?>();
-
-
-
-            _items.Clear();
-
-            _items.AddRange(items.Where(i => i != null && !i.IsDirectory));
-
-            _framedSlots = 0;
-
-
-
-            _isFillMode = true; // Always default to Fill (crop to fill) to eliminate black bars
-
-            _lines = MosaicLayout.DefaultLines(_items.Count);
-
-            _lineCounts = null;
-
-            _flipped = false;
-
-            _heroActive = false;
-
-            _heroKind = HeroKind.Banner;
-
-            _heroPosition = 0;
-
-
-
-            ExitSolo();
-
-            BuildLayout();
-
-            ShowHudAndOverlays();
-
-            ResetUndo();
-
-        }
-
-
-
-        /// <summary>The session stays as it is, ready to come back to.</summary>
-
-        public void PrepareToLeave()
-
-        {
-
-            RemoveTrayCard();
-
-            StopAutoPlay();
-
-            StopAutoPlayMusic();
-
-            ResetCanvasCamera();
-
-            CloseCountsCard();
-
-            _hudTimer.Stop();
-
-        }
-
-
-
-        public void Clear()
-
-        {
-
-            RemoveTrayCard();
-
-            _activeShow = null;
-
-            _shuffleChosen = false;
-
-            _isStoryboardPlayback = false;
-
-            ForgetSurprise();
-
-            CloseCountsCard();
-
-            _hudTimer.Stop();
-
-            ClearUndo();
-
-            ClearAllFreeformCards();
-
-            _itemBorders.Clear();
-
-            _cellGeometry.Clear();
-
-            SetCanvas(null, null);
-
-            SetCanvasFrame(null);
-
-            _cellRoots = Array.Empty<FrameworkElement?>();
-
-            _items.Clear();
-
-            _cellTransforms.Clear();
-
-            _layoutUpdaters.Clear();
-
-            _cellTopControls.Clear();
-
-            ResetMosaicFields();
-
-            CellsGrid.Children.Clear();
-
-            CellsGrid.RowDefinitions.Clear();
-
-            CellsGrid.ColumnDefinitions.Clear();
-
-            SoloImage.Source = null;
-
-            _soloIndex = -1;
-
-        }
-
-
-
-        /// <summary>More or fewer rows or columns. Counts return to an even split, and a rectangle hero turns off.</summary>
-
-        public void ChangeLines(int delta)
-
-        {
-
-            int total = LineTotal();
-
-            if (!CanEditGridLayout || total < 1) return;
-
-            int current = Math.Clamp(_lines, 1, total);
-
-            int next = Math.Clamp(current + delta, 1, total);
-
-            bool linesInUse = !_heroActive || HeroUsesLines;
-
-            if (next == current && linesInUse && !_mosaicCustom) return;
-
-            _lines = next;
-
-            _lineCounts = null;
-
-            if (!HeroUsesLines) _heroActive = false;
-
-            RelayoutKeepingCells();
-
-            SyncOpenLayout();
-
-            ShowHudAndOverlays();
-
-        }
-
-
-
-        /// <summary>A banner or pair keeps the line controls for the other photos. Rectangle does not.</summary>
-
-        private bool HeroUsesLines => _heroActive && _heroKind != HeroKind.Rectangle;
-
-
-
-        /// <summary>Photos the line controls arrange: all of them, or the ones beside a banner or pair.</summary>
-
-        private int LineTotal()
-
-        {
-
-            int shown = VisibleCount(GridCellCount);
-
-            if (HeroUsesLines) return Math.Max(1, shown - MosaicLayout.HeroFeatured(_heroKind));
-
-            return shown;
-
-        }
-
-
-
-        private int EffectiveLines() => Math.Clamp(_lines, 1, Math.Max(1, LineTotal()));
-
-
-
-        /// <summary>Photos in each line. Even until the user changes one line.</summary>
-
-        private int[] CurrentLineCounts()
-
-        {
-
-            int total = LineTotal();
-
-            int lines = EffectiveLines();
-
-            if (_lineCounts != null && _lineCounts.Length == lines && _lineCounts.Sum() == total && _lineCounts.All(n => n >= 1))
-
-                return _lineCounts;
-
-            return MosaicLayout.LineCounts(total, lines);
-
-        }
-
-
-
-        private void AdjustLine(int line, int delta)
-
-        {
-
-            var next = MosaicLayout.MovePhoto(CurrentLineCounts(), line, delta);
-
-            if (next == null) return;
-
-            _lineCounts = next;
-
-            if (!HeroUsesLines) _heroActive = false;
-
-            RelayoutKeepingCells();
-
-            SyncOpenLayout();
-
-            ShowHudAndOverlays();
-
-        }
-
-
-
-        private void RowsSide_Click(object sender, RoutedEventArgs e) => CountsSide_Click(wantRows: true);
-
-
-
-        private void ColumnsSide_Click(object sender, RoutedEventArgs e) => CountsSide_Click(wantRows: false);
-
-
-
-        /// <summary>The other side switches and opens the card. The chosen side opens the card, or closes it.</summary>
-
-        private void CountsSide_Click(bool wantRows)
-
-        {
-
-            if (wantRows == _flipped)
-
-            {
-
-                ToggleRowsColumns();
-
-                OpenCountsCard();
-
-            }
-
-            else if (IsCountsCardOpen)
-
-            {
-
-                CloseCountsCard();
-
-            }
-
-            else
-
-            {
-
-                OpenCountsCard();
-
-            }
-
-        }
-
-
-
-        private void OpenCountsCard()
-
-        {
-
-            if (IsCountsCardOpen || CountsSwitch.Visibility != Visibility.Visible || CountsSwitch.Opacity == 0) return;
-
-            FillCountsPanel();
-
-            CountsCard.Visibility = Visibility.Visible;
-
-            PlaceCountsCard();
-
-            ShowCountsSides();
-
-            HudMenu_Opened(this, EventArgs.Empty);
-
-        }
-
-
-
-        private void CloseCountsCard()
-
-        {
-
-            if (!IsCountsCardOpen) return;
-
-            CountsCard.Visibility = Visibility.Collapsed;
-
-            ShowCountsSides();
-
-            HudMenu_Closed(this, EventArgs.Empty);
-
-        }
-
-
-
-        /// <summary>Centred over the switch and just above the bar, inside the window.</summary>
-
-        private void PlaceCountsCard()
-
-        {
-
-            if (!IsCountsCardOpen) return;
-
-            double fromBottom = UnifiedHud.ActualHeight + UnifiedHud.Margin.Bottom + CountsCardGap;
-
-            CountsCard.MaxHeight = Math.Max(160, RootGrid.ActualHeight - fromBottom - CountsCardGap);
-
-            var at = CountsSwitch.TransformToVisual(RootGrid).TransformPoint(new Point(0, 0));
-
-            double left = at.X + (CountsSwitch.ActualWidth - CountsCard.ActualWidth) / 2;
-
-            left = Math.Max(CountsCardGap, Math.Min(left, RootGrid.ActualWidth - CountsCard.ActualWidth - CountsCardGap));
-
-            CountsCard.Margin = new Thickness(left, 0, 0, fromBottom);
-
-        }
-
-
-
-        /// <summary>A press anywhere but the card or the switch closes the card, and still does what it does.</summary>
-
-        private void CloseCountsCardOnPressOutside(object sender, PointerRoutedEventArgs e)
-
-        {
-
-            ShowHudFromUser();
-
-            CloseCountsCardOnPressOutsideCore(e);
-
-            if (_selectedSlot >= 0 && !IsInsideAnyCell(e.OriginalSource))
-
-            {
-
-                DeselectCell();
-
-            }
-
-        }
-
-
-
-        private bool IsInsideAnyCell(object? source)
-
-        {
-
-            for (var node = source as DependencyObject; node != null; node = VisualTreeHelper.GetParent(node))
-
-            {
-
-                if (node is FrameworkElement fe && fe.Tag is CellParts)
-
-                    return true;
-
-            }
-
-            return false;
-
-        }
-
-
-
-        private void CloseCountsCardOnPressOutsideCore(PointerRoutedEventArgs e)
-
-        {
-
-            if (!IsCountsCardOpen) return;
-
-            for (var node = e.OriginalSource as DependencyObject; node != null; node = VisualTreeHelper.GetParent(node))
-
-            {
-
-                if (ReferenceEquals(node, CountsCard) || ReferenceEquals(node, CountsSwitch)) return;
-
-            }
-
-            CloseCountsCard();
-
-        }
-
-
-
-        /// <summary>The chosen side carries a plate, and a brighter one while the card is open.</summary>
-
-        private void ShowCountsSides()
-
-        {
-
-            var chosen = _flipped ? ColumnsSide : RowsSide;
-
-            var other = _flipped ? RowsSide : ColumnsSide;
-
-            HoldFlyoutSource(other, false);
-
-            HoldFlyoutSource(chosen, IsCountsCardOpen);
-
-            if (!IsCountsCardOpen)
-
-                chosen.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF));
-
-        }
-
-
-
-        /// <summary>
-
-        /// WinUI drops a button back to Normal once its flyout is up. Hold a pressed
-
-        /// plate until the card closes. The platform wash is a few percent of white
-
-        /// and does not read on this glass.
-
-        /// </summary>
-
-        private static void HoldFlyoutSource(Button? button, bool open)
-
-        {
-
-            if (button == null) return;
-
-            if (!open)
-
-            {
-
-                button.ClearValue(Control.BackgroundProperty);
-
-                button.ClearValue(Control.BorderBrushProperty);
-
-                button.ClearValue(Control.BorderThicknessProperty);
-
-                return;
-
-            }
-
-
-
-            button.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0x55, 0xFF, 0xFF, 0xFF));
-
-            button.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF));
-
-            button.BorderThickness = new Thickness(1);
-
-        }
-
-
-
-        private bool IsCountsCardOpen => CountsCard?.Visibility == Visibility.Visible;
-
-
-
-        /// <summary>
-
-        /// The steppers are RepeatButtons. Rebuilding the card on a click destroys the
-
-        /// button under the pointer, so a hold never repeats. Keep that button and
-
-        /// update the open card in place. A new line count replaces only the diagram.
-
-        /// </summary>
-
-        private void SyncOpenLayout()
-
-        {
-
-            if (!IsCountsCardOpen)
-
-                return;
-
-            bool rows = !_flipped;
-
-            if (_layoutSubtitle == null || _countsScroll == null || _lineLess == null || rows != _openLayoutIsRows)
-
-            {
-
-                FillCountsPanel();
-
-                return;
-
-            }
-
-
-
-            var counts = CurrentLineCounts();
-
-            int lines = EffectiveLines();
-
-            bool isEven = counts.SequenceEqual(MosaicLayout.LineCounts(LineTotal(), lines));
-
-            _layoutSubtitle.Text = LayoutSubtitle(lines, rows);
-
-            SyncEvenButton(isEven);
-
-            SyncLineCountStepper(lines, rows);
-
-            if (_lineSlots.Count != counts.Length)
-
-                ReplaceDiagram(counts, rows);
-
-            else
-
-                UpdateLineSlots(counts);
-
-        }
-
-
-
-        private void RefreshOpenLayout()
-
-        {
-
-            if (IsCountsCardOpen)
-
-                FillCountsPanel();
-
-        }
-
-
-
-        private void ReplaceDiagram(int[] counts, bool rows)
-
-        {
-
-            if (_countsScroll == null)
-
-            {
-
-                FillCountsPanel();
-
-                return;
-
-            }
-
-            double across = _countsScroll.HorizontalOffset;
-
-            double down = _countsScroll.VerticalOffset;
-
-            _countsScroll.Content = rows ? BuildRowDiagram(counts) : BuildColumnDiagram(counts);
-
-            _countsScroll.UpdateLayout();
-
-            CenterColumnChart();
-
-            _countsScroll.ChangeView(across, down, null, true);
-
-        }
-
-
-
-        private void UpdateLineSlots(int[] counts)
-
-        {
-
-            for (int i = 0; i < counts.Length; i++)
-
-            {
-
-                var slot = _lineSlots[i];
-
-                FillStrip(slot.Strip, counts[i], slot.Vertical);
-
-                slot.Value.Text = counts[i].ToString();
-
-                AutomationProperties.SetName(slot.Value, counts[i] + " images in " + slot.Name.ToLowerInvariant());
-
-                string spoken = slot.Name.ToLowerInvariant();
-
-                bool canLess = MosaicLayout.MovePhoto(counts, i, -1) != null;
-
-                bool canMore = MosaicLayout.MovePhoto(counts, i, 1) != null;
-
-                ApplyStepState(slot.Less, canLess, canLess ? "One fewer in " + spoken : slot.Name + " already has one image");
-
-                ApplyStepState(slot.More, canMore, canMore ? "One more in " + spoken : "No image left to move");
-
-            }
-
-        }
-
-
-
-        private void SyncEvenButton(bool isEven)
-
-        {
-
-            if (_evenButton == null) return;
-
-            _evenButton.IsEnabled = !isEven;
-
-            ToolTipService.SetToolTip(_evenButton, isEven
-
-                ? "The lines already have the same number of images."
-
-                : "Give every line the same number of images.");
-
-        }
-
-
-
-        private void SyncLineCountStepper(int lines, bool rows)
-
-        {
-
-            if (_lineLess == null || _lineMore == null) return;
-
-            int total = LineTotal();
-
-            string noun = rows ? "rows" : "columns";
-
-            bool canLess = lines > 1;
-
-            bool canMore = lines < total;
-
-            ApplyStepState(_lineLess, canLess, canLess ? "Fewer " + noun : "Minimum reached");
-
-            ApplyStepState(_lineMore, canMore, canMore ? "More " + noun : "Maximum reached");
-
-            if (_lineCountLabel != null) _lineCountLabel.Text = LineCountText(lines, rows);
-
-        }
-
-
-
-        private static void ApplyStepState(RepeatButton button, bool enabled, string tip)
-
-        {
-
-            if (button.IsEnabled != enabled)
-
-                button.IsEnabled = enabled;
-
-            ToolTipService.SetToolTip(button, tip);
-
-            AutomationProperties.SetName(button, tip);
-
-        }
-
-
-
-        private Style LayoutStyle(string key) => (Style)Resources[key];
-
-
-
-        private void FillCountsPanel()
-
-        {
-
-            if (_countsScroll != null)
-
-            {
-
-                _countsScrollOffset = _countsScroll.VerticalOffset;
-
-                _countsScrollAcross = _countsScroll.HorizontalOffset;
-
-            }
-
-
-
-            CountsPanel.Children.Clear();
-
-
-
-            var counts = CurrentLineCounts();
-
-            bool rows = !_flipped;
-
-            int lines = EffectiveLines();
-
-            bool isEven = counts.SequenceEqual(MosaicLayout.LineCounts(LineTotal(), lines));
-
-
-
-            CountsPanel.Children.Add(BuildLayoutHeader(lines, rows, isEven));
-
-            CountsPanel.Children.Add(BuildLayoutToolbar(lines, rows));
-
-            CountsPanel.Children.Add(BuildHeroRow());
-
-            CountsPanel.Children.Add(new Rectangle
-
-            {
-
-                Style = LayoutStyle("LayoutDividerStyle"),
-
-                Margin = new Thickness(0, 8, 0, 2)
-
-            });
-
-            CountsPanel.Children.Add(BuildLayoutLines(counts, rows));
-
-        }
-
-
-
-        private static string LineCountText(int lines, bool rows) =>
-
-            lines + " " + (rows ? (lines == 1 ? "row" : "rows") : (lines == 1 ? "column" : "columns"));
-
-
-
-        private string LayoutSubtitle(int lines, bool rows)
-
-        {
-
-            int arranged = LineTotal();
-
-            string noun = rows
-
-                ? (lines == 1 ? "row" : "rows")
-
-                : (lines == 1 ? "column" : "columns");
-
-            string across = $"{arranged} {(arranged == 1 ? "image" : "images")} across {lines} {noun}";
-
-
-
-            if (_heroActive && !HeroUsesLines)
-
-                return "Editing the lines turns the hero off";
-
-
-
-            if (_heroActive && HeroUsesLines)
-
-            {
-
-                string kind = MosaicLayout.HeroTitle(_heroKind).ToLowerInvariant();
-
-                return across + ", beside the " + kind;
-
-            }
-
-
-
-            return across;
-
-        }
-
-
-
-        private FrameworkElement BuildLayoutHeader(int lines, bool rows, bool isEven)
-
-        {
-
-            var header = new Grid();
-
-            header.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-            header.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-            header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-
-
-            header.Children.Add(new TextBlock
-
-            {
-
-                Text = "Grid layout",
-
-                Style = LayoutStyle("LayoutTitleStyle"),
-
-                VerticalAlignment = VerticalAlignment.Center
-
-            });
-
-
-
-            var even = new Button
-
-            {
-
-                Style = LayoutStyle("LayoutEvenButtonStyle"),
-
-                Content = "Even out"
-
-            };
-
-            _evenButton = even;
-
-            SyncEvenButton(isEven);
-
-            even.Click += (_, _) =>
-
-            {
-
-                _lineCounts = null;
-
-                RelayoutKeepingCells();
-
-                SyncOpenLayout();
-
-                ShowHudAndOverlays();
-
-            };
-
-            Grid.SetColumn(even, 1);
-
-            header.Children.Add(even);
-
-
-
-            var subtitle = new TextBlock
-
-            {
-
-                Text = LayoutSubtitle(lines, rows),
-
-                Style = LayoutStyle("LayoutSubtitleStyle"),
-
-                Margin = new Thickness(0, 2, 0, 0)
-
-            };
-
-            _layoutSubtitle = subtitle;
-
-            Grid.SetRow(subtitle, 1);
-
-            Grid.SetColumnSpan(subtitle, 2);
-
-            header.Children.Add(subtitle);
-
-            return header;
-
-        }
-
-
-
-        private FrameworkElement BuildLayoutToolbar(int lines, bool rows)
-
-        {
-
-            int total = LineTotal();
-
-            bool canLess = lines > 1;
-
-            bool canMore = lines < total;
-
-            string noun = rows ? "rows" : "columns";
-
-            var host = new Border
-
-            {
-
-                Style = LayoutStyle("LayoutChoiceHostStyle"),
-
-                Margin = new Thickness(0, 10, 0, 2)
-
-            };
-
-            var grid = new Grid();
-
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1) });
-
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1) });
-
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-
-
-            var less = MakeStepperButton("\uE738", canLess ? "Fewer " + noun : "Minimum reached", canLess, () => ChangeLines(-1), new CornerRadius(4));
-
-            var more = MakeStepperButton("\uE710", canMore ? "More " + noun : "Maximum reached", canMore, () => ChangeLines(1), new CornerRadius(4));
-
-            Grid.SetColumn(less, 0);
-
-            Grid.SetColumn(more, 4);
-
-            grid.Children.Add(less);
-
-            grid.Children.Add(more);
-
-
-
-            var leftRule = StepperRule(vertical: true);
-
-            var rightRule = StepperRule(vertical: true);
-
-            leftRule.Margin = new Thickness(0, 8, 0, 8);
-
-            rightRule.Margin = new Thickness(0, 8, 0, 8);
-
-            Grid.SetColumn(leftRule, 1);
-
-            Grid.SetColumn(rightRule, 3);
-
-            grid.Children.Add(leftRule);
-
-            grid.Children.Add(rightRule);
-
-
-
-            _lineCountLabel = new TextBlock { Text = LineCountText(lines, rows), Style = LayoutStyle("LayoutLineCountTextStyle") };
-
-            Grid.SetColumn(_lineCountLabel, 2);
-
-            grid.Children.Add(_lineCountLabel);
-
-
-
-            _lineLess = less;
-
-            _lineMore = more;
-
-            host.Child = grid;
-
-            return host;
-
-        }
-
-
-
-        /// <summary>
-
-        /// One strip per line, cut into that many photos. Rows are full-width bands.
-
-        /// Columns are full-height stacks, left to right, matching the grid.
-
-        /// </summary>
-
-        private Border MakeCellStrip(int count, bool vertical)
-
-        {
-
-            var strip = new Border { Style = LayoutStyle("LayoutStripStyle") };
-
-            FillStrip(strip, count, vertical);
-
-            return strip;
-
-        }
-
-
-
-        private void FillStrip(Border strip, int count, bool vertical)
-
-        {
-
-            count = Math.Max(count, 1);
-
-            if (strip.Child is not Grid layers)
-
-            {
-
-                layers = new Grid();
-
-                strip.Child = layers;
-
-            }
-
-
-
-            Grid cells;
-
-            if (layers.Children.Count == 0 || layers.Children[0] is not Grid existing)
-
-            {
-
-                cells = new Grid();
-
-                layers.Children.Insert(0, cells);
-
-            }
-
-            else
-
-            {
-
-                cells = existing;
-
-                cells.Children.Clear();
-
-                cells.RowDefinitions.Clear();
-
-                cells.ColumnDefinitions.Clear();
-
-            }
-
-
-
-            for (int i = 0; i < count; i++)
-
-            {
-
-                if (vertical)
-
-                    cells.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-
-                else
-
-                    cells.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-
-
-                var cell = new Border
-
-                {
-
-                    Style = LayoutStyle("LayoutCellStyle"),
-
-                    Margin = vertical
-
-                        ? new Thickness(0, 0, 0, i < count - 1 ? 1 : 0)
-
-                        : new Thickness(0, 0, i < count - 1 ? 1 : 0, 0)
-
-                };
-
-                if (vertical)
-
-                    Grid.SetRow(cell, i);
-
-                else
-
-                    Grid.SetColumn(cell, i);
-
-                cells.Children.Add(cell);
-
-            }
-
-        }
-
-
-
-        private (Border Well, RepeatButton Less, RepeatButton More) MakeLineStepper(int line, string name, bool vertical)
-
-        {
-
-            bool canLess = MosaicLayout.MovePhoto(CurrentLineCounts(), line, -1) != null;
-
-            bool canMore = MosaicLayout.MovePhoto(CurrentLineCounts(), line, 1) != null;
-
-            string spoken = name.ToLowerInvariant();
-
-            return MakeStepperWell(
-
-                canLess ? $"One fewer in {spoken}" : $"{name} already has one image",
-
-                canMore ? $"One more in {spoken}" : "No image left to move",
-
-                canLess,
-
-                canMore,
-
-                () => AdjustLine(line, -1),
-
-                () => AdjustLine(line, 1),
-
-                vertical);
-
-        }
-
-
-
-        /// <summary>
-
-        /// The photo count sits on the bar, only as tall as the digits, so the
-
-        /// segment gaps stay visible above and below it.
-
-        /// </summary>
-
-        private (Grid Host, Border Strip, TextBlock Badge) MakeStripHost(int count, bool vertical, string name)
-
-        {
-
-            var strip = MakeCellStrip(count, vertical);
-
-            strip.Height = vertical ? 96 : 30;
-
-            var badge = new TextBlock
-
-            {
-
-                Text = count.ToString(),
-
-                Style = LayoutStyle("LayoutCountChipTextStyle")
-
-            };
-
-            AutomationProperties.SetName(badge, count + " images in " + name.ToLowerInvariant());
-
-            var chip = new Border
-
-            {
-
-                Style = LayoutStyle("LayoutCountChipStyle"),
-
-                Child = badge,
-
-                Padding = vertical ? new Thickness(2, 3, 2, 3) : new Thickness(4, 0, 4, 0),
-
-                VerticalAlignment = VerticalAlignment.Center
-
-            };
-
-            var layers = (Grid)strip.Child;
-
-            layers.Children.Add(chip);
-
-            layers.SizeChanged += (_, e) =>
-
-            {
-
-                layers.Clip = new RectangleGeometry
-
-                {
-
-                    Rect = new Rect(0, 0, e.NewSize.Width, e.NewSize.Height)
-
-                };
-
-            };
-
-            var host = new Grid { Height = strip.Height };
-
-            host.Children.Add(strip);
-
-            return (host, strip, badge);
-
-        }
-
-
-
-        private (Border Well, RepeatButton Less, RepeatButton More) MakeStepperWell(
-
-            string lessTip,
-
-            string moreTip,
-
-            bool canLess,
-
-            bool canMore,
-
-            Action less,
-
-            Action more,
-
-            bool vertical)
-
-        {
-
-            // Segoe Fluent Icons Remove and Add. A text minus stays a hairline at this size.
-
-            var lessButton = MakeStepperButton("\uE738", lessTip, canLess, less, vertical ? new CornerRadius(0, 0, 4, 4) : new CornerRadius(4, 0, 0, 4));
-
-            var moreButton = MakeStepperButton("\uE710", moreTip, canMore, more, vertical ? new CornerRadius(4, 4, 0, 0) : new CornerRadius(0, 4, 4, 0));
-
-            var grid = new Grid();
-
-            if (vertical)
-
-            {
-
-                grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-                grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1) });
-
-                grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-                Grid.SetRow(moreButton, 0);
-
-                Grid.SetRow(lessButton, 2);
-
-                var topRule = StepperRule(vertical: false);
-
-                Grid.SetRow(topRule, 1);
-
-                grid.Children.Add(moreButton);
-
-                grid.Children.Add(topRule);
-
-                grid.Children.Add(lessButton);
-
-            }
-
-            else
-
-            {
-
-                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1) });
-
-                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-                Grid.SetColumn(lessButton, 0);
-
-                Grid.SetColumn(moreButton, 2);
-
-                var leftRule = StepperRule(vertical: true);
-
-                Grid.SetColumn(leftRule, 1);
-
-                grid.Children.Add(lessButton);
-
-                grid.Children.Add(leftRule);
-
-                grid.Children.Add(moreButton);
-
-            }
-
-
-
-            var well = new Border
-
-            {
-
-                Style = LayoutStyle("LayoutStepperWellStyle"),
-
-                HorizontalAlignment = vertical ? HorizontalAlignment.Stretch : HorizontalAlignment.Center,
-
-                Child = grid
-
-            };
-
-            return (well, lessButton, moreButton);
-
-        }
-
-
-
-        private Rectangle StepperRule(bool vertical)
-
-        {
-
-            return new Rectangle
-
-            {
-
-                Style = LayoutStyle("LayoutStepperDividerStyle"),
-
-                Width = vertical ? 1 : double.NaN,
-
-                Height = vertical ? double.NaN : 1,
-
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-
-                VerticalAlignment = VerticalAlignment.Stretch
-
-            };
-
-        }
-
-
-
-        private RepeatButton MakeStepperButton(string glyph, string tip, bool enabled, Action onClick, CornerRadius corner)
-
-        {
-
-            var button = new RepeatButton
-
-            {
-
-                Style = LayoutStyle("LayoutStepperButtonStyle"),
-
-                Content = glyph,
-
-                FontFamily = new FontFamily("Segoe Fluent Icons"),
-
-                FontWeight = Microsoft.UI.Text.FontWeights.Normal,
-
-                Delay = 400,
-
-                Interval = 80,
-
-                CornerRadius = corner
-
-            };
-
-            ApplyStepState(button, enabled, tip);
-
-            button.Click += (_, _) => onClick();
-
-            return button;
-
-        }
-
-
-
-        private void RememberLine(Border strip, (Border Well, RepeatButton Less, RepeatButton More) steps, TextBlock badge, string name, bool vertical)
-
-        {
-
-            _lineSlots.Add(new LayoutLineSlot
-
-            {
-
-                Strip = strip,
-
-                Value = badge,
-
-                Less = steps.Less,
-
-                More = steps.More,
-
-                Name = name,
-
-                Vertical = vertical
-
-            });
-
-        }
-
-
-
-        private FrameworkElement BuildLayoutLines(int[] counts, bool rows)
-
-        {
-
-            FrameworkElement chart = rows ? BuildRowDiagram(counts) : BuildColumnDiagram(counts);
-
-            var scroll = new ScrollViewer
-
-            {
-
-                Content = chart,
-
-                MaxHeight = rows ? 576 : 280,
-
-                MaxWidth = rows ? double.PositiveInfinity : 600,
-
-                VerticalScrollBarVisibility = rows ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled,
-
-                HorizontalScrollBarVisibility = rows ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto
-
-            };
-
-            _countsScroll = scroll;
-
-            if (!rows)
-
-            {
-
-                scroll.SizeChanged += (_, _) => CenterColumnChart();
-
-                scroll.Loaded += (_, _) => CenterColumnChart();
-
-            }
-
-            if (_countsScrollOffset > 0 || _countsScrollAcross > 0)
-
-            {
-
-                scroll.Loaded += (_, _) => scroll.ChangeView(_countsScrollAcross, _countsScrollOffset, null, true);
-
-            }
-
-            return scroll;
-
-        }
-
-
-
-        private FrameworkElement BuildRowDiagram(int[] counts)
-
-        {
-
-            _lineSlots.Clear();
-
-            _openLayoutIsRows = true;
-
-            _columnChartHost = null;
-
-            var panel = new StackPanel();
-
-            for (int i = 0; i < counts.Length; i++)
-
-            {
-
-                int line = i;
-
-                string name = $"Row {i + 1}";
-
-                var row = new Grid { Height = 36 };
-
-                // Two digits, held against the bar. The word stays in the spoken name.
-
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(36) });
-
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-                var label = new TextBlock
-
-                {
-
-                    Text = (i + 1).ToString(),
-
-                    Style = LayoutStyle("LayoutLineLabelStyle")
-
-                };
-
-                AutomationProperties.SetName(label, name);
-
-                ToolTipService.SetToolTip(label, name);
-
-                row.Children.Add(label);
-
-
-
-                var visual = MakeStripHost(counts[i], vertical: false, name);
-
-                visual.Host.Margin = new Thickness(0, 0, 8, 0);
-
-                visual.Host.VerticalAlignment = VerticalAlignment.Center;
-
-                Grid.SetColumn(visual.Host, 1);
-
-                row.Children.Add(visual.Host);
-
-
-
-                var steps = MakeLineStepper(line, name, vertical: false);
-
-                RememberLine(visual.Strip, steps, visual.Badge, name, vertical: false);
-
-                Grid.SetColumn(steps.Well, 2);
-
-                row.Children.Add(steps.Well);
-
-                panel.Children.Add(row);
-
-            }
-
-            return panel;
-
-        }
-
-
-
-        private FrameworkElement BuildColumnDiagram(int[] counts)
-
-        {
-
-            _lineSlots.Clear();
-
-            _openLayoutIsRows = false;
-
-            int n = Math.Max(counts.Length, 1);
-
-            int slot = n >= 12 ? 34 : n >= 8 ? 42 : 52;
-
-            int gap = n >= 12 ? 2 : 4;
-
-            _columnChartWidth = counts.Length * slot + Math.Max(0, counts.Length - 1) * gap;
-
-            var panel = new StackPanel
-
-            {
-
-                Orientation = Orientation.Horizontal,
-
-                Spacing = gap,
-
-                HorizontalAlignment = HorizontalAlignment.Center
-
-            };
-
-            for (int i = 0; i < counts.Length; i++)
-
-            {
-
-                int line = i;
-
-                string name = $"Column {i + 1}";
-
-                var column = new StackPanel { Width = slot };
-
-                AutomationProperties.SetName(column, name);
-
-                ToolTipService.SetToolTip(column, name);
-
-                column.Children.Add(new TextBlock
-
-                {
-
-                    Text = (i + 1).ToString(),
-
-                    Style = LayoutStyle("LayoutColumnLabelStyle")
-
-                });
-
-
-
-                var visual = MakeStripHost(counts[i], vertical: true, name);
-
-                visual.Host.Margin = new Thickness(0, 2, 0, 4);
-
-                column.Children.Add(visual.Host);
-
-                var steps = MakeLineStepper(line, name, vertical: true);
-
-                RememberLine(visual.Strip, steps, visual.Badge, name, vertical: true);
-
-                column.Children.Add(steps.Well);
-
-                panel.Children.Add(column);
-
-            }
-
-            var host = new Grid();
-
-            host.Children.Add(panel);
-
-            _columnChartHost = host;
-
-            return host;
-
-        }
-
-
-
-        /// <summary>
-
-        /// The column chart is only as wide as its stacks. Stretch a host to the
-
-        /// card and center the chart in it. A chart wider than the card scrolls.
-
-        /// </summary>
-
-        private void CenterColumnChart()
-
-        {
-
-            if (_countsScroll == null || _columnChartHost == null) return;
-
-            double view = _countsScroll.ViewportWidth;
-
-            if (view <= 0) return;
-
-            bool fits = _columnChartWidth <= view;
-
-            _countsScroll.HorizontalScrollBarVisibility = fits
-
-                ? ScrollBarVisibility.Disabled
-
-                : ScrollBarVisibility.Auto;
-
-            double target = fits ? view : 0;
-
-            if (Math.Abs(_columnChartHost.MinWidth - target) > 0.5)
-
-                _columnChartHost.MinWidth = target;
-
-        }
-
-
-
-        /// <summary>
-
-        /// Rows become columns and back. A plain grid or a Rectangle turns a quarter, dragged sizes kept.
-
-        /// Beside a banner or pair only the other photos turn, so their sizes go back to even like
-
-        /// any other line change.
-
-        /// </summary>
-
-        public void ToggleRowsColumns()
-
-        {
-
-            if (!CanEditGridLayout) return;
-
-            _flipped = !_flipped;
-
-            if (!HeroUsesLines && _mosaic != null && CellRootsReady())
-
-            {
-
-                _mosaic = MosaicLayout.Transpose(_mosaic);
-
-                _keepMosaic = true;
-
-                try { BuildLayout(); }
-
-                finally { _keepMosaic = false; }
-
-            }
-
-            else
-
-            {
-
-                RelayoutKeepingCells();
-
-            }
-
-            RefreshOpenLayout();
-
-            ShowHudAndOverlays();
-
-        }
-
-
-
-        /// <summary>A new layout for the same photos. The cells move into it; no photo decodes again.</summary>
-
-        private void RelayoutKeepingCells()
-
-        {
-
-            if (!CellRootsReady())
-
-            {
-
-                BuildLayout();
-
-                return;
-
-            }
-
-            _relayoutKeepingCells = true;
-
-            try { BuildLayout(); }
-
-            finally { _relayoutKeepingCells = false; }
-
-        }
-
-
-
-        /// <summary>H: the next kind, then off.</summary>
-
-        private void CycleHero()
-
-        {
-
-            var kinds = MosaicLayout.HeroKinds(VisibleCount(GridCellCount));
-
-            if (kinds.Length == 0) return;
-
-            if (!_heroActive)
-
-            {
-
-                _heroActive = true;
-
-                _heroKind = kinds[0];
-
-                _heroPosition = _heroKind == HeroKind.Banner
-
-                    ? MosaicLayout.DefaultBannerPosition(CellsGrid.ActualWidth, CellsGrid.ActualHeight)
-
-                    : 0;
-
-            }
-
-            else
-
-            {
-
-                int index = Array.IndexOf(kinds, _heroKind);
-
-                if (index < 0) index = 0;
-
-                int nextIndex = index + 1;
-
-                if (nextIndex >= kinds.Length)
-
-                {
-
-                    _heroActive = false;
-
-                }
-
-                else
-
-                {
-
-                    _heroKind = kinds[nextIndex];
-
-                    _heroPosition = 0;
-
-                }
-
-            }
-
-            RelayoutKeepingCells();
-
-            RefreshOpenLayout();
-
-            ShowHudAndOverlays();
-
-        }
-
-
-
-        private static readonly HeroKind[] HeroRowKinds = { HeroKind.Banner, HeroKind.Rectangle, HeroKind.Pair };
-
-
-
-        /// <summary>The Hero row of the grid layout card: off, or one kind directly. What this many photos cannot do is greyed out.</summary>
-
-        private FrameworkElement BuildHeroRow()
-
-        {
-
-            var available = MosaicLayout.HeroKinds(VisibleCount(GridCellCount));
-
-            var row = new StackPanel { Spacing = 4, Margin = new Thickness(0, 8, 0, 0) };
-
-
-
-            var header = new Grid { Height = 30 };
-
-            var title = new TextBlock { Text = "Hero", FontSize = 12, Foreground = _menuWhiteSecondary, VerticalAlignment = VerticalAlignment.Center };
-
-            ToolTipService.SetToolTip(title, "Rectangle needs 4, 5, 6, 7 or 9 images, and Pair needs at least 3.");
-
-            header.Children.Add(title);
-
-            if (_heroActive)
-
-            {
-
-                var next = new Button
-
-                {
-
-                    Style = (Style)Resources["QuietButtonStyle"],
-
-                    HorizontalAlignment = HorizontalAlignment.Right,
-
-                    Padding = new Thickness(8, 4, 8, 4),
-
-                    CornerRadius = new CornerRadius(8),
-
-                    Content = new FontIcon { FontFamily = new FontFamily("Segoe Fluent Icons"), Glyph = "\uE7AD", FontSize = 13 }
-
-                };
-
-                ToolTipService.SetToolTip(next, "Next position");
-
-                AutomationProperties.SetName(next, "Next position");
-
-                next.Click += RotateHero_Click;
-
-                header.Children.Add(next);
-
-            }
-
-            row.Children.Add(header);
-
-
-
-            var buttons = new Button[4];
-
-            var track = MakeSegment(new[] { "Off", "Banner", "Rectangle", "Pair" }, new[]
-
-            {
-
-                "No hero",
-
-                "One large image along a side",
-
-                "One large image in a corner block",
-
-                "The first two images large"
-
-            }, SetHero, out var show, buttons);
-
-            for (int i = 0; i < HeroRowKinds.Length; i++)
-
-            {
-
-                bool can = Array.IndexOf(available, HeroRowKinds[i]) >= 0;
-
-                buttons[i + 1].IsEnabled = can;
-
-                if (buttons[i + 1].Content is TextBlock caption && !can) caption.Opacity = 0.4;
-
-            }
-
-            show(_heroActive ? Array.IndexOf(HeroRowKinds, _heroKind) + 1 : 0);
-
-            row.Children.Add(track);
-
-            return row;
-
-        }
-
-
-
-        private void SetHero(int choice)
-
-        {
-
-            bool off = choice == 0;
-
-            if (off && !_heroActive) return;
-
-            if (off)
-
-            {
-
-                _heroActive = false;
-
-            }
-
-            else
-
-            {
-
-                var kind = HeroRowKinds[choice - 1];
-
-                if (_heroActive && _heroKind == kind) return;
-
-                _heroActive = true;
-
-                _heroKind = kind;
-
-                _heroPosition = kind == HeroKind.Banner
-
-                    ? MosaicLayout.DefaultBannerPosition(CellsGrid.ActualWidth, CellsGrid.ActualHeight)
-
-                    : 0;
-
-            }
-
-            RelayoutKeepingCells();
-
-            RefreshOpenLayout();
-
-            ShowHudAndOverlays();
-
-            NoteUserAction();
-
-        }
-
-
-
-        private void RotateHero_Click(object sender, RoutedEventArgs e)
-
-        {
-
-            if (!_heroActive) return;
-
-            int positions = MosaicLayout.HeroPositions(VisibleCount(GridCellCount), _heroKind);
-
-            _heroPosition = (_heroPosition + 1) % positions;
-
-            RelayoutKeepingCells();
-
-            ShowHudAndOverlays();
-
-        }
-
-
-
-        private void NormalizeHero()
-
-        {
-
-            var kinds = MosaicLayout.HeroKinds(VisibleCount(GridCellCount));
-
-            if (kinds.Length == 0)
-
-            {
-
-                _heroActive = false;
-
-                return;
-
-            }
-
-            if (Array.IndexOf(kinds, _heroKind) < 0)
-
-            {
-
-                _heroKind = kinds[0];
-
-                _heroPosition = 0;
-
-            }
-
-            else
-
-            {
-
-                int positions = MosaicLayout.HeroPositions(VisibleCount(GridCellCount), _heroKind);
-
-                if (_heroPosition >= positions) _heroPosition = 0;
-
-            }
-
-        }
-
-
-
-        public bool HandleKeyDown(VirtualKey key)
-
-        {
-
-            if (_isEditingCamera)
-
-            {
-
-                if (key is VirtualKey.Escape or VirtualKey.Enter)
-
-                {
-
-                    ExitCameraDirector(save: true);
-
-                    return true;
-
-                }
-
-                if (key == VirtualKey.Space)
-
-                {
-
-                    PreviewCameraMove();
-
-                    return true;
-
-                }
-
-                if (key == VirtualKey.Tab)
-
-                {
-
-                    SelectCameraKeyframe(!_activeIsStartKeyframe);
-
-                    return true;
-
-                }
-
-                if (key is VirtualKey.Left or VirtualKey.PageUp)
-
-                {
-
-                    NavigateCameraScene(-1);
-
-                    return true;
-
-                }
-
-                if (key is VirtualKey.Right or VirtualKey.PageDown)
-
-                {
-
-                    NavigateCameraScene(1);
-
-                    return true;
-
-                }
-
-                return true;
-
-            }
-
-            ShowHudFromUser();
-
-            // An open card keeps the keyboard. Letters typed in the tray's search are not shortcuts, and nothing behind the card changes.
-
-            if (_trayCard != null || _surpriseCard != null)
-
-            {
-
-                // The card's own Esc needs focus inside the canvas, and removing a thumbnail can leave it nowhere.
-
-                if (key == VirtualKey.Escape)
-
-                {
-
-                    RemoveSurpriseCard();
-
-                    RemoveTrayCard();
-
-                }
-
-                return key != VirtualKey.Tab;
-
-            }
-
-            if (HandleAutoPlayKey(key)) return true;
-
-
-
-            if (IsSoloActive)
-
-            {
-
-                switch (key)
-
-                {
-
-                    case VirtualKey.Escape:
-
-                    case VirtualKey.Enter:
-
-                        ExitSolo();
-
-                        return true;
-
-                    case VirtualKey.Left:
-
-                        PrevSolo();
-
-                        return true;
-
-                    case VirtualKey.Right:
-
-                        NextSolo();
-
-                        return true;
-
-                }
-
-                return false;
-
-            }
-
-
-
-            switch (key)
-
-            {
-
-                case VirtualKey.Escape:
-
-                    if (IsCountsCardOpen)
-
-                    {
-
-                        CloseCountsCard();
-
-                        return true;
-
-                    }
-
-                    if (_selectedSlot >= 0)
-
-                    {
-
-                        DeselectCell();
-
-                        return true;
-
-                    }
-
-                    CloseRequested?.Invoke(this, EventArgs.Empty);
-
-                    return true;
-
-                case VirtualKey.Left:
-
-                    if (_autoPlaySeconds > 0)
-
-                    {
-
-                        if (_isStoryboardPlayback) _ = StepStoryboardScene(back: true);
-
-                        else StepLayout(back: true);
-
-                        return true;
-
-                    }
-
-                    break;
-
-                case VirtualKey.Right:
-
-                    if (_autoPlaySeconds > 0)
-
-                    {
-
-                        if (_isStoryboardPlayback) _ = StepStoryboardScene(back: false);
-
-                        else StepLayout(back: false);
-
-                        return true;
-
-                    }
-
-                    break;
-
-                case VirtualKey.Add:
-
-                case (VirtualKey)187: // = / +
-
-                    ChangeLines(1);
-
-                    return true;
-
-                case VirtualKey.Subtract:
-
-                case (VirtualKey)189: // - / _
-
-                    ChangeLines(-1);
-
-                    return true;
-
-                case VirtualKey.B:
-
-                    StoryDeckButton_Click(StoryDeckButton, new RoutedEventArgs());
-
-                    return true;
-
-                case VirtualKey.R:
-
-                    ToggleRowsColumns();
-
-                    return true;
-
-                case VirtualKey.H:
-
-                    CycleHero();
-
-                    return true;
-
-                case VirtualKey.S:
-
-                    if (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
-
-                    {
-
-                        SaveButton?.Flyout?.ShowAt(SaveButton);
-
-                        return true;
-
-                    }
-
-                    break;
-
-                case VirtualKey.Z:
-
-                    if (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
-
-                    {
-
-                        if (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
-
-                            Redo();
-
-                        else
-
-                            Undo();
-
-                        return true;
-
-                    }
-
-                    break;
-
-                case VirtualKey.Y:
-
-                    if (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
-
-                    {
-
-                        Redo();
-
-                        return true;
-
-                    }
-
-                    break;
-
-                case VirtualKey.C:
-
-                    if (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
-
-                    {
-
-                        _ = CopyCanvasToClipboardAsync();
-
-                        return true;
-
-                    }
-
-                    break;
-
-            }
-
-
-
-            return false;
-
-        }
-
-
-
-        #region HUD & Auto-Hide
-
-
-
-        private void RootGrid_PointerMoved(object sender, PointerRoutedEventArgs e)
-
-        {
-
-            var point = e.GetCurrentPoint(RootGrid).Position;
-
-            if (!_haveHudPointer)
-
-            {
-
-                _lastHudPointer = point;
-
-                _haveHudPointer = true;
-
-            }
-
-            bool moved = Math.Abs(point.X - _lastHudPointer.X) >= 3
-
-                || Math.Abs(point.Y - _lastHudPointer.Y) >= 3;
-
-            // A new layout can report the pointer still sitting where it was. That is not the user moving.
-
-            if (_autoPlaySeconds > 0 && !moved) return;
-
-            _lastHudPointer = point;
-
-            ShowHudFromUser();
-
-        }
-
-
-
-        private void Hud_PointerEntered(object sender, PointerRoutedEventArgs e)
-
-        {
-
-            _isPointerOverHud = true;
-
-            ShowHudFromUser();
-
-        }
-
-
-
-        private void Hud_PointerExited(object sender, PointerRoutedEventArgs e)
-
-        {
-
-            _isPointerOverHud = false;
-
-            _hudTimer.Stop();
-
-            _hudTimer.Start();
-
-        }
-
-
-
-        /// <summary>
-
-        /// Shows the bar and starts the idle timer again. While a show or shuffle is playing, a new layout
-
-        /// calls this and must not: the bar stays hidden until the pointer, a key, or a click.
-
-        /// </summary>
-
-        private void ShowHudAndOverlays()
-
-        {
-
-            if (_quietBar) return;
-
-            if (_autoPlaySeconds > 0) return;
-
-            ShowHudFromUser();
-
-        }
-
-
-
-        private void ShowHudFromUser()
-
-        {
-
-            if (_isEditingCamera) return;
-
-            _hudTimer.Stop();
-
-            _hudTimer.Start();
-
-
-
-            if (!_isHudVisible)
-
-            {
-
-                _isHudVisible = true;
-
-                UnifiedHud.Opacity = 1.0;
-
-                UnifiedHud.IsHitTestVisible = true;
-
-                HudTranslate.Y = 0;
-
-                if (HudScrim != null) HudScrim.Opacity = 1.0;
-
-
-
-                SoloInfoOverlay.Opacity = 1.0;
-
-                SoloBottomBar.Opacity = 1.0;
-
-                SoloBottomBar.IsHitTestVisible = true;
-
-                SoloTopRightControls.Opacity = 1.0;
-
-                SoloTopRightControls.IsHitTestVisible = true;
-
-                SetPlaceholderOpacity(1.0);
-
-            }
-
-        }
-
-
-
-        /// <summary>An empty cell's label fades with the bar, so the composition can be seen without it.</summary>
-
-        private void SetPlaceholderOpacity(double opacity)
-
-        {
-
-            foreach (var root in _cellRoots)
-
-            {
-
-                if (root?.Tag is CellParts { HiddenPlaceholder: not null } parts)
-
-                    parts.HiddenPlaceholder.Opacity = opacity;
-
-            }
-
-        }
-
-
-
-        private int _hudMenusOpen;
-
-        // Asked rather than counted: a menu whose cell goes away must not hold the playbar up for good.
-
-        private MenuFlyout? _openCellMenu;
-
-        private int _selectedSlot = -1;
-
-
-
-        private CellParts? GetCellParts(int slot)
-
-        {
-
-            if (slot < 0 || slot >= _items.Count) return null;
-
-            if (slot < _cellRoots.Length && _cellRoots[slot]?.Tag is CellParts gridParts)
-
-                return gridParts;
-
-            var card = _freeformCards.FirstOrDefault(c => _items.IndexOf(c.Item) == slot);
-
-            if (card?.Container.Tag is CellParts cardParts)
-
-                return cardParts;
-
-            return null;
-
-        }
-
-
-
-        public void SelectCell(int slot)
-
-        {
-
-            if (_selectedSlot == slot) return;
-
-
-
-            if (_selectedSlot >= 0)
-
-            {
-
-                GetCellParts(_selectedSlot)?.SetSelected?.Invoke(false);
-
-            }
-
-
-
-            _selectedSlot = slot;
-
-
-
-            if (_selectedSlot >= 0)
-
-            {
-
-                GetCellParts(_selectedSlot)?.SetSelected?.Invoke(true);
-
-            }
-
-        }
-
-
-
-        public void DeselectCell()
-
-        {
-
-            SelectCell(-1);
-
-        }
-
-
-
-        private void HudMenu_Opened(object? sender, object e)
-
-        {
-
-            _hudMenusOpen++;
-
-            ShowHudFromUser();
-
-            EnforceDarkFlyoutPresenter();
-
-        }
-
-
-
-        private void EnforceDarkFlyoutPresenter()
-
-        {
-
-            if (XamlRoot == null) return;
-
-            try
-
-            {
-
-                var popups = VisualTreeHelper.GetOpenPopupsForXamlRoot(XamlRoot);
-
-                foreach (var popup in popups)
-
-                {
-
-                    if (popup.Child is MenuFlyoutPresenter presenter)
-
-                    {
-
-                        presenter.RequestedTheme = ElementTheme.Dark;
-
-                        presenter.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(242, 32, 32, 32));
-
-                        presenter.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(51, 255, 255, 255));
-
-                        presenter.BorderThickness = new Thickness(1);
-
-                        presenter.CornerRadius = new CornerRadius(10);
-
-                    }
-
-                }
-
-            }
-
-            catch { }
-
-        }
-
-
-
-        private void HudMenu_Closed(object? sender, object e)
-
-        {
-
-            _hudMenusOpen = Math.Max(0, _hudMenusOpen - 1);
-
-            ShowHudAndOverlays();
-
-            NoteUserAction();
-
-        }
-
-
-
-        private void HideHudAndOverlays()
-
-        {
-
-            if (_isPointerOverHud || _hudMenusOpen > 0 || _openCellMenu?.IsOpen == true) return;
-
-
-
-            _hudTimer.Stop();
-
-            _isHudVisible = false;
-
-
-
-            UnifiedHud.Opacity = 0.0;
-
-            UnifiedHud.IsHitTestVisible = false;
-
-            HudTranslate.Y = 15;
-
-            if (HudScrim != null) HudScrim.Opacity = 0.0;
-
-
-
-            SoloInfoOverlay.Opacity = 0.0;
-
-            SoloBottomBar.Opacity = 0.0;
-
-            SoloBottomBar.IsHitTestVisible = false;
-
-            SoloTopRightControls.Opacity = 0.0;
-
-            SoloTopRightControls.IsHitTestVisible = false;
-
-            SetPlaceholderOpacity(0.0);
-
-
-
-            foreach (var ctrl in _cellTopControls)
-
-            {
-
-                if (ctrl is FrameworkElement fe && fe.Tag is bool isSel && isSel) continue;
-
-                ctrl.Opacity = 0.0;
-
-                ctrl.IsHitTestVisible = false;
-
-            }
-
-        }
-
-
-
-        private void HudTimer_Tick(object? sender, object e)
-
-        {
-
-            HideHudAndOverlays();
-
-        }
-
-
-
-        #endregion
-
-
-
-        #region Layout & Cell Construction
-
-
-
-        private void AddCell(Grid targetGrid, ImageItem item, int row, int col, int rowSpan, int colSpan, int index)
-
-        {
-
-            var cell = CreateCell(item, index);
-
-            Grid.SetRow(cell, row);
-
-            Grid.SetColumn(cell, col);
-
-            if (rowSpan > 1) Grid.SetRowSpan(cell, rowSpan);
-
-            if (colSpan > 1) Grid.SetColumnSpan(cell, colSpan);
-
-            targetGrid.Children.Add(cell);
-
-            if ((uint)index < (uint)_cellRoots.Length)
-
-                _cellRoots[index] = cell;
-
-        }
-
-
-
-        private FrameworkElement CreateCell(ImageItem item, int index, bool isFreeform = false)
-
-        {
-
-            var slotGrid = new Grid
-
-            {
-
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-
-                VerticalAlignment = VerticalAlignment.Stretch
-
-            };
-
-
-
-            var cellBorder = new Border
-
-            {
-
-                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 28, 28, 28)),
-
-                BorderThickness = new Thickness(0),
-
-                Margin = new Thickness(0)
-
-            };
-
-
-
-            var cellGrid = new FreeformCellGrid
-
-            {
-
-                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(1, 0, 0, 0)), // Hit-testable
-
-                ManipulationMode = ManipulationModes.None
-
-            };
-
-
-
-            var transform = new CompositeTransform();
-
-            _cellTransforms.Add(transform);
-
-
-
-            var imgContainer = new Grid
-
-            {
-
-                HorizontalAlignment = HorizontalAlignment.Center,
-
-                VerticalAlignment = VerticalAlignment.Center,
-
-                RenderTransformOrigin = new Point(0.5, 0.5),
-
-                RenderTransform = transform,
-
-                IsHitTestVisible = false // Ensure all pointer events go directly to cellGrid
-
-            };
-
-
-
-            // Until the picture has decoded, its shape is a guess, and clamping to that would wipe a saved pan.
-
-            bool decodedSize = false;
-
-            double naturalWidth = 16.0;
-
-            double naturalHeight = 9.0;
-
-
-
-            if (item.Thumbnail is BitmapSource bs && bs.PixelWidth > 0 && bs.PixelHeight > 0)
-
-            {
-
-                naturalWidth = bs.PixelWidth;
-
-                naturalHeight = bs.PixelHeight;
-
-            }
-
-
-
-            Image? thumb = null;
-
-            if (item.Thumbnail != null)
-
-            {
-
-                thumb = new Image
-
-                {
-
-                    Source = item.Thumbnail,
-
-                    Stretch = Stretch.Uniform,
-
-                    HorizontalAlignment = HorizontalAlignment.Stretch,
-
-                    VerticalAlignment = VerticalAlignment.Stretch
-
-                };
-
-                imgContainer.Children.Add(thumb);
-
-            }
-
-
-
-            var fullImg = new Image
-
-            {
-
-                Stretch = Stretch.Uniform,
-
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-
-                VerticalAlignment = VerticalAlignment.Stretch
-
-            };
-
-
-
-            var photo = new CellPhoto(item)
-
-            {
-
-                SetDimensions = (w, h) => { naturalWidth = w; naturalHeight = h; decodedSize = true; },
-
-                GetDimensions = () => (naturalWidth, naturalHeight)
-
-            };
-
-
-
-            // A turned photo needs a different box. The container stays unturned and its transform turns it.
-
-            (double Cos, double Sin) ImageTurn()
-
-            {
-
-                double radians = GetGeometry(photo.Item).ImageAngle * Math.PI / 180;
-
-                return (Math.Abs(Math.Cos(radians)), Math.Abs(Math.Sin(radians)));
-
-            }
-
-
-
-            // Layout & Clamping helpers for this cell
-
-            void ClampTranslation()
-
-            {
-
-                double cellW = cellGrid.ActualWidth;
-
-                double cellH = cellGrid.ActualHeight;
-
-                if (cellW <= 0 || cellH <= 0 || imgContainer.Width <= 0 || imgContainer.Height <= 0) return;
-
-
-
-                var turn = ImageTurn();
-
-                double effW = (imgContainer.Width * turn.Cos + imgContainer.Height * turn.Sin) * transform.ScaleX;
-
-                double effH = (imgContainer.Width * turn.Sin + imgContainer.Height * turn.Cos) * transform.ScaleY;
-
-
-
-                if (effW > cellW)
-
-                {
-
-                    double maxPanX = (effW - cellW) / 2.0;
-
-                    if (isFreeform) maxPanX = Math.Max(maxPanX, Math.Max(cellW, effW));
-
-                    transform.TranslateX = Math.Clamp(transform.TranslateX, -maxPanX, maxPanX);
-
-                }
-
-                else if (isFreeform)
-
-                {
-
-                    double maxPanX = Math.Max(cellW, effW);
-
-                    transform.TranslateX = Math.Clamp(transform.TranslateX, -maxPanX, maxPanX);
-
-                }
-
-                else
-
-                {
-
-                    transform.TranslateX = 0;
-
-                }
-
-
-
-                if (effH > cellH)
-
-                {
-
-                    double maxPanY = (effH - cellH) / 2.0;
-
-                    if (isFreeform) maxPanY = Math.Max(maxPanY, Math.Max(cellH, effH));
-
-                    transform.TranslateY = Math.Clamp(transform.TranslateY, -maxPanY, maxPanY);
-
-                }
-
-                else if (isFreeform)
-
-                {
-
-                    double maxPanY = Math.Max(cellH, effH);
-
-                    transform.TranslateY = Math.Clamp(transform.TranslateY, -maxPanY, maxPanY);
-
-                }
-
-                else
-
-                {
-
-                    transform.TranslateY = 0;
-
-                }
-
-            }
-
-
-
-            void UpdateImageLayout()
-
-            {
-
-                double cellW = cellGrid.ActualWidth;
-
-                double cellH = cellGrid.ActualHeight;
-
-                if (cellW <= 0 || cellH <= 0 || naturalWidth <= 0 || naturalHeight <= 0) return;
-
-
-
-                cellGrid.Clip = new RectangleGeometry { Rect = new Rect(0, 0, cellW, cellH) };
-
-
-
-                // Fill covers the whole cell with no bars, at any turn. Fit keeps the whole photo inside it.
-
-                var turn = ImageTurn();
-
-                var cover = WindowShapes.CoverBox(GetGeometry(photo.Item), cellW, cellH);
-
-                double scale = _isFillMode
-
-                    ? Math.Max(cover.Width / naturalWidth, cover.Height / naturalHeight)
-
-                    : Math.Min(cellW / (naturalWidth * turn.Cos + naturalHeight * turn.Sin), cellH / (naturalWidth * turn.Sin + naturalHeight * turn.Cos));
-
-
-
-                imgContainer.Width = naturalWidth * scale;
-
-                imgContainer.Height = naturalHeight * scale;
-
-                if (decodedSize) ClampTranslation();
-
-            }
-
-
-
-            Action updateLayout = UpdateImageLayout;
-
-            _layoutUpdaters.Add(updateLayout);
-
-
-
-            cellGrid.SizeChanged += (s, e) =>
-
-            {
-
-                if (e.NewSize.Width > 0 && e.NewSize.Height > 0)
-
-                {
-
-                    UpdateImageLayout();
-
-                }
-
-            };
-
-
-
-            void MarkFailed(ImageItem failedItem)
-
-            {
-
-                if (!ReferenceEquals(photo.Item, failedItem)) return;
-
-                photo.Failed = true;
-
-                ShowEmptyState(Slot(failedItem));
-
-            }
-
-
-
-            void LoadPhoto()
-
-            {
-
-                var current = photo.Item;
-
-                photo.Failed = false;
-
-                if (IsEmptyCell(current))
-
-                {
-
-                    fullImg.Source = null;
-
-                    if (thumb != null && imgContainer.Children.Contains(thumb))
-
-                    {
-
-                        imgContainer.Children.Remove(thumb);
-
-                        thumb = null;
-
-                    }
-
-                    return;
-
-                }
-
-                if (_reuseBitmaps != null && _reuseBitmaps.TryGetValue(current.Path, out var decoded))
-
-                {
-
-                    naturalWidth = decoded.PixelWidth;
-
-                    naturalHeight = decoded.PixelHeight;
-
-                    decodedSize = true;
-
-                    fullImg.Source = decoded;
-
-                    if (thumb != null && imgContainer.Children.Contains(thumb))
-
-                    {
-
-                        imgContainer.Children.Remove(thumb);
-
-                        thumb = null;
-
-                    }
-
-                    UpdateImageLayout();
-
-                    return;
-
-                }
-
-                if (current.Thumbnail is BitmapSource bs && bs.PixelWidth > 0 && bs.PixelHeight > 0)
-
-                {
-
-                    naturalWidth = bs.PixelWidth;
-
-                    naturalHeight = bs.PixelHeight;
-
-                    UpdateImageLayout();
-
-                }
-
-                try
-
-                {
-
-                    var bmp = new BitmapImage();
-
-                    bmp.UriSource = new Uri(current.Path, UriKind.Absolute);
-
-                    bmp.ImageOpened += (_, _) =>
-
-                    {
-
-                        if (!ReferenceEquals(photo.Item, current)) return;
-
-                        if (bmp.PixelWidth > 0 && bmp.PixelHeight > 0)
-
-                        {
-
-                            naturalWidth = bmp.PixelWidth;
-
-                            naturalHeight = bmp.PixelHeight;
-
-                            decodedSize = true;
-
-                            UpdateImageLayout();
-
-                        }
-
-                        // The thumbnail would show through a transparent photo, and is no longer needed.
-
-                        if (thumb != null && imgContainer.Children.Contains(thumb))
-
-                        {
-
-                            imgContainer.Children.Remove(thumb);
-
-                            thumb = null;
-
-                        }
-
-                    };
-
-                    bmp.ImageFailed += (_, _) => MarkFailed(current);
-
-                    fullImg.Source = bmp;
-
-                }
-
-                catch
-
-                {
-
-                    // A path that is not a valid address never reaches ImageFailed.
-
-                    MarkFailed(current);
-
-                }
-
-            }
-
-            photo.Reload = LoadPhoto;
-
-            photo.ApplyGeometry = () =>
-
-            {
-
-                var geometry = GetGeometry(photo.Item);
-
-                transform.Rotation = geometry.ImageAngle;
-
-                double flipX = geometry.ImageFlipH ? -1 : 1;
-
-                double flipY = geometry.ImageFlipV ? -1 : 1;
-
-                fullImg.RenderTransformOrigin = new Point(0.5, 0.5);
-
-                fullImg.RenderTransform = new ScaleTransform { ScaleX = flipX, ScaleY = flipY };
-
-                if (thumb != null)
-
-                {
-
-                    thumb.RenderTransformOrigin = new Point(0.5, 0.5);
-
-                    thumb.RenderTransform = new ScaleTransform { ScaleX = flipX, ScaleY = flipY };
-
-                }
-
-                UpdateImageLayout();
-
-            };
-
-            LoadPhoto();
-
-
-
-            imgContainer.Children.Add(fullImg);
-
-            cellGrid.Children.Add(imgContainer);
-
-
-
-            // Per-cell Pan & Zoom handling
-
-            bool isDragging = false;
-
-            Point lastPoint = default;
-
-            uint dragPointerId = 0;
-
-            Point dragStartPoint = default;
-
-            bool hasDraggedCell = false;
-
-
-
-            bool isMovingCard = false;
-
-            Point dragStartInRoot = default;
-
-            double startLeft = 0;
-
-            double startTop = 0;
-
-            uint movePointerId = 0;
-
-
-
-            cellGrid.PointerPressed += (s, e) =>
-
-            {
-
-                ShowHudAndOverlays();
-
-                var prop = e.GetCurrentPoint(cellGrid).Properties;
-
-
-
-                if (prop.IsMiddleButtonPressed)
-
-                {
-
-                    // Middle-click: Reset zoom & pan
-
-                    transform.ScaleX = 1.0;
-
-                    transform.ScaleY = 1.0;
-
-                    transform.TranslateX = 0;
-
-                    transform.TranslateY = 0;
-
-                    ClampTranslation();
-
-                    e.Handled = true;
-
-                    return;
-
-                }
-
-
-
-                if (prop.IsLeftButtonPressed)
-
-                {
-
-                    bool isAlt = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Menu).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
-
-                    if (isAlt)
-
-                    {
-
-                        e.Handled = true;
-
-                        _ = StartSwapDragAsync(cellGrid, e.GetCurrentPoint(cellGrid), Slot(photo.Item));
-
-                        return;
-
-                    }
-
-
-
-                    if (isFreeform)
-
-                    {
-
-                        bool isCtrl = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
-
-                        if (isCtrl || prop.IsMiddleButtonPressed)
-
-                        {
-
-                            // Ctrl-mouse drag or Middle-button drag: PAN photo inside freeform cell!
-
-                            isDragging = true;
-
-                            lastPoint = e.GetCurrentPoint(cellGrid).Position;
-
-                            dragStartPoint = lastPoint;
-
-                            hasDraggedCell = false;
-
-                            dragPointerId = e.Pointer.PointerId;
-
-                            cellGrid.CapturePointer(e.Pointer);
-
-                            e.Handled = true;
-
-                            return;
-
-                        }
-
-
-
-                        // Normal mouse drag without Ctrl: MOVE the freeform window around
-
-                        isMovingCard = true;
-
-                        movePointerId = e.Pointer.PointerId;
-
-                        dragStartInRoot = e.GetCurrentPoint(RootGrid).Position;
-
-                        startLeft = Canvas.GetLeft(slotGrid);
-
-                        if (double.IsNaN(startLeft)) startLeft = 0;
-
-                        startTop = Canvas.GetTop(slotGrid);
-
-                        if (double.IsNaN(startTop)) startTop = 0;
-
-                        cellGrid.CapturePointer(e.Pointer);
-
-                        e.Handled = true;
-
-                        return;
-
-                    }
-
-
-
-                    isDragging = true;
-
-                    lastPoint = e.GetCurrentPoint(cellGrid).Position;
-
-                    dragStartPoint = lastPoint;
-
-                    hasDraggedCell = false;
-
-                    dragPointerId = e.Pointer.PointerId;
-
-                    cellGrid.CapturePointer(e.Pointer);
-
-                    e.Handled = true;
-
-                }
-
-            };
-
-
-
-            cellGrid.PointerMoved += (s, e) =>
-
-            {
-
-                ShowHudAndOverlays();
-
-
-
-                if (isFreeform && !isMovingCard && !isDragging)
-
-                {
-
-                    bool isCtrlHover = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
-
-                    cellGrid.SetCursor(isCtrlHover ? InputSystemCursorShape.Hand : InputSystemCursorShape.SizeAll);
-
-                }
-
-
-
-                if (isFreeform && isMovingCard && e.Pointer.PointerId == movePointerId)
-
-                {
-
-                    Point cur = e.GetCurrentPoint(RootGrid).Position;
-
-                    double dx = cur.X - dragStartInRoot.X;
-
-                    double dy = cur.Y - dragStartInRoot.Y;
-
-
-
-                    double boundW = Math.Max(200, RootGrid.ActualWidth > 0 ? RootGrid.ActualWidth : 1280);
-
-                    double boundH = Math.Max(150, RootGrid.ActualHeight > 0 ? RootGrid.ActualHeight : 720);
-
-
-
-                    double cardW = slotGrid.Width > 0 ? slotGrid.Width : (slotGrid.ActualWidth > 0 ? slotGrid.ActualWidth : 300);
-
-                    double cardH = slotGrid.Height > 0 ? slotGrid.Height : (slotGrid.ActualHeight > 0 ? slotGrid.ActualHeight : 200);
-
-
-
-                    double newX = FreeformBounds.Move(startLeft + dx, cardW, boundW);
-
-                    double newY = FreeformBounds.Move(startTop + dy, cardH, boundH);
-
-                    var snapped = SnapDraggedCard(slotGrid, newX, newY, cardW, cardH);
-
-                    newX = FreeformBounds.Move(snapped.X, cardW, boundW);
-
-                    newY = FreeformBounds.Move(snapped.Y, cardH, boundH);
-
-
-
-                    Canvas.SetLeft(slotGrid, newX);
-
-                    Canvas.SetTop(slotGrid, newY);
-
-                    e.Handled = true;
-
-                    return;
-
-                }
-
-
-
-                if (isDragging && e.Pointer.PointerId == dragPointerId)
-
-                {
-
-                    var currentPoint = e.GetCurrentPoint(cellGrid).Position;
-
-                    double dx = currentPoint.X - lastPoint.X;
-
-                    double dy = currentPoint.Y - lastPoint.Y;
-
-
-
-                    if (Math.Abs(currentPoint.X - dragStartPoint.X) > 4 || Math.Abs(currentPoint.Y - dragStartPoint.Y) > 4)
-
-                    {
-
-                        hasDraggedCell = true;
-
-                    }
-
-
-
-                    transform.TranslateX += dx;
-
-                    transform.TranslateY += dy;
-
-                    ClampTranslation();
-
-
-
-                    lastPoint = currentPoint;
-
-                    e.Handled = true;
-
-                }
-
-            };
-
-
-
-            // A tap, so a drag on an empty floating cell still moves it.
-
-            cellGrid.Tapped += (s, e) =>
-
-            {
-
-                SelectCell(Slot(photo.Item));
-
-                if (!IsEmptyCell(photo.Item) || IsBareCanvas(_items.IndexOf(photo.Item))) return;
-
-                e.Handled = true;
-
-                AddImageRequested?.Invoke(this, photo.Item);
-
-            };
-
-
-
-            cellGrid.PointerReleased += (s, e) =>
-
-            {
-
-                if (isFreeform && isMovingCard && e.Pointer.PointerId == movePointerId)
-
-                {
-
-                    isMovingCard = false;
-
-                    HideSnapGuides();
-
-                    try { cellGrid.ReleasePointerCapture(e.Pointer); } catch { }
-
-                    e.Handled = true;
-
-                    return;
-
-                }
-
-
-
-                if (e.Pointer.PointerId == dragPointerId)
-
-                {
-
-                    bool wasDragging = isDragging;
-
-                    if (isDragging)
-
-                    {
-
-                        isDragging = false;
-
-                        try { cellGrid.ReleasePointerCapture(e.Pointer); } catch { }
-
-                        e.Handled = true;
-
-                    }
-
-
-
-                    if (!hasDraggedCell && !isMovingCard)
-
-                    {
-
-                        SelectCell(Slot(photo.Item));
-
-                    }
-
-                }
-
-            };
-
-
-
-            cellGrid.PointerCanceled += (s, e) =>
-
-            {
-
-                if (isMovingCard)
-
-                {
-
-                    isMovingCard = false;
-
-                    HideSnapGuides();
-
-                    try { cellGrid.ReleasePointerCapture(e.Pointer); } catch { }
-
-                }
-
-                if (isDragging)
-
-                {
-
-                    isDragging = false;
-
-                    try { cellGrid.ReleasePointerCapture(e.Pointer); } catch { }
-
-                }
-
-            };
-
-
-
-            cellGrid.PointerWheelChanged += (s, e) =>
-
-            {
-
-                ShowHudAndOverlays();
-
-                var ptr = e.GetCurrentPoint(cellGrid);
-
-                int delta = ptr.Properties.MouseWheelDelta;
-
-                double zoomFactor = delta > 0 ? 1.15 : (1.0 / 1.15);
-
-
-
-                double cellW = cellGrid.ActualWidth;
-
-                double cellH = cellGrid.ActualHeight;
-
-                var wheelTurn = ImageTurn();
-
-                double baseW = imgContainer.Width * wheelTurn.Cos + imgContainer.Height * wheelTurn.Sin;
-
-                double baseH = imgContainer.Width * wheelTurn.Sin + imgContainer.Height * wheelTurn.Cos;
-
-
-
-                // Scale factor where whole picture fits into cell (unlock zoom out in fill mode!)
-
-                double fitScale = 1.0;
-
-                if (baseW > 0 && baseH > 0 && cellW > 0 && cellH > 0)
-
-                {
-
-                    fitScale = Math.Min(cellW / baseW, cellH / baseH);
-
-                }
-
-                double minScale = Math.Min(fitScale * 0.8, 0.15);
-
-                double maxScale = 10.0;
-
-
-
-                double oldScale = transform.ScaleX;
-
-                double newScale = Math.Clamp(oldScale * zoomFactor, minScale, maxScale);
-
-
-
-                Point pos = ptr.Position;
-
-                double cx = cellW / 2.0;
-
-                double cy = cellH / 2.0;
-
-
-
-                // Cursor-anchored zoom with RenderTransformOrigin = (0.5, 0.5)
-
-                transform.TranslateX = (pos.X - cx) - (pos.X - cx - transform.TranslateX) * (newScale / oldScale);
-
-                transform.TranslateY = (pos.Y - cy) - (pos.Y - cy - transform.TranslateY) * (newScale / oldScale);
-
-                transform.ScaleX = newScale;
-
-                transform.ScaleY = newScale;
-
-
-
-                ClampTranslation();
-
-                e.Handled = true;
-
-            };
-
-
-
-            cellGrid.DoubleTapped += (s, e) =>
-
-            {
-
-                ShowHudAndOverlays();
-
-                e.Handled = true;
-
-
-
-                if (Math.Abs(transform.ScaleX - 1.0) > 0.05 || Math.Abs(transform.TranslateX) > 1 || Math.Abs(transform.TranslateY) > 1)
-
-                {
-
-                    // Reset to default fill/fit
-
-                    transform.ScaleX = 1.0;
-
-                    transform.ScaleY = 1.0;
-
-                    transform.TranslateX = 0;
-
-                    transform.TranslateY = 0;
-
-                }
-
-                else
-
-                {
-
-                    // Zoom to 2.0x centered at click position
-
-                    Point pos = e.GetPosition(cellGrid);
-
-                    double cx = cellGrid.ActualWidth / 2.0;
-
-                    double cy = cellGrid.ActualHeight / 2.0;
-
-
-
-                    double oldScale = transform.ScaleX;
-
-                    double newScale = 2.0;
-
-                    transform.TranslateX = (pos.X - cx) - (pos.X - cx - transform.TranslateX) * (newScale / oldScale);
-
-                    transform.TranslateY = (pos.Y - cy) - (pos.Y - cy - transform.TranslateY) * (newScale / oldScale);
-
-                    transform.ScaleX = newScale;
-
-                    transform.ScaleY = newScale;
-
-                }
-
-
-
-                ClampTranslation();
-
-            };
-
-
-
-            // Selection Border (Active tile indicator: 2px Fluent blue accent #4CC2FF)
-
-            var selectionBorder = new Border
-
-            {
-
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-
-                VerticalAlignment = VerticalAlignment.Stretch,
-
-                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x4C, 0xC2, 0xFF)),
-
-                BorderThickness = new Thickness(2),
-
-                CornerRadius = new CornerRadius(4),
-
-                Margin = isFreeform ? new Thickness(0) : new Thickness(1),
-
-                IsHitTestVisible = false,
-
-                Visibility = Visibility.Collapsed
-
-            };
-
-            Canvas.SetZIndex(selectionBorder, 204);
-
-            slotGrid.Children.Add(selectionBorder);
-
-
-
-            // Top-Right Contextual Micro-HUD Pill
-
-            var topControls = new Border
-
-            {
-
-                HorizontalAlignment = HorizontalAlignment.Right,
-
-                VerticalAlignment = VerticalAlignment.Top,
-
-                Margin = isFreeform ? new Thickness(0, 10, 22, 0) : new Thickness(0, 8, 8, 0),
-
-                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(234, 30, 30, 30)),
-
-                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(64, 255, 255, 255)),
-
-                BorderThickness = new Thickness(1),
-
-                CornerRadius = new CornerRadius(16),
-
-                Padding = new Thickness(4, 2, 4, 2),
-
-                Height = 32,
-
-                Opacity = 0.0,
-
-                IsHitTestVisible = false
-
-            };
-
-            Canvas.SetZIndex(topControls, 205);
-
-            topControls.PointerEntered += Hud_PointerEntered;
-
-
-            topControls.PointerExited += Hud_PointerExited;
-
-            _cellTopControls.Add(topControls);
-
-
-
-            bool isCellHovered = false;
-
-            bool isMenuOpen = false;
-
-            bool isCellSelected = false;
-
-
-
-            void UpdateCardElevation()
-
-            {
-
-                if (!isFreeform) return;
-
-                var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Container, slotGrid));
-
-                if (card == null) return;
-
-
-
-                bool active = isCellSelected || isMenuOpen || isCellHovered;
-
-                if (active)
-
-                {
-
-                    Canvas.SetZIndex(slotGrid, 8900);
-
-                    slotGrid.Translation = new Vector3(0, 0, 800);
-
-                }
-
-                else
-
-                {
-
-                    Canvas.SetZIndex(slotGrid, card.ZIndex);
-
-                    slotGrid.Translation = new Vector3(0, 0, 256 + ((card.ZIndex - 5000) * 8));
-
-                }
-
-            }
-
-
-
-            void UpdateHudVisibility()
-
-            {
-
-                bool show = isCellSelected || isMenuOpen || (_isHudVisible && isCellHovered);
-
-                topControls.Opacity = show ? 1.0 : 0.0;
-
-                topControls.IsHitTestVisible = show;
-
-                topControls.Tag = isCellSelected;
-
-            }
-
-
-
-            void SetCellHover(bool hovered)
-
-            {
-
-                isCellHovered = hovered;
-
-                UpdateHudVisibility();
-
-                UpdateCardElevation();
-
-            }
-
-
-
-            void SetCellSelected(bool selected)
-
-            {
-
-                isCellSelected = selected;
-
-                if (selected)
-
-                {
-
-                    selectionBorder.CornerRadius = new CornerRadius(Math.Max(4, cellBorder.CornerRadius.TopLeft));
-
-                }
-
-                selectionBorder.Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
-
-                UpdateHudVisibility();
-
-                UpdateCardElevation();
-
-            }
-
-
-
-            // A floating cell's buttons can sit past its shape, where nothing is under the pointer, so they wait for it to arrive.
-
-            DispatcherTimer? hoverOff = null;
-
-            if (isFreeform)
-
-            {
-
-                hoverOff = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(WindowHoverGraceMs) };
-
-                hoverOff.Tick += (s, e) =>
-
-                {
-
-                    hoverOff.Stop();
-
-                    SetCellHover(false);
-
-                };
-
-            }
-
-            slotGrid.PointerEntered += (s, e) =>
-
-            {
-
-                hoverOff?.Stop();
-
-                SetCellHover(true);
-
-            };
-
-            slotGrid.PointerExited += (s, e) =>
-
-            {
-
-                if (hoverOff != null) hoverOff.Start();
-
-                else SetCellHover(false);
-
-            };
-
-            cellGrid.PointerMoved += (s, e) =>
-
-            {
-
-                if (_isHudVisible && !topControls.IsHitTestVisible)
-
-                    SetCellHover(true);
-
-            };
-
-
-
-            Button MakePillButton(string glyph, string toolTip, int fontSize = 11)
-
-            {
-
-                var btn = new Button
-
-                {
-
-                    Width = 28,
-
-                    Height = 26,
-
-                    Padding = new Thickness(0),
-
-                    Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
-
-                    BorderThickness = new Thickness(0),
-
-                    CornerRadius = new CornerRadius(13),
-
-                    IsTabStop = false,
-
-                    UseSystemFocusVisuals = false,
-
-                    FocusVisualPrimaryThickness = new Thickness(0),
-
-                    FocusVisualSecondaryThickness = new Thickness(0),
-
-                    Content = new FontIcon
-
-                    {
-
-                        FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
-
-                        Glyph = glyph,
-
-                        FontSize = fontSize,
-
-                        Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(240, 255, 255, 255))
-
-                    }
-
-                };
-
-                btn.Resources["ButtonBackgroundPointerOver"] = new SolidColorBrush(Windows.UI.Color.FromArgb(32, 255, 255, 255));
-
-                btn.Resources["ButtonBackgroundPressed"] = new SolidColorBrush(Windows.UI.Color.FromArgb(20, 255, 255, 255));
-
-                btn.Resources["ButtonForegroundPointerOver"] = new SolidColorBrush(Microsoft.UI.Colors.White);
-
-                btn.Resources["ButtonForegroundPressed"] = new SolidColorBrush(Windows.UI.Color.FromArgb(200, 255, 255, 255));
-
-                ToolTipService.SetToolTip(btn, toolTip);
-
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(btn, toolTip);
-
-                return btn;
-
-            }
-
-
-
-            var topStack = new StackPanel
-
-            {
-
-                Orientation = Orientation.Horizontal,
-
-                Spacing = 2,
-
-                VerticalAlignment = VerticalAlignment.Center
-
-            };
-
-
-
-            // 1. Swap / Replace Button
-
-            var swapBtn = MakePillButton("\uE8AB", "Replace / Swap");
-
-            var swapMenu = new MenuFlyout
-
-            {
-
-                MenuFlyoutPresenterStyle = (Style)Resources["MultiViewMenuFlyoutPresenterStyle"]
-
-            };
-
-            swapMenu.Opening += (s, e) =>
-
-            {
-
-                swapMenu.Items.Clear();
-
-                int curSlot = Slot(photo.Item);
-
-                int inTray = TrayImages().Count;
-
-                var fromPool = MakeAdvancedItem(inTray > 0 ? $"From Image Pool ({inTray})\u2026" : "From Image Pool\u2026", "\uE8B9", () => ShowTrayCard(curSlot));
-
-                swapMenu.Items.Add(fromPool);
-
-
-
-                var browse = MakeAdvancedItem("Browse Image File\u2026", "\uE8E5", () => AddImageRequested?.Invoke(this, photo.Item));
-
-                swapMenu.Items.Add(browse);
-
-
-
-                if (!IsEmptyCell(photo.Item))
-
-                {
-
-                    var moveToPool = MakeAdvancedItem("Move to Image Pool", "\uE8DE", () => MoveCellToTray(photo.Item));
-
-                    swapMenu.Items.Add(moveToPool);
-
-                }
-
-
-
-                if (_items.Count > 1)
-
-                {
-
-                    swapMenu.Items.Add(new MenuFlyoutSeparator());
-
-                    swapMenu.Items.Add(MakeCellTargetMenu("Swap with Position\u2026", "\uE8AB", "Swap with", curSlot,
-
-                        (target, withAttr) => SwapItems(curSlot, target, withAttr)));
-
-                }
-
-            };
-
-            swapMenu.Opened += (s, e) =>
-
-            {
-
-                isMenuOpen = true;
-
-                _openCellMenu = swapMenu;
-
-                EnforceDarkFlyoutPresenter();
-
-                UpdateHudVisibility();
-
-                UpdateCardElevation();
-
-            };
-
-            swapMenu.Closed += (s, e) =>
-
-            {
-
-                isMenuOpen = false;
-
-                if (ReferenceEquals(_openCellMenu, swapMenu)) _openCellMenu = null;
-
-                UpdateHudVisibility();
-
-                UpdateCardElevation();
-
-            };
-
-            swapBtn.Flyout = swapMenu;
-
-            topStack.Children.Add(swapBtn);
-
-
-
-            // 2. Window Shape Button
-
-            var shapeBtn = MakePillButton("\uE7C5", "Window Shape");
-
-            var shapeMenu = new MenuFlyout
-
-            {
-
-                MenuFlyoutPresenterStyle = (Style)Resources["MultiViewMenuFlyoutPresenterStyle"]
-
-            };
-
-            shapeMenu.Opening += (s, e) =>
-
-            {
-
-                shapeMenu.Items.Clear();
-
-                var windowSub = MakeWindowMenu(photo.Item);
-
-                while (windowSub.Items.Count > 0)
-
-                {
-
-                    var mItem = windowSub.Items[0];
-
-                    windowSub.Items.RemoveAt(0);
-
-                    shapeMenu.Items.Add(mItem);
-
-                }
-
-            };
-
-            shapeMenu.Opened += (s, e) =>
-
-            {
-
-                isMenuOpen = true;
-
-                _openCellMenu = shapeMenu;
-
-                EnforceDarkFlyoutPresenter();
-
-                UpdateHudVisibility();
-
-                UpdateCardElevation();
-
-            };
-
-            shapeMenu.Closed += (s, e) =>
-
-            {
-
-                isMenuOpen = false;
-
-                if (ReferenceEquals(_openCellMenu, shapeMenu)) _openCellMenu = null;
-
-                UpdateHudVisibility();
-
-                UpdateCardElevation();
-
-            };
-
-            shapeBtn.Flyout = shapeMenu;
-
-            topStack.Children.Add(shapeBtn);
-
-
-
-            // 3. Frame & Border Button
-
-            var frameBtn = MakePillButton("\uE790", "Frame & Border");
-
-            frameBtn.Click += (s, e) => OpenCellBorderFlyout(photo.Item);
-
-            topStack.Children.Add(frameBtn);
-
-
-
-            // 4. Solo / Maximize Button
-
-            var maxBtn = MakePillButton("\uE922", "Solo / Maximize", fontSize: 10);
-
-            maxBtn.Visibility = IsEmptyCell(photo.Item) ? Visibility.Collapsed : Visibility.Visible;
-
-            maxBtn.Click += (s, e) => EnterSolo(Slot(photo.Item));
-
-            topStack.Children.Add(maxBtn);
-
-
-
-            // Hairline separator
-
-            var sep = new Border
-
-            {
-
-                Width = 1,
-
-                Height = 14,
-
-                Margin = new Thickness(2, 0, 2, 0),
-
-                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(48, 255, 255, 255)),
-
-                VerticalAlignment = VerticalAlignment.Center
-
-            };
-
-            topStack.Children.Add(sep);
-
-
-
-            // 5. Close / Remove Button
-
-            var closeBtn = MakePillButton("\uE8BB", "Remove cell", fontSize: 10);
-
-            closeBtn.Resources["ButtonBackgroundPointerOver"] = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 196, 43, 28));
-
-            closeBtn.Resources["ButtonBackgroundPressed"] = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 153, 27, 16));
-
-            closeBtn.Resources["ButtonForegroundPointerOver"] = new SolidColorBrush(Microsoft.UI.Colors.White);
-
-            closeBtn.Resources["ButtonForegroundPressed"] = new SolidColorBrush(Microsoft.UI.Colors.White);
-
-            closeBtn.Click += (s, e) => RemoveItem(photo.Item);
-
-            topStack.Children.Add(closeBtn);
-
-
-
-            void UpdatePillCompactness(double w)
-
-            {
-
-                bool isTight = w > 0 && w < 100;
-
-                bool compact = w > 0 && w < 130;
-
-                shapeBtn.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-
-                frameBtn.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-
-                sep.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-
-                maxBtn.Visibility = (isTight || IsEmptyCell(photo.Item)) ? Visibility.Collapsed : Visibility.Visible;
-
-            }
-
-            slotGrid.SizeChanged += (s, e) => UpdatePillCompactness(e.NewSize.Width);
-
-
-
-            topControls.Child = topStack;
-
-            // These sit on the cell, outside the shape's clip.
-
-            slotGrid.Children.Add(topControls);
-
-
-
-            // Top-Left Position Badge (for right-click Swap / Move target indication)
-
-            var positionBadge = new Border
-
-            {
-
-                HorizontalAlignment = HorizontalAlignment.Left,
-
-                VerticalAlignment = VerticalAlignment.Top,
-
-                Margin = new Thickness(10),
-
-                Padding = new Thickness(8, 3, 8, 3),
-
-                CornerRadius = new CornerRadius(6),
-
-                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(220, 20, 20, 20)),
-
-                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(80, 255, 255, 255)),
-
-                BorderThickness = new Thickness(1),
-
-                Opacity = 0.0,
-
-                IsHitTestVisible = false
-
-            };
-
-            Canvas.SetZIndex(positionBadge, 206);
-
-
-
-            var badgeText = new TextBlock
-
-            {
-
-                FontSize = 11.5,
-
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-
-                Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
-
-                VerticalAlignment = VerticalAlignment.Center,
-
-                HorizontalAlignment = HorizontalAlignment.Center
-
-            };
-
-            positionBadge.Child = badgeText;
-
-            if (isFreeform)
-
-            {
-
-                // Centred, so a turn cannot take it off the cell. ApplyWindowTurn keeps it upright.
-
-                positionBadge.HorizontalAlignment = HorizontalAlignment.Center;
-
-                positionBadge.VerticalAlignment = VerticalAlignment.Center;
-
-                positionBadge.Margin = new Thickness(0);
-
-                positionBadge.RenderTransformOrigin = new Point(0.5, 0.5);
-
-            }
-
-            slotGrid.Children.Add(positionBadge);
-
-
-
-            // Right-Click Context Menu, filled when it opens so it names the photo's current place
-
-            var menu = new MenuFlyout
-
-            {
-
-                MenuFlyoutPresenterStyle = (Style)Resources["MultiViewMenuFlyoutPresenterStyle"]
-
-            };
-
-            // One entry so the menu counts as having something to open. It is filled for real as it opens.
-
-            menu.Items.Add(new MenuFlyoutItem());
-
-            menu.Opening += (_, _) => FillCellMenu(menu, photo.Item);
-
-            // The cell's own buttons show with its menu, and take a click through the menu's light dismiss.
-
-            menu.OverlayInputPassThroughElement = topControls;
-
-            menu.Opened += (_, _) =>
-
-            {
-
-                ShowPositionBadges(Slot(photo.Item));
-
-                EnforceDarkFlyoutPresenter();
-
-                _openCellMenu = menu;
-
-                ShowHudAndOverlays();
-
-                isMenuOpen = true;
-
-                SetCellHover(isCellHovered);
-
-                UpdateCardElevation();
-
-            };
-
-            menu.Closed += (_, _) =>
-
-            {
-
-                HidePositionBadges();
-
-                NoteUserAction();
-
-                if (ReferenceEquals(_openCellMenu, menu)) _openCellMenu = null;
-
-                isMenuOpen = false;
-
-                SetCellHover(isCellHovered);
-
-                ShowHudAndOverlays();
-
-                UpdateCardElevation();
-
-            };
-
-
-
-            cellGrid.ContextFlyout = menu;
-
-
-
-            // Dashed Border Overlay (for vector dashed stroke style)
-
-            var dashedStroke = new Microsoft.UI.Xaml.Shapes.Rectangle
-
-            {
-
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-
-                VerticalAlignment = VerticalAlignment.Stretch,
-
-                IsHitTestVisible = false,
-
-                Visibility = Visibility.Collapsed
-
-            };
-
-            Canvas.SetZIndex(dashedStroke, 50);
-
-            cellGrid.Children.Add(dashedStroke);
-
-
-
-            var rimGlowStroke = new Microsoft.UI.Xaml.Shapes.Rectangle
-
-            {
-
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-
-                VerticalAlignment = VerticalAlignment.Stretch,
-
-                IsHitTestVisible = false,
-
-                Visibility = Visibility.Collapsed
-
-            };
-
-            Canvas.SetZIndex(rimGlowStroke, 48);
-
-            cellGrid.Children.Add(rimGlowStroke);
-
-
-
-            AttachSwapDrop(cellBorder, cellGrid, photo);
-
-
-
-            var gutterBorder = new Border
-
-            {
-
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-
-                VerticalAlignment = VerticalAlignment.Stretch,
-
-                IsHitTestVisible = false
-
-            };
-
-            var shadowImage = new Image
-
-            {
-
-                IsHitTestVisible = false,
-
-                Stretch = Stretch.Fill,
-
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-
-                VerticalAlignment = VerticalAlignment.Stretch,
-
-                Visibility = Visibility.Collapsed
-
-            };
-
-            gutterBorder.Child = shadowImage;
-
-            gutterBorder.SizeChanged += (_, e) =>
-
-            {
-
-                if (e.NewSize.Width < 2 || e.NewSize.Height < 2) return;
-
-                if (GetGeometry(photo.Item).Shape != WindowShapes.Rectangle) return;
-
-                ApplyDropShadow(gutterBorder, GetBorderForItem(photo.Item));
-
-            };
-
-            Canvas.SetZIndex(gutterBorder, 0);
-
-            Canvas.SetZIndex(cellBorder, 1);
-
-
-
-            slotGrid.Children.Add(gutterBorder);
-
-            slotGrid.Children.Add(cellBorder);
-
-
-
-            // Shown when the cell has no image
-
-            var placeholder = new StackPanel
-
-            {
-
-                HorizontalAlignment = HorizontalAlignment.Center,
-
-                VerticalAlignment = VerticalAlignment.Center,
-
-                Spacing = 6,
-
-                // A floating cell has whatever is behind it showing through, so the message carries its own backing.
-
-                Padding = new Thickness(14, 10, 14, 10),
-
-                CornerRadius = new CornerRadius(8),
-
-                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(200, 10, 10, 10)),
-
-                IsHitTestVisible = false,
-
-                Visibility = IsEmptyCell(photo.Item) ? Visibility.Visible : Visibility.Collapsed
-
-            };
-
-            placeholder.Children.Add(new FontIcon
-
-            {
-
-                Glyph = "\uE739",
-
-                FontSize = 26,
-
-                FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
-
-                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(170, 255, 255, 255)),
-
-                HorizontalAlignment = HorizontalAlignment.Center
-
-            });
-
-            placeholder.Children.Add(new TextBlock
-
-            {
-
-                Text = "Empty cell",
-
-                FontSize = 12,
-
-                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(200, 255, 255, 255)),
-
-                HorizontalAlignment = HorizontalAlignment.Center
-
-            });
-
-            placeholder.Children.Add(new TextBlock
-
-            {
-
-                Text = "Click to add an image",
-
-                TextAlignment = TextAlignment.Center,
-
-                FontSize = 11,
-
-                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(170, 255, 255, 255)),
-
-                HorizontalAlignment = HorizontalAlignment.Center
-
-            });
-
-            Canvas.SetZIndex(placeholder, 5);
-
-            cellGrid.Children.Add(placeholder);
-
-
-
-            imgContainer.Visibility = IsEmptyCell(photo.Item) ? Visibility.Collapsed : Visibility.Visible;
-
-
-
-            var parts = new CellParts(transform, updateLayout, topControls, fullImg, photo, positionBadge, badgeText, dashedStroke, rimGlowStroke, gutterBorder, imgContainer, placeholder, maxBtn, SetCellSelected);
-
-            cellBorder.Tag = parts;
-
-            slotGrid.Tag = parts;
-
-
-
-            if (isFreeform)
-
-            {
-
-                AttachWindowResizeHandles(slotGrid, updateLayout);
-
-            }
-
-            else
-
-            {
-
-                slotGrid.SizeChanged += (_, _) => ApplyCellShape(slotGrid, photo.Item, null);
-
-            }
-
-
-
-            cellBorder.Child = cellGrid;
-
-            ApplyBorderToCellBorder(cellBorder, cellGrid, photo.Item);
-
-            photo.ApplyGeometry?.Invoke();
-
-            return slotGrid;
-
-        }
-
-
-
-        private int Slot(ImageItem item)
-
-        {
-
-            if (item == null) return -1;
-
-            return _items.IndexOf(item);
-
-        }
-
-
-
-        private void FillCellMenu(MenuFlyout menu, ImageItem item)
-
-        {
-
-            menu.Items.Clear();
-
-            if (item == null) return;
-
-            int curSlot = Slot(item);
-
-            if (curSlot < 0) return;
-
-
-
-            // An empty cell's label asks for this, so it comes first.
-
-            if (IsEmptyCell(item))
-
-            {
-
-                menu.Items.Add(MakeAdvancedItem("Add image\u2026", "\uE8E5", () => AddImageRequested?.Invoke(this, item)));
-
-                int inTray = TrayImages().Count;
-
-                if (inTray > 0)
-
-                    menu.Items.Add(MakeAdvancedItem($"Not on the canvas ({inTray})\u2026", "\uE8B9", () => ShowTrayCard(curSlot)));
-
-                menu.Items.Add(new MenuFlyoutSeparator());
-
-            }
-
-
-
-            if (_items.Count > 1)
-
-            {
-
-                var swapMenu = MakeCellTargetMenu("Swap with...", "\uE8AB", "Swap with", curSlot,
-
-                    (target, withAttributes) => SwapItems(curSlot, target, withAttributes));
-
-                int inTray = TrayImages().Count;
-
-                if (inTray > 0 && !IsEmptyCell(item))
-
-                {
-
-                    var fromTray = MakeAdvancedItem($"Not on the canvas ({inTray})\u2026", "\uE8B9", () => ShowTrayCard(curSlot));
-
-                    ToolTipService.SetToolTip(fromTray, "Images that are in the pool. Pick one to place it on the canvas.");
-
-                    swapMenu.Items.Insert(0, fromTray);
-
-                    swapMenu.Items.Insert(1, new MenuFlyoutSeparator());
-
-                }
-
-                menu.Items.Add(swapMenu);
-
-                if (!IsEmptyCell(item))
-
-                {
-
-                    menu.Items.Add(MakeCellTargetMenu("Copy to...", "\uE8C8", "Copy to", curSlot,
-
-                        (target, withAttributes) => CopyItemTo(curSlot, target, withAttributes)));
-
-                    menu.Items.Add(MakeCellTargetMenu("Move to...", "\uE8DE", "Move to", curSlot,
-
-                        (target, withAttributes) => MoveItemTo(curSlot, target, withAttributes)));
-
-                }
-
-
-
-                menu.Items.Add(new MenuFlyoutSeparator());
-
-            }
-
-
-
-            var borderItem = new MenuFlyoutItem { Text = "Frame & Border\u2026", Icon = new FontIcon { Glyph = "\uE790" } };
-
-            borderItem.Click += (s, e) => OpenCellBorderFlyout(item);
-
-            menu.Items.Add(borderItem);
-
-
-
-            menu.Items.Add(MakeWindowMenu(item));
-
-            var activeCard = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, item));
-
-            if (activeCard != null) menu.Items.Add(MakeLayerMenu(activeCard));
-
-            AddCellImageMenu(menu, item);
-
-            if (!IsEmptyCell(item))
-
-            {
-
-                string picture = item.Path;
-
-                var feature = MakeChoiceItem("Feature in Auto-Mix", _featuredPictures.Contains(picture), () =>
-
-                {
-
-                    if (!_featuredPictures.Remove(picture)) _featuredPictures.Add(picture);
-
-                });
-
-                ToolTipService.SetToolTip(feature, "Auto-Mix always uses this image and gives it the best place");
-
-                menu.Items.Add(feature);
-
-            }
-
-
-
-            if (activeCard != null)
-
-            {
-
-                menu.Items.Add(new MenuFlyoutSeparator());
-
-                if (!GridHasNoRoomFor(activeCard))
-
-                {
-
-                    var dockItem = new MenuFlyoutItem
-
-                    {
-
-                        Text = "Dock to Grid",
-
-                        Icon = new FontIcon { Glyph = "\uE8CA" }
-
-                    };
-
-                    dockItem.Click += (s, e) =>
-
-                    {
-
-                        DockFreeformCard(activeCard);
-
-                    };
-
-                    menu.Items.Add(dockItem);
-
-                }
-
-                if (!IsEmptyCell(item)) menu.Items.Add(MoveToTrayItem(item));
-
-            }
-
-            else if (!IsEmptyCell(item))
-
-            {
-
-                var freeformItem = new MenuFlyoutItem
-
-                {
-
-                    Text = "Freeform",
-
-                    Icon = new FontIcon { Glyph = "\uEE49" }
-
-                };
-
-                freeformItem.Click += (s, e) => SpawnFreeformCell(item);
-
-                menu.Items.Add(new MenuFlyoutSeparator());
-
-                menu.Items.Add(freeformItem);
-
-                menu.Items.Add(MoveToTrayItem(item));
-
-            }
-
-        }
-
-
-
-        private MenuFlyoutItem MoveToTrayItem(ImageItem item)
-
-        {
-
-            var move = MakeAdvancedItem("Move to Image Pool", "\uE8B9", () => MoveCellToTray(item));
-
-            ToolTipService.SetToolTip(move, "Moves image to Image Pool. Restore it anytime from the Image Pool panel.");
-
-            return move;
-
-        }
-
-
-
-        /// <summary>
-
-        /// A submenu of the other cells in two columns: the contents alone, or with the cell attributes. Each row is one
-
-        /// ordinary menu entry, so the menu handles its click for every kind of input. Where the pointer is picks the column.
-
-        /// </summary>
-
-        private MenuFlyoutSubItem MakeCellTargetMenu(string text, string glyph, string action, int curSlot, Action<int, bool> run)
-
-        {
-
-            var template = (ControlTemplate)Resources["CellTargetRowTemplate"];
-
-            var sub = new MenuFlyoutSubItem { Text = text, Icon = new FontIcon { Glyph = glyph } };
-
-            int column = 0;
-
-
-
-            static (Grid Row, Border[] Cells) MakeRow(string left, string right, double fontSize, Brush foreground)
-
-            {
-
-                var row = new Grid { ColumnSpacing = 2, Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0)) };
-
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(116) });
-
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(116) });
-
-                var cells = new Border[2];
-
-                for (int i = 0; i < 2; i++)
-
-                {
-
-                    cells[i] = new Border
-
-                    {
-
-                        CornerRadius = new CornerRadius(4),
-
-                        Padding = new Thickness(10, 6, 10, 6),
-
-                        Child = new TextBlock { Text = i == 0 ? left : right, FontSize = fontSize, Foreground = foreground }
-
-                    };
-
-                    Grid.SetColumn(cells[i], i);
-
-                    row.Children.Add(cells[i]);
-
-                }
-
-                return (row, cells);
-
-            }
-
-
-
-            var (header, headerCells) = MakeRow("Contents only", "With attributes", 12, _menuWhiteSecondary);
-
-            ToolTipService.SetToolTip(headerCells[0], "The image alone. Each cell keeps its frame, image rotation and zoom, and its shape.");
-
-            ToolTipService.SetToolTip(headerCells[1], "The image with its frame, image rotation, zoom and shape. The cell's own rotation too, between floating cells.");
-
-            sub.Items.Add(new MenuFlyoutItem { Tag = header, Template = template, IsEnabled = false });
-
-
-
-            int gridCells = GridCellCount;
-
-            int cellsOnShow = VisibleCount(gridCells);
-
-            for (int i = 0; i < _items.Count; i++)
-
-            {
-
-                if (i == curSlot) continue;
-
-                // A position that cannot be seen means nothing. Those images are in the tray, which Swap with opens.
-
-                if (i >= cellsOnShow && i < gridCells) continue;
-
-                int targetSlot = i;
-
-                string position = $"Position {PositionOfSlot(i)}";
-
-                var (row, cells) = MakeRow(position, position, 14, _menuWhitePrimary);
-
-                var entry = new MenuFlyoutItem { Text = position, Tag = row, Template = template };
-
-
-
-                void Mark()
-
-                {
-
-                    cells[column].Background = _cellTargetHover;
-
-                    cells[1 - column].Background = null;
-
-                    HighlightPositionBadge(targetSlot, action, column == 1);
-
-                }
-
-                void Unmark()
-
-                {
-
-                    cells[0].Background = null;
-
-                    cells[1].Background = null;
-
-                    ClearHighlightPositionBadge(targetSlot, curSlot);
-
-                }
-
-                void Track(PointerRoutedEventArgs e)
-
-                {
-
-                    column = e.GetCurrentPoint(row).Position.X < row.ActualWidth / 2 ? 0 : 1;
-
-                    Mark();
-
-                }
-
-
-
-                // Handled events too: a menu entry marks its own pointer presses as handled.
-
-                entry.AddHandler(PointerEnteredEvent, new PointerEventHandler((_, e) => Track(e)), true);
-
-                entry.AddHandler(PointerMovedEvent, new PointerEventHandler((_, e) => Track(e)), true);
-
-                entry.AddHandler(PointerPressedEvent, new PointerEventHandler((_, e) => Track(e)), true);
-
-                entry.AddHandler(PointerExitedEvent, new PointerEventHandler((_, _) => Unmark()), true);
-
-                entry.GotFocus += (_, _) => Mark();
-
-                entry.LostFocus += (_, _) => Unmark();
-
-                // Left at the first column falls through, which closes the submenu as usual.
-
-                entry.KeyDown += (_, e) =>
-
-                {
-
-                    int wanted = e.Key == Windows.System.VirtualKey.Right ? 1 : e.Key == Windows.System.VirtualKey.Left ? 0 : column;
-
-                    if (wanted == column) return;
-
-                    column = wanted;
-
-                    Mark();
-
-                    e.Handled = true;
-
-                };
-
-                entry.Click += (_, _) => run(targetSlot, column == 1);
-
-                sub.Items.Add(entry);
-
-            }
-
-            return sub;
-
-        }
-
-
-
-        private void CopyItemTo(int fromIndex, int toIndex, bool withAttributes = false)
-
-        {
-
-            if (fromIndex < 0 || fromIndex >= _items.Count || toIndex < 0 || toIndex >= _items.Count || fromIndex == toIndex) return;
-
-            var source = _items[fromIndex];
-
-            if (source == null) return;
-
-
-
-            var copy = new ImageItem
-
-            {
-
-                Path = source.Path,
-
-                Name = source.Name,
-
-                DateModified = source.DateModified,
-
-                SizeString = source.SizeString,
-
-                Thumbnail = source.Thumbnail,
-
-                Dispatcher = source.Dispatcher
-
-            };
-
-
-
-            // Only the target's content changes. It keeps its own frame, zoom and pan.
-
-            MoveCellParameters(_items[toIndex], copy);
-
-            PutInCell(toIndex, copy);
-
-
-
-            var rootSrc = (uint)fromIndex < (uint)_cellRoots.Length ? _cellRoots[fromIndex] : null;
-
-            var rootDst = (uint)toIndex < (uint)_cellRoots.Length ? _cellRoots[toIndex] : null;
-
-            var partsSrc = rootSrc?.Tag as CellParts;
-
-            var partsDst = rootDst?.Tag as CellParts;
-
-
-
-            if (partsSrc != null && partsDst != null && CellImageReady(partsSrc))
-
-            {
-
-                partsDst.Photo.Source = partsSrc.Photo.Source;
-
-                var dims = partsSrc.Bound.GetDimensions?.Invoke() ?? (16, 9);
-
-                partsDst.Bound.SetDimensions?.Invoke(dims.Width, dims.Height);
-
-                partsDst.Bound.Item = copy;
-
-                partsDst.UpdateLayout?.Invoke();
-
-            }
-
-            else
-
-            {
-
-                RebindCell(toIndex);
-
-            }
-
-
-
-            if (withAttributes) CopyCellAttributes(fromIndex, toIndex);
-
-            ShowEmptyState(toIndex);
-
-            ShowHudAndOverlays();
-
-        }
-
-
-
-        /// <summary>A copy, then the source goes: a floating cell disappears and a grid cell is left empty.</summary>
-
-        private void MoveItemTo(int fromIndex, int toIndex, bool withAttributes = false)
-
-        {
-
-            if (fromIndex < 0 || fromIndex >= _items.Count || toIndex < 0 || toIndex >= _items.Count || fromIndex == toIndex) return;
-
-            CopyItemTo(fromIndex, toIndex, withAttributes);
-
-            var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, _items[fromIndex]));
-
-            if (card != null) CloseFreeformCard(card);
-
-            else EmptyCell(fromIndex);
-
-        }
-
-
-
-        /// <summary>A decoded image can move to another cell. One still opening, or a missing one, cannot.</summary>
-
-        private static bool CellImageReady(CellParts parts) =>
-
-            parts.Photo.Source is BitmapSource bitmap && bitmap.PixelWidth > 0 && bitmap.PixelHeight > 0;
-
-
-
-        /// <summary>Load this slot's image into its cell, when the slot has a cell on screen.</summary>
-
-        private void RebindCell(int slot)
-
-        {
-
-            if ((uint)slot >= (uint)_cellRoots.Length || (uint)slot >= (uint)_items.Count) return;
-
-            if (_cellRoots[slot]?.Tag is not CellParts parts) return;
-
-            parts.Bound.Item = _items[slot];
-
-            parts.Bound.Reload?.Invoke();
-
-            parts.UpdateLayout?.Invoke();
-
-        }
-
-
-
-        /// <summary>What a cell registered in the shared lists, so removing the cell can take it back out.</summary>
-
-        private sealed class CellPhoto
-
-        {
-
-            public ImageItem Item { get; set; }
-
-            public Action? Reload { get; set; }
-
-            public Action? ApplyGeometry { get; set; }
-
-            public bool Failed { get; set; }
-
-            public Action<double, double>? SetDimensions { get; set; }
-
-            public Func<(double Width, double Height)>? GetDimensions { get; set; }
-
-            public CellPhoto(ImageItem item) { Item = item; }
-
-        }
-
-
-
-        private sealed record CellParts(CompositeTransform Transform, Action UpdateLayout, UIElement TopControls, Image Photo, CellPhoto Bound, Border PositionBadge, TextBlock BadgeText, Microsoft.UI.Xaml.Shapes.Rectangle DashedStroke, Microsoft.UI.Xaml.Shapes.Rectangle? RimGlowStroke = null, Border? GutterHost = null, FrameworkElement? ImageContainer = null, FrameworkElement? HiddenPlaceholder = null, Button? MaximizeButton = null, Action<bool>? SetSelected = null);
-
-
-
-        /// <summary>
-
-        /// Remove a photo and keep the other cells, so none of them decodes again. The layout is rebuilt
-
-        /// for the new count. The canvas stays smaller: an image from the tray does not take the place.
-
-        /// </summary>
-
-        private void RemoveItem(ImageItem item)
-
-        {
-
-            DeselectCell();
-
-            // The cell goes while its button handles the click, so the pointer release never reaches the canvas to record the step.
-
-            NoteUserAction();
-
-            var freeformCard = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, item));
-
-            if (freeformCard != null)
-
-            {
-
-                CloseFreeformCard(freeformCard);
-
-                return;
-
-            }
-
-            int index = _items.IndexOf(item);
-
-            if (index < 0) return;
-
-            int visibleBefore = VisibleCount(GridCellCount);
-
-            // The last cell on show with images in the tray. The grid needs one cell, so it stays, empty.
-
-            if (index < visibleBefore && visibleBefore == 1 && GridCellCount > 1)
-
-            {
-
-                EmptyCell(index);
-
-                ShowShownBadge();
-
-                ShowHudAndOverlays();
-
-                return;
-
-            }
-
-            _itemBorders.Remove(item);
-
-            _cellGeometry.Remove(item);
-
-            bool cellsReady = CellRootsReady();
-
-            bool trayBehind = GridCellCount > visibleBefore;
-
-            _items.RemoveAt(index);
-
-            if (_items.Count == 0)
-
-            {
-
-                CloseRequested?.Invoke(this, EventArgs.Empty);
-
-                return;
-
-            }
-
-            if (index < visibleBefore && trayBehind) _framedSlots = visibleBefore - 1;
-
-
-
-            // Freeform cells remember their source by slot, and the later slots just moved down.
-
-            foreach (var card in _freeformCards)
-
-            {
-
-                if (card.SourceSlot == index) card.SourceSlot = -1;
-
-                else if (card.SourceSlot > index) card.SourceSlot--;
-
-            }
-
-
-
-            if (cellsReady && index >= visibleBefore && _mosaic != null)
-
-            {
-
-                // A photo that was not on screen: only the count changes.
-
-                var waiting = new List<FrameworkElement?>(_cellRoots);
-
-                if (index < waiting.Count) waiting.RemoveAt(index);
-
-                _cellRoots = waiting.ToArray();
-
-                _keepMosaic = true;
-
-                try { BuildLayout(); }
-
-                finally { _keepMosaic = false; }
-
-            }
-
-            else if (cellsReady)
-
-            {
-
-                var roots = new List<FrameworkElement?>(_cellRoots);
-
-                ForgetCell(roots[index]);
-
-                roots.RemoveAt(index);
-
-                int visible = VisibleCount(GridCellCount);
-
-                while (roots.Count < visible) roots.Add(null);
-
-                _cellRoots = roots.ToArray();
-
-                _relayoutKeepingCells = true;
-
-                try { BuildLayout(); }
-
-                finally { _relayoutKeepingCells = false; }
-
-            }
-
-            else
-
-            {
-
-                BuildLayout();
-
-            }
-
-            ShowHudAndOverlays();
-
-        }
-
-
-
-        private void ForgetCell(FrameworkElement? cell)
-
-        {
-
-            if (cell == null) return;
-
-            if (cell.Tag is CellParts parts)
-
-            {
-
-                _cellTransforms.Remove(parts.Transform);
-
-                _layoutUpdaters.Remove(parts.UpdateLayout);
-
-                _cellTopControls.Remove(parts.TopControls);
-
-            }
-
-            if (cell.Parent is Panel parent) parent.Children.Remove(cell);
-
-        }
-
-
-
-        #endregion
-
-
-
-
-
-        #region Position Badges for Swap / Move Indication
-
-
-
-        private Windows.UI.Color GetMultiViewAccentColor()
-
-        {
-
-            Windows.UI.Color accent = Windows.UI.Color.FromArgb(255, 0, 120, 212);
-
-            try
-
-            {
-
-                if (Application.Current.Resources["SystemAccentColor"] is Windows.UI.Color c) accent = c;
-
-                else if (Application.Current.Resources["SystemAccentColorLight2"] is Windows.UI.Color c2) accent = c2;
-
-            }
-
-            catch { }
-
-            return accent;
-
-        }
-
-
-
-        private void ShowPositionBadges(int sourceIndex)
-
-        {
-
-            var accent = GetMultiViewAccentColor();
-
-
-
-            for (int i = 0; i < _items.Count; i++)
-
-            {
-
-                if (i < _cellRoots.Length && _cellRoots[i]?.Tag is CellParts parts)
-
-                {
-
-                    bool isSource = (i == sourceIndex);
-
-                    bool compact = (_cellRoots[i] is FrameworkElement fe && fe.ActualWidth < 220);
-
-
-
-                    if (isSource)
-
-                    {
-
-                        parts.BadgeText.Text = compact ? $"#{PositionOfSlot(i)} (This)" : $"Position {PositionOfSlot(i)} (This Image)";
-
-                        parts.PositionBadge.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(235, 36, 36, 36));
-
-                        parts.PositionBadge.BorderBrush = new SolidColorBrush(accent);
-
-                        parts.PositionBadge.BorderThickness = new Thickness(1.5);
-
-                    }
-
-                    else
-
-                    {
-
-                        parts.BadgeText.Text = compact ? $"#{PositionOfSlot(i)}" : $"Position {PositionOfSlot(i)}";
-
-                        parts.PositionBadge.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(220, 20, 20, 20));
-
-                        parts.PositionBadge.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(90, 255, 255, 255));
-
-                        parts.PositionBadge.BorderThickness = new Thickness(1);
-
-                    }
-
-                    parts.PositionBadge.Opacity = 1.0;
-
-                }
-
-            }
-
-        }
-
-
-
-        private void HighlightPositionBadge(int targetIndex, string action = "Swap with", bool withAttributes = false)
-
-        {
-
-            if (targetIndex < 0 || targetIndex >= _items.Count || targetIndex >= _cellRoots.Length) return;
-
-            if (_cellRoots[targetIndex]?.Tag is CellParts parts)
-
-            {
-
-                var accent = GetMultiViewAccentColor();
-
-                bool compact = (_cellRoots[targetIndex] is FrameworkElement fe && fe.ActualWidth < 220);
-
-                string symbol = action == "Copy to" ? "\u2398" : "\u279C";
-
-                parts.BadgeText.Text = compact ? $"{symbol} #{PositionOfSlot(targetIndex)}" : $"{symbol} {action} Position {PositionOfSlot(targetIndex)}{(withAttributes ? " + attributes" : "")}";
-
-                parts.PositionBadge.Background = new SolidColorBrush(accent);
-
-                parts.PositionBadge.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.White);
-
-                parts.PositionBadge.BorderThickness = new Thickness(2);
-
-                parts.PositionBadge.Opacity = 1.0;
-
-            }
-
-        }
-
-
-
-        private void ClearHighlightPositionBadge(int targetIndex, int sourceIndex)
-
-        {
-
-            if (targetIndex < 0 || targetIndex >= _items.Count || targetIndex >= _cellRoots.Length) return;
-
-            if (_cellRoots[targetIndex]?.Tag is CellParts parts)
-
-            {
-
-                bool isSource = (targetIndex == sourceIndex);
-
-                bool compact = (_cellRoots[targetIndex] is FrameworkElement fe && fe.ActualWidth < 220);
-
-                if (isSource)
-
-                {
-
-                    var accent = GetMultiViewAccentColor();
-
-                    parts.BadgeText.Text = compact ? $"#{PositionOfSlot(targetIndex)} (This)" : $"Position {PositionOfSlot(targetIndex)} (This Image)";
-
-                    parts.PositionBadge.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(235, 36, 36, 36));
-
-                    parts.PositionBadge.BorderBrush = new SolidColorBrush(accent);
-
-                    parts.PositionBadge.BorderThickness = new Thickness(1.5);
-
-                }
-
-                else
-
-                {
-
-                    parts.BadgeText.Text = compact ? $"#{PositionOfSlot(targetIndex)}" : $"Position {PositionOfSlot(targetIndex)}";
-
-                    parts.PositionBadge.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(220, 20, 20, 20));
-
-                    parts.PositionBadge.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(90, 255, 255, 255));
-
-                    parts.PositionBadge.BorderThickness = new Thickness(1);
-
-                }
-
-            }
-
-        }
-
-
-
-        private void HidePositionBadges()
-
-        {
-
-            for (int i = 0; i < _cellRoots.Length; i++)
-
-            {
-
-                if (_cellRoots[i]?.Tag is CellParts parts)
-
-                {
-
-                    parts.PositionBadge.Opacity = 0.0;
-
-                }
-
-            }
-
-        }
-
-
-
-        #endregion
-
-
-
-        #region Solo View Mode
-
-
-
-        private void SetupSoloInteractions()
-
-        {
-
-            SoloImageContainer.SizeChanged += (s, e) =>
-
-            {
-
-                if (_soloIndex < 0) return;
-
-                UpdateSoloHud();
-
-                ApplySoloTurn();
-
-            };
-
-            SoloImageContainer.PointerPressed += (s, e) =>
-
-            {
-
-                ShowHudAndOverlays();
-
-                var prop = e.GetCurrentPoint(SoloImageContainer).Properties;
-
-
-
-                if (prop.IsMiddleButtonPressed)
-
-                {
-
-                    ResetSoloZoom();
-
-                    e.Handled = true;
-
-                    return;
-
-                }
-
-
-
-                if (prop.IsLeftButtonPressed)
-
-                {
-
-                    var point = e.GetCurrentPoint(SoloImageContainer).Position;
-
-                    _soloPointerId = e.Pointer.PointerId;
-
-                    _lastSoloPoint = point;
-
-                    if (IsSoloBackground(point))
-
-                    {
-
-                        _soloBackgroundClick = true;
-
-                        _soloBackgroundStart = point;
-
-                    }
-
-                    else
-
-                    {
-
-                        _isSoloDragging = true;
-
-                    }
-
-                    SoloImageContainer.CapturePointer(e.Pointer);
-
-                    e.Handled = true;
-
-                }
-
-            };
-
-
-
-            SoloImageContainer.PointerMoved += (s, e) =>
-
-            {
-
-                ShowHudAndOverlays();
-
-                if (e.Pointer.PointerId != _soloPointerId) return;
-
-
-
-                var currentPoint = e.GetCurrentPoint(SoloImageContainer).Position;
-
-                if (_soloBackgroundClick)
-
-                {
-
-                    double dx = currentPoint.X - _soloBackgroundStart.X;
-
-                    double dy = currentPoint.Y - _soloBackgroundStart.Y;
-
-                    if (dx * dx + dy * dy > 15 * 15)
-
-                        _soloBackgroundClick = false;
-
-                    e.Handled = true;
-
-                    return;
-
-                }
-
-
-
-                if (_isSoloDragging)
-
-                {
-
-                    double dx = currentPoint.X - _lastSoloPoint.X;
-
-                    double dy = currentPoint.Y - _lastSoloPoint.Y;
-
-                    SoloTransform.TranslateX += dx;
-
-                    SoloTransform.TranslateY += dy;
-
-                    _lastSoloPoint = currentPoint;
-
-                    e.Handled = true;
-
-                }
-
-            };
-
-
-
-            SoloImageContainer.PointerReleased += (s, e) =>
-
-            {
-
-                if (e.Pointer.PointerId != _soloPointerId) return;
-
-                bool close = _soloBackgroundClick;
-
-                _soloBackgroundClick = false;
-
-                if (_isSoloDragging)
-
-                {
-
-                    _isSoloDragging = false;
-
-                }
-
-                try { SoloImageContainer.ReleasePointerCapture(e.Pointer); }
-
-                catch { }
-
-                e.Handled = true;
-
-                if (close)
-
-                    ExitSolo();
-
-            };
-
-
-
-            SoloImageContainer.PointerCanceled += (s, e) =>
-
-            {
-
-                _soloBackgroundClick = false;
-
-                if (_isSoloDragging || e.Pointer.PointerId == _soloPointerId)
-
-                {
-
-                    _isSoloDragging = false;
-
-                    try { SoloImageContainer.ReleasePointerCapture(e.Pointer); }
-
-                    catch { }
-
-                }
-
-            };
-
-
-
-            SoloImageContainer.PointerWheelChanged += (s, e) =>
-
-            {
-
-                ShowHudAndOverlays();
-
-                var ptr = e.GetCurrentPoint(SoloImageContainer);
-
-                int delta = ptr.Properties.MouseWheelDelta;
-
-                double zoomFactor = delta > 0 ? 1.15 : (1.0 / 1.15);
-
-
-
-                double oldScale = SoloTransform.ScaleX;
-
-                double newScale = Math.Clamp(oldScale * zoomFactor, 1.0, 10.0);
-
-
-
-                if (newScale <= 1.02)
-
-                {
-
-                    ResetSoloZoom();
-
-                }
-
-                else
-
-                {
-
-                    Point pos = ptr.Position;
-
-                    SoloTransform.TranslateX = pos.X - (pos.X - SoloTransform.TranslateX) * (newScale / oldScale);
-
-                    SoloTransform.TranslateY = pos.Y - (pos.Y - SoloTransform.TranslateY) * (newScale / oldScale);
-
-                    SoloTransform.ScaleX = newScale;
-
-                    SoloTransform.ScaleY = newScale;
-
-                    UpdateSoloHud();
-
-                }
-
-
-
-                e.Handled = true;
-
-            };
-
-
-
-            SoloImageContainer.DoubleTapped += (s, e) =>
-
-            {
-
-                ShowHudAndOverlays();
-
-                e.Handled = true;
-
-                if (IsSoloBackground(e.GetPosition(SoloImageContainer)))
-
-                {
-
-                    ExitSolo();
-
-                    return;
-
-                }
-
-
-
-                if (SoloTransform.ScaleX > 1.05)
-
-                {
-
-                    ResetSoloZoom();
-
-                }
-
-                else
-
-                {
-
-                    Point pos = e.GetPosition(SoloImageContainer);
-
-                    double newScale = 2.5;
-
-                    double oldScale = SoloTransform.ScaleX;
-
-                    SoloTransform.TranslateX = pos.X - (pos.X - SoloTransform.TranslateX) * (newScale / oldScale);
-
-                    SoloTransform.TranslateY = pos.Y - (pos.Y - SoloTransform.TranslateY) * (newScale / oldScale);
-
-                    SoloTransform.ScaleX = newScale;
-
-                    SoloTransform.ScaleY = newScale;
-
-                    UpdateSoloHud();
-
-                }
-
-            };
-
-        }
-
-
-
-        private bool IsSoloBackground(Point point)
-
-        {
-
-            double viewW = SoloImageContainer.ActualWidth;
-
-            double viewH = SoloImageContainer.ActualHeight;
-
-            if (viewW <= 1 || viewH <= 1) return false;
-
-
-
-            // The photo element is only as large as the picture. The black around it
-
-            // is this container, so a point outside the element's box is the margin.
-
-            if (SoloImage.ActualWidth > 1 && SoloImage.ActualHeight > 1
-
-                && (SoloImage.ActualWidth < viewW - 2 || SoloImage.ActualHeight < viewH - 2))
-
-            {
-
-                try
-
-                {
-
-                    var bounds = SoloImage.TransformToVisual(SoloImageContainer)
-
-                        .TransformBounds(new Rect(0, 0, SoloImage.ActualWidth, SoloImage.ActualHeight));
-
-                    return point.X < bounds.X || point.X > bounds.Right || point.Y < bounds.Y || point.Y > bounds.Bottom;
-
-                }
-
-                catch
-
-                {
-
-                    return false;
-
-                }
-
-            }
-
-
-
-            if (SoloImage.Source is not BitmapSource bitmap || bitmap.PixelWidth <= 0 || bitmap.PixelHeight <= 0)
-
-                return false;
-
-
-
-            double fit = Math.Min(viewW / bitmap.PixelWidth, viewH / bitmap.PixelHeight);
-
-            double displayedW = bitmap.PixelWidth * fit * SoloTransform.ScaleX;
-
-            double displayedH = bitmap.PixelHeight * fit * SoloTransform.ScaleY;
-
-            return ViewerMath.IsPointerOverLetterbox(
-
-                point.X - SoloTransform.TranslateX,
-
-                point.Y - SoloTransform.TranslateY,
-
-                viewW,
-
-                viewH,
-
-                displayedW,
-
-                displayedH);
-
-        }
-
-
-
-        private void UpdateSoloHud()
-
-        {
-
-            if (_soloIndex < 0 || _soloIndex >= _items.Count) return;
-
-            var item = _items[_soloIndex];
-
-
-
-            SoloTitleText.Text = !string.IsNullOrWhiteSpace(item.Name) ? item.Name : " ";
-
-
-
-            double w = 0, h = 0;
-
-            if (ImageCache.TryGet(item.Path, out var entry) && entry != null && entry.NativeWidth > 0 && entry.NativeHeight > 0)
-
-            {
-
-                w = entry.NativeWidth;
-
-                h = entry.NativeHeight;
-
-            }
-
-            else if (SoloImage.Source is BitmapSource bs && bs.PixelWidth > 0 && bs.PixelHeight > 0)
-
-            {
-
-                w = bs.PixelWidth;
-
-                h = bs.PixelHeight;
-
-            }
-
-            else if (item.Thumbnail is BitmapSource ts && ts.PixelWidth > 0 && ts.PixelHeight > 0)
-
-            {
-
-                w = ts.PixelWidth;
-
-                h = ts.PixelHeight;
-
-            }
-
-
-
-            if (w > 0 && h > 0)
-
-            {
-
-                SoloSecondaryText.Text = item.GetHudDisplayString(w, h);
-
-            }
-
-            else
-
-            {
-
-                string size = !string.IsNullOrEmpty(item.SizeString) ? item.SizeString : "";
-
-                string date = item.DateModified != DateTime.MinValue ? item.DateModified.ToString("yyyy-MM-dd HH:mm") : item.DateText;
-
-                SoloSecondaryText.Text = $"{size} \u2022 {date}".Trim(' ', '\u2022');
-
-            }
-
-
-
-            double viewW = SoloImageContainer.ActualWidth;
-
-            double viewH = SoloImageContainer.ActualHeight;
-
-            if (viewW <= 0 || viewH <= 0)
-
-            {
-
-                viewW = ActualWidth;
-
-                viewH = ActualHeight;
-
-            }
-
-
-
-            double zoomRatio = 1.0;
-
-            if (w > 0 && h > 0 && viewW > 0 && viewH > 0)
-
-            {
-
-                bool quarterTurn = GetGeometry(item).ImageRotation % 180 != 0;
-
-                double fit = quarterTurn ? Math.Min(viewW / h, viewH / w) : Math.Min(viewW / w, viewH / h);
-
-                zoomRatio = fit * SoloTransform.ScaleX;
-
-            }
-
-            else
-
-            {
-
-                zoomRatio = SoloTransform.ScaleX;
-
-            }
-
-
-
-            SoloZoomText.Text = item.GetZoomString((float)zoomRatio);
-
-            SoloFidelityText.Text = "HF";
-
-        }
-
-
-
-        private bool IsCanvasSlot(int slot)
-
-        {
-
-            int grid = GridCellCount;
-
-            return (uint)slot < (uint)_items.Count && (slot < VisibleCount(grid) || slot >= grid);
-
-        }
-
-
-
-        private void EnterSolo(int index)
-
-        {
-
-            DeselectCell();
-
-            if (!IsCanvasSlot(index) || IsEmptyCell(_items[index])) return;
-
-            _soloIndex = index;
-
-            var item = _items[index];
-
-
-
-            int pos = 0, total = 0;
-
-            for (int s = 0; s < _items.Count; s++)
-
-            {
-
-                if (!IsCanvasSlot(s) || IsEmptyCell(_items[s])) continue;
-
-                total++;
-
-                if (s <= index) pos++;
-
-            }
-
-            SoloCounterText.Text = $"{pos} of {total}";
-
-
-
-            try
-
-            {
-
-                var bmp = new BitmapImage();
-
-                bmp.UriSource = new Uri(item.Path, UriKind.Absolute);
-
-                bmp.ImageOpened += (_, _) =>
-
-                {
-
-                    UpdateSoloHud();
-
-                    ApplySoloTurn();
-
-                };
-
-                SoloImage.Source = bmp;
-
-            }
-
-            catch { }
-
-
-
-            ApplySoloTurn();
-
-            ResetSoloZoom();
-
-            UpdateSoloHud();
-
-            SoloContainer.Visibility = Visibility.Visible;
-
-            UnifiedHud.Visibility = Visibility.Collapsed;
-
-            if (FreeformCanvas != null) FreeformCanvas.Visibility = Visibility.Collapsed;
-
-            ShowHudAndOverlays();
-
-        }
-
-
-
-        /// <summary>Solo shows the photo the way its cell turns and mirrors it. A quarter turn is scaled to fit the other way round.</summary>
-
-        private void ApplySoloTurn()
-
-        {
-
-            if (_soloIndex < 0 || _soloIndex >= _items.Count) return;
-
-            var geometry = GetGeometry(_items[_soloIndex]);
-
-            double scale = 1;
-
-            if (geometry.ImageRotation % 180 != 0 && SoloImage.Source is BitmapSource bitmap
-
-                && bitmap.PixelWidth > 0 && bitmap.PixelHeight > 0
-
-                && SoloImageContainer.ActualWidth > 0 && SoloImageContainer.ActualHeight > 0)
-
-            {
-
-                double viewW = SoloImageContainer.ActualWidth;
-
-                double viewH = SoloImageContainer.ActualHeight;
-
-                double upright = Math.Min(viewW / bitmap.PixelWidth, viewH / bitmap.PixelHeight);
-
-                double turned = Math.Min(viewW / bitmap.PixelHeight, viewH / bitmap.PixelWidth);
-
-                scale = turned / upright;
-
-            }
-
-            SoloTurn.Rotation = geometry.ImageRotation;
-
-            SoloTurn.ScaleX = (geometry.ImageFlipH ? -1 : 1) * scale;
-
-            SoloTurn.ScaleY = (geometry.ImageFlipV ? -1 : 1) * scale;
-
-        }
-
-
-
-        private void ExitSolo()
-
-        {
-
-            SoloContainer.Visibility = Visibility.Collapsed;
-
-            UnifiedHud.Visibility = Visibility.Visible;
-
-            if (FreeformCanvas != null) FreeformCanvas.Visibility = Visibility.Visible;
-
-            SoloImage.Source = null;
-
-            _soloIndex = -1;
-
-            ResetSoloZoom();
-
-            ShowHudAndOverlays();
-
-        }
-
-
-
-        private void ResetSoloZoom()
-
-        {
-
-            SoloTransform.ScaleX = 1.0;
-
-            SoloTransform.ScaleY = 1.0;
-
-            SoloTransform.TranslateX = 0;
-
-            SoloTransform.TranslateY = 0;
-
-            UpdateSoloHud();
-
-        }
-
-
-
-        private void PrevSolo() => StepSolo(-1);
-
-
-
-        private void NextSolo() => StepSolo(1);
-
-
-
-        /// <summary>The next photo that is not an empty cell, wrapping round. Stays put when there is no other.</summary>
-
-        private void StepSolo(int direction)
-
-        {
-
-            int total = _items.Count;
-
-            for (int step = 1; step < total; step++)
-
-            {
-
-                int slot = ((_soloIndex + direction * step) % total + total) % total;
-
-                if (!IsCanvasSlot(slot) || IsEmptyCell(_items[slot])) continue;
-
-                EnterSolo(slot);
-
-                return;
-
-            }
-
-        }
-
-
-
-        private void ExitSolo_Click(object sender, RoutedEventArgs e) => ExitSolo();
-
-        private void PrevSolo_Click(object sender, RoutedEventArgs e) => PrevSolo();
-
-        private void NextSolo_Click(object sender, RoutedEventArgs e) => NextSolo();
-
-        private void ResetSoloZoom_Click(object sender, RoutedEventArgs e) => ResetSoloZoom();
-
-
-
-        #endregion
-
-
-
-        #region Actions
-
-
-
-        private void CloseButton_Click(object sender, RoutedEventArgs e)
-
-        {
-
-            CloseRequested?.Invoke(this, EventArgs.Empty);
-
-        }
-
-
-
-        private void AddImagesButton_Click(object sender, RoutedEventArgs e)
-
-        {
-
-            AddImagesRequested?.Invoke(this, EventArgs.Empty);
-
-        }
-
-
-
-        public int ShownSlots => GridCellCount == 0 ? 0 : VisibleCount(GridCellCount);
-
-
-
-        private int _swapSource = -1;
-
-
-
-        /// <summary>Alt-drag: a Windows drag of this photo. Dropping on another photo swaps the two.</summary>
-
-        private async System.Threading.Tasks.Task StartSwapDragAsync(UIElement source, Microsoft.UI.Input.PointerPoint point, int index)
-
-        {
-
-            _swapSource = index;
-
-            try { await source.StartDragAsync(point); }
-
-            catch { }
-
-            finally { _swapSource = -1; }
-
-        }
-
-
-
-        private void AttachSwapDrop(Border cellBorder, Grid cellGrid, CellPhoto photo)
-
-        {
-
-            Windows.UI.Color accent = Windows.UI.Color.FromArgb(255, 96, 205, 255);
-
-            try { if (Application.Current.Resources["SystemAccentColorLight2"] is Windows.UI.Color c) accent = c; }
-
-            catch { }
-
-            var ring = new Rectangle
-
-            {
-
-                Stroke = new SolidColorBrush(accent),
-
-                StrokeThickness = 4,
-
-                Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(40, accent.R, accent.G, accent.B)),
-
-                IsHitTestVisible = false,
-
-                Visibility = Visibility.Collapsed
-
-            };
-
-            Canvas.SetZIndex(ring, 100);
-
-            cellGrid.Children.Add(ring);
-
-            cellGrid.AllowDrop = true;
-
-
-
-            cellGrid.DragStarting += async (s, e) =>
-
-            {
-
-                ShowPositionBadges(Slot(photo.Item));
-
-                e.AllowedOperations = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
-
-                e.Data.RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
-
-                e.Data.SetText(photo.Item.Name);
-
-                cellBorder.Opacity = 0.4;
-
-                var deferral = e.GetDeferral();
-
-                try { await SetDragPictureAsync(cellGrid, e.DragUI, e.GetPosition(cellGrid)); }
-
-                catch { }
-
-                finally { deferral.Complete(); }
-
-            };
-
-            cellGrid.DropCompleted += (s, e) =>
-
-            {
-
-                HidePositionBadges();
-
-                cellBorder.Opacity = 1;
-
-            };
-
-
-
-            void Over(object s, DragEventArgs e)
-
-            {
-
-                if (_swapSource < 0 || _swapSource == Slot(photo.Item))
-
-                {
-
-                    e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.None;
-
-                    return;
-
-                }
-
-                e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
-
-                e.DragUIOverride.Caption = "Swap";
-
-                e.DragUIOverride.IsCaptionVisible = true;
-
-                e.DragUIOverride.IsGlyphVisible = true;
-
-                ring.Visibility = Visibility.Visible;
-
-                e.Handled = true;
-
-            }
-
-            cellGrid.DragEnter += Over;
-
-            cellGrid.DragOver += Over;
-
-            cellGrid.DragLeave += (s, e) => ring.Visibility = Visibility.Collapsed;
-
-            cellGrid.Drop += (s, e) =>
-
-            {
-
-                ring.Visibility = Visibility.Collapsed;
-
-                int from = _swapSource;
-
-                int index = Slot(photo.Item);
-
-                if (from < 0 || index < 0 || from == index) return;
-
-                e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
-
-                e.Handled = true;
-
-                // Swap after the drag has finished with these elements.
-
-                DispatcherQueue.TryEnqueue(() => SwapItems(from, index));
-
-            };
-
-        }
-
-
-
-        /// <summary>A small picture of the photo under the pointer, held where it was grabbed.</summary>
-
-        private static async System.Threading.Tasks.Task SetDragPictureAsync(FrameworkElement element, DragUI ui, Point grab)
-
-        {
-
-            double w = element.ActualWidth, h = element.ActualHeight;
-
-            if (w < 1 || h < 1) return;
-
-            double scale = Math.Min(1.0, 240.0 / Math.Max(w, h));
-
-            var rtb = new RenderTargetBitmap();
-
-            await rtb.RenderAsync(element, (int)Math.Max(1, w * scale), (int)Math.Max(1, h * scale));
-
-            if (rtb.PixelWidth < 1 || rtb.PixelHeight < 1) return;
-
-            var pixels = await rtb.GetPixelsAsync();
-
-            var bitmap = Windows.Graphics.Imaging.SoftwareBitmap.CreateCopyFromBuffer(
-
-                pixels,
-
-                Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8,
-
-                rtb.PixelWidth,
-
-                rtb.PixelHeight,
-
-                Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied);
-
-            ui.SetContentFromSoftwareBitmap(bitmap, new Point(grab.X * rtb.PixelWidth / w, grab.Y * rtb.PixelHeight / h));
-
-        }
-
-
-
-        public void SwapItems(int idxA, int idxB, bool withAttributes = false)
-
-        {
-
-            if (idxA < 0 || idxA >= _items.Count || idxB < 0 || idxB >= _items.Count || idxA == idxB) return;
-
-            var itemA = _items[idxA];
-
-            var itemB = _items[idxB];
-
-            PutInCell(idxA, itemB);
-
-            PutInCell(idxB, itemA);
-
-
-
-            // The cells stay where they are and keep their parameters. Only their images change.
-
-            ExchangeCellParameters(itemA, itemB);
-
-
-
-            var rootA = (uint)idxA < (uint)_cellRoots.Length ? _cellRoots[idxA] : null;
-
-            var rootB = (uint)idxB < (uint)_cellRoots.Length ? _cellRoots[idxB] : null;
-
-            var partsA = rootA?.Tag as CellParts;
-
-            var partsB = rootB?.Tag as CellParts;
-
-
-
-            if (partsA != null && partsB != null && CellImageReady(partsA) && CellImageReady(partsB))
-
-            {
-
-                // Move the decoded images between the cells, so no photo decodes again.
-
-                (partsA.Photo.Source, partsB.Photo.Source) = (partsB.Photo.Source, partsA.Photo.Source);
-
-
-
-                var dimsA = partsA.Bound.GetDimensions?.Invoke() ?? (16, 9);
-
-                var dimsB = partsB.Bound.GetDimensions?.Invoke() ?? (16, 9);
-
-                partsA.Bound.SetDimensions?.Invoke(dimsB.Width, dimsB.Height);
-
-                partsB.Bound.SetDimensions?.Invoke(dimsA.Width, dimsA.Height);
-
-
-
-                partsA.Bound.Item = itemB;
-
-                partsB.Bound.Item = itemA;
-
-                partsA.UpdateLayout?.Invoke();
-
-                partsB.UpdateLayout?.Invoke();
-
-            }
-
-            else
-
-            {
-
-                // A photo waiting off screen has no cell, and one still opening has no image to move.
-
-                RebindCell(idxA);
-
-                RebindCell(idxB);
-
-            }
-
-
-
-            if (rootA != null) rootA.Opacity = 1;
-
-            if (rootB != null) rootB.Opacity = 1;
-
-
-
-            if (withAttributes) ExchangeCellAttributes(idxA, idxB);
-
-            ShowEmptyState(idxA);
-
-            ShowEmptyState(idxB);
-
-            ShowHudAndOverlays();
-
-        }
-
-
-
-        public void ReflowFrames()
-
-        {
-
-            foreach (var update in _layoutUpdaters)
-
-                update();
-
-        }
-
-
-
-        public void ToggleFillMode()
-
-        {
-
-            _isFillMode = !_isFillMode;
-
-            ResetAllZooms();
-
-            foreach (var update in _layoutUpdaters)
-
-            {
-
-                update();
-
-            }
-
-            ShowHudAndOverlays();
-
-        }
-
-
-
-        private void ResetAllZooms()
-
-        {
-
-            foreach (var tr in _cellTransforms)
-
-            {
-
-                tr.ScaleX = 1.0;
-
-                tr.ScaleY = 1.0;
-
-                tr.TranslateX = 0;
-
-                tr.TranslateY = 0;
-
-            }
-
-        }
-
-
-
-        #endregion
-
-    }
-
-}
-
+using Microsoft.UI.Input;
+
+using Microsoft.UI.Xaml;
+
+using Microsoft.UI.Xaml.Automation;
+
+using Microsoft.UI.Xaml.Controls;
+
+using Microsoft.UI.Xaml.Controls.Primitives;
+
+using Microsoft.UI.Xaml.Input;
+
+using Microsoft.UI.Xaml.Media;
+
+using Microsoft.UI.Xaml.Media.Imaging;
+
+using Microsoft.UI.Xaml.Shapes;
+
+using System;
+
+using System.Numerics;
+
+using System.Collections.Generic;
+
+using System.Linq;
+
+using Windows.Foundation;
+
+using Windows.System;
+
+namespace ModernImageViewer
+
+{
+
+    public sealed partial class MultiViewControl : UserControl
+
+    {
+
+        public event EventHandler? CloseRequested;
+
+        public event EventHandler? AddImagesRequested;
+
+        public event EventHandler<ImageItem>? AddImageRequested;
+
+        // When set, this many frames stay on screen and later photos wait off screen.
+
+        private int _framedSlots;
+
+        /// <summary>The window should become this width/height ratio. Dragging the window is the custom shape.</summary>
+
+        public event Action<double>? CanvasAspectChosen;
+
+        private readonly List<ImageItem> _items = new();
+
+        private readonly List<CompositeTransform> _cellTransforms = new();
+
+        private readonly List<Action> _layoutUpdaters = new();
+
+        private readonly List<UIElement> _cellTopControls = new();
+
+        private bool _isFillMode = true; // Default to Fill for zero wasted space
+
+        private readonly DispatcherTimer _hudTimer;
+
+        private bool _isHudVisible = true;
+
+        private bool _isPointerOverHud = false;
+
+        private Point _lastHudPointer;
+
+        private bool _haveHudPointer;
+
+        private int _soloIndex = -1;
+
+        private int _lines = 1;
+
+        private int[]? _lineCounts;
+
+        private const double CountsCardGap = 8;
+
+        private TextBlock? _lineCountLabel;
+
+        private ScrollViewer? _countsScroll;
+
+        private double _countsScrollOffset;
+
+        private double _countsScrollAcross;
+
+        private readonly List<LayoutLineSlot> _lineSlots = new();
+
+        private TextBlock? _layoutSubtitle;
+
+        private RepeatButton? _lineLess;
+
+        private RepeatButton? _lineMore;
+
+        private Button? _evenButton;
+
+        private bool _openLayoutIsRows;
+
+        private FrameworkElement? _columnChartHost;
+
+        private double _columnChartWidth;
+
+        private sealed class LayoutLineSlot
+
+        {
+
+            public Border Strip = null!;
+
+            public TextBlock Value = null!;
+
+            public RepeatButton Less = null!;
+
+            public RepeatButton More = null!;
+
+            public string Name = "";
+
+            public bool Vertical;
+
+        }
+
+        private bool _flipped;
+
+        private bool _heroActive;
+
+        private HeroKind _heroKind = HeroKind.Banner;
+
+        private int _heroPosition;
+
+        // Solo drag tracking. A click on the black around the photo is not a drag.
+
+        private bool _isSoloDragging = false;
+
+        private bool _soloBackgroundClick = false;
+
+        private Point _lastSoloPoint = default;
+
+        private Point _soloBackgroundStart = default;
+
+        private uint _soloPointerId = 0;
+
+        public MultiViewControl()
+
+        {
+
+            this.InitializeComponent();
+
+            _hudTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2.5) };
+
+            _hudTimer.Tick += HudTimer_Tick;
+
+            RootGrid.PointerMoved += SegmentGesture_PointerMoved;
+
+            RootGrid.PointerReleased += SegmentGesture_PointerReleased;
+
+            RootGrid.PointerCaptureLost += SegmentGesture_PointerReleased;
+
+            AttachUndoWatchers();
+
+            RootGrid.AddHandler(PointerPressedEvent, new PointerEventHandler(CloseCountsCardOnPressOutside), true);
+
+            CountsCard.SizeChanged += (_, _) => PlaceCountsCard();
+
+            UnifiedHud.SizeChanged += (_, _) => PlaceCountsCard();
+
+            RootGrid.SizeChanged += (_, _) => PlaceCountsCard();
+
+            SizeChanged += (_, e) =>
+
+            {
+
+                RefreshCanvasLabel();
+
+                if (FreeformCanvas != null && e.NewSize.Width > 0 && e.NewSize.Height > 0)
+
+                {
+
+                    FreeformCanvas.Width = e.NewSize.Width;
+
+                    FreeformCanvas.Height = e.NewSize.Height;
+
+                    RescaleFreeformCards(e.NewSize.Width, e.NewSize.Height);
+
+                    DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, RebaseUntouchedUndo);
+
+                }
+
+                if (_autoPlaySeconds > 0) ApplyPlayEdge(CurrentPlayPercent());
+
+            };
+
+            SetupSoloInteractions();
+
+        }
+
+        public bool IsSoloActive => SoloContainer.Visibility == Visibility.Visible;
+
+        /// <summary>Hold keyboard focus on the grid itself, so the first photo's caption button does not draw a focus box.</summary>
+
+        public void FocusView()
+
+        {
+
+            if (!RootGrid.Focus(FocusState.Programmatic))
+
+                Focus(FocusState.Programmatic);
+
+        }
+
+        public void LoadImages(IEnumerable<ImageItem> items)
+
+        {
+
+            DeselectCell();
+
+            ForgetSurprise();
+
+            ClearAllFreeformCards();
+
+            _itemBorders.Clear();
+
+            _cellGeometry.Clear();
+
+            SetCanvas(null, null);
+
+            SetCanvasFrame(null);
+
+            _cellRoots = Array.Empty<FrameworkElement?>();
+
+            _items.Clear();
+
+            _items.AddRange(items.Where(i => i != null && !i.IsDirectory));
+
+            _framedSlots = 0;
+
+            _isFillMode = true; // Always default to Fill (crop to fill) to eliminate black bars
+
+            _lines = MosaicLayout.DefaultLines(_items.Count);
+
+            _lineCounts = null;
+
+            _flipped = false;
+
+            _heroActive = false;
+
+            _heroKind = HeroKind.Banner;
+
+            _heroPosition = 0;
+
+            ExitSolo();
+
+            BuildLayout();
+
+            ShowHudAndOverlays();
+
+            ResetUndo();
+
+        }
+
+        /// <summary>The session stays as it is, ready to come back to.</summary>
+
+        public void PrepareToLeave()
+
+        {
+
+            RemoveTrayCard();
+
+            StopAutoPlay();
+
+            StopAutoPlayMusic();
+
+            ResetCanvasCamera();
+
+            CloseCountsCard();
+
+            _hudTimer.Stop();
+
+        }
+
+        public void Clear()
+
+        {
+
+            RemoveTrayCard();
+
+            _activeShow = null;
+
+            _shuffleChosen = false;
+
+            _isStoryboardPlayback = false;
+
+            ForgetSurprise();
+
+            CloseCountsCard();
+
+            _hudTimer.Stop();
+
+            ClearUndo();
+
+            ClearAllFreeformCards();
+
+            _itemBorders.Clear();
+
+            _cellGeometry.Clear();
+
+            SetCanvas(null, null);
+
+            SetCanvasFrame(null);
+
+            _cellRoots = Array.Empty<FrameworkElement?>();
+
+            _items.Clear();
+
+            _cellTransforms.Clear();
+
+            _layoutUpdaters.Clear();
+
+            _cellTopControls.Clear();
+
+            ResetMosaicFields();
+
+            CellsGrid.Children.Clear();
+
+            CellsGrid.RowDefinitions.Clear();
+
+            CellsGrid.ColumnDefinitions.Clear();
+
+            SoloImage.Source = null;
+
+            _soloIndex = -1;
+
+        }
+
+        /// <summary>More or fewer rows or columns. Counts return to an even split, and a rectangle hero turns off.</summary>
+
+        public void ChangeLines(int delta)
+
+        {
+
+            int total = LineTotal();
+
+            if (!CanEditGridLayout || total < 1) return;
+
+            int current = Math.Clamp(_lines, 1, total);
+
+            int next = Math.Clamp(current + delta, 1, total);
+
+            bool linesInUse = !_heroActive || HeroUsesLines;
+
+            if (next == current && linesInUse && !_mosaicCustom) return;
+
+            _lines = next;
+
+            _lineCounts = null;
+
+            if (!HeroUsesLines) _heroActive = false;
+
+            RelayoutKeepingCells();
+
+            SyncOpenLayout();
+
+            ShowHudAndOverlays();
+
+        }
+
+        /// <summary>A banner or pair keeps the line controls for the other photos. Rectangle does not.</summary>
+
+        private bool HeroUsesLines => _heroActive && _heroKind != HeroKind.Rectangle;
+
+        /// <summary>Photos the line controls arrange: all of them, or the ones beside a banner or pair.</summary>
+
+        private int LineTotal()
+
+        {
+
+            int shown = VisibleCount(GridCellCount);
+
+            if (HeroUsesLines) return Math.Max(1, shown - MosaicLayout.HeroFeatured(_heroKind));
+
+            return shown;
+
+        }
+
+        private int EffectiveLines() => Math.Clamp(_lines, 1, Math.Max(1, LineTotal()));
+
+        /// <summary>Photos in each line. Even until the user changes one line.</summary>
+
+        private int[] CurrentLineCounts()
+
+        {
+
+            int total = LineTotal();
+
+            int lines = EffectiveLines();
+
+            if (_lineCounts != null && _lineCounts.Length == lines && _lineCounts.Sum() == total && _lineCounts.All(n => n >= 1))
+
+                return _lineCounts;
+
+            return MosaicLayout.LineCounts(total, lines);
+
+        }
+
+        private void AdjustLine(int line, int delta)
+
+        {
+
+            var next = MosaicLayout.MovePhoto(CurrentLineCounts(), line, delta);
+
+            if (next == null) return;
+
+            _lineCounts = next;
+
+            if (!HeroUsesLines) _heroActive = false;
+
+            RelayoutKeepingCells();
+
+            SyncOpenLayout();
+
+            ShowHudAndOverlays();
+
+        }
+
+        private void RowsSide_Click(object sender, RoutedEventArgs e) => CountsSide_Click(wantRows: true);
+
+        private void ColumnsSide_Click(object sender, RoutedEventArgs e) => CountsSide_Click(wantRows: false);
+
+        /// <summary>The other side switches and opens the card. The chosen side opens the card, or closes it.</summary>
+
+        private void CountsSide_Click(bool wantRows)
+
+        {
+
+            if (wantRows == _flipped)
+
+            {
+
+                ToggleRowsColumns();
+
+                OpenCountsCard();
+
+            }
+
+            else if (IsCountsCardOpen)
+
+            {
+
+                CloseCountsCard();
+
+            }
+
+            else
+
+            {
+
+                OpenCountsCard();
+
+            }
+
+        }
+
+        private void OpenCountsCard()
+
+        {
+
+            if (IsCountsCardOpen || CountsSwitch.Visibility != Visibility.Visible || CountsSwitch.Opacity == 0) return;
+
+            FillCountsPanel();
+
+            CountsCard.Visibility = Visibility.Visible;
+
+            PlaceCountsCard();
+
+            ShowCountsSides();
+
+            HudMenu_Opened(this, EventArgs.Empty);
+
+        }
+
+        private void CloseCountsCard()
+
+        {
+
+            if (!IsCountsCardOpen) return;
+
+            CountsCard.Visibility = Visibility.Collapsed;
+
+            ShowCountsSides();
+
+            HudMenu_Closed(this, EventArgs.Empty);
+
+        }
+
+        /// <summary>Centred over the switch and just above the bar, inside the window.</summary>
+
+        private void PlaceCountsCard()
+
+        {
+
+            if (!IsCountsCardOpen) return;
+
+            double fromBottom = UnifiedHud.ActualHeight + UnifiedHud.Margin.Bottom + CountsCardGap;
+
+            CountsCard.MaxHeight = Math.Max(160, RootGrid.ActualHeight - fromBottom - CountsCardGap);
+
+            var at = CountsSwitch.TransformToVisual(RootGrid).TransformPoint(new Point(0, 0));
+
+            double left = at.X + (CountsSwitch.ActualWidth - CountsCard.ActualWidth) / 2;
+
+            left = Math.Max(CountsCardGap, Math.Min(left, RootGrid.ActualWidth - CountsCard.ActualWidth - CountsCardGap));
+
+            CountsCard.Margin = new Thickness(left, 0, 0, fromBottom);
+
+        }
+
+        /// <summary>A press anywhere but the card or the switch closes the card, and still does what it does.</summary>
+
+        private void CloseCountsCardOnPressOutside(object sender, PointerRoutedEventArgs e)
+
+        {
+
+            ShowHudFromUser();
+
+            CloseCountsCardOnPressOutsideCore(e);
+
+            if (_selectedSlot >= 0 && !IsInsideAnyCell(e.OriginalSource))
+
+            {
+
+                DeselectCell();
+
+            }
+
+        }
+
+        private bool IsInsideAnyCell(object? source)
+
+        {
+
+            for (var node = source as DependencyObject; node != null; node = VisualTreeHelper.GetParent(node))
+
+            {
+
+                if (node is FrameworkElement fe && fe.Tag is CellParts)
+
+                    return true;
+
+            }
+
+            return false;
+
+        }
+
+        private void CloseCountsCardOnPressOutsideCore(PointerRoutedEventArgs e)
+
+        {
+
+            if (!IsCountsCardOpen) return;
+
+            for (var node = e.OriginalSource as DependencyObject; node != null; node = VisualTreeHelper.GetParent(node))
+
+            {
+
+                if (ReferenceEquals(node, CountsCard) || ReferenceEquals(node, CountsSwitch)) return;
+
+            }
+
+            CloseCountsCard();
+
+        }
+
+        /// <summary>The chosen side carries a plate, and a brighter one while the card is open.</summary>
+
+        private void ShowCountsSides()
+
+        {
+
+            var chosen = _flipped ? ColumnsSide : RowsSide;
+
+            var other = _flipped ? RowsSide : ColumnsSide;
+
+            HoldFlyoutSource(other, false);
+
+            HoldFlyoutSource(chosen, IsCountsCardOpen);
+
+            if (!IsCountsCardOpen)
+
+                chosen.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF));
+
+        }
+
+        /// <summary>
+
+        /// WinUI drops a button back to Normal once its flyout is up. Hold a pressed
+
+        /// plate until the card closes. The platform wash is a few percent of white
+
+        /// and does not read on this glass.
+
+        /// </summary>
+
+        private static void HoldFlyoutSource(Button? button, bool open)
+
+        {
+
+            if (button == null) return;
+
+            if (!open)
+
+            {
+
+                button.ClearValue(Control.BackgroundProperty);
+
+                button.ClearValue(Control.BorderBrushProperty);
+
+                button.ClearValue(Control.BorderThicknessProperty);
+
+                return;
+
+            }
+
+            button.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0x55, 0xFF, 0xFF, 0xFF));
+
+            button.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF));
+
+            button.BorderThickness = new Thickness(1);
+
+        }
+
+        private bool IsCountsCardOpen => CountsCard?.Visibility == Visibility.Visible;
+
+        /// <summary>
+
+        /// The steppers are RepeatButtons. Rebuilding the card on a click destroys the
+
+        /// button under the pointer, so a hold never repeats. Keep that button and
+
+        /// update the open card in place. A new line count replaces only the diagram.
+
+        /// </summary>
+
+        private void SyncOpenLayout()
+
+        {
+
+            if (!IsCountsCardOpen)
+
+                return;
+
+            bool rows = !_flipped;
+
+            if (_layoutSubtitle == null || _countsScroll == null || _lineLess == null || rows != _openLayoutIsRows)
+
+            {
+
+                FillCountsPanel();
+
+                return;
+
+            }
+
+            var counts = CurrentLineCounts();
+
+            int lines = EffectiveLines();
+
+            bool isEven = counts.SequenceEqual(MosaicLayout.LineCounts(LineTotal(), lines));
+
+            _layoutSubtitle.Text = LayoutSubtitle(lines, rows);
+
+            SyncEvenButton(isEven);
+
+            SyncLineCountStepper(lines, rows);
+
+            if (_lineSlots.Count != counts.Length)
+
+                ReplaceDiagram(counts, rows);
+
+            else
+
+                UpdateLineSlots(counts);
+
+        }
+
+        private void RefreshOpenLayout()
+
+        {
+
+            if (IsCountsCardOpen)
+
+                FillCountsPanel();
+
+        }
+
+        private void ReplaceDiagram(int[] counts, bool rows)
+
+        {
+
+            if (_countsScroll == null)
+
+            {
+
+                FillCountsPanel();
+
+                return;
+
+            }
+
+            double across = _countsScroll.HorizontalOffset;
+
+            double down = _countsScroll.VerticalOffset;
+
+            _countsScroll.Content = rows ? BuildRowDiagram(counts) : BuildColumnDiagram(counts);
+
+            _countsScroll.UpdateLayout();
+
+            CenterColumnChart();
+
+            _countsScroll.ChangeView(across, down, null, true);
+
+        }
+
+        private void UpdateLineSlots(int[] counts)
+
+        {
+
+            for (int i = 0; i < counts.Length; i++)
+
+            {
+
+                var slot = _lineSlots[i];
+
+                FillStrip(slot.Strip, counts[i], slot.Vertical);
+
+                slot.Value.Text = counts[i].ToString();
+
+                AutomationProperties.SetName(slot.Value, counts[i] + " images in " + slot.Name.ToLowerInvariant());
+
+                string spoken = slot.Name.ToLowerInvariant();
+
+                bool canLess = MosaicLayout.MovePhoto(counts, i, -1) != null;
+
+                bool canMore = MosaicLayout.MovePhoto(counts, i, 1) != null;
+
+                ApplyStepState(slot.Less, canLess, canLess ? "One fewer in " + spoken : slot.Name + " already has one image");
+
+                ApplyStepState(slot.More, canMore, canMore ? "One more in " + spoken : "No image left to move");
+
+            }
+
+        }
+
+        private void SyncEvenButton(bool isEven)
+
+        {
+
+            if (_evenButton == null) return;
+
+            _evenButton.IsEnabled = !isEven;
+
+            ToolTipService.SetToolTip(_evenButton, isEven
+
+                ? "The lines already have the same number of images."
+
+                : "Give every line the same number of images.");
+
+        }
+
+        private void SyncLineCountStepper(int lines, bool rows)
+
+        {
+
+            if (_lineLess == null || _lineMore == null) return;
+
+            int total = LineTotal();
+
+            string noun = rows ? "rows" : "columns";
+
+            bool canLess = lines > 1;
+
+            bool canMore = lines < total;
+
+            ApplyStepState(_lineLess, canLess, canLess ? "Fewer " + noun : "Minimum reached");
+
+            ApplyStepState(_lineMore, canMore, canMore ? "More " + noun : "Maximum reached");
+
+            if (_lineCountLabel != null) _lineCountLabel.Text = LineCountText(lines, rows);
+
+        }
+
+        private static void ApplyStepState(RepeatButton button, bool enabled, string tip)
+
+        {
+
+            if (button.IsEnabled != enabled)
+
+                button.IsEnabled = enabled;
+
+            ToolTipService.SetToolTip(button, tip);
+
+            AutomationProperties.SetName(button, tip);
+
+        }
+
+        private Style LayoutStyle(string key) => (Style)Resources[key];
+
+        private void FillCountsPanel()
+
+        {
+
+            if (_countsScroll != null)
+
+            {
+
+                _countsScrollOffset = _countsScroll.VerticalOffset;
+
+                _countsScrollAcross = _countsScroll.HorizontalOffset;
+
+            }
+
+            CountsPanel.Children.Clear();
+
+            var counts = CurrentLineCounts();
+
+            bool rows = !_flipped;
+
+            int lines = EffectiveLines();
+
+            bool isEven = counts.SequenceEqual(MosaicLayout.LineCounts(LineTotal(), lines));
+
+            CountsPanel.Children.Add(BuildLayoutHeader(lines, rows, isEven));
+
+            CountsPanel.Children.Add(BuildLayoutToolbar(lines, rows));
+
+            CountsPanel.Children.Add(BuildHeroRow());
+
+            CountsPanel.Children.Add(new Rectangle
+
+            {
+
+                Style = LayoutStyle("LayoutDividerStyle"),
+
+                Margin = new Thickness(0, 8, 0, 2)
+
+            });
+
+            CountsPanel.Children.Add(BuildLayoutLines(counts, rows));
+
+        }
+
+        private static string LineCountText(int lines, bool rows) =>
+
+            lines + " " + (rows ? (lines == 1 ? "row" : "rows") : (lines == 1 ? "column" : "columns"));
+
+        private string LayoutSubtitle(int lines, bool rows)
+
+        {
+
+            int arranged = LineTotal();
+
+            string noun = rows
+
+                ? (lines == 1 ? "row" : "rows")
+
+                : (lines == 1 ? "column" : "columns");
+
+            string across = $"{arranged} {(arranged == 1 ? "image" : "images")} across {lines} {noun}";
+
+            if (_heroActive && !HeroUsesLines)
+
+                return "Editing the lines turns the hero off";
+
+            if (_heroActive && HeroUsesLines)
+
+            {
+
+                string kind = MosaicLayout.HeroTitle(_heroKind).ToLowerInvariant();
+
+                return across + ", beside the " + kind;
+
+            }
+
+            return across;
+
+        }
+
+        private FrameworkElement BuildLayoutHeader(int lines, bool rows, bool isEven)
+
+        {
+
+            var header = new Grid();
+
+            header.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            header.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            header.Children.Add(new TextBlock
+
+            {
+
+                Text = "Grid layout",
+
+                Style = LayoutStyle("LayoutTitleStyle"),
+
+                VerticalAlignment = VerticalAlignment.Center
+
+            });
+
+            var even = new Button
+
+            {
+
+                Style = LayoutStyle("LayoutEvenButtonStyle"),
+
+                Content = "Even out"
+
+            };
+
+            _evenButton = even;
+
+            SyncEvenButton(isEven);
+
+            even.Click += (_, _) =>
+
+            {
+
+                _lineCounts = null;
+
+                RelayoutKeepingCells();
+
+                SyncOpenLayout();
+
+                ShowHudAndOverlays();
+
+            };
+
+            Grid.SetColumn(even, 1);
+
+            header.Children.Add(even);
+
+            var subtitle = new TextBlock
+
+            {
+
+                Text = LayoutSubtitle(lines, rows),
+
+                Style = LayoutStyle("LayoutSubtitleStyle"),
+
+                Margin = new Thickness(0, 2, 0, 0)
+
+            };
+
+            _layoutSubtitle = subtitle;
+
+            Grid.SetRow(subtitle, 1);
+
+            Grid.SetColumnSpan(subtitle, 2);
+
+            header.Children.Add(subtitle);
+
+            return header;
+
+        }
+
+        private FrameworkElement BuildLayoutToolbar(int lines, bool rows)
+
+        {
+
+            int total = LineTotal();
+
+            bool canLess = lines > 1;
+
+            bool canMore = lines < total;
+
+            string noun = rows ? "rows" : "columns";
+
+            var host = new Border
+
+            {
+
+                Style = LayoutStyle("LayoutChoiceHostStyle"),
+
+                Margin = new Thickness(0, 10, 0, 2)
+
+            };
+
+            var grid = new Grid();
+
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1) });
+
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1) });
+
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var less = MakeStepperButton("\uE738", canLess ? "Fewer " + noun : "Minimum reached", canLess, () => ChangeLines(-1), new CornerRadius(4));
+
+            var more = MakeStepperButton("\uE710", canMore ? "More " + noun : "Maximum reached", canMore, () => ChangeLines(1), new CornerRadius(4));
+
+            Grid.SetColumn(less, 0);
+
+            Grid.SetColumn(more, 4);
+
+            grid.Children.Add(less);
+
+            grid.Children.Add(more);
+
+            var leftRule = StepperRule(vertical: true);
+
+            var rightRule = StepperRule(vertical: true);
+
+            leftRule.Margin = new Thickness(0, 8, 0, 8);
+
+            rightRule.Margin = new Thickness(0, 8, 0, 8);
+
+            Grid.SetColumn(leftRule, 1);
+
+            Grid.SetColumn(rightRule, 3);
+
+            grid.Children.Add(leftRule);
+
+            grid.Children.Add(rightRule);
+
+            _lineCountLabel = new TextBlock { Text = LineCountText(lines, rows), Style = LayoutStyle("LayoutLineCountTextStyle") };
+
+            Grid.SetColumn(_lineCountLabel, 2);
+
+            grid.Children.Add(_lineCountLabel);
+
+            _lineLess = less;
+
+            _lineMore = more;
+
+            host.Child = grid;
+
+            return host;
+
+        }
+
+        /// <summary>
+
+        /// One strip per line, cut into that many photos. Rows are full-width bands.
+
+        /// Columns are full-height stacks, left to right, matching the grid.
+
+        /// </summary>
+
+        private Border MakeCellStrip(int count, bool vertical)
+
+        {
+
+            var strip = new Border { Style = LayoutStyle("LayoutStripStyle") };
+
+            FillStrip(strip, count, vertical);
+
+            return strip;
+
+        }
+
+        private void FillStrip(Border strip, int count, bool vertical)
+
+        {
+
+            count = Math.Max(count, 1);
+
+            if (strip.Child is not Grid layers)
+
+            {
+
+                layers = new Grid();
+
+                strip.Child = layers;
+
+            }
+
+            Grid cells;
+
+            if (layers.Children.Count == 0 || layers.Children[0] is not Grid existing)
+
+            {
+
+                cells = new Grid();
+
+                layers.Children.Insert(0, cells);
+
+            }
+
+            else
+
+            {
+
+                cells = existing;
+
+                cells.Children.Clear();
+
+                cells.RowDefinitions.Clear();
+
+                cells.ColumnDefinitions.Clear();
+
+            }
+
+            for (int i = 0; i < count; i++)
+
+            {
+
+                if (vertical)
+
+                    cells.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+                else
+
+                    cells.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+                var cell = new Border
+
+                {
+
+                    Style = LayoutStyle("LayoutCellStyle"),
+
+                    Margin = vertical
+
+                        ? new Thickness(0, 0, 0, i < count - 1 ? 1 : 0)
+
+                        : new Thickness(0, 0, i < count - 1 ? 1 : 0, 0)
+
+                };
+
+                if (vertical)
+
+                    Grid.SetRow(cell, i);
+
+                else
+
+                    Grid.SetColumn(cell, i);
+
+                cells.Children.Add(cell);
+
+            }
+
+        }
+
+        private (Border Well, RepeatButton Less, RepeatButton More) MakeLineStepper(int line, string name, bool vertical)
+
+        {
+
+            bool canLess = MosaicLayout.MovePhoto(CurrentLineCounts(), line, -1) != null;
+
+            bool canMore = MosaicLayout.MovePhoto(CurrentLineCounts(), line, 1) != null;
+
+            string spoken = name.ToLowerInvariant();
+
+            return MakeStepperWell(
+
+                canLess ? $"One fewer in {spoken}" : $"{name} already has one image",
+
+                canMore ? $"One more in {spoken}" : "No image left to move",
+
+                canLess,
+
+                canMore,
+
+                () => AdjustLine(line, -1),
+
+                () => AdjustLine(line, 1),
+
+                vertical);
+
+        }
+
+        /// <summary>
+
+        /// The photo count sits on the bar, only as tall as the digits, so the
+
+        /// segment gaps stay visible above and below it.
+
+        /// </summary>
+
+        private (Grid Host, Border Strip, TextBlock Badge) MakeStripHost(int count, bool vertical, string name)
+
+        {
+
+            var strip = MakeCellStrip(count, vertical);
+
+            strip.Height = vertical ? 96 : 30;
+
+            var badge = new TextBlock
+
+            {
+
+                Text = count.ToString(),
+
+                Style = LayoutStyle("LayoutCountChipTextStyle")
+
+            };
+
+            AutomationProperties.SetName(badge, count + " images in " + name.ToLowerInvariant());
+
+            var chip = new Border
+
+            {
+
+                Style = LayoutStyle("LayoutCountChipStyle"),
+
+                Child = badge,
+
+                Padding = vertical ? new Thickness(2, 3, 2, 3) : new Thickness(4, 0, 4, 0),
+
+                VerticalAlignment = VerticalAlignment.Center
+
+            };
+
+            var layers = (Grid)strip.Child;
+
+            layers.Children.Add(chip);
+
+            layers.SizeChanged += (_, e) =>
+
+            {
+
+                layers.Clip = new RectangleGeometry
+
+                {
+
+                    Rect = new Rect(0, 0, e.NewSize.Width, e.NewSize.Height)
+
+                };
+
+            };
+
+            var host = new Grid { Height = strip.Height };
+
+            host.Children.Add(strip);
+
+            return (host, strip, badge);
+
+        }
+
+        private (Border Well, RepeatButton Less, RepeatButton More) MakeStepperWell(
+
+            string lessTip,
+
+            string moreTip,
+
+            bool canLess,
+
+            bool canMore,
+
+            Action less,
+
+            Action more,
+
+            bool vertical)
+
+        {
+
+            // Segoe Fluent Icons Remove and Add. A text minus stays a hairline at this size.
+
+            var lessButton = MakeStepperButton("\uE738", lessTip, canLess, less, vertical ? new CornerRadius(0, 0, 4, 4) : new CornerRadius(4, 0, 0, 4));
+
+            var moreButton = MakeStepperButton("\uE710", moreTip, canMore, more, vertical ? new CornerRadius(4, 4, 0, 0) : new CornerRadius(0, 4, 4, 0));
+
+            var grid = new Grid();
+
+            if (vertical)
+
+            {
+
+                grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+                grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1) });
+
+                grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+                Grid.SetRow(moreButton, 0);
+
+                Grid.SetRow(lessButton, 2);
+
+                var topRule = StepperRule(vertical: false);
+
+                Grid.SetRow(topRule, 1);
+
+                grid.Children.Add(moreButton);
+
+                grid.Children.Add(topRule);
+
+                grid.Children.Add(lessButton);
+
+            }
+
+            else
+
+            {
+
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1) });
+
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+                Grid.SetColumn(lessButton, 0);
+
+                Grid.SetColumn(moreButton, 2);
+
+                var leftRule = StepperRule(vertical: true);
+
+                Grid.SetColumn(leftRule, 1);
+
+                grid.Children.Add(lessButton);
+
+                grid.Children.Add(leftRule);
+
+                grid.Children.Add(moreButton);
+
+            }
+
+            var well = new Border
+
+            {
+
+                Style = LayoutStyle("LayoutStepperWellStyle"),
+
+                HorizontalAlignment = vertical ? HorizontalAlignment.Stretch : HorizontalAlignment.Center,
+
+                Child = grid
+
+            };
+
+            return (well, lessButton, moreButton);
+
+        }
+
+        private Rectangle StepperRule(bool vertical)
+
+        {
+
+            return new Rectangle
+
+            {
+
+                Style = LayoutStyle("LayoutStepperDividerStyle"),
+
+                Width = vertical ? 1 : double.NaN,
+
+                Height = vertical ? double.NaN : 1,
+
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+
+                VerticalAlignment = VerticalAlignment.Stretch
+
+            };
+
+        }
+
+        private RepeatButton MakeStepperButton(string glyph, string tip, bool enabled, Action onClick, CornerRadius corner)
+
+        {
+
+            var button = new RepeatButton
+
+            {
+
+                Style = LayoutStyle("LayoutStepperButtonStyle"),
+
+                Content = glyph,
+
+                FontFamily = new FontFamily("Segoe Fluent Icons"),
+
+                FontWeight = Microsoft.UI.Text.FontWeights.Normal,
+
+                Delay = 400,
+
+                Interval = 80,
+
+                CornerRadius = corner
+
+            };
+
+            ApplyStepState(button, enabled, tip);
+
+            button.Click += (_, _) => onClick();
+
+            return button;
+
+        }
+
+        private void RememberLine(Border strip, (Border Well, RepeatButton Less, RepeatButton More) steps, TextBlock badge, string name, bool vertical)
+
+        {
+
+            _lineSlots.Add(new LayoutLineSlot
+
+            {
+
+                Strip = strip,
+
+                Value = badge,
+
+                Less = steps.Less,
+
+                More = steps.More,
+
+                Name = name,
+
+                Vertical = vertical
+
+            });
+
+        }
+
+        private FrameworkElement BuildLayoutLines(int[] counts, bool rows)
+
+        {
+
+            FrameworkElement chart = rows ? BuildRowDiagram(counts) : BuildColumnDiagram(counts);
+
+            var scroll = new ScrollViewer
+
+            {
+
+                Content = chart,
+
+                MaxHeight = rows ? 576 : 280,
+
+                MaxWidth = rows ? double.PositiveInfinity : 600,
+
+                VerticalScrollBarVisibility = rows ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled,
+
+                HorizontalScrollBarVisibility = rows ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto
+
+            };
+
+            _countsScroll = scroll;
+
+            if (!rows)
+
+            {
+
+                scroll.SizeChanged += (_, _) => CenterColumnChart();
+
+                scroll.Loaded += (_, _) => CenterColumnChart();
+
+            }
+
+            if (_countsScrollOffset > 0 || _countsScrollAcross > 0)
+
+            {
+
+                scroll.Loaded += (_, _) => scroll.ChangeView(_countsScrollAcross, _countsScrollOffset, null, true);
+
+            }
+
+            return scroll;
+
+        }
+
+        private FrameworkElement BuildRowDiagram(int[] counts)
+
+        {
+
+            _lineSlots.Clear();
+
+            _openLayoutIsRows = true;
+
+            _columnChartHost = null;
+
+            var panel = new StackPanel();
+
+            for (int i = 0; i < counts.Length; i++)
+
+            {
+
+                int line = i;
+
+                string name = $"Row {i + 1}";
+
+                var row = new Grid { Height = 36 };
+
+                // Two digits, held against the bar. The word stays in the spoken name.
+
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(36) });
+
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+                var label = new TextBlock
+
+                {
+
+                    Text = (i + 1).ToString(),
+
+                    Style = LayoutStyle("LayoutLineLabelStyle")
+
+                };
+
+                AutomationProperties.SetName(label, name);
+
+                ToolTipService.SetToolTip(label, name);
+
+                row.Children.Add(label);
+
+                var visual = MakeStripHost(counts[i], vertical: false, name);
+
+                visual.Host.Margin = new Thickness(0, 0, 8, 0);
+
+                visual.Host.VerticalAlignment = VerticalAlignment.Center;
+
+                Grid.SetColumn(visual.Host, 1);
+
+                row.Children.Add(visual.Host);
+
+                var steps = MakeLineStepper(line, name, vertical: false);
+
+                RememberLine(visual.Strip, steps, visual.Badge, name, vertical: false);
+
+                Grid.SetColumn(steps.Well, 2);
+
+                row.Children.Add(steps.Well);
+
+                panel.Children.Add(row);
+
+            }
+
+            return panel;
+
+        }
+
+        private FrameworkElement BuildColumnDiagram(int[] counts)
+
+        {
+
+            _lineSlots.Clear();
+
+            _openLayoutIsRows = false;
+
+            int n = Math.Max(counts.Length, 1);
+
+            int slot = n >= 12 ? 34 : n >= 8 ? 42 : 52;
+
+            int gap = n >= 12 ? 2 : 4;
+
+            _columnChartWidth = counts.Length * slot + Math.Max(0, counts.Length - 1) * gap;
+
+            var panel = new StackPanel
+
+            {
+
+                Orientation = Orientation.Horizontal,
+
+                Spacing = gap,
+
+                HorizontalAlignment = HorizontalAlignment.Center
+
+            };
+
+            for (int i = 0; i < counts.Length; i++)
+
+            {
+
+                int line = i;
+
+                string name = $"Column {i + 1}";
+
+                var column = new StackPanel { Width = slot };
+
+                AutomationProperties.SetName(column, name);
+
+                ToolTipService.SetToolTip(column, name);
+
+                column.Children.Add(new TextBlock
+
+                {
+
+                    Text = (i + 1).ToString(),
+
+                    Style = LayoutStyle("LayoutColumnLabelStyle")
+
+                });
+
+                var visual = MakeStripHost(counts[i], vertical: true, name);
+
+                visual.Host.Margin = new Thickness(0, 2, 0, 4);
+
+                column.Children.Add(visual.Host);
+
+                var steps = MakeLineStepper(line, name, vertical: true);
+
+                RememberLine(visual.Strip, steps, visual.Badge, name, vertical: true);
+
+                column.Children.Add(steps.Well);
+
+                panel.Children.Add(column);
+
+            }
+
+            var host = new Grid();
+
+            host.Children.Add(panel);
+
+            _columnChartHost = host;
+
+            return host;
+
+        }
+
+        /// <summary>
+
+        /// The column chart is only as wide as its stacks. Stretch a host to the
+
+        /// card and center the chart in it. A chart wider than the card scrolls.
+
+        /// </summary>
+
+        private void CenterColumnChart()
+
+        {
+
+            if (_countsScroll == null || _columnChartHost == null) return;
+
+            double view = _countsScroll.ViewportWidth;
+
+            if (view <= 0) return;
+
+            bool fits = _columnChartWidth <= view;
+
+            _countsScroll.HorizontalScrollBarVisibility = fits
+
+                ? ScrollBarVisibility.Disabled
+
+                : ScrollBarVisibility.Auto;
+
+            double target = fits ? view : 0;
+
+            if (Math.Abs(_columnChartHost.MinWidth - target) > 0.5)
+
+                _columnChartHost.MinWidth = target;
+
+        }
+
+        /// <summary>
+
+        /// Rows become columns and back. A plain grid or a Rectangle turns a quarter, dragged sizes kept.
+
+        /// Beside a banner or pair only the other photos turn, so their sizes go back to even like
+
+        /// any other line change.
+
+        /// </summary>
+
+        public void ToggleRowsColumns()
+
+        {
+
+            if (!CanEditGridLayout) return;
+
+            _flipped = !_flipped;
+
+            if (!HeroUsesLines && _mosaic != null && CellRootsReady())
+
+            {
+
+                _mosaic = MosaicLayout.Transpose(_mosaic);
+
+                _keepMosaic = true;
+
+                try { BuildLayout(); }
+
+                finally { _keepMosaic = false; }
+
+            }
+
+            else
+
+            {
+
+                RelayoutKeepingCells();
+
+            }
+
+            RefreshOpenLayout();
+
+            ShowHudAndOverlays();
+
+        }
+
+        /// <summary>A new layout for the same photos. The cells move into it; no photo decodes again.</summary>
+
+        private void RelayoutKeepingCells()
+
+        {
+
+            if (!CellRootsReady())
+
+            {
+
+                BuildLayout();
+
+                return;
+
+            }
+
+            _relayoutKeepingCells = true;
+
+            try { BuildLayout(); }
+
+            finally { _relayoutKeepingCells = false; }
+
+        }
+
+        /// <summary>H: the next kind, then off.</summary>
+
+        private void CycleHero()
+
+        {
+
+            var kinds = MosaicLayout.HeroKinds(VisibleCount(GridCellCount));
+
+            if (kinds.Length == 0) return;
+
+            if (!_heroActive)
+
+            {
+
+                _heroActive = true;
+
+                _heroKind = kinds[0];
+
+                _heroPosition = _heroKind == HeroKind.Banner
+
+                    ? MosaicLayout.DefaultBannerPosition(CellsGrid.ActualWidth, CellsGrid.ActualHeight)
+
+                    : 0;
+
+            }
+
+            else
+
+            {
+
+                int index = Array.IndexOf(kinds, _heroKind);
+
+                if (index < 0) index = 0;
+
+                int nextIndex = index + 1;
+
+                if (nextIndex >= kinds.Length)
+
+                {
+
+                    _heroActive = false;
+
+                }
+
+                else
+
+                {
+
+                    _heroKind = kinds[nextIndex];
+
+                    _heroPosition = 0;
+
+                }
+
+            }
+
+            RelayoutKeepingCells();
+
+            RefreshOpenLayout();
+
+            ShowHudAndOverlays();
+
+        }
+
+        private static readonly HeroKind[] HeroRowKinds = { HeroKind.Banner, HeroKind.Rectangle, HeroKind.Pair };
+
+        /// <summary>The Hero row of the grid layout card: off, or one kind directly. What this many photos cannot do is greyed out.</summary>
+
+        private FrameworkElement BuildHeroRow()
+
+        {
+
+            var available = MosaicLayout.HeroKinds(VisibleCount(GridCellCount));
+
+            var row = new StackPanel { Spacing = 4, Margin = new Thickness(0, 8, 0, 0) };
+
+            var header = new Grid { Height = 30 };
+
+            var title = new TextBlock { Text = "Hero", FontSize = 12, Foreground = _menuWhiteSecondary, VerticalAlignment = VerticalAlignment.Center };
+
+            ToolTipService.SetToolTip(title, "Rectangle needs 4, 5, 6, 7 or 9 images, and Pair needs at least 3.");
+
+            header.Children.Add(title);
+
+            if (_heroActive)
+
+            {
+
+                var next = new Button
+
+                {
+
+                    Style = (Style)Resources["QuietButtonStyle"],
+
+                    HorizontalAlignment = HorizontalAlignment.Right,
+
+                    Padding = new Thickness(8, 4, 8, 4),
+
+                    CornerRadius = new CornerRadius(8),
+
+                    Content = new FontIcon { FontFamily = new FontFamily("Segoe Fluent Icons"), Glyph = "\uE7AD", FontSize = 13 }
+
+                };
+
+                ToolTipService.SetToolTip(next, "Next position");
+
+                AutomationProperties.SetName(next, "Next position");
+
+                next.Click += RotateHero_Click;
+
+                header.Children.Add(next);
+
+            }
+
+            row.Children.Add(header);
+
+            var buttons = new Button[4];
+
+            var track = MakeSegment(new[] { "Off", "Banner", "Rectangle", "Pair" }, new[]
+
+            {
+
+                "No hero",
+
+                "One large image along a side",
+
+                "One large image in a corner block",
+
+                "The first two images large"
+
+            }, SetHero, out var show, buttons);
+
+            for (int i = 0; i < HeroRowKinds.Length; i++)
+
+            {
+
+                bool can = Array.IndexOf(available, HeroRowKinds[i]) >= 0;
+
+                buttons[i + 1].IsEnabled = can;
+
+                if (buttons[i + 1].Content is TextBlock caption && !can) caption.Opacity = 0.4;
+
+            }
+
+            show(_heroActive ? Array.IndexOf(HeroRowKinds, _heroKind) + 1 : 0);
+
+            row.Children.Add(track);
+
+            return row;
+
+        }
+
+        private void SetHero(int choice)
+
+        {
+
+            bool off = choice == 0;
+
+            if (off && !_heroActive) return;
+
+            if (off)
+
+            {
+
+                _heroActive = false;
+
+            }
+
+            else
+
+            {
+
+                var kind = HeroRowKinds[choice - 1];
+
+                if (_heroActive && _heroKind == kind) return;
+
+                _heroActive = true;
+
+                _heroKind = kind;
+
+                _heroPosition = kind == HeroKind.Banner
+
+                    ? MosaicLayout.DefaultBannerPosition(CellsGrid.ActualWidth, CellsGrid.ActualHeight)
+
+                    : 0;
+
+            }
+
+            RelayoutKeepingCells();
+
+            RefreshOpenLayout();
+
+            ShowHudAndOverlays();
+
+            NoteUserAction();
+
+        }
+
+        private void RotateHero_Click(object sender, RoutedEventArgs e)
+
+        {
+
+            if (!_heroActive) return;
+
+            int positions = MosaicLayout.HeroPositions(VisibleCount(GridCellCount), _heroKind);
+
+            _heroPosition = (_heroPosition + 1) % positions;
+
+            RelayoutKeepingCells();
+
+            ShowHudAndOverlays();
+
+        }
+
+        private void NormalizeHero()
+
+        {
+
+            var kinds = MosaicLayout.HeroKinds(VisibleCount(GridCellCount));
+
+            if (kinds.Length == 0)
+
+            {
+
+                _heroActive = false;
+
+                return;
+
+            }
+
+            if (Array.IndexOf(kinds, _heroKind) < 0)
+
+            {
+
+                _heroKind = kinds[0];
+
+                _heroPosition = 0;
+
+            }
+
+            else
+
+            {
+
+                int positions = MosaicLayout.HeroPositions(VisibleCount(GridCellCount), _heroKind);
+
+                if (_heroPosition >= positions) _heroPosition = 0;
+
+            }
+
+        }
+
+        public bool HandleKeyDown(VirtualKey key)
+
+        {
+
+            if (_isEditingCamera)
+
+            {
+
+                if (key is VirtualKey.Escape or VirtualKey.Enter)
+
+                {
+
+                    ExitCameraDirector(save: true);
+
+                    return true;
+
+                }
+
+                if (key == VirtualKey.Space)
+
+                {
+
+                    PreviewCameraMove();
+
+                    return true;
+
+                }
+
+                if (key == VirtualKey.Tab)
+
+                {
+
+                    SelectCameraKeyframe(!_activeIsStartKeyframe);
+
+                    return true;
+
+                }
+
+                if (key is VirtualKey.Left or VirtualKey.PageUp)
+
+                {
+
+                    NavigateCameraScene(-1);
+
+                    return true;
+
+                }
+
+                if (key is VirtualKey.Right or VirtualKey.PageDown)
+
+                {
+
+                    NavigateCameraScene(1);
+
+                    return true;
+
+                }
+
+                return true;
+
+            }
+
+            ShowHudFromUser();
+
+            // An open card keeps the keyboard. Letters typed in the tray's search are not shortcuts, and nothing behind the card changes.
+
+            if (_trayCard != null || _surpriseCard != null)
+
+            {
+
+                // The card's own Esc needs focus inside the canvas, and removing a thumbnail can leave it nowhere.
+
+                if (key == VirtualKey.Escape)
+
+                {
+
+                    RemoveSurpriseCard();
+
+                    RemoveTrayCard();
+
+                }
+
+                return key != VirtualKey.Tab;
+
+            }
+
+            if (HandleAutoPlayKey(key)) return true;
+
+            if (IsSoloActive)
+
+            {
+
+                switch (key)
+
+                {
+
+                    case VirtualKey.Escape:
+
+                    case VirtualKey.Enter:
+
+                        ExitSolo();
+
+                        return true;
+
+                    case VirtualKey.Left:
+
+                        PrevSolo();
+
+                        return true;
+
+                    case VirtualKey.Right:
+
+                        NextSolo();
+
+                        return true;
+
+                }
+
+                return false;
+
+            }
+
+            switch (key)
+
+            {
+
+                case VirtualKey.Escape:
+
+                    if (IsCountsCardOpen)
+
+                    {
+
+                        CloseCountsCard();
+
+                        return true;
+
+                    }
+
+                    if (_selectedSlot >= 0)
+
+                    {
+
+                        DeselectCell();
+
+                        return true;
+
+                    }
+
+                    CloseRequested?.Invoke(this, EventArgs.Empty);
+
+                    return true;
+
+                case VirtualKey.Left:
+
+                    if (_autoPlaySeconds > 0)
+
+                    {
+
+                        if (_isStoryboardPlayback) _ = StepStoryboardScene(back: true);
+
+                        else StepLayout(back: true);
+
+                        return true;
+
+                    }
+
+                    break;
+
+                case VirtualKey.Right:
+
+                    if (_autoPlaySeconds > 0)
+
+                    {
+
+                        if (_isStoryboardPlayback) _ = StepStoryboardScene(back: false);
+
+                        else StepLayout(back: false);
+
+                        return true;
+
+                    }
+
+                    break;
+
+                case VirtualKey.Add:
+
+                case (VirtualKey)187: // = / +
+
+                    ChangeLines(1);
+
+                    return true;
+
+                case VirtualKey.Subtract:
+
+                case (VirtualKey)189: // - / _
+
+                    ChangeLines(-1);
+
+                    return true;
+
+                case VirtualKey.B:
+
+                    StoryDeckButton_Click(StoryDeckButton, new RoutedEventArgs());
+
+                    return true;
+
+                case VirtualKey.R:
+
+                    ToggleRowsColumns();
+
+                    return true;
+
+                case VirtualKey.H:
+
+                    CycleHero();
+
+                    return true;
+
+                case VirtualKey.S:
+
+                    if (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
+
+                    {
+
+                        SaveButton?.Flyout?.ShowAt(SaveButton);
+
+                        return true;
+
+                    }
+
+                    break;
+
+                case VirtualKey.Z:
+
+                    if (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
+
+                    {
+
+                        if (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
+
+                            Redo();
+
+                        else
+
+                            Undo();
+
+                        return true;
+
+                    }
+
+                    break;
+
+                case VirtualKey.Y:
+
+                    if (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
+
+                    {
+
+                        Redo();
+
+                        return true;
+
+                    }
+
+                    break;
+
+                case VirtualKey.C:
+
+                    if (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
+
+                    {
+
+                        _ = CopyCanvasToClipboardAsync();
+
+                        return true;
+
+                    }
+
+                    break;
+
+            }
+
+            return false;
+
+        }
+
+        #region HUD & Auto-Hide
+
+        private void RootGrid_PointerMoved(object sender, PointerRoutedEventArgs e)
+
+        {
+
+            var point = e.GetCurrentPoint(RootGrid).Position;
+
+            if (!_haveHudPointer)
+
+            {
+
+                _lastHudPointer = point;
+
+                _haveHudPointer = true;
+
+            }
+
+            bool moved = Math.Abs(point.X - _lastHudPointer.X) >= 3
+
+                || Math.Abs(point.Y - _lastHudPointer.Y) >= 3;
+
+            // A new layout can report the pointer still sitting where it was. That is not the user moving.
+
+            if (_autoPlaySeconds > 0 && !moved) return;
+
+            _lastHudPointer = point;
+
+            ShowHudFromUser();
+
+        }
+
+        private void Hud_PointerEntered(object sender, PointerRoutedEventArgs e)
+
+        {
+
+            _isPointerOverHud = true;
+
+            ShowHudFromUser();
+
+        }
+
+        private void Hud_PointerExited(object sender, PointerRoutedEventArgs e)
+
+        {
+
+            _isPointerOverHud = false;
+
+            _hudTimer.Stop();
+
+            _hudTimer.Start();
+
+        }
+
+        /// <summary>
+
+        /// Shows the bar and starts the idle timer again. While a show or shuffle is playing, a new layout
+
+        /// calls this and must not: the bar stays hidden until the pointer, a key, or a click.
+
+        /// </summary>
+
+        private void ShowHudAndOverlays()
+
+        {
+
+            if (_quietBar) return;
+
+            if (_autoPlaySeconds > 0) return;
+
+            ShowHudFromUser();
+
+        }
+
+        private void ShowHudFromUser()
+
+        {
+
+            if (_isEditingCamera) return;
+
+            _hudTimer.Stop();
+
+            _hudTimer.Start();
+
+            if (!_isHudVisible)
+
+            {
+
+                _isHudVisible = true;
+
+                UnifiedHud.Opacity = 1.0;
+
+                UnifiedHud.IsHitTestVisible = true;
+
+                HudTranslate.Y = 0;
+
+                if (HudScrim != null) HudScrim.Opacity = 1.0;
+
+                SoloInfoOverlay.Opacity = 1.0;
+
+                SoloBottomBar.Opacity = 1.0;
+
+                SoloBottomBar.IsHitTestVisible = true;
+
+                SoloTopRightControls.Opacity = 1.0;
+
+                SoloTopRightControls.IsHitTestVisible = true;
+
+                SetPlaceholderOpacity(1.0);
+
+            }
+
+        }
+
+        /// <summary>An empty cell's label fades with the bar, so the composition can be seen without it.</summary>
+
+        private void SetPlaceholderOpacity(double opacity)
+
+        {
+
+            foreach (var root in _cellRoots)
+
+            {
+
+                if (root?.Tag is CellParts { HiddenPlaceholder: not null } parts)
+
+                    parts.HiddenPlaceholder.Opacity = opacity;
+
+            }
+
+        }
+
+        private int _hudMenusOpen;
+
+        // Asked rather than counted: a menu whose cell goes away must not hold the playbar up for good.
+
+        private MenuFlyout? _openCellMenu;
+
+        private int _selectedSlot = -1;
+
+        private CellParts? GetCellParts(int slot)
+
+        {
+
+            if (slot < 0 || slot >= _items.Count) return null;
+
+            if (slot < _cellRoots.Length && _cellRoots[slot]?.Tag is CellParts gridParts)
+
+                return gridParts;
+
+            var card = _freeformCards.FirstOrDefault(c => _items.IndexOf(c.Item) == slot);
+
+            if (card?.Container.Tag is CellParts cardParts)
+
+                return cardParts;
+
+            return null;
+
+        }
+
+        public void SelectCell(int slot)
+
+        {
+
+            if (_selectedSlot == slot) return;
+
+            if (_selectedSlot >= 0)
+
+            {
+
+                GetCellParts(_selectedSlot)?.SetSelected?.Invoke(false);
+
+            }
+
+            _selectedSlot = slot;
+
+            if (_selectedSlot >= 0)
+
+            {
+
+                GetCellParts(_selectedSlot)?.SetSelected?.Invoke(true);
+
+            }
+
+        }
+
+        public void DeselectCell()
+
+        {
+
+            SelectCell(-1);
+
+        }
+
+        private void HudMenu_Opened(object? sender, object e)
+
+        {
+
+            _hudMenusOpen++;
+
+            ShowHudFromUser();
+
+            EnforceDarkFlyoutPresenter();
+
+        }
+
+        private void EnforceDarkFlyoutPresenter()
+
+        {
+
+            if (XamlRoot == null) return;
+
+            try
+
+            {
+
+                var popups = VisualTreeHelper.GetOpenPopupsForXamlRoot(XamlRoot);
+
+                foreach (var popup in popups)
+
+                {
+
+                    if (popup.Child is MenuFlyoutPresenter presenter)
+
+                    {
+
+                        presenter.RequestedTheme = ElementTheme.Dark;
+
+                        presenter.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(242, 32, 32, 32));
+
+                        presenter.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(51, 255, 255, 255));
+
+                        presenter.BorderThickness = new Thickness(1);
+
+                        presenter.CornerRadius = new CornerRadius(10);
+
+                    }
+
+                }
+
+            }
+
+            catch { }
+
+        }
+
+        private void HudMenu_Closed(object? sender, object e)
+
+        {
+
+            _hudMenusOpen = Math.Max(0, _hudMenusOpen - 1);
+
+            ShowHudAndOverlays();
+
+            NoteUserAction();
+
+        }
+
+        private void HideHudAndOverlays()
+
+        {
+
+            if (_isPointerOverHud || _hudMenusOpen > 0 || _openCellMenu?.IsOpen == true) return;
+
+            _hudTimer.Stop();
+
+            _isHudVisible = false;
+
+            UnifiedHud.Opacity = 0.0;
+
+            UnifiedHud.IsHitTestVisible = false;
+
+            HudTranslate.Y = 15;
+
+            if (HudScrim != null) HudScrim.Opacity = 0.0;
+
+            SoloInfoOverlay.Opacity = 0.0;
+
+            SoloBottomBar.Opacity = 0.0;
+
+            SoloBottomBar.IsHitTestVisible = false;
+
+            SoloTopRightControls.Opacity = 0.0;
+
+            SoloTopRightControls.IsHitTestVisible = false;
+
+            SetPlaceholderOpacity(0.0);
+
+            foreach (var ctrl in _cellTopControls)
+
+            {
+
+                if (ctrl is FrameworkElement fe && fe.Tag is bool isSel && isSel) continue;
+
+                ctrl.Opacity = 0.0;
+
+                ctrl.IsHitTestVisible = false;
+
+            }
+
+        }
+
+        private void HudTimer_Tick(object? sender, object e)
+
+        {
+
+            HideHudAndOverlays();
+
+        }
+
+        #endregion
+
+        #region Layout & Cell Construction
+
+        private void AddCell(Grid targetGrid, ImageItem item, int row, int col, int rowSpan, int colSpan, int index)
+
+        {
+
+            var cell = CreateCell(item, index);
+
+            Grid.SetRow(cell, row);
+
+            Grid.SetColumn(cell, col);
+
+            if (rowSpan > 1) Grid.SetRowSpan(cell, rowSpan);
+
+            if (colSpan > 1) Grid.SetColumnSpan(cell, colSpan);
+
+            targetGrid.Children.Add(cell);
+
+            if ((uint)index < (uint)_cellRoots.Length)
+
+                _cellRoots[index] = cell;
+
+        }
+
+        private FrameworkElement CreateCell(ImageItem item, int index, bool isFreeform = false)
+
+        {
+
+            var slotGrid = new Grid
+
+            {
+
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+
+                VerticalAlignment = VerticalAlignment.Stretch
+
+            };
+
+            var cellBorder = new Border
+
+            {
+
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 28, 28, 28)),
+
+                BorderThickness = new Thickness(0),
+
+                Margin = new Thickness(0)
+
+            };
+
+            var cellGrid = new FreeformCellGrid
+
+            {
+
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(1, 0, 0, 0)), // Hit-testable
+
+                ManipulationMode = ManipulationModes.None
+
+            };
+
+            var transform = new CompositeTransform();
+
+            _cellTransforms.Add(transform);
+
+            var imgContainer = new Grid
+
+            {
+
+                HorizontalAlignment = HorizontalAlignment.Center,
+
+                VerticalAlignment = VerticalAlignment.Center,
+
+                RenderTransformOrigin = new Point(0.5, 0.5),
+
+                RenderTransform = transform,
+
+                IsHitTestVisible = false // Ensure all pointer events go directly to cellGrid
+
+            };
+
+            // Until the picture has decoded, its shape is a guess, and clamping to that would wipe a saved pan.
+
+            bool decodedSize = false;
+
+            double naturalWidth = 16.0;
+
+            double naturalHeight = 9.0;
+
+            if (item.Thumbnail is BitmapSource bs && bs.PixelWidth > 0 && bs.PixelHeight > 0)
+
+            {
+
+                naturalWidth = bs.PixelWidth;
+
+                naturalHeight = bs.PixelHeight;
+
+            }
+
+            Image? thumb = null;
+
+            if (item.Thumbnail != null)
+
+            {
+
+                thumb = new Image
+
+                {
+
+                    Source = item.Thumbnail,
+
+                    Stretch = Stretch.Uniform,
+
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+
+                    VerticalAlignment = VerticalAlignment.Stretch
+
+                };
+
+                imgContainer.Children.Add(thumb);
+
+            }
+
+            var fullImg = new Image
+
+            {
+
+                Stretch = Stretch.Uniform,
+
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+
+                VerticalAlignment = VerticalAlignment.Stretch
+
+            };
+
+            var photo = new CellPhoto(item)
+
+            {
+
+                SetDimensions = (w, h) => { naturalWidth = w; naturalHeight = h; decodedSize = true; },
+
+                GetDimensions = () => (naturalWidth, naturalHeight)
+
+            };
+
+            // A turned photo needs a different box. The container stays unturned and its transform turns it.
+
+            (double Cos, double Sin) ImageTurn()
+
+            {
+
+                double radians = GetGeometry(photo.Item).ImageAngle * Math.PI / 180;
+
+                return (Math.Abs(Math.Cos(radians)), Math.Abs(Math.Sin(radians)));
+
+            }
+
+            // Layout & Clamping helpers for this cell
+
+            void ClampTranslation()
+
+            {
+
+                double cellW = cellGrid.ActualWidth;
+
+                double cellH = cellGrid.ActualHeight;
+
+                if (cellW <= 0 || cellH <= 0 || imgContainer.Width <= 0 || imgContainer.Height <= 0) return;
+
+                var turn = ImageTurn();
+
+                double effW = (imgContainer.Width * turn.Cos + imgContainer.Height * turn.Sin) * transform.ScaleX;
+
+                double effH = (imgContainer.Width * turn.Sin + imgContainer.Height * turn.Cos) * transform.ScaleY;
+
+                if (effW > cellW)
+
+                {
+
+                    double maxPanX = (effW - cellW) / 2.0;
+
+                    if (isFreeform) maxPanX = Math.Max(maxPanX, Math.Max(cellW, effW));
+
+                    transform.TranslateX = Math.Clamp(transform.TranslateX, -maxPanX, maxPanX);
+
+                }
+
+                else if (isFreeform)
+
+                {
+
+                    double maxPanX = Math.Max(cellW, effW);
+
+                    transform.TranslateX = Math.Clamp(transform.TranslateX, -maxPanX, maxPanX);
+
+                }
+
+                else
+
+                {
+
+                    transform.TranslateX = 0;
+
+                }
+
+                if (effH > cellH)
+
+                {
+
+                    double maxPanY = (effH - cellH) / 2.0;
+
+                    if (isFreeform) maxPanY = Math.Max(maxPanY, Math.Max(cellH, effH));
+
+                    transform.TranslateY = Math.Clamp(transform.TranslateY, -maxPanY, maxPanY);
+
+                }
+
+                else if (isFreeform)
+
+                {
+
+                    double maxPanY = Math.Max(cellH, effH);
+
+                    transform.TranslateY = Math.Clamp(transform.TranslateY, -maxPanY, maxPanY);
+
+                }
+
+                else
+
+                {
+
+                    transform.TranslateY = 0;
+
+                }
+
+            }
+
+            void UpdateImageLayout()
+
+            {
+
+                double cellW = cellGrid.ActualWidth;
+
+                double cellH = cellGrid.ActualHeight;
+
+                if (cellW <= 0 || cellH <= 0 || naturalWidth <= 0 || naturalHeight <= 0) return;
+
+                cellGrid.Clip = new RectangleGeometry { Rect = new Rect(0, 0, cellW, cellH) };
+
+                // Fill covers the whole cell with no bars, at any turn. Fit keeps the whole photo inside it.
+
+                var turn = ImageTurn();
+
+                var cover = WindowShapes.CoverBox(GetGeometry(photo.Item), cellW, cellH);
+
+                double scale = _isFillMode
+
+                    ? Math.Max(cover.Width / naturalWidth, cover.Height / naturalHeight)
+
+                    : Math.Min(cellW / (naturalWidth * turn.Cos + naturalHeight * turn.Sin), cellH / (naturalWidth * turn.Sin + naturalHeight * turn.Cos));
+
+                imgContainer.Width = naturalWidth * scale;
+
+                imgContainer.Height = naturalHeight * scale;
+
+                if (decodedSize) ClampTranslation();
+
+            }
+
+            Action updateLayout = UpdateImageLayout;
+
+            _layoutUpdaters.Add(updateLayout);
+
+            cellGrid.SizeChanged += (s, e) =>
+
+            {
+
+                if (e.NewSize.Width > 0 && e.NewSize.Height > 0)
+
+                {
+
+                    UpdateImageLayout();
+
+                }
+
+            };
+
+            void MarkFailed(ImageItem failedItem)
+
+            {
+
+                if (!ReferenceEquals(photo.Item, failedItem)) return;
+
+                photo.Failed = true;
+
+                ShowEmptyState(Slot(failedItem));
+
+            }
+
+            void LoadPhoto()
+
+            {
+
+                var current = photo.Item;
+
+                photo.Failed = false;
+
+                if (IsEmptyCell(current))
+
+                {
+
+                    fullImg.Source = null;
+
+                    if (thumb != null && imgContainer.Children.Contains(thumb))
+
+                    {
+
+                        imgContainer.Children.Remove(thumb);
+
+                        thumb = null;
+
+                    }
+
+                    return;
+
+                }
+
+                if (_reuseBitmaps != null && _reuseBitmaps.TryGetValue(current.Path, out var decoded))
+
+                {
+
+                    naturalWidth = decoded.PixelWidth;
+
+                    naturalHeight = decoded.PixelHeight;
+
+                    decodedSize = true;
+
+                    fullImg.Source = decoded;
+
+                    if (thumb != null && imgContainer.Children.Contains(thumb))
+
+                    {
+
+                        imgContainer.Children.Remove(thumb);
+
+                        thumb = null;
+
+                    }
+
+                    UpdateImageLayout();
+
+                    return;
+
+                }
+
+                if (current.Thumbnail is BitmapSource bs && bs.PixelWidth > 0 && bs.PixelHeight > 0)
+
+                {
+
+                    naturalWidth = bs.PixelWidth;
+
+                    naturalHeight = bs.PixelHeight;
+
+                    UpdateImageLayout();
+
+                }
+
+                try
+
+                {
+
+                    var bmp = new BitmapImage();
+
+                    bmp.UriSource = new Uri(current.Path, UriKind.Absolute);
+
+                    bmp.ImageOpened += (_, _) =>
+
+                    {
+
+                        if (!ReferenceEquals(photo.Item, current)) return;
+
+                        if (bmp.PixelWidth > 0 && bmp.PixelHeight > 0)
+
+                        {
+
+                            naturalWidth = bmp.PixelWidth;
+
+                            naturalHeight = bmp.PixelHeight;
+
+                            decodedSize = true;
+
+                            UpdateImageLayout();
+
+                        }
+
+                        // The thumbnail would show through a transparent photo, and is no longer needed.
+
+                        if (thumb != null && imgContainer.Children.Contains(thumb))
+
+                        {
+
+                            imgContainer.Children.Remove(thumb);
+
+                            thumb = null;
+
+                        }
+
+                    };
+
+                    bmp.ImageFailed += (_, _) => MarkFailed(current);
+
+                    fullImg.Source = bmp;
+
+                }
+
+                catch
+
+                {
+
+                    // A path that is not a valid address never reaches ImageFailed.
+
+                    MarkFailed(current);
+
+                }
+
+            }
+
+            photo.Reload = LoadPhoto;
+
+            photo.ApplyGeometry = () =>
+
+            {
+
+                var geometry = GetGeometry(photo.Item);
+
+                transform.Rotation = geometry.ImageAngle;
+
+                double flipX = geometry.ImageFlipH ? -1 : 1;
+
+                double flipY = geometry.ImageFlipV ? -1 : 1;
+
+                fullImg.RenderTransformOrigin = new Point(0.5, 0.5);
+
+                fullImg.RenderTransform = new ScaleTransform { ScaleX = flipX, ScaleY = flipY };
+
+                if (thumb != null)
+
+                {
+
+                    thumb.RenderTransformOrigin = new Point(0.5, 0.5);
+
+                    thumb.RenderTransform = new ScaleTransform { ScaleX = flipX, ScaleY = flipY };
+
+                }
+
+                UpdateImageLayout();
+
+            };
+
+            LoadPhoto();
+
+            imgContainer.Children.Add(fullImg);
+
+            cellGrid.Children.Add(imgContainer);
+
+            // Per-cell Pan & Zoom handling
+
+            bool isDragging = false;
+
+            Point lastPoint = default;
+
+            uint dragPointerId = 0;
+
+            Point dragStartPoint = default;
+
+            bool hasDraggedCell = false;
+
+            bool isMovingCard = false;
+
+            Point dragStartInRoot = default;
+
+            double startLeft = 0;
+
+            double startTop = 0;
+
+            uint movePointerId = 0;
+
+            cellGrid.PointerPressed += (s, e) =>
+
+            {
+
+                ShowHudAndOverlays();
+
+                var prop = e.GetCurrentPoint(cellGrid).Properties;
+
+                if (prop.IsMiddleButtonPressed)
+
+                {
+
+                    // Middle-click: Reset zoom & pan
+
+                    transform.ScaleX = 1.0;
+
+                    transform.ScaleY = 1.0;
+
+                    transform.TranslateX = 0;
+
+                    transform.TranslateY = 0;
+
+                    ClampTranslation();
+
+                    e.Handled = true;
+
+                    return;
+
+                }
+
+                if (prop.IsLeftButtonPressed)
+
+                {
+
+                    bool isAlt = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Menu).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+
+                    if (isAlt)
+
+                    {
+
+                        e.Handled = true;
+
+                        _ = StartSwapDragAsync(cellGrid, e.GetCurrentPoint(cellGrid), Slot(photo.Item));
+
+                        return;
+
+                    }
+
+                    if (isFreeform)
+
+                    {
+
+                        bool isCtrl = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+
+                        if (isCtrl || prop.IsMiddleButtonPressed)
+
+                        {
+
+                            // Ctrl-mouse drag or Middle-button drag: PAN photo inside freeform cell!
+
+                            isDragging = true;
+
+                            lastPoint = e.GetCurrentPoint(cellGrid).Position;
+
+                            dragStartPoint = lastPoint;
+
+                            hasDraggedCell = false;
+
+                            dragPointerId = e.Pointer.PointerId;
+
+                            cellGrid.CapturePointer(e.Pointer);
+
+                            e.Handled = true;
+
+                            return;
+
+                        }
+
+                        // Normal mouse drag without Ctrl: MOVE the freeform window around
+
+                        isMovingCard = true;
+
+                        movePointerId = e.Pointer.PointerId;
+
+                        dragStartInRoot = e.GetCurrentPoint(RootGrid).Position;
+
+                        startLeft = Canvas.GetLeft(slotGrid);
+
+                        if (double.IsNaN(startLeft)) startLeft = 0;
+
+                        startTop = Canvas.GetTop(slotGrid);
+
+                        if (double.IsNaN(startTop)) startTop = 0;
+
+                        cellGrid.CapturePointer(e.Pointer);
+
+                        e.Handled = true;
+
+                        return;
+
+                    }
+
+                    isDragging = true;
+
+                    lastPoint = e.GetCurrentPoint(cellGrid).Position;
+
+                    dragStartPoint = lastPoint;
+
+                    hasDraggedCell = false;
+
+                    dragPointerId = e.Pointer.PointerId;
+
+                    cellGrid.CapturePointer(e.Pointer);
+
+                    e.Handled = true;
+
+                }
+
+            };
+
+            cellGrid.PointerMoved += (s, e) =>
+
+            {
+
+                ShowHudAndOverlays();
+
+                if (isFreeform && !isMovingCard && !isDragging)
+
+                {
+
+                    bool isCtrlHover = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+
+                    cellGrid.SetCursor(isCtrlHover ? InputSystemCursorShape.Hand : InputSystemCursorShape.SizeAll);
+
+                }
+
+                if (isFreeform && isMovingCard && e.Pointer.PointerId == movePointerId)
+
+                {
+
+                    Point cur = e.GetCurrentPoint(RootGrid).Position;
+
+                    double dx = cur.X - dragStartInRoot.X;
+
+                    double dy = cur.Y - dragStartInRoot.Y;
+
+                    double boundW = Math.Max(200, RootGrid.ActualWidth > 0 ? RootGrid.ActualWidth : 1280);
+
+                    double boundH = Math.Max(150, RootGrid.ActualHeight > 0 ? RootGrid.ActualHeight : 720);
+
+                    double cardW = slotGrid.Width > 0 ? slotGrid.Width : (slotGrid.ActualWidth > 0 ? slotGrid.ActualWidth : 300);
+
+                    double cardH = slotGrid.Height > 0 ? slotGrid.Height : (slotGrid.ActualHeight > 0 ? slotGrid.ActualHeight : 200);
+
+                    double newX = FreeformBounds.Move(startLeft + dx, cardW, boundW);
+
+                    double newY = FreeformBounds.Move(startTop + dy, cardH, boundH);
+
+                    var snapped = SnapDraggedCard(slotGrid, newX, newY, cardW, cardH);
+
+                    newX = FreeformBounds.Move(snapped.X, cardW, boundW);
+
+                    newY = FreeformBounds.Move(snapped.Y, cardH, boundH);
+
+                    Canvas.SetLeft(slotGrid, newX);
+
+                    Canvas.SetTop(slotGrid, newY);
+
+                    e.Handled = true;
+
+                    
+                    SyncCanvasToSelectedScene(showToast: false);
+                    CaptureUndoPoint();
+                    return;
+
+                }
+
+                if (isDragging && e.Pointer.PointerId == dragPointerId)
+
+                {
+
+                    var currentPoint = e.GetCurrentPoint(cellGrid).Position;
+
+                    double dx = currentPoint.X - lastPoint.X;
+
+                    double dy = currentPoint.Y - lastPoint.Y;
+
+                    if (Math.Abs(currentPoint.X - dragStartPoint.X) > 4 || Math.Abs(currentPoint.Y - dragStartPoint.Y) > 4)
+
+                    {
+
+                        hasDraggedCell = true;
+
+                    }
+
+                    transform.TranslateX += dx;
+
+                    transform.TranslateY += dy;
+
+                    ClampTranslation();
+
+                    lastPoint = currentPoint;
+
+                    e.Handled = true;
+
+                }
+
+            };
+
+            // A tap, so a drag on an empty floating cell still moves it.
+
+            cellGrid.Tapped += (s, e) =>
+
+            {
+
+                SelectCell(Slot(photo.Item));
+
+                if (!IsEmptyCell(photo.Item) || IsBareCanvas(_items.IndexOf(photo.Item))) return;
+
+                e.Handled = true;
+
+                AddImageRequested?.Invoke(this, photo.Item);
+
+            };
+
+            cellGrid.PointerReleased += (s, e) =>
+
+            {
+
+                if (isFreeform && isMovingCard && e.Pointer.PointerId == movePointerId)
+
+                {
+
+                    isMovingCard = false;
+
+                    HideSnapGuides();
+
+                    try { cellGrid.ReleasePointerCapture(e.Pointer); } catch { }
+
+                    e.Handled = true;
+
+                    return;
+
+                }
+
+                if (e.Pointer.PointerId == dragPointerId)
+
+                {
+
+                    bool wasDragging = isDragging;
+
+                    if (isDragging)
+
+                    {
+
+                        isDragging = false;
+
+                        try { cellGrid.ReleasePointerCapture(e.Pointer); } catch { }
+
+                        SyncCanvasToSelectedScene(showToast: false);
+                        CaptureUndoPoint();
+                        e.Handled = true;
+
+                    }
+
+                    if (!hasDraggedCell && !isMovingCard)
+
+                    {
+
+                        SelectCell(Slot(photo.Item));
+
+                    }
+
+                }
+
+            };
+
+            cellGrid.PointerCanceled += (s, e) =>
+
+            {
+
+                if (isMovingCard)
+
+                {
+
+                    isMovingCard = false;
+
+                    HideSnapGuides();
+
+                    try { cellGrid.ReleasePointerCapture(e.Pointer); } catch { }
+
+                }
+
+                if (isDragging)
+
+                {
+
+                    isDragging = false;
+
+                    try { cellGrid.ReleasePointerCapture(e.Pointer); } catch { }
+
+                }
+
+            };
+
+            cellGrid.PointerWheelChanged += (s, e) =>
+
+            {
+
+                ShowHudAndOverlays();
+
+                var ptr = e.GetCurrentPoint(cellGrid);
+
+                int delta = ptr.Properties.MouseWheelDelta;
+
+                double zoomFactor = delta > 0 ? 1.15 : (1.0 / 1.15);
+
+                double cellW = cellGrid.ActualWidth;
+
+                double cellH = cellGrid.ActualHeight;
+
+                var wheelTurn = ImageTurn();
+
+                double baseW = imgContainer.Width * wheelTurn.Cos + imgContainer.Height * wheelTurn.Sin;
+
+                double baseH = imgContainer.Width * wheelTurn.Sin + imgContainer.Height * wheelTurn.Cos;
+
+                // Scale factor where whole picture fits into cell (unlock zoom out in fill mode!)
+
+                double fitScale = 1.0;
+
+                if (baseW > 0 && baseH > 0 && cellW > 0 && cellH > 0)
+
+                {
+
+                    fitScale = Math.Min(cellW / baseW, cellH / baseH);
+
+                }
+
+                double minScale = Math.Min(fitScale * 0.8, 0.15);
+
+                double maxScale = 10.0;
+
+                double oldScale = transform.ScaleX;
+
+                double newScale = Math.Clamp(oldScale * zoomFactor, minScale, maxScale);
+
+                Point pos = ptr.Position;
+
+                double cx = cellW / 2.0;
+
+                double cy = cellH / 2.0;
+
+                // Cursor-anchored zoom with RenderTransformOrigin = (0.5, 0.5)
+
+                transform.TranslateX = (pos.X - cx) - (pos.X - cx - transform.TranslateX) * (newScale / oldScale);
+
+                transform.TranslateY = (pos.Y - cy) - (pos.Y - cy - transform.TranslateY) * (newScale / oldScale);
+
+                transform.ScaleX = newScale;
+
+                transform.ScaleY = newScale;
+
+                ClampTranslation();
+
+                e.Handled = true;
+
+            };
+
+            cellGrid.DoubleTapped += (s, e) =>
+
+            {
+
+                ShowHudAndOverlays();
+
+                e.Handled = true;
+
+                if (Math.Abs(transform.ScaleX - 1.0) > 0.05 || Math.Abs(transform.TranslateX) > 1 || Math.Abs(transform.TranslateY) > 1)
+
+                {
+
+                    // Reset to default fill/fit
+
+                    transform.ScaleX = 1.0;
+
+                    transform.ScaleY = 1.0;
+
+                    transform.TranslateX = 0;
+
+                    transform.TranslateY = 0;
+
+                }
+
+                else
+
+                {
+
+                    // Zoom to 2.0x centered at click position
+
+                    Point pos = e.GetPosition(cellGrid);
+
+                    double cx = cellGrid.ActualWidth / 2.0;
+
+                    double cy = cellGrid.ActualHeight / 2.0;
+
+                    double oldScale = transform.ScaleX;
+
+                    double newScale = 2.0;
+
+                    transform.TranslateX = (pos.X - cx) - (pos.X - cx - transform.TranslateX) * (newScale / oldScale);
+
+                    transform.TranslateY = (pos.Y - cy) - (pos.Y - cy - transform.TranslateY) * (newScale / oldScale);
+
+                    transform.ScaleX = newScale;
+
+                    transform.ScaleY = newScale;
+
+                }
+
+                ClampTranslation();
+
+            };
+
+            // Selection Border (Active tile indicator: 2px Fluent blue accent #4CC2FF)
+
+            var selectionBorder = new Border
+
+            {
+
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+
+                VerticalAlignment = VerticalAlignment.Stretch,
+
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x4C, 0xC2, 0xFF)),
+
+                BorderThickness = new Thickness(2),
+
+                CornerRadius = new CornerRadius(4),
+
+                Margin = isFreeform ? new Thickness(0) : new Thickness(1),
+
+                IsHitTestVisible = false,
+
+                Visibility = Visibility.Collapsed
+
+            };
+
+            Canvas.SetZIndex(selectionBorder, 204);
+
+            slotGrid.Children.Add(selectionBorder);
+
+            // Top-Right Contextual Micro-HUD Pill
+
+            var topControls = new Border
+
+            {
+
+                HorizontalAlignment = HorizontalAlignment.Right,
+
+                VerticalAlignment = VerticalAlignment.Top,
+
+                Margin = isFreeform ? new Thickness(0, 10, 22, 0) : new Thickness(0, 8, 8, 0),
+
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(234, 30, 30, 30)),
+
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(64, 255, 255, 255)),
+
+                BorderThickness = new Thickness(1),
+
+                CornerRadius = new CornerRadius(16),
+
+                Padding = new Thickness(4, 2, 4, 2),
+
+                Height = 32,
+
+                Opacity = 0.0,
+
+                IsHitTestVisible = false
+
+            };
+
+            Canvas.SetZIndex(topControls, 205);
+
+            topControls.PointerEntered += Hud_PointerEntered;
+
+            topControls.PointerExited += Hud_PointerExited;
+
+            _cellTopControls.Add(topControls);
+
+            bool isCellHovered = false;
+
+            bool isMenuOpen = false;
+
+            bool isCellSelected = false;
+
+            void UpdateCardElevation()
+
+            {
+
+                if (!isFreeform) return;
+
+                var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Container, slotGrid));
+
+                if (card == null) return;
+
+                bool active = isCellSelected || isMenuOpen || isCellHovered;
+
+                if (active)
+
+                {
+
+                    Canvas.SetZIndex(slotGrid, 8900);
+
+                    slotGrid.Translation = new Vector3(0, 0, 800);
+
+                }
+
+                else
+
+                {
+
+                    Canvas.SetZIndex(slotGrid, card.ZIndex);
+
+                    slotGrid.Translation = new Vector3(0, 0, 256 + ((card.ZIndex - 5000) * 8));
+
+                }
+
+            }
+
+            void UpdateHudVisibility()
+
+            {
+
+                bool show = isCellSelected || isMenuOpen || (_isHudVisible && isCellHovered);
+
+                topControls.Opacity = show ? 1.0 : 0.0;
+
+                topControls.IsHitTestVisible = show;
+
+                topControls.Tag = isCellSelected;
+
+            }
+
+            void SetCellHover(bool hovered)
+
+            {
+
+                isCellHovered = hovered;
+
+                UpdateHudVisibility();
+
+                UpdateCardElevation();
+
+            }
+
+            void SetCellSelected(bool selected)
+
+            {
+
+                isCellSelected = selected;
+
+                if (selected)
+
+                {
+
+                    selectionBorder.CornerRadius = new CornerRadius(Math.Max(4, cellBorder.CornerRadius.TopLeft));
+
+                }
+
+                selectionBorder.Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
+
+                UpdateHudVisibility();
+
+                UpdateCardElevation();
+
+            }
+
+            // A floating cell's buttons can sit past its shape, where nothing is under the pointer, so they wait for it to arrive.
+
+            DispatcherTimer? hoverOff = null;
+
+            if (isFreeform)
+
+            {
+
+                hoverOff = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(WindowHoverGraceMs) };
+
+                hoverOff.Tick += (s, e) =>
+
+                {
+
+                    hoverOff.Stop();
+
+                    SetCellHover(false);
+
+                };
+
+            }
+
+            slotGrid.PointerEntered += (s, e) =>
+
+            {
+
+                hoverOff?.Stop();
+
+                SetCellHover(true);
+
+            };
+
+            slotGrid.PointerExited += (s, e) =>
+
+            {
+
+                if (hoverOff != null) hoverOff.Start();
+
+                else SetCellHover(false);
+
+            };
+
+            cellGrid.PointerMoved += (s, e) =>
+
+            {
+
+                if (_isHudVisible && !topControls.IsHitTestVisible)
+
+                    SetCellHover(true);
+
+            };
+
+            Button MakePillButton(string glyph, string toolTip, int fontSize = 11)
+
+            {
+
+                var btn = new Button
+
+                {
+
+                    Width = 28,
+
+                    Height = 26,
+
+                    Padding = new Thickness(0),
+
+                    Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+
+                    BorderThickness = new Thickness(0),
+
+                    CornerRadius = new CornerRadius(13),
+
+                    IsTabStop = false,
+
+                    UseSystemFocusVisuals = false,
+
+                    FocusVisualPrimaryThickness = new Thickness(0),
+
+                    FocusVisualSecondaryThickness = new Thickness(0),
+
+                    Content = new FontIcon
+
+                    {
+
+                        FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
+
+                        Glyph = glyph,
+
+                        FontSize = fontSize,
+
+                        Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(240, 255, 255, 255))
+
+                    }
+
+                };
+
+                btn.Resources["ButtonBackgroundPointerOver"] = new SolidColorBrush(Windows.UI.Color.FromArgb(32, 255, 255, 255));
+
+                btn.Resources["ButtonBackgroundPressed"] = new SolidColorBrush(Windows.UI.Color.FromArgb(20, 255, 255, 255));
+
+                btn.Resources["ButtonForegroundPointerOver"] = new SolidColorBrush(Microsoft.UI.Colors.White);
+
+                btn.Resources["ButtonForegroundPressed"] = new SolidColorBrush(Windows.UI.Color.FromArgb(200, 255, 255, 255));
+
+                ToolTipService.SetToolTip(btn, toolTip);
+
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(btn, toolTip);
+
+                return btn;
+
+            }
+
+            var topStack = new StackPanel
+
+            {
+
+                Orientation = Orientation.Horizontal,
+
+                Spacing = 2,
+
+                VerticalAlignment = VerticalAlignment.Center
+
+            };
+
+            // 1. Swap / Replace Button
+
+            var swapBtn = MakePillButton("\uE8AB", "Replace / Swap");
+
+            var swapMenu = new MenuFlyout
+
+            {
+
+                MenuFlyoutPresenterStyle = (Style)Resources["MultiViewMenuFlyoutPresenterStyle"]
+
+            };
+
+            swapMenu.Opening += (s, e) =>
+
+            {
+
+                swapMenu.Items.Clear();
+
+                int curSlot = Slot(photo.Item);
+
+                int inTray = TrayImages().Count;
+
+                var fromPool = MakeAdvancedItem(inTray > 0 ? $"From Image Pool ({inTray})\u2026" : "From Image Pool\u2026", "\uE8B9", () => ShowTrayCard(curSlot));
+
+                swapMenu.Items.Add(fromPool);
+
+                var browse = MakeAdvancedItem("Browse Image File\u2026", "\uE8E5", () => AddImageRequested?.Invoke(this, photo.Item));
+
+                swapMenu.Items.Add(browse);
+
+                if (!IsEmptyCell(photo.Item))
+
+                {
+
+                    var moveToPool = MakeAdvancedItem("Move to Image Pool", "\uE8DE", () => MoveCellToTray(photo.Item));
+
+                    swapMenu.Items.Add(moveToPool);
+
+                }
+
+                if (_items.Count > 1)
+
+                {
+
+                    swapMenu.Items.Add(new MenuFlyoutSeparator());
+
+                    swapMenu.Items.Add(MakeCellTargetMenu("Swap with Position\u2026", "\uE8AB", "Swap with", curSlot,
+
+                        (target, withAttr) => SwapItems(curSlot, target, withAttr)));
+
+                }
+
+            };
+
+            swapMenu.Opened += (s, e) =>
+
+            {
+
+                isMenuOpen = true;
+
+                _openCellMenu = swapMenu;
+
+                EnforceDarkFlyoutPresenter();
+
+                UpdateHudVisibility();
+
+                UpdateCardElevation();
+
+            };
+
+            swapMenu.Closed += (s, e) =>
+
+            {
+
+                isMenuOpen = false;
+
+                if (ReferenceEquals(_openCellMenu, swapMenu)) _openCellMenu = null;
+
+                UpdateHudVisibility();
+
+                UpdateCardElevation();
+
+            };
+
+            swapBtn.Flyout = swapMenu;
+
+            topStack.Children.Add(swapBtn);
+
+            // 2. Window Shape Button
+
+            var shapeBtn = MakePillButton("\uE7C5", "Window Shape");
+
+            var shapeMenu = new MenuFlyout
+
+            {
+
+                MenuFlyoutPresenterStyle = (Style)Resources["MultiViewMenuFlyoutPresenterStyle"]
+
+            };
+
+            shapeMenu.Opening += (s, e) =>
+
+            {
+
+                shapeMenu.Items.Clear();
+
+                var windowSub = MakeWindowMenu(photo.Item);
+
+                while (windowSub.Items.Count > 0)
+
+                {
+
+                    var mItem = windowSub.Items[0];
+
+                    windowSub.Items.RemoveAt(0);
+
+                    shapeMenu.Items.Add(mItem);
+
+                }
+
+            };
+
+            shapeMenu.Opened += (s, e) =>
+
+            {
+
+                isMenuOpen = true;
+
+                _openCellMenu = shapeMenu;
+
+                EnforceDarkFlyoutPresenter();
+
+                UpdateHudVisibility();
+
+                UpdateCardElevation();
+
+            };
+
+            shapeMenu.Closed += (s, e) =>
+
+            {
+
+                isMenuOpen = false;
+
+                if (ReferenceEquals(_openCellMenu, shapeMenu)) _openCellMenu = null;
+
+                UpdateHudVisibility();
+
+                UpdateCardElevation();
+
+            };
+
+            shapeBtn.Flyout = shapeMenu;
+
+            topStack.Children.Add(shapeBtn);
+
+            // 3. Frame & Border Button
+
+            var frameBtn = MakePillButton("\uE790", "Frame & Border");
+
+            frameBtn.Click += (s, e) => OpenCellBorderFlyout(photo.Item);
+
+            topStack.Children.Add(frameBtn);
+
+            // 4. Solo / Maximize Button
+
+            var maxBtn = MakePillButton("\uE922", "Solo / Maximize", fontSize: 10);
+
+            maxBtn.Visibility = IsEmptyCell(photo.Item) ? Visibility.Collapsed : Visibility.Visible;
+
+            maxBtn.Click += (s, e) => EnterSolo(Slot(photo.Item));
+
+            topStack.Children.Add(maxBtn);
+
+            // Hairline separator
+
+            var sep = new Border
+
+            {
+
+                Width = 1,
+
+                Height = 14,
+
+                Margin = new Thickness(2, 0, 2, 0),
+
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(48, 255, 255, 255)),
+
+                VerticalAlignment = VerticalAlignment.Center
+
+            };
+
+            topStack.Children.Add(sep);
+
+            // 5. Close / Remove Button
+
+            var closeBtn = MakePillButton("\uE8BB", "Remove cell", fontSize: 10);
+
+            closeBtn.Resources["ButtonBackgroundPointerOver"] = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 196, 43, 28));
+
+            closeBtn.Resources["ButtonBackgroundPressed"] = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 153, 27, 16));
+
+            closeBtn.Resources["ButtonForegroundPointerOver"] = new SolidColorBrush(Microsoft.UI.Colors.White);
+
+            closeBtn.Resources["ButtonForegroundPressed"] = new SolidColorBrush(Microsoft.UI.Colors.White);
+
+            closeBtn.Click += (s, e) => RemoveItem(photo.Item);
+
+            topStack.Children.Add(closeBtn);
+
+            void UpdatePillCompactness(double w)
+
+            {
+
+                bool isTight = w > 0 && w < 100;
+
+                bool compact = w > 0 && w < 130;
+
+                shapeBtn.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+
+                frameBtn.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+
+                sep.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+
+                maxBtn.Visibility = (isTight || IsEmptyCell(photo.Item)) ? Visibility.Collapsed : Visibility.Visible;
+
+            }
+
+            slotGrid.SizeChanged += (s, e) => UpdatePillCompactness(e.NewSize.Width);
+
+            topControls.Child = topStack;
+
+            // These sit on the cell, outside the shape's clip.
+
+            slotGrid.Children.Add(topControls);
+
+            // Top-Left Position Badge (for right-click Swap / Move target indication)
+
+            var positionBadge = new Border
+
+            {
+
+                HorizontalAlignment = HorizontalAlignment.Left,
+
+                VerticalAlignment = VerticalAlignment.Top,
+
+                Margin = new Thickness(10),
+
+                Padding = new Thickness(8, 3, 8, 3),
+
+                CornerRadius = new CornerRadius(6),
+
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(220, 20, 20, 20)),
+
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(80, 255, 255, 255)),
+
+                BorderThickness = new Thickness(1),
+
+                Opacity = 0.0,
+
+                IsHitTestVisible = false
+
+            };
+
+            Canvas.SetZIndex(positionBadge, 206);
+
+            var badgeText = new TextBlock
+
+            {
+
+                FontSize = 11.5,
+
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+
+                Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
+
+                VerticalAlignment = VerticalAlignment.Center,
+
+                HorizontalAlignment = HorizontalAlignment.Center
+
+            };
+
+            positionBadge.Child = badgeText;
+
+            if (isFreeform)
+
+            {
+
+                // Centred, so a turn cannot take it off the cell. ApplyWindowTurn keeps it upright.
+
+                positionBadge.HorizontalAlignment = HorizontalAlignment.Center;
+
+                positionBadge.VerticalAlignment = VerticalAlignment.Center;
+
+                positionBadge.Margin = new Thickness(0);
+
+                positionBadge.RenderTransformOrigin = new Point(0.5, 0.5);
+
+            }
+
+            slotGrid.Children.Add(positionBadge);
+
+            // Right-Click Context Menu, filled when it opens so it names the photo's current place
+
+            var menu = new MenuFlyout
+
+            {
+
+                MenuFlyoutPresenterStyle = (Style)Resources["MultiViewMenuFlyoutPresenterStyle"]
+
+            };
+
+            // One entry so the menu counts as having something to open. It is filled for real as it opens.
+
+            menu.Items.Add(new MenuFlyoutItem());
+
+            menu.Opening += (_, _) => FillCellMenu(menu, photo.Item);
+
+            // The cell's own buttons show with its menu, and take a click through the menu's light dismiss.
+
+            menu.OverlayInputPassThroughElement = topControls;
+
+            menu.Opened += (_, _) =>
+
+            {
+
+                ShowPositionBadges(Slot(photo.Item));
+
+                EnforceDarkFlyoutPresenter();
+
+                _openCellMenu = menu;
+
+                ShowHudAndOverlays();
+
+                isMenuOpen = true;
+
+                SetCellHover(isCellHovered);
+
+                UpdateCardElevation();
+
+            };
+
+            menu.Closed += (_, _) =>
+
+            {
+
+                HidePositionBadges();
+
+                NoteUserAction();
+
+                if (ReferenceEquals(_openCellMenu, menu)) _openCellMenu = null;
+
+                isMenuOpen = false;
+
+                SetCellHover(isCellHovered);
+
+                ShowHudAndOverlays();
+
+                UpdateCardElevation();
+
+            };
+
+            cellGrid.ContextFlyout = menu;
+
+            // Dashed Border Overlay (for vector dashed stroke style)
+
+            var dashedStroke = new Microsoft.UI.Xaml.Shapes.Rectangle
+
+            {
+
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+
+                VerticalAlignment = VerticalAlignment.Stretch,
+
+                IsHitTestVisible = false,
+
+                Visibility = Visibility.Collapsed
+
+            };
+
+            Canvas.SetZIndex(dashedStroke, 50);
+
+            cellGrid.Children.Add(dashedStroke);
+
+            var rimGlowStroke = new Microsoft.UI.Xaml.Shapes.Rectangle
+
+            {
+
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+
+                VerticalAlignment = VerticalAlignment.Stretch,
+
+                IsHitTestVisible = false,
+
+                Visibility = Visibility.Collapsed
+
+            };
+
+            Canvas.SetZIndex(rimGlowStroke, 48);
+
+            cellGrid.Children.Add(rimGlowStroke);
+
+            AttachSwapDrop(cellBorder, cellGrid, photo);
+
+            var gutterBorder = new Border
+
+            {
+
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+
+                VerticalAlignment = VerticalAlignment.Stretch,
+
+                IsHitTestVisible = false
+
+            };
+
+            var shadowImage = new Image
+
+            {
+
+                IsHitTestVisible = false,
+
+                Stretch = Stretch.Fill,
+
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+
+                VerticalAlignment = VerticalAlignment.Stretch,
+
+                Visibility = Visibility.Collapsed
+
+            };
+
+            gutterBorder.Child = shadowImage;
+
+            gutterBorder.SizeChanged += (_, e) =>
+
+            {
+
+                if (e.NewSize.Width < 2 || e.NewSize.Height < 2) return;
+
+                if (GetGeometry(photo.Item).Shape != WindowShapes.Rectangle) return;
+
+                ApplyDropShadow(gutterBorder, GetBorderForItem(photo.Item));
+
+            };
+
+            Canvas.SetZIndex(gutterBorder, 0);
+
+            Canvas.SetZIndex(cellBorder, 1);
+
+            slotGrid.Children.Add(gutterBorder);
+
+            slotGrid.Children.Add(cellBorder);
+
+            // Shown when the cell has no image
+
+            var placeholder = new StackPanel
+
+            {
+
+                HorizontalAlignment = HorizontalAlignment.Center,
+
+                VerticalAlignment = VerticalAlignment.Center,
+
+                Spacing = 6,
+
+                // A floating cell has whatever is behind it showing through, so the message carries its own backing.
+
+                Padding = new Thickness(14, 10, 14, 10),
+
+                CornerRadius = new CornerRadius(8),
+
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(200, 10, 10, 10)),
+
+                IsHitTestVisible = false,
+
+                Visibility = IsEmptyCell(photo.Item) ? Visibility.Visible : Visibility.Collapsed
+
+            };
+
+            placeholder.Children.Add(new FontIcon
+
+            {
+
+                Glyph = "\uE739",
+
+                FontSize = 26,
+
+                FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
+
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(170, 255, 255, 255)),
+
+                HorizontalAlignment = HorizontalAlignment.Center
+
+            });
+
+            placeholder.Children.Add(new TextBlock
+
+            {
+
+                Text = "Empty cell",
+
+                FontSize = 12,
+
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(200, 255, 255, 255)),
+
+                HorizontalAlignment = HorizontalAlignment.Center
+
+            });
+
+            placeholder.Children.Add(new TextBlock
+
+            {
+
+                Text = "Click to add an image",
+
+                TextAlignment = TextAlignment.Center,
+
+                FontSize = 11,
+
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(170, 255, 255, 255)),
+
+                HorizontalAlignment = HorizontalAlignment.Center
+
+            });
+
+            Canvas.SetZIndex(placeholder, 5);
+
+            cellGrid.Children.Add(placeholder);
+
+            imgContainer.Visibility = IsEmptyCell(photo.Item) ? Visibility.Collapsed : Visibility.Visible;
+
+            var parts = new CellParts(transform, updateLayout, topControls, fullImg, photo, positionBadge, badgeText, dashedStroke, rimGlowStroke, gutterBorder, imgContainer, placeholder, maxBtn, SetCellSelected);
+
+            cellBorder.Tag = parts;
+
+            slotGrid.Tag = parts;
+
+            if (isFreeform)
+
+            {
+
+                AttachWindowResizeHandles(slotGrid, updateLayout);
+
+            }
+
+            else
+
+            {
+
+                slotGrid.SizeChanged += (_, _) => ApplyCellShape(slotGrid, photo.Item, null);
+
+            }
+
+            cellBorder.Child = cellGrid;
+
+            ApplyBorderToCellBorder(cellBorder, cellGrid, photo.Item);
+
+            photo.ApplyGeometry?.Invoke();
+
+            return slotGrid;
+
+        }
+
+        private int Slot(ImageItem item)
+
+        {
+
+            if (item == null) return -1;
+
+            return _items.IndexOf(item);
+
+        }
+
+        private void FillCellMenu(MenuFlyout menu, ImageItem item)
+
+        {
+
+            menu.Items.Clear();
+
+            if (item == null) return;
+
+            int curSlot = Slot(item);
+
+            if (curSlot < 0) return;
+
+            // An empty cell's label asks for this, so it comes first.
+
+            if (IsEmptyCell(item))
+
+            {
+
+                menu.Items.Add(MakeAdvancedItem("Add image\u2026", "\uE8E5", () => AddImageRequested?.Invoke(this, item)));
+
+                int inTray = TrayImages().Count;
+
+                if (inTray > 0)
+
+                    menu.Items.Add(MakeAdvancedItem($"Not on the canvas ({inTray})\u2026", "\uE8B9", () => ShowTrayCard(curSlot)));
+
+                menu.Items.Add(new MenuFlyoutSeparator());
+
+            }
+
+            if (_items.Count > 1)
+
+            {
+
+                var swapMenu = MakeCellTargetMenu("Swap with...", "\uE8AB", "Swap with", curSlot,
+
+                    (target, withAttributes) => SwapItems(curSlot, target, withAttributes));
+
+                int inTray = TrayImages().Count;
+
+                if (inTray > 0 && !IsEmptyCell(item))
+
+                {
+
+                    var fromTray = MakeAdvancedItem($"Not on the canvas ({inTray})\u2026", "\uE8B9", () => ShowTrayCard(curSlot));
+
+                    ToolTipService.SetToolTip(fromTray, "Images that are in the pool. Pick one to place it on the canvas.");
+
+                    swapMenu.Items.Insert(0, fromTray);
+
+                    swapMenu.Items.Insert(1, new MenuFlyoutSeparator());
+
+                }
+
+                menu.Items.Add(swapMenu);
+
+                if (!IsEmptyCell(item))
+
+                {
+
+                    menu.Items.Add(MakeCellTargetMenu("Copy to...", "\uE8C8", "Copy to", curSlot,
+
+                        (target, withAttributes) => CopyItemTo(curSlot, target, withAttributes)));
+
+                    menu.Items.Add(MakeCellTargetMenu("Move to...", "\uE8DE", "Move to", curSlot,
+
+                        (target, withAttributes) => MoveItemTo(curSlot, target, withAttributes)));
+
+                }
+
+                menu.Items.Add(new MenuFlyoutSeparator());
+
+            }
+
+            var borderItem = new MenuFlyoutItem { Text = "Frame & Border\u2026", Icon = new FontIcon { Glyph = "\uE790" } };
+
+            borderItem.Click += (s, e) => OpenCellBorderFlyout(item);
+
+            menu.Items.Add(borderItem);
+
+            menu.Items.Add(MakeWindowMenu(item));
+
+            var activeCard = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, item));
+
+            if (activeCard != null) menu.Items.Add(MakeLayerMenu(activeCard));
+
+            AddCellImageMenu(menu, item);
+
+            if (!IsEmptyCell(item))
+
+            {
+
+                string picture = item.Path;
+
+                var feature = MakeChoiceItem("Feature in Auto-Mix", _featuredPictures.Contains(picture), () =>
+
+                {
+
+                    if (!_featuredPictures.Remove(picture)) _featuredPictures.Add(picture);
+
+                });
+
+                ToolTipService.SetToolTip(feature, "Auto-Mix always uses this image and gives it the best place");
+
+                menu.Items.Add(feature);
+
+            }
+
+            if (activeCard != null)
+
+            {
+
+                menu.Items.Add(new MenuFlyoutSeparator());
+
+                if (!GridHasNoRoomFor(activeCard))
+
+                {
+
+                    var dockItem = new MenuFlyoutItem
+
+                    {
+
+                        Text = "Dock to Grid",
+
+                        Icon = new FontIcon { Glyph = "\uE8CA" }
+
+                    };
+
+                    dockItem.Click += (s, e) =>
+
+                    {
+
+                        DockFreeformCard(activeCard);
+
+                    };
+
+                    menu.Items.Add(dockItem);
+
+                }
+
+                if (!IsEmptyCell(item)) menu.Items.Add(MoveToTrayItem(item));
+
+            }
+
+            else if (!IsEmptyCell(item))
+
+            {
+
+                var freeformItem = new MenuFlyoutItem
+
+                {
+
+                    Text = "Freeform",
+
+                    Icon = new FontIcon { Glyph = "\uEE49" }
+
+                };
+
+                freeformItem.Click += (s, e) => SpawnFreeformCell(item);
+
+                menu.Items.Add(new MenuFlyoutSeparator());
+
+                menu.Items.Add(freeformItem);
+
+                menu.Items.Add(MoveToTrayItem(item));
+
+            }
+
+        }
+
+        private MenuFlyoutItem MoveToTrayItem(ImageItem item)
+
+        {
+
+            var move = MakeAdvancedItem("Move to Image Pool", "\uE8B9", () => MoveCellToTray(item));
+
+            ToolTipService.SetToolTip(move, "Moves image to Image Pool. Restore it anytime from the Image Pool panel.");
+
+            return move;
+
+        }
+
+        /// <summary>
+
+        /// A submenu of the other cells in two columns: the contents alone, or with the cell attributes. Each row is one
+
+        /// ordinary menu entry, so the menu handles its click for every kind of input. Where the pointer is picks the column.
+
+        /// </summary>
+
+        private MenuFlyoutSubItem MakeCellTargetMenu(string text, string glyph, string action, int curSlot, Action<int, bool> run)
+
+        {
+
+            var template = (ControlTemplate)Resources["CellTargetRowTemplate"];
+
+            var sub = new MenuFlyoutSubItem { Text = text, Icon = new FontIcon { Glyph = glyph } };
+
+            int column = 0;
+
+            static (Grid Row, Border[] Cells) MakeRow(string left, string right, double fontSize, Brush foreground)
+
+            {
+
+                var row = new Grid { ColumnSpacing = 2, Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0)) };
+
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(116) });
+
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(116) });
+
+                var cells = new Border[2];
+
+                for (int i = 0; i < 2; i++)
+
+                {
+
+                    cells[i] = new Border
+
+                    {
+
+                        CornerRadius = new CornerRadius(4),
+
+                        Padding = new Thickness(10, 6, 10, 6),
+
+                        Child = new TextBlock { Text = i == 0 ? left : right, FontSize = fontSize, Foreground = foreground }
+
+                    };
+
+                    Grid.SetColumn(cells[i], i);
+
+                    row.Children.Add(cells[i]);
+
+                }
+
+                return (row, cells);
+
+            }
+
+            var (header, headerCells) = MakeRow("Contents only", "With attributes", 12, _menuWhiteSecondary);
+
+            ToolTipService.SetToolTip(headerCells[0], "The image alone. Each cell keeps its frame, image rotation and zoom, and its shape.");
+
+            ToolTipService.SetToolTip(headerCells[1], "The image with its frame, image rotation, zoom and shape. The cell's own rotation too, between floating cells.");
+
+            sub.Items.Add(new MenuFlyoutItem { Tag = header, Template = template, IsEnabled = false });
+
+            int gridCells = GridCellCount;
+
+            int cellsOnShow = VisibleCount(gridCells);
+
+            for (int i = 0; i < _items.Count; i++)
+
+            {
+
+                if (i == curSlot) continue;
+
+                // A position that cannot be seen means nothing. Those images are in the tray, which Swap with opens.
+
+                if (i >= cellsOnShow && i < gridCells) continue;
+
+                int targetSlot = i;
+
+                string position = $"Position {PositionOfSlot(i)}";
+
+                var (row, cells) = MakeRow(position, position, 14, _menuWhitePrimary);
+
+                var entry = new MenuFlyoutItem { Text = position, Tag = row, Template = template };
+
+                void Mark()
+
+                {
+
+                    cells[column].Background = _cellTargetHover;
+
+                    cells[1 - column].Background = null;
+
+                    HighlightPositionBadge(targetSlot, action, column == 1);
+
+                }
+
+                void Unmark()
+
+                {
+
+                    cells[0].Background = null;
+
+                    cells[1].Background = null;
+
+                    ClearHighlightPositionBadge(targetSlot, curSlot);
+
+                }
+
+                void Track(PointerRoutedEventArgs e)
+
+                {
+
+                    column = e.GetCurrentPoint(row).Position.X < row.ActualWidth / 2 ? 0 : 1;
+
+                    Mark();
+
+                }
+
+                // Handled events too: a menu entry marks its own pointer presses as handled.
+
+                entry.AddHandler(PointerEnteredEvent, new PointerEventHandler((_, e) => Track(e)), true);
+
+                entry.AddHandler(PointerMovedEvent, new PointerEventHandler((_, e) => Track(e)), true);
+
+                entry.AddHandler(PointerPressedEvent, new PointerEventHandler((_, e) => Track(e)), true);
+
+                entry.AddHandler(PointerExitedEvent, new PointerEventHandler((_, _) => Unmark()), true);
+
+                entry.GotFocus += (_, _) => Mark();
+
+                entry.LostFocus += (_, _) => Unmark();
+
+                // Left at the first column falls through, which closes the submenu as usual.
+
+                entry.KeyDown += (_, e) =>
+
+                {
+
+                    int wanted = e.Key == Windows.System.VirtualKey.Right ? 1 : e.Key == Windows.System.VirtualKey.Left ? 0 : column;
+
+                    if (wanted == column) return;
+
+                    column = wanted;
+
+                    Mark();
+
+                    e.Handled = true;
+
+                };
+
+                entry.Click += (_, _) => run(targetSlot, column == 1);
+
+                sub.Items.Add(entry);
+
+            }
+
+            return sub;
+
+        }
+
+        private void CopyItemTo(int fromIndex, int toIndex, bool withAttributes = false)
+
+        {
+
+            if (fromIndex < 0 || fromIndex >= _items.Count || toIndex < 0 || toIndex >= _items.Count || fromIndex == toIndex) return;
+
+            var source = _items[fromIndex];
+
+            if (source == null) return;
+
+            var copy = new ImageItem
+
+            {
+
+                Path = source.Path,
+
+                Name = source.Name,
+
+                DateModified = source.DateModified,
+
+                SizeString = source.SizeString,
+
+                Thumbnail = source.Thumbnail,
+
+                Dispatcher = source.Dispatcher
+
+            };
+
+            // Only the target's content changes. It keeps its own frame, zoom and pan.
+
+            MoveCellParameters(_items[toIndex], copy);
+
+            PutInCell(toIndex, copy);
+
+            var rootSrc = (uint)fromIndex < (uint)_cellRoots.Length ? _cellRoots[fromIndex] : null;
+
+            var rootDst = (uint)toIndex < (uint)_cellRoots.Length ? _cellRoots[toIndex] : null;
+
+            var partsSrc = rootSrc?.Tag as CellParts;
+
+            var partsDst = rootDst?.Tag as CellParts;
+
+            if (partsSrc != null && partsDst != null && CellImageReady(partsSrc))
+
+            {
+
+                partsDst.Photo.Source = partsSrc.Photo.Source;
+
+                var dims = partsSrc.Bound.GetDimensions?.Invoke() ?? (16, 9);
+
+                partsDst.Bound.SetDimensions?.Invoke(dims.Width, dims.Height);
+
+                partsDst.Bound.Item = copy;
+
+                partsDst.UpdateLayout?.Invoke();
+
+            }
+
+            else
+
+            {
+
+                RebindCell(toIndex);
+
+            }
+
+            if (withAttributes) CopyCellAttributes(fromIndex, toIndex);
+
+            ShowEmptyState(toIndex);
+
+            ShowHudAndOverlays();
+
+        }
+
+        /// <summary>A copy, then the source goes: a floating cell disappears and a grid cell is left empty.</summary>
+
+        private void MoveItemTo(int fromIndex, int toIndex, bool withAttributes = false)
+
+        {
+
+            if (fromIndex < 0 || fromIndex >= _items.Count || toIndex < 0 || toIndex >= _items.Count || fromIndex == toIndex) return;
+
+            CopyItemTo(fromIndex, toIndex, withAttributes);
+
+            var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, _items[fromIndex]));
+
+            if (card != null) CloseFreeformCard(card);
+
+            else EmptyCell(fromIndex);
+
+        }
+
+        /// <summary>A decoded image can move to another cell. One still opening, or a missing one, cannot.</summary>
+
+        private static bool CellImageReady(CellParts parts) =>
+
+            parts.Photo.Source is BitmapSource bitmap && bitmap.PixelWidth > 0 && bitmap.PixelHeight > 0;
+
+        /// <summary>Load this slot's image into its cell, when the slot has a cell on screen.</summary>
+
+        private void RebindCell(int slot)
+
+        {
+
+            if ((uint)slot >= (uint)_cellRoots.Length || (uint)slot >= (uint)_items.Count) return;
+
+            if (_cellRoots[slot]?.Tag is not CellParts parts) return;
+
+            parts.Bound.Item = _items[slot];
+
+            parts.Bound.Reload?.Invoke();
+
+            parts.UpdateLayout?.Invoke();
+
+        }
+
+        /// <summary>What a cell registered in the shared lists, so removing the cell can take it back out.</summary>
+
+        private sealed class CellPhoto
+
+        {
+
+            public ImageItem Item { get; set; }
+
+            public Action? Reload { get; set; }
+
+            public Action? ApplyGeometry { get; set; }
+
+            public bool Failed { get; set; }
+
+            public Action<double, double>? SetDimensions { get; set; }
+
+            public Func<(double Width, double Height)>? GetDimensions { get; set; }
+
+            public CellPhoto(ImageItem item) { Item = item; }
+
+        }
+
+        private sealed record CellParts(CompositeTransform Transform, Action UpdateLayout, UIElement TopControls, Image Photo, CellPhoto Bound, Border PositionBadge, TextBlock BadgeText, Microsoft.UI.Xaml.Shapes.Rectangle DashedStroke, Microsoft.UI.Xaml.Shapes.Rectangle? RimGlowStroke = null, Border? GutterHost = null, FrameworkElement? ImageContainer = null, FrameworkElement? HiddenPlaceholder = null, Button? MaximizeButton = null, Action<bool>? SetSelected = null);
+
+        /// <summary>
+
+        /// Remove a photo and keep the other cells, so none of them decodes again. The layout is rebuilt
+
+        /// for the new count. The canvas stays smaller: an image from the tray does not take the place.
+
+        /// </summary>
+
+        private void RemoveItem(ImageItem item)
+
+        {
+
+            DeselectCell();
+
+            // The cell goes while its button handles the click, so the pointer release never reaches the canvas to record the step.
+
+            NoteUserAction();
+
+            var freeformCard = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, item));
+
+            if (freeformCard != null)
+
+            {
+
+                CloseFreeformCard(freeformCard);
+
+                return;
+
+            }
+
+            int index = _items.IndexOf(item);
+
+            if (index < 0) return;
+
+            int visibleBefore = VisibleCount(GridCellCount);
+
+            // The last cell on show with images in the tray. The grid needs one cell, so it stays, empty.
+
+            if (index < visibleBefore && visibleBefore == 1 && GridCellCount > 1)
+
+            {
+
+                EmptyCell(index);
+
+                ShowShownBadge();
+
+                ShowHudAndOverlays();
+
+                return;
+
+            }
+
+            _itemBorders.Remove(item);
+
+            _cellGeometry.Remove(item);
+
+            bool cellsReady = CellRootsReady();
+
+            bool trayBehind = GridCellCount > visibleBefore;
+
+            _items.RemoveAt(index);
+
+            if (_items.Count == 0)
+
+            {
+
+                CloseRequested?.Invoke(this, EventArgs.Empty);
+
+                return;
+
+            }
+
+            if (index < visibleBefore && trayBehind) _framedSlots = visibleBefore - 1;
+
+            // Freeform cells remember their source by slot, and the later slots just moved down.
+
+            foreach (var card in _freeformCards)
+
+            {
+
+                if (card.SourceSlot == index) card.SourceSlot = -1;
+
+                else if (card.SourceSlot > index) card.SourceSlot--;
+
+            }
+
+            if (cellsReady && index >= visibleBefore && _mosaic != null)
+
+            {
+
+                // A photo that was not on screen: only the count changes.
+
+                var waiting = new List<FrameworkElement?>(_cellRoots);
+
+                if (index < waiting.Count) waiting.RemoveAt(index);
+
+                _cellRoots = waiting.ToArray();
+
+                _keepMosaic = true;
+
+                try { BuildLayout(); }
+
+                finally { _keepMosaic = false; }
+
+            }
+
+            else if (cellsReady)
+
+            {
+
+                var roots = new List<FrameworkElement?>(_cellRoots);
+
+                ForgetCell(roots[index]);
+
+                roots.RemoveAt(index);
+
+                int visible = VisibleCount(GridCellCount);
+
+                while (roots.Count < visible) roots.Add(null);
+
+                _cellRoots = roots.ToArray();
+
+                _relayoutKeepingCells = true;
+
+                try { BuildLayout(); }
+
+                finally { _relayoutKeepingCells = false; }
+
+            }
+
+            else
+
+            {
+
+                BuildLayout();
+
+            }
+
+            ShowHudAndOverlays();
+
+        }
+
+        private void ForgetCell(FrameworkElement? cell)
+
+        {
+
+            if (cell == null) return;
+
+            if (cell.Tag is CellParts parts)
+
+            {
+
+                _cellTransforms.Remove(parts.Transform);
+
+                _layoutUpdaters.Remove(parts.UpdateLayout);
+
+                _cellTopControls.Remove(parts.TopControls);
+
+            }
+
+            if (cell.Parent is Panel parent) parent.Children.Remove(cell);
+
+        }
+
+        #endregion
+
+        #region Position Badges for Swap / Move Indication
+
+        private Windows.UI.Color GetMultiViewAccentColor()
+
+        {
+
+            Windows.UI.Color accent = Windows.UI.Color.FromArgb(255, 0, 120, 212);
+
+            try
+
+            {
+
+                if (Application.Current.Resources["SystemAccentColor"] is Windows.UI.Color c) accent = c;
+
+                else if (Application.Current.Resources["SystemAccentColorLight2"] is Windows.UI.Color c2) accent = c2;
+
+            }
+
+            catch { }
+
+            return accent;
+
+        }
+
+        private void ShowPositionBadges(int sourceIndex)
+
+        {
+
+            var accent = GetMultiViewAccentColor();
+
+            for (int i = 0; i < _items.Count; i++)
+
+            {
+
+                if (i < _cellRoots.Length && _cellRoots[i]?.Tag is CellParts parts)
+
+                {
+
+                    bool isSource = (i == sourceIndex);
+
+                    bool compact = (_cellRoots[i] is FrameworkElement fe && fe.ActualWidth < 220);
+
+                    if (isSource)
+
+                    {
+
+                        parts.BadgeText.Text = compact ? $"#{PositionOfSlot(i)} (This)" : $"Position {PositionOfSlot(i)} (This Image)";
+
+                        parts.PositionBadge.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(235, 36, 36, 36));
+
+                        parts.PositionBadge.BorderBrush = new SolidColorBrush(accent);
+
+                        parts.PositionBadge.BorderThickness = new Thickness(1.5);
+
+                    }
+
+                    else
+
+                    {
+
+                        parts.BadgeText.Text = compact ? $"#{PositionOfSlot(i)}" : $"Position {PositionOfSlot(i)}";
+
+                        parts.PositionBadge.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(220, 20, 20, 20));
+
+                        parts.PositionBadge.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(90, 255, 255, 255));
+
+                        parts.PositionBadge.BorderThickness = new Thickness(1);
+
+                    }
+
+                    parts.PositionBadge.Opacity = 1.0;
+
+                }
+
+            }
+
+        }
+
+        private void HighlightPositionBadge(int targetIndex, string action = "Swap with", bool withAttributes = false)
+
+        {
+
+            if (targetIndex < 0 || targetIndex >= _items.Count || targetIndex >= _cellRoots.Length) return;
+
+            if (_cellRoots[targetIndex]?.Tag is CellParts parts)
+
+            {
+
+                var accent = GetMultiViewAccentColor();
+
+                bool compact = (_cellRoots[targetIndex] is FrameworkElement fe && fe.ActualWidth < 220);
+
+                string symbol = action == "Copy to" ? "\u2398" : "\u279C";
+
+                parts.BadgeText.Text = compact ? $"{symbol} #{PositionOfSlot(targetIndex)}" : $"{symbol} {action} Position {PositionOfSlot(targetIndex)}{(withAttributes ? " + attributes" : "")}";
+
+                parts.PositionBadge.Background = new SolidColorBrush(accent);
+
+                parts.PositionBadge.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.White);
+
+                parts.PositionBadge.BorderThickness = new Thickness(2);
+
+                parts.PositionBadge.Opacity = 1.0;
+
+            }
+
+        }
+
+        private void ClearHighlightPositionBadge(int targetIndex, int sourceIndex)
+
+        {
+
+            if (targetIndex < 0 || targetIndex >= _items.Count || targetIndex >= _cellRoots.Length) return;
+
+            if (_cellRoots[targetIndex]?.Tag is CellParts parts)
+
+            {
+
+                bool isSource = (targetIndex == sourceIndex);
+
+                bool compact = (_cellRoots[targetIndex] is FrameworkElement fe && fe.ActualWidth < 220);
+
+                if (isSource)
+
+                {
+
+                    var accent = GetMultiViewAccentColor();
+
+                    parts.BadgeText.Text = compact ? $"#{PositionOfSlot(targetIndex)} (This)" : $"Position {PositionOfSlot(targetIndex)} (This Image)";
+
+                    parts.PositionBadge.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(235, 36, 36, 36));
+
+                    parts.PositionBadge.BorderBrush = new SolidColorBrush(accent);
+
+                    parts.PositionBadge.BorderThickness = new Thickness(1.5);
+
+                }
+
+                else
+
+                {
+
+                    parts.BadgeText.Text = compact ? $"#{PositionOfSlot(targetIndex)}" : $"Position {PositionOfSlot(targetIndex)}";
+
+                    parts.PositionBadge.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(220, 20, 20, 20));
+
+                    parts.PositionBadge.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(90, 255, 255, 255));
+
+                    parts.PositionBadge.BorderThickness = new Thickness(1);
+
+                }
+
+            }
+
+        }
+
+        private void HidePositionBadges()
+
+        {
+
+            for (int i = 0; i < _cellRoots.Length; i++)
+
+            {
+
+                if (_cellRoots[i]?.Tag is CellParts parts)
+
+                {
+
+                    parts.PositionBadge.Opacity = 0.0;
+
+                }
+
+            }
+
+        }
+
+        #endregion
+
+        #region Solo View Mode
+
+        private void SetupSoloInteractions()
+
+        {
+
+            SoloImageContainer.SizeChanged += (s, e) =>
+
+            {
+
+                if (_soloIndex < 0) return;
+
+                UpdateSoloHud();
+
+                ApplySoloTurn();
+
+            };
+
+            SoloImageContainer.PointerPressed += (s, e) =>
+
+            {
+
+                ShowHudAndOverlays();
+
+                var prop = e.GetCurrentPoint(SoloImageContainer).Properties;
+
+                if (prop.IsMiddleButtonPressed)
+
+                {
+
+                    ResetSoloZoom();
+
+                    e.Handled = true;
+
+                    return;
+
+                }
+
+                if (prop.IsLeftButtonPressed)
+
+                {
+
+                    var point = e.GetCurrentPoint(SoloImageContainer).Position;
+
+                    _soloPointerId = e.Pointer.PointerId;
+
+                    _lastSoloPoint = point;
+
+                    if (IsSoloBackground(point))
+
+                    {
+
+                        _soloBackgroundClick = true;
+
+                        _soloBackgroundStart = point;
+
+                    }
+
+                    else
+
+                    {
+
+                        _isSoloDragging = true;
+
+                    }
+
+                    SoloImageContainer.CapturePointer(e.Pointer);
+
+                    e.Handled = true;
+
+                }
+
+            };
+
+            SoloImageContainer.PointerMoved += (s, e) =>
+
+            {
+
+                ShowHudAndOverlays();
+
+                if (e.Pointer.PointerId != _soloPointerId) return;
+
+                var currentPoint = e.GetCurrentPoint(SoloImageContainer).Position;
+
+                if (_soloBackgroundClick)
+
+                {
+
+                    double dx = currentPoint.X - _soloBackgroundStart.X;
+
+                    double dy = currentPoint.Y - _soloBackgroundStart.Y;
+
+                    if (dx * dx + dy * dy > 15 * 15)
+
+                        _soloBackgroundClick = false;
+
+                    e.Handled = true;
+
+                    return;
+
+                }
+
+                if (_isSoloDragging)
+
+                {
+
+                    double dx = currentPoint.X - _lastSoloPoint.X;
+
+                    double dy = currentPoint.Y - _lastSoloPoint.Y;
+
+                    SoloTransform.TranslateX += dx;
+
+                    SoloTransform.TranslateY += dy;
+
+                    _lastSoloPoint = currentPoint;
+
+                    e.Handled = true;
+
+                }
+
+            };
+
+            SoloImageContainer.PointerReleased += (s, e) =>
+
+            {
+
+                if (e.Pointer.PointerId != _soloPointerId) return;
+
+                bool close = _soloBackgroundClick;
+
+                _soloBackgroundClick = false;
+
+                if (_isSoloDragging)
+
+                {
+
+                    _isSoloDragging = false;
+
+                }
+
+                try { SoloImageContainer.ReleasePointerCapture(e.Pointer); }
+
+                catch { }
+
+                e.Handled = true;
+
+                if (close)
+
+                    ExitSolo();
+
+            };
+
+            SoloImageContainer.PointerCanceled += (s, e) =>
+
+            {
+
+                _soloBackgroundClick = false;
+
+                if (_isSoloDragging || e.Pointer.PointerId == _soloPointerId)
+
+                {
+
+                    _isSoloDragging = false;
+
+                    try { SoloImageContainer.ReleasePointerCapture(e.Pointer); }
+
+                    catch { }
+
+                }
+
+            };
+
+            SoloImageContainer.PointerWheelChanged += (s, e) =>
+
+            {
+
+                ShowHudAndOverlays();
+
+                var ptr = e.GetCurrentPoint(SoloImageContainer);
+
+                int delta = ptr.Properties.MouseWheelDelta;
+
+                double zoomFactor = delta > 0 ? 1.15 : (1.0 / 1.15);
+
+                double oldScale = SoloTransform.ScaleX;
+
+                double newScale = Math.Clamp(oldScale * zoomFactor, 1.0, 10.0);
+
+                if (newScale <= 1.02)
+
+                {
+
+                    ResetSoloZoom();
+
+                }
+
+                else
+
+                {
+
+                    Point pos = ptr.Position;
+
+                    SoloTransform.TranslateX = pos.X - (pos.X - SoloTransform.TranslateX) * (newScale / oldScale);
+
+                    SoloTransform.TranslateY = pos.Y - (pos.Y - SoloTransform.TranslateY) * (newScale / oldScale);
+
+                    SoloTransform.ScaleX = newScale;
+
+                    SoloTransform.ScaleY = newScale;
+
+                    UpdateSoloHud();
+
+                }
+
+                e.Handled = true;
+
+            };
+
+            SoloImageContainer.DoubleTapped += (s, e) =>
+
+            {
+
+                ShowHudAndOverlays();
+
+                e.Handled = true;
+
+                if (IsSoloBackground(e.GetPosition(SoloImageContainer)))
+
+                {
+
+                    ExitSolo();
+
+                    return;
+
+                }
+
+                if (SoloTransform.ScaleX > 1.05)
+
+                {
+
+                    ResetSoloZoom();
+
+                }
+
+                else
+
+                {
+
+                    Point pos = e.GetPosition(SoloImageContainer);
+
+                    double newScale = 2.5;
+
+                    double oldScale = SoloTransform.ScaleX;
+
+                    SoloTransform.TranslateX = pos.X - (pos.X - SoloTransform.TranslateX) * (newScale / oldScale);
+
+                    SoloTransform.TranslateY = pos.Y - (pos.Y - SoloTransform.TranslateY) * (newScale / oldScale);
+
+                    SoloTransform.ScaleX = newScale;
+
+                    SoloTransform.ScaleY = newScale;
+
+                    UpdateSoloHud();
+
+                }
+
+            };
+
+        }
+
+        private bool IsSoloBackground(Point point)
+
+        {
+
+            double viewW = SoloImageContainer.ActualWidth;
+
+            double viewH = SoloImageContainer.ActualHeight;
+
+            if (viewW <= 1 || viewH <= 1) return false;
+
+            // The photo element is only as large as the picture. The black around it
+
+            // is this container, so a point outside the element's box is the margin.
+
+            if (SoloImage.ActualWidth > 1 && SoloImage.ActualHeight > 1
+
+                && (SoloImage.ActualWidth < viewW - 2 || SoloImage.ActualHeight < viewH - 2))
+
+            {
+
+                try
+
+                {
+
+                    var bounds = SoloImage.TransformToVisual(SoloImageContainer)
+
+                        .TransformBounds(new Rect(0, 0, SoloImage.ActualWidth, SoloImage.ActualHeight));
+
+                    return point.X < bounds.X || point.X > bounds.Right || point.Y < bounds.Y || point.Y > bounds.Bottom;
+
+                }
+
+                catch
+
+                {
+
+                    return false;
+
+                }
+
+            }
+
+            if (SoloImage.Source is not BitmapSource bitmap || bitmap.PixelWidth <= 0 || bitmap.PixelHeight <= 0)
+
+                return false;
+
+            double fit = Math.Min(viewW / bitmap.PixelWidth, viewH / bitmap.PixelHeight);
+
+            double displayedW = bitmap.PixelWidth * fit * SoloTransform.ScaleX;
+
+            double displayedH = bitmap.PixelHeight * fit * SoloTransform.ScaleY;
+
+            return ViewerMath.IsPointerOverLetterbox(
+
+                point.X - SoloTransform.TranslateX,
+
+                point.Y - SoloTransform.TranslateY,
+
+                viewW,
+
+                viewH,
+
+                displayedW,
+
+                displayedH);
+
+        }
+
+        private void UpdateSoloHud()
+
+        {
+
+            if (_soloIndex < 0 || _soloIndex >= _items.Count) return;
+
+            var item = _items[_soloIndex];
+
+            SoloTitleText.Text = !string.IsNullOrWhiteSpace(item.Name) ? item.Name : " ";
+
+            double w = 0, h = 0;
+
+            if (ImageCache.TryGet(item.Path, out var entry) && entry != null && entry.NativeWidth > 0 && entry.NativeHeight > 0)
+
+            {
+
+                w = entry.NativeWidth;
+
+                h = entry.NativeHeight;
+
+            }
+
+            else if (SoloImage.Source is BitmapSource bs && bs.PixelWidth > 0 && bs.PixelHeight > 0)
+
+            {
+
+                w = bs.PixelWidth;
+
+                h = bs.PixelHeight;
+
+            }
+
+            else if (item.Thumbnail is BitmapSource ts && ts.PixelWidth > 0 && ts.PixelHeight > 0)
+
+            {
+
+                w = ts.PixelWidth;
+
+                h = ts.PixelHeight;
+
+            }
+
+            if (w > 0 && h > 0)
+
+            {
+
+                SoloSecondaryText.Text = item.GetHudDisplayString(w, h);
+
+            }
+
+            else
+
+            {
+
+                string size = !string.IsNullOrEmpty(item.SizeString) ? item.SizeString : "";
+
+                string date = item.DateModified != DateTime.MinValue ? item.DateModified.ToString("yyyy-MM-dd HH:mm") : item.DateText;
+
+                SoloSecondaryText.Text = $"{size} \u2022 {date}".Trim(' ', '\u2022');
+
+            }
+
+            double viewW = SoloImageContainer.ActualWidth;
+
+            double viewH = SoloImageContainer.ActualHeight;
+
+            if (viewW <= 0 || viewH <= 0)
+
+            {
+
+                viewW = ActualWidth;
+
+                viewH = ActualHeight;
+
+            }
+
+            double zoomRatio = 1.0;
+
+            if (w > 0 && h > 0 && viewW > 0 && viewH > 0)
+
+            {
+
+                bool quarterTurn = GetGeometry(item).ImageRotation % 180 != 0;
+
+                double fit = quarterTurn ? Math.Min(viewW / h, viewH / w) : Math.Min(viewW / w, viewH / h);
+
+                zoomRatio = fit * SoloTransform.ScaleX;
+
+            }
+
+            else
+
+            {
+
+                zoomRatio = SoloTransform.ScaleX;
+
+            }
+
+            SoloZoomText.Text = item.GetZoomString((float)zoomRatio);
+
+            SoloFidelityText.Text = "HF";
+
+        }
+
+        private bool IsCanvasSlot(int slot)
+
+        {
+
+            int grid = GridCellCount;
+
+            return (uint)slot < (uint)_items.Count && (slot < VisibleCount(grid) || slot >= grid);
+
+        }
+
+        private void EnterSolo(int index)
+
+        {
+
+            DeselectCell();
+
+            if (!IsCanvasSlot(index) || IsEmptyCell(_items[index])) return;
+
+            _soloIndex = index;
+
+            var item = _items[index];
+
+            int pos = 0, total = 0;
+
+            for (int s = 0; s < _items.Count; s++)
+
+            {
+
+                if (!IsCanvasSlot(s) || IsEmptyCell(_items[s])) continue;
+
+                total++;
+
+                if (s <= index) pos++;
+
+            }
+
+            SoloCounterText.Text = $"{pos} of {total}";
+
+            try
+
+            {
+
+                var bmp = new BitmapImage();
+
+                bmp.UriSource = new Uri(item.Path, UriKind.Absolute);
+
+                bmp.ImageOpened += (_, _) =>
+
+                {
+
+                    UpdateSoloHud();
+
+                    ApplySoloTurn();
+
+                };
+
+                SoloImage.Source = bmp;
+
+            }
+
+            catch { }
+
+            ApplySoloTurn();
+
+            ResetSoloZoom();
+
+            UpdateSoloHud();
+
+            SoloContainer.Visibility = Visibility.Visible;
+
+            UnifiedHud.Visibility = Visibility.Collapsed;
+
+            if (FreeformCanvas != null) FreeformCanvas.Visibility = Visibility.Collapsed;
+
+            ShowHudAndOverlays();
+
+        }
+
+        /// <summary>Solo shows the photo the way its cell turns and mirrors it. A quarter turn is scaled to fit the other way round.</summary>
+
+        private void ApplySoloTurn()
+
+        {
+
+            if (_soloIndex < 0 || _soloIndex >= _items.Count) return;
+
+            var geometry = GetGeometry(_items[_soloIndex]);
+
+            double scale = 1;
+
+            if (geometry.ImageRotation % 180 != 0 && SoloImage.Source is BitmapSource bitmap
+
+                && bitmap.PixelWidth > 0 && bitmap.PixelHeight > 0
+
+                && SoloImageContainer.ActualWidth > 0 && SoloImageContainer.ActualHeight > 0)
+
+            {
+
+                double viewW = SoloImageContainer.ActualWidth;
+
+                double viewH = SoloImageContainer.ActualHeight;
+
+                double upright = Math.Min(viewW / bitmap.PixelWidth, viewH / bitmap.PixelHeight);
+
+                double turned = Math.Min(viewW / bitmap.PixelHeight, viewH / bitmap.PixelWidth);
+
+                scale = turned / upright;
+
+            }
+
+            SoloTurn.Rotation = geometry.ImageRotation;
+
+            SoloTurn.ScaleX = (geometry.ImageFlipH ? -1 : 1) * scale;
+
+            SoloTurn.ScaleY = (geometry.ImageFlipV ? -1 : 1) * scale;
+
+        }
+
+        private void ExitSolo()
+
+        {
+
+            SoloContainer.Visibility = Visibility.Collapsed;
+
+            UnifiedHud.Visibility = Visibility.Visible;
+
+            if (FreeformCanvas != null) FreeformCanvas.Visibility = Visibility.Visible;
+
+            SoloImage.Source = null;
+
+            _soloIndex = -1;
+
+            ResetSoloZoom();
+
+            ShowHudAndOverlays();
+
+        }
+
+        private void ResetSoloZoom()
+
+        {
+
+            SoloTransform.ScaleX = 1.0;
+
+            SoloTransform.ScaleY = 1.0;
+
+            SoloTransform.TranslateX = 0;
+
+            SoloTransform.TranslateY = 0;
+
+            UpdateSoloHud();
+
+        }
+
+        private void PrevSolo() => StepSolo(-1);
+
+        private void NextSolo() => StepSolo(1);
+
+        /// <summary>The next photo that is not an empty cell, wrapping round. Stays put when there is no other.</summary>
+
+        private void StepSolo(int direction)
+
+        {
+
+            int total = _items.Count;
+
+            for (int step = 1; step < total; step++)
+
+            {
+
+                int slot = ((_soloIndex + direction * step) % total + total) % total;
+
+                if (!IsCanvasSlot(slot) || IsEmptyCell(_items[slot])) continue;
+
+                EnterSolo(slot);
+
+                return;
+
+            }
+
+        }
+
+        private void ExitSolo_Click(object sender, RoutedEventArgs e) => ExitSolo();
+
+        private void PrevSolo_Click(object sender, RoutedEventArgs e) => PrevSolo();
+
+        private void NextSolo_Click(object sender, RoutedEventArgs e) => NextSolo();
+
+        private void ResetSoloZoom_Click(object sender, RoutedEventArgs e) => ResetSoloZoom();
+
+        #endregion
+
+        #region Actions
+
+        private void CloseButton_Click(object sender, RoutedEventArgs e)
+
+        {
+
+            CloseRequested?.Invoke(this, EventArgs.Empty);
+
+        }
+
+        private void AddImagesButton_Click(object sender, RoutedEventArgs e)
+
+        {
+
+            AddImagesRequested?.Invoke(this, EventArgs.Empty);
+
+        }
+
+        public int ShownSlots => GridCellCount == 0 ? 0 : VisibleCount(GridCellCount);
+
+        private int _swapSource = -1;
+
+        /// <summary>Alt-drag: a Windows drag of this photo. Dropping on another photo swaps the two.</summary>
+
+        private async System.Threading.Tasks.Task StartSwapDragAsync(UIElement source, Microsoft.UI.Input.PointerPoint point, int index)
+
+        {
+
+            _swapSource = index;
+
+            try { await source.StartDragAsync(point); }
+
+            catch { }
+
+            finally { _swapSource = -1; }
+
+        }
+
+        private void AttachSwapDrop(Border cellBorder, Grid cellGrid, CellPhoto photo)
+
+        {
+
+            Windows.UI.Color accent = Windows.UI.Color.FromArgb(255, 96, 205, 255);
+
+            try { if (Application.Current.Resources["SystemAccentColorLight2"] is Windows.UI.Color c) accent = c; }
+
+            catch { }
+
+            var ring = new Rectangle
+
+            {
+
+                Stroke = new SolidColorBrush(accent),
+
+                StrokeThickness = 4,
+
+                Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(40, accent.R, accent.G, accent.B)),
+
+                IsHitTestVisible = false,
+
+                Visibility = Visibility.Collapsed
+
+            };
+
+            Canvas.SetZIndex(ring, 100);
+
+            cellGrid.Children.Add(ring);
+
+            cellGrid.AllowDrop = true;
+
+            cellGrid.DragStarting += async (s, e) =>
+
+            {
+
+                ShowPositionBadges(Slot(photo.Item));
+
+                e.AllowedOperations = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
+
+                e.Data.RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
+
+                e.Data.SetText(photo.Item.Name);
+
+                cellBorder.Opacity = 0.4;
+
+                var deferral = e.GetDeferral();
+
+                try { await SetDragPictureAsync(cellGrid, e.DragUI, e.GetPosition(cellGrid)); }
+
+                catch { }
+
+                finally { deferral.Complete(); }
+
+            };
+
+            cellGrid.DropCompleted += (s, e) =>
+
+            {
+
+                HidePositionBadges();
+
+                cellBorder.Opacity = 1;
+
+            };
+
+            void Over(object s, DragEventArgs e)
+
+            {
+
+                if (_swapSource < 0 || _swapSource == Slot(photo.Item))
+
+                {
+
+                    e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.None;
+
+                    return;
+
+                }
+
+                e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
+
+                e.DragUIOverride.Caption = "Swap";
+
+                e.DragUIOverride.IsCaptionVisible = true;
+
+                e.DragUIOverride.IsGlyphVisible = true;
+
+                ring.Visibility = Visibility.Visible;
+
+                e.Handled = true;
+
+            }
+
+            cellGrid.DragEnter += Over;
+
+            cellGrid.DragOver += Over;
+
+            cellGrid.DragLeave += (s, e) => ring.Visibility = Visibility.Collapsed;
+
+            cellGrid.Drop += (s, e) =>
+
+            {
+
+                ring.Visibility = Visibility.Collapsed;
+
+                int from = _swapSource;
+
+                int index = Slot(photo.Item);
+
+                if (from < 0 || index < 0 || from == index) return;
+
+                e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
+
+                e.Handled = true;
+
+                // Swap after the drag has finished with these elements.
+
+                DispatcherQueue.TryEnqueue(() => SwapItems(from, index));
+
+            };
+
+        }
+
+        /// <summary>A small picture of the photo under the pointer, held where it was grabbed.</summary>
+
+        private static async System.Threading.Tasks.Task SetDragPictureAsync(FrameworkElement element, DragUI ui, Point grab)
+
+        {
+
+            double w = element.ActualWidth, h = element.ActualHeight;
+
+            if (w < 1 || h < 1) return;
+
+            double scale = Math.Min(1.0, 240.0 / Math.Max(w, h));
+
+            var rtb = new RenderTargetBitmap();
+
+            await rtb.RenderAsync(element, (int)Math.Max(1, w * scale), (int)Math.Max(1, h * scale));
+
+            if (rtb.PixelWidth < 1 || rtb.PixelHeight < 1) return;
+
+            var pixels = await rtb.GetPixelsAsync();
+
+            var bitmap = Windows.Graphics.Imaging.SoftwareBitmap.CreateCopyFromBuffer(
+
+                pixels,
+
+                Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8,
+
+                rtb.PixelWidth,
+
+                rtb.PixelHeight,
+
+                Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied);
+
+            ui.SetContentFromSoftwareBitmap(bitmap, new Point(grab.X * rtb.PixelWidth / w, grab.Y * rtb.PixelHeight / h));
+
+        }
+
+        public void SwapItems(int idxA, int idxB, bool withAttributes = false)
+
+        {
+
+            if (idxA < 0 || idxA >= _items.Count || idxB < 0 || idxB >= _items.Count || idxA == idxB) return;
+
+            var itemA = _items[idxA];
+
+            var itemB = _items[idxB];
+
+            PutInCell(idxA, itemB);
+
+            PutInCell(idxB, itemA);
+
+            // The cells stay where they are and keep their parameters. Only their images change.
+
+            ExchangeCellParameters(itemA, itemB);
+
+            var rootA = (uint)idxA < (uint)_cellRoots.Length ? _cellRoots[idxA] : null;
+
+            var rootB = (uint)idxB < (uint)_cellRoots.Length ? _cellRoots[idxB] : null;
+
+            var partsA = rootA?.Tag as CellParts;
+
+            var partsB = rootB?.Tag as CellParts;
+
+            if (partsA != null && partsB != null && CellImageReady(partsA) && CellImageReady(partsB))
+
+            {
+
+                // Move the decoded images between the cells, so no photo decodes again.
+
+                (partsA.Photo.Source, partsB.Photo.Source) = (partsB.Photo.Source, partsA.Photo.Source);
+
+                var dimsA = partsA.Bound.GetDimensions?.Invoke() ?? (16, 9);
+
+                var dimsB = partsB.Bound.GetDimensions?.Invoke() ?? (16, 9);
+
+                partsA.Bound.SetDimensions?.Invoke(dimsB.Width, dimsB.Height);
+
+                partsB.Bound.SetDimensions?.Invoke(dimsA.Width, dimsA.Height);
+
+                partsA.Bound.Item = itemB;
+
+                partsB.Bound.Item = itemA;
+
+                partsA.UpdateLayout?.Invoke();
+
+                partsB.UpdateLayout?.Invoke();
+
+            }
+
+            else
+
+            {
+
+                // A photo waiting off screen has no cell, and one still opening has no image to move.
+
+                RebindCell(idxA);
+
+                RebindCell(idxB);
+
+            }
+
+            if (rootA != null) rootA.Opacity = 1;
+
+            if (rootB != null) rootB.Opacity = 1;
+
+            if (withAttributes) ExchangeCellAttributes(idxA, idxB);
+
+            ShowEmptyState(idxA);
+
+            ShowEmptyState(idxB);
+
+            ShowHudAndOverlays();
+
+        }
+
+        public void ReflowFrames()
+
+        {
+
+            foreach (var update in _layoutUpdaters)
+
+                update();
+
+        }
+
+        public void ToggleFillMode()
+
+        {
+
+            _isFillMode = !_isFillMode;
+
+            ResetAllZooms();
+
+            foreach (var update in _layoutUpdaters)
+
+            {
+
+                update();
+
+            }
+
+            ShowHudAndOverlays();
+
+        }
+
+        private void ResetAllZooms()
+
+        {
+
+            foreach (var tr in _cellTransforms)
+
+            {
+
+                tr.ScaleX = 1.0;
+
+                tr.ScaleY = 1.0;
+
+                tr.TranslateX = 0;
+
+                tr.TranslateY = 0;
+
+            }
+
+        }
+
+        #endregion
+
+    }
+
+}
+

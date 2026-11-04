@@ -864,6 +864,8 @@ namespace ModernImageViewer
                     {
                         isResizing = false;
                         try { handle.ReleasePointerCapture(e.Pointer); } catch { }
+                        SyncCanvasToSelectedScene(showToast: false);
+                        CaptureUndoPoint();
                         e.Handled = true;
                     }
                 };
@@ -874,12 +876,19 @@ namespace ModernImageViewer
                     {
                         isResizing = false;
                         try { handle.ReleasePointerCapture(e.Pointer); } catch { }
+                        SyncCanvasToSelectedScene(showToast: false);
+                        CaptureUndoPoint();
                     }
                 };
 
                 handle.PointerCaptureLost += (s, e) =>
                 {
-                    isResizing = false;
+                    if (isResizing)
+                    {
+                        isResizing = false;
+                        SyncCanvasToSelectedScene(showToast: false);
+                        CaptureUndoPoint();
+                    }
                 };
 
                 slotGrid.Children.Add(handle);
