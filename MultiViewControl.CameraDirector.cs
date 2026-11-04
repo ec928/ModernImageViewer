@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
@@ -49,6 +50,14 @@ namespace ModernImageViewer
         private double _curEndY = 0.5;
 
         private bool _isPreviewingCameraMove;
+
+        // Faces in the scene on the canvas, in RootGrid's space, largest first, and their outlines on the overlay.
+        private List<Rect> _facesOnCanvas = new();
+        private readonly List<FrameworkElement> _faceOutlines = new();
+        private int _aimFaceIndex;
+        private Button? _aimFaceBtn;
+        private const double FaceFillsFrame = 0.35;
+        private const double MostDirectorZoom = 2.5;
 
         public bool IsEditingCamera => _isEditingCamera;
 
@@ -115,6 +124,7 @@ namespace ModernImageViewer
 
             BuildCameraDirectorUI();
             LayoutWireframes();
+            ShowFaceOutlines();
         }
 
         private void SaveCurrentCameraKeyframes()
@@ -185,6 +195,7 @@ namespace ModernImageViewer
             UpdateDirectorSceneBadge();
             UpdateKeyframeToggles();
             LayoutWireframes();
+            ShowFaceOutlines();
         }
 
         public void NavigateCameraScene(int delta)
@@ -513,6 +524,35 @@ namespace ModernImageViewer
             ToolTipService.SetToolTip(resetBtn, "Reset Start and End frames to default wide-to-in framing");
             barStack.Children.Add(resetBtn);
 
+            _aimFaceBtn = new Button
+            {
+                Height = 28,
+                Padding = new Thickness(8, 0, 8, 0),
+                Background = new SolidColorBrush(Colors.Transparent),
+                BorderThickness = new Thickness(0),
+                CornerRadius = new CornerRadius(14),
+                IsTabStop = false,
+                IsEnabled = false,
+                Content = new TextBlock { Text = "Aim at face", FontSize = 11.5, Foreground = new SolidColorBrush(Color.FromArgb(220, 255, 255, 255)) }
+            };
+            _aimFaceBtn.Click += (_, _) => AimSelectedFrameAtFace();
+            ToolTipService.SetToolTip(_aimFaceBtn, "Looking for faces");
+            barStack.Children.Add(_aimFaceBtn);
+
+            var exactBtn = new Button
+            {
+                Height = 28,
+                Padding = new Thickness(8, 0, 8, 0),
+                Background = new SolidColorBrush(Colors.Transparent),
+                BorderThickness = new Thickness(0),
+                CornerRadius = new CornerRadius(14),
+                IsTabStop = false,
+                Content = new TextBlock { Text = "Exact…", FontSize = 11.5, Foreground = new SolidColorBrush(Color.FromArgb(220, 255, 255, 255)) },
+                Flyout = MakeExactFrameFlyout()
+            };
+            ToolTipService.SetToolTip(exactBtn, "Type the selected frame's zoom and centre");
+            barStack.Children.Add(exactBtn);
+
             barStack.Children.Add(MakeDirectorDivider());
 
             // Done button
@@ -554,7 +594,167 @@ namespace ModernImageViewer
 
         private void CameraDirector_SizeChanged(object sender, SizeChangedEventArgs e)
         {
-            if (_isEditingCamera) LayoutWireframes();
+            if (!_isEditingCamera) return;
+            LayoutWireframes();
+            DrawFaceOutlines();
+        }
+
+        /// <summary>
+        /// Faces in the scene on the canvas, in RootGrid's space, largest first. Read from each cell's image as it is shown:
+        /// its crop, zoom and pan, and the cell's place and turn, clipped to the cell.
+        /// </summary>
+        private List<Rect> FacesOnCanvas()
+        {
+            var found = new List<Rect>();
+            foreach (var root in _cellRoots)
+            {
+                if (root?.Tag is not CellParts parts || root.Visibility != Visibility.Visible) continue;
+                string path = parts.Bound.Item.Path;
+                if (string.IsNullOrEmpty(path) || !_photoFacts.TryGetValue(path, out var facts) || facts.Faces.Count == 0) continue;
+                var photo = parts.Photo;
+                double ew = photo.ActualWidth, eh = photo.ActualHeight;
+                if (ew < 1 || eh < 1 || facts.Width < 1 || facts.Height < 1) continue;
+
+                // Where the picture sits in its element: covering it when filled, inside it when fitted, centred either way.
+                double scale = photo.Stretch == Stretch.Uniform
+                    ? Math.Min(ew / facts.Width, eh / facts.Height)
+                    : Math.Max(ew / facts.Width, eh / facts.Height);
+                double dw = facts.Width * scale, dh = facts.Height * scale;
+                double ox = (ew - dw) / 2, oy = (eh - dh) / 2;
+
+                GeneralTransform toCanvas, cellToCanvas;
+                try
+                {
+                    toCanvas = photo.TransformToVisual(RootGrid);
+                    cellToCanvas = root.TransformToVisual(RootGrid);
+                }
+                catch (ArgumentException)
+                {
+                    continue;
+                }
+                var cell = cellToCanvas.TransformBounds(new Rect(0, 0, root.ActualWidth, root.ActualHeight));
+                foreach (var face in facts.Faces)
+                {
+                    var r = toCanvas.TransformBounds(new Rect(ox + face.X * dw, oy + face.Y * dh, face.W * dw, face.H * dh));
+                    r.Intersect(cell);
+                    if (!r.IsEmpty && r.Width >= 4 && r.Height >= 4) found.Add(r);
+                }
+            }
+            return found.OrderByDescending(r => r.Width * r.Height).ToList();
+        }
+
+        /// <summary>
+        /// Outlines the faces once the scene's cells have laid out. A scene added by hand may not have had its faces read
+        /// yet, so they are read first. A later scene switch makes this one give up.
+        /// </summary>
+        private async void ShowFaceOutlines()
+        {
+            var scene = _editingCameraScene;
+            var paths = _cellRoots
+                .Select(r => (r?.Tag as CellParts)?.Bound.Item.Path)
+                .Where(p => !string.IsNullOrEmpty(p))
+                .Select(p => p!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (paths.Any(p => !_photoFacts.ContainsKey(p)))
+            {
+                var ready = DecodedBitmaps();
+                await ReadFactsAsync(paths, path => ready.TryGetValue(path, out var bitmap) ? (bitmap.PixelWidth, bitmap.PixelHeight) : null);
+            }
+            bool CellsShown() => _cellRoots.All(r => r?.Tag is not CellParts parts || r.Visibility != Visibility.Visible || parts.Photo.ActualWidth > 0);
+            for (int i = 0; i < 20 && !CellsShown(); i++) await Task.Delay(100);
+            if (!_isEditingCamera || _editingCameraScene != scene) return;
+            DrawFaceOutlines();
+        }
+
+        private void DrawFaceOutlines()
+        {
+            if (_cameraOverlayCanvas == null) return;
+            foreach (var outline in _faceOutlines) _cameraOverlayCanvas.Children.Remove(outline);
+            _faceOutlines.Clear();
+            _facesOnCanvas = FacesOnCanvas();
+            _aimFaceIndex = 0;
+            foreach (var face in _facesOnCanvas)
+            {
+                var outline = new Rectangle
+                {
+                    Width = face.Width,
+                    Height = face.Height,
+                    Stroke = new SolidColorBrush(Color.FromArgb(220, 255, 255, 255)),
+                    StrokeThickness = 1.5,
+                    StrokeDashArray = new DoubleCollection { 3, 2 },
+                    RadiusX = 3,
+                    RadiusY = 3,
+                    IsHitTestVisible = false
+                };
+                Canvas.SetLeft(outline, face.X);
+                Canvas.SetTop(outline, face.Y);
+                Canvas.SetZIndex(outline, 240);
+                _cameraOverlayCanvas.Children.Add(outline);
+                _faceOutlines.Add(outline);
+            }
+            if (_aimFaceBtn != null)
+            {
+                _aimFaceBtn.IsEnabled = _facesOnCanvas.Count > 0;
+                ToolTipService.SetToolTip(_aimFaceBtn, _facesOnCanvas.Count == 0
+                    ? "No face found in this scene"
+                    : $"Centres the selected frame on a face, largest first. {_facesOnCanvas.Count} found; click again for the next.");
+            }
+        }
+
+        /// <summary>The selected frame on the next face, largest first, zoomed so the face fills about a third of it.</summary>
+        private void AimSelectedFrameAtFace()
+        {
+            double W = RootGrid.ActualWidth, H = RootGrid.ActualHeight;
+            if (_facesOnCanvas.Count == 0 || W < 10 || H < 10) return;
+            var face = _facesOnCanvas[_aimFaceIndex % _facesOnCanvas.Count];
+            _aimFaceIndex++;
+            double faceShare = Math.Max(face.Width / W, face.Height / H);
+            double zoom = Math.Clamp(FaceFillsFrame / Math.Max(0.01, faceShare), 1.0, MostDirectorZoom);
+            SetSelectedFrame(zoom, (face.X + face.Width / 2) / W, (face.Y + face.Height / 2) / H);
+        }
+
+        /// <summary>Moves the selected frame, kept whole on the canvas.</summary>
+        private void SetSelectedFrame(double zoom, double x, double y)
+        {
+            zoom = Math.Clamp(zoom, 1.0, MostDirectorZoom);
+            double half = 0.5 / zoom;
+            x = Math.Clamp(x, half, 1.0 - half);
+            y = Math.Clamp(y, half, 1.0 - half);
+            if (_activeIsStartKeyframe) { _curStartZoom = zoom; _curStartX = x; _curStartY = y; }
+            else { _curEndZoom = zoom; _curEndX = x; _curEndY = y; }
+            LayoutWireframes();
+        }
+
+        /// <summary>Typed values for the selected frame, for when dragging is too coarse.</summary>
+        private Flyout MakeExactFrameFlyout()
+        {
+            var zoomBox = new NumberBox { Header = "Zoom", Minimum = 1, Maximum = MostDirectorZoom, SmallChange = 0.05, LargeChange = 0.25, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact, Width = 170 };
+            var acrossBox = new NumberBox { Header = "Across (% of the width)", Minimum = 0, Maximum = 100, SmallChange = 1, LargeChange = 10, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact, Width = 170 };
+            var downBox = new NumberBox { Header = "Down (% of the height)", Minimum = 0, Maximum = 100, SmallChange = 1, LargeChange = 10, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact, Width = 170 };
+            zoomBox.NumberFormatter = new Windows.Globalization.NumberFormatting.DecimalFormatter { FractionDigits = 2, IntegerDigits = 1 };
+            var note = new TextBlock { FontSize = 11, Opacity = 0.7, TextWrapping = TextWrapping.Wrap, MaxWidth = 170 };
+            var panel = new StackPanel { Spacing = 8, Children = { note, zoomBox, acrossBox, downBox } };
+            var flyout = new Flyout { Content = panel, Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.Bottom };
+            bool loading = false;
+            flyout.Opening += (_, _) =>
+            {
+                loading = true;
+                note.Text = _activeIsStartKeyframe ? "Start frame. Across and down are its centre." : "End frame. Across and down are its centre.";
+                zoomBox.Value = Math.Round(_activeIsStartKeyframe ? _curStartZoom : _curEndZoom, 2);
+                acrossBox.Value = Math.Round((_activeIsStartKeyframe ? _curStartX : _curEndX) * 100);
+                downBox.Value = Math.Round((_activeIsStartKeyframe ? _curStartY : _curEndY) * 100);
+                loading = false;
+            };
+            void Apply()
+            {
+                if (loading || double.IsNaN(zoomBox.Value) || double.IsNaN(acrossBox.Value) || double.IsNaN(downBox.Value)) return;
+                SetSelectedFrame(zoomBox.Value, acrossBox.Value / 100, downBox.Value / 100);
+            }
+            zoomBox.ValueChanged += (_, _) => Apply();
+            acrossBox.ValueChanged += (_, _) => Apply();
+            downBox.ValueChanged += (_, _) => Apply();
+            return flyout;
         }
 
         private void TeardownCameraDirectorUI()
@@ -570,6 +770,9 @@ namespace ModernImageViewer
                 RootGrid.Children.Remove(_cameraDirectorBar);
                 _cameraDirectorBar = null;
             }
+            _faceOutlines.Clear();
+            _facesOnCanvas = new List<Rect>();
+            _aimFaceBtn = null;
             _startWireframe = null;
             _endWireframe = null;
             _startBadge = null;
