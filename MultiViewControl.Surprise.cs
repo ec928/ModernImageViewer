@@ -931,9 +931,9 @@ namespace ModernImageViewer
                 v => (int)v == 1 ? "Best" : $"Top {(int)v}",
                 (o, v) => o.Variety = (int)v);
 
-            // 3. Camera & transitions
-            string CameraSummaryText() => $"{SurpriseChoices.CameraMode} \u00B7 {SurpriseChoices.TransitionShares()[LayoutTransition.Crossfade] * 100:0}% crossfade";
-            var (cameraSection, cameraSummary) = Section("Camera & transitions", CameraSummaryText());
+            // 3. Camera: how it moves within a scene. 4. Transitions: how one scene changes to the next.
+            string CameraSummaryText() => SurpriseChoices.CameraMode;
+            var (cameraSection, cameraSummary) = Section("Camera", CameraSummaryText());
             Slider? zoomVsDriftSlider = null;
             var camChips = new List<(Microsoft.UI.Xaml.Controls.Primitives.ToggleButton Chip, string Mode)>();
             var camModePanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Margin = new Thickness(0, 4, 0, 16) };
@@ -969,7 +969,10 @@ namespace ModernImageViewer
                 v => $"{v:0}%",
                 (o, v) => o.MotionFaceChance = v / 100);
             MovementGroup(cameraSection);
-            TransitionGroup(cameraSection, () => cameraSummary.Text = CameraSummaryText());
+
+            string TransitionSummaryText() => $"{SurpriseChoices.TransitionShares()[LayoutTransition.Crossfade] * 100:0}% crossfade";
+            var (transitionSection, transitionSummary) = Section("Transitions", TransitionSummaryText());
+            TransitionGroup(transitionSection, () => transitionSummary.Text = TransitionSummaryText());
 
             // 5. Look
             string LookSummaryText()
@@ -1207,14 +1210,6 @@ namespace ModernImageViewer
             // giving the mix they make, so the words on the sliders never have to stand for a percentage.
             void TransitionGroup(StackPanel column, Action changed)
             {
-                column.Children.Add(new TextBlock
-                {
-                    Text = "Transitions",
-                    FontSize = 12,
-                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    Opacity = 0.85,
-                    Margin = new Thickness(0, 10, 0, 2)
-                });
                 Note(column, "How one layout or scene changes to the next. The same kind never comes twice in a row, except a crossfade. All off is a crossfade.");
                 var mix = new TextBlock { FontSize = 11, Opacity = 0.75, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 6) };
                 void ShowMix()
@@ -1246,13 +1241,17 @@ namespace ModernImageViewer
             // 6. Cinematic storyboard: the settings it puts in place of the ones above. Not a second set of everything:
             // only what makes the one generator's layouts like Cinematic Slideshow's. Whether they are in use belongs to
             // the storyboard, so Auto-Mix is never affected.
-            bool CinematicOn() => _activeShow?.GeneratorOverrides == CinematicOverrides.Name;
+            // In Auto-Mix nothing here is in use, so the switch reads off there and cannot be changed: it showed the open
+            // storyboard's state while Auto-Mix played, which read as Auto-Mix using these settings.
+            bool storyboardPlays = PlayUsesStoryboard();
+            bool CinematicOn() => storyboardPlays && _activeShow?.GeneratorOverrides == CinematicOverrides.Name;
             string CinematicSummaryText()
             {
                 var c = SurpriseChoices.Cinematic;
                 string images = c.FewestPictures == c.MostPictures ? $"{c.FewestPictures}" : $"{c.FewestPictures}–{c.MostPictures}";
                 string hold = c.FewestSeconds == c.MostSeconds ? $"{c.FewestSeconds}s" : $"{c.FewestSeconds}–{c.MostSeconds}s";
-                return $"{(CinematicOn() ? "On" : "Off")} · {images} · {hold}";
+                string state = !storyboardPlays ? "Not in use" : CinematicOn() ? "On" : "Off";
+                return $"{state} · {images} · {hold}";
             }
             var (cineSection, cineSummary) = Section("Cinematic storyboard", CinematicSummaryText());
             cineSection.Children.Add(new TextBlock
@@ -1267,7 +1266,12 @@ namespace ModernImageViewer
             var cineOn = Toggle(cineSection, "Use for this storyboard",
                 "On: new scenes in the open storyboard, from Add new layout or Replace show, use these settings. Auto-Mix never uses them.",
                 CinematicOn(), (_, _) => { },
-                subtitle: "On when it was started with Cinematic storyboard; off for any other storyboard.");
+                subtitle: storyboardPlays
+                    ? "On when it was started with Cinematic storyboard; off for any other storyboard."
+                    : _activeShow == null || _activeShow.Scenes.Count == 0
+                        ? "No storyboard yet. Auto-Mix never uses these settings."
+                        : "Auto-Mix is selected, and it never uses these settings. Select Storyboard to change this.");
+            cineOn.IsEnabled = storyboardPlays;
             cineOn.Toggled += (_, _) =>
             {
                 UseCinematicOverrides(cineOn.IsOn);
@@ -4780,6 +4784,8 @@ namespace ModernImageViewer
             return hand;
         }
 
+        private const int CoverLayer = 5700;
+
         private async Task<Image?> CoverWithPictureOfCanvasAsync()
         {
             try
@@ -4788,7 +4794,9 @@ namespace ModernImageViewer
                 // From outside the canvas's clip: taken of the canvas itself, a zoomed layer reaching past its edge makes the picture bigger than the canvas.
                 await shot.RenderAsync(this);
                 var cover = new Image { Source = shot, Stretch = Microsoft.UI.Xaml.Media.Stretch.Fill, IsHitTestVisible = false };
-                AddOverCanvas(cover, 6000);
+                // Above the canvas and the floating cells (5000), below the progress edge, the bar, toasts and cards: the
+                // picture holds them too, and above the bar it faded an old copy of it over the live one.
+                AddOverCanvas(cover, CoverLayer);
                 return cover;
             }
             catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.Runtime.InteropServices.COMException)
@@ -4877,7 +4885,7 @@ namespace ModernImageViewer
                     break;
                 case LayoutTransition.ThroughDark:
                     dark = new Border { Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x0A, 0x0A, 0x0A)), IsHitTestVisible = false };
-                    AddOverCanvas(dark, 5990);
+                    AddOverCanvas(dark, CoverLayer - 10);
                     ContinueOutgoing(400);
                     Animate(cover, "Opacity", 1, 0, 400);
                     Animate(dark, "Opacity", 1, 0, 550, after: 450);

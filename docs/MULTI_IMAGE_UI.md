@@ -22,11 +22,11 @@ One pill along the bottom, left to right. Dividers separate the groups. Rows and
 | Play options | chevron | Opens or closes Layout Generator Settings, the settings the Layout Generator makes layouts with, for Auto-Mix and for storyboards. |
 | Rows | Rows, or N Rows | Arranges the grid in rows and opens the grid layout card. R switches between rows and columns. B, R, H, + and − work only without Ctrl or Alt held, so Ctrl+B still toggles the sidebar. |
 | Columns | Columns, or N Columns | Arranges the grid in columns. Same card and same R key. |
-| Full screen | icon | Full screen toggle (F11). |
 | Canvas | Canvas | Aspect ratio, surface, color, and canvas frame options. |
 | Save/Load | Save/Load | Save the canvas as JPEG or PNG, copy it, or save and open layouts (`.mivlayout`) and storyboards (`.mivshow`). Ctrl+S opens it. |
 | Undo, Redo | icons | Undo (Ctrl+Z) and Redo (Ctrl+Y). Greyed out when there is nothing to take back or bring back. They are on the bar because removing a scene, a cell or a layout never asks first. |
 | Advanced | gear | Undo, redo, fill or fit, and reset options. |
+| Full screen | icon | Full screen toggle (F11). Last on the bar, after a divider, as in a video player. |
 
 ### Which mode is active
 
@@ -156,9 +156,9 @@ The last section in Advanced Settings holds the settings Cinematic storyboard us
 | Single images | Fill the screen Often, Matted Off, Whole image Off |
 | Duration | 5 to 20 seconds |
 | Smart pace | On |
-| Motion | 50% |
+| Motion | 40% to 60% |
 
-Reset to defaults resets these along with the rest. Use for this storyboard is not a saved setting: it belongs to the open storyboard and is saved with it.
+Reset to defaults resets these along with the rest. Use for this storyboard is not a saved setting: it belongs to the open storyboard and is saved with it. With Auto-Mix selected, or no storyboard, the section reads **Not in use** and the switch is greyed out: Auto-Mix never uses these settings. The storyboard keeps its setting for when Storyboard is selected again.
 
 A Cinematic storyboard uses your main Transitions settings.
 
@@ -166,7 +166,7 @@ A Cinematic storyboard uses your main Transitions settings.
 
 **Motion**, on the first page and in the Cinematic storyboard section, is a range: each layout or scene picks how far the camera moves from within it. Ends together is one strength. A saved single Motion becomes a range of that one value.
 
-Under Camera & transitions:
+Under Camera:
 
 - **Two-shot scenes** (default 25%): the chance that a scene with a face, held 8 seconds or more, is two shots, as Cinematic Slideshow makes them: a wide shot, then either a snap zoom in to the face or a cut to the face and a slow push in. Only with the camera on Auto.
 - **Movement curves**: odds for how each move gets going and comes to rest, on the Off to Often scale, with the mix shown underneath.
@@ -187,7 +187,7 @@ Storyboard scenes store their curve, bend, turn and shots, and play them; scenes
 
 ### Transitions
 
-Under Camera & transitions, each kind of scene change has its own slider, on the same Off to Often scale as the designs: **Crossfade**, **Zoom through**, **Fade through black** and **Slide**. They are odds against each other. The line under them gives the mix they make, for example `Mix: crossfade 65% · zoom through 14% · fade through black 14% · slide 8%`. The same kind never comes twice in a row, except a crossfade, and the mix allows for that. With all four off, every change is a crossfade. They apply to Auto-Mix while it plays and to the scenes a storyboard makes; each storyboard scene keeps the transition it was made with and plays it. A change made by hand in Auto-Mix is a crossfade.
+In its own section, Transitions, each kind of scene change has its own slider, on the same Off to Often scale as the designs: **Crossfade**, **Zoom through**, **Fade through black** and **Slide**. They are odds against each other. The line under them gives the mix they make, for example `Mix: crossfade 65% · zoom through 14% · fade through black 14% · slide 8%`. The same kind never comes twice in a row, except a crossfade, and the mix allows for that. With all four off, every change is a crossfade. They apply to Auto-Mix while it plays and to the scenes a storyboard makes; each storyboard scene keeps the transition it was made with and plays it. A change made by hand in Auto-Mix is a crossfade.
 
 These replace the single Transition variety slider. A saved Transition variety is converted once to odds giving the same mix.
 
