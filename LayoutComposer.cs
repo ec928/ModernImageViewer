@@ -183,6 +183,30 @@ namespace ModernImageViewer
         public double GapScale { get; set; } = 1;
         public string Card { get; set; } = CardAny;
         public bool KeepCanvas { get; set; }
+        public const string SoloFill = "Fill";
+        public const string SoloMatted = "Matted";
+        public const string SoloWhole = "Whole";
+
+        /// <summary>
+        /// How a layout of one image shows it, as odds against each other, 0 being off: filling the screen (cropped), in a
+        /// matted card, or whole as a framed print. An image that filling would cut a face from, or crop by more than a third,
+        /// is always shown whole. The defaults are the odds the designs had before they were a setting.
+        /// </summary>
+        public double SoloFillOdds { get; set; } = 2;
+        public double SoloMattedOdds { get; set; } = 1;
+        public double SoloWholeOdds { get; set; } = 1;
+
+        /// <summary>Which way a single image is shown this time. With every way off, it is shown whole.</summary>
+        public string PickSolo(bool fillsWell, Random random)
+        {
+            if (!fillsWell) return SoloWhole;
+            double fill = Math.Max(0, SoloFillOdds), matted = Math.Max(0, SoloMattedOdds), whole = Math.Max(0, SoloWholeOdds);
+            double sum = fill + matted + whole;
+            if (sum <= 0) return SoloWhole;
+            double roll = random.NextDouble() * sum;
+            return roll < fill ? SoloFill : roll < fill + matted ? SoloMatted : SoloWhole;
+        }
+
         public int FewestPictures { get; set; } = 9;
         public int MostPictures { get; set; } = MosaicLayout.MaxShown;
 
@@ -284,6 +308,9 @@ namespace ModernImageViewer
                 read.FewestPictures = Math.Clamp(read.FewestPictures, FewestAllowed, MosaicLayout.MaxShown);
                 read.MostPictures = Math.Clamp(read.MostPictures, read.FewestPictures, MosaicLayout.MaxShown);
                 read.TogetherChance = Math.Clamp(read.TogetherChance, 0, 1);
+                read.SoloFillOdds = Math.Clamp(read.SoloFillOdds, 0, MostFavouredDesign);
+                read.SoloMattedOdds = Math.Clamp(read.SoloMattedOdds, 0, MostFavouredDesign);
+                read.SoloWholeOdds = Math.Clamp(read.SoloWholeOdds, 0, MostFavouredDesign);
                 if (!Cards.Contains(read.Card)) read.Card = CardAny;
                 if (!AutoPlayChoices.Contains(read.AutoPlaySeconds)) read.AutoPlaySeconds = 0;
                 if (!RandomPlayChoices.Contains(read.RandomFewestSeconds)) read.RandomFewestSeconds = 5;
@@ -516,19 +543,21 @@ namespace ModernImageViewer
             Judge(fullComp, rasterScale, options.FaceShown);
             double shownShare = Math.Max(1, fullCell.W * fullCell.H) / Math.Max(1, fullCell.ImageWidth * fullCell.ImageHeight);
             bool fitsFull = shownShare >= 0.65 && fullComp.FacesCut == 0;
-            if (fitsFull && random.Next(4) != 0)
+            string way = options.PickSolo(fitsFull, random);
+            if (way == SurpriseOptions.SoloMatted)
             {
-                if (random.Next(3) == 0)
+                var matted = BuildGalleryWall(new List<PhotoFacts> { photo }, w, h, random, options);
+                if (matted != null)
                 {
-                    var matted = BuildGalleryWall(new List<PhotoFacts> { photo }, w, h, random, options);
-                    if (matted != null)
-                    {
-                        if (options.MostZoom > 1 && random.NextDouble() < options.ZoomChance)
-                            AimAtSubject(matted.Cells[0], options.MostZoom, rasterScale);
-                        Judge(matted, rasterScale, options.FaceShown);
-                        return matted;
-                    }
+                    if (options.MostZoom > 1 && random.NextDouble() < options.ZoomChance)
+                        AimAtSubject(matted.Cells[0], options.MostZoom, rasterScale);
+                    Judge(matted, rasterScale, options.FaceShown);
+                    return matted;
                 }
+                way = SurpriseOptions.SoloFill;
+            }
+            if (way == SurpriseOptions.SoloFill)
+            {
                 if (options.MostZoom > 1 && random.NextDouble() < options.ZoomChance)
                     AimAtSubject(fullCell, options.MostZoom, rasterScale);
                 Judge(fullComp, rasterScale, options.FaceShown);

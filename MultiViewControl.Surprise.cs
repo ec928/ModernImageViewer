@@ -40,6 +40,8 @@ namespace ModernImageViewer
         private System.Threading.CancellationTokenSource? _prepareCts;
         private Task? _prepareTask;
         private Action? _updateStorySummary;
+        /// <summary>Set while the drawer is open: its Image Pool tab counts the images off the canvas, which change with the canvas.</summary>
+        private Action? _refreshPoolTab;
         private Action? _refreshStoryboardCards;
         private Action? _syncStorySceneSelection;
         private Action<int>? _onStoryboardPlaybackIndexChanged;
@@ -833,6 +835,33 @@ namespace ModernImageViewer
                     });
                 designSliders[design] = ds;
             }
+            // A layout of one image: the same odds scale as the designs above, so it reads and works the same way.
+            designsSection.Children.Add(new TextBlock
+            {
+                Text = "Single images",
+                FontSize = 12,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Opacity = 0.85,
+                Margin = new Thickness(0, 14, 0, 2)
+            });
+            designsSection.Children.Add(new TextBlock
+            {
+                Text = "How a layout of one image shows it. An image that filling would crop by more than a third, or cut a face from, is always shown whole.",
+                FontSize = 11,
+                Opacity = 0.6,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 6)
+            });
+            void SoloSlide(string name, string tip, double odds, Action<SurpriseOptions, double> set)
+            {
+                double initial = odds <= 0 ? -1.2 : Math.Log(Math.Max(SurpriseOptions.RarestDesign, odds), DesignOddsBase);
+                Slide(designsSection, name, tip, -1.2, 1.0, 0.1, initial, FormatDesignStep,
+                    (o, v) => set(o, v <= -1.1 ? 0 : Math.Pow(DesignOddsBase, v)));
+            }
+            SoloSlide("Fill the screen", "Cropped to fill the screen. Far left turns it off.", options.SoloFillOdds, (o, v) => o.SoloFillOdds = v);
+            SoloSlide("Matted", "In a card with a mat round it. Far left turns it off.", options.SoloMattedOdds, (o, v) => o.SoloMattedOdds = v);
+            SoloSlide("Whole image", "Not cropped: a framed print on a canvas tinted from the image. Far left turns it off.", options.SoloWholeOdds, (o, v) => o.SoloWholeOdds = v);
+
             Slide(designsSection, "Version variety", "How many of the highest-scored candidate layouts it picks from. 1 always picks the single best layout.",
                 1, 12, 1, options.Variety,
                 v => (int)v == 1 ? "Best" : $"Top {(int)v}",
@@ -1785,6 +1814,7 @@ namespace ModernImageViewer
             };
             tabStrip.Children.Add(poolTab);
             tabStrip.Children.Add(storyTab);
+            _refreshPoolTab = () => poolTab.Content = PoolTabLabel();
             topHeader.Children.Add(tabStrip);
 
             Action? updateStorySummary = null;
@@ -2574,6 +2604,9 @@ namespace ModernImageViewer
 
             void SyncSceneSelection()
             {
+                // After Undo or opening a file, the show is new objects and these cards are the old ones until the drawer
+                // is rebuilt. Taking the old object as the selection would leave a scene that is not in the show.
+                if (_activeShow == null || !scenesCollection.All(s => _activeShow.Scenes.Contains(s))) return;
                 if (_selectedShowScene != null)
                 {
                     var match = scenesCollection.FirstOrDefault(s => s.Id == _selectedShowScene.Id);
@@ -3125,10 +3158,11 @@ namespace ModernImageViewer
                     Canvas = file.Canvas,
                     State = file.State,
                     Mosaic = file.Mosaic,
-                    Photos = file.Photos.Where(p => p.Slot < onShow && !string.IsNullOrEmpty(p.Path)).ToList(),
+                    // Empty cells are part of the layout: dropped, a scene of floating prints lost its grid and a pool image took its place.
+                    Photos = file.Photos.Where(p => p.Slot < onShow).ToList(),
                     Freeform = file.Freeform != null ? new List<FreeformCellDto>(file.Freeform) : null
                 };
-                int photoCount = sceneFile.Photos.Count + (sceneFile.Freeform?.Count ?? 0);
+                int photoCount = sceneFile.Photos.Count(p => !string.IsNullOrEmpty(p.Path)) + (sceneFile.Freeform?.Count(c => !string.IsNullOrEmpty(c.Path)) ?? 0);
                 if (photoCount == 0)
                 {
                     ShowAutoPlayToast("Put at least one image on the canvas first");
@@ -3193,7 +3227,7 @@ namespace ModernImageViewer
                         _canvasSceneId = scene.Id;
                     }
                     RefreshCardBadges();
-                    int images = scene.PhotoCount;
+                    int images = scene.GetPhotoPaths().Count();
                     ShowAutoPlayToast(reusing
                         ? $"Added scene {scenesCollection.Count}. Every image was already in the show, so it reuses some."
                         : $"Added scene {scenesCollection.Count} with {images} new {(images == 1 ? "image" : "images")}");
@@ -3389,6 +3423,64 @@ namespace ModernImageViewer
             HudMenu_Opened(this, EventArgs.Empty);
             ShowShownBadge();
             if (_trayTab == 0 && all.Count > 0) search.Loaded += (_, _) => search.Focus(FocusState.Programmatic);
+        }
+
+        private int _storyboardBuildTicket;
+        private const int ScenesBeforePlay = 2;
+
+        /// <summary>
+        /// Play storyboard, from the folders: a new storyboard of the session's images that starts playing after its first
+        /// scenes and goes on making scenes, from images not in it yet, while it plays, until every image is in it. Reading a
+        /// large folder's faces first would keep the screen still for minutes. Stops if the show is replaced or cleared.
+        /// </summary>
+        public async Task MakeAndPlayStoryboardAsync()
+        {
+            int ticket = ++_storyboardBuildTicket;
+            // The session has only just opened: wait for the canvas to have its size, so scenes take its shape.
+            for (int i = 0; i < 40 && (ActualWidth < 1 || ActualHeight < 1); i++) await Task.Delay(50);
+
+            StopAutoPlay();
+            RemoveTrayCard();
+            var show = new ShowProject { Title = "Storyboard" };
+            _activeShow = show;
+            _selectedShowScene = null;
+            _canvasSceneId = null;
+            _shuffleChosen = false;
+            _isStoryboardPlayback = false;
+            _showPlaybackIndex = 0;
+            ShowShownBadge();
+            bool Current() => ticket == _storyboardBuildTicket && ReferenceEquals(show, _activeShow);
+
+            bool started = false;
+            while (Current())
+            {
+                var fresh = show.ImagesNotInShow(SessionPictures());
+                if (fresh.Count == 0) break;
+                var chosen = fresh.Take(Math.Clamp(SurpriseChoices.MostPictures, 1, MosaicLayout.MaxShown)).ToList();
+                var ready = DecodedBitmaps();
+                var facts = await ReadFactsAsync(chosen, path => ready.TryGetValue(path, out var bitmap) ? (bitmap.PixelWidth, bitmap.PixelHeight) : null);
+                if (!Current()) return;
+                var previous = show.Scenes.Count > 0 ? show.Scenes[^1] : null;
+                var scene = await ShowDirector.DraftSceneAsync(facts, SurpriseChoices, ActualWidth, ActualHeight, previous);
+                if (!Current()) return;
+                // What is left cannot be laid out, such as files that will not open.
+                if (scene == null) break;
+
+                show.Scenes.Add(scene);
+                _updateStorySummary?.Invoke();
+                ShowShownBadge();
+                if (!started && show.Scenes.Count >= ScenesBeforePlay)
+                {
+                    started = true;
+                    await PlayStoryboardAsync(0);
+                }
+            }
+            if (!started && Current() && show.Scenes.Count > 0) await PlayStoryboardAsync(0);
+            if (Current())
+            {
+                _updateStorySummary?.Invoke();
+                ShowShownBadge();
+            }
         }
 
         private async Task PlayStoryboardAsync(int startIndex = -1)
@@ -3616,12 +3708,13 @@ namespace ModernImageViewer
                 Canvas = file.Canvas,
                 State = file.State,
                 Mosaic = file.Mosaic,
-                Photos = file.Photos.Where(p => p.Slot < onShow && !string.IsNullOrEmpty(p.Path)).ToList(),
+                // Empty cells are part of the layout: dropped, a scene of floating prints lost its grid and a pool image took its place.
+                    Photos = file.Photos.Where(p => p.Slot < onShow).ToList(),
                 Freeform = file.Freeform != null ? new List<FreeformCellDto>(file.Freeform) : null,
                 ActiveSceneId = scene.Id
             };
 
-            int photoCount = sceneFile.Photos.Count + (sceneFile.Freeform?.Count ?? 0);
+            int photoCount = sceneFile.Photos.Count(p => !string.IsNullOrEmpty(p.Path)) + (sceneFile.Freeform?.Count(c => !string.IsNullOrEmpty(c.Path)) ?? 0);
             if (photoCount == 0) return;
 
             var stored = MultiViewLayoutFile.FromJson(sceneFile.ToJson()) ?? sceneFile;
@@ -3649,6 +3742,7 @@ namespace ModernImageViewer
             RootGrid.Children.Remove(_trayCard);
             _trayCard = null;
             _updateStorySummary = null;
+            _refreshPoolTab = null;
             _refreshStoryboardCards = null;
             _syncStorySceneSelection = null;
             _onStoryboardPlaybackIndexChanged = null;
@@ -3800,7 +3894,8 @@ namespace ModernImageViewer
                         ? $"Play a new layout every {SurpriseChoices.PlayWords}, from the image pool. Space does the same."
                         : $"Play a new layout every {SurpriseChoices.PlayWords}. Space does the same."));
 
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(AutoPlayButton, playing ? $"Pause, {text}" : text);
+            // The label already says Pause while something plays; the name is the label.
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(AutoPlayButton, text);
             ToolTipService.SetToolTip(AutoPlayButton, playTip);
             PaintSelected(AutoPlayButton, AutoPlayText, AutoPlayIcon, playing);
 
@@ -4272,19 +4367,8 @@ namespace ModernImageViewer
         /// </summary>
         private MultiViewLayoutFile WithRestInTray(MultiViewLayoutFile file, List<string> pictures)
         {
-            var copy = MultiViewLayoutFile.FromJson(file.ToJson());
-            if (copy == null) return file;
-
-            int framed = file.State?.FramedSlots ?? 0;
-            if (framed > 0)
-                file.Photos.RemoveAll(photo => photo.Slot >= framed);
-
-            var used = new HashSet<string>(copy.Photos.Select(p => p.Path ?? string.Empty), StringComparer.OrdinalIgnoreCase);
-            foreach (var cell in copy.Freeform ?? new List<FreeformCellDto>()) used.Add(cell.Path ?? string.Empty);
             var sourceList = (_isStoryboardPlayback || _surpriseDeck == null) ? pictures : (_surpriseDeck.All);
-            var rest = sourceList.Where(used.Add).ToList();
-            if (rest.Count > 0) AppendToTray(copy, rest, copy.Photos.Count);
-            return copy;
+            return MultiViewLayoutFile.WithPoolAfter(file, sourceList);
         }
 
         /// <summary>Featured pictures are always in the hand. The deck supplies the rest.</summary>
