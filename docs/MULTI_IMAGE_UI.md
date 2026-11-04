@@ -19,7 +19,7 @@ One pill along the bottom, left to right. Dividers separate the groups. Rows and
 | Play | Play Show, Play Show · i/N, Play Mix, or Pause | Starts or pauses. Stopped on a storyboard: `Play Show`, or `Play Show · i/N` when resuming past the first scene. Stopped on Auto-Mix: `Play Mix`. While either is running, the label is `Pause`. Space does the same. Filled while running. |
 | Next | icon | Next scene, or next layout. Right arrow / PageDown. |
 | Play options | chevron | Opens or closes Auto-Mix Settings. |
-| Rows | Rows, or N Rows | Arranges the grid in rows and opens the grid layout card. R switches between rows and columns. |
+| Rows | Rows, or N Rows | Arranges the grid in rows and opens the grid layout card. R switches between rows and columns. B, R, H, + and − work only without Ctrl or Alt held, so Ctrl+B still toggles the sidebar. |
 | Columns | Columns, or N Columns | Arranges the grid in columns. Same card and same R key. |
 | Full screen | icon | Full screen toggle (F11). |
 | Canvas | Canvas | Aspect ratio, surface, color, and canvas frame options. |
@@ -104,7 +104,10 @@ Floating at the top of the canvas, strictly elevated above all cards:
 - **Keyframe Mode Pills**: `🟢 Start` (emerald green) and `🔴 End` (ruby coral).
 - **Preview Move**: Plays a live 2.5-second Ken Burns camera transition between Start and End keyframes.
 - **Reset**: Reverts camera keyframes to default framing.
-- **Done**: Commits the custom camera keyframes and returns to the storyboard.
+- **Cancel**: Leaves without keeping this scene's changes. Esc does the same. A scene left with the steppers has already kept its path.
+- **Done**: Commits the custom camera keyframes and returns to the storyboard. Enter does the same.
+
+While it is open, Space previews, Tab switches Start and End, Left and Right step scenes, F1 still lists the keys, and F11 still toggles full screen. Other keys do nothing, so Undo and Save/Load cannot change the canvas under the frames.
 
 ### Wireframe Editing
 - **Interactive Wireframes**: Green rectangular wireframe indicates camera Start; red wireframe indicates camera End.
@@ -128,7 +131,7 @@ When viewing a storyboard scene on the canvas, any manual layout adjustment auto
 Opened via `Save/Load` or `Ctrl+S`:
 - Section header: **Storyboards & Layouts**.
 - **Save Storyboard as…**: Exports current presentation as `.mivshow` JSON project.
-- **Open Storyboard…**: Opens a saved `.mivshow` file.
+- **Open Storyboard…**: Opens a saved `.mivshow` file. A `.mivshow` also opens from Explorer, the command line or a drop on the window. That replaces the session, which goes to Autosaved.
 - **Recent & Favourites Folders**: Scans for both `.mivlayout` and `.mivshow` files, automatically prioritizing `.mivshow` storyboards at the top of folder lists with filmstrip icons (`🎬`) and blue `Show` badges.
 - **Autosaved Sessions**: Displays both image count and storyboard scene metadata: `181 images · 🎬 33` with full scene restore tooltips.
 
