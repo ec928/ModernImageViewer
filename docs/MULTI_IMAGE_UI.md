@@ -112,7 +112,9 @@ Floating at the top of the canvas, strictly elevated above all cards:
 - **Reset**: Reverts camera keyframes to default framing.
 - **Cancel**: Leaves without keeping this scene's changes. Esc does the same. A scene left with the steppers has already kept its path.
 - **Aim at face**: Centres the selected frame on a face and zooms so the face fills about a third of it, up to 2.5×. Largest face first; each click moves to the next. Greyed out when no face was found in the scene.
-- **Exact…**: Zoom, and across and down (the frame's centre, as a percentage of the canvas), typed for the selected frame.
+- **Exact…**: Zoom, across and down (the frame's centre, as a percentage of the canvas), and turn (degrees), typed for the selected frame. A turned frame is drawn turned, at the size playback shows it: zoomed a little further so no corner of the canvas shows.
+- **Shot 1 of 2**: In a scene of more than one shot, steps between its shots; Start and End are the selected shot's frames. A shot that follows on starts where the one before ends, so moving one of those frames moves the other; "cut" marks a shot that starts somewhere else. Preview Move plays every shot, 2.5 seconds each.
+- **Curve**: How the selected shot gets going and comes to rest (see Movement curves).
 - **Face outlines**: Every face found in the scene is outlined with a dashed box, where the image shows it: its crop, zoom and turn included. Faces that had not been read yet, as in a scene added by hand, are read when the editor opens.
 - **Done**: Commits the custom camera keyframes and returns to the storyboard. Enter does the same.
 
@@ -159,6 +161,29 @@ The last section in Advanced Settings holds the settings Cinematic storyboard us
 Reset to defaults resets these along with the rest. Use for this storyboard is not a saved setting: it belongs to the open storyboard and is saved with it.
 
 A Cinematic storyboard uses your main Transitions settings.
+
+### Motion and movement
+
+**Motion**, on the first page and in the Cinematic storyboard section, is a range: each layout or scene picks how far the camera moves from within it. Ends together is one strength. A saved single Motion becomes a range of that one value.
+
+Under Camera & transitions:
+
+- **Two-shot scenes** (default 25%): the chance that a scene with a face, held 8 seconds or more, is two shots, as Cinematic Slideshow makes them: a wide shot, then either a snap zoom in to the face or a cut to the face and a slow push in. Only with the camera on Auto.
+- **Movement curves**: odds for how each move gets going and comes to rest, on the Off to Often scale, with the mix shown underneath.
+
+| Curve | What it looks like | Default |
+|---|---|---|
+| Steady | The same speed throughout, so it is still moving through a crossfade | Normal |
+| Gentle | The mildest start and stop | Often |
+| Smooth | A soft start and stop; every move eased this way before there was a choice | Normal |
+| Cinematic | Lingers at both ends, quicker in the middle, as Cinematic Slideshow | Less |
+| Settle | Under way at once, then glides to rest | Rare |
+| Snap | Slow, a quick push, then a long settle; zooms only | Off |
+
+- **Curved path** (default 0–50%): how far a pan's path bows to one side, up to Cinematic Slideshow's bend.
+- **Rotation** (default Off, up to 6°): how far the view turns over a move. It zooms in just enough to keep every corner covered.
+
+Storyboard scenes store their curve, bend, turn and shots, and play them; scenes made before these play as they did.
 
 ### Transitions
 
