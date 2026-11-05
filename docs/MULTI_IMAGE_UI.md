@@ -25,7 +25,7 @@ One pill along the bottom, left to right. Dividers separate the groups. Rows and
 | Canvas | Canvas | Aspect ratio, surface, color, and canvas frame options. |
 | Save/Load | Save/Load | Save the canvas as JPEG or PNG, copy it, or save and open layouts (`.mivlayout`) and storyboards (`.mivshow`). Ctrl+S opens it. |
 | Undo, Redo | icons | Undo (Ctrl+Z) and Redo (Ctrl+Y). Greyed out when there is nothing to take back or bring back. They are on the bar because removing a scene, a cell or a layout never asks first. |
-| Advanced | gear | Undo, redo, fill or fit, and reset options. |
+| Advanced | gear | Fill cells or fit whole images, and Reset canvas and images. Undo and Redo are on the bar beside it, not in this menu. |
 | Full screen | icon | Full screen toggle (F11). Last on the bar, after a divider, as in a video player. |
 
 ### Which mode is active

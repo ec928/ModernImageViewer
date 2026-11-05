@@ -511,7 +511,7 @@
                             Padding="8,5"
                             CornerRadius="12"
                             AutomationProperties.Name="Advanced options"
-                            ToolTipService.ToolTip="Advanced options">
+                            ToolTipService.ToolTip="Advanced options: fill or fit, and reset">
                         <Button.Flyout>
                             <MenuFlyout x:Name="AdvancedMenuFlyout"
                                         MenuFlyoutPresenterStyle="{StaticResource MultiViewMenuFlyoutPresenterStyle}"

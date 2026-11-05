@@ -635,17 +635,7 @@ namespace ModernImageViewer
         {
             AdvancedMenuFlyout.Items.Clear();
             CaptureUndoPoint();
-            var undo = MakeAdvancedItem("Undo", "\uE7A7", Undo);
-            undo.KeyboardAcceleratorTextOverride = "Ctrl+Z";
-            undo.IsEnabled = CanUndo;
-            ToolTipService.SetToolTip(undo, "Undo (Ctrl+Z)");
-            AdvancedMenuFlyout.Items.Add(undo);
-            var redo = MakeAdvancedItem("Redo", "\uE7A6", Redo);
-            redo.KeyboardAcceleratorTextOverride = "Ctrl+Y";
-            redo.IsEnabled = CanRedo;
-            ToolTipService.SetToolTip(redo, "Redo (Ctrl+Y)");
-            AdvancedMenuFlyout.Items.Add(redo);
-            AdvancedMenuFlyout.Items.Add(new MenuFlyoutSeparator());
+            // Undo and Redo are on the bar beside this menu; they were here as well.
             var fillFit = MakeAdvancedItem(_isFillMode ? "Fit whole images" : "Fill cells", _isFillMode ? "\uE73F" : "\uE740", () =>
             {
                 ToggleFillMode();
