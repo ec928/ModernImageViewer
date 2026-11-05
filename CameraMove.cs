@@ -116,9 +116,18 @@ namespace ModernImageViewer
     /// far the view turns (degrees, a range), and the chance of a two-shot scene where there is a face. None is the plain
     /// move every scene had before these were settings.
     /// </summary>
-    public sealed record CameraStyle(IReadOnlyList<double> CurveOdds, double BowLeast, double BowMost, double TurnLeast, double TurnMost, double TwoShotChance)
+    public sealed record CameraStyle(IReadOnlyList<double> CurveOdds, double BowLeast, double BowMost, double TurnLeast, double TurnMost, double TwoShotChance,
+        double ZoomLeast = 0, double ZoomMost = 0)
     {
         public static readonly CameraStyle Plain = new(new double[] { 0, 0, 1, 0, 0, 0 }, 0, 0, 0, 0, 0);
+
+        /// <summary>How far this zoom goes, picked within the Camera zoom range; null without one, when Motion sets it.</summary>
+        public double? PickZoom(Random random)
+        {
+            if (ZoomMost <= 1) return null;
+            double least = Math.Max(1, Math.Min(ZoomLeast, ZoomMost)), most = Math.Max(ZoomLeast, ZoomMost);
+            return least + random.NextDouble() * (most - least);
+        }
     }
 
     /// <summary>How a floating cell sits at a moment, on top of its place in the layout, which does not change.</summary>
@@ -371,7 +380,7 @@ namespace ModernImageViewer
             }
 
             var wide = new CameraView(WidestZoom, aim.X, aim.Y).Covered();
-            var close = new CameraView(Math.Max(WidestZoom + 0.02, 1 + intensity * 1.5), aim.X, aim.Y).Covered();
+            var close = new CameraView(Math.Max(WidestZoom + 0.02, style.PickZoom(random) ?? 1 + intensity * 1.5), aim.X, aim.Y).Covered();
             return kind == CameraKind.ZoomIn
                 ? new CameraMove(kind, wide with { Angle = turn.From }, close with { Angle = turn.To }, seconds, curve)
                 : new CameraMove(kind, close with { Angle = turn.From }, wide with { Angle = turn.To }, seconds, curve);
@@ -386,7 +395,8 @@ namespace ModernImageViewer
             var calm = CameraCurves.Pick(style.CurveOdds, zoom: false, random);
             (double From, double To) turn = Turn(style, random);
             double wideZoom = 1.06 + intensity * 0.3;
-            double closeZoom = Math.Max(1.35, 1 + intensity * 2.5);
+            // The close-up is always nearer than the wide shot, so the second shot reads as moving in.
+            double closeZoom = style.PickZoom(random) is double picked ? Math.Max(wideZoom + 0.15, picked) : Math.Max(1.35, 1 + intensity * 2.5);
             // The wide shot drifts a little toward the face, so the second shot follows on from it.
             var wideFrom = new CameraView(wideZoom, 0.5 + (0.5 - face.X) * 0.15, 0.5 + (0.5 - face.Y) * 0.15, turn.From).Covered();
             var wideTo = new CameraView(wideZoom, 0.5 + (face.X - 0.5) * 0.15, 0.5 + (face.Y - 0.5) * 0.15, turn.From).Covered();

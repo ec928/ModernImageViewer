@@ -152,8 +152,9 @@ The defaults, which **Reset to defaults** on the Advanced page puts back. A sett
 | Duration | 10 to 15 seconds (a single duration, with the thumbs together, defaults to 10 seconds) |
 | Smart pace | On |
 | Motion | 40% to 60% |
-| Zoom on faces | 4× |
-| Face zoom frequency | 70% |
+| Zoom (layout zoom, every image) | 1.5× to 4× |
+| Zoom frequency | 70% |
+| Camera zoom | 1.15× to 1.8× |
 | Face kept in frame, at least | 85% |
 | Pick from the best | 3 |
 
@@ -162,17 +163,26 @@ The defaults, which **Reset to defaults** on the Advanced page puts back. A sett
 Faces are found by Windows on this PC. What follows applies only to faces it finds; a face it misses, such as one turned away, very small or in shadow, is cropped like any other part of the image.
 
 - **Framing.** A cell with faces is framed on the area that holds all of them, a little above the middle of the cell, whether or not it zooms. An image with no faces is framed on its focus point.
-- **Zoom.** Each cell with faces zooms in at the odds of **Face zoom frequency**. The zoom is the smallest of: **Zoom on faces**; enough for the faces to fill about 40% of the cell; and twice the image's own pixels, so it does not go soft. A small face in a large image can zoom close to the full amount; a face that already fills the cell, a group, or a low-resolution image zooms little or not at all.
+- **Zoom.** Zoom is not only for faces: see **Zoom**, below. With faces, a zoom heads for them and stops short of cutting any: all the faces found stay in, taking at most 85% of the cell. A face that already fills the cell, or a wide group, zooms little or not at all.
 - **No cut faces.** Each layout is tried in several versions. A version cuts a face when less of it than **Face kept in frame, at least** shows, whether the cell's edge, its shape or another cell hides it. The pick is made from the best **Pick from the best** versions that cut no face and mostly hide no image; only when every version cuts a face is the best of them taken anyway. A small face in a crowd weighs less than a face that fills the image.
 - **The big places.** The largest cell goes, by preference, to the image with the most in it, and faces count heavily. Hero spotlight takes its hero from the two images that rank highest, unless an image is featured (**Feature in Auto-Mix**), which always gets the best place.
-- **Single images.** An image that filling the screen would cut a face from is shown whole.
+- **Single images.** An image that filling the screen would cut a face from is never filled: see **Single images**, below.
 - **Camera.** 70% of camera moves head for a large cell with faces. Two-shot scenes are under Camera, below.
 
 These are applied when a layout is made, so changing them does not change scenes already in a storyboard; Add new layout and Replace show use the new values.
 
+### Zoom
+
+Two settings zoom, and both work with or without faces:
+
+- **Zoom** (Images & faces), a range, with **Zoom frequency**: when a layout is made, each image rolls against the frequency, and one that zooms picks an amount within the range, toward its faces or, with none found, its focus point. Only two things stop it short: it never cuts a face, and never shows the photo past twice its own pixels, so it stays sharp. The zoom stays for the scene. It replaces Zoom on faces, which zoomed only images with faces, by a fixed amount for each photo.
+- **Camera zoom** (Camera), a range: how far a zoom in or out goes while a layout plays. Each zoom picks within it, and so does a two-shot's close-up, always closer than its wide shot. Before this setting the depth came from Motion and could not pass about 1.6×.
+
+On a Cinematic storyboard portrait with the default settings, about 7 scenes in 10 are zoomed in, each by a different amount from 1.5× to 4× where the photo has the detail, and the rest show the whole portrait; the camera then moves over it.
+
 ### Single images
 
-Under Advanced Settings > Designs, after the six design sliders, **Single images** sets how a layout of one image shows it, on the same Off to Often scale as the designs: **Fill the screen** (cropped), **Matted** (in a card with a mat) and **Whole image** (not cropped: a framed print on a canvas tinted from the image). They are odds against each other, so with all three at Normal each comes up about a third of the time. The defaults are More, Normal and Normal, the odds single images had before this was a setting. An image that filling would show less than 65% of, such as a portrait on a landscape screen, or cut a face from, is never filled; the odds still decide. Its Fill odds show it whole instead, as large as the screen allows and with no frame, as Cinematic Slideshow shows a portrait; Matted and Whole image keep theirs. Matted zooms on faces at your Face zoom frequency. Whole image is a print framed in the Gallery wall's Frame color and Frame width. They apply to Auto-Mix, Make a show, Add new layout and Play storyboard; Cinematic storyboard has its own.
+Under Advanced Settings > Designs, after the six design sliders, **Single images** sets how a layout of one image shows it, on the same Off to Often scale as the designs: **Fill the screen** (cropped), **Matted** (in a card with a mat) and **Whole image** (not cropped: a framed print on a canvas tinted from the image). They are odds against each other, so with all three at Normal each comes up about a third of the time. The defaults are More, Normal and Normal, the odds single images had before this was a setting. An image that filling would show less than 65% of, such as a portrait on a landscape screen, or cut a face from, is never filled; the odds still decide. Its Fill odds show it whole instead, as large as the screen allows and with no frame, as Cinematic Slideshow shows a portrait; Matted and Whole image keep theirs. Fill the screen, the full-size whole view and Matted all take the layout zoom (see **Zoom**), so a portrait is sometimes whole and sometimes zoomed in by a different amount each time. Whole image is the uncropped print and never zooms. Whole image is a print framed in the Gallery wall's Frame color and Frame width. They apply to Auto-Mix, Make a show, Add new layout and Play storyboard; Cinematic storyboard has its own.
 
 ### Cinematic storyboard
 
@@ -193,7 +203,7 @@ A Cinematic storyboard uses your main Transitions settings.
 
 ### Motion and movement
 
-**Motion**, on the first page and in the Cinematic storyboard section, is a range: each layout or scene picks how far the camera moves from within it. Ends together is one strength. A saved single Motion becomes a range of that one value.
+**Motion**, on the first page and in the Cinematic storyboard section, is a range: each layout or scene picks how far the camera drifts from within it, and 0 keeps the camera still. How far it zooms is **Camera zoom**. Ends together is one strength. A saved single Motion becomes a range of that one value.
 
 Under Camera:
 

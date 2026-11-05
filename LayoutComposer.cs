@@ -171,8 +171,25 @@ namespace ModernImageViewer
         public Dictionary<string, double> DesignOdds { get; set; } = new();
         public HashSet<string> DisabledDesigns { get; set; } = new(StringComparer.OrdinalIgnoreCase);
         public bool IsDesignOff(string design) => DisabledDesigns != null && DisabledDesigns.Contains(design);
+        /// <summary>
+        /// Layout zoom: how far an image is zoomed into its cell when the layout is made, toward its faces or, with none
+        /// found, its focus point. Each zoomed image picks within LeastZoom to MostZoom; ZoomChance is how often an image
+        /// is zoomed. Only two things hold it back: it never cuts a face, and never shows the photo past twice its own pixels.
+        /// </summary>
+        public double LeastZoom { get; set; } = 1.5;
         public double MostZoom { get; set; } = 4;
         public double ZoomChance { get; set; } = 0.7;
+        public bool Zooms(Random random) => MostZoom > 1 && random.NextDouble() < ZoomChance;
+        public double PickZoom(Random random)
+        {
+            double least = Math.Min(LeastZoom, MostZoom), most = Math.Max(LeastZoom, MostZoom);
+            return least + random.NextDouble() * (most - least);
+        }
+
+        /// <summary>Camera zoom: how far a zoom move goes while a layout plays, with or without faces, as a range each zoom picks within.</summary>
+        public double CameraZoomLeast { get; set; } = 1.15;
+        public double CameraZoomMost { get; set; } = 1.8;
+        public const double LeastCameraZoom = 1.05, MostCameraZoom = 2.5;
         /// <summary>How many of the best versions the pick is made from: 1 is always the best, more is more varied.</summary>
         public int Variety { get; set; } = 3;
         /// <summary>How much of a face must show for it to count as uncut.</summary>
@@ -295,7 +312,8 @@ namespace ModernImageViewer
 
         /// <summary>The camera settings a planned move follows. Two shots only when the camera mode is Auto: a chosen mode is one kind of move.</summary>
         public CameraStyle CameraStyle() => new(CurveOdds, PathBendLeast, PathBendMost, TurnLeast, TurnMost,
-            string.Equals(CameraMode, CameraAuto, StringComparison.OrdinalIgnoreCase) ? TwoShotChance : 0);
+            string.Equals(CameraMode, CameraAuto, StringComparison.OrdinalIgnoreCase) ? TwoShotChance : 0,
+            CameraZoomLeast, CameraZoomMost);
         /// <summary>The odds that it zooms rather than drifts.</summary>
         public double MotionZoomChance { get; set; } = 0.5;
         /// <summary>The odds that it aims at a cell with faces, where there is one.</summary>
@@ -409,6 +427,9 @@ namespace ModernImageViewer
                     : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 if (!CameraModes.Contains(read.CameraMode)) read.CameraMode = CameraAuto;
                 read.MostZoom = Math.Clamp(read.MostZoom, 1, MostOfAnyZoom);
+                read.LeastZoom = Math.Clamp(read.LeastZoom, 1, read.MostZoom);
+                read.CameraZoomLeast = Math.Clamp(read.CameraZoomLeast, LeastCameraZoom, MostCameraZoom);
+                read.CameraZoomMost = Math.Clamp(read.CameraZoomMost, read.CameraZoomLeast, MostCameraZoom);
                 read.ZoomChance = Math.Clamp(read.ZoomChance, 0, 1);
                 read.Variety = Math.Clamp(read.Variety, 1, 12);
                 read.FaceShown = Math.Clamp(read.FaceShown, 0.5, 1);
@@ -650,7 +671,8 @@ namespace ModernImageViewer
         private const int NearlyTheSame = 5;
         private const double ScreenFlatShare = 0.15;
         // The face box runs from the eyes to the mouth, so this leaves room for the head and shoulders.
-        private const double FacesFill = 0.4;
+        // How much of the cell the faces may take at most when an image zooms: the rest is room round them.
+        private const double FacesKept = 0.85;
         private const double MostEnlarged = 2;
         private const double FeaturedLarger = 1.5;
         // The middle of the faces in a sample of family photos, below which a face looks soft.
@@ -693,12 +715,9 @@ namespace ModernImageViewer
                     {
                         var version = Build(recipe, usable, width, height, random, pass == 0 ? look : random.Next(int.MaxValue), options);
                         if (version == null) continue;
-                        if (options.MostZoom > 1)
+                        foreach (var cell in version.Cells)
                         {
-                            foreach (var cell in version.Cells)
-                            {
-                                if (random.NextDouble() < options.ZoomChance) AimAtSubject(cell, options.MostZoom, rasterScale);
-                            }
+                            if (options.Zooms(random)) AimAtSubject(cell, options.PickZoom(random), rasterScale);
                         }
                         Judge(version, rasterScale, options.FaceShown);
                         found.Add(version);
@@ -764,8 +783,8 @@ namespace ModernImageViewer
                 var matted = BuildGalleryWall(new List<PhotoFacts> { photo }, w, h, random, options);
                 if (matted != null)
                 {
-                    if (options.MostZoom > 1 && random.NextDouble() < options.ZoomChance)
-                        AimAtSubject(matted.Cells[0], options.MostZoom, rasterScale);
+                    if (options.Zooms(random))
+                        AimAtSubject(matted.Cells[0], options.PickZoom(random), rasterScale);
                     Judge(matted, rasterScale, options.FaceShown);
                     return matted;
                 }
@@ -773,8 +792,8 @@ namespace ModernImageViewer
             }
             if (way == SurpriseOptions.SoloFill)
             {
-                if (options.MostZoom > 1 && random.NextDouble() < options.ZoomChance)
-                    AimAtSubject(fullCell, options.MostZoom, rasterScale);
+                if (options.Zooms(random))
+                    AimAtSubject(fullCell, options.PickZoom(random), rasterScale);
                 Judge(fullComp, rasterScale, options.FaceShown);
                 return fullComp;
             }
@@ -822,6 +841,10 @@ namespace ModernImageViewer
                 Geometry = new CellGeometryDto()
             };
             var stage = Finish(HeroSpotlight, new List<ComposedCell> { stageCell }, null, Tone(photo.Color, 0.28, 0.14), CanvasLook.Vignette, FrameLooks.Flush(), w, h);
+            // Fitted takes the layout zoom like any cell: the frame stays the whole image's shape, the image zooms inside it.
+            // Whole image is the uncropped print, so it never zooms.
+            if (fitted && options.Zooms(random))
+                AimAtSubject(stage.Cells[0], options.PickZoom(random), rasterScale);
             Judge(stage, rasterScale, options.FaceShown);
             return stage;
         }
@@ -1181,7 +1204,12 @@ namespace ModernImageViewer
         }
 
         /// <summary>The picture covers the cell, as Fill does, and shifts so its subject sits a little above the middle.</summary>
-        private static void AimAtSubject(ComposedCell cell, double mostZoom = 1, double rasterScale = 1)
+        /// <summary>
+        /// Frames the cell on its faces or, with none, its focus point, and zooms toward them by <paramref name="zoomTo"/>.
+        /// The zoom stops short where it would cut a face (all faces stay in, with a little room) or show the photo past
+        /// twice its own pixels.
+        /// </summary>
+        private static void AimAtSubject(ComposedCell cell, double zoomTo = 1, double rasterScale = 1)
         {
             double innerW = Math.Max(1, cell.W - 2 * cell.Frame.Padding);
             double innerH = Math.Max(1, cell.H - 2 * cell.Frame.Padding);
@@ -1191,7 +1219,7 @@ namespace ModernImageViewer
             double imageH = cell.Photo.Height * scale;
 
             double fx = cell.Photo.FocusX, fy = cell.Photo.FocusY;
-            double zoom = 1;
+            double limit = zoomTo;
             if (cell.Photo.Faces.Count > 0)
             {
                 double left = cell.Photo.Faces.Min(f => f.X);
@@ -1200,14 +1228,12 @@ namespace ModernImageViewer
                 double bottom = cell.Photo.Faces.Max(f => f.Y + f.H);
                 fx = (left + right) / 2;
                 fy = (top + bottom) / 2;
-                if (mostZoom > 1)
-                {
-                    // All the faces found, with room around them, and no further than the picture has the detail for.
-                    double fills = FacesFill * Math.Min(innerW / Math.Max(1, (right - left) * imageW), innerH / Math.Max(1, (bottom - top) * imageH));
-                    double detail = MostEnlarged * cell.Photo.Width / Math.Max(1, imageW * rasterScale);
-                    zoom = Math.Max(1, Math.Min(mostZoom, Math.Min(fills, detail)));
-                }
+                // Every face found stays in, with a little room round them.
+                limit = Math.Min(limit, FacesKept * Math.Min(innerW / Math.Max(1, (right - left) * imageW), innerH / Math.Max(1, (bottom - top) * imageH)));
             }
+            // No further than the picture has the detail for.
+            limit = Math.Min(limit, MostEnlarged * cell.Photo.Width / Math.Max(1, imageW * rasterScale));
+            double zoom = Math.Max(1, limit);
             imageW *= zoom;
             imageH *= zoom;
             cell.Zoom = zoom;

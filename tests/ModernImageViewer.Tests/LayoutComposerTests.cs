@@ -254,7 +254,8 @@ namespace ModernImageViewer.Tests
             Assert.True(front.X < back.X && back.X < 0, "the view moved right, so a nearer cell moves further left");
         }
 
-        private static SurpriseOptions Zoomed(double most) => new() { MostZoom = most, ZoomChance = 1 };
+        // The range pinned to one amount, so the amount reached can be checked exactly.
+        private static SurpriseOptions Zoomed(double most) => new() { LeastZoom = most, MostZoom = most, ZoomChance = 1 };
 
         [Fact]
         public void Zoom_is_off_at_1x()
@@ -278,12 +279,13 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
-        public void Zoom_leaves_a_picture_alone_when_faces_already_fill_it_or_none_were_found()
+        public void Zoom_leaves_a_picture_alone_when_faces_already_fill_it_and_zooms_one_without_faces()
         {
             var made = LayoutComposer.Compose(Photos(4, 4000, 3000, new UnitRect(0.05, 0.05, 0.9, 0.9)), 1280, 720, 3, null, 1, LayoutComposer.EdgeToEdge, Zoomed(5))!;
             Assert.All(made.Cells, c => Assert.Equal(1, c.Zoom));
-            made = LayoutComposer.Compose(Photos(4, 4000, 3000), 1280, 720, 3, null, 1, LayoutComposer.EdgeToEdge, Zoomed(5))!;
-            Assert.All(made.Cells, c => Assert.Equal(1, c.Zoom));
+            // No faces: zoom is for every image, toward its focus point.
+            made = LayoutComposer.Compose(Photos(4, 4000, 3000), 1280, 720, 3, null, 1, LayoutComposer.EdgeToEdge, Zoomed(2))!;
+            Assert.All(made.Cells, c => Assert.Equal(2, c.Zoom, 3));
         }
 
         [Fact]

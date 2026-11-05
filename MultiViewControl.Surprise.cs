@@ -379,6 +379,7 @@ namespace ModernImageViewer
             }
 
             static string Percents(double a, double b) => b < 0.5 ? "Off" : Math.Abs(a - b) < 0.5 ? $"{a:0}%" : $"{a:0}% - {b:0}%";
+            static string Times(double a, double b) => b <= 1.01 ? "Off" : Math.Abs(a - b) < 0.01 ? $"{a:0.##}×" : $"{a:0.##}× - {b:0.##}×";
 
             ToggleSwitch Toggle(StackPanel column, string label, string tip, bool value, Action<SurpriseOptions, bool> chosen, string? subtitle = null)
             {
@@ -702,7 +703,7 @@ namespace ModernImageViewer
 
                 Toggle(body, "Smart pace", "When duration has a range, holds dense multi-image layouts toward the longer end and solo/pair layouts toward the shorter end.", options.SmartPace, (o, on) => o.SmartPace = on, subtitle: "Adjusts duration based on layout density");
 
-                RangeRow(body, "Motion", "How far the camera moves over each layout while it plays, from still to strong, with floating cells following it. Each layout picks within the range; ends together is one strength.",
+                RangeRow(body, "Motion", "How far the camera drifts over each layout while it plays, from still to strong, with floating cells following it; at 0 the camera stays still. How far it zooms is Camera zoom, under Advanced > Camera. Each layout picks within the range; ends together is one strength.",
                     0, 100, 5, options.MotionLeast * 100, options.MotionMost * 100, Percents,
                     (o, a, b) => { o.MotionLeast = a / 100; o.MotionMost = b / 100; });
 
@@ -779,10 +780,10 @@ namespace ModernImageViewer
             {
                 int f = SurpriseChoices.FewestPictures, m = SurpriseChoices.MostPictures;
                 string rangeText = f == m ? $"{f}" : $"{f}\u2013{m}";
-                string faceText = SurpriseChoices.MostZoom <= 1.01 || SurpriseChoices.ZoomChance <= 0.001
-                    ? "Faces Off"
-                    : $"Faces {SurpriseChoices.MostZoom:0.#}\u00D7";
-                return $"{rangeText} \u00B7 {faceText}";
+                string zoomText = SurpriseChoices.MostZoom <= 1.01 || SurpriseChoices.ZoomChance <= 0.001
+                    ? "Zoom off"
+                    : $"Zoom {Times(SurpriseChoices.LeastZoom, SurpriseChoices.MostZoom)}";
+                return $"{rangeText} \u00B7 {zoomText}";
             }
             var (imagesSection, imagesSummary) = Section("Images & faces", ImagesSummaryText());
             updateImagesSummary = () => imagesSummary.Text = ImagesSummaryText();
@@ -796,11 +797,10 @@ namespace ModernImageViewer
                 (o, v) => o.TogetherChance = v / 100);
             Toggle(imagesSection, "Skip screens and repeats", "Leave out what looks like a screen capture or a graphic, and all but one of near-identical shots.",
                 options.SkipScreens, (o, on) => o.SkipScreens = on);
-            Slide(imagesSection, "Zoom on faces", "1x is off. Brings forward people who are small in the image.",
-                1, SurpriseOptions.MostOfAnyZoom, 0.5, options.MostZoom,
-                v => v <= 1.01 ? "Off" : $"{v:0.0}\u00D7",
-                (o, v) => { o.MostZoom = v; updateImagesSummary(); });
-            Slide(imagesSection, "Face zoom frequency", "The odds that an image with faces is zoomed.",
+            RangeRow(imagesSection, "Zoom", "How far an image is zoomed into its frame when a layout is made, toward its faces or, with none found, its focus point. Each zoomed image picks within the range. It stops short of cutting a face, and of showing the photo past twice its own pixels, so it stays sharp. 1x is off.",
+                1, SurpriseOptions.MostOfAnyZoom, 0.25, options.LeastZoom, options.MostZoom, Times,
+                (o, a, b) => { o.LeastZoom = a; o.MostZoom = b; }, () => updateImagesSummary());
+            Slide(imagesSection, "Zoom frequency", "The odds that an image is zoomed, with or without faces.",
                 0, 100, 5, options.ZoomChance * 100,
                 v => v < 1 ? "Off" : $"{v:0}%",
                 (o, v) => { o.ZoomChance = v / 100; updateImagesSummary(); });
@@ -1038,6 +1038,10 @@ namespace ModernImageViewer
                 0, 100, 5, options.MotionZoomChance * 100,
                 v => $"{v:0}%",
                 (o, v) => o.MotionZoomChance = v / 100);
+
+            RangeRow(cameraSection, "Camera zoom", "How far the camera zooms in or out while a layout plays, with or without faces. Each zoom picks within the range, and so does a two-shot's close-up.",
+                SurpriseOptions.LeastCameraZoom, SurpriseOptions.MostCameraZoom, 0.05, options.CameraZoomLeast, options.CameraZoomMost, Times,
+                (o, a, b) => { o.CameraZoomLeast = a; o.CameraZoomMost = b; });
 
             Slide(cameraSection, "Aims at faces", "The odds that the camera heads toward a large image with faces in it.",
                 0, 100, 5, options.MotionFaceChance * 100,
