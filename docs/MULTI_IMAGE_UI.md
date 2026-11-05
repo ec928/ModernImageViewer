@@ -87,7 +87,7 @@ Cards can be dragged into a new order.
 
 **Play storyboard** in the sidebar, under Cinematic Slideshow, plays the whole folder; the same button on the selection bar plays the selected images. Either opens Multi-View with those images, starts a new storyboard and plays it once its first two scenes are made, so a large folder starts within seconds. While it plays it makes the next scenes from images not in it yet, a few ahead of the screen, one at a time, so building never competes with the show; when it is paused it makes the rest. It goes on until every image is in the show, and stops if the show is replaced or cleared. The drawer's summary and the Image Pool count catch up when the show pauses.
 
-**Cinematic storyboard**, under Play storyboard in the sidebar (and on the selection bar), makes a storyboard that looks like Cinematic Slideshow. By default each scene is one image filling the screen, for 5 to 20 seconds, with the camera moving and a crossfade between scenes. You can change this in Layout Generator Settings, under Advanced.
+**Cinematic storyboard**, under Play storyboard in the sidebar (and on the selection bar), makes a storyboard that looks like Cinematic Slideshow. By default each scene is one image filling the screen, for 10 to 15 seconds, with the camera moving and a crossfade between scenes. You can change this in Layout Generator Settings, under Advanced.
 
 A Cinematic storyboard stays Cinematic. While it is open, Add new layout and Replace show make Cinematic scenes, and the images-per-scene picker in the drawer changes the Cinematic setting. The drawer's summary starts with "Cinematic", and it stays Cinematic when saved and opened again.
 
@@ -157,7 +157,7 @@ The last section in Advanced Settings holds the settings Cinematic storyboard us
 | Use for this storyboard | Off; on for a storyboard started with Cinematic storyboard |
 | Images per scene | 1 to 1 |
 | Single images | Fill the screen Often, Matted Off, Whole image Off |
-| Duration | 5 to 20 seconds |
+| Duration | 10 to 15 seconds |
 | Smart pace | On |
 | Motion | 40% to 60% |
 

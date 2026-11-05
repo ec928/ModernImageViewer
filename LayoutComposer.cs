@@ -216,8 +216,8 @@ namespace ModernImageViewer
             return roll < fill ? SoloFill : roll < fill + matted ? SoloMatted : SoloWhole;
         }
 
-        public int FewestPictures { get; set; } = 9;
-        public int MostPictures { get; set; } = MosaicLayout.MaxShown;
+        public int FewestPictures { get; set; } = 1;
+        public int MostPictures { get; set; } = 9;
 
         /// <summary>With more pictures than a click may use, the clicks take turns through them.</summary>
         public bool TakesTurns(int pictures) => pictures > Math.Min(MosaicLayout.MaxShown, MostPictures);
@@ -225,14 +225,14 @@ namespace ModernImageViewer
         public double TogetherChance { get; set; } = 0.8;
         public bool SkipScreens { get; set; } = true;
         /// <summary>0 is off. A saved setting like the rest: pausing auto-play does not change it.</summary>
-        public int AutoPlaySeconds { get; set; }
+        public int AutoPlaySeconds { get; set; } = 10;
         public static readonly int[] AutoPlayChoices = { 0, 3, 5, 8, 10, 15, 20, 30 };
         public static readonly int[] RandomPlayChoices = { 3, 5, 8, 10, 15, 20, 30, 45, 60 };
         /// <summary>The shortest and longest hold a saved setting may have, in seconds.</summary>
         public const int FewestSeconds = 3, MostSeconds = 60;
-        public bool AutoPlayRandom { get; set; }
+        public bool AutoPlayRandom { get; set; } = true;
         public bool SmartPace { get; set; } = true;
-        public int RandomFewestSeconds { get; set; } = 5;
+        public int RandomFewestSeconds { get; set; } = 10;
         public int RandomMostSeconds { get; set; } = 15;
         public string CameraMode { get; set; } = CameraAuto;
         [System.Text.Json.Serialization.JsonIgnore]
@@ -486,8 +486,8 @@ namespace ModernImageViewer
         public double SoloFillOdds { get; set; } = SurpriseOptions.MostFavouredDesign;
         public double SoloMattedOdds { get; set; }
         public double SoloWholeOdds { get; set; }
-        public int FewestSeconds { get; set; } = 5;
-        public int MostSeconds { get; set; } = 20;
+        public int FewestSeconds { get; set; } = 10;
+        public int MostSeconds { get; set; } = 15;
         public bool SmartPace { get; set; } = true;
         public double MotionLeast { get; set; } = 0.4;
         public double MotionMost { get; set; } = 0.6;

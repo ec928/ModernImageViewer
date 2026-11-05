@@ -73,7 +73,8 @@ namespace ModernImageViewer.Tests
         [Fact]
         public void Too_few_pictures_or_no_room_make_nothing()
         {
-            Assert.Null(LayoutComposer.Compose(Photos(1), 1280, 720, 1));
+            // Images per scene starts at 1 by default, so one picture is a layout of one image.
+            Assert.Single(LayoutComposer.Compose(Photos(1), 1280, 720, 1)!.Cells);
             Assert.Null(LayoutComposer.Compose(Photos(0), 1280, 720, 1));
             Assert.Null(LayoutComposer.Compose(Photos(4), 0, 0, 1));
             Assert.Null(LayoutComposer.Compose(Photos(4, 0, 0), 1280, 720, 1));
@@ -333,15 +334,20 @@ namespace ModernImageViewer.Tests
             Assert.Equal(SurpriseOptions.CardAny, read.Card);
             Assert.Equal(1, read.MostZoom);
             Assert.Equal(3, read.Variety);
-            Assert.Equal(9, read.FewestPictures);
+            Assert.Equal(1, read.FewestPictures);
+            Assert.Equal(9, read.MostPictures);
+            Assert.True(read.AutoPlayRandom);
+            Assert.Equal(10, read.RandomFewestSeconds);
+            Assert.Equal(15, read.RandomMostSeconds);
+            Assert.Equal(10, read.AutoPlaySeconds);
             var random = new SurpriseOptions { AutoPlayRandom = true, RandomFewestSeconds = 8, RandomMostSeconds = 20 };
             var seen = Enumerable.Range(0, 2000).Select(_ => random.NextPlaySeconds(new Random(_))).ToHashSet();
             Assert.Equal(8, seen.Min());
             Assert.Equal(20, seen.Max());
             Assert.True(seen.Count > 5);
             Assert.Equal("8\u201320 s", random.PlayLabel);
-            Assert.Equal(15, new SurpriseOptions { AutoPlaySeconds = 15 }.NextPlaySeconds(new Random(1)));
-            Assert.Equal(5, new SurpriseOptions().NextPlaySeconds(new Random(1)));
+            Assert.Equal(15, new SurpriseOptions { AutoPlayRandom = false, AutoPlaySeconds = 15 }.NextPlaySeconds(new Random(1)));
+            Assert.InRange(new SurpriseOptions().NextPlaySeconds(new Random(1)), 10, 15);
             var crossed = SurpriseOptions.FromJson("{\"AutoPlaySeconds\":15,\"RandomFewestSeconds\":30,\"RandomMostSeconds\":5}");
             Assert.Equal(15, crossed.AutoPlaySeconds);
             Assert.True(crossed.RandomMostSeconds >= crossed.RandomFewestSeconds);
@@ -349,8 +355,8 @@ namespace ModernImageViewer.Tests
             Assert.Equal(7, SurpriseOptions.FromJson("{\"RandomFewestSeconds\":7}").RandomFewestSeconds);
             Assert.Equal(SurpriseOptions.FewestSeconds, SurpriseOptions.FromJson("{\"RandomFewestSeconds\":1}").RandomFewestSeconds);
             Assert.Equal(SurpriseOptions.MostSeconds, SurpriseOptions.FromJson("{\"RandomMostSeconds\":500}").RandomMostSeconds);
-            Assert.False(new SurpriseOptions().TakesTurns(16));
-            Assert.True(new SurpriseOptions().TakesTurns(17));
+            Assert.False(new SurpriseOptions { MostPictures = 16 }.TakesTurns(16));
+            Assert.True(new SurpriseOptions { MostPictures = 16 }.TakesTurns(17));
             Assert.True(new SurpriseOptions { MostPictures = 9 }.TakesTurns(14));
             Assert.False(new SurpriseOptions { MostPictures = 9 }.TakesTurns(9));
         }

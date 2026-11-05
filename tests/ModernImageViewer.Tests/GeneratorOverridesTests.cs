@@ -20,8 +20,8 @@ namespace ModernImageViewer.Tests
 
             Assert.Equal(0, cine.SoloMattedOdds);
             Assert.True(cine.AutoPlayRandom);
-            Assert.Equal(5, cine.RandomFewestSeconds);
-            Assert.Equal(20, cine.RandomMostSeconds);
+            Assert.Equal(10, cine.RandomFewestSeconds);
+            Assert.Equal(15, cine.RandomMostSeconds);
             // Not overridden: comes from the main settings.
             Assert.Equal(3, cine.MostZoom);
             Assert.Equal(SurpriseOptions.CardBlack, cine.Card);
