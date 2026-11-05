@@ -254,12 +254,12 @@ namespace ModernImageViewer.Tests
             Assert.True(front.X < back.X && back.X < 0, "the view moved right, so a nearer cell moves further left");
         }
 
-        private static SurpriseOptions Zoomed(double most) => new() { MostZoom = most };
+        private static SurpriseOptions Zoomed(double most) => new() { MostZoom = most, ZoomChance = 1 };
 
         [Fact]
-        public void Zoom_is_off_unless_asked_for()
+        public void Zoom_is_off_at_1x()
         {
-            var made = LayoutComposer.Compose(Photos(6, 4000, 3000, new UnitRect(0.45, 0.4, 0.04, 0.05)), 1280, 720, 1)!;
+            var made = LayoutComposer.Compose(Photos(6, 4000, 3000, new UnitRect(0.45, 0.4, 0.04, 0.05)), 1280, 720, 1, null, 1, LayoutComposer.EdgeToEdge, Zoomed(1))!;
             Assert.All(made.Cells, c => Assert.Equal(1, c.Zoom));
             Assert.All(made.ToLayoutFile().Photos, p => Assert.Null(p.Zoom));
         }
@@ -332,7 +332,8 @@ namespace ModernImageViewer.Tests
         {
             var read = SurpriseOptions.FromJson(json);
             Assert.Equal(SurpriseOptions.CardAny, read.Card);
-            Assert.Equal(1, read.MostZoom);
+            Assert.Equal(4, read.MostZoom);
+            Assert.Equal(0.7, read.ZoomChance);
             Assert.Equal(3, read.Variety);
             Assert.Equal(1, read.FewestPictures);
             Assert.Equal(9, read.MostPictures);

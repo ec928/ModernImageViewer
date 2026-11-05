@@ -171,8 +171,8 @@ namespace ModernImageViewer
         public Dictionary<string, double> DesignOdds { get; set; } = new();
         public HashSet<string> DisabledDesigns { get; set; } = new(StringComparer.OrdinalIgnoreCase);
         public bool IsDesignOff(string design) => DisabledDesigns != null && DisabledDesigns.Contains(design);
-        public double MostZoom { get; set; } = 1;
-        public double ZoomChance { get; set; } = 1;
+        public double MostZoom { get; set; } = 4;
+        public double ZoomChance { get; set; } = 0.7;
         /// <summary>How many of the best versions the pick is made from: 1 is always the best, more is more varied.</summary>
         public int Variety { get; set; } = 3;
         /// <summary>How much of a face must show for it to count as uncut.</summary>
