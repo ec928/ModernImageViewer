@@ -1419,6 +1419,10 @@ namespace ModernImageViewer
                     transform.TranslateY = 0;
                 }
             }
+            // A grid cell's pan as it was last chosen (dragged, zoomed, loaded), at the photo width it was chosen at. A resize
+            // shows it scaled to the new photo size and trimmed to fit, but keeps it, so growing back restores the framing.
+            // Trimmed in place, it was lost for good whenever the cell shrank. Floating cells scale theirs when they rescale.
+            double chosenPanX = 0, chosenPanY = 0, chosenAtWidth = 0, shownPanX = 0, shownPanY = 0;
             void UpdateImageLayout()
             {
                 double cellW = cellGrid.ActualWidth;
@@ -1433,7 +1437,24 @@ namespace ModernImageViewer
                     : Math.Min(cellW / (naturalWidth * turn.Cos + naturalHeight * turn.Sin), cellH / (naturalWidth * turn.Sin + naturalHeight * turn.Cos));
                 imgContainer.Width = naturalWidth * scale;
                 imgContainer.Height = naturalHeight * scale;
-                if (decodedSize) ClampTranslation();
+                if (!decodedSize) return;
+                if (!isFreeform)
+                {
+                    // Changed since the last layout by anything but a resize (a drag, a zoom, a loaded layout): that is the new
+                    // choice, made for the photo at this size.
+                    if (chosenAtWidth <= 0 || transform.TranslateX != shownPanX || transform.TranslateY != shownPanY)
+                    {
+                        chosenPanX = transform.TranslateX;
+                        chosenPanY = transform.TranslateY;
+                        chosenAtWidth = imgContainer.Width;
+                    }
+                    double grow = imgContainer.Width / chosenAtWidth;
+                    transform.TranslateX = chosenPanX * grow;
+                    transform.TranslateY = chosenPanY * grow;
+                }
+                ClampTranslation();
+                shownPanX = transform.TranslateX;
+                shownPanY = transform.TranslateY;
             }
             Action updateLayout = UpdateImageLayout;
             _layoutUpdaters.Add(updateLayout);
