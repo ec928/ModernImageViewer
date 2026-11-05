@@ -142,7 +142,33 @@ When viewing a storyboard scene on the canvas, any manual layout adjustment auto
 
 ## Layout Generator Settings
 
-Opened from the chevron beside Play. The Layout Generator is the one generator that makes layouts, live in Auto-Mix and as scenes in storyboards (Make a show, Add new layout, Play storyboard, Cinematic storyboard); the panel says so at the top. The main page has two sections, each heading with its "more settings" on the right as the same gear-and-label button: **Layout** (images per scene, duration, smart pace, motion), whose **Advanced…** opens the rest in sections, one open at a time; and **Soundtrack**, whose **Configure…** opens the music settings (folder, lowest rating, which shows play music).
+Opened from the Generator button on the bar. The Layout Generator is the one generator that makes layouts, live in Auto-Mix and as scenes in storyboards (Make a show, Add new layout, Play storyboard, Cinematic storyboard); the panel says so at the top. The main page has two sections, each heading with its "more settings" on the right as the same gear-and-label button: **Layout** (images per scene, duration, smart pace, motion), whose **Advanced…** opens the rest in sections, one open at a time; and **Soundtrack**, whose **Configure…** opens the music settings (folder, lowest rating, which shows play music).
+
+The defaults, which **Reset to defaults** on the Advanced page puts back. A settings file saved before a default changed keeps its own values until then.
+
+| Setting | Default |
+|---|---|
+| Images per scene | 1 to 9 |
+| Duration | 10 to 15 seconds (a single duration, with the thumbs together, defaults to 10 seconds) |
+| Smart pace | On |
+| Motion | 40% to 60% |
+| Zoom on faces | 4× |
+| Face zoom frequency | 70% |
+| Face kept in frame, at least | 85% |
+| Pick from the best | 3 |
+
+### Faces
+
+Faces are found by Windows on this PC. What follows applies only to faces it finds; a face it misses, such as one turned away, very small or in shadow, is cropped like any other part of the image.
+
+- **Framing.** A cell with faces is framed on the area that holds all of them, a little above the middle of the cell, whether or not it zooms. An image with no faces is framed on its focus point.
+- **Zoom.** Each cell with faces zooms in at the odds of **Face zoom frequency**. The zoom is the smallest of: **Zoom on faces**; enough for the faces to fill about 40% of the cell; and twice the image's own pixels, so it does not go soft. A small face in a large image can zoom close to the full amount; a face that already fills the cell, a group, or a low-resolution image zooms little or not at all.
+- **No cut faces.** Each layout is tried in several versions. A version cuts a face when less of it than **Face kept in frame, at least** shows, whether the cell's edge, its shape or another cell hides it. The pick is made from the best **Pick from the best** versions that cut no face and mostly hide no image; only when every version cuts a face is the best of them taken anyway. A small face in a crowd weighs less than a face that fills the image.
+- **The big places.** The largest cell goes, by preference, to the image with the most in it, and faces count heavily. Hero spotlight takes its hero from the two images that rank highest, unless an image is featured (**Feature in Auto-Mix**), which always gets the best place.
+- **Single images.** An image that filling the screen would cut a face from is shown whole.
+- **Camera.** 70% of camera moves head for a large cell with faces. Two-shot scenes are under Camera, below.
+
+These are applied when a layout is made, so changing them does not change scenes already in a storyboard; Add new layout and Replace show use the new values.
 
 ### Single images
 
@@ -150,7 +176,7 @@ Under Advanced Settings > Designs, after the six design sliders, **Single images
 
 ### Cinematic storyboard
 
-The last section in Advanced Settings holds the settings Cinematic storyboard uses. For everything else, such as faces, designs and the look, it uses the settings above. The defaults:
+The last section in Advanced Settings holds the settings Cinematic storyboard uses. For everything else, such as faces, designs, the camera and Canvas & progress, it uses the settings above. The defaults:
 
 | Setting | Default |
 |---|---|

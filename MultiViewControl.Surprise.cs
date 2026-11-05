@@ -626,7 +626,7 @@ namespace ModernImageViewer
 
                 // Each section's heading has its "more settings" on the right, as the same gear-and-label button.
                 body.Children.Add(SectionHeading("Layout", MoreButton("Advanced\u2026", "Advanced Layout Generator settings",
-                    "Faces, designs, camera and transitions, look, and the Cinematic storyboard settings",
+                    "Images and faces, designs, camera, transitions, canvas and progress, and the Cinematic storyboard settings",
                     (_, _) => { _showingSurpriseAdvanced = true; ShowSurpriseCard(); })));
                 body.Children.Add(imagesRow);
 
