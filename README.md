@@ -144,7 +144,7 @@ Multi-View pairs procedural Auto-Mix playback with a rich Storyboard presentatio
 
 ### Layout Generator: how it decides, and what is open
 
-The full rules are in `docs/MULTI_IMAGE_UI.md` (Layout Generator Settings, Zoom, Faces, Single images, Cinematic storyboard). In short, every choice comes from a setting:
+The full rules are in `docs/MULTI_IMAGE_UI.md` (Layout Generator Settings, Zoom, Faces, Single images, Cinematic storyboard). A proposed redesign, not yet approved or built, is in `docs/LAYOUT_GENERATOR_DESIGN.md`: one mechanism for every layout, one image included, with the requirements it answers, every number the generator uses, and the open questions. As built today, every choice comes from a setting:
 
 | What | Setting | Default |
 |---|---|---|
