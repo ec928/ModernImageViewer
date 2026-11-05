@@ -199,21 +199,29 @@ namespace ModernImageViewer
         /// <summary>
         /// How a layout of one image shows it, as odds against each other, 0 being off: filling the screen (cropped), in a
         /// matted card, or whole as a framed print. An image that filling would cut a face from, or show less than 65% of,
-        /// is always shown whole. The defaults are the odds the designs had before they were a setting.
+        /// is never filled: Fill shows it whole and unframed instead (<see cref="PickSolo"/>). The defaults are the odds the designs had before they were a setting.
         /// </summary>
         public double SoloFillOdds { get; set; } = 2;
         public double SoloMattedOdds { get; set; } = 1;
         public double SoloWholeOdds { get; set; } = 1;
 
-        /// <summary>Which way a single image is shown this time. With every way off, it is shown whole.</summary>
+        /// <summary>Shown whole and as large as the screen allows, with no frame: what Fill becomes for an image that
+        /// filling would crop too far, such as a portrait on a landscape screen.</summary>
+        public const string SoloFitted = "Fitted";
+
+        /// <summary>
+        /// Which way a single image is shown this time, by the odds. An image that filling would crop too far (a portrait
+        /// on a landscape screen) is never filled: its Fill odds become <see cref="SoloFitted"/>, the nearest to filling
+        /// that keeps the whole image, and Matted and Whole keep theirs. With every way off, it is shown whole.
+        /// </summary>
         public string PickSolo(bool fillsWell, Random random)
         {
-            if (!fillsWell) return SoloWhole;
             double fill = Math.Max(0, SoloFillOdds), matted = Math.Max(0, SoloMattedOdds), whole = Math.Max(0, SoloWholeOdds);
             double sum = fill + matted + whole;
             if (sum <= 0) return SoloWhole;
             double roll = random.NextDouble() * sum;
-            return roll < fill ? SoloFill : roll < fill + matted ? SoloMatted : SoloWhole;
+            string way = roll < fill ? SoloFill : roll < fill + matted ? SoloMatted : SoloWhole;
+            return way == SoloFill && !fillsWell ? SoloFitted : way;
         }
 
         public int FewestPictures { get; set; } = 1;
@@ -660,6 +668,12 @@ namespace ModernImageViewer
             if (usable.Count == 1)
                 return ComposeSolo(usable[0], width, height, random, rasterScale, options);
 
+            // A design you turned off is never used while one you left on can be. When the ones left on cannot take this many
+            // images, the layout takes as many as the roomiest of them can, featured images first, rather than bring back a
+            // design that is off. Only with every design off are they all used.
+            int roomiest = Recipes.Where(r => !options.IsDesignOff(r) && (only == null || r == only)).Select(MostFor).DefaultIfEmpty(0).Max();
+            if (roomiest >= 2 && roomiest < usable.Count)
+                usable = usable.Select((p, i) => (p, i)).OrderByDescending(x => x.p.Featured).ThenBy(x => x.i).Take(roomiest).Select(x => x.p).ToList();
             var eligible = Recipes.Where(r => CanMake(r, usable.Count) && (only == null || r == only)).ToList();
             var enabled = eligible.Where(r => !options.IsDesignOff(r)).ToList();
             var recipes = (enabled.Count > 0 ? enabled : eligible)
@@ -700,27 +714,27 @@ namespace ModernImageViewer
             return fallback;
         }
 
-        public static bool CanMake(string recipe, int photos) => recipe switch
+        /// <summary>Every design takes two images or more; prints, circles and panels have a most, past which they crowd.</summary>
+        public static bool CanMake(string recipe, int photos) => photos >= 2 && photos <= MostFor(recipe);
+
+        public static int MostFor(string recipe) => recipe switch
         {
-            HeroSpotlight => photos >= 3,
-            ScatteredPrints or Circles => photos >= 3 && photos <= MaxScattered,
-            SlantedPanels => photos >= 3 && photos <= MaxPanels,
-            _ => photos >= 2
+            ScatteredPrints or Circles => MaxScattered,
+            SlantedPanels => MaxPanels,
+            _ => MosaicLayout.MaxShown
         };
 
         /// <summary>
         /// A guess, used only to leave a picture out of a large set. Photos sent by message lose their camera details, so
-        /// camera details or a large face mean a photo. Otherwise a screenshot's name, a PNG, a phone screen's height, or
-        /// large flat areas give it away: in a sample of 300 pictures, photos from a camera reached 2% flat and captures started at 16%.
+        /// camera details or a large face mean a photo. Otherwise a screenshot's name or large flat areas give it away: in a sample of 300 pictures, photos from a camera reached 2% flat and captures started at 16%.
         /// </summary>
         public static bool LooksLikeScreen(string path, bool camera, double width, double height, IReadOnlyList<UnitRect> faces, double flatShare)
         {
             if (camera || faces.Any(f => f.Area >= 0.01)) return false;
             if (flatShare >= ScreenFlatShare) return true;
+            // A PNG, or a tall image, is not on its own a screen: photos are saved as PNG and phones take tall ones.
             string name = System.IO.Path.GetFileName(path);
-            if (name.Contains("screenshot", StringComparison.OrdinalIgnoreCase) || name.Contains("screen shot", StringComparison.OrdinalIgnoreCase)) return true;
-            if (string.Equals(System.IO.Path.GetExtension(path), ".png", StringComparison.OrdinalIgnoreCase)) return true;
-            return height / Math.Max(1, width) >= 1.75;
+            return name.Contains("screenshot", StringComparison.OrdinalIgnoreCase) || name.Contains("screen shot", StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>For a large set: what looks like a screen capture goes, and all but one of near-identical shots. Never a featured picture, and never so many that nothing is left to arrange.</summary>
@@ -765,14 +779,37 @@ namespace ModernImageViewer
                 return fullComp;
             }
 
-            double pad = Math.Round(Math.Min(w, h) * 0.055);
+            // Fitted: as large as the screen allows, edge to edge on its short side, unframed, as Cinematic Slideshow shows a
+            // portrait. Whole: a framed print, in the frame color and width set for Gallery wall.
+            bool fitted = way == SurpriseOptions.SoloFitted;
+            double pad = fitted ? 0 : Math.Round(Math.Min(w, h) * 0.055);
             double availW = Math.Max(40, w - 2 * pad), availH = Math.Max(40, h - 2 * pad);
             double scale = Math.Min(availW / photo.Width, availH / photo.Height);
             double cardW = Math.Max(40, photo.Width * scale), cardH = Math.Max(40, photo.Height * scale);
-            double rim = Math.Clamp(Math.Round(Math.Min(cardW, cardH) * 0.022), 5, 16);
-            cardW = Math.Min(availW, cardW + 2 * rim);
-            cardH = Math.Min(availH, cardH + 2 * rim);
-            var stageFrame = new CellBorderDto { Color = "#FFFFFFFF", Thickness = rim, Padding = rim, Shadow = true, CornerRadius = 6, GutterMaterial = "None", GutterColor = "#00000000" };
+            CellBorderDto stageFrame;
+            if (fitted)
+            {
+                stageFrame = new CellBorderDto { Color = "#00000000", GutterMaterial = "None", GutterColor = "#00000000" };
+            }
+            else
+            {
+                double rim = Math.Clamp(Math.Round(Math.Min(cardW, cardH) * 0.022 * options.GapScale), 2, 48);
+                cardW = Math.Min(availW, cardW + 2 * rim);
+                cardH = Math.Min(availH, cardH + 2 * rim);
+                string rimColor = (options.Card switch
+                {
+                    SurpriseOptions.CardWhite => 0,
+                    SurpriseOptions.CardBlack => 1,
+                    SurpriseOptions.CardFromPictures => 2,
+                    _ => random.Next(3)
+                }) switch
+                {
+                    0 => "#FFF8F8F8",
+                    1 => "#FF141414",
+                    _ => Tone(photo.Color, 0.22, 0.16)
+                };
+                stageFrame = new CellBorderDto { Color = rimColor, Thickness = rim, Padding = rim, Shadow = true, CornerRadius = 6, GutterMaterial = "None", GutterColor = "#00000000" };
+            }
             var stageCell = new ComposedCell
             {
                 Photo = photo,

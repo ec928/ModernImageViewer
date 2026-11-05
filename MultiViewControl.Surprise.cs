@@ -632,8 +632,8 @@ namespace ModernImageViewer
 
                 int initialFrom = options.AutoPlayRandom ? options.RandomFewestSeconds : options.PlaySeconds;
                 int initialTo = options.AutoPlayRandom ? options.RandomMostSeconds : options.PlaySeconds;
-                initialFrom = Math.Clamp(initialFrom, 3, 30);
-                initialTo = Math.Clamp(Math.Max(initialFrom, initialTo), 3, 30);
+                initialFrom = Math.Clamp(initialFrom, SurpriseOptions.FewestSeconds, SurpriseOptions.MostSeconds);
+                initialTo = Math.Clamp(Math.Max(initialFrom, initialTo), SurpriseOptions.FewestSeconds, SurpriseOptions.MostSeconds);
 
                 var durationRow = new Grid { ColumnSpacing = 12, MinHeight = 34 };
                 durationRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -660,8 +660,8 @@ namespace ModernImageViewer
 
                 var durationSlider = new RangeSlider
                 {
-                    Minimum = 3,
-                    Maximum = 30,
+                    Minimum = SurpriseOptions.FewestSeconds,
+                    Maximum = SurpriseOptions.MostSeconds,
                     StepFrequency = 1,
                     RangeStart = initialFrom,
                     RangeEnd = initialTo,
@@ -990,7 +990,7 @@ namespace ModernImageViewer
             });
             designsSection.Children.Add(new TextBlock
             {
-                Text = "How a layout of one image shows it. An image that filling would show less than 65% of, or cut a face from, is always shown whole.",
+                Text = "How a layout of one image shows it. Where filling would show less than 65% of the image (a portrait) or cut a face, Fill shows it whole instead, as large as the screen allows and with no frame.",
                 FontSize = 11,
                 Opacity = 0.6,
                 TextWrapping = TextWrapping.Wrap,
@@ -1354,7 +1354,7 @@ namespace ModernImageViewer
                 Opacity = 0.85,
                 Margin = new Thickness(0, 10, 0, 2)
             });
-            CineOddsSlide("Fill the screen", "Crop the image to fill the screen, like Cinematic Slideshow. If that would cut off a face or too much of the image, it is shown whole instead.", options.Cinematic.SoloFillOdds, (o, v) => o.Cinematic.SoloFillOdds = v);
+            CineOddsSlide("Fill the screen", "Crop the image to fill the screen, like Cinematic Slideshow. If that would cut off a face or too much of the image, as with a portrait, it is shown whole instead, as large as the screen allows and with no frame.", options.Cinematic.SoloFillOdds, (o, v) => o.Cinematic.SoloFillOdds = v);
             CineOddsSlide("Matted", "Show the image in a card with a mat around it. Far left turns this off.", options.Cinematic.SoloMattedOdds, (o, v) => o.Cinematic.SoloMattedOdds = v);
             CineOddsSlide("Whole image", "Show the whole image as a framed print, on a background tinted to match it. Far left turns this off.", options.Cinematic.SoloWholeOdds, (o, v) => o.Cinematic.SoloWholeOdds = v);
 
@@ -1367,10 +1367,10 @@ namespace ModernImageViewer
                 right.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(146) });
                 right.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(76) });
                 string Hold(int low, int high) => low == high ? $"{low}s" : $"{low}s - {high}s";
-                int from = Math.Clamp(options.Cinematic.FewestSeconds, 3, 30);
-                int to = Math.Clamp(Math.Max(from, options.Cinematic.MostSeconds), 3, 30);
+                int from = Math.Clamp(options.Cinematic.FewestSeconds, SurpriseOptions.FewestSeconds, SurpriseOptions.MostSeconds);
+                int to = Math.Clamp(Math.Max(from, options.Cinematic.MostSeconds), SurpriseOptions.FewestSeconds, SurpriseOptions.MostSeconds);
                 var readout = new TextBlock { Text = Hold(from, to), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, FontSize = 12, Opacity = 0.82, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
-                var range = new RangeSlider { Minimum = 3, Maximum = 30, StepFrequency = 1, RangeStart = from, RangeEnd = to, Width = 146, VerticalAlignment = VerticalAlignment.Center };
+                var range = new RangeSlider { Minimum = SurpriseOptions.FewestSeconds, Maximum = SurpriseOptions.MostSeconds, StepFrequency = 1, RangeStart = from, RangeEnd = to, Width = 146, VerticalAlignment = VerticalAlignment.Center };
                 range.RangeChanged += (_, r) =>
                 {
                     int low = (int)Math.Round(r.Start), high = (int)Math.Round(r.End);
@@ -4164,7 +4164,6 @@ namespace ModernImageViewer
             IsInside(source, SurpriseControl) || (_surpriseCard != null && IsInside(source, _surpriseCard));
 
         private bool? _lastPlayWasLong;
-        private bool _lastHandWasSolo;
 
         /// <summary>The first new layout comes at once, so choosing it visibly does something.</summary>
         private void StartChosenPlay()
@@ -4776,18 +4775,8 @@ namespace ModernImageViewer
         private List<string> DealHand(PictureDeck deck, SurpriseOptions options)
         {
             int fewest = Math.Min(options.FewestPictures, options.MostPictures);
-            int size;
-            if (fewest == 1 && options.MostPictures > 1)
-            {
-                bool goSolo = !_lastHandWasSolo && Random.Shared.NextDouble() < 0.35;
-                _lastHandWasSolo = goSolo;
-                size = goSolo ? 1 : Random.Shared.Next(2, options.MostPictures + 1);
-            }
-            else
-            {
-                size = Random.Shared.Next(fewest, options.MostPictures + 1);
-                _lastHandWasSolo = size == 1;
-            }
+            // Any count in the range, each as likely, as storyboards draft them.
+            int size = Random.Shared.Next(fewest, options.MostPictures + 1);
             var hand = _featuredPictures.Where(deck.Holds).Take(size).ToList();
             foreach (string path in deck.Deal(size, Random.Shared.NextDouble() < options.TogetherChance))
             {

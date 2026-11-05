@@ -594,8 +594,8 @@ namespace ModernImageViewer.Tests
 
         [Theory]
         [InlineData("a.jpg", false, 768, 976, 0.0, 0.34, true)]    // a chat capture: flat areas
-        [InlineData("a.jpg", false, 900, 1600, 0.0, 0, true)]       // as tall as a phone
-        [InlineData("a.png", false, 1920, 1080, 0.0, 0, true)]
+        [InlineData("a.jpg", false, 900, 1600, 0.0, 0, false)]      // as tall as a phone: a phone photo sent by message
+        [InlineData("a.png", false, 1920, 1080, 0.0, 0, false)]     // a PNG photo
         [InlineData("Screenshot_1.jpg", false, 1000, 800, 0.0, 0, true)]
         [InlineData("a.jpg", true, 1080, 1920, 0.0, 0.9, false)]    // camera details mean a photo
         [InlineData("a.jpg", false, 720, 1280, 0.04, 0, false)]     // a photo sent by message, with a large face
