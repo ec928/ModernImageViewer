@@ -40,15 +40,37 @@ namespace ModernImageViewer
             if (_freeformBasis.Width >= 1e-6 && _freeformBasis.Height >= 1e-6
                 && (width != _freeformBasis.Width || height != _freeformBasis.Height))
             {
-                double scaleX = width / _freeformBasis.Width;
-                double scaleY = height / _freeformBasis.Height;
+                // The centre keeps its place on the canvas; the window keeps its shape. Width and height scaled apart
+                // stretched a hero's hexagon or squircle whenever the canvas changed shape. One scale, the smaller, so it
+                // still fits, measured from where the window was placed, so resizing back and forth never shrinks it.
                 foreach (var card in _freeformCards)
                 {
                     var window = card.Container;
-                    Canvas.SetLeft(window, Canvas.GetLeft(window) * scaleX);
-                    Canvas.SetTop(window, Canvas.GetTop(window) * scaleY);
-                    window.Width *= scaleX;
-                    window.Height *= scaleY;
+                    var now = new Rect(Canvas.GetLeft(window), Canvas.GetTop(window), window.Width, window.Height);
+                    if (card.PlacedOn.Width < 1e-6 || now != card.LastSet)
+                    {
+                        // Placed or moved since the last rescale: that is where it now belongs, on the canvas before this change.
+                        card.Placed = now;
+                        card.PlacedOn = _freeformBasis;
+                    }
+                    double scaleX = width / card.PlacedOn.Width;
+                    double scaleY = height / card.PlacedOn.Height;
+                    double scale = Math.Min(scaleX, scaleY);
+                    double centreX = (card.Placed.X + card.Placed.Width / 2) * scaleX;
+                    double centreY = (card.Placed.Y + card.Placed.Height / 2) * scaleY;
+                    // The photo's pan is in pixels, so it scales with the window. Left as it was, a smaller window
+                    // showed the photo pushed past its edge, with the canvas showing through the shape.
+                    double ratio = window.Width > 0 ? card.Placed.Width * scale / window.Width : 1;
+                    if (window.Tag is CellParts parts)
+                    {
+                        parts.Transform.TranslateX *= ratio;
+                        parts.Transform.TranslateY *= ratio;
+                    }
+                    window.Width = card.Placed.Width * scale;
+                    window.Height = card.Placed.Height * scale;
+                    Canvas.SetLeft(window, centreX - window.Width / 2);
+                    Canvas.SetTop(window, centreY - window.Height / 2);
+                    card.LastSet = new Rect(Canvas.GetLeft(window), Canvas.GetTop(window), window.Width, window.Height);
                 }
             }
             _freeformBasis = new Size(width, height);
@@ -62,6 +84,10 @@ namespace ModernImageViewer
             public Border? NotchHandle { get; set; }
             public Border? RotateHandle { get; set; }
             public int ZIndex { get; set; } = 5000;
+            /// <summary>Where it was placed, on a canvas of PlacedOn; LastSet is what the last rescale made of it.</summary>
+            public Rect Placed { get; set; }
+            public Size PlacedOn { get; set; }
+            public Rect LastSet { get; set; }
         }
 
         public void SpawnFreeformCell(ImageItem item, FreeformCellDto? restoreDto = null)
