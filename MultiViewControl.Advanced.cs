@@ -631,22 +631,27 @@ namespace ModernImageViewer
             if (window.Tag is CellParts { GutterHost: not null } parts) yield return parts.GutterHost;
             if (CardBorder(window) is Border card) yield return card;
         }
-        private void AdvancedFlyout_Opening(object sender, object e)
+        /// <summary>
+        /// The end of the Canvas menu: fill or fit, which changes how every image sits in its cell, then Reset on its own.
+        /// They had a gear button of their own on the bar; the Canvas menu is where the rest of the canvas's look is set.
+        /// </summary>
+        private void AddCanvasActionItems(MenuFlyout menu)
         {
-            AdvancedMenuFlyout.Items.Clear();
             CaptureUndoPoint();
-            // Undo and Redo are on the bar beside this menu; they were here as well.
-            var fillFit = MakeAdvancedItem(_isFillMode ? "Fit whole images" : "Fill cells", _isFillMode ? "\uE73F" : "\uE740", () =>
+            menu.Items.Add(new MenuFlyoutSeparator());
+            var fillFit = new MenuFlyoutItem { Text = _isFillMode ? "Fit whole images" : "Fill cells" };
+            fillFit.Click += (_, _) =>
             {
                 ToggleFillMode();
                 NoteUserAction();
-            });
+            };
             ToolTipService.SetToolTip(fillFit, _isFillMode ? "Show the whole of each image" : "Crop each image to fill its cell");
-            AdvancedMenuFlyout.Items.Add(fillFit);
-            AdvancedMenuFlyout.Items.Add(new MenuFlyoutSeparator());
-            var reset = MakeAdvancedItem("Reset canvas and images", "\uE72C", ResetCanvasAndImages);
+            menu.Items.Add(fillFit);
+            menu.Items.Add(new MenuFlyoutSeparator());
+            var reset = new MenuFlyoutItem { Text = "Reset canvas and images" };
+            reset.Click += (_, _) => ResetCanvasAndImages();
             ToolTipService.SetToolTip(reset, "Start again with four empty cells and a plain canvas. Undo brings it back.");
-            AdvancedMenuFlyout.Items.Add(reset);
+            menu.Items.Add(reset);
         }
         /// <summary>The surface and color behind the cells, under the canvas shape.</summary>
         private void AddCanvasLookMenus(MenuFlyout menu)

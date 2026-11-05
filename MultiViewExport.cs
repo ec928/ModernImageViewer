@@ -50,6 +50,7 @@ namespace ModernImageViewer
             ToolTipService.SetToolTip(shape, "Drag the window for any other ratio");
             AspectMenuFlyout.Items.Add(shape);
             AddCanvasLookMenus(AspectMenuFlyout);
+            AddCanvasActionItems(AspectMenuFlyout);
         }
 
         private static readonly SolidColorBrush _menuWhitePrimary = new(Windows.UI.Color.FromArgb(245, 255, 255, 255));

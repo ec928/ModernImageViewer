@@ -13,20 +13,21 @@ One pill along the bottom, left to right. Dividers separate the groups. Rows and
 | Control | Words | What it does |
 |---|---|---|
 | Back | Back | Leaves multi-image for the tiles. Esc does the same when no card is open. The layout stays, and Multi-View returns to it. |
-| Drawer | Image Pool, Image Pool (N), Storyboard, or Storyboard (N) | Opens or closes the drawer, on the tab it was last left on, and names that tab. N is what the tab shows: images not on the canvas, or scenes. It never changes what Play plays. A light plate shows while the drawer is open. |
+| Drawer | Drawer, or Drawer (N) | Opens or closes the drawer, on the tab it was last left on: Image Pool or Storyboard. N is what that tab shows: images not on the canvas, or scenes; the tooltip names the tab. Named Drawer so "Storyboard" is on the bar once, on the mode switch. It never changes what Play plays. A light plate shows while the drawer is open. |
 | Storyboard | Storyboard | One side of the mode switch. Play walks the storyboard. Greyed out until a storyboard has scenes. Choosing it changes nothing on the canvas; while playing, the next picture is a scene. |
 | Auto-Mix | Auto-Mix | The other side. Play makes a new layout each time, from the Image Pool. Choosing it changes nothing on the canvas; Next makes a new layout now. |
 | Previous | icon | Previous scene while a storyboard is playing. Otherwise the previous layout. Left arrow. |
 | Play | Play Show, Play Show · i/N, Play Mix, or Pause | Starts or pauses. Stopped on a storyboard: `Play Show`, or `Play Show · i/N` when resuming past the first scene. Stopped on Auto-Mix: `Play Mix`. While either is running: `Pause`. Space does the same. Filled while running. |
 | Next | icon | Next scene, or the next layout, made new when there is none ahead. Right arrow. |
-| Play options | chevron | Opens or closes Layout Generator Settings, the settings the Layout Generator makes layouts with, for Auto-Mix and for storyboards. |
+| Generator | Generator | Opens or closes Layout Generator Settings, the settings the Layout Generator makes layouts with, for Auto-Mix and for storyboards. |
 | Rows | Rows, or N Rows | Arranges the grid in rows and opens the grid layout card. R switches between rows and columns. B, R, H, + and − work only without Ctrl or Alt held, so Ctrl+B still toggles the sidebar. |
 | Columns | Columns, or N Columns | Arranges the grid in columns. Same card and same R key. |
-| Canvas | Canvas | Aspect ratio, surface, color, and canvas frame options. |
+| Canvas | Canvas | Aspect ratio, surface, color and Frame & Border; then Fit whole images (or Fill cells), which changes how every image sits in its cell; then Reset canvas and images, on its own at the end. |
 | Save/Load | Save/Load | Save the canvas as JPEG or PNG, copy it, or save and open layouts (`.mivlayout`) and storyboards (`.mivshow`). Ctrl+S opens it. |
 | Undo, Redo | icons | Undo (Ctrl+Z) and Redo (Ctrl+Y). Greyed out when there is nothing to take back or bring back. They are on the bar because removing a scene, a cell or a layout never asks first. |
-| Advanced | gear | Fill cells or fit whole images, and Reset canvas and images. Undo and Redo are on the bar beside it, not in this menu. |
 | Full screen | icon | Full screen toggle (F11). Last on the bar, after a divider, as in a video player. |
+
+While a storyboard plays, each new scene's name shows at the top for a moment only while the bar is showing. Once the bar has hidden for want of movement, scenes change with nothing over the picture. Messages that answer something you did, such as Paused or Duplicated scene, still show.
 
 ### Which mode is active
 

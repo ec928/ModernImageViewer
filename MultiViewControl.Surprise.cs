@@ -1463,7 +1463,6 @@ namespace ModernImageViewer
             AddOverCanvas(_surpriseCard, 6500);
             PlaceSurpriseCard();
             SurpriseCardButton.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF));
-            SurpriseCardArrow.Glyph = "\uE972";
             ShowAutoPlayState();
             HudMenu_Opened(this, EventArgs.Empty);
         }
@@ -1741,7 +1740,6 @@ namespace ModernImageViewer
             _cardNextSong = null;
             _showingSurpriseAdvanced = false;
             SurpriseCardButton.ClearValue(Control.BackgroundProperty);
-            SurpriseCardArrow.Glyph = "\uE971";
             HudMenu_Closed(this, EventArgs.Empty);
         }
 
@@ -4022,7 +4020,8 @@ namespace ModernImageViewer
             int displayIndex = currentIndex + 1;
             int totalDisplay = visibleScenes.Count;
             string sceneName = scene.Title ?? scene.Recipe ?? $"Scene {displayIndex}";
-            ShowAutoPlayToast($"Scene {displayIndex} of {totalDisplay}: {sceneName}");
+            // Only with the bar up: once it has hidden for want of movement, nothing else should come up over the picture.
+            if (_isHudVisible) ShowAutoPlayToast($"Scene {displayIndex} of {totalDisplay}: {sceneName}");
             if (_autoPlaySeconds > 0) StartPlaybackProgress(_layoutSeconds);
             else StopPlaybackProgress();
 
