@@ -2386,7 +2386,7 @@ namespace ModernImageViewer
 
             var draftRangeText = new TextBlock
             {
-                Text = $"({GeneratorSettingsFor(_activeShow).FewestPictures}–{GeneratorSettingsFor(_activeShow).MostPictures}) ▾",
+                Text = ShowSettingsLabel(),
                 FontSize = 11,
                 VerticalAlignment = VerticalAlignment.Center,
                 Opacity = 0.9
@@ -2407,7 +2407,7 @@ namespace ModernImageViewer
                 storyFewestBox.Value = now.FewestPictures;
                 storyMostBox.Value = now.MostPictures;
                 syncingStoryRange = false;
-                FillShowSettings(showSettingsPanel, () => draftRangeText.Text = $"({GeneratorSettingsFor(_activeShow).FewestPictures}–{GeneratorSettingsFor(_activeShow).MostPictures}) ▾");
+                FillShowSettings(showSettingsPanel, () => draftRangeText.Text = ShowSettingsLabel());
             };
 
             Border MakeDivider() => new Border { Width = 1, Height = 16, Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x35, 0xFF, 0xFF, 0xFF)), VerticalAlignment = VerticalAlignment.Center };
@@ -2500,7 +2500,7 @@ namespace ModernImageViewer
                     {
                         if (storyFewestBox.Value != f) storyFewestBox.Value = f;
                         if (storyMostBox.Value != m) storyMostBox.Value = m;
-                        draftRangeText.Text = $"({f}–{m}) ▾";
+                        draftRangeText.Text = ShowSettingsLabel();
                     }
                     finally
                     {

@@ -35,6 +35,16 @@ namespace ModernImageViewer
             changed?.Invoke();
         }
 
+        /// <summary>The storyboard's settings button names this show's preset, so the presets can be found there.</summary>
+        private string ShowSettingsLabel()
+        {
+            var values = GeneratorSettingsFor(_activeShow);
+            string preset = _activeShow == null || !_activeShow.GlobalDefaults.HoldsValues ? MultiImagePreset
+                : _activeShow.GeneratorOverrides == CinematicOverrides.Name ? CinematicOverrides.Name : "Custom";
+            string images = values.FewestPictures == values.MostPictures ? $"{values.FewestPictures}" : $"{values.FewestPictures}–{values.MostPictures}";
+            return $"Preset: {preset} · {images} images ▾";
+        }
+
         private static string PresetName(int slot, CinematicOverrides? preset) => $"My preset {slot + 1}" + (preset == null ? " (empty)" : "");
 
         /// <summary>Fills the storyboard's settings pop-up with the open show's preset and values, as they are now.</summary>
