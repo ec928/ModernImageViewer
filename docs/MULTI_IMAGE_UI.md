@@ -166,7 +166,7 @@ Faces are found by Windows on this PC. What follows applies only to faces it fin
 - **Zoom.** Zoom is not only for faces: see **Zoom**, below. With faces, a zoom heads for them and stops short of cutting any: all the faces found stay in, taking at most 85% of the cell. A face that already fills the cell, or a wide group, zooms little or not at all.
 - **No cut faces.** Each layout is tried in several versions. A version cuts a face when less of it than **Face kept in frame, at least** shows, whether the cell's edge, its shape or another cell hides it. The pick is made from the best **Pick from the best** versions that cut no face and mostly hide no image; only when every version cuts a face is the best of them taken anyway. A small face in a crowd weighs less than a face that fills the image.
 - **The big places.** The largest cell goes, by preference, to the image with the most in it, and faces count heavily. Hero spotlight takes its hero from the two images that rank highest, unless an image is featured (**Feature in Auto-Mix**), which always gets the best place.
-- **Single images.** An image that filling the screen would cut a face from is never filled: see **Single images**, below.
+- **One image.** A layout of one image is kept to Crop at most: see **One image**, below.
 - **Camera.** 70% of camera moves head for a large cell with faces. Two-shot scenes are under Camera, below.
 
 These are applied when a layout is made, so changing them does not change scenes already in a storyboard; Add new layout and Replace show use the new values.
@@ -180,9 +180,9 @@ Two settings zoom, and both work with or without faces:
 
 On a Cinematic storyboard portrait with the default settings, about 7 scenes in 10 are zoomed in, each by a different amount from 1.5× to 4× where the photo has the detail, and the rest show the whole portrait; the camera then moves over it.
 
-### Single images
+### One image
 
-Under Advanced Settings > Designs, after the six design sliders, **Single images** sets how a layout of one image shows it, on the same Off to Often scale as the designs: **Fill the screen** (cropped), **Matted** (in a card with a mat) and **Whole image** (not cropped: a framed print on a canvas tinted from the image). They are odds against each other, so with all three at Normal each comes up about a third of the time. The defaults are More, Normal and Normal, the odds single images had before this was a setting. An image that filling would show less than 65% of, such as a portrait on a landscape screen, or cut a face from, is never filled; the odds still decide. Its Fill odds show it whole instead, as large as the screen allows and with no frame, as Cinematic Slideshow shows a portrait; Matted and Whole image keep theirs. Fill the screen, the full-size whole view and Matted all take the layout zoom (see **Zoom**), so a portrait is sometimes whole and sometimes zoomed in by a different amount each time. Whole image is the uncropped print and never zooms. Whole image is a print framed in the Gallery wall's Frame color and Frame width. They apply to Auto-Mix, Make a show, Add new layout and Play storyboard; Cinematic storyboard has its own.
+A layout of one image goes through the design odds like any layout. **Crop at most** (Images & faces, default 35%) is how much of it a layout may crop away to fill its frame, measured against the frame's shape; a face is never cut past **Face kept in frame**. Past either, Edge to edge shows the image whole at full height or width on a tinted background, Gallery wall shows it whole in its card, and Scattered prints already shows it whole. Hero spotlight, Circles and Slanted panels can only crop, so they sit that layout out and another design is used. At the default, a circle comes up for one image only when it is within about 6:5 of square, since a circle alone hides about a fifth of its box. The image takes the layout zoom by **Zoom frequency**, rolled once after its design is chosen. A Cinematic storyboard has its own design odds.
 
 ### Cinematic storyboard
 
@@ -192,7 +192,7 @@ The last section in Advanced Settings holds the settings Cinematic storyboard us
 |---|---|
 | Use for this storyboard | Off; on for a storyboard started with Cinematic storyboard |
 | Images per scene | 1 to 1 |
-| Single images | Fill the screen Often, Matted Off, Whole image Off |
+| Designs | Edge to edge Often, Hero spotlight Rare, the rest Off |
 | Duration | 10 to 15 seconds |
 | Smart pace | On |
 | Motion | 40% to 60% |

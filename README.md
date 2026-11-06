@@ -140,23 +140,23 @@ Multi-View pairs procedural Auto-Mix playback with a rich Storyboard presentatio
 - **Growing a show**: **Add new layout** makes one new scene at the end from images not in the show yet, without replacing the others.
 - **Play storyboard**: from the sidebar (the whole folder) or the selection bar (the selected images). It starts playing once two scenes are made and keeps adding scenes until every image is in the show.
 - **Cinematic storyboard**: a storyboard that looks like Cinematic Slideshow: one image at a time, full screen, with the camera moving and crossfades. Change how it looks in Layout Generator Settings > Advanced. Add new layout and Replace show keep it Cinematic. To go back to your main settings, turn off **Use for this storyboard** there, press Clear, or start a new storyboard with Play storyboard.
-- **Single images**: Layout Generator Settings > Advanced > Designs sets the odds that a one-image layout fills the screen, is matted, or is shown whole and uncropped. A portrait is never cropped to fill a landscape screen: its Fill odds show it whole at full height instead, and like every image it may be zoomed by the **Zoom** setting.
+- **One image**: A layout of one image goes through the design odds like any layout. **Crop at most** (Images & faces, default 35%) is how much of it a layout may crop away to fill its frame, measured against the frame's shape; a face is never cut past **Face kept in frame**. Past either, Edge to edge shows the image whole at full height or width on a tinted background, Gallery wall shows it whole in its card, and Scattered prints already shows it whole. Hero spotlight, Circles and Slanted panels can only crop, so they sit that layout out and another design is used. At the default, a circle comes up for one image only when it is within about 6:5 of square, since a circle alone hides about a fifth of its box. Like every image, it may be zoomed by the **Zoom** setting.
 
 ### Layout Generator: how it decides, and what is open
 
-The full rules are in `docs/MULTI_IMAGE_UI.md` (Layout Generator Settings, Zoom, Faces, Single images, Cinematic storyboard). A proposed redesign, not yet approved or built, is in `docs/MULTI_IMAGE_DESIGN.md`: one mechanism for every layout, one image included, with the requirements it answers, every number the generator uses, and the open questions. As built today, every choice comes from a setting:
+The full rules are in `docs/MULTI_IMAGE_UI.md` (Layout Generator Settings, Zoom, Faces, One image, Cinematic storyboard). A proposed redesign, not yet approved or built, is in `docs/MULTI_IMAGE_DESIGN.md`: one mechanism for every layout, one image included, with the requirements it answers, every number the generator uses, and the open questions. As built today, every choice comes from a setting:
 
 | What | Setting | Default |
 |---|---|---|
 | Images in a layout | Images per scene: any count in the range, equally likely | 1 to 9 |
 | Design | Design odds; a design set to Off is never used. With too many images for the designs left on, the layout takes fewer | All Normal |
-| One image | Fill the screen / Matted / Whole image odds. Fill never crops a portrait to a strip (under 65% of it showing): it shows it whole at full height | More / Normal / Normal; Cinematic storyboard Often / Off / Off |
+| One image | The design odds, as any layout. Crop at most decides whether it fills or is shown whole; a design that can only crop sits that layout out | 35%; Cinematic storyboard Edge to edge Often, Hero spotlight Rare, the rest Off |
 | Layout zoom | Zoom range and Zoom frequency, every image, toward faces or the focus point | 1.5× to 4×, 70% |
 | Camera | Motion (drift), Camera zoom (zoom depth), Zooms rather than drifts, Aims at faces, Two-shot scenes, curves, curved path, rotation | 40–60%, 1.15–1.8×, 50%, 70%, 25% |
 
 **Limits that remain, and why:**
-- Fill does not crop an image to less than 65% of it, or through a face; it shows it whole instead. Not a setting yet.
-- Circles and Scattered prints take at most 9 images, Slanted panels 6; every design takes at least 2. Past those they crowd.
+- Crop at most applies to a layout of one image. A layout of several images still fills every cell.
+- Circles and Scattered prints take at most 9 images, Slanted panels 6. Past those they crowd.
 - A zoom stops where it would cut a face (faces take at most 85% of the cell) or show the photo past twice its pixels.
 - Two-shot scenes need a scene of 8 seconds or more, as in Cinematic Slideshow: two shots in a short scene read as a flip-book.
 - Camera zoom goes to 2.5×, the most Camera Director can edit.

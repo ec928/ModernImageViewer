@@ -306,32 +306,6 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
-        public void PickSolo_FollowsTheOdds_AndShowsWholeWhenFillingWouldCrop()
-        {
-            var random = new Random(7);
-            var options = new SurpriseOptions { SoloFillOdds = 0, SoloMattedOdds = 0, SoloWholeOdds = 1 };
-            Assert.All(Enumerable.Range(0, 50), _ => Assert.Equal(SurpriseOptions.SoloWhole, options.PickSolo(true, random)));
-
-            options = new SurpriseOptions { SoloFillOdds = 1, SoloMattedOdds = 0, SoloWholeOdds = 0 };
-            Assert.All(Enumerable.Range(0, 50), _ => Assert.Equal(SurpriseOptions.SoloFill, options.PickSolo(true, random)));
-            // Filling that would crop too much is never chosen: Fill shows it whole and unframed instead.
-            Assert.All(Enumerable.Range(0, 50), _ => Assert.Equal(SurpriseOptions.SoloFitted, options.PickSolo(false, random)));
-            // Matted and Whole keep their odds for an image that cannot fill.
-            options = new SurpriseOptions { SoloFillOdds = 1, SoloMattedOdds = 1, SoloWholeOdds = 1 };
-            var cropped = Enumerable.Range(0, 3000).Select(_ => options.PickSolo(false, random)).GroupBy(w => w).ToDictionary(g => g.Key, g => g.Count());
-            Assert.All(new[] { SurpriseOptions.SoloFitted, SurpriseOptions.SoloMatted, SurpriseOptions.SoloWhole }, w => Assert.InRange(cropped[w], 850, 1150));
-
-            // Even odds land near a third each.
-            options = new SurpriseOptions { SoloFillOdds = 1, SoloMattedOdds = 1, SoloWholeOdds = 1 };
-            var counts = Enumerable.Range(0, 3000).Select(_ => options.PickSolo(true, random)).GroupBy(w => w).ToDictionary(g => g.Key, g => g.Count());
-            Assert.All(new[] { SurpriseOptions.SoloFill, SurpriseOptions.SoloMatted, SurpriseOptions.SoloWhole }, w => Assert.InRange(counts[w], 850, 1150));
-
-            // All off still shows the image.
-            options = new SurpriseOptions { SoloFillOdds = 0, SoloMattedOdds = 0, SoloWholeOdds = 0 };
-            Assert.Equal(SurpriseOptions.SoloWhole, options.PickSolo(true, random));
-        }
-
-        [Fact]
         public void ImagesNotInShow_KeepsPoolOrder_AndLeavesOutEveryImageAScenesShows()
         {
             var show = new ShowProject();

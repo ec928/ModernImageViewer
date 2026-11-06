@@ -18,7 +18,9 @@ namespace ModernImageViewer.Tests
             Assert.Equal(1, cine.FewestPictures);
             Assert.Equal(1, cine.MostPictures);
 
-            Assert.Equal(0, cine.SoloMattedOdds);
+            Assert.True(cine.IsDesignOff(LayoutComposer.GalleryWall));
+            Assert.False(cine.IsDesignOff(LayoutComposer.EdgeToEdge));
+            Assert.Equal(SurpriseOptions.MostFavouredDesign, cine.OddsOf(LayoutComposer.EdgeToEdge));
             Assert.True(cine.AutoPlayRandom);
             Assert.Equal(10, cine.RandomFewestSeconds);
             Assert.Equal(15, cine.RandomMostSeconds);

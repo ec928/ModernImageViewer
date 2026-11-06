@@ -808,6 +808,10 @@ namespace ModernImageViewer
                 50, 100, 5, options.FaceShown * 100,
                 v => $"{v:0}%",
                 (o, v) => o.FaceShown = v / 100);
+            Slide(imagesSection, "Crop at most", "How much of an image a layout of one image may crop away to fill its frame, measured against the frame's shape. Past it, the image is shown whole where the design can, and a design that can only crop sits that layout out.",
+                0, 100, 5, options.CropAtMost * 100,
+                v => $"{v:0}%",
+                (o, v) => o.CropAtMost = v / 100);
 
             // 2. Designs (with style preset chips + Off stop)
             string DesignsSummaryText()
@@ -979,32 +983,6 @@ namespace ModernImageViewer
                 v => (int)v == 1 ? "Best" : $"Top {(int)v}",
                 (o, v) => o.Variety = (int)v);
 
-            // A layout of one image: the same odds scale as the designs above, so it reads and works the same way.
-            designsSection.Children.Add(new TextBlock
-            {
-                Text = "Single images",
-                FontSize = 12,
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Opacity = 0.85,
-                Margin = new Thickness(0, 14, 0, 2)
-            });
-            designsSection.Children.Add(new TextBlock
-            {
-                Text = "How a layout of one image shows it. Where filling would show less than 65% of the image (a portrait) or cut a face, Fill shows it whole instead, as large as the screen allows and with no frame.",
-                FontSize = 11,
-                Opacity = 0.6,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 0, 0, 6)
-            });
-            void SoloSlide(string name, string tip, double odds, Action<SurpriseOptions, double> set)
-            {
-                double initial = odds <= 0 ? -1.2 : Math.Log(Math.Max(SurpriseOptions.RarestDesign, odds), DesignOddsBase);
-                Slide(designsSection, name, tip, -1.2, 1.0, 0.1, initial, FormatDesignStep,
-                    (o, v) => set(o, v <= -1.1 ? 0 : Math.Pow(DesignOddsBase, v)));
-            }
-            SoloSlide("Fill the screen", "Cropped to fill the screen. Far left turns it off.", options.SoloFillOdds, (o, v) => o.SoloFillOdds = v);
-            SoloSlide("Matted", "In a card with a mat round it. Far left turns it off.", options.SoloMattedOdds, (o, v) => o.SoloMattedOdds = v);
-            SoloSlide("Whole image", "Not cropped: a framed print on a canvas tinted from the image. Far left turns it off.", options.SoloWholeOdds, (o, v) => o.SoloWholeOdds = v);
 
             // 3. Camera: how it moves within a scene. 4. Transitions: how one scene changes to the next.
             string CameraSummaryText() => SurpriseChoices.CameraMode;
@@ -1356,15 +1334,18 @@ namespace ModernImageViewer
             }
             cineSection.Children.Add(new TextBlock
             {
-                Text = "Single images",
+                Text = "Designs",
                 FontSize = 12,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                 Opacity = 0.85,
                 Margin = new Thickness(0, 10, 0, 2)
             });
-            CineOddsSlide("Fill the screen", "Crop the image to fill the screen, like Cinematic Slideshow. If that would cut off a face or too much of the image, as with a portrait, it is shown whole instead, as large as the screen allows and with no frame.", options.Cinematic.SoloFillOdds, (o, v) => o.Cinematic.SoloFillOdds = v);
-            CineOddsSlide("Matted", "Show the image in a card with a mat around it. Far left turns this off.", options.Cinematic.SoloMattedOdds, (o, v) => o.Cinematic.SoloMattedOdds = v);
-            CineOddsSlide("Whole image", "Show the whole image as a framed print, on a background tinted to match it. Far left turns this off.", options.Cinematic.SoloWholeOdds, (o, v) => o.Cinematic.SoloWholeOdds = v);
+            foreach (string design in LayoutComposer.Recipes)
+            {
+                string named = design;
+                CineOddsSlide(named, $"How often a cinematic storyboard uses {named}. Far left turns it off.", options.Cinematic.OddsFor(named),
+                    (o, v) => o.Cinematic.DesignOdds[named] = v);
+            }
 
             {
                 var row = new Grid { ColumnSpacing = 12, MinHeight = 34 };

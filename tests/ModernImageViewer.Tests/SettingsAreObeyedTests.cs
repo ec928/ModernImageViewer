@@ -20,24 +20,48 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
-        public void A_portrait_follows_the_single_image_odds()
+        public void One_image_goes_through_the_design_odds()
         {
             var portrait = new[] { Photo(0, 1200, 1600) };
-            var options = new SurpriseOptions { SoloFillOdds = 1, SoloMattedOdds = 1, SoloWholeOdds = 1 };
-            var recipes = Enumerable.Range(0, 60).Select(seed => LayoutComposer.Compose(portrait, 1920, 1080, seed, options: options)!.Recipe).ToHashSet();
-            // Matted is a one-image Gallery wall; Fitted and Whole are the stage.
+            var recipes = Enumerable.Range(0, 120).Select(seed => LayoutComposer.Compose(portrait, 1920, 1080, seed)!.Recipe).ToHashSet();
+            // The three that can show any image whole always can; the single-image branch and its odds are gone.
+            Assert.Contains(LayoutComposer.EdgeToEdge, recipes);
             Assert.Contains(LayoutComposer.GalleryWall, recipes);
-            Assert.Contains(LayoutComposer.HeroSpotlight, recipes);
+            Assert.Contains(LayoutComposer.ScatteredPrints, recipes);
         }
 
         [Fact]
-        public void A_portrait_with_only_Fill_on_is_full_height_and_unframed()
+        public void Crop_at_most_0_shows_every_image_whole_and_only_designs_that_can()
         {
-            var options = new SurpriseOptions { SoloFillOdds = 1, SoloMattedOdds = 0, SoloWholeOdds = 0 };
-            for (int seed = 0; seed < 20; seed++)
+            // Zoom is off: it crops after the fill, which slice 4 orders (design 3.5).
+            var options = new SurpriseOptions { CropAtMost = 0, ZoomChance = 0 };
+            for (int seed = 0; seed < 60; seed++)
             {
                 var made = LayoutComposer.Compose(new[] { Photo(0, 1200, 1600) }, 1920, 1080, seed, options: options)!;
-                var cell = Assert.Single(made.Cells);
+                Assert.Contains(made.Recipe, new[] { LayoutComposer.EdgeToEdge, LayoutComposer.GalleryWall, LayoutComposer.ScatteredPrints });
+                Assert.True(LayoutComposer.CropShare(Assert.Single(made.Cells)) < 0.01, $"{made.Recipe} cropped");
+            }
+        }
+
+        [Fact]
+        public void Crop_at_most_100_fills_edge_to_edge()
+        {
+            var options = Only(LayoutComposer.EdgeToEdge);
+            options.CropAtMost = 1;
+            for (int seed = 0; seed < 20; seed++)
+            {
+                var cell = Assert.Single(LayoutComposer.Compose(new[] { Photo(0, 1200, 1600) }, 1920, 1080, seed, options: options)!.Cells);
+                Assert.True(cell.W >= 1919 && cell.H >= 1079, "a portrait should fill the screen when any crop is allowed");
+            }
+        }
+
+        [Fact]
+        public void A_portrait_past_crop_at_most_is_full_height_and_unframed()
+        {
+            var options = Only(LayoutComposer.EdgeToEdge);
+            for (int seed = 0; seed < 20; seed++)
+            {
+                var cell = Assert.Single(LayoutComposer.Compose(new[] { Photo(0, 1200, 1600) }, 1920, 1080, seed, options: options)!.Cells);
                 Assert.Equal(1080, cell.H, 3);
                 Assert.Equal(810, cell.W, 3);
                 Assert.Equal(0, cell.Frame.Thickness);
@@ -47,22 +71,26 @@ namespace ModernImageViewer.Tests
         [Theory]
         [InlineData(SurpriseOptions.CardWhite, "#FFF8F8F8")]
         [InlineData(SurpriseOptions.CardBlack, "#FF141414")]
-        public void Whole_image_takes_the_frame_color(string card, string color)
+        public void A_whole_image_in_gallery_wall_sits_in_the_card_color(string card, string color)
         {
-            var options = new SurpriseOptions { SoloFillOdds = 0, SoloMattedOdds = 0, SoloWholeOdds = 1, Card = card };
+            var options = Only(LayoutComposer.GalleryWall);
+            options.Card = card;
+            options.ZoomChance = 0;
             var made = LayoutComposer.Compose(new[] { Photo(0, 1200, 1600) }, 1920, 1080, 3, options: options)!;
-            Assert.Equal(color, Assert.Single(made.Cells).Frame.Color);
+            Assert.Equal(color, made.CanvasColor);
+            Assert.True(LayoutComposer.CropShare(Assert.Single(made.Cells)) < 0.01);
         }
 
         [Fact]
-        public void Whole_image_takes_the_frame_width()
+        public void A_whole_image_in_gallery_wall_keeps_the_card_margin()
         {
-            double Rim(double scale)
+            double Height(double scale)
             {
-                var options = new SurpriseOptions { SoloFillOdds = 0, SoloMattedOdds = 0, SoloWholeOdds = 1, GapScale = scale };
-                return LayoutComposer.Compose(new[] { Photo(0, 1200, 1600) }, 1920, 1080, 3, options: options)!.Cells[0].Frame.Thickness;
+                var options = Only(LayoutComposer.GalleryWall);
+                options.GapScale = scale;
+                return LayoutComposer.Compose(new[] { Photo(0, 1200, 1600) }, 1920, 1080, 3, options: options)!.Cells[0].H;
             }
-            Assert.True(Rim(3) > 2 * Rim(1));
+            Assert.True(Height(3) < Height(1) - 10);
         }
 
         [Theory]

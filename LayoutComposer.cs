@@ -209,37 +209,13 @@ namespace ModernImageViewer
         public double GapScale { get; set; } = 1;
         public string Card { get; set; } = CardAny;
         public bool KeepCanvas { get; set; }
-        public const string SoloFill = "Fill";
-        public const string SoloMatted = "Matted";
-        public const string SoloWhole = "Whole";
-
         /// <summary>
-        /// How a layout of one image shows it, as odds against each other, 0 being off: filling the screen (cropped), in a
-        /// matted card, or whole as a framed print. An image that filling would cut a face from, or show less than 65% of,
-        /// is never filled: Fill shows it whole and unframed instead (<see cref="PickSolo"/>). The defaults are the odds the designs had before they were a setting.
+        /// How much of an image a cell may crop away to fill itself, 0 to 1, measured against the cell's shape. Past it,
+        /// or past Face kept in frame, the image is shown whole where the design can show it whole; a design that cannot
+        /// (a circle, a hero shape, a leaning panel) takes no part in that call, as a design that cannot hold the count.
+        /// Applies to a layout of one image.
         /// </summary>
-        public double SoloFillOdds { get; set; } = 2;
-        public double SoloMattedOdds { get; set; } = 1;
-        public double SoloWholeOdds { get; set; } = 1;
-
-        /// <summary>Shown whole and as large as the screen allows, with no frame: what Fill becomes for an image that
-        /// filling would crop too far, such as a portrait on a landscape screen.</summary>
-        public const string SoloFitted = "Fitted";
-
-        /// <summary>
-        /// Which way a single image is shown this time, by the odds. An image that filling would crop too far (a portrait
-        /// on a landscape screen) is never filled: its Fill odds become <see cref="SoloFitted"/>, the nearest to filling
-        /// that keeps the whole image, and Matted and Whole keep theirs. With every way off, it is shown whole.
-        /// </summary>
-        public string PickSolo(bool fillsWell, Random random)
-        {
-            double fill = Math.Max(0, SoloFillOdds), matted = Math.Max(0, SoloMattedOdds), whole = Math.Max(0, SoloWholeOdds);
-            double sum = fill + matted + whole;
-            if (sum <= 0) return SoloWhole;
-            double roll = random.NextDouble() * sum;
-            string way = roll < fill ? SoloFill : roll < fill + matted ? SoloMatted : SoloWhole;
-            return way == SoloFill && !fillsWell ? SoloFitted : way;
-        }
+        public double CropAtMost { get; set; } = 0.35;
 
         public int FewestPictures { get; set; } = 1;
         public int MostPictures { get; set; } = 9;
@@ -450,9 +426,7 @@ namespace ModernImageViewer
                 read.FewestPictures = Math.Clamp(read.FewestPictures, FewestAllowed, MosaicLayout.MaxShown);
                 read.MostPictures = Math.Clamp(read.MostPictures, read.FewestPictures, MosaicLayout.MaxShown);
                 read.TogetherChance = Math.Clamp(read.TogetherChance, 0, 1);
-                read.SoloFillOdds = Math.Clamp(read.SoloFillOdds, 0, MostFavouredDesign);
-                read.SoloMattedOdds = Math.Clamp(read.SoloMattedOdds, 0, MostFavouredDesign);
-                read.SoloWholeOdds = Math.Clamp(read.SoloWholeOdds, 0, MostFavouredDesign);
+                read.CropAtMost = Math.Clamp(read.CropAtMost, 0, 1);
                 if (!Cards.Contains(read.Card)) read.Card = CardAny;
                 // Any whole second in range: the Duration slider sets values off the old menu lists, such as 7 to 12, and
                 // checking against those lists put 5 to 15 back on the next launch.
@@ -516,9 +490,24 @@ namespace ModernImageViewer
 
         public int FewestPictures { get; set; } = 1;
         public int MostPictures { get; set; } = 1;
-        public double SoloFillOdds { get; set; } = SurpriseOptions.MostFavouredDesign;
-        public double SoloMattedOdds { get; set; }
-        public double SoloWholeOdds { get; set; }
+        /// <summary>
+        /// The designs' odds for a cinematic storyboard, 0 being off. Edge to edge Often, Hero spotlight Rare, the rest
+        /// off: prints, circles, cards and panels are not a film frame, and odds add up, so even the rarest four would
+        /// put about one scene in thirteen on one of them. The user can turn any back on.
+        /// </summary>
+        public Dictionary<string, double> DesignOdds { get; set; } = DefaultDesignOdds();
+
+        public static Dictionary<string, double> DefaultDesignOdds() => new(StringComparer.OrdinalIgnoreCase)
+        {
+            [LayoutComposer.EdgeToEdge] = SurpriseOptions.MostFavouredDesign,
+            [LayoutComposer.HeroSpotlight] = 0.25,
+            [LayoutComposer.GalleryWall] = 0,
+            [LayoutComposer.ScatteredPrints] = 0,
+            [LayoutComposer.Circles] = 0,
+            [LayoutComposer.SlantedPanels] = 0
+        };
+
+        public double OddsFor(string design) => DesignOdds.TryGetValue(design, out double odds) ? odds : 0;
         public int FewestSeconds { get; set; } = 10;
         public int MostSeconds { get; set; } = 15;
         public bool SmartPace { get; set; } = true;
@@ -533,9 +522,14 @@ namespace ModernImageViewer
         {
             options.FewestPictures = FewestPictures;
             options.MostPictures = MostPictures;
-            options.SoloFillOdds = SoloFillOdds;
-            options.SoloMattedOdds = SoloMattedOdds;
-            options.SoloWholeOdds = SoloWholeOdds;
+            options.DesignOdds = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+            options.DisabledDesigns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string design in LayoutComposer.Recipes)
+            {
+                double odds = OddsFor(design);
+                if (odds <= 0) options.DisabledDesigns.Add(design);
+                else options.DesignOdds[design] = odds;
+            }
             options.AutoPlayRandom = FewestSeconds < MostSeconds;
             options.AutoPlaySeconds = FewestSeconds;
             options.RandomFewestSeconds = FewestSeconds;
@@ -551,9 +545,12 @@ namespace ModernImageViewer
             var c = read ?? new CinematicOverrides();
             c.FewestPictures = Math.Clamp(c.FewestPictures, SurpriseOptions.FewestAllowed, MosaicLayout.MaxShown);
             c.MostPictures = Math.Clamp(c.MostPictures, c.FewestPictures, MosaicLayout.MaxShown);
-            c.SoloFillOdds = Math.Clamp(c.SoloFillOdds, 0, SurpriseOptions.MostFavouredDesign);
-            c.SoloMattedOdds = Math.Clamp(c.SoloMattedOdds, 0, SurpriseOptions.MostFavouredDesign);
-            c.SoloWholeOdds = Math.Clamp(c.SoloWholeOdds, 0, SurpriseOptions.MostFavouredDesign);
+            var odds = DefaultDesignOdds();
+            if (c.DesignOdds != null)
+                foreach (string design in LayoutComposer.Recipes)
+                    if (c.DesignOdds.TryGetValue(design, out double saved))
+                        odds[design] = saved <= 0 ? 0 : Math.Clamp(saved, SurpriseOptions.RarestDesign, SurpriseOptions.MostFavouredDesign);
+            c.DesignOdds = odds;
             c.FewestSeconds = Math.Clamp(c.FewestSeconds, SurpriseOptions.FewestSeconds, SurpriseOptions.MostSeconds);
             c.MostSeconds = Math.Clamp(c.MostSeconds, c.FewestSeconds, SurpriseOptions.MostSeconds);
             if (c.MotionAmount is double motion)
@@ -691,8 +688,6 @@ namespace ModernImageViewer
             if (usable.Count < minRequired || width < 50 || height < 50) return null;
 
             var random = new Random(seed);
-            if (usable.Count == 1)
-                return ComposeSolo(usable[0], width, height, random, rasterScale, options);
 
             // A design you turned off is never used while one you left on can be. When the ones left on cannot take this many
             // images, the layout takes as many as the roomiest of them can, featured images first, rather than bring back a
@@ -718,11 +713,14 @@ namespace ModernImageViewer
                     for (int i = 0; i < Versions; i++)
                     {
                         var version = Build(recipe, usable, width, height, random, pass == 0 ? look : random.Next(int.MaxValue), options);
+                        if (version != null && usable.Count == 1) version = WithinCropAtMost(version, rasterScale, options, random);
                         if (version == null) continue;
-                        foreach (var cell in version.Cells)
-                        {
-                            if (options.Zooms(random)) AimAtSubject(cell, options.PickZoom(random), rasterScale);
-                        }
+                        // One image rolls its zoom once, after it is chosen: ranked here, an unzoomed version always shows more and wins.
+                        if (usable.Count > 1)
+                            foreach (var cell in version.Cells)
+                            {
+                                if (options.Zooms(random)) AimAtSubject(cell, options.PickZoom(random), rasterScale);
+                            }
                         Judge(version, rasterScale, options.FaceShown);
                         found.Add(version);
                     }
@@ -730,15 +728,26 @@ namespace ModernImageViewer
                     if (ranked.Count == 0) break;
                     if (fallback == null || ranked[0].Score > fallback.Score) fallback = ranked[0];
                     var clean = ranked.Where(c => c.FacesCut == 0 && c.PicturesBuried == 0).ToList();
-                    if (clean.Count > 0) return clean[random.Next(Math.Min(options.Variety, clean.Count))];
+                    if (clean.Count > 0) return ZoomedIfOne(clean[random.Next(Math.Min(options.Variety, clean.Count))], usable.Count, rasterScale, options, random);
                     if (recipe != HeroSpotlight) break;
                 }
             }
-            return fallback;
+            return fallback == null ? null : ZoomedIfOne(fallback, usable.Count, rasterScale, options, random);
         }
 
-        /// <summary>Every design takes two images or more; prints, circles and panels have a most, past which they crowd.</summary>
-        public static bool CanMake(string recipe, int photos) => photos >= 2 && photos <= MostFor(recipe);
+        /// <summary>A layout of one image takes the layout zoom by Zoom frequency, as any image does.</summary>
+        private static Composition ZoomedIfOne(Composition chosen, int images, double rasterScale, SurpriseOptions options, Random random)
+        {
+            if (images != 1 || !options.Zooms(random)) return chosen;
+            var cell = chosen.Cells.FirstOrDefault(c => c.Photo != null);
+            if (cell == null) return chosen;
+            AimAtSubject(cell, options.PickZoom(random), rasterScale);
+            Judge(chosen, rasterScale, options.FaceShown);
+            return chosen;
+        }
+
+        /// <summary>Every design takes one image or more; prints, circles and panels have a most, past which they crowd.</summary>
+        public static bool CanMake(string recipe, int photos) => photos >= 1 && photos <= MostFor(recipe);
 
         public static int MostFor(string recipe) => recipe switch
         {
@@ -774,83 +783,73 @@ namespace ModernImageViewer
             return kept.Count >= 2 ? kept : photos;
         }
 
-        private static Composition ComposeSolo(PhotoFacts photo, double w, double h, Random random, double rasterScale, SurpriseOptions options)
+        /// <summary>
+        /// A layout of one image, kept to Crop at most and Face kept in frame. Filling within both, it stays as built.
+        /// Past either, Edge to edge shows the image whole as large as the screen allows, Gallery wall shows it whole in
+        /// its card, Scattered prints already show it whole, and a design that can only crop (a circle, a hero shape, a
+        /// leaning panel) gives no version, so it takes no part in this call.
+        /// </summary>
+        private static Composition? WithinCropAtMost(Composition version, double rasterScale, SurpriseOptions options, Random random)
         {
-            var fullCell = new ComposedCell { Photo = photo, X = 0, Y = 0, W = w, H = h, Frame = FrameLooks.Flush(), Geometry = new CellGeometryDto() };
-            var fullComp = Finish(EdgeToEdge, new List<ComposedCell> { fullCell }, MosaicLayout.Cell(0), "#FF0A0A0A", CanvasLook.Solid, FrameLooks.Flush(), w, h);
-            Judge(fullComp, rasterScale, options.FaceShown);
-            double shownShare = Math.Max(1, fullCell.W * fullCell.H) / Math.Max(1, fullCell.ImageWidth * fullCell.ImageHeight);
-            bool fitsFull = shownShare >= 0.65 && fullComp.FacesCut == 0;
-            string way = options.PickSolo(fitsFull, random);
-            if (way == SurpriseOptions.SoloMatted)
+            var cell = version.Cells.FirstOrDefault(c => c.Photo != null);
+            if (cell == null) return version;
+            Judge(version, rasterScale, options.FaceShown);
+            if (version.FacesCut == 0 && CropShare(cell) <= options.CropAtMost + 1e-9) return version;
+            return version.Recipe switch
             {
-                var matted = BuildGalleryWall(new List<PhotoFacts> { photo }, w, h, random, options);
-                if (matted != null)
-                {
-                    if (options.Zooms(random))
-                        AimAtSubject(matted.Cells[0], options.PickZoom(random), rasterScale);
-                    Judge(matted, rasterScale, options.FaceShown);
-                    return matted;
-                }
-                way = SurpriseOptions.SoloFill;
-            }
-            if (way == SurpriseOptions.SoloFill)
-            {
-                if (options.Zooms(random))
-                    AimAtSubject(fullCell, options.PickZoom(random), rasterScale);
-                Judge(fullComp, rasterScale, options.FaceShown);
-                return fullComp;
-            }
+                EdgeToEdge => ShownWhole(EdgeToEdge, cell.Photo, version.Width, version.Height, 0, null, random),
+                GalleryWall => ShownWhole(GalleryWall, cell.Photo, version.Width, version.Height, cell.Frame.Padding * 2, version.CanvasColor, random),
+                ScatteredPrints => version,
+                _ => null
+            };
+        }
 
-            // Fitted: as large as the screen allows, edge to edge on its short side, unframed, as Cinematic Slideshow shows a
-            // portrait. Whole: a framed print, in the frame color and width set for Gallery wall.
-            bool fitted = way == SurpriseOptions.SoloFitted;
-            double pad = fitted ? 0 : Math.Round(Math.Min(w, h) * 0.055);
-            double availW = Math.Max(40, w - 2 * pad), availH = Math.Max(40, h - 2 * pad);
+        /// <summary>The share of the image a cell hides when it fills the cell, measured against the cell's shape, not its box.</summary>
+        public static double CropShare(ComposedCell cell)
+        {
+            double innerW = Math.Max(1, cell.W - 2 * cell.Frame.Padding);
+            double innerH = Math.Max(1, cell.H - 2 * cell.Frame.Padding);
+            var outline = WindowShapes.Outline(cell.Geometry);
+            double shapeArea = innerW * innerH * (outline == null ? 1 : PolygonArea(outline));
+            double imageArea = Math.Max(1, cell.ImageWidth * cell.ImageHeight);
+            return Math.Clamp(1 - shapeArea / imageArea, 0, 1);
+        }
+
+        private static double PolygonArea((double X, double Y)[] points)
+        {
+            double sum = 0;
+            for (int i = 0; i < points.Length; i++)
+            {
+                var a = points[i];
+                var b = points[(i + 1) % points.Length];
+                sum += a.X * b.Y - b.X * a.Y;
+            }
+            return Math.Abs(sum) / 2;
+        }
+
+        /// <summary>
+        /// The image whole, as large as the space allows, unframed: on a tinted vignette for Edge to edge (as Cinematic
+        /// Slideshow shows a portrait), or set in its card for Gallery wall, the card's margin at least the given one.
+        /// </summary>
+        private static Composition ShownWhole(string recipe, PhotoFacts photo, double w, double h, double margin, string? card, Random random)
+        {
+            double availW = Math.Max(40, w - 2 * margin), availH = Math.Max(40, h - 2 * margin);
             double scale = Math.Min(availW / photo.Width, availH / photo.Height);
-            double cardW = Math.Max(40, photo.Width * scale), cardH = Math.Max(40, photo.Height * scale);
-            CellBorderDto stageFrame;
-            if (fitted)
-            {
-                stageFrame = new CellBorderDto { Color = "#00000000", GutterMaterial = "None", GutterColor = "#00000000" };
-            }
-            else
-            {
-                double rim = Math.Clamp(Math.Round(Math.Min(cardW, cardH) * 0.022 * options.GapScale), 2, 48);
-                cardW = Math.Min(availW, cardW + 2 * rim);
-                cardH = Math.Min(availH, cardH + 2 * rim);
-                string rimColor = (options.Card switch
-                {
-                    SurpriseOptions.CardWhite => 0,
-                    SurpriseOptions.CardBlack => 1,
-                    SurpriseOptions.CardFromPictures => 2,
-                    _ => random.Next(3)
-                }) switch
-                {
-                    0 => "#FFF8F8F8",
-                    1 => "#FF141414",
-                    _ => Tone(photo.Color, 0.22, 0.16)
-                };
-                stageFrame = new CellBorderDto { Color = rimColor, Thickness = rim, Padding = rim, Shadow = true, CornerRadius = 6, GutterMaterial = "None", GutterColor = "#00000000" };
-            }
-            var stageCell = new ComposedCell
+            double cellW = Math.Max(40, photo.Width * scale), cellH = Math.Max(40, photo.Height * scale);
+            var cell = new ComposedCell
             {
                 Photo = photo,
                 Floating = true,
-                X = (w - cardW) / 2,
-                Y = (h - cardH) / 2,
-                W = cardW,
-                H = cardH,
-                Frame = stageFrame,
+                X = (w - cellW) / 2,
+                Y = (h - cellH) / 2,
+                W = cellW,
+                H = cellH,
+                Frame = new CellBorderDto { Color = "#00000000", GutterMaterial = "None", GutterColor = "#00000000" },
                 Geometry = new CellGeometryDto()
             };
-            var stage = Finish(HeroSpotlight, new List<ComposedCell> { stageCell }, null, Tone(photo.Color, 0.28, 0.14), CanvasLook.Vignette, FrameLooks.Flush(), w, h);
-            // Fitted takes the layout zoom like any cell: the frame stays the whole image's shape, the image zooms inside it.
-            // Whole image is the uncropped print, so it never zooms.
-            if (fitted && options.Zooms(random))
-                AimAtSubject(stage.Cells[0], options.PickZoom(random), rasterScale);
-            Judge(stage, rasterScale, options.FaceShown);
-            return stage;
+            return card == null
+                ? Finish(recipe, new List<ComposedCell> { cell }, null, Tone(photo.Color, 0.28, 0.14), CanvasLook.Vignette, FrameLooks.Flush(), w, h)
+                : Finish(recipe, new List<ComposedCell> { cell }, null, card, CanvasLook.Solid, FrameLooks.Flush(), w, h);
         }
 
         private static Composition? Build(string recipe, List<PhotoFacts> photos, double w, double h, Random random, int look, SurpriseOptions options) => recipe switch
@@ -906,11 +905,16 @@ namespace ModernImageViewer
             var hero = photos.Where(p => p.Featured).OrderBy(_ => random.Next()).FirstOrDefault()
                 ?? photos.OrderByDescending(Presence).Take(2).OrderBy(_ => random.Next()).First();
             var rest = photos.Where(p => !ReferenceEquals(p, hero)).ToList();
-            var tree = FindTree(rest, w / h, random);
-            if (tree == null) return null;
             var cells = new List<ComposedCell>();
-            var flush = new CellBorderDto { Color = "#00000000", Padding = 1, GutterMaterial = "None", GutterColor = "#00000000" };
-            var mosaic = Place(tree, 0, 0, w, h, flush, cells);
+            MosaicLayout? mosaic = null;
+            // The only image is the hero, alone on its backdrop.
+            if (rest.Count > 0)
+            {
+                var tree = FindTree(rest, w / h, random);
+                if (tree == null) return null;
+                var flush = new CellBorderDto { Color = "#00000000", Padding = 1, GutterMaterial = "None", GutterColor = "#00000000" };
+                mosaic = Place(tree, 0, 0, w, h, flush, cells);
+            }
 
             string[] shapes = { WindowShapes.Arch, WindowShapes.Oval, WindowShapes.Squircle, WindowShapes.Hexagon };
             string shape = shapes[look % shapes.Length];
@@ -1020,7 +1024,11 @@ namespace ModernImageViewer
             int count = photos.Count;
             const double lean = 0.2;
             double gap = Math.Clamp(Math.Min(w, h) * 0.012, 5, 12);
-            double panelW = (w - (count - 1) * gap) / ((1 - lean) * count - lean);
+            // One panel stands alone in the middle, at full height and about the image's own width.
+            double panelW = count == 1
+                ? Math.Clamp(h * photos[0].Aspect / (1 - lean), w * 0.25, w * 0.8)
+                : (w - (count - 1) * gap) / ((1 - lean) * count - lean);
+            double firstX = count == 1 ? (w - panelW) / 2 : -lean * panelW;
             bool mirrored = random.Next(2) == 0;
             var order = photos.OrderBy(_ => random.Next()).ToList();
             var cells = new List<ComposedCell>();
@@ -1030,7 +1038,7 @@ namespace ModernImageViewer
                 {
                     Photo = order[i],
                     Floating = true,
-                    X = -lean * panelW + i * ((1 - lean) * panelW + gap),
+                    X = firstX + i * ((1 - lean) * panelW + gap),
                     Y = 0,
                     W = panelW,
                     H = h,

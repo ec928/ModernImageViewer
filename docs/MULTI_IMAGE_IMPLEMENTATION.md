@@ -5,7 +5,7 @@ and is rewritten as each slice lands. Where the two disagree, the design wins an
 planned in full; slices 2 to 6 are outlines, planned in full only when the slice before has been shown to Ed and
 adjusted.
 
-**Status: slice 1 built on branch `slice1-one-engine-call`, not yet seen by Ed.** Slices 2 to 6 not started. "Today" means v0.31.2. File and line references were read on
+**Status: slices 1 and 2 built on branch `slice1-one-engine-call`, neither yet seen by Ed.** Slices 3 to 6 not started. "Today" means v0.31.2. File and line references were read on
 6 Nov 2026 and will drift.
 
 **How each slice runs**
@@ -130,7 +130,7 @@ design odds; a portrait shown whole when filling would crop more than Crop at mo
 - A shape's outline is known (`WindowShapes.Outline`, `CoverBox` in `MultiViewLayoutFile.cs`), so the share of an
   image a shape hides can be measured exactly.
 
-### Open question, before building: a shape that would crop too far
+### Decided (Ed, 6 Nov): a shape that would crop too far steps aside (option A)
 
 The design (3.4) says a cell that would crop past Crop at most shows its image "fitted inside the bounding box, clipped
 by the shape, on the backdrop". For a rectangle that is the Fitted cell above. For a circle, hero shape or leaning
@@ -175,6 +175,15 @@ R5 (Crop at most is never overridden). The design's 3.4 sentence changes to matc
 - A design at Off never appears for one image (design check 4 for count 1).
 - `SettingsAreObeyedTests` covers the old Single images odds and will be rewritten for the design odds; which of its
   tests go is listed in the commit.
+
+### As built
+
+- At the defaults, across 120 layouts each: a portrait gets Prints, Gallery wall, Edge to edge and Hero (rarer);
+  a 3:2 landscape adds Slanted panels; Circles come up only for an image within about 6:5 of square; a panorama gets
+  Prints, Gallery wall and Edge to edge. No layout crops past 35% or cuts a face, and none fails to be made.
+- One image's layout zoom is rolled once, after its design is chosen (`ZoomedIfOne`), as `ComposeSolo` did. Rolled per
+  version, the ranking always picked an unzoomed version, since it scores how much of the image shows.
+- Zoom still crops after Crop at most is checked; slice 4 orders the two (design 3.5).
 
 ### Risks
 

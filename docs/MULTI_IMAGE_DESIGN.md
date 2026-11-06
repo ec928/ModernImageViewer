@@ -362,8 +362,10 @@ away to fill its cell**.
 - **A cell that is not a rectangle** (a circle, the hero's arch, oval, squircle or hexagon, a leaning panel) is measured
   against the shape, not its bounding box. The box is larger than the shape, so a crop that "passes" against the box
   still hides the corners, and Crop at most would not mean what it says (R5). Filling is safe only when the shape itself
-  keeps at least **Crop at most** of the image and keeps the face. Shown whole means the image is fitted inside the
-  bounding box, clipped by the shape, on the backdrop. The corners a circle must hide are the shape, not a second crop.
+  keeps at least **Crop at most** of the image and keeps the face. A shape cannot show an image whole (the renderer
+  fills every cell), so a design whose shape would crop too far **takes no part in that call**, as a design that cannot
+  hold the image count does (Ed, 6 Nov). Edge to edge, Gallery wall and Scattered prints can always show an image
+  whole, so a layout is always made. The corners a circle must hide count toward the crop.
 
 ### 3.5 Zoom (R11)
 
