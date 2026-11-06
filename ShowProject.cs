@@ -18,8 +18,22 @@ namespace ModernImageViewer
         public const string FileExtension = ".mivshow";
         public const string DefaultTitle = "Untitled Show";
 
+        /// <summary>
+        /// Version 2 holds the show's own values in <see cref="GlobalDefaults"/>. A file is written as the current version
+        /// only when saved; the version it was read as is kept in <see cref="ReadAsVersion"/>.
+        /// </summary>
+        public const int CurrentSchemaVersion = 2;
+
         [JsonPropertyName("$schemaVersion")]
-        public int SchemaVersion { get; set; } = 1;
+        public int SchemaVersion
+        {
+            get => CurrentSchemaVersion;
+            set => ReadAsVersion = value;
+        }
+
+        /// <summary>The version the file was read as; the current one for a show made in this session.</summary>
+        [JsonIgnore]
+        public int ReadAsVersion { get; private set; } = CurrentSchemaVersion;
 
         [JsonPropertyName("created")]
         public DateTime Created { get; set; } = DateTime.UtcNow;
@@ -86,10 +100,34 @@ namespace ModernImageViewer
         public static ShowProject? FromJson(string json)
         {
             if (string.IsNullOrWhiteSpace(json)) return null;
-            return JsonSerializer.Deserialize<ShowProject>(json, new JsonSerializerOptions
+            var show = JsonSerializer.Deserialize<ShowProject>(json, new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
             });
+            show?.ReadAsCurrentVersion();
+            return show;
+        }
+
+        /// <summary>
+        /// A show from before version 2 held no values of its own: its smart pace was a note of the setting when it was
+        /// drafted, and it followed the app's settings. That note is dropped, so it plays as it did. Call on any show read
+        /// from a file, including one inside a layout file.
+        /// </summary>
+        public void ReadAsCurrentVersion()
+        {
+            if (ReadAsVersion >= 2) return;
+            GlobalDefaults.SmartPace = null;
+        }
+
+        /// <summary>
+        /// A show just opened. One saved before shows held values, made as a Cinematic storyboard, takes the app's current
+        /// cinematic values once; its scenes, holds and camera paths are not touched, and the file changes only when saved.
+        /// </summary>
+        public void AdoptOnOpen(CinematicOverrides appCinematic)
+        {
+            ReadAsCurrentVersion();
+            if (ReadAsVersion < 2 && GeneratorOverrides == CinematicOverrides.Name && !GlobalDefaults.HoldsValues)
+                GlobalDefaults.TakeValues(appCinematic);
         }
 
         public async Task SaveAsync(string filePath)
@@ -209,7 +247,92 @@ namespace ModernImageViewer
         public double DefaultDwellSeconds { get; set; } = 12.0;
 
         [JsonPropertyName("smartPace")]
-        public bool SmartPace { get; set; } = true;
+        public bool? SmartPace { get; set; }
+
+        // The show's own values (version 2). Null: the show does not hold it, and Layout Generator Settings decide.
+        [JsonPropertyName("fewestImages")]
+        public int? FewestImages { get; set; }
+
+        [JsonPropertyName("mostImages")]
+        public int? MostImages { get; set; }
+
+        /// <summary>Each design's odds, 0 being off.</summary>
+        [JsonPropertyName("designOdds")]
+        public Dictionary<string, double>? DesignOdds { get; set; }
+
+        [JsonPropertyName("fewestSeconds")]
+        public int? FewestSeconds { get; set; }
+
+        [JsonPropertyName("mostSeconds")]
+        public int? MostSeconds { get; set; }
+
+        [JsonPropertyName("motionLeast")]
+        public double? MotionLeast { get; set; }
+
+        [JsonPropertyName("motionMost")]
+        public double? MotionMost { get; set; }
+
+        [JsonIgnore]
+        public bool HoldsValues => FewestImages != null || MostImages != null || DesignOdds != null || FewestSeconds != null
+            || MostSeconds != null || SmartPace != null || MotionLeast != null || MotionMost != null;
+
+        /// <summary>The show takes a preset's values as its own, every one of them.</summary>
+        public void TakeValues(CinematicOverrides preset)
+        {
+            FewestImages = preset.FewestPictures;
+            MostImages = preset.MostPictures;
+            DesignOdds = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+            foreach (string design in LayoutComposer.Recipes) DesignOdds[design] = preset.OddsFor(design);
+            FewestSeconds = preset.FewestSeconds;
+            MostSeconds = preset.MostSeconds;
+            SmartPace = preset.SmartPace;
+            MotionLeast = preset.MotionLeast;
+            MotionMost = preset.MotionMost;
+        }
+
+        /// <summary>The show holds nothing of its own: Layout Generator Settings decide every value.</summary>
+        public void ClearValues()
+        {
+            FewestImages = MostImages = FewestSeconds = MostSeconds = null;
+            DesignOdds = null;
+            SmartPace = null;
+            MotionLeast = MotionMost = null;
+        }
+
+        /// <summary>
+        /// The settings a call for this show is made with: Layout Generator Settings, with every value the show holds in
+        /// place of the setting. Resolved once, before the call; the engine never knows where a value came from.
+        /// </summary>
+        public SurpriseOptions ApplyTo(SurpriseOptions engine)
+        {
+            var o = SurpriseOptions.FromJson(engine.ToJson());
+            if (FewestImages is int fewest) o.FewestPictures = Math.Clamp(fewest, 1, MosaicLayout.MaxShown);
+            if (MostImages is int most) o.MostPictures = Math.Clamp(most, o.FewestPictures, MosaicLayout.MaxShown);
+            if (DesignOdds != null)
+            {
+                o.DesignOdds = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+                o.DisabledDesigns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (string design in LayoutComposer.Recipes)
+                {
+                    double odds = DesignOdds.TryGetValue(design, out double held) ? held : 1;
+                    if (odds <= 0) o.DisabledDesigns.Add(design);
+                    else o.DesignOdds[design] = Math.Clamp(odds, SurpriseOptions.RarestDesign, SurpriseOptions.MostFavouredDesign);
+                }
+            }
+            if (FewestSeconds is int least && MostSeconds is int longest)
+            {
+                least = Math.Clamp(least, SurpriseOptions.FewestSeconds, SurpriseOptions.MostSeconds);
+                longest = Math.Clamp(longest, least, SurpriseOptions.MostSeconds);
+                o.AutoPlayRandom = least < longest;
+                o.AutoPlaySeconds = least;
+                o.RandomFewestSeconds = least;
+                o.RandomMostSeconds = longest;
+            }
+            if (SmartPace is bool smart) o.SmartPace = smart;
+            if (MotionLeast is double motionLeast) o.MotionLeast = Math.Clamp(motionLeast, 0, 1);
+            if (MotionMost is double motionMost) o.MotionMost = Math.Clamp(motionMost, o.MotionLeast, 1);
+            return o;
+        }
 
         [JsonPropertyName("cameraMotionAmount")]
         public double CameraMotionAmount { get; set; } = 0.5;

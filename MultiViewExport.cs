@@ -1647,6 +1647,7 @@ namespace ModernImageViewer
                 var show = ShowProject.FromJson(json);
                 if (show != null && show.Scenes.Count > 0)
                 {
+                    AdoptOpenedShow(show);
                     string? openedDir = Path.GetDirectoryName(filePath);
                     if (!string.IsNullOrEmpty(openedDir)) MainWindow.Instance?.AddMultiViewSaveLocation(openedDir);
 
@@ -1902,6 +1903,7 @@ namespace ModernImageViewer
             {
                 foreach (var scene in layoutFile.Storyboard.Scenes)
                     scene.KeepCanvasPhotos();
+                AdoptOpenedShow(layoutFile.Storyboard);
                 _activeShow = layoutFile.Storyboard;
                 _shuffleChosen = false;
                 _isStoryboardPlayback = false;

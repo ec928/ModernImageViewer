@@ -8,7 +8,11 @@ adjusted.
 **Status: slices 1, 2, 3a and 4 built on branch `slice1-one-engine-call`; Ed has run 1, 2 and 3a.** 3a's timing: first
 picture 0.83 s and 1.12 s on two runs, no scene held late in 2.6 minutes; the 30-minute run is not done. Slice 4 adds the
 face and detail ceiling to one image's camera move (Ed saw a snap cut a close-up's eyes) and aims a zoom without faces at
-the focus point. 3b, 3c, 5 and 6 not started. "Today" means v0.31.2. File and line references were read on
+the focus point. 3b built: shows hold their values in `globalDefaults` (version 2), a version 1 show
+plays as before, and a version 1 Cinematic show takes the app's cinematic values once on open. Until 3c, the Cinematic
+storyboard settings in Generator Advanced write into the open cinematic storyboard, as they always applied to it. Not
+checked: an older app opening a version 2 file (only from the code); no saved show exists on this machine to try. 3c, 5
+and 6 not started. "Today" means v0.31.2. File and line references were read on
 6 Nov 2026 and will drift.
 
 **How each slice runs**

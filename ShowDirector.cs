@@ -64,7 +64,6 @@ namespace ModernImageViewer
                 GlobalDefaults = new ShowGlobalDefaults
                 {
                     DefaultDwellSeconds = options.AutoPlayRandom ? (options.RandomFewestSeconds + options.RandomMostSeconds) / 2.0 : 12.0,
-                    SmartPace = options.SmartPace,
                     CameraMotionAmount = (options.MotionLeast + options.MotionMost) / 2,
                     CameraMode = options.CameraMode
                 }

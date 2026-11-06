@@ -94,17 +94,42 @@ namespace ModernImageViewer
         {
             if ((_activeShow?.GeneratorOverrides == CinematicOverrides.Name) == on) return;
             _activeShow ??= new ShowProject { Title = "Storyboard" };
-            _activeShow.GeneratorOverrides = on ? CinematicOverrides.Name : null;
+            SetCinematic(_activeShow, on);
             _updateStorySummary?.Invoke();
             NoteUserAction();
         }
 
-        /// <summary>The Layout Generator settings for a show: the main ones, with the show's overrides applied when it has any.</summary>
-        private SurpriseOptions GeneratorSettingsFor(ShowProject? show) => SurpriseChoices.WithOverrides(show?.GeneratorOverrides);
+        /// <summary>
+        /// The Layout Generator settings for a show: the main ones, with every value the show holds in their place. A show
+        /// made before shows held values, and not yet opened as one, still takes its overrides by name.
+        /// </summary>
+        private SurpriseOptions GeneratorSettingsFor(ShowProject? show) =>
+            show == null ? SurpriseChoices
+            : show.GlobalDefaults.HoldsValues ? show.GlobalDefaults.ApplyTo(SurpriseChoices)
+            : SurpriseChoices.WithOverrides(show.GeneratorOverrides);
+
+        /// <summary>A cinematic storyboard holds the cinematic values as its own; any other holds none and follows the settings.</summary>
+        private void SetCinematic(ShowProject show, bool on)
+        {
+            show.GeneratorOverrides = on ? CinematicOverrides.Name : null;
+            if (on) show.GlobalDefaults.TakeValues(SurpriseChoices.Cinematic ?? new CinematicOverrides());
+            else show.GlobalDefaults.ClearValues();
+        }
+
+        /// <summary>
+        /// A show just read from a file. One saved before shows held values, made as a Cinematic storyboard, takes the
+        /// app's cinematic values once, now; its scenes, holds and camera paths are not touched, and the file is rewritten
+        /// only when the user saves.
+        /// </summary>
+        private void AdoptOpenedShow(ShowProject show) => show.AdoptOnOpen(SurpriseChoices.Cinematic ?? new CinematicOverrides());
 
         private void ChangeSurpriseChoices(Action<SurpriseOptions> change)
         {
             change(SurpriseChoices);
+            // Until the storyboard edits its own values, the Cinematic storyboard settings here are the open cinematic
+            // storyboard's, as they always have been.
+            if (_activeShow != null && _activeShow.GeneratorOverrides == CinematicOverrides.Name)
+                _activeShow.GlobalDefaults.TakeValues(SurpriseChoices.Cinematic ?? new CinematicOverrides());
             CancelPreparedSurprise();
             try
             {
@@ -3434,7 +3459,7 @@ namespace ModernImageViewer
                         ActualHeight,
                         overrides != null ? $"{overrides} storyboard" : "Auto-Drafted Presentation",
                         progress);
-                    _activeShow.GeneratorOverrides = overrides;
+                    SetCinematic(_activeShow, overrides == CinematicOverrides.Name);
                     _selectedShowScene = null;
                     _canvasSceneId = null;
                     _shuffleChosen = false;
@@ -3574,7 +3599,7 @@ namespace ModernImageViewer
                 _canvasSceneId = null;
                 _activeShow.Scenes.Clear();
                 // Clearing ends the show, so the next one is made with the main settings.
-                _activeShow.GeneratorOverrides = null;
+                SetCinematic(_activeShow, false);
                 scenesCollection.Clear();
                 SyncStoryImageRange();
             };
@@ -3799,8 +3824,8 @@ namespace ModernImageViewer
             var show = new ShowProject
             {
                 Title = cinematic ? "Cinematic storyboard" : "Storyboard",
-                GeneratorOverrides = cinematic ? CinematicOverrides.Name : null
             };
+            SetCinematic(show, cinematic);
             _activeShow = show;
             _selectedShowScene = null;
             _canvasSceneId = null;
