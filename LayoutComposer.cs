@@ -206,8 +206,28 @@ namespace ModernImageViewer
         /// </summary>
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public double? HeroSize { get; set; }
+        /// <summary>Frame width, for every frame: Gallery wall's card and gaps, a hero's outline, a print's border, a circle's outline.</summary>
         public double GapScale { get; set; } = 1;
+        /// <summary>Frame color, for every frame. Any: each layout picks white, black or a tone from its images.</summary>
         public string Card { get; set; } = CardAny;
+
+        /// <summary>
+        /// Backdrop odds, for every design with a backdrop (an image shown whole, a hero, prints, circles), on the designs'
+        /// Off to Often scale, 0 being off. Vignette and gradient at Normal are today's even split; solid comes up rarely.
+        /// </summary>
+        public double BackdropVignetteOdds { get; set; } = 1;
+        public double BackdropGradientOdds { get; set; } = 1;
+        public double BackdropSolidOdds { get; set; } = 0.25;
+
+        /// <summary>The backdrop this layout gets, by the odds. With every one off, a plain colour.</summary>
+        public string PickBackdrop(Random random)
+        {
+            double vignette = Math.Max(0, BackdropVignetteOdds), gradient = Math.Max(0, BackdropGradientOdds), solid = Math.Max(0, BackdropSolidOdds);
+            double sum = vignette + gradient + solid;
+            if (sum <= 0) return CanvasLook.Solid;
+            double roll = random.NextDouble() * sum;
+            return roll < vignette ? CanvasLook.Vignette : roll < vignette + gradient ? CanvasLook.Gradient : CanvasLook.Solid;
+        }
         public bool KeepCanvas { get; set; }
         /// <summary>
         /// How much of an image a cell may crop away to fill itself, 0 to 1, measured against the cell's shape. Past it,
@@ -426,6 +446,9 @@ namespace ModernImageViewer
                 read.HeroSmallest = Math.Clamp(read.HeroSmallest, HeroLowest, HeroHighest);
                 read.HeroLargest = Math.Clamp(read.HeroLargest, read.HeroSmallest, HeroHighest);
                 read.GapScale = Math.Clamp(read.GapScale, 0.25, 3);
+                read.BackdropVignetteOdds = Math.Clamp(read.BackdropVignetteOdds, 0, MostFavouredDesign);
+                read.BackdropGradientOdds = Math.Clamp(read.BackdropGradientOdds, 0, MostFavouredDesign);
+                read.BackdropSolidOdds = Math.Clamp(read.BackdropSolidOdds, 0, MostFavouredDesign);
                 read.FewestPictures = Math.Clamp(read.FewestPictures, FewestAllowed, MosaicLayout.MaxShown);
                 read.MostPictures = Math.Clamp(read.MostPictures, read.FewestPictures, MosaicLayout.MaxShown);
                 read.TogetherChance = Math.Clamp(read.TogetherChance, 0, 1);
@@ -815,10 +838,31 @@ namespace ModernImageViewer
             if (version.FacesCut == 0 && CropShare(cell) <= options.CropAtMost + 1e-9) return version;
             return version.Recipe switch
             {
-                EdgeToEdge => ShownWhole(EdgeToEdge, cell.Photo, version.Width, version.Height, 0, null, random),
-                GalleryWall => ShownWhole(GalleryWall, cell.Photo, version.Width, version.Height, cell.Frame.Padding * 2, version.CanvasColor, random),
+                EdgeToEdge => ShownWhole(EdgeToEdge, cell.Photo, version.Width, version.Height, 0, null, random, options.PickBackdrop(random)),
+                GalleryWall => ShownWhole(GalleryWall, cell.Photo, version.Width, version.Height, cell.Frame.Padding * 2, version.CanvasColor, random, CanvasLook.Solid),
                 ScatteredPrints => version,
                 _ => null
+            };
+        }
+
+        /// <summary>
+        /// The colour of every frame in one layout, from Frame color: white, black, or a tone from the boldest image; Any
+        /// picks one of the three for each layout.
+        /// </summary>
+        public static string FrameColorFor(List<PhotoFacts> photos, Random random, SurpriseOptions options)
+        {
+            int kind = options.Card switch
+            {
+                SurpriseOptions.CardWhite => 0,
+                SurpriseOptions.CardBlack => 1,
+                SurpriseOptions.CardFromPictures => 2,
+                _ => random.Next(3)
+            };
+            return kind switch
+            {
+                0 => "#FFF8F8F8",
+                1 => "#FF141414",
+                _ => Tone(Boldest(photos, random).Color, 0.22, 0.16)
             };
         }
 
@@ -849,7 +893,7 @@ namespace ModernImageViewer
         /// The image whole, as large as the space allows, unframed: on a tinted vignette for Edge to edge (as Cinematic
         /// Slideshow shows a portrait), or set in its card for Gallery wall, the card's margin at least the given one.
         /// </summary>
-        private static Composition ShownWhole(string recipe, PhotoFacts photo, double w, double h, double margin, string? card, Random random)
+        private static Composition ShownWhole(string recipe, PhotoFacts photo, double w, double h, double margin, string? card, Random random, string backdrop)
         {
             double availW = Math.Max(40, w - 2 * margin), availH = Math.Max(40, h - 2 * margin);
             double scale = Math.Min(availW / photo.Width, availH / photo.Height);
@@ -866,7 +910,7 @@ namespace ModernImageViewer
                 Geometry = new CellGeometryDto()
             };
             return card == null
-                ? Finish(recipe, new List<ComposedCell> { cell }, null, Tone(photo.Color, 0.28, 0.14), CanvasLook.Vignette, FrameLooks.Flush(), w, h)
+                ? Finish(recipe, new List<ComposedCell> { cell }, null, Tone(photo.Color, 0.28, 0.14), backdrop, FrameLooks.Flush(), w, h)
                 : Finish(recipe, new List<ComposedCell> { cell }, null, card, CanvasLook.Solid, FrameLooks.Flush(), w, h);
         }
 
@@ -875,7 +919,7 @@ namespace ModernImageViewer
             EdgeToEdge => BuildEdgeToEdge(photos, w, h, random),
             GalleryWall => BuildGalleryWall(photos, w, h, random, options),
             SlantedPanels => BuildSlantedPanels(photos, w, h, random),
-            Circles => BuildCircles(photos, w, h, random),
+            Circles => BuildCircles(photos, w, h, random, options),
             HeroSpotlight => BuildHeroSpotlight(photos, w, h, random, look, options),
             _ => BuildScatteredPrints(photos, w, h, random, options)
         };
@@ -894,19 +938,7 @@ namespace ModernImageViewer
         private static Composition? BuildGalleryWall(List<PhotoFacts> photos, double w, double h, Random random, SurpriseOptions options)
         {
             // One sheet of card with the pictures set into it: the margin all round matches the gaps between them.
-            int cardKind = options.Card switch
-            {
-                SurpriseOptions.CardWhite => 0,
-                SurpriseOptions.CardBlack => 1,
-                SurpriseOptions.CardFromPictures => 2,
-                _ => random.Next(3)
-            };
-            string card = cardKind switch
-            {
-                0 => "#FFF8F8F8",
-                1 => "#FF141414",
-                _ => Tone(Boldest(photos, random).Color, 0.22, 0.16)
-            };
+            string card = FrameColorFor(photos, random, options);
             double gap = Math.Clamp(Math.Min(w, h) * (0.012 + random.NextDouble() * 0.012), 6, 20) * options.GapScale;
             double radius = random.Next(3) == 0 ? gap * 0.6 : 0;
             var cellFrame = new CellBorderDto { Color = "#00000000", Padding = gap / 2, CornerRadius = radius, GutterMaterial = "Solid", GutterColor = card };
@@ -951,7 +983,8 @@ namespace ModernImageViewer
             double cx = w * across[random.Next(across.Length)];
             double cy = h * (0.46 + random.NextDouble() * 0.08);
             double shadowRoom = Math.Min(w, h) * 0.035;
-            double line = Math.Clamp(Math.Min(w, h) * 0.007, 3, 8);
+            double line = Math.Clamp(Math.Min(w, h) * 0.007, 3, 8) * options.GapScale;
+            string outline = FrameColorFor(photos, random, options);
             cells.Add(new ComposedCell
             {
                 Photo = hero,
@@ -963,7 +996,7 @@ namespace ModernImageViewer
                 Geometry = new CellGeometryDto { Shape = shape },
                 Frame = new CellBorderDto
                 {
-                    Color = "#FFFFFFFF",
+                    Color = outline,
                     Thickness = line,
                     Padding = shadowRoom,
                     CornerRadius = shape == WindowShapes.Squircle || shape == WindowShapes.Oval ? 0 : line * 2,
@@ -973,7 +1006,7 @@ namespace ModernImageViewer
                     GutterColor = "#00000000"
                 }
             });
-            return Finish(HeroSpotlight, cells, mosaic, Tone(hero.Color, 0.25, 0.1), CanvasLook.Solid, FrameLooks.Flush(), w, h);
+            return Finish(HeroSpotlight, cells, mosaic, Tone(hero.Color, 0.25, 0.1), options.PickBackdrop(random), FrameLooks.Flush(), w, h);
         }
 
         private static Composition? BuildScatteredPrints(List<PhotoFacts> photos, double w, double h, Random random, SurpriseOptions options)
@@ -990,7 +1023,8 @@ namespace ModernImageViewer
             }
 
             double share = 1.05 + random.NextDouble() * 0.25;
-            double border = Math.Clamp(Math.Min(w, h) * 0.012, 5, 12);
+            double border = Math.Clamp(Math.Min(w, h) * 0.012, 5, 12) * options.GapScale;
+            string borderColor = FrameColorFor(photos, random, options);
             double shadowRoom = Math.Min(w, h) * 0.03;
             // A featured print is larger and lies on top.
             var order = photos.OrderBy(p => p.Featured ? 1 : 0).ThenBy(_ => random.Next()).ToList();
@@ -1022,7 +1056,7 @@ namespace ModernImageViewer
                     Geometry = new CellGeometryDto { WindowRotation = turn },
                     Frame = new CellBorderDto
                     {
-                        Color = "#FFFAFAFA",
+                        Color = borderColor,
                         Thickness = border,
                         Padding = shadowRoom,
                         ShadowIntensity = 55,
@@ -1032,7 +1066,7 @@ namespace ModernImageViewer
                     }
                 });
             }
-            string surface = random.Next(2) == 0 ? CanvasLook.Vignette : CanvasLook.Gradient;
+            string surface = options.PickBackdrop(random);
             return Finish(ScatteredPrints, cells, null, Tone(Boldest(photos, random).Color, 0.28, 0.3), surface, FrameLooks.Flush(), w, h);
         }
 
@@ -1067,14 +1101,15 @@ namespace ModernImageViewer
         }
 
         /// <summary>Round portraits of varied size on a quiet canvas. The boldest picture is the largest.</summary>
-        private static Composition? BuildCircles(List<PhotoFacts> photos, double w, double h, Random random)
+        private static Composition? BuildCircles(List<PhotoFacts> photos, double w, double h, Random random, SurpriseOptions options)
         {
             int count = photos.Count;
             int columns = Math.Max(1, (int)Math.Round(Math.Sqrt(count * w / h)));
             int rows = (int)Math.Ceiling(count / (double)columns);
             var order = photos.OrderBy(_ => random.Next()).ToList();
             var boldest = order.Where(p => p.Featured).FirstOrDefault() ?? Boldest(order, random);
-            double line = Math.Clamp(Math.Min(w, h) * 0.006, 3, 7);
+            double line = Math.Clamp(Math.Min(w, h) * 0.006, 3, 7) * options.GapScale;
+            string outline = FrameColorFor(photos, random, options);
             double shadowRoom = Math.Min(w, h) * 0.03;
             double evenArea = w * h * 0.8 / count;
             var cells = new List<ComposedCell>();
@@ -1101,7 +1136,7 @@ namespace ModernImageViewer
                     Geometry = new CellGeometryDto { Shape = WindowShapes.Oval },
                     Frame = new CellBorderDto
                     {
-                        Color = "#FFFFFFFF",
+                        Color = outline,
                         Thickness = line,
                         Padding = shadowRoom,
                         ShadowIntensity = 60,
@@ -1111,7 +1146,7 @@ namespace ModernImageViewer
                     }
                 });
             }
-            string surface = random.Next(2) == 0 ? CanvasLook.Vignette : CanvasLook.Gradient;
+            string surface = options.PickBackdrop(random);
             return Finish(Circles, cells, null, Tone(boldest.Color, 0.25, 0.22), surface, FrameLooks.Flush(), w, h);
         }
 

@@ -915,6 +915,32 @@ namespace ModernImageViewer
                 v <= 0.15 ? "Normal" :
                 v <= 0.6 ? "More" : "Often";
 
+            // Shared by every design that has the thing, shown once above the designs (design 3.3).
+            {
+                var frameColor = new ComboBox { Width = 230, HorizontalAlignment = HorizontalAlignment.Right, ItemsSource = SurpriseOptions.Cards.ToList(), SelectedItem = options.Card };
+                frameColor.SelectionChanged += (_, _) =>
+                {
+                    if (frameColor.SelectedItem is string name) ChangeSurpriseChoices(o => o.Card = name);
+                };
+                Row(designsSection, "Frame color", "The color of every frame: Gallery wall's card, a hero's outline, a print's border, a circle's outline. Any: each layout picks white, black or a tone from its images.", frameColor);
+                Slide(designsSection, "Frame width", "How wide every frame is: Gallery wall's card and gaps, a hero's outline, a print's border, a circle's outline. 1x is the usual width.",
+                    0.25, 3, 0.25, options.GapScale,
+                    v => $"{v:0.##}×",
+                    (o, v) => o.GapScale = v);
+                void BackdropSlide(string name, string tip, double odds, Action<SurpriseOptions, double> set)
+                {
+                    double initial = odds <= 0 ? -1.2 : Math.Log(Math.Max(SurpriseOptions.RarestDesign, odds), DesignOddsBase);
+                    Slide(designsSection, name, tip, -1.2, 1.0, 0.1, initial, FormatDesignStep,
+                        (o, v) => set(o, v <= -1.1 ? 0 : Math.Pow(DesignOddsBase, v)));
+                }
+                BackdropSlide("Backdrop: vignette", "How often a backdrop fades from the middle to the edges. The backdrop is what shows round an image shown whole, a hero, prints and circles. Far left turns it off.",
+                    options.BackdropVignetteOdds, (o, v) => o.BackdropVignetteOdds = v);
+                BackdropSlide("Backdrop: gradient", "How often a backdrop fades from corner to corner. Far left turns it off.",
+                    options.BackdropGradientOdds, (o, v) => o.BackdropGradientOdds = v);
+                BackdropSlide("Backdrop: solid", "How often a backdrop is one flat colour. Far left turns it off.",
+                    options.BackdropSolidOdds, (o, v) => o.BackdropSolidOdds = v);
+            }
+
             foreach (string design in LayoutComposer.Recipes)
             {
                 double initialVal = options.IsDesignOff(design) ? -1.2 : Math.Log(Math.Max(SurpriseOptions.RarestDesign, options.DesignOdds.GetValueOrDefault(design, 1.0)), DesignOddsBase);
@@ -939,21 +965,7 @@ namespace ModernImageViewer
                     designsSection.Children.Add(panel);
                     return panel;
                 }
-                if (design == LayoutComposer.GalleryWall)
-                {
-                    var detail = Detail();
-                    var frameColor = new ComboBox { Width = 230, HorizontalAlignment = HorizontalAlignment.Right, ItemsSource = SurpriseOptions.Cards.ToList(), SelectedItem = options.Card };
-                    frameColor.SelectionChanged += (_, _) =>
-                    {
-                        if (frameColor.SelectedItem is string name) ChangeSurpriseChoices(o => o.Card = name);
-                    };
-                    Row(detail, "Frame color", "The color of the frame round each image and the canvas edge. Any: each layout picks white, black or a tone from its images.", frameColor);
-                    Slide(detail, "Frame width", "How wide the frame between the images and round the edge is. 1x is the usual width.",
-                        0.25, 3, 0.25, options.GapScale,
-                        v => $"{v:0.##}×",
-                        (o, v) => o.GapScale = v);
-                }
-                else if (design == LayoutComposer.HeroSpotlight)
+                if (design == LayoutComposer.HeroSpotlight)
                 {
                     // A range like Duration: each Hero layout picks its hero's height from it.
                     var detail = Detail();
