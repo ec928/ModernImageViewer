@@ -144,7 +144,7 @@ Multi-View pairs procedural Auto-Mix playback with a rich Storyboard presentatio
 
 ### Layout Generator: how it decides, and what is open
 
-The full rules are in `docs/MULTI_IMAGE_UI.md` (Layout Generator Settings, Zoom, Faces, Single images, Cinematic storyboard). A proposed redesign, not yet approved or built, is in `docs/LAYOUT_GENERATOR_DESIGN.md`: one mechanism for every layout, one image included, with the requirements it answers, every number the generator uses, and the open questions. As built today, every choice comes from a setting:
+The full rules are in `docs/MULTI_IMAGE_UI.md` (Layout Generator Settings, Zoom, Faces, Single images, Cinematic storyboard). A proposed redesign, not yet approved or built, is in `docs/MULTI_IMAGE_DESIGN.md`: one mechanism for every layout, one image included, with the requirements it answers, every number the generator uses, and the open questions. As built today, every choice comes from a setting:
 
 | What | Setting | Default |
 |---|---|---|
@@ -163,7 +163,7 @@ The full rules are in `docs/MULTI_IMAGE_UI.md` (Layout Generator Settings, Zoom,
 
 **Odds still fixed in code, with no setting:** Edge to edge without gaps 1 time in 3; Gallery wall rounded corners 1 time in 3; Scattered prints and Circles backdrop vignette or gradient 50/50; a drift goes sideways 3 times in 4; in Scattered prints a featured image's print, and in Circles the boldest image's circle, is 1.5× larger; an image counts as mostly hidden at 60% covered; a screenshot is an image named so or with 15% or more flat color.
 
-**Differences from Cinematic Slideshow still open:** two-shot scenes are rarer (25% against about 65% of face slides) and have two patterns, not Cinematic's five, with no pan from one face to another; Cinematic tilts slightly by default, where Rotation here starts off.
+**Direction:** the foundation is this multi-image engine. Cinematic Slideshow is still in the app and is not being rebuilt to match it. The differences (two-shot scenes at 25% with two patterns, against about 65% of Cinematic face slides and five patterns; Rotation off here, a slight tilt there) are not a list to close by copying that slideshow into the generator. The proposed design is `docs/MULTI_IMAGE_DESIGN.md`. Sequence beats, removed from Cinematic on 1 Nov 2026, come back when that design is ready, on the storyboard.
 
 **Checked by unit tests, not yet watched on screen:** two-image Circles, Scattered prints, Slanted panels and Hero spotlight; portraits at full height with zoom; the Camera zoom range during playback.
 - **Editing a scene**: while a scene is on the canvas, moving, resizing or turning a floating cell and dragging an edge between images are kept in that scene, and so are other changes when you play, pause or move to another scene. A scene is only changed while it is the one on the canvas; **Update scene from canvas**, on a card's right-click menu, copies the canvas into that scene. **Undo** steps back through these changes.

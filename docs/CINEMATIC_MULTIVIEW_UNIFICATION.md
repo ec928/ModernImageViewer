@@ -1,7 +1,9 @@
 # Unifying Cinematic & Multi-Image Auto-Play: Architecture & Options Analysis
 
-**Document Status:** Architectural Proposal / Reference Document  
-**Date:** November 2026  
+**Document Status (6 Nov 2026): not an open decision.** The direction has been chosen. The multi-image engine, built from scratch, is the foundation. Cinematic slideshow was abandoned as the engine to rebuild. Do not pick one of the options below and build it. Sequence beats come back later, on the storyboard, when there is a design for them. See `MULTI_IMAGE_DESIGN.md` (R14). This file remains the options analysis written before that choice.
+
+**Earlier status:** Architectural Proposal / Reference Document
+**Date:** November 2026
 **Target Application:** ModernImageViewer (`MultiViewControl` and `CinematicWindow`)  
 
 ---

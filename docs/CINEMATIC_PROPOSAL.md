@@ -1,10 +1,12 @@
 # Cinematic in ModernImageViewer: an excellent stills show
 
-**Status:** proposal, with the Play round, Edit show, Open show and music built (2026-11-01; see the end of §2). A 2026-08-27 attempt was reverted (lied: Clear-to-Auto on Auto; no visible start/end). Rebuild must follow §4–§6: two modes, no lying.  
-**Date:** 2026-08-27 (two-mode law)  
+**Status (6 Nov 2026): not the direction.** Sequence beats were removed to rebuild this engine from fundamentals. That rebuild did not succeed. Cinematic slideshow was abandoned as the engine to rebuild. The multi-image engine was built from scratch instead, and it is the foundation. Sequence beats come back when there is an appropriate design, on the storyboard, not by continuing this document. The direction is `MULTI_IMAGE_DESIGN.md` (R14). The window described below is still in the app. Do not implement further work from this file.
+
+**Earlier status, kept so the history below stays readable:** proposal, with the Play round, Edit show, Open show and music built (2026-11-01; see the end of §2). A 2026-08-27 attempt was reverted (lied: Clear-to-Auto on Auto; no visible start/end).
+**Date:** 2026-08-27 (two-mode law)
 **Scope:** The cinematic slideshow **in this app**. VideoDirector stays the multi-track compositor and MP4 exporter. Cinematic does not become an NLE.
 
-This document is product direction. Section 2 is what ships today. The destination is not “a better playlist on a mediocre player.” It is an **excellent cinematic show inside ModernImageViewer**.
+Section 2 is what was in the app when this was written. Section 1 was the old destination. It is not the current direction.
 
 ---
 
