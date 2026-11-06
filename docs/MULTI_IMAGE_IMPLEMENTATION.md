@@ -5,7 +5,7 @@ and is rewritten as each slice lands. Where the two disagree, the design wins an
 planned in full; slices 2 to 6 are outlines, planned in full only when the slice before has been shown to Ed and
 adjusted.
 
-**Status: slices 1 and 2 built on branch `slice1-one-engine-call`, neither yet seen by Ed.** Slices 3 to 6 not started. "Today" means v0.31.2. File and line references were read on
+**Status: slices 1 and 2 built on branch `slice1-one-engine-call`; Ed has run them. Slice 3 planned; 4 to 6 not started.** "Today" means v0.31.2. File and line references were read on
 6 Nov 2026 and will drift.
 
 **How each slice runs**
@@ -191,6 +191,61 @@ R5 (Crop at most is never overridden). The design's 3.4 sentence changes to matc
   the way Fitted does, but nobody has looked at it.
 - Today's Whole image always had a frame colour from Gallery wall's settings; as a hero it takes the hero's white
   outline until slice 5 brings Frame color to every design.
+
+## Slice 3: Play through the director
+
+**Goal (design, The director; R15).** Play goes through the director and keeps what it plays. Show values live in
+the show file. The cinematic values and the five presets live on the storyboard.
+
+### What the code does today
+
+- **Play storyboard already is the director playing on demand.** `MakeAndPlayStoryboardAsync`
+  (`MultiViewControl.Surprise.cs` ~3790) drafts one scene at a time with `ShowDirector.DraftSceneAsync`, starts
+  playing after 2 scenes (`ScenesBeforePlay`), stays at most 3 ahead while playing (`ScenesAheadWhilePlaying`), keeps
+  every scene, and stops drafting once every image is in a scene. Play then loops the kept scenes
+  (`_showPlaybackIndex = (currentIndex + 1) % count`).
+- **Play in Auto-Mix is not.** With no storyboard, or after the user chose Auto-Mix, Play runs `SurpriseAsync` on a
+  timer: each step deals a hand from a `PictureDeck` (every image before any repeats; Same folder and date;
+  Skip screens and repeats; featured first), prepares the next layout while this one holds, keeps nothing, and never
+  ends.
+- So the work is not building a director. It is moving Auto-Mix's Play onto the existing one, and moving Auto-Mix's
+  way of choosing pictures (the deck) into the director's "next images" step.
+
+### Open question, before building: when every image has been in a scene
+
+| Option | What Play does after the last image | Fits |
+|---|---|---|
+| **A. Keep drafting (recommended for Play from images)** | Deals the next hand from the deck as Auto-Mix does, so new scenes keep coming, all kept. An hour at 12 s is about 300 scenes | R6 (variety), today's Auto-Mix; nothing a user sees today is lost |
+| B. Loop the kept scenes | Replays scene 1 onward, as Play storyboard does today | A saved show, which plays what was saved |
+
+The recommendation is both, by what is playing: Play started from images keeps drafting (A); a show the user opened
+or saved replays its scenes (B), as the design's "saved shows replay what was saved" says.
+
+### Steps (slice 3 is split so the visible part is seen first)
+
+**3a. Play through the director (what Ed sees).**
+1. Auto-Mix's Play calls the director path (`MakeAndPlayStoryboardAsync`) instead of the `SurpriseAsync` timer.
+2. The director's next images come from the deck (`DealHand`), not "the next images not yet in the show", so Same
+   folder and date, Skip screens and repeats, featured first and taking turns keep working.
+3. Play starts after 1 scene, not 2, for the 1 s target; the next is drafted while the first holds.
+4. When the deck has gone round, Play keeps drafting (A) or loops (B), by the answer above.
+5. Measure on Ed's largest folder: time to first picture, and scenes held past their duration over 30 minutes. A miss
+   is fixed before 3b.
+
+**3b. Show values in the file (design section 7).** `ShowGlobalDefaults` gains images per scene, design odds,
+duration, smart pace, motion, sequence beats and Scenes per step; `$schemaVersion` 2; a version 1 "Cinematic" show
+copies the app's cinematic values once on open; `GeneratorSettingsFor` reads the show's own values first.
+
+**3c. Presets and the storyboard's settings.** The cinematic values leave Generator Advanced and are edited on the
+storyboard; Multi-Image, Cinematic and My presets 1, 2, 3 in the app's settings.
+
+### Tests
+
+- 3a: a headless run of the director's next-images step over a folder list: every image used before any repeats,
+  featured first, screens skipped; control by dealing in folder order instead.
+- 3a: Play from images past the last image keeps adding scenes (A); an opened show loops (B).
+- 3b: a version 1 Cinematic show opens with the app's cinematic values copied in, is unchanged on disk until saved,
+  and an older reader skips the new fields.
 
 ## Slices 2 to 6: outline
 
