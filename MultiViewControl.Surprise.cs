@@ -3737,7 +3737,8 @@ namespace ModernImageViewer
         }
 
         private int _storyboardBuildTicket;
-        private const int ScenesBeforePlay = 2;
+        // Play starts once the first scene is made; the next is drafted while it holds.
+        private const int ScenesBeforePlay = 1;
         private const int ScenesAheadWhilePlaying = 3;
         // Released at each change of scene, so the storyboard build makes its next scene then, mid-hold.
         private readonly System.Threading.SemaphoreSlim _storyboardAdvanced = new(0, 1);
@@ -3773,8 +3774,11 @@ namespace ModernImageViewer
         }
 
         /// <summary>
-        /// Play storyboard, from the folders: a new storyboard of the session's images that starts playing after its first
-        /// scenes and goes on making scenes, from images not in it yet, while it plays, until every image is in it. Reading a
+        /// Play from images: a new storyboard of the session's images that starts playing after its first scene and goes on
+        /// making scenes while it plays, every one kept. Each scene's images are dealt as Auto-Mix deals them: every image
+        /// before any comes round again, neighbours in folder and date by Same folder and date, featured images first,
+        /// screens and repeats left out. Once every image is in a scene it keeps making new ones while the show plays, and
+        /// waits while it is paused. A show that was opened or saved is not made here: it replays its own scenes. Reading a
         /// large folder's faces first would keep the screen still for minutes. Stops if the show is replaced or cleared.
         /// </summary>
         /// <param name="overrides">Null for the main Layout Generator settings, or the name of a set of overrides
@@ -3801,6 +3805,8 @@ namespace ModernImageViewer
             _showPlaybackIndex = 0;
             ShowShownBadge();
             bool Current() => ticket == _storyboardBuildTicket && ReferenceEquals(show, _activeShow);
+            var deck = new PictureDeck(PicturesInOrder(), new Random());
+            int failedHands = 0;
 
             bool started = false;
             while (Current())
@@ -3812,11 +3818,19 @@ namespace ModernImageViewer
                     await _storyboardAdvanced.WaitAsync(TimeSpan.FromSeconds(2));
                 if (!Current()) return;
 
-                var fresh = show.ImagesNotInShow(SessionPictures()).Where(p => !_imagesBeingDrafted.Contains(p)).ToList();
-                if (fresh.Count == 0) break;
+                var session = SessionPictures();
+                if (session.Count == 0) break;
+                deck.MatchSession(session);
+                // Every image is in a scene: more are made only while the show plays, so a pause does not draft forever.
+                if (started && !IsPlayingStoryboard && !show.ImagesNotInShow(session).Any())
+                {
+                    await _storyboardAdvanced.WaitAsync(TimeSpan.FromSeconds(2));
+                    continue;
+                }
                 // Read for each scene, so a setting changed while it plays applies to the scenes still to come.
                 var settings = GeneratorSettingsFor(show);
-                var chosen = fresh.Take(Math.Clamp(settings.MostPictures, 1, MosaicLayout.MaxShown)).ToList();
+                var chosen = DealHand(deck, settings).Where(p => !_imagesBeingDrafted.Contains(p)).ToList();
+                if (chosen.Count == 0) break;
                 _imagesBeingDrafted.UnionWith(chosen);
                 ShowScene? scene;
                 try
@@ -3824,11 +3838,19 @@ namespace ModernImageViewer
                     var ready = DecodedBitmaps();
                     var facts = await ReadFactsAsync(chosen, path => ready.TryGetValue(path, out var bitmap) ? (bitmap.PixelWidth, bitmap.PixelHeight) : null);
                     if (!Current()) return;
+                    if (settings.SkipScreens) facts = LayoutComposer.LeaveOutScreensAndRepeats(facts);
                     var previous = show.Scenes.Count > 0 ? show.Scenes[^1] : null;
-                    scene = await ShowDirector.DraftSceneAsync(facts, settings, ActualWidth, ActualHeight, previous);
+                    // The hand is the scene: its size was already rolled in the Images per scene range.
+                    scene = await ShowDirector.DraftSceneAsync(facts, settings, ActualWidth, ActualHeight, previous, takeAll: true);
                     if (!Current()) return;
-                    // What is left cannot be laid out, such as files that will not open.
-                    if (scene == null) break;
+                    // A hand that cannot be laid out, such as files that will not open: the next hand may. Five in a row
+                    // means nothing left can be.
+                    if (scene == null)
+                    {
+                        if (++failedHands >= 5) break;
+                        continue;
+                    }
+                    failedHands = 0;
                     show.Scenes.Add(scene);
                 }
                 finally
@@ -4172,6 +4194,13 @@ namespace ModernImageViewer
             if (SessionPictures().Count < minPics)
             {
                 AddImagesRequested?.Invoke(this, EventArgs.Empty);
+                return;
+            }
+            // Play goes through the director and keeps what it plays (R15). With a storyboard already open and Auto-Mix
+            // chosen, Play still mixes without keeping, so that storyboard is not replaced by a new one.
+            if (_activeShow == null || _activeShow.Scenes.Count == 0)
+            {
+                await MakeAndPlayStoryboardAsync();
                 return;
             }
             StopAutoPlay();

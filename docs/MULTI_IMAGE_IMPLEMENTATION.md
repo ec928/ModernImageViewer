@@ -5,7 +5,7 @@ and is rewritten as each slice lands. Where the two disagree, the design wins an
 planned in full; slices 2 to 6 are outlines, planned in full only when the slice before has been shown to Ed and
 adjusted.
 
-**Status: slices 1 and 2 built on branch `slice1-one-engine-call`; Ed has run them. Slice 3 planned; 4 to 6 not started.** "Today" means v0.31.2. File and line references were read on
+**Status: slices 1, 2 and 3a built on branch `slice1-one-engine-call`; Ed has run 1 and 2. 3a's timing not yet measured; 3b, 3c and 4 to 6 not started.** "Today" means v0.31.2. File and line references were read on
 6 Nov 2026 and will drift.
 
 **How each slice runs**
@@ -211,7 +211,7 @@ the show file. The cinematic values and the five presets live on the storyboard.
 - So the work is not building a director. It is moving Auto-Mix's Play onto the existing one, and moving Auto-Mix's
   way of choosing pictures (the deck) into the director's "next images" step.
 
-### Open question, before building: when every image has been in a scene
+### Decided (Ed, 6 Nov): when every image has been in a scene, Play from images keeps drafting; a saved or opened show loops
 
 | Option | What Play does after the last image | Fits |
 |---|---|---|
@@ -231,6 +231,10 @@ or saved replays its scenes (B), as the design's "saved shows replay what was sa
 4. When the deck has gone round, Play keeps drafting (A) or loops (B), by the answer above.
 5. Measure on Ed's largest folder: time to first picture, and scenes held past their duration over 30 minutes. A miss
    is fixed before 3b.
+
+*3a as built:* with a storyboard already open and Auto-Mix chosen, Play still mixes without keeping, so that
+storyboard is not replaced. A hand that cannot be laid out is skipped; five in a row end the drafting. Not yet
+measured: the timing targets (they need the app running on Ed's largest folder).
 
 **3b. Show values in the file (design section 7).** `ShowGlobalDefaults` gains images per scene, design odds,
 duration, smart pace, motion, sequence beats and Scenes per step; `$schemaVersion` 2; a version 1 "Cinematic" show

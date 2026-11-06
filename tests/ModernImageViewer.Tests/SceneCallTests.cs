@@ -60,6 +60,19 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
+        public void PlayFromImages_DraftsTheWholeHand()
+        {
+            // The hand Play deals is already sized within Images per scene; the director must not roll the count again.
+            var options = new SurpriseOptions { FewestPictures = 1, MostPictures = 9 };
+            var hand = Enumerable.Range(0, 5).Select(n => new PhotoFacts($@"C:\p\hand{n}.jpg", 1600, 1200, new List<UnitRect>(), 0.5, 0.5, "#000000")).ToList();
+            for (int i = 0; i < 30; i++)
+            {
+                var scene = ShowDirector.DraftSceneAsync(hand, options, 1920, 1080, null, takeAll: true).Result!;
+                Assert.Equal(5, scene.GetPhotoPaths().Count(p => !string.IsNullOrEmpty(p)));
+            }
+        }
+
+        [Fact]
         public void TheLastMove_IsPassedIn_AndNotRepeated()
         {
             var options = new SurpriseOptions { MotionZoomChance = 0.5, TwoShotChance = 0 };

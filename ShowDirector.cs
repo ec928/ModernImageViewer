@@ -110,8 +110,9 @@ namespace ModernImageViewer
         /// images-per-scene range allows. It avoids repeating the previous scene's design, move and transition.
         /// Null when nothing can be laid out.
         /// </summary>
+        /// <param name="takeAll">The photos are the scene's hand, already sized within Images per scene: use them all.</param>
         public static Task<ShowScene?> DraftSceneAsync(IReadOnlyList<PhotoFacts> photos, SurpriseOptions? options,
-            double canvasWidth, double canvasHeight, ShowScene? previous)
+            double canvasWidth, double canvasHeight, ShowScene? previous, bool takeAll = false)
         {
             options ??= new SurpriseOptions();
             double width = Math.Max(320, canvasWidth);
@@ -124,7 +125,7 @@ namespace ModernImageViewer
                 var random = new Random(Random.Shared.Next());
                 int fewest = Math.Clamp(options.FewestPictures, 1, MosaicLayout.MaxShown);
                 int most = Math.Clamp(options.MostPictures, fewest, MosaicLayout.MaxShown);
-                var chunk = usable.Take(Math.Min(usable.Count, random.Next(fewest, most + 1))).ToList();
+                var chunk = usable.Take(Math.Min(usable.Count, takeAll ? MosaicLayout.MaxShown : random.Next(fewest, most + 1))).ToList();
 
                 var composition = SceneCall.Make(new SceneRequest(chunk, width, height, options, 0, random.Next(), previous?.Recipe))?.Composition
                     ?? SceneCall.Make(new SceneRequest(new[] { chunk[0] }, width, height, options, 0, random.Next()))?.Composition;
