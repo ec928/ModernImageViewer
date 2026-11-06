@@ -105,6 +105,84 @@ Dynamic and played.
 
 ---
 
+## Slice 2: one image through the designs
+
+**Goal (design 3.1 to 3.4, for one image).** A layout of one image rolls the design odds like any layout. The Single
+images branch and its odds go. **Crop at most** (default 35%) replaces the 65% rule. A shaped cell is measured by its
+shape.
+
+**What Ed sees.** A portrait and a landscape regenerated: full screen, in card, hero, print, circle, panel, by the
+design odds; a portrait shown whole when filling would crop more than Crop at most.
+
+### What the code does today
+
+- `LayoutComposer.Compose` sends one image to `ComposeSolo` (~777) before any design is rolled.
+- `ComposeSolo` fills the screen and measures the share shown; under 65% or with a face cut, Fill becomes **Fitted**:
+  a transparent floating cell sized to the image, on a toned vignette. Then `SurpriseOptions.PickSolo` rolls Fill /
+  Matted / Whole (odds 2 / 1 / 1). Matted is `BuildGalleryWall` with one photo; Whole is a framed print on a vignette,
+  labelled Hero spotlight.
+- `CanMake` refuses every design under two images. Of the builders: `BuildScatteredPrints` and `BuildCircles` already
+  work for one; `BuildHeroSpotlight` needs at least one image beside the hero; `BuildSlantedPanels` with one image makes
+  a panel 1.67 screens wide.
+- **The renderer fills every cell.** A layout file has `State.IsFillMode`, but the control does not read it from a
+  file, and it is one switch for the whole canvas. So "shown whole" can only be drawn today the way Fitted does it:
+  a cell sized to the image's own shape.
+- A shape's outline is known (`WindowShapes.Outline`, `CoverBox` in `MultiViewLayoutFile.cs`), so the share of an
+  image a shape hides can be measured exactly.
+
+### Open question, before building: a shape that would crop too far
+
+The design (3.4) says a cell that would crop past Crop at most shows its image "fitted inside the bounding box, clipped
+by the shape, on the backdrop". For a rectangle that is the Fitted cell above. For a circle, hero shape or leaning
+panel it is a new kind of drawing: an image smaller than its shape, with backdrop showing inside the shape around it.
+The renderer cannot draw that today.
+
+| Option | What a portrait in a circle does | Cost |
+|---|---|---|
+| **A. The design steps aside for that image (recommended)** | That call rolls among the designs that can show it within Crop at most, as a design that cannot hold the image count does today. Edge to edge (fitted when needed), Gallery wall (whole in its card) and Scattered prints (a print is the image's own shape) can show any image, so a layout is always made | None in the renderer. Every shape keeps its look. Crop at most means exactly what it says |
+| B. The shape takes the image's proportions | A tall oval instead of a circle; a stretched hexagon | Shapes stop looking like themselves |
+| C. Draw an image inside its shape, smaller than it | A circle with the whole portrait inside and backdrop at its sides | New renderer work in the cell drawing, which this slice was not sized for, and which can only be checked by eye |
+
+A respects R2 (a design is not turned off; it takes no part in a call it cannot honour, as with the image count) and
+R5 (Crop at most is never overridden). The design's 3.4 sentence changes to match whichever is chosen.
+
+### Steps (written for A; B or C change step 3 only)
+
+1. **One image goes through the designs.** `Compose` stops sending one image to `ComposeSolo`. `CanMake` accepts one
+   image for every design. Each builder gets a one-image form: Edge to edge, one full-screen cell; Gallery wall, one
+   cell in its card; Hero spotlight, the hero alone on its backdrop (today's Whole print becomes this, with the hero
+   shapes); Scattered prints and Circles, as today with one; Slanted panels, one panel at full height and the
+   image's width.
+2. **Crop at most.** A new setting, `CropAtMost`, default 0.35, under Images & faces. One measure,
+   `CropShare(cell)`: the share of the image the cell hides when filled, measured against the shape's outline, not
+   its box.
+3. **Shown whole, or stepping aside (A).** Edge to edge: past Crop at most or through a face, the cell becomes today's
+   Fitted cell. Gallery wall: the card fills the screen and the image sits whole in it. Scattered prints: never crops.
+   Hero, Circles, Slanted panels: past Crop at most, the design leaves that call's roll.
+4. **Single images goes.** `SoloFillOdds`, `SoloMattedOdds`, `SoloWholeOdds`, `PickSolo`, `ComposeSolo` and the
+   Single images section of Generator Advanced are removed; the Cinematic overrides' copies too (design section 7).
+   Old settings files still load: the fields are ignored. The 65% in `ComposeSolo` goes with it; the Cinematic
+   Slideshow window's own copy stays (R14).
+5. **Cinematic.** Its preset's design odds (Edge to edge Often, Hero spotlight Rare, others Off) replace its Single
+   images odds.
+
+### Tests
+
+- Attack first: a 2:3 portrait, a 3:2 landscape, a 1:3 panorama, a tiny image and a face at the edge, each
+  regenerated 30 times with default odds: which designs come up, and none crops past 35% or cuts a face.
+- Crop at most at 100%: nothing shown whole for crop; at 0%: Edge to edge always fitted, Hero, Circles and Panels never
+  chosen for a portrait. Control: ignore the setting and both ends fail.
+- A design at Off never appears for one image (design check 4 for count 1).
+- `SettingsAreObeyedTests` covers the old Single images odds and will be rewritten for the design odds; which of its
+  tests go is listed in the commit.
+
+### Risks
+
+- Gallery wall's whole-in-card for one image is a new layout (a floating cell on a card-coloured canvas). It renders
+  the way Fitted does, but nobody has looked at it.
+- Today's Whole image always had a frame colour from Gallery wall's settings; as a hero it takes the hero's white
+  outline until slice 5 brings Frame color to every design.
+
 ## Slices 2 to 6: outline
 
 | Slice | Main code | First thing to settle |
