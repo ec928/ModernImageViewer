@@ -1164,6 +1164,8 @@ namespace ModernImageViewer
                     0, 100, 5, options.StillChance * 100,
                     v => v < 1 ? "Off" : $"{v:0}%",
                     (o, v) => o.StillChance = v / 100);
+                Toggle(column, "Log Play timing", "Temporary, for measuring: Play writes how long it takes to show each scene to play-timing.log in the app's folder. Timings only, no file names.",
+                    options.LogPlayTiming, (o, v) => o.LogPlayTiming = v);
 
                 column.Children.Add(new TextBlock
                 {
@@ -3737,6 +3739,8 @@ namespace ModernImageViewer
         }
 
         private int _storyboardBuildTicket;
+        // The show Play from images is still making scenes for: it holds at its last scene rather than going back to the start.
+        private ShowProject? _showBeingBuilt;
         // Play starts once the first scene is made; the next is drafted while it holds.
         private const int ScenesBeforePlay = 1;
         private const int ScenesAheadWhilePlaying = 3;
@@ -3807,6 +3811,8 @@ namespace ModernImageViewer
             bool Current() => ticket == _storyboardBuildTicket && ReferenceEquals(show, _activeShow);
             var deck = new PictureDeck(PicturesInOrder(), new Random());
             int failedHands = 0;
+            _showBeingBuilt = show;
+            PlayTiming.Start(SurpriseChoices.LogPlayTiming);
 
             bool started = false;
             while (Current())
@@ -3835,13 +3841,16 @@ namespace ModernImageViewer
                 ShowScene? scene;
                 try
                 {
+                    long dealt = PlayTiming.Now;
                     var ready = DecodedBitmaps();
                     var facts = await ReadFactsAsync(chosen, path => ready.TryGetValue(path, out var bitmap) ? (bitmap.PixelWidth, bitmap.PixelHeight) : null);
                     if (!Current()) return;
+                    long read = PlayTiming.Now;
                     if (settings.SkipScreens) facts = LayoutComposer.LeaveOutScreensAndRepeats(facts);
                     var previous = show.Scenes.Count > 0 ? show.Scenes[^1] : null;
                     // The hand is the scene: its size was already rolled in the Images per scene range.
                     scene = await ShowDirector.DraftSceneAsync(facts, settings, ActualWidth, ActualHeight, previous, takeAll: true);
+                    PlayTiming.Write($"scene {show.Scenes.Count + 1} drafted: {chosen.Count} images, faces and sizes read in {read - dealt} ms, laid out in {PlayTiming.Now - read} ms");
                     if (!Current()) return;
                     // A hand that cannot be laid out, such as files that will not open: the next hand may. Five in a row
                     // means nothing left can be.
@@ -3872,6 +3881,8 @@ namespace ModernImageViewer
                     await PlayStoryboardAsync(0);
                 }
             }
+            // Nothing more will be made: the show now replays its scenes from the start.
+            if (ReferenceEquals(_showBeingBuilt, show)) _showBeingBuilt = null;
             if (!started && Current() && show.Scenes.Count > 0) await PlayStoryboardAsync(0);
             if (Current())
             {
@@ -3953,6 +3964,21 @@ namespace ModernImageViewer
                 return;
             }
 
+            long turnCame = PlayTiming.Now;
+            // The next scene is still being made: this one holds, still, until it is ready. Play never goes back to the
+            // start of a show that is still growing, and never shows a blank screen.
+            if (_showPlaybackIndex >= visibleScenes.Count && ReferenceEquals(_activeShow, _showBeingBuilt))
+            {
+                var show = _activeShow;
+                int waitingFor = _showPlaybackIndex;
+                while (_autoPlaySeconds > 0 && ReferenceEquals(_activeShow, show) && ReferenceEquals(show, _showBeingBuilt)
+                       && show.Scenes.Count(s => !s.IsHidden) <= waitingFor)
+                    await Task.Delay(50);
+                PlayTiming.Write($"scene {waitingFor + 1} was not ready: held the last one {PlayTiming.Now - turnCame} ms longer");
+                if (_autoPlaySeconds == 0 || !ReferenceEquals(_activeShow, show)) return;
+                visibleScenes = show.Scenes.Where(s => !s.IsHidden).ToList();
+            }
+
             if (_showPlaybackIndex < 0 || _showPlaybackIndex >= visibleScenes.Count)
                 _showPlaybackIndex = 0;
 
@@ -4032,11 +4058,14 @@ namespace ModernImageViewer
             if (_autoPlaySeconds > 0) StartPlaybackProgress(_layoutSeconds);
             else StopPlaybackProgress();
 
-            _showPlaybackIndex = (currentIndex + 1) % visibleScenes.Count;
+            PlayTiming.Write($"scene {currentIndex + 1} shown {PlayTiming.Now - turnCame} ms after its turn came, holds {_layoutSeconds} s");
+            // A show still being made goes on to its next scene when that is ready; a finished one goes round again.
+            bool growing = ReferenceEquals(_activeShow, _showBeingBuilt);
+            _showPlaybackIndex = growing && currentIndex + 1 >= visibleScenes.Count ? currentIndex + 1 : (currentIndex + 1) % visibleScenes.Count;
             ShowAutoPlayState();
             if (_storyboardAdvanced.CurrentCount == 0) _storyboardAdvanced.Release();
             // The next scene's images load while this one holds, as Auto-Mix's next layout does, so its change does not wait on them.
-            if (_autoPlaySeconds > 0) PreloadStoryScene(visibleScenes[_showPlaybackIndex]);
+            if (_autoPlaySeconds > 0 && _showPlaybackIndex < visibleScenes.Count) PreloadStoryScene(visibleScenes[_showPlaybackIndex]);
         }
 
         private void RefreshTrayCardIfOpen()

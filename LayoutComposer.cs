@@ -289,6 +289,9 @@ namespace ModernImageViewer
         /// <summary>The chance that a scene plays no move at all. Off by default: a still adds a little variety, not much.</summary>
         public double StillChance { get; set; }
 
+        /// <summary>Temporary diagnostic: Play writes its timings to play-timing.log. Off by default.</summary>
+        public bool LogPlayTiming { get; set; }
+
         /// <summary>The camera settings a planned move follows. Two shots only when the camera mode is Auto: a chosen mode is one kind of move.</summary>
         public CameraStyle CameraStyle() => new(CurveOdds, PathBendLeast, PathBendMost, TurnLeast, TurnMost,
             string.Equals(CameraMode, CameraAuto, StringComparison.OrdinalIgnoreCase) ? TwoShotChance : 0,
