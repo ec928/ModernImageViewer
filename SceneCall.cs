@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace ModernImageViewer
 {
@@ -67,9 +68,49 @@ namespace ModernImageViewer
             var options = request.Options;
             if (options.StillChance > 0 && random.NextDouble() < options.StillChance) return new SceneResult(composition, null, 0);
             double amount = options.PickMotion(random);
-            var move = CameraMove.Plan(subjects, amount, options.MotionZoomChance, options.MotionFaceChance,
-                request.HoldSeconds + OverrunSeconds, request.LastKind, random, options.ForcedCameraKind, options.CameraStyle());
+            double seconds = request.HoldSeconds + OverrunSeconds;
+            var one = composition?.Cells.Where(c => c.Photo != null && !string.IsNullOrEmpty(c.Photo.Path)).Take(2).ToList();
+            var move = one is { Count: 1 }
+                ? OneImageMove(one[0], composition!, subjects, options, amount, seconds, request.LastKind, random)
+                : CameraMove.Plan(subjects, amount, options.MotionZoomChance, options.MotionFaceChance,
+                    seconds, request.LastKind, random, options.ForcedCameraKind, options.CameraStyle());
             return new SceneResult(composition, move, move == null ? 0 : amount);
+        }
+
+        /// <summary>
+        /// One image is one move (design 3.5). The layout did not zoom it: it opens on its fit or fill, and Zoom is where the
+        /// move arrives. Camera mode Zoom in or Zoom out travels between that frame and the Zoom amount every scene. On Auto,
+        /// Zoom frequency is rolled first: a hit zooms in or out to the Zoom amount, toward the faces or the focus point; a
+        /// miss is the ordinary camera move, a Camera zoom or a drift. No view goes past where a face would be cut or the
+        /// photo shown past its detail.
+        /// </summary>
+        private static CameraMove? OneImageMove(ComposedCell cell, Composition composition, IReadOnlyList<(double X, double Y)> subjects,
+            SurpriseOptions options, double amount, double seconds, CameraKind? last, Random random)
+        {
+            double mostZoom = LayoutComposer.MostCameraZoom(cell, composition.Width, composition.Height);
+            var aim = new List<(double X, double Y)> { LayoutComposer.AimFor(cell, composition.Width, composition.Height) };
+            var style = options.CameraStyle();
+            // A two-shot snaps to a face; an image without one has none to snap to.
+            var toZoom = style with
+            {
+                ZoomLeast = options.LeastZoom,
+                ZoomMost = options.MostZoom,
+                TwoShotChance = cell.Photo.Faces.Count > 0 ? style.TwoShotChance : 0
+            };
+            var forced = options.ForcedCameraKind;
+            if (forced is CameraKind.ZoomIn or CameraKind.ZoomOut)
+                return CameraMove.Plan(aim, amount, 1, 1, seconds, last, random, forced, options.MostZoom > 1 ? toZoom : style, mostZoom);
+            if (forced == CameraKind.Drift)
+                return CameraMove.Plan(subjects, amount, 0, options.MotionFaceChance, seconds, last, random, forced, style, mostZoom);
+            if (options.Zooms(random))
+            {
+                // Never the same kind twice running, as the planner keeps it.
+                var kind = last == CameraKind.ZoomIn ? CameraKind.ZoomOut
+                    : last == CameraKind.ZoomOut ? CameraKind.ZoomIn
+                    : random.Next(2) == 0 ? CameraKind.ZoomIn : CameraKind.ZoomOut;
+                return CameraMove.Plan(aim, amount, 1, 1, seconds, last, random, kind, toZoom, mostZoom);
+            }
+            return CameraMove.Plan(subjects, amount, options.MotionZoomChance, options.MotionFaceChance, seconds, last, random, null, style, mostZoom);
         }
     }
 }

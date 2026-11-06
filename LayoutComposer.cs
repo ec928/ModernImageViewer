@@ -731,22 +731,37 @@ namespace ModernImageViewer
                     if (ranked.Count == 0) break;
                     if (fallback == null || ranked[0].Score > fallback.Score) fallback = ranked[0];
                     var clean = ranked.Where(c => c.FacesCut == 0 && c.PicturesBuried == 0).ToList();
-                    if (clean.Count > 0) return ZoomedIfOne(clean[random.Next(Math.Min(options.Variety, clean.Count))], usable.Count, rasterScale, options, random);
+                    if (clean.Count > 0) return clean[random.Next(Math.Min(options.Variety, clean.Count))];
                     if (recipe != HeroSpotlight) break;
                 }
             }
-            return fallback == null ? null : ZoomedIfOne(fallback, usable.Count, rasterScale, options, random);
+            return fallback;
         }
 
-        /// <summary>A layout of one image takes the layout zoom by Zoom frequency, as any image does.</summary>
-        private static Composition ZoomedIfOne(Composition chosen, int images, double rasterScale, SurpriseOptions options, Random random)
+        /// <summary>
+        /// Where a camera zoom on a one-image layout heads: its faces or, with none found, its focus point, as shares of the
+        /// canvas.
+        /// </summary>
+        public static (double X, double Y) AimFor(ComposedCell cell, double canvasW, double canvasH) =>
+            cell.Photo.Faces.Count > 0
+                ? SubjectOnCanvas(cell, canvasW, canvasH)
+                : PointForNormalized(cell, cell.Photo.FocusX, cell.Photo.FocusY, canvasW, canvasH);
+
+        /// <summary>
+        /// How far a camera may zoom on a one-image layout: the faces take at most 85% of the view, all of them in, and the
+        /// photo is never shown past twice its own pixels. The same limits the layout zoom keeps.
+        /// </summary>
+        public static double MostCameraZoom(ComposedCell cell, double canvasW, double canvasH)
         {
-            if (images != 1 || !options.Zooms(random)) return chosen;
-            var cell = chosen.Cells.FirstOrDefault(c => c.Photo != null);
-            if (cell == null) return chosen;
-            AimAtSubject(cell, options.PickZoom(random), rasterScale);
-            Judge(chosen, rasterScale, options.FaceShown);
-            return chosen;
+            double most = MostEnlarged * cell.Photo.Width / Math.Max(1, cell.ImageWidth);
+            if (cell.Photo.Faces.Count > 0 && canvasW >= 1 && canvasH >= 1)
+            {
+                var a = PointForNormalized(cell, cell.Photo.Faces.Min(f => f.X), cell.Photo.Faces.Min(f => f.Y), canvasW, canvasH);
+                var b = PointForNormalized(cell, cell.Photo.Faces.Max(f => f.X + f.W), cell.Photo.Faces.Max(f => f.Y + f.H), canvasW, canvasH);
+                double share = Math.Max(Math.Abs(b.X - a.X), Math.Abs(b.Y - a.Y));
+                if (share > 0) most = Math.Min(most, FacesKept / share);
+            }
+            return Math.Clamp(most, 1, SurpriseOptions.MostOfAnyZoom);
         }
 
         /// <summary>Every design takes one image or more; prints, circles and panels have a most, past which they crowd.</summary>

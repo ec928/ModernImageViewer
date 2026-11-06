@@ -5,7 +5,10 @@ and is rewritten as each slice lands. Where the two disagree, the design wins an
 planned in full; slices 2 to 6 are outlines, planned in full only when the slice before has been shown to Ed and
 adjusted.
 
-**Status: slices 1, 2 and 3a built on branch `slice1-one-engine-call`; Ed has run 1 and 2. 3a's timing not yet measured; 3b, 3c and 4 to 6 not started.** "Today" means v0.31.2. File and line references were read on
+**Status: slices 1, 2, 3a and 4 built on branch `slice1-one-engine-call`; Ed has run 1, 2 and 3a.** 3a's timing: first
+picture 0.83 s and 1.12 s on two runs, no scene held late in 2.6 minutes; the 30-minute run is not done. Slice 4 adds the
+face and detail ceiling to one image's camera move (Ed saw a snap cut a close-up's eyes) and aims a zoom without faces at
+the focus point. 3b, 3c, 5 and 6 not started. "Today" means v0.31.2. File and line references were read on
 6 Nov 2026 and will drift.
 
 **How each slice runs**

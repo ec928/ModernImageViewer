@@ -17,12 +17,19 @@ namespace ModernImageViewer.Tests
         [InlineData(4032, 3024, false)]
         public void Cinematic_storyboard_single_images_vary(double w, double h, bool face)
         {
+            // One image opens on its fit or fill; Zoom is where its one camera move arrives (design 3.5).
             var options = new SurpriseOptions().WithOverrides(CinematicOverrides.Name);
-            var zooms = Enumerable.Range(0, 30).Select(seed => LayoutComposer.Compose(new[] { Pic(w, h, face) }, 1920, 1080, seed, options: options)!.Cells[0].Zoom).ToList();
-            int zoomed = zooms.Count(z => z > 1.01);
-            Assert.InRange(zoomed, 12, 28);                                        // about 70%, and some whole
-            Assert.True(zooms.Where(z => z > 1.01).Select(z => Math.Round(z, 2)).Distinct().Count() >= 8);
-            Assert.All(zooms, z => Assert.InRange(z, 1, options.MostZoom + 0.001));
+            var depths = Enumerable.Range(0, 60).Select(seed =>
+            {
+                var made = LayoutComposer.Compose(new[] { Pic(w, h, face) }, 1920, 1080, seed, options: options)!;
+                Assert.All(made.Cells, c => Assert.Equal(1, c.Zoom));
+                var move = SceneCall.Make(new SceneRequest(Array.Empty<PhotoFacts>(), 1920, 1080, options, 12, seed, Keep: KeptLayout.Of(made)))!.Move!;
+                return move.Shots.Max(s => Math.Max(s.From.Zoom, s.To.Zoom));
+            }).ToList();
+            int toZoom = depths.Count(d => d >= options.LeastZoom - 0.001);
+            Assert.InRange(toZoom, 30, 54);                                         // about 70%, and some not
+            Assert.True(depths.Where(d => d >= options.LeastZoom).Select(d => Math.Round(d, 2)).Distinct().Count() >= 8);
+            Assert.All(depths, d => Assert.InRange(d, 1, options.MostZoom + 0.001));
         }
 
         [Fact]

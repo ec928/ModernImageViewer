@@ -336,21 +336,30 @@ namespace ModernImageViewer
         /// Never the same kind twice running, while another is possible. The style gives its curve, bend, turn, and the chance
         /// that a scene with a face becomes two shots; without one, it is the plain move.
         /// </summary>
-        public static CameraMove? Plan(IReadOnlyList<(double X, double Y)> subjects, double amount, double zoomChance, double aimChance, double seconds, CameraKind? last, Random random, CameraKind? forcedKind = null, CameraStyle? style = null)
+        /// <param name="mostZoom">How far any view of the move may zoom: past it a face would be cut or the photo shown past
+        /// the detail it has. A two-shot that would have no room to move in is not played; a zoom with no room becomes a drift.</param>
+        public static CameraMove? Plan(IReadOnlyList<(double X, double Y)> subjects, double amount, double zoomChance, double aimChance, double seconds, CameraKind? last, Random random, CameraKind? forcedKind = null, CameraStyle? style = null, double mostZoom = double.PositiveInfinity)
         {
             if (amount <= 0 || seconds <= 0) return null;
             style ??= CameraStyle.Plain;
             double intensity = Math.Min(amount, 1) * MostIntensity * Math.Clamp(seconds / 12.0, 0.6, 1.25);
+            mostZoom = Math.Max(1, mostZoom);
 
-            if (subjects.Count > 0 && seconds >= ShortestTwoShotSeconds && style.TwoShotChance > 0 && random.NextDouble() < style.TwoShotChance)
-                return PlanTwoShots(subjects[random.Next(subjects.Count)], intensity, seconds, random, style);
+            bool roomForTwoShots = mostZoom >= 1.06 + intensity * 0.3 + 0.15;
+            if (subjects.Count > 0 && roomForTwoShots && seconds >= ShortestTwoShotSeconds && style.TwoShotChance > 0 && random.NextDouble() < style.TwoShotChance)
+                return PlanTwoShots(subjects[random.Next(subjects.Count)], intensity, seconds, random, style, mostZoom);
 
             (double X, double Y) aim = subjects.Count > 0 && random.NextDouble() < aimChance
                 ? subjects[random.Next(subjects.Count)]
                 : (0.5 + (random.NextDouble() - 0.5) * 0.3, 0.5 + (random.NextDouble() - 0.5) * 0.3);
 
             CameraKind kind;
-            if (forcedKind.HasValue)
+            if (mostZoom < WidestZoom + 0.02)
+            {
+                // No room to zoom without cutting a face or losing detail: the move drifts instead.
+                kind = CameraKind.Drift;
+            }
+            else if (forcedKind.HasValue)
             {
                 kind = forcedKind.Value;
             }
@@ -366,7 +375,7 @@ namespace ModernImageViewer
 
             if (kind == CameraKind.Drift)
             {
-                double zoom = Math.Max(1.06, 1 + intensity * 0.75);
+                double zoom = Math.Min(Math.Max(1.06, 1 + intensity * 0.75), mostZoom);
                 double margin = 0.5 / zoom;
                 double travel = Math.Min(1 - 2 * margin, 0.08 + intensity * 0.8);
                 bool sideways = random.NextDouble() < 0.75;
@@ -380,7 +389,7 @@ namespace ModernImageViewer
             }
 
             var wide = new CameraView(WidestZoom, aim.X, aim.Y).Covered();
-            var close = new CameraView(Math.Max(WidestZoom + 0.02, style.PickZoom(random) ?? 1 + intensity * 1.5), aim.X, aim.Y).Covered();
+            var close = new CameraView(Math.Min(mostZoom, Math.Max(WidestZoom + 0.02, style.PickZoom(random) ?? 1 + intensity * 1.5)), aim.X, aim.Y).Covered();
             return kind == CameraKind.ZoomIn
                 ? new CameraMove(kind, wide with { Angle = turn.From }, close with { Angle = turn.To }, seconds, curve)
                 : new CameraMove(kind, close with { Angle = turn.From }, wide with { Angle = turn.To }, seconds, curve);
@@ -390,13 +399,14 @@ namespace ModernImageViewer
         /// Two shots, as Cinematic Slideshow makes them where there is a face: a slow wide shot, then either a snap zoom in to
         /// the face, or a cut to the face and a slow push in.
         /// </summary>
-        private static CameraMove PlanTwoShots((double X, double Y) face, double intensity, double seconds, Random random, CameraStyle style)
+        private static CameraMove PlanTwoShots((double X, double Y) face, double intensity, double seconds, Random random, CameraStyle style, double mostZoom)
         {
             var calm = CameraCurves.Pick(style.CurveOdds, zoom: false, random);
             (double From, double To) turn = Turn(style, random);
             double wideZoom = 1.06 + intensity * 0.3;
             // The close-up is always nearer than the wide shot, so the second shot reads as moving in.
             double closeZoom = style.PickZoom(random) is double picked ? Math.Max(wideZoom + 0.15, picked) : Math.Max(1.35, 1 + intensity * 2.5);
+            closeZoom = Math.Max(wideZoom + 0.15, Math.Min(closeZoom, mostZoom));
             // The wide shot drifts a little toward the face, so the second shot follows on from it.
             var wideFrom = new CameraView(wideZoom, 0.5 + (0.5 - face.X) * 0.15, 0.5 + (0.5 - face.Y) * 0.15, turn.From).Covered();
             var wideTo = new CameraView(wideZoom, 0.5 + (face.X - 0.5) * 0.15, 0.5 + (face.Y - 0.5) * 0.15, turn.From).Covered();
@@ -412,7 +422,7 @@ namespace ModernImageViewer
                 }, seconds);
             }
             // Reveal: the wide shot, then a cut to the face, pushing in slowly.
-            var nearer = new CameraView(closeZoom * 1.08, face.X, face.Y, turn.To).Covered();
+            var nearer = new CameraView(Math.Min(closeZoom * 1.08, Math.Max(closeZoom, mostZoom)), face.X, face.Y, turn.To).Covered();
             return new CameraMove(CameraKind.ZoomIn, new[]
             {
                 new CameraShot(wideFrom, wideTo, 0.5, calm, Bow(style, random)),
