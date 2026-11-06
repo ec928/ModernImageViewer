@@ -617,104 +617,41 @@ namespace ModernImageViewer
 
             if (!_showingSurpriseAdvanced)
             {
+                // The Show card (R17): what Play plays. The director makes every scene from this show's values and keeps it in
+                // the storyboard; the engine works behind it, its settings behind one link.
                 var header = new Grid { ColumnSpacing = 8, Margin = new Thickness(0, 0, 0, 4) };
                 header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                var title = new TextBlock { Text = "Layout Generator Settings", FontSize = 14, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+                var title = new TextBlock { Text = "Show", FontSize = 14, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
                 header.Children.Add(title);
+                var engineLink = MoreButton("Engine settings\u2026", "Engine settings",
+                    "How the engine makes one layout and one move: images and faces, designs, camera, transitions, canvas and progress.",
+                    (_, _) => { _showingSurpriseAdvanced = true; ShowSurpriseCard(); });
+                Grid.SetColumn(engineLink, 1);
+                header.Children.Add(engineLink);
                 body.Children.Add(header);
-                // One generator serves both: without this, the settings read as Auto-Mix's alone.
                 body.Children.Add(new TextBlock
                 {
-                    Text = "The Layout Generator makes the layouts for Auto-Mix and for storyboards.",
+                    Text = "Play plays this show: each scene is made from its values and kept in the storyboard, so you can step back to it.",
                     FontSize = 11,
                     Opacity = 0.65,
                     TextWrapping = TextWrapping.Wrap,
                     Margin = new Thickness(0, -4, 0, 2)
                 });
 
+                var showPanel = new StackPanel { Spacing = 4 };
+                body.Children.Add(showPanel);
+                FillShowSettings(showPanel, () => { SpeedChanged(); RefreshStoryboardSettingsLabel?.Invoke(); });
 
-                // Each section's heading has its "more settings" on the right, as the same gear-and-label button.
-                body.Children.Add(SectionHeading("Layout", MoreButton("Advanced\u2026", "Advanced Layout Generator settings",
-                    "Images and faces, designs, camera, transitions, canvas and progress, and the Cinematic storyboard settings",
-                    (_, _) => { _showingSurpriseAdvanced = true; ShowSurpriseCard(); })));
-                body.Children.Add(imagesRow);
-
-                int initialFrom = options.AutoPlayRandom ? options.RandomFewestSeconds : options.PlaySeconds;
-                int initialTo = options.AutoPlayRandom ? options.RandomMostSeconds : options.PlaySeconds;
-                initialFrom = Math.Clamp(initialFrom, SurpriseOptions.FewestSeconds, SurpriseOptions.MostSeconds);
-                initialTo = Math.Clamp(Math.Max(initialFrom, initialTo), SurpriseOptions.FewestSeconds, SurpriseOptions.MostSeconds);
-
-                var durationRow = new Grid { ColumnSpacing = 12, MinHeight = 34 };
-                durationRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                durationRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
-
-                var durationLabel = new TextBlock { Text = "Duration", VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
-
-                var durationRightGrid = new Grid { Width = 230, ColumnSpacing = 8, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-                durationRightGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(146) });
-                durationRightGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(76) });
-
-                string FormatDuration(int low, int high) => low == high ? $"{low:0}s" : $"{low:0}s - {high:0}s";
-
-                var durationReadout = new TextBlock
+                var newShow = new Button { Content = "New show from these images", FontSize = 12, Margin = new Thickness(0, 6, 0, 0) };
+                ToolTipService.SetToolTip(newShow, "Starts an empty show with the same preset and values. Play then makes its scenes from the images on the canvas and in the tray.");
+                newShow.Click += async (_, _) =>
                 {
-                    Text = FormatDuration(initialFrom, initialTo),
-                    VerticalAlignment = VerticalAlignment.Center,
-                    HorizontalAlignment = HorizontalAlignment.Right,
-                    TextAlignment = TextAlignment.Right,
-                    FontSize = 12,
-                    Opacity = 0.82,
-                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White)
+                    if (!await ConfirmReplaceShowAsync()) return;
+                    StartEmptyShowLikeThisOne();
+                    ShowSurpriseCard();
                 };
-
-                var durationSlider = new RangeSlider
-                {
-                    Minimum = SurpriseOptions.FewestSeconds,
-                    Maximum = SurpriseOptions.MostSeconds,
-                    StepFrequency = 1,
-                    RangeStart = initialFrom,
-                    RangeEnd = initialTo,
-                    Width = 146,
-                    VerticalAlignment = VerticalAlignment.Center
-                };
-
-                durationSlider.RangeChanged += (_, range) =>
-                {
-                    int low = (int)Math.Round(range.Start);
-                    int high = (int)Math.Round(range.End);
-                    durationReadout.Text = FormatDuration(low, high);
-                    bool isRange = low < high;
-                    ChangeSurpriseChoices(o =>
-                    {
-                        o.AutoPlayRandom = isRange;
-                        o.AutoPlaySeconds = low;
-                        o.RandomFewestSeconds = low;
-                        o.RandomMostSeconds = high;
-                    });
-                    SpeedChanged();
-                };
-
-                ToolTipService.SetToolTip(durationRow, "Slide duration per layout before advancing. Drag thumbs apart for a random range, together for a fixed duration. Double-click to set a single fixed duration.");
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(durationSlider, "Duration");
-
-                Grid.SetColumn(durationSlider, 0);
-                Grid.SetColumn(durationReadout, 1);
-                durationRightGrid.Children.Add(durationSlider);
-                durationRightGrid.Children.Add(durationReadout);
-
-                Grid.SetColumn(durationLabel, 0);
-                Grid.SetColumn(durationRightGrid, 1);
-                durationRow.Children.Add(durationLabel);
-                durationRow.Children.Add(durationRightGrid);
-
-                body.Children.Add(durationRow);
-
-                Toggle(body, "Smart pace", "When duration has a range, holds dense multi-image layouts toward the longer end and solo/pair layouts toward the shorter end.", options.SmartPace, (o, on) => o.SmartPace = on, subtitle: "Adjusts duration based on layout density");
-
-                RangeRow(body, "Motion", "How far the camera drifts over each layout while it plays, from still to strong, with floating cells following it; at 0 the camera stays still. How far it zooms is Camera zoom, under Advanced > Camera. Each layout picks within the range; ends together is one strength.",
-                    0, 100, 5, options.MotionLeast * 100, options.MotionMost * 100, Percents,
-                    (o, a, b) => { o.MotionLeast = a / 100; o.MotionMost = b / 100; });
+                body.Children.Add(newShow);
 
                 body.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle { Height = 1, Opacity = 0.15, Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White), Margin = new Thickness(0, 6, 0, 4) });
                 // The music library's own settings (folder, ratings, which shows play music) open from here, so
@@ -741,10 +678,10 @@ namespace ModernImageViewer
                 backStack.Children.Add(Icon("\uE72B", 12));
                 backStack.Children.Add(new TextBlock { Text = "Back", FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
                 backBtn.Content = backStack;
-                ToolTipService.SetToolTip(backBtn, "Back to fundamental options");
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(backBtn, "Back to fundamental options");
+                ToolTipService.SetToolTip(backBtn, "Back to the show");
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(backBtn, "Back to the show");
                 backBtn.Click += (_, _) => { _showingSurpriseAdvanced = false; ShowSurpriseCard(); };
-                var advTitle = new TextBlock { Text = "Advanced Settings", FontSize = 14, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+                var advTitle = new TextBlock { Text = "Engine settings", FontSize = 14, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
                 Grid.SetColumn(advTitle, 1);
                 advHeader.Children.Add(backBtn);
                 advHeader.Children.Add(advTitle);
@@ -1187,14 +1124,6 @@ namespace ModernImageViewer
                     0, 100, 5, options.StillChance * 100,
                     v => v < 1 ? "Off" : $"{v:0}%",
                     (o, v) => o.StillChance = v / 100);
-                Slide(column, "Sequence beats", "The chance that a step of Play or of a drafted show is more than one scene, each a closer view of the one before: a group, then one image from it, then its faces. Each is a kept scene you can step back to.",
-                    0, 100, 5, options.SequenceBeatsChance * 100,
-                    v => v < 1 ? "Off" : $"{v:0}%",
-                    (o, v) => o.SequenceBeatsChance = v / 100);
-                RangeRow(column, "Scenes per step", "How many scenes a step that rolls Sequence beats may be. It stops early when no closer view is left.",
-                    2, SurpriseOptions.MostScenesInAStep, 1, options.FewestScenesPerStep, options.MostScenesPerStep,
-                    (a, b) => a == b ? $"{a:0}" : $"{a:0} to {b:0}",
-                    (o, a, b) => { o.FewestScenesPerStep = (int)Math.Round(a); o.MostScenesPerStep = (int)Math.Round(Math.Max(a, b)); });
                 Toggle(column, "Log Play timing", "Temporary, for measuring: Play writes how long it takes to show each scene to play-timing.log in the app's folder. Timings only, no file names.",
                     options.LogPlayTiming, (o, v) => o.LogPlayTiming = v);
 
@@ -2400,6 +2329,7 @@ namespace ModernImageViewer
                 VerticalAlignment = VerticalAlignment.Center
             };
             ToolTipService.SetToolTip(draftRangeBtn, "This show's settings: its preset, images per scene, duration, motion, sequence beats and designs. They are the show's own; Layout Generator Settings are not changed.");
+            RefreshStoryboardSettingsLabel = () => draftRangeText.Text = ShowSettingsLabel();
             draftRangeFlyout.Opening += (_, _) =>
             {
                 var now = GeneratorSettingsFor(_activeShow);
@@ -3633,6 +3563,8 @@ namespace ModernImageViewer
             if (_trayTab == 0 && all.Count > 0) search.Loaded += (_, _) => search.Focus(FocusState.Programmatic);
         }
 
+        // Brings the storyboard's settings button up to date after the Show card changes this show's values.
+        private Action? RefreshStoryboardSettingsLabel;
         private int _storyboardBuildTicket;
         // The show Play from images is still making scenes for: it holds at its last scene rather than going back to the start.
         private ShowProject? _showBeingBuilt;
@@ -3691,11 +3623,14 @@ namespace ModernImageViewer
             StopAutoPlay();
             RemoveTrayCard();
             bool cinematic = string.Equals(overrides, CinematicOverrides.Name, StringComparison.OrdinalIgnoreCase);
-            var show = new ShowProject
+            // Play with an empty show plays that show: its preset and values were chosen on the Show card.
+            ShowProject show;
+            if (overrides == null && _activeShow is { Scenes.Count: 0 } empty) show = empty;
+            else
             {
-                Title = cinematic ? "Cinematic storyboard" : "Storyboard",
-            };
-            SetCinematic(show, cinematic);
+                show = new ShowProject { Title = cinematic ? "Cinematic storyboard" : "Storyboard" };
+                SetCinematic(show, cinematic);
+            }
             _activeShow = show;
             _selectedShowScene = null;
             _canvasSceneId = null;
@@ -4121,47 +4056,13 @@ namespace ModernImageViewer
                 return;
             }
             _isStoryboardPlayback = false;
-            int minPics = SurpriseChoices.FewestPictures == 1 ? 1 : 2;
-            if (SessionPictures().Count < minPics)
+            if (SessionPictures().Count < 1)
             {
                 AddImagesRequested?.Invoke(this, EventArgs.Empty);
                 return;
             }
-            // Play goes through the director and keeps what it plays (R15). With a storyboard already open and Auto-Mix
-            // chosen, Play still mixes without keeping, so that storyboard is not replaced by a new one.
-            if (_activeShow == null || _activeShow.Scenes.Count == 0)
-            {
-                await MakeAndPlayStoryboardAsync();
-                return;
-            }
-            StopAutoPlay();
-            CaptureUndoPoint();
-            _autoPlaySeconds = seconds;
-            _lastPlayWasLong = null;
-            AddAutoPlayShield();
-            StartAutoPlayMusic();
-            ShowAutoPlayState();
-            ShowAutoPlayToast($"Playing: a new layout every {SurpriseChoices.PlayWords}");
-            _layoutSeconds = SurpriseChoices.NextPlaySeconds(Random.Shared);
-            var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(_layoutSeconds) };
-            _autoPlayTimer = timer;
-            timer.Tick += async (_, _) =>
-            {
-                timer.Stop();
-                if (_isStoryboardPlayback && _activeShow != null && _activeShow.Scenes.Count > 0)
-                {
-                    await PlayNextStoryboardSceneAsync(fade: true);
-                }
-                else
-                {
-                    await SurpriseAsync(fade: true);
-                }
-                timer.Interval = TimeSpan.FromSeconds(_layoutSeconds);
-                if (ReferenceEquals(_autoPlayTimer, timer)) timer.Start();
-            };
-            await SurpriseAsync(fade: true);
-            timer.Interval = TimeSpan.FromSeconds(_layoutSeconds);
-            if (ReferenceEquals(_autoPlayTimer, timer)) timer.Start();
+            // Everything goes through the director (R15, R17): a show with no scenes yet is made as it plays, and kept.
+            await MakeAndPlayStoryboardAsync();
         }
 
         private void StopAutoPlay()

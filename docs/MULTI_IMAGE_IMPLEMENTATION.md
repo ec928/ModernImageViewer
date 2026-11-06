@@ -21,7 +21,13 @@ Not watched: the Cut and the snap on screen. 3c built: the storyboard's images-p
 settings (preset, Save as My preset 1-3, images per scene, duration, smart pace, motion, sequence beats, scenes per
 step, design odds), written into the show; the Cinematic section is gone from Generator Advanced; My presets are kept
 in the app's settings; beats are in the show file. Not watched on screen. Every slice in the plan is built; none is
-merged to master or pushed. "Today" means v0.31.2. File and line references were read on
+merged to master or pushed.
+
+**Slice 0 (R17), built 6 Nov after the rest, by mistake in that order:** the bar's Generator button is now **Show** and
+opens the Show card (preset, Save as, the show's values, New show from these images, Soundtrack); the old pages are
+behind **Engine settings…**; the Storyboard / Auto-Mix switch is hidden and the direct mix is removed, so Play always
+plays the show, made as it plays when it has no scenes yet, from the preset and values chosen on the card. Checked:
+it builds, starts on a hidden desktop and stays up; 179 tests pass. Not seen on screen. "Today" means v0.31.2. File and line references were read on
 6 Nov 2026 and will drift.
 
 **How each slice runs**

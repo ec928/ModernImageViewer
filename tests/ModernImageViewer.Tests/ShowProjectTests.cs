@@ -271,7 +271,7 @@ namespace ModernImageViewer.Tests
             Assert.Equal("Pause", ShowProject.PlayTransportText(playing: true, storyboard: false, sceneNumber: 1, sceneCount: 0));
             Assert.Equal("Play Show", ShowProject.PlayTransportText(playing: false, storyboard: true, sceneNumber: 1, sceneCount: 33));
             Assert.Equal("Play Show · 4/33", ShowProject.PlayTransportText(playing: false, storyboard: true, sceneNumber: 4, sceneCount: 33));
-            Assert.Equal("Play Mix", ShowProject.PlayTransportText(playing: false, storyboard: false, sceneNumber: 1, sceneCount: 0));
+            Assert.Equal("Play", ShowProject.PlayTransportText(playing: false, storyboard: false, sceneNumber: 1, sceneCount: 0));
         }
 
         [Fact]

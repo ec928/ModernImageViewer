@@ -45,6 +45,45 @@ namespace ModernImageViewer
             return $"Preset: {preset} · {images} images ▾";
         }
 
+        /// <summary>Before a show with scenes is replaced: true when it has none, or the user says to replace it.</summary>
+        private async System.Threading.Tasks.Task<bool> ConfirmReplaceShowAsync()
+        {
+            int count = _activeShow?.Scenes.Count ?? 0;
+            if (count == 0) return true;
+            var dialog = new ContentDialog
+            {
+                Title = "Start a new show?",
+                Content = $"The storyboard's {count} scene{(count == 1 ? "" : "s")} will be replaced. Save it first from the storyboard to keep it.",
+                PrimaryButtonText = "New show",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = XamlRoot,
+                RequestedTheme = MainWindow.Instance?.CurrentRequestedTheme ?? ElementTheme.Default
+            };
+            return await dialog.ShowAsync() == ContentDialogResult.Primary;
+        }
+
+        /// <summary>An empty show with the same preset and values as the open one; Play then makes its scenes.</summary>
+        private void StartEmptyShowLikeThisOne()
+        {
+            var old = _activeShow;
+            StopAutoPlay();
+            _storyboardBuildTicket++;
+            var show = new ShowProject { Title = old?.GeneratorOverrides == CinematicOverrides.Name ? "Cinematic storyboard" : "Storyboard" };
+            if (old != null && old.GlobalDefaults.HoldsValues)
+            {
+                show.GeneratorOverrides = old.GeneratorOverrides;
+                show.GlobalDefaults.TakeValues(CinematicOverrides.From(GeneratorSettingsFor(old)));
+            }
+            _activeShow = show;
+            _selectedShowScene = null;
+            _canvasSceneId = null;
+            _showPlaybackIndex = 0;
+            _updateStorySummary?.Invoke();
+            ShowShownBadge();
+            RefreshStoryboardSettingsLabel?.Invoke();
+        }
+
         private static string PresetName(int slot, CinematicOverrides? preset) => $"My preset {slot + 1}" + (preset == null ? " (empty)" : "");
 
         /// <summary>Fills the storyboard's settings pop-up with the open show's preset and values, as they are now.</summary>
@@ -138,6 +177,16 @@ namespace ModernImageViewer
 
             // The values this show is played with.
             Heading("Scenes");
+            var fewestImages = Box(1, MosaicLayout.MaxShown, values.FewestPictures);
+            var mostImages = Box(1, MosaicLayout.MaxShown, values.MostPictures);
+            void SetImages() => ChangeShowValues(v =>
+            {
+                v.FewestImages = Math.Min(fewestImages.Value, mostImages.Value);
+                v.MostImages = Math.Max(fewestImages.Value, mostImages.Value);
+            }, changed);
+            fewestImages.ValueChanged += (_, _) => SetImages();
+            mostImages.ValueChanged += (_, _) => SetImages();
+            Row("Images per scene", "How many images each new scene gets: any count in the range.", Pair(fewestImages, mostImages));
             var fewestSeconds = Box(SurpriseOptions.FewestSeconds, SurpriseOptions.MostSeconds, values.AutoPlayRandom ? values.RandomFewestSeconds : values.AutoPlaySeconds);
             var mostSeconds = Box(SurpriseOptions.FewestSeconds, SurpriseOptions.MostSeconds, values.AutoPlayRandom ? values.RandomMostSeconds : values.AutoPlaySeconds);
             void SetSeconds() => ChangeShowValues(v =>

@@ -82,7 +82,7 @@ namespace ModernImageViewer
         public static string PlayTransportText(bool playing, bool storyboard, int sceneNumber, int sceneCount)
         {
             if (playing) return "Pause";
-            if (!storyboard) return "Play Mix";
+            if (!storyboard) return "Play";
             if (sceneNumber > 1 && sceneNumber <= sceneCount)
                 return $"Play Show · {sceneNumber}/{sceneCount}";
             return "Play Show";

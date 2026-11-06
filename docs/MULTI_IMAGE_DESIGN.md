@@ -211,6 +211,10 @@ durations. Landing a cut on the music is a later way of choosing them (3.10).
 
 ## Build order
 
+**Slice 0, built last by mistake (6 Nov): the screen the user meets (R17).** The Show card is in front: preset, Play,
+the show's values and its storyboard; Play always goes through the director, never a direct mix; the engine's settings
+sit behind one link. Every slice below is checked against this screen, not only its own tests.
+
 Thin slices, each one something Ed can see running. Each slice is finished, shown, and adjusted before the next
 starts. The rest of this file is detail for those slices; tunable numbers start as stated defaults and change once
 seen.
@@ -255,6 +259,7 @@ nearby requirement.
 | R14 | **The foundation is the multi-image engine, built from scratch.** Sequence beats were removed to rebuild the cinematic engine from fundamentals. That rebuild did not succeed. Cinematic slideshow was abandoned as the engine to rebuild. Sequence beats come back when there is an appropriate design. | 6 Nov: "we removed it as I wanted to rebuild the engine from fundamentals - that did not succeed. Instead we abandoned the cinematic slideshow and built the multi-image engine from fundamentals, from scratch. When we have an appropriate design we will bring it back." |
 | R15 | **Play goes through the director, including when it feels immediate.** For most scenarios the user does not use direct Auto-Mix. The director is what provides the enhanced options. It still generates on demand, so Play does not wait for a finished show. A canvas layout stays one engine call. *(The canvas-layout sentence is the reading of "most scenarios," so one layout is not forced into a show.)* | 6 Nov: the director proposal is the right direction. "In the future, the user really should be going through the director for most scenarios including seemingly real time generation, as that gives you enhanced options. Rather than going to auto-mix directly." |
 | R16 | **Each call rolls. Nothing is locked, and no scene is special because of where it sits.** The odds a call was given are rolled every time. Narrow odds are not a lock: Hero Rare can still come up, and Hero Off never does. A scene differs only when its own parameters say so. There is no rule for the first scene and no rule for the last scene. Play that is still generating has no last scene. *(Reading. He did not list these two rules. They are what "one engine, and the storyboard is that engine with specific settings" rules out.)* | 6 Nov: "what you are proposing is effectively a branch, rather than the concept of one core engine. And cinematic storyboard is merely more of the same but with specific settings." |
+| R17 | **Everything goes through the director. The director is what the user meets; the engine works behind the scenes.** Play, a show, a cinematic storyboard and live generation are all the director, with a preset to start from and the show's own values. The engine's settings (faces, zoom, crop, camera, frames, backdrops, transitions) sit behind one link and are not the first thing the user sees or uses. The only direct engine use is one layout on the canvas, which is not Play. | 6 Nov: "two fundamental design components, of which the most important would be the director, and the engine relegated to a behind the scenes engine that the user wouldn't access first hand." R15 already said it: "the user really should be going through the director for most scenarios including seemingly real time generation." |
 
 ---
 
@@ -559,7 +564,7 @@ chosen or played.
 | Cinematic values in Generator Advanced | Five presets on the storyboard: Multi-Image, Cinematic, and three of the user's |
 | The canvas, Auto-Mix and a storyboard plan moves three ways; a storyboard scene with no saved path ignores faces | One entry point plans every move from the same values |
 
-Folded under each design and off the first page, so the first page and the defaults stay as simple as today (R1).
+Folded under each design, in the engine's settings behind the Show card (R17), so what the user meets first stays simple (R1).
 
 ---
 

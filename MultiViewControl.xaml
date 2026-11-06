@@ -305,10 +305,8 @@
                         </Button>
                     </Border>
 
-                    <Rectangle Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,0" Opacity="0.5"/>
-
-                    <!-- What Play plays. Choosing a side changes nothing on the canvas. -->
-                    <Border x:Name="PlayModeControl" CornerRadius="12" Background="#14FFFFFF" VerticalAlignment="Center">
+                    <!-- The Storyboard / Auto-Mix switch: Play always plays the show now (R17), so it is not shown. -->
+                    <Border x:Name="PlayModeControl" CornerRadius="12" Background="#14FFFFFF" VerticalAlignment="Center" Visibility="Collapsed">
                         <StackPanel Orientation="Horizontal">
                             <Button x:Name="StoryboardModeButton"
                                     Click="StoryboardModeButton_Click"
@@ -359,7 +357,7 @@
                                     Click="AutoPlayButton_Click"
                                     MinWidth="88"
                                     AutomationProperties.Name="Play auto-play"
-                                    ToolTipService.ToolTip="Play scenes or auto-mix layouts. Space does the same."
+                                    ToolTipService.ToolTip="Play the show: scenes are made as it plays and kept in the storyboard. Space does the same."
                                     Style="{StaticResource QuietButtonStyle}"
                                     Padding="8,5"
                                     CornerRadius="12">
@@ -387,15 +385,15 @@
                             </Button>
                             <Button x:Name="SurpriseCardButton"
                                     Click="SurpriseCardButton_Click"
-                                    AutomationProperties.Name="Layout Generator Settings"
-                                    ToolTipService.ToolTip="Layout Generator Settings: how layouts are made for Auto-Mix and storyboards, the pace, the music and advanced settings"
+                                    AutomationProperties.Name="Show"
+                                    ToolTipService.ToolTip="This show: its preset, its values and its music. The engine's settings are behind Engine settings."
                                     Style="{StaticResource QuietButtonStyle}"
                                     Padding="8,5"
                                     CornerRadius="12">
                                 <!-- Named for what it opens, as the other buttons on the bar are; open shows as a lit button. -->
                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                     <FontIcon x:Name="SurpriseCardArrow" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE9E9;" FontSize="13" />
-                                    <TextBlock Text="Generator" VerticalAlignment="Center" FontSize="13" />
+                                    <TextBlock Text="Show" VerticalAlignment="Center" FontSize="13" />
                                 </StackPanel>
                             </Button>
                         </StackPanel>
