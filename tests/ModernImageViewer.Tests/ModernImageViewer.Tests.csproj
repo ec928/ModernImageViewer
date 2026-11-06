@@ -29,5 +29,6 @@
     <Compile Include="..\..\Cinematic\CinematicProject.cs" Link="CinematicProject.cs" />
     <Compile Include="..\..\ShowProject.cs" Link="ShowProject.cs" />
     <Compile Include="..\..\ShowDirector.cs" Link="ShowDirector.cs" />
+    <Compile Include="..\..\SceneCall.cs" Link="SceneCall.cs" />
   </ItemGroup>
 </Project>

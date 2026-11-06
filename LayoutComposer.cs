@@ -310,6 +310,9 @@ namespace ModernImageViewer
         /// <summary>The chance that a scene with a face, held long enough, is two shots: a wide shot, then a snap zoom or a cut to the face.</summary>
         public double TwoShotChance { get; set; } = 0.25;
 
+        /// <summary>The chance that a scene plays no move at all. Off by default: a still adds a little variety, not much.</summary>
+        public double StillChance { get; set; }
+
         /// <summary>The camera settings a planned move follows. Two shots only when the camera mode is Auto: a chosen mode is one kind of move.</summary>
         public CameraStyle CameraStyle() => new(CurveOdds, PathBendLeast, PathBendMost, TurnLeast, TurnMost,
             string.Equals(CameraMode, CameraAuto, StringComparison.OrdinalIgnoreCase) ? TwoShotChance : 0,
@@ -476,6 +479,7 @@ namespace ModernImageViewer
                 read.TurnLeast = Math.Clamp(read.TurnLeast, 0, MostTurn);
                 read.TurnMost = Math.Clamp(read.TurnMost, read.TurnLeast, MostTurn);
                 read.TwoShotChance = Math.Clamp(read.TwoShotChance, 0, 1);
+                read.StillChance = Math.Clamp(read.StillChance, 0, 1);
                 read.MotionZoomChance = Math.Clamp(read.MotionZoomChance, 0, 1);
                 read.MotionFaceChance = Math.Clamp(read.MotionFaceChance, 0, 1);
                 // A file from before the four odds: about the mix its single slider gave, so nobody's look changes.

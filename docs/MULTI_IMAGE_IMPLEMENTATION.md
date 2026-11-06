@@ -5,7 +5,7 @@ and is rewritten as each slice lands. Where the two disagree, the design wins an
 planned in full; slices 2 to 6 are outlines, planned in full only when the slice before has been shown to Ed and
 adjusted.
 
-**Status: plan, not started.** Nothing here is built. "Today" means v0.31.2. File and line references were read on
+**Status: slice 1 built on branch `slice1-one-engine-call`, not yet seen by Ed.** Slices 2 to 6 not started. "Today" means v0.31.2. File and line references were read on
 6 Nov 2026 and will drift.
 
 **How each slice runs**
@@ -57,16 +57,19 @@ Settings: the canvas reads `SurpriseChoices`; a show reads `GeneratorSettingsFor
    the move. Two calls, one entry point: the layout is prepared ahead, and the hold is only fixed when it is shown.
 3. **Memory moves out of the engine path.** `_lastCameraKind` stays the canvas's own memory, but is passed into each
    call rather than read inside a planner. A storyboard scene takes its "last" from the previous scene's saved kind,
-   as the director does, not from the control's field.
+   as the director does, not from the control's field. *Built differently:* during storyboard play the control
+   keeps the kind of the move that last played (saved path or Dynamic) and passes it in, because a Dynamic scene's
+   previous scene may itself be Dynamic, with no saved kind.
 4. **The director uses it.** `BuildScene` calls `SceneCall.Make` with the previous scene's recipe and kind.
    `ChooseMotionKind` is deleted, and its stills become a user setting: **Still scenes**, odds in the camera
    settings, default 0% (Ed, 6 Nov: stills add a little variety, but not by default). `SceneCall.Make` rolls it before
    planning; a hit returns no move. Still in a scene's camera menu stays as it is. The
    saved path is planned for hold + overrun, as the canvas's is; it is re-timed at play anyway
    (`ToCameraMove(_layoutSeconds + CameraOverrunSeconds)`), so only the strength scaling by length changes, slightly.
-5. **Dynamic scenes get faces.** At play, a Dynamic scene reads its pictures' facts (`ReadFactsAsync`) and builds the
-   subjects from its saved cells (each cell's rect and its photo's faces, as `CameraSubjects` does), then calls
-   `SceneCall.Make` with that layout to keep. First measure how long the facts read takes on a scene of 9 large
+5. **Dynamic scenes get faces.** At play, a Dynamic scene reads any facts not yet cached (`ReadFactsAsync`), takes
+   the faces as shown from Camera Director's `FacesOnCanvas` (the saved layout file holds no faces), and passes the
+   three largest as the layout to keep (`KeptLayout(null, subjects)`). *Differs from `CameraSubjects`:* that takes one
+   point per cell, weighted across its faces; this takes one point per face. First measure how long the facts read takes on a scene of 9 large
    images; if it delays the scene visibly, read the facts while the previous scene plays.
 6. **One rule for values.** All three callers get their options from one place: `GeneratorSettingsFor(show)` for a
    show, `SurpriseChoices` for the canvas. Today that is already true; this step only removes any read of the

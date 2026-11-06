@@ -18,7 +18,7 @@ namespace ModernImageViewer
     public sealed partial class MultiViewControl
     {
         // Allows for the next layout being prepared and faded in, so this one is still moving when it goes.
-        private const double CameraOverrunSeconds = 2.5;
+        private const double CameraOverrunSeconds = SceneCall.OverrunSeconds;
         private const double CameraHomeSeconds = 0.45;
 
         private CameraMove? _cameraMove;
@@ -38,8 +38,11 @@ namespace ModernImageViewer
         private void StartCanvasCamera(Composition composition)
         {
             var options = SurpriseChoices;
-            double amount = options.PickMotion(Random.Shared);
-            var move = CameraMove.Plan(composition.CameraSubjects(), amount, options.MotionZoomChance, options.MotionFaceChance, _layoutSeconds + CameraOverrunSeconds, _lastCameraKind, Random.Shared, options.ForcedCameraKind, options.CameraStyle());
+            // The layout is kept: this call plans only its move, now that the hold is known.
+            var made = SceneCall.Make(new SceneRequest(Array.Empty<PhotoFacts>(), composition.Width, composition.Height, options,
+                _layoutSeconds, Random.Shared.Next(), LastKind: _lastCameraKind, Keep: KeptLayout.Of(composition)));
+            var move = made?.Move;
+            double amount = made?.Amount ?? 0;
             if (move == null)
             {
                 ResetCanvasCamera();

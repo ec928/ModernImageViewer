@@ -781,6 +781,30 @@ namespace ModernImageViewer
         }
 
         /// <summary>
+        /// Where a camera may aim on the layout as shown: the three largest faces, as shares of the canvas. Faces not yet
+        /// read are read first. Used for a scene whose saved layout holds no faces of its own.
+        /// </summary>
+        private async Task<IReadOnlyList<(double X, double Y)>> SubjectsOnCanvasAsync()
+        {
+            var paths = _cellRoots
+                .Select(r => (r?.Tag as CellParts)?.Bound.Item.Path)
+                .Where(p => !string.IsNullOrEmpty(p))
+                .Select(p => p!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (paths.Any(p => !_photoFacts.ContainsKey(p)))
+            {
+                var ready = DecodedBitmaps();
+                await ReadFactsAsync(paths, path => ready.TryGetValue(path, out var bitmap) ? (bitmap.PixelWidth, bitmap.PixelHeight) : null);
+            }
+            double w = RootGrid.ActualWidth, h = RootGrid.ActualHeight;
+            if (w < 1 || h < 1) return Array.Empty<(double, double)>();
+            return FacesOnCanvas().Take(3)
+                .Select(r => (Math.Clamp((r.X + r.Width / 2) / w, 0, 1), Math.Clamp((r.Y + r.Height / 2) / h, 0, 1)))
+                .ToList();
+        }
+
+        /// <summary>
         /// Outlines the faces once the scene's cells have laid out. A scene added by hand may not have had its faces read
         /// yet, so they are read first. A later scene switch makes this one give up.
         /// </summary>

@@ -1182,6 +1182,10 @@ namespace ModernImageViewer
                     v => v < 1 ? "Off" : $"{v:0}%",
                     (o, v) => o.TwoShotChance = v / 100);
                 Note(column, "A wide shot, then a snap zoom or a cut to the face, as Cinematic Slideshow does. Only with the camera on Auto, in a scene held 8 seconds or more.");
+                Slide(column, "Still scenes", "The chance that a scene does not move at all.",
+                    0, 100, 5, options.StillChance * 100,
+                    v => v < 1 ? "Off" : $"{v:0}%",
+                    (o, v) => o.StillChance = v / 100);
 
                 column.Children.Add(new TextBlock
                 {
@@ -3994,21 +3998,17 @@ namespace ModernImageViewer
                 var move = scene.CameraOverride.ToCameraMove(_layoutSeconds + CameraOverrunSeconds);
                 if (move != null)
                 {
+                    _lastCameraKind = move.Kind;
                     RunCamera(move, goingHome: false);
                 }
             }
             else
             {
-                var move = CameraMove.Plan(
-                    Array.Empty<(double, double)>(),
-                    showSettings.PickMotion(Random.Shared),
-                    showSettings.MotionZoomChance,
-                    showSettings.MotionFaceChance,
-                    _layoutSeconds + CameraOverrunSeconds,
-                    _lastCameraKind,
-                    Random.Shared,
-                    showSettings.ForcedCameraKind,
-                    showSettings.CameraStyle());
+                // Dynamic: the scene keeps its saved layout, and this call plans only the move, aimed at the faces as shown.
+                var subjects = await SubjectsOnCanvasAsync();
+                var move = SceneCall.Make(new SceneRequest(Array.Empty<PhotoFacts>(), RootGrid.ActualWidth, RootGrid.ActualHeight,
+                    showSettings, _layoutSeconds, Random.Shared.Next(), LastKind: _lastCameraKind,
+                    Keep: new KeptLayout(null, subjects)))?.Move;
                 if (move != null)
                 {
                     _lastCameraKind = move.Kind;
@@ -4620,7 +4620,7 @@ namespace ModernImageViewer
                     if (_surpriseDeck != null && options.SkipScreens) facts = LayoutComposer.LeaveOutScreensAndRepeats(facts);
 
                     string? avoid = sameRun ? _surpriseRecipe : null;
-                    composition = await Task.Run(() => LayoutComposer.Compose(facts, width, height, Random.Shared.Next(), avoid, scale, null, options));
+                    composition = await Task.Run(() => SceneCall.Make(new SceneRequest(facts, width, height, options, 0, Random.Shared.Next(), avoid, RasterScale: scale))?.Composition);
                 }
 
                 // The session was changed for other pictures while these were being read, and that wins.
@@ -4723,7 +4723,7 @@ namespace ModernImageViewer
                 if (token.IsCancellationRequested) return;
                 if (nextDeck != null && options.SkipScreens) facts = LayoutComposer.LeaveOutScreensAndRepeats(facts);
 
-                var composition = await Task.Run(() => LayoutComposer.Compose(facts, width, height, Random.Shared.Next(), avoid, scale, null, options), token);
+                var composition = await Task.Run(() => SceneCall.Make(new SceneRequest(facts, width, height, options, 0, Random.Shared.Next(), avoid, RasterScale: scale))?.Composition, token);
                 if (composition == null || token.IsCancellationRequested) return;
 
                 var toPreload = composition.Cells.Select(c => c.Photo.Path)
