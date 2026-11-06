@@ -17,7 +17,11 @@ Backdrop odds (vignette, gradient, solid; default Normal, Normal, Rare) every de
 blur (Rare) joins the backdrop odds; on screen the plain colour shows until the blurred copy is made; export draws
 it too. Not watched on screen, and not exported to check. 6 built: Sequence beats (odds, default off) and Scenes per step (2 to 4) in Advanced > Camera until 3c moves them to the
 storyboard; the director writes closer views as kept scenes; Cut between views of one image, no overrun before one.
-Not in the show file yet (3c). Not watched: the Cut and the snap on screen. 3c not started. "Today" means v0.31.2. File and line references were read on
+Not watched: the Cut and the snap on screen. 3c built: the storyboard's images-per-scene pop-up is this show's
+settings (preset, Save as My preset 1-3, images per scene, duration, smart pace, motion, sequence beats, scenes per
+step, design odds), written into the show; the Cinematic section is gone from Generator Advanced; My presets are kept
+in the app's settings; beats are in the show file. Not watched on screen. Every slice in the plan is built; none is
+merged to master or pushed. "Today" means v0.31.2. File and line references were read on
 6 Nov 2026 and will drift.
 
 **How each slice runs**

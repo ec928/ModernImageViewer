@@ -272,9 +272,19 @@ namespace ModernImageViewer
         [JsonPropertyName("motionMost")]
         public double? MotionMost { get; set; }
 
+        [JsonPropertyName("sequenceBeats")]
+        public double? SequenceBeats { get; set; }
+
+        [JsonPropertyName("fewestScenesPerStep")]
+        public int? FewestScenesPerStep { get; set; }
+
+        [JsonPropertyName("mostScenesPerStep")]
+        public int? MostScenesPerStep { get; set; }
+
         [JsonIgnore]
         public bool HoldsValues => FewestImages != null || MostImages != null || DesignOdds != null || FewestSeconds != null
-            || MostSeconds != null || SmartPace != null || MotionLeast != null || MotionMost != null;
+            || MostSeconds != null || SmartPace != null || MotionLeast != null || MotionMost != null
+            || SequenceBeats != null || FewestScenesPerStep != null || MostScenesPerStep != null;
 
         /// <summary>The show takes a preset's values as its own, every one of them.</summary>
         public void TakeValues(CinematicOverrides preset)
@@ -288,6 +298,9 @@ namespace ModernImageViewer
             SmartPace = preset.SmartPace;
             MotionLeast = preset.MotionLeast;
             MotionMost = preset.MotionMost;
+            SequenceBeats = preset.SequenceBeatsChance;
+            FewestScenesPerStep = preset.FewestScenesPerStep;
+            MostScenesPerStep = preset.MostScenesPerStep;
         }
 
         /// <summary>The show holds nothing of its own: Layout Generator Settings decide every value.</summary>
@@ -297,6 +310,8 @@ namespace ModernImageViewer
             DesignOdds = null;
             SmartPace = null;
             MotionLeast = MotionMost = null;
+            SequenceBeats = null;
+            FewestScenesPerStep = MostScenesPerStep = null;
         }
 
         /// <summary>
@@ -331,6 +346,9 @@ namespace ModernImageViewer
             if (SmartPace is bool smart) o.SmartPace = smart;
             if (MotionLeast is double motionLeast) o.MotionLeast = Math.Clamp(motionLeast, 0, 1);
             if (MotionMost is double motionMost) o.MotionMost = Math.Clamp(motionMost, o.MotionLeast, 1);
+            if (SequenceBeats is double beats) o.SequenceBeatsChance = Math.Clamp(beats, 0, 1);
+            if (FewestScenesPerStep is int fewestScenes) o.FewestScenesPerStep = Math.Clamp(fewestScenes, 2, SurpriseOptions.MostScenesInAStep);
+            if (MostScenesPerStep is int mostScenes) o.MostScenesPerStep = Math.Clamp(mostScenes, o.FewestScenesPerStep, SurpriseOptions.MostScenesInAStep);
             return o;
         }
 

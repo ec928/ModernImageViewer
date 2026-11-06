@@ -186,18 +186,18 @@ A layout of one image goes through the design odds like any layout. **Crop at mo
 
 ### Cinematic storyboard
 
-The last section in Advanced Settings holds the settings Cinematic storyboard uses. For everything else, such as faces, designs, the camera and Canvas & progress, it uses the settings above. The defaults:
+A Cinematic storyboard is a show started from the **Cinematic** preset. Its values are its own, edited in this show's settings on the storyboard, and saved with it; for everything else, such as faces, the camera and Canvas & progress, it uses Layout Generator Settings. The preset's defaults:
 
 | Setting | Default |
 |---|---|
-| Use for this storyboard | Off; on for a storyboard started with Cinematic storyboard |
 | Images per scene | 1 to 1 |
 | Designs | Edge to edge Often, Hero spotlight Rare, the rest Off |
 | Duration | 10 to 15 seconds |
 | Smart pace | On |
 | Motion | 40% to 60% |
+| Sequence beats | Off |
 
-Reset to defaults resets these along with the rest. Use for this storyboard is not a saved setting: it belongs to the open storyboard and is saved with it. With Auto-Mix selected, or no storyboard, the section reads **Not in use** and the switch is greyed out: Auto-Mix never uses these settings. The storyboard keeps its setting for when Storyboard is selected again.
+The storyboard's images-per-scene button opens **this show's settings**: a **Preset** (Multi-Image, which follows Layout Generator Settings; Cinematic; or My preset 1, 2 or 3), **Save as** My preset 1, 2 or 3, and the values this show is played with: images per scene, duration, smart pace, motion, sequence beats, scenes per step and each design's odds. They are the show's own and are saved in its file; Layout Generator Settings are not changed. A show that holds none follows Layout Generator Settings; the first change makes it hold the full set it was using.
 
 A Cinematic storyboard uses your main Transitions settings.
 

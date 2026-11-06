@@ -68,11 +68,44 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
+        public void A_preset_saved_from_a_show_gives_another_show_the_same_values()
+        {
+            var playing = new SurpriseOptions { FewestPictures = 2, MostPictures = 5, SequenceBeatsChance = 0.25, FewestScenesPerStep = 2, MostScenesPerStep = 3, MotionLeast = 0.2, MotionMost = 0.9 };
+            playing.DisabledDesigns.Add(LayoutComposer.Circles);
+            var preset = CinematicOverrides.From(playing);
+
+            var other = new ShowProject();
+            other.GlobalDefaults.TakeValues(preset);
+            var used = ShowProject.FromJson(other.ToJson())!.GlobalDefaults.ApplyTo(new SurpriseOptions());
+            Assert.Equal(5, used.MostPictures);
+            Assert.Equal(0.25, used.SequenceBeatsChance, 3);
+            Assert.Equal(3, used.MostScenesPerStep);
+            Assert.Equal(0.9, used.MotionMost, 3);
+            Assert.True(used.IsDesignOff(LayoutComposer.Circles));
+            Assert.False(used.IsDesignOff(LayoutComposer.EdgeToEdge));
+        }
+
+        [Fact]
+        public void My_presets_are_three_slots_kept_in_the_settings()
+        {
+            var options = new SurpriseOptions();
+            options.MyPresets[1] = new CinematicOverrides { MostPictures = 4, SequenceBeatsChance = 0.5 };
+            var read = SurpriseOptions.FromJson(options.ToJson());
+            Assert.Equal(3, read.MyPresets.Count);
+            Assert.Null(read.MyPresets[0]);
+            Assert.Equal(4, read.MyPresets[1]!.MostPictures);
+            Assert.Equal(0.5, read.MyPresets[1]!.SequenceBeatsChance, 3);
+            Assert.Null(read.MyPresets[2]);
+            // A settings file from before presets has three empty slots.
+            Assert.Equal(3, SurpriseOptions.FromJson("{}").MyPresets.Count);
+        }
+
+        [Fact]
         public void A_show_holding_nothing_writes_none_of_the_new_fields()
         {
             // So an older app reading it finds what it always found.
             string json = new ShowProject().ToJson();
-            foreach (string field in new[] { "fewestImages", "mostImages", "designOdds", "fewestSeconds", "mostSeconds", "motionLeast", "motionMost", "smartPace" })
+            foreach (string field in new[] { "fewestImages", "mostImages", "designOdds", "fewestSeconds", "mostSeconds", "motionLeast", "motionMost", "smartPace", "sequenceBeats", "fewestScenesPerStep", "mostScenesPerStep" })
                 Assert.DoesNotContain($"\"{field}\"", json);
         }
     }

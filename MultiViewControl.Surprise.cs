@@ -86,18 +86,6 @@ namespace ModernImageViewer
             }
         }
 
-        /// <summary>
-        /// Turns the Cinematic overrides on or off for the open storyboard, from the toggle in Layout Generator Settings.
-        /// With no storyboard yet, it starts an empty one, so the next scenes made for it follow the toggle.
-        /// </summary>
-        private void UseCinematicOverrides(bool on)
-        {
-            if ((_activeShow?.GeneratorOverrides == CinematicOverrides.Name) == on) return;
-            _activeShow ??= new ShowProject { Title = "Storyboard" };
-            SetCinematic(_activeShow, on);
-            _updateStorySummary?.Invoke();
-            NoteUserAction();
-        }
 
         /// <summary>
         /// The Layout Generator settings for a show: the main ones, with every value the show holds in their place. A show
@@ -126,10 +114,6 @@ namespace ModernImageViewer
         private void ChangeSurpriseChoices(Action<SurpriseOptions> change)
         {
             change(SurpriseChoices);
-            // Until the storyboard edits its own values, the Cinematic storyboard settings here are the open cinematic
-            // storyboard's, as they always have been.
-            if (_activeShow != null && _activeShow.GeneratorOverrides == CinematicOverrides.Name)
-                _activeShow.GlobalDefaults.TakeValues(SurpriseChoices.Cinematic ?? new CinematicOverrides());
             CancelPreparedSurprise();
             try
             {
@@ -1287,150 +1271,7 @@ namespace ModernImageViewer
                 ShowMix();
             }
 
-            // 6. Cinematic storyboard: the settings it puts in place of the ones above. Not a second set of everything:
-            // only what makes the one generator's layouts like Cinematic Slideshow's. Whether they are in use belongs to
-            // the storyboard, so Auto-Mix is never affected.
-            // In Auto-Mix nothing here is in use, so the switch reads off there and cannot be changed: it showed the open
-            // storyboard's state while Auto-Mix played, which read as Auto-Mix using these settings.
-            bool storyboardPlays = PlayUsesStoryboard();
-            bool CinematicOn() => storyboardPlays && _activeShow?.GeneratorOverrides == CinematicOverrides.Name;
-            string CinematicSummaryText()
-            {
-                var c = SurpriseChoices.Cinematic;
-                string images = c.FewestPictures == c.MostPictures ? $"{c.FewestPictures}" : $"{c.FewestPictures}–{c.MostPictures}";
-                string hold = c.FewestSeconds == c.MostSeconds ? $"{c.FewestSeconds}s" : $"{c.FewestSeconds}–{c.MostSeconds}s";
-                string state = !storyboardPlays ? "Not in use" : CinematicOn() ? "On" : "Off";
-                return $"{state} · {images} · {hold}";
-            }
-            var (cineSection, cineSummary) = Section("Cinematic storyboard", CinematicSummaryText());
-            cineSection.Children.Add(new TextBlock
-            {
-                Text = "Cinematic storyboard uses these settings. For everything else, it uses the settings above.",
-                FontSize = 11,
-                Opacity = 0.6,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 0, 0, 6)
-            });
-
-            var cineOn = Toggle(cineSection, "Use for this storyboard",
-                "On: new scenes in the open storyboard, from Add new layout or Replace show, use these settings. Auto-Mix never uses them.",
-                CinematicOn(), (_, _) => { },
-                subtitle: storyboardPlays
-                    ? "On when it was started with Cinematic storyboard; off for any other storyboard."
-                    : _activeShow == null || _activeShow.Scenes.Count == 0
-                        ? "No storyboard yet. Auto-Mix never uses these settings."
-                        : "Auto-Mix is selected, and it never uses these settings. Select Storyboard to change this.");
-            cineOn.IsEnabled = storyboardPlays;
-            cineOn.Toggled += (_, _) =>
-            {
-                UseCinematicOverrides(cineOn.IsOn);
-                cineSummary.Text = CinematicSummaryText();
-            };
-
-            {
-                // The same boxes as Images per scene on the first page.
-                bool syncingCine = false;
-                SpinNumberBox CineBox(int value, string name, string tip)
-                {
-                    var box = new SpinNumberBox { Minimum = 1, Maximum = MosaicLayout.MaxShown, Value = value, Width = 84, Height = 32, VerticalAlignment = VerticalAlignment.Center };
-                    ToolTipService.SetToolTip(box, tip);
-                    Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(box, name);
-                    return box;
-                }
-                var cineFewestBox = CineBox(options.Cinematic.FewestPictures, "Cinematic minimum images per scene", "Fewest images in each scene (1 to 16). Cinematic Slideshow shows one.");
-                var cineMostBox = CineBox(options.Cinematic.MostPictures, "Cinematic maximum images per scene", "Most images in each scene (1 to 16).");
-                void SetCineRange(int f, int m)
-                {
-                    f = Math.Clamp(f, 1, MosaicLayout.MaxShown);
-                    m = Math.Clamp(m, f, MosaicLayout.MaxShown);
-                    if (syncingCine) return;
-                    syncingCine = true;
-                    try
-                    {
-                        if (cineFewestBox.Value != f) cineFewestBox.Value = f;
-                        if (cineMostBox.Value != m) cineMostBox.Value = m;
-                        ChangeSurpriseChoices(o => { o.Cinematic.FewestPictures = f; o.Cinematic.MostPictures = m; });
-                        cineSummary.Text = CinematicSummaryText();
-                        _updateStorySummary?.Invoke();
-                    }
-                    finally
-                    {
-                        syncingCine = false;
-                    }
-                }
-                cineFewestBox.ValueChanged += (_, v) => { if (!syncingCine) SetCineRange(v, Math.Max(v, cineMostBox.Value)); };
-                cineMostBox.ValueChanged += (_, v) => { if (!syncingCine) SetCineRange(Math.Min(v, cineFewestBox.Value), v); };
-
-                var boxes = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-                boxes.Children.Add(cineFewestBox);
-                boxes.Children.Add(new TextBlock { Text = "to", FontSize = 13, Opacity = 0.7, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 0, 2, 0) });
-                boxes.Children.Add(cineMostBox);
-                var row = new Grid { ColumnSpacing = 12, MinHeight = 36, Margin = new Thickness(0, 2, 0, 2) };
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
-                var label = new TextBlock { Text = "Images per scene:", VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
-                Grid.SetColumn(boxes, 1);
-                row.Children.Add(label);
-                row.Children.Add(boxes);
-                cineSection.Children.Add(row);
-            }
-
-            void CineOddsSlide(string name, string tip, double odds, Action<SurpriseOptions, double> set)
-            {
-                double initial = odds <= 0 ? -1.2 : Math.Log(Math.Max(SurpriseOptions.RarestDesign, odds), DesignOddsBase);
-                Slide(cineSection, name, tip, -1.2, 1.0, 0.1, initial, FormatDesignStep,
-                    (o, v) => set(o, v <= -1.1 ? 0 : Math.Pow(DesignOddsBase, v)));
-            }
-            cineSection.Children.Add(new TextBlock
-            {
-                Text = "Designs",
-                FontSize = 12,
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Opacity = 0.85,
-                Margin = new Thickness(0, 10, 0, 2)
-            });
-            foreach (string design in LayoutComposer.Recipes)
-            {
-                string named = design;
-                CineOddsSlide(named, $"How often a cinematic storyboard uses {named}. Far left turns it off.", options.Cinematic.OddsFor(named),
-                    (o, v) => o.Cinematic.DesignOdds[named] = v);
-            }
-
-            {
-                var row = new Grid { ColumnSpacing = 12, MinHeight = 34 };
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
-                var label = new TextBlock { Text = "Duration", VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
-                var right = new Grid { Width = 230, ColumnSpacing = 8, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-                right.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(146) });
-                right.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(76) });
-                string Hold(int low, int high) => low == high ? $"{low}s" : $"{low}s - {high}s";
-                int from = Math.Clamp(options.Cinematic.FewestSeconds, SurpriseOptions.FewestSeconds, SurpriseOptions.MostSeconds);
-                int to = Math.Clamp(Math.Max(from, options.Cinematic.MostSeconds), SurpriseOptions.FewestSeconds, SurpriseOptions.MostSeconds);
-                var readout = new TextBlock { Text = Hold(from, to), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, FontSize = 12, Opacity = 0.82, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
-                var range = new RangeSlider { Minimum = SurpriseOptions.FewestSeconds, Maximum = SurpriseOptions.MostSeconds, StepFrequency = 1, RangeStart = from, RangeEnd = to, Width = 146, VerticalAlignment = VerticalAlignment.Center };
-                range.RangeChanged += (_, r) =>
-                {
-                    int low = (int)Math.Round(r.Start), high = (int)Math.Round(r.End);
-                    readout.Text = Hold(low, high);
-                    ChangeSurpriseChoices(o => { o.Cinematic.FewestSeconds = low; o.Cinematic.MostSeconds = Math.Max(low, high); });
-                    cineSummary.Text = CinematicSummaryText();
-                };
-                ToolTipService.SetToolTip(row, "How long each scene stays on screen. Cinematic Slideshow uses 5 to 20 seconds.");
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(range, "Cinematic storyboard duration");
-                Grid.SetColumn(range, 0);
-                Grid.SetColumn(readout, 1);
-                right.Children.Add(range);
-                right.Children.Add(readout);
-                Grid.SetColumn(right, 1);
-                row.Children.Add(label);
-                row.Children.Add(right);
-                cineSection.Children.Add(row);
-            }
-            Toggle(cineSection, "Smart pace", "Alternate shorter and longer scenes, like Cinematic Slideshow.", options.Cinematic.SmartPace, (o, on) => o.Cinematic.SmartPace = on);
-            RangeRow(cineSection, "Motion", "How much the camera moves during each scene. Cinematic Slideshow always moves. Each scene picks within the range.",
-                0, 100, 5, options.Cinematic.MotionLeast * 100, options.Cinematic.MotionMost * 100, Percents,
-                (o, a, b) => { o.Cinematic.MotionLeast = a / 100; o.Cinematic.MotionMost = b / 100; });
+            // The Cinematic storyboard's values are the show's own now, edited on the storyboard (MultiViewControl.ShowSettings.cs).
 
             // Reset to defaults
             var resetRow = new Grid { ColumnSpacing = 6, MinHeight = 32 };
@@ -2538,7 +2379,10 @@ namespace ModernImageViewer
             rangeFlyoutStack.Children.Add(rangeHeader);
             rangeFlyoutStack.Children.Add(rangeInputsRow);
 
-            var draftRangeFlyout = new Flyout { Content = rangeFlyoutStack };
+            // The rest of this show's settings, filled each time the pop-up opens so it shows the show as it is now.
+            var showSettingsPanel = new StackPanel { Spacing = 4, MinWidth = 330 };
+            rangeFlyoutStack.Children.Add(showSettingsPanel);
+            var draftRangeFlyout = new Flyout { Content = new ScrollViewer { Content = rangeFlyoutStack, MaxHeight = 560, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
 
             var draftRangeText = new TextBlock
             {
@@ -2555,7 +2399,16 @@ namespace ModernImageViewer
                 Padding = new Thickness(8, 4, 8, 4),
                 VerticalAlignment = VerticalAlignment.Center
             };
-            ToolTipService.SetToolTip(draftRangeBtn, "How many images each new scene in this show gets. For a Cinematic storyboard, this changes the Cinematic setting.");
+            ToolTipService.SetToolTip(draftRangeBtn, "This show's settings: its preset, images per scene, duration, motion, sequence beats and designs. They are the show's own; Layout Generator Settings are not changed.");
+            draftRangeFlyout.Opening += (_, _) =>
+            {
+                var now = GeneratorSettingsFor(_activeShow);
+                syncingStoryRange = true;
+                storyFewestBox.Value = now.FewestPictures;
+                storyMostBox.Value = now.MostPictures;
+                syncingStoryRange = false;
+                FillShowSettings(showSettingsPanel, () => draftRangeText.Text = $"({GeneratorSettingsFor(_activeShow).FewestPictures}–{GeneratorSettingsFor(_activeShow).MostPictures}) ▾");
+            };
 
             Border MakeDivider() => new Border { Width = 1, Height = 16, Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x35, 0xFF, 0xFF, 0xFF)), VerticalAlignment = VerticalAlignment.Center };
 
@@ -2608,13 +2461,8 @@ namespace ModernImageViewer
                 {
                     if (storyFewestBox.Value != f) storyFewestBox.Value = f;
                     if (storyMostBox.Value != m) storyMostBox.Value = m;
-                    // The range this show's new scenes use: its overrides' when it has them, else the main one.
-                    bool cinematic = _activeShow?.GeneratorOverrides == CinematicOverrides.Name;
-                    ChangeSurpriseChoices(o =>
-                    {
-                        if (cinematic) { o.Cinematic.FewestPictures = f; o.Cinematic.MostPictures = m; }
-                        else { o.FewestPictures = f; o.MostPictures = m; }
-                    });
+                    // The range is the show's own: its new scenes use it; Layout Generator Settings are not changed.
+                    ChangeShowValues(v => { v.FewestImages = f; v.MostImages = m; }, null);
                     SyncStoryImageRange();
                 }
                 finally

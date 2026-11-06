@@ -415,6 +415,9 @@ namespace ModernImageViewer
         /// <summary>The Layout Generator settings that Cinematic storyboard uses in place of these. Everything not in it comes from here.</summary>
         public CinematicOverrides Cinematic { get; set; } = new();
 
+        /// <summary>My presets 1, 2 and 3: whatever the user saved into them from a show, the same full set of values. Empty until saved.</summary>
+        public List<CinematicOverrides?> MyPresets { get; set; } = new() { null, null, null };
+
         /// <summary>
         /// These settings with a set of overrides applied, by its name; this same object when the name is none or unknown.
         /// A copy, so the saved settings are never changed by it.
@@ -477,6 +480,9 @@ namespace ModernImageViewer
                 read.RandomMostSeconds = Math.Clamp(read.RandomMostSeconds, FewestSeconds, MostSeconds);
                 if (read.RandomMostSeconds < read.RandomFewestSeconds) read.RandomMostSeconds = read.RandomFewestSeconds;
                 read.Cinematic = CinematicOverrides.Checked(read.Cinematic);
+                // Three slots, whatever the file held; an empty one stays empty.
+                var presets = read.MyPresets ?? new List<CinematicOverrides?>();
+                read.MyPresets = Enumerable.Range(0, 3).Select(i => i < presets.Count && presets[i] != null ? CinematicOverrides.Checked(presets[i]) : null).ToList();
                 if (read.MotionAmount is double motion)
                 {
                     read.MotionLeast = read.MotionMost = motion;
@@ -558,6 +564,31 @@ namespace ModernImageViewer
         public bool SmartPace { get; set; } = true;
         public double MotionLeast { get; set; } = 0.4;
         public double MotionMost { get; set; } = 0.6;
+        /// <summary>Sequence beats: off in both built-in presets; a user's preset may hold any value.</summary>
+        public double SequenceBeatsChance { get; set; }
+        public int FewestScenesPerStep { get; set; } = 2;
+        public int MostScenesPerStep { get; set; } = 2;
+
+        /// <summary>A preset holding the values a show is played with now: what Save as My preset stores.</summary>
+        public static CinematicOverrides From(SurpriseOptions o)
+        {
+            var preset = new CinematicOverrides
+            {
+                FewestPictures = o.FewestPictures,
+                MostPictures = o.MostPictures,
+                FewestSeconds = o.AutoPlayRandom ? o.RandomFewestSeconds : o.AutoPlaySeconds,
+                MostSeconds = o.AutoPlayRandom ? o.RandomMostSeconds : o.AutoPlaySeconds,
+                SmartPace = o.SmartPace,
+                MotionLeast = o.MotionLeast,
+                MotionMost = o.MotionMost,
+                SequenceBeatsChance = o.SequenceBeatsChance,
+                FewestScenesPerStep = o.FewestScenesPerStep,
+                MostScenesPerStep = o.MostScenesPerStep,
+                DesignOdds = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
+            };
+            foreach (string design in LayoutComposer.Recipes) preset.DesignOdds[design] = o.IsDesignOff(design) ? 0 : o.OddsOf(design);
+            return preset;
+        }
         /// <summary>The single Motion of earlier versions, read only to convert a saved file.</summary>
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public double? MotionAmount { get; set; }
@@ -582,6 +613,9 @@ namespace ModernImageViewer
             options.SmartPace = SmartPace;
             options.MotionLeast = MotionLeast;
             options.MotionMost = MotionMost;
+            options.SequenceBeatsChance = SequenceBeatsChance;
+            options.FewestScenesPerStep = FewestScenesPerStep;
+            options.MostScenesPerStep = MostScenesPerStep;
         }
 
         /// <summary>Anything missing or out of range in the saved file comes back as its default or its limit.</summary>
@@ -605,6 +639,9 @@ namespace ModernImageViewer
             }
             c.MotionLeast = Math.Clamp(c.MotionLeast, 0, 1);
             c.MotionMost = Math.Clamp(c.MotionMost, c.MotionLeast, 1);
+            c.SequenceBeatsChance = Math.Clamp(c.SequenceBeatsChance, 0, 1);
+            c.FewestScenesPerStep = Math.Clamp(c.FewestScenesPerStep, 2, SurpriseOptions.MostScenesInAStep);
+            c.MostScenesPerStep = Math.Clamp(c.MostScenesPerStep, c.FewestScenesPerStep, SurpriseOptions.MostScenesInAStep);
             return c;
         }
     }
