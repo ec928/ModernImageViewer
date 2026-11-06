@@ -7,11 +7,13 @@ this file. Do not read, implement from, or reconcile with them. How it is built,
 `MULTI_IMAGE_IMPLEMENTATION.md`; this file wins where they differ. `MULTI_IMAGE_UI.md` describes the app as it is, not
 the design. Renamed on 6 Nov 2026 from `LAYOUT_GENERATOR_DESIGN.md`.
 
-**Status: proposal, not built, not approved.** Nothing here is in the app until Ed has said yes to it. The app as it stands
-(v0.31.2) is described in `MULTI_IMAGE_UI.md` and the README's "Layout Generator" section; where this file says
-"today", it means v0.31.2.
+**Status: proposal, partly built on a branch, not approved.** Slices 1 to 6 were built on 6 Nov on branch
+`slice1-one-engine-call`, engine-first by mistake (see "What the user meets", below); the screen is being rebuilt to this
+file. Nothing here is in the released app until Ed has said yes to it. Where this file says "today", it means v0.31.2,
+the released app, described in `MULTI_IMAGE_UI.md` and the README.
 
-**How to use this file.** The direction below is where the work goes. The core principle is what the engine is. Section 1
+**How to use this file.** Start with **What the user meets** (R17): it is the first principle and the first thing built.
+The direction below is where the work goes. The core principle is what the engine is. Section 1
 is Ed's requirements, with where each came from. Every later decision cites the requirement it serves (R1, R2 ...).
 Section 6 lists every number the generator uses, so none is decided silently. Section 9 is the questions only Ed can
 answer. A reviewer should start at section 11.
@@ -22,8 +24,10 @@ answer. A reviewer should start at section 11.
 |---|---|
 | Engine call | One layout and one move (today's two-shot included), from one entry point (Core principle). The engine does not keep it. |
 | Canvas layout | One engine call placed on the canvas. It is not a scene. |
-| Direct Auto-Mix | What v0.31.2 plays continuously. Each step is an engine call, and the result is discarded. |
-| Play | The future path (R15). The director drafts the next scene when it is needed and keeps the scenes. |
+| Direct Auto-Mix | What v0.31.2 plays continuously. Each step is an engine call, and the result is discarded. It goes (R15, R17). |
+| Play | Always the director (R15, R17). It plays the show; a show with no scenes yet is made as it plays, and kept. |
+| Show card | What the user meets: the show's preset, its values and its soundtrack. Opened from Show on the bar. |
+| Engine settings | How the engine makes one layout and one move. Behind one link on the Show card, not the first thing seen. |
 
 ## Direction
 
@@ -38,9 +42,58 @@ default is **0%, as today**: every step is one scene. Nothing of this comes back
 slideshow. Sections 3 to 6 stay the engine: one call. The
 director's half is the section after the core principle.
 
-Play goes through that director, including when it feels immediate (R15). Direct Auto-Mix is what the app does today.
-Play drafts the next scene when it is needed, keeps the scenes it has made, and so can use sequence beats, the show's
-own settings, and the memory of the last scene. A canvas layout stays one engine call.
+Everything goes through the director, including what feels immediate (R15, R17). The director is what the user meets;
+the engine works behind the scenes. Play drafts the next scene when it is needed, keeps the scenes it has made, and so
+can use sequence beats, the show's own settings, and the memory of the last scene. Direct Auto-Mix, which v0.31.2 plays,
+goes. One layout on the canvas stays one engine call, and is not Play.
+
+---
+
+## What the user meets (R17)
+
+The director is the front. The engine has no screen of its own that the user starts from; its settings are behind one
+link. This section is the first thing built and the thing every later slice is checked against.
+
+| Where | What it is | What the user does there |
+|---|---|---|
+| **Play** on the bar | The director playing the show | Plays the show. A show with no scenes yet is made as it plays, from the preset and values on the Show card, and every scene is kept. Space does the same. |
+| **Previous / Next** on the bar | Steps through the show | Moves between the show's scenes. With no show, Next makes one layout on the canvas: the one direct engine use, not kept. |
+| **Show** on the bar | Opens the Show card | The only settings button on the bar. There is no Storyboard / Auto-Mix switch: Play always plays the show. |
+| **Show card** | The show: what Play plays | **Preset** (Multi-Image, Cinematic, My preset 1, 2, 3), **Save as** My preset, the show's values (images per scene, duration, smart pace, motion, sequence beats, scenes per step, design odds), **New show from these images** (asks before replacing a show that has scenes), **Soundtrack**, and the **Engine settings** link. |
+| **Storyboard** (drawer) | The director's kept scenes | Steps back, edits, reorders, hides and saves scenes. Its settings button opens the same show settings as the Show card. |
+| **Engine settings** (behind the link) | How one layout and one move are made | Images & faces, designs (frames, backdrops, each design's own settings), camera, transitions, canvas and progress. Nothing about one show. Its design odds are the defaults a show uses when it holds none of its own (the Multi-Image preset); a show's pace and images per scene are set on the Show card. |
+| **Cinematic storyboard** command | Starts a show from the Cinematic preset | The same director and engine; only the starting values differ. |
+
+Where each control from v0.31.2 goes:
+
+| v0.31.2 | Under R17 |
+|---|---|
+| Generator button on the bar, opening **Layout Generator Settings** | **Show** on the bar, opening the Show card |
+| Layout Generator Settings, first page: images per scene, duration, smart pace, motion | The Show card, as the show's values |
+| Storyboard / Auto-Mix switch on the bar | Gone; Play plays the show |
+| Advanced (images & faces, designs, camera, transitions, canvas, cinematic) | Engine settings, behind the link; the cinematic group is the Cinematic preset |
+| Play in Auto-Mix: a new layout each time, nothing kept | Play: the director, every scene kept |
+| Surprise me: one new layout on the canvas | Next with no show: one layout on the canvas, not kept |
+
+### Why this section exists
+
+On 6 Nov slices 1 to 6 were built from this file engine-first: Layout Generator Settings and Auto-Mix stayed what the
+user met, and the director, with its presets, sat behind a "(1-9)" button in the storyboard drawer. Ed's direction had
+been the opposite since R15: everything through the director, the engine behind it. How it happened:
+
+1. This file grew from an engine-only design (5 Nov, `LAYOUT_GENERATOR_DESIGN.md`). The director was added on top on
+   6 Nov (R13 to R16, the director section), but nothing said what the user meets, and section 4 kept the engine
+   design's line about keeping Layout Generator Settings' first page "as simple as today". That line contradicted R15
+   and was not resolved.
+2. The build order had no slice for the screen. Every slice changed the engine or the director's internals, and each
+   was checked against its own tests, never against R15.
+3. When Ed said twice that it looked the same as before, the build explained it by defaults (beats off, blur Rare)
+   instead of seeing the structure was wrong.
+4. The presets were put where the old controls already were, instead of where the design said the user works.
+5. Reviews checked the file against itself and the code; the file was consistent in an engine-first way, so they passed it.
+
+The rule from this: R17 and this section come first, are built first, and every slice is checked against this screen as
+well as its own tests. A reviewer starts here (section 11).
 
 ---
 
@@ -83,7 +136,7 @@ for a canvas layout, each passing it in as "what not to repeat".
 
 **One rule for every value.** A value comes from the scene if the scene holds it, else from the show, else from Layout
 Generator Settings. It is resolved once, in one place, before the call. The engine receives one set of values and
-never knows which level each came from. A canvas layout has no scene and no show, so it is Layout Generator Settings
+never knows which level each came from. A canvas layout has no scene and no show, so it is the engine's settings
 alone.
 
 The storyboard orchestrates. It keeps an ordered list of calls. A temporal idea is two calls, not a sequence inside the
@@ -95,9 +148,10 @@ engine already has, such as one image, or duration 10 to 15 seconds. A **special
 a control the engine already has, such as the zoom aimed at a face, or a small rotation. The engine does not gain a
 shot list, a second phase inside one hold, or a reader for the music. The storyboard chooses the duration it passes.
 
-The two are separate controls. Layout Generator Settings, Advanced included, belong to the engine: they say how one
-call makes a layout and a move. A single layout on the canvas, with no show, uses those settings and keeps nothing.
-The storyboard belongs to the director: it keeps the ordered calls, and it keeps the values it passes. A cinematic
+The two are separate controls. Engine settings (Layout Generator Settings in v0.31.2) belong to the engine: they say
+how one call makes a layout and a move, and they sit behind the Show card (R17). A single layout on the canvas, with no
+show, uses those settings and keeps nothing. The show belongs to the director: it keeps the ordered calls, and it keeps
+the values it passes, edited on the Show card and the storyboard. A cinematic
 storyboard's usual values, and any value a single scene passes of its own, are edited with the storyboard. They are
 not a group inside Generator Advanced. Putting them there makes the director look like more generator settings, which
 is how the two keep being merged into one.
@@ -106,16 +160,16 @@ is how the two keep being merged into one.
 
 ## The director
 
-Ed called this the right direction on 6 Nov. It is not built. The rows are the proposal that follows from R13, R14 and
-R15, not a second list of word-for-word requirements.
+Ed called this the right direction on 6 Nov, and it is the front of the app (R17). The rows are the proposal that
+follows from R13 to R17, not a second list of word-for-word requirements.
 
 The storyboard already is a director, limited to basic sequencing. It keeps the scenes in order, drafts each one by
 one engine call, and avoids repeating the last design, the last transition and the last kind of move. It alternates
 short and long holds. The user can reorder, hide, remove, duplicate and add scenes, and Camera Director can edit one
 scene's path. It cannot plan two calls as one idea, and the show's own values are edited inside Generator Advanced.
 
-**Show settings live on the storyboard.** Images per scene, design odds, duration, motion, sequence beats and Scenes per step for this
-show are edited there. A new show starts from the engine's settings when the user has not chosen a preset. After that,
+**Show settings live with the show.** Images per scene, design odds, duration, smart pace, motion, sequence beats and
+Scenes per step for this show are edited on the Show card, and from the storyboard's settings button. A new show starts from the engine's settings when the user has not chosen a preset. After that,
 live play uses the show's values.
 
 **Presets: one engine, five sets of values.** A preset is a saved set of the show values above, nothing else; every
@@ -211,9 +265,10 @@ durations. Landing a cut on the music is a later way of choosing them (3.10).
 
 ## Build order
 
-**Slice 0, built last by mistake (6 Nov): the screen the user meets (R17).** The Show card is in front: preset, Play,
-the show's values and its storyboard; Play always goes through the director, never a direct mix; the engine's settings
-sit behind one link. Every slice below is checked against this screen, not only its own tests.
+**Slice 0: the screen the user meets (R17).** Built first in any rebuild; on 6 Nov it was built last, by mistake (see
+"Why this section exists"). It is "What the user meets": Show on the bar, the Show card, Play always the director, the
+engine's settings behind one link, no Storyboard / Auto-Mix switch. Every slice below is checked against this screen,
+not only its own tests.
 
 Thin slices, each one something Ed can see running. Each slice is finished, shown, and adjusted before the next
 starts. The rest of this file is detail for those slices; tunable numbers start as stated defaults and change once
@@ -433,9 +488,9 @@ when both have room. A tall crop's spare room is vertical, so a sideways bias re
 
 ### 3.7 What the storyboard keeps and passes (R10, R13)
 
-Layout Generator Settings are the engine's controls. The storyboard does not add a section to them, and it does not
-store its values inside them. It keeps an ordered list of calls, and it keeps the values each call passes. The user
-edits those values with the storyboard.
+The engine's settings are the engine's controls, behind the Show card (R17). The show does not add a section to them,
+and it does not store its values inside them. It keeps an ordered list of calls, and it keeps the values each call
+passes. The user edits those values on the Show card and the storyboard.
 
 A cinematic storyboard is one such list. Its usual scene passes the limited values below. They are values of controls
 the engine already has. A scene that should differ, such as the same photo snapped to a face, keeps different camera
@@ -522,7 +577,7 @@ threshold counts as unread, so free-time music and speech fall back to smart pac
 size, modified time). The audio never leaves the machine.
 
 **The control.** One switch in the storyboard's Soundtrack section, **Cut on the beat**, default on: with nothing read
-it changes nothing. Direct Auto-Mix is not affected; Play through the director is (R15).
+it changes nothing. A canvas layout is not affected; Play, which is always the director, is (R15, R17).
 
 | Number | Value |
 |---|---|
@@ -548,6 +603,9 @@ chosen or played.
 
 ## 4. What the user sees change
 
+The screen comes first: "What the user meets" (R17) has its own table of where every v0.31.2 control goes. The rows
+below are what changes inside the engine's settings and in what the engine makes.
+
 | Today | Proposed |
 |---|---|
 | Advanced > Designs > Single images: Fill the screen, Matted, Whole image | Removed. One-image layouts use the design odds. |
@@ -557,11 +615,11 @@ chosen or played.
 | Slanted panels, Edge to edge, Circles: no settings | Lean, Mirrored; Gaps; Circle size variety |
 | Nothing for backdrops | Backdrop odds: Vignette Normal, Gradient Normal, Ambient blur Rare, Solid Rare (Q5) |
 | Nothing for crop | Images & faces: Crop at most |
-| Advanced > Cinematic storyboard: images per scene, Fill / Matted / Whole, duration, smart pace, motion, and "use for this storyboard". The Cinematic storyboard button points here | Removed from Generator Advanced. The storyboard keeps those values and passes them (3.7). The engine is called the same way |
+| Advanced > Cinematic storyboard: images per scene, Fill / Matted / Whole, duration, smart pace, motion, and "use for this storyboard". The Cinematic storyboard button points here | Removed from the engine's settings. They are the Cinematic preset; the show keeps its values and passes them (3.7). The engine is called the same way |
 | One image is cropped by Zoom, then the camera zooms again | One image opens on the fit or the fill. Zoom is where that move arrives |
 | Direct Auto-Mix plays by an engine call and keeps nothing | Play goes through the director. It drafts the next scene when it is needed and keeps the scenes it has made (R15). A canvas layout stays one engine call |
-| No sequence beats in multi-image | Sequence beats (odds, default 0%, as today) and Scenes per step (range, default 2 to 2) on the storyboard. When the roll hits, a step is kept scenes, each a closer view |
-| Cinematic values in Generator Advanced | Five presets on the storyboard: Multi-Image, Cinematic, and three of the user's |
+| No sequence beats in multi-image | Sequence beats (odds, default 0%, as today) and Scenes per step (range, default 2 to 2) on the Show card. When the roll hits, a step is kept scenes, each a closer view |
+| Cinematic values in Generator Advanced | Five presets on the Show card: Multi-Image, Cinematic, and three of the user's |
 | The canvas, Auto-Mix and a storyboard plan moves three ways; a storyboard scene with no saved path ignores faces | One entry point plans every move from the same values |
 
 Folded under each design, in the engine's settings behind the Show card (R17), so what the user meets first stays simple (R1).
@@ -762,9 +820,9 @@ Written from what Ed does, not from the description. Each is run and its numbers
 15. One image, Camera mode Auto, Zoom frequency at 100% and at 0%, 30 scenes each. At 100%, every move reaches the Zoom
     range. At 0%, none does: each is a Camera zoom or a drift, about half and half. Camera mode Drift: none reach the
     Zoom range.
-16. Layout Generator Settings, then Advanced, with a cinematic storyboard open: the page has no Cinematic storyboard
-    group. Images per scene, duration, motion and sequence beats are edited on the storyboard. A canvas layout does
-    not read them.
+16. Engine settings, with a cinematic storyboard open: the page has no Cinematic storyboard group. Images per scene,
+    duration, motion and sequence beats are edited on the Show card and the storyboard. A canvas layout does not read
+    them.
 17. Play on Ed's largest folder: time to first picture, and over 30 minutes the number of scenes held past their
     duration because the next was not ready. Targets in the director section.
 18. Play on a folder of mixed portraits and groups, with sequence beats at 100% and Scenes per step 2 to 4. Each step
@@ -772,11 +830,20 @@ Written from what Ed does, not from the description. Each is run and its numbers
     early when there is no closer view. Every hold is inside Duration. Views of one image change by a Cut, without the layout
     changing. Stepping back shows each scene. A canvas layout of one of those pictures is one
     call, one move, and is not kept.
-19. The same settings, one image with a face, 30 moves each from the canvas, Auto-Mix and a storyboard scene with no
+19. The same settings, one image with a face, 30 moves each from the canvas, Play and a storyboard scene with no
     saved path: the same spread of zoom, drift and face aim from all three. Today they differ; this is the check for
     the one entry point.
 20. No code outside the engine entry point calls `CameraMove.Plan` or `ChooseMotionKind`, and no
     planner reads a last move it was not passed (a search, not a run). The canvas keeps its own last move and passes it in.
+21. Open the app on a folder (R17). The first settings the user reaches from the bar are the Show card: preset, the
+    show's values, new show, soundtrack, and one Engine settings link. No Storyboard / Auto-Mix switch on the bar.
+22. With no storyboard, choose Cinematic on the Show card and press Play: scenes are one image, full screen, made as it
+    plays and kept; stepping back shows them. Choose Multi-Image instead: scenes follow the engine's settings.
+23. With a storyboard of scenes open, press Play: that show plays; nothing direct, nothing replaced. New show from these
+    images asks before replacing it.
+24. Change duration or motion on the Show card while Play runs: the scenes drafted after that use it; the scene
+    playing keeps its own hold.
+25. Save as My preset 1, start a new show, choose My preset 1: the new show plays with the saved values.
 
 ---
 
@@ -822,6 +889,8 @@ option (R4, R12).
 
 Check this design, not its author's reasoning:
 
+0. Start with "What the user meets" and R17. Anything the user meets first that is the engine's (a settings page, a mode,
+   a switch) is a finding. A slice or section that leaves the engine in front is a finding, however correct inside.
 1. Read section 1. R1 to R13 are met in sections 3 and 4. R14 is met in the Direction and section 10. R15 and R16 are
    met in the director section and section 4. A requirement with nowhere to land is a finding. Do not expect R14, R15
    or R16 to be restated as engine steps.
@@ -846,7 +915,7 @@ Check this design, not its author's reasoning:
    its shot sequences into the layout engine, is a finding. Sequence beats placed in the engine or in Generator Advanced are a
    finding. Today's two-shot inside the move is not. Sequence beats' absence from sections 3 to 6 is not a finding:
    they are in the director section.
-9. Read R15 and the names at the top. Play that calls the engine and keeps nothing is a finding. A canvas layout is
+9. Read R15, R17 and the names at the top. Play that calls the engine and keeps nothing is a finding. A canvas layout is
    one engine call and is not such a finding. Describing direct Auto-Mix as the future path is a finding. A director
    rule that changes what one engine call returns is a finding.
 10. Read R16. A locked design and backdrop, or a first or last scene treated differently because of its index, is a
