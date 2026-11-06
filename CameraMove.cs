@@ -177,7 +177,8 @@ namespace ModernImageViewer
         }
     }
 
-    public enum LayoutTransition { Crossfade, ZoomThrough, ThroughDark, Slide }
+    /// <summary>Cut is used only between two views of one image (sequence beats); it is never in the transition odds.</summary>
+    public enum LayoutTransition { Crossfade, ZoomThrough, ThroughDark, Slide, Cut }
 
     public static class LayoutTransitions
     {
@@ -187,7 +188,7 @@ namespace ModernImageViewer
         private static double[] Weights(double crossfade, double zoomThrough, double throughDark, double slide, LayoutTransition? last)
         {
             var w = new[] { Math.Max(0, crossfade), Math.Max(0, zoomThrough), Math.Max(0, throughDark), Math.Max(0, slide) };
-            if (last is LayoutTransition l && l != LayoutTransition.Crossfade) w[Array.IndexOf(Kinds, l)] = 0;
+            if (last is LayoutTransition l && l != LayoutTransition.Crossfade && Array.IndexOf(Kinds, l) is int i && i >= 0) w[i] = 0;
             return w;
         }
 

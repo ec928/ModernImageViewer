@@ -309,6 +309,16 @@ namespace ModernImageViewer
         /// <summary>The chance that a scene plays no move at all. Off by default: a still adds a little variety, not much.</summary>
         public double StillChance { get; set; }
 
+        /// <summary>
+        /// Sequence beats: the odds that a step of a show is more than one scene, each a closer view of the one before (a
+        /// group, then one image from it, then its faces). Off by default: one step is one scene, as before.
+        /// </summary>
+        public double SequenceBeatsChance { get; set; }
+        /// <summary>How many scenes a step that rolls Sequence beats may be, as a range. It stops early when no closer view is left.</summary>
+        public int FewestScenesPerStep { get; set; } = 2;
+        public int MostScenesPerStep { get; set; } = 2;
+        public const int MostScenesInAStep = 4;
+
         /// <summary>Temporary diagnostic: Play writes its timings to play-timing.log. Off by default.</summary>
         public bool LogPlayTiming { get; set; }
 
@@ -480,6 +490,9 @@ namespace ModernImageViewer
                 read.TurnMost = Math.Clamp(read.TurnMost, read.TurnLeast, MostTurn);
                 read.TwoShotChance = Math.Clamp(read.TwoShotChance, 0, 1);
                 read.StillChance = Math.Clamp(read.StillChance, 0, 1);
+                read.SequenceBeatsChance = Math.Clamp(read.SequenceBeatsChance, 0, 1);
+                read.FewestScenesPerStep = Math.Clamp(read.FewestScenesPerStep, 2, MostScenesInAStep);
+                read.MostScenesPerStep = Math.Clamp(read.MostScenesPerStep, read.FewestScenesPerStep, MostScenesInAStep);
                 read.MotionZoomChance = Math.Clamp(read.MotionZoomChance, 0, 1);
                 read.MotionFaceChance = Math.Clamp(read.MotionFaceChance, 0, 1);
                 // A file from before the four odds: about the mix its single slider gave, so nobody's look changes.
@@ -769,6 +782,23 @@ namespace ModernImageViewer
             cell.Photo.Faces.Count > 0
                 ? SubjectOnCanvas(cell, canvasW, canvasH)
                 : PointForNormalized(cell, cell.Photo.FocusX, cell.Photo.FocusY, canvasW, canvasH);
+
+        /// <summary>The faces of a cell's image worth a view of their own, largest first.</summary>
+        public static List<UnitRect> FacesLargestFirst(ComposedCell cell) =>
+            cell.Photo.Faces.Where(f => f.Area > 0.0015).OrderByDescending(f => f.Area).ToList();
+
+        /// <summary>Where one face sits on the canvas, as shares, and how far a camera may zoom on it alone: it takes at most
+        /// 85% of the view, and the photo is never shown past twice its own pixels.</summary>
+        public static ((double X, double Y) Point, double MostZoom) OnFace(ComposedCell cell, UnitRect face, double canvasW, double canvasH)
+        {
+            var point = PointForNormalized(cell, face.X + face.W / 2, face.Y + face.H / 2, canvasW, canvasH);
+            var a = PointForNormalized(cell, face.X, face.Y, canvasW, canvasH);
+            var b = PointForNormalized(cell, face.X + face.W, face.Y + face.H, canvasW, canvasH);
+            double share = Math.Max(Math.Abs(b.X - a.X), Math.Abs(b.Y - a.Y));
+            double most = MostEnlarged * cell.Photo.Width / Math.Max(1, cell.ImageWidth);
+            if (share > 0) most = Math.Min(most, FacesKept / share);
+            return (point, Math.Clamp(most, 1, SurpriseOptions.MostOfAnyZoom));
+        }
 
         /// <summary>
         /// How far a camera may zoom on a one-image layout: the faces take at most 85% of the view, all of them in, and the

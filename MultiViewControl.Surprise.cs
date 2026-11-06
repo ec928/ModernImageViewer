@@ -1201,6 +1201,14 @@ namespace ModernImageViewer
                     0, 100, 5, options.StillChance * 100,
                     v => v < 1 ? "Off" : $"{v:0}%",
                     (o, v) => o.StillChance = v / 100);
+                Slide(column, "Sequence beats", "The chance that a step of Play or of a drafted show is more than one scene, each a closer view of the one before: a group, then one image from it, then its faces. Each is a kept scene you can step back to.",
+                    0, 100, 5, options.SequenceBeatsChance * 100,
+                    v => v < 1 ? "Off" : $"{v:0}%",
+                    (o, v) => o.SequenceBeatsChance = v / 100);
+                RangeRow(column, "Scenes per step", "How many scenes a step that rolls Sequence beats may be. It stops early when no closer view is left.",
+                    2, SurpriseOptions.MostScenesInAStep, 1, options.FewestScenesPerStep, options.MostScenesPerStep,
+                    (a, b) => a == b ? $"{a:0}" : $"{a:0} to {b:0}",
+                    (o, a, b) => { o.FewestScenesPerStep = (int)Math.Round(a); o.MostScenesPerStep = (int)Math.Round(Math.Max(a, b)); });
                 Toggle(column, "Log Play timing", "Temporary, for measuring: Play writes how long it takes to show each scene to play-timing.log in the app's folder. Timings only, no file names.",
                     options.LogPlayTiming, (o, v) => o.LogPlayTiming = v);
 
@@ -3886,8 +3894,9 @@ namespace ModernImageViewer
                     if (settings.SkipScreens) facts = LayoutComposer.LeaveOutScreensAndRepeats(facts);
                     var previous = show.Scenes.Count > 0 ? show.Scenes[^1] : null;
                     // The hand is the scene: its size was already rolled in the Images per scene range.
-                    scene = await ShowDirector.DraftSceneAsync(facts, settings, ActualWidth, ActualHeight, previous, takeAll: true);
-                    PlayTiming.Write($"scene {show.Scenes.Count + 1} drafted: {chosen.Count} images, faces and sizes read in {read - dealt} ms, laid out in {PlayTiming.Now - read} ms");
+                    var step = await ShowDirector.DraftStepAsync(facts, settings, ActualWidth, ActualHeight, previous, takeAll: true);
+                    scene = step.Count > 0 ? step[0] : null;
+                    PlayTiming.Write($"scene {show.Scenes.Count + 1} drafted: {chosen.Count} images, {step.Count} scenes, faces and sizes read in {read - dealt} ms, laid out in {PlayTiming.Now - read} ms");
                     if (!Current()) return;
                     // A hand that cannot be laid out, such as files that will not open: the next hand may. Five in a row
                     // means nothing left can be.
@@ -3897,7 +3906,10 @@ namespace ModernImageViewer
                         continue;
                     }
                     failedHands = 0;
-                    show.Scenes.Add(scene);
+                    show.Scenes.AddRange(step);
+                    // Every scene of the step shows in the storyboard; the last is announced below, as a single scene was.
+                    foreach (var earlier in step.Take(step.Count - 1)) _sceneAddedBehindDrawer?.Invoke(show, earlier);
+                    scene = step[^1];
                 }
                 finally
                 {
@@ -4059,9 +4071,12 @@ namespace ModernImageViewer
                 _surpriseSettling = false;
             }
 
+            // Before a Cut to a closer view of this image the move ends with the hold: its end frame is where the next starts.
+            bool cutNext = currentIndex + 1 < visibleScenes.Count && visibleScenes[currentIndex + 1].Transition == nameof(LayoutTransition.Cut);
+            double overrun = cutNext ? 0 : CameraOverrunSeconds;
             if (scene.CameraOverride != null)
             {
-                var move = scene.CameraOverride.ToCameraMove(_layoutSeconds + CameraOverrunSeconds);
+                var move = scene.CameraOverride.ToCameraMove(_layoutSeconds + overrun);
                 if (move != null)
                 {
                     _lastCameraKind = move.Kind;
@@ -4971,6 +4986,10 @@ namespace ModernImageViewer
                     ContinueOutgoing(400);
                     Animate(cover, "Opacity", 1, 0, 400);
                     Animate(dark, "Opacity", 1, 0, 550, after: 450);
+                    break;
+                case LayoutTransition.Cut:
+                    // A closer view of the same picture: nothing on the canvas changes but the camera.
+                    Animate(cover, "Opacity", 1, 0, 1);
                     break;
                 case LayoutTransition.Slide:
                     int way = Random.Shared.Next(3);

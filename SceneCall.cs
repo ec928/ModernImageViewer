@@ -28,7 +28,9 @@ namespace ModernImageViewer
         CameraKind? LastKind = null,
         KeptLayout? Keep = null,
         double RasterScale = 1,
-        string? OnlyDesign = null);
+        string? OnlyDesign = null,
+        UnitRect? Face = null,
+        CameraView? StartFrom = null);
 
     /// <summary>
     /// One layout and one move. The composition is null only when the call kept a layout it was given as faces alone.
@@ -70,11 +72,37 @@ namespace ModernImageViewer
             double amount = options.PickMotion(random);
             double seconds = request.HoldSeconds + OverrunSeconds;
             var one = composition?.Cells.Where(c => c.Photo != null && !string.IsNullOrEmpty(c.Photo.Path)).Take(2).ToList();
+            if (request.Face is UnitRect face && one is { Count: 1 })
+                return new SceneResult(composition, FaceMove(one[0], face, composition!, request.StartFrom, options, seconds, random), amount);
             var move = one is { Count: 1 }
                 ? OneImageMove(one[0], composition!, subjects, options, amount, seconds, request.LastKind, random)
                 : CameraMove.Plan(subjects, amount, options.MotionZoomChance, options.MotionFaceChance,
                     seconds, request.LastKind, random, options.ForcedCameraKind, options.CameraStyle());
             return new SceneResult(composition, move, move == null ? 0 : amount);
+        }
+
+        /// <summary>
+        /// A view of one face of a one-image layout, the next scene of a sequence beat: either a snap from where the last
+        /// scene ended in to the face, then a slow push, or the face already framed and pushing in slowly. The zoom is from
+        /// the Zoom range, never past where the face would take 85% of the view or the photo show past its detail.
+        /// </summary>
+        private static CameraMove FaceMove(ComposedCell cell, UnitRect face, Composition composition, CameraView? startFrom,
+            SurpriseOptions options, double seconds, Random random)
+        {
+            var (point, mostZoom) = LayoutComposer.OnFace(cell, face, composition.Width, composition.Height);
+            var start = (startFrom ?? CameraView.Whole) with { Angle = 0 };
+            double wanted = options.MostZoom > 1 ? options.PickZoom(random) : 1.6;
+            double close = Math.Min(mostZoom, Math.Max(start.Zoom + 0.15, wanted));
+            var closeView = new CameraView(close, point.X, point.Y).Covered();
+            var nearer = new CameraView(Math.Min(mostZoom, close * 1.06), point.X, point.Y).Covered();
+            var calm = CameraCurves.Pick(options.CurveOdds, false, random);
+            if (random.Next(2) == 0)
+                return new CameraMove(CameraKind.ZoomIn, new[]
+                {
+                    new CameraShot(start.Covered(), closeView, 0.3, CameraCurve.Snap, 0),
+                    new CameraShot(closeView, nearer, 0.7, calm, 0)
+                }, seconds);
+            return new CameraMove(CameraKind.ZoomIn, new[] { new CameraShot(closeView, nearer, 1, calm, 0) }, seconds);
         }
 
         /// <summary>

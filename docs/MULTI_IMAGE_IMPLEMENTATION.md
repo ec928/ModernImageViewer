@@ -14,7 +14,9 @@ storyboard settings in Generator Advanced write into the open cinematic storyboa
 checked: an older app opening a version 2 file (only from the code); no saved show exists on this machine to try. 5a built: Frame color and Frame width reach every frame
 (Gallery wall's card, hero outline, print border, circle outline; Hero, prints and circles were always white), and
 Backdrop odds (vignette, gradient, solid; default Normal, Normal, Rare) every design with a backdrop. 5b, the ambient
-blur backdrop, needs new drawing on screen and in export and waits until 5a has been seen. 3c and 6 not started. "Today" means v0.31.2. File and line references were read on
+blur backdrop, needs new drawing on screen and in export and waits until 5a has been seen. 6 built: Sequence beats (odds, default off) and Scenes per step (2 to 4) in Advanced > Camera until 3c moves them to the
+storyboard; the director writes closer views as kept scenes; Cut between views of one image, no overrun before one.
+Not in the show file yet (3c). Not watched: the Cut and the snap on screen. 3c not started. "Today" means v0.31.2. File and line references were read on
 6 Nov 2026 and will drift.
 
 **How each slice runs**

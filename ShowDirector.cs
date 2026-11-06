@@ -91,10 +91,12 @@ namespace ModernImageViewer
 
                 if (composition == null) continue;
 
-                var scene = BuildScene(composition, options, random, ref lastKind, lastTransition, ref lastWasLong, out var transition);
-                project.Scenes.Add(scene);
 
-                lastRecipe = composition.Recipe;
+                var steps = DraftStep(chunk, composition, options, width, height, random, ref lastKind, lastTransition, ref lastWasLong, out var transition);
+                project.Scenes.AddRange(steps);
+                var scene = steps[^1];
+
+                lastRecipe = scene.Recipe;
                 lastTransition = transition;
 
                 double percent = (double)(i + 1) / totalChunks * 100.0;
@@ -110,7 +112,21 @@ namespace ModernImageViewer
         /// Null when nothing can be laid out.
         /// </summary>
         /// <param name="takeAll">The photos are the scene's hand, already sized within Images per scene: use them all.</param>
-        public static Task<ShowScene?> DraftSceneAsync(IReadOnlyList<PhotoFacts> photos, SurpriseOptions? options,
+        public static async Task<ShowScene?> DraftSceneAsync(IReadOnlyList<PhotoFacts> photos, SurpriseOptions? options,
+            double canvasWidth, double canvasHeight, ShowScene? previous, bool takeAll = false)
+        {
+            // One scene: Sequence beats are for a step of Play or of a drafted show, not for adding one layout.
+            var one = options == null ? new SurpriseOptions() : SurpriseOptions.FromJson(options.ToJson());
+            one.SequenceBeatsChance = 0;
+            var step = await DraftStepAsync(photos, one, canvasWidth, canvasHeight, previous, takeAll);
+            return step.Count > 0 ? step[0] : null;
+        }
+
+        /// <summary>
+        /// One step of a show from <paramref name="photos"/>: one scene, or, by Sequence beats, that scene and closer views
+        /// of it (design, the director). Empty when nothing can be laid out.
+        /// </summary>
+        public static Task<List<ShowScene>> DraftStepAsync(IReadOnlyList<PhotoFacts> photos, SurpriseOptions? options,
             double canvasWidth, double canvasHeight, ShowScene? previous, bool takeAll = false)
         {
             options ??= new SurpriseOptions();
@@ -119,7 +135,7 @@ namespace ModernImageViewer
             return Task.Run(() =>
             {
                 var usable = photos.Where(p => p.Width >= 1 && p.Height >= 1).ToList();
-                if (usable.Count == 0) return null;
+                if (usable.Count == 0) return new List<ShowScene>();
 
                 var random = new Random(Random.Shared.Next());
                 int fewest = Math.Clamp(options.FewestPictures, 1, MosaicLayout.MaxShown);
@@ -128,13 +144,13 @@ namespace ModernImageViewer
 
                 var composition = SceneCall.Make(new SceneRequest(chunk, width, height, options, 0, random.Next(), previous?.Recipe))?.Composition
                     ?? SceneCall.Make(new SceneRequest(new[] { chunk[0] }, width, height, options, 0, random.Next()))?.Composition;
-                if (composition == null) return (ShowScene?)null;
+                if (composition == null) return new List<ShowScene>();
 
                 CameraKind? lastKind = KindOf(previous?.CameraOverride?.Kind);
                 // Short and long take turns across scenes drafted one at a time, as they do in a show drafted at once.
                 bool? lastWasLong = options.WasLong(previous?.DwellSeconds);
                 LayoutTransition? lastTransition = Enum.TryParse<LayoutTransition>(previous?.Transition, out var parsed) ? parsed : null;
-                return BuildScene(composition, options, random, ref lastKind, lastTransition, ref lastWasLong, out _);
+                return DraftStep(chunk, composition, options, width, height, random, ref lastKind, lastTransition, ref lastWasLong, out _);
             });
         }
 
@@ -142,8 +158,80 @@ namespace ModernImageViewer
         /// One scene from a finished composition: its hold, the transition into it, and a camera path planned once by
         /// the one engine call, from the same camera settings the canvas uses. A scene that does not move is saved as Still.
         /// </summary>
+        /// <summary>
+        /// A step: the scene from <paramref name="composition"/>, and, when Sequence beats rolls, closer views after it, each
+        /// an ordinary kept scene: a group, then one image from it (the featured one, else rolled, weighted to images with
+        /// faces), then that image's faces, largest first. As many as the Scenes per step roll, fewer when no closer view is
+        /// left. A view of the same image keeps its layout, starts from where the last ended, and comes in by a Cut; a new
+        /// layout takes an ordinary transition. Inside such a step no call plays a two-shot: the step already is the second
+        /// view. Each scene's hold is from Duration.
+        /// </summary>
+        private static List<ShowScene> DraftStep(List<PhotoFacts> hand, Composition composition, SurpriseOptions options,
+            double width, double height, Random random, ref CameraKind? lastKind, LayoutTransition? lastTransition,
+            ref bool? lastWasLong, out LayoutTransition transition)
+        {
+            bool beats = options.SequenceBeatsChance > 0 && random.NextDouble() < options.SequenceBeatsChance;
+            if (!beats)
+                return new List<ShowScene> { BuildScene(composition, options, random, ref lastKind, lastTransition, ref lastWasLong, out transition, out _) };
+
+            var step = SurpriseOptions.FromJson(options.ToJson());
+            step.TwoShotChance = 0;
+            int count = random.Next(Math.Min(step.FewestScenesPerStep, step.MostScenesPerStep), step.MostScenesPerStep + 1);
+            var scenes = new List<ShowScene> { BuildScene(composition, step, random, ref lastKind, lastTransition, ref lastWasLong, out transition, out var lastMove) };
+            var current = composition;
+            int faceIndex = 0;
+            while (scenes.Count < count)
+            {
+                var cells = current.Cells.Where(c => c.Photo != null && !string.IsNullOrEmpty(c.Photo.Path)).ToList();
+                if (cells.Count > 1)
+                {
+                    var photo = cells.Select(c => c.Photo).FirstOrDefault(p => p.Featured) ?? Weighted(cells.Select(c => c.Photo).ToList(), random);
+                    var one = SceneCall.Make(new SceneRequest(new[] { photo }, width, height, step, 0, random.Next()))?.Composition;
+                    if (one == null) break;
+                    scenes.Add(BuildScene(one, step, random, ref lastKind, transition, ref lastWasLong, out transition, out lastMove));
+                    current = one;
+                    faceIndex = 0;
+                    continue;
+                }
+                if (cells.Count != 1) break;
+                var faces = LayoutComposer.FacesLargestFirst(cells[0]);
+                if (faceIndex >= faces.Count) break;
+                double dwell = step.NextPlaySeconds(random, 1, ref lastWasLong);
+                var faceMove = SceneCall.Make(new SceneRequest(Array.Empty<PhotoFacts>(), current.Width, current.Height, step, dwell,
+                    random.Next(), Keep: KeptLayout.Of(current), Face: faces[faceIndex], StartFrom: lastMove?.Shots[^1].To))?.Move;
+                if (faceMove == null) break;
+                scenes.Add(new ShowScene
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Title = $"{current.Recipe} (face)",
+                    Recipe = current.Recipe,
+                    Layout = current.ToLayoutFile(),
+                    DwellSeconds = dwell,
+                    Transition = LayoutTransition.Cut.ToString(),
+                    CameraOverride = CameraKeyframeOverride.FromMove(faceMove, faceMove.Kind.ToString())
+                });
+                lastMove = faceMove;
+                lastKind = faceMove.Kind;
+                faceIndex++;
+            }
+            return scenes;
+        }
+
+        /// <summary>One image from a group for the closer view: images with faces three times as likely.</summary>
+        private static PhotoFacts Weighted(List<PhotoFacts> photos, Random random)
+        {
+            double total = photos.Sum(p => p.Faces.Count > 0 ? 3.0 : 1.0);
+            double roll = random.NextDouble() * total;
+            foreach (var p in photos)
+            {
+                roll -= p.Faces.Count > 0 ? 3.0 : 1.0;
+                if (roll < 0) return p;
+            }
+            return photos[^1];
+        }
+
         private static ShowScene BuildScene(Composition composition, SurpriseOptions options, Random random,
-            ref CameraKind? lastKind, LayoutTransition? lastTransition, ref bool? lastWasLong, out LayoutTransition transition)
+            ref CameraKind? lastKind, LayoutTransition? lastTransition, ref bool? lastWasLong, out LayoutTransition transition, out CameraMove? planned)
         {
             double dwell = options.NextPlaySeconds(random, composition.Cells.Count, ref lastWasLong);
             transition = options.PickTransition(lastTransition, random);
@@ -160,6 +248,7 @@ namespace ModernImageViewer
 
             var move = SceneCall.Make(new SceneRequest(Array.Empty<PhotoFacts>(), composition.Width, composition.Height, options,
                 dwell, random.Next(), LastKind: lastKind, Keep: KeptLayout.Of(composition)))?.Move;
+            planned = move;
             if (move == null)
             {
                 scene.CameraOverride = new CameraKeyframeOverride(
