@@ -1065,6 +1065,9 @@ namespace ModernImageViewer
         public const string Solid = "Solid";
         public const string Gradient = "Gradient";
         public const string Vignette = "Vignette";
+        /// <summary>The layout's largest picture, darkened and blurred, behind it. Chosen by the generator's backdrop odds; an
+        /// older version shows the plain colour instead.</summary>
+        public const string AmbientBlur = "AmbientBlur";
         public const string DefaultColor = "#FF0A0A0A";
 
         public static readonly string[] Surfaces = { Solid, Gradient, Vignette };

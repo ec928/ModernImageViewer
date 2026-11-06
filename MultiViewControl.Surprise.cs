@@ -939,6 +939,8 @@ namespace ModernImageViewer
                     options.BackdropGradientOdds, (o, v) => o.BackdropGradientOdds = v);
                 BackdropSlide("Backdrop: solid", "How often a backdrop is one flat colour. Far left turns it off.",
                     options.BackdropSolidOdds, (o, v) => o.BackdropSolidOdds = v);
+                BackdropSlide("Backdrop: ambient blur", "How often a backdrop is the layout's largest picture, darkened and blurred, as Cinematic Slideshow shows a portrait. Far left turns it off.",
+                    options.BackdropAmbientBlurOdds, (o, v) => o.BackdropAmbientBlurOdds = v);
             }
 
             foreach (string design in LayoutComposer.Recipes)

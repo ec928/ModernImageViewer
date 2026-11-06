@@ -218,15 +218,20 @@ namespace ModernImageViewer
         public double BackdropVignetteOdds { get; set; } = 1;
         public double BackdropGradientOdds { get; set; } = 1;
         public double BackdropSolidOdds { get; set; } = 0.25;
+        public double BackdropAmbientBlurOdds { get; set; } = 0.25;
 
         /// <summary>The backdrop this layout gets, by the odds. With every one off, a plain colour.</summary>
         public string PickBackdrop(Random random)
         {
             double vignette = Math.Max(0, BackdropVignetteOdds), gradient = Math.Max(0, BackdropGradientOdds), solid = Math.Max(0, BackdropSolidOdds);
-            double sum = vignette + gradient + solid;
+            double blur = Math.Max(0, BackdropAmbientBlurOdds);
+            double sum = vignette + gradient + solid + blur;
             if (sum <= 0) return CanvasLook.Solid;
             double roll = random.NextDouble() * sum;
-            return roll < vignette ? CanvasLook.Vignette : roll < vignette + gradient ? CanvasLook.Gradient : CanvasLook.Solid;
+            return roll < vignette ? CanvasLook.Vignette
+                : roll < vignette + gradient ? CanvasLook.Gradient
+                : roll < vignette + gradient + solid ? CanvasLook.Solid
+                : CanvasLook.AmbientBlur;
         }
         public bool KeepCanvas { get; set; }
         /// <summary>
@@ -459,6 +464,7 @@ namespace ModernImageViewer
                 read.BackdropVignetteOdds = Math.Clamp(read.BackdropVignetteOdds, 0, MostFavouredDesign);
                 read.BackdropGradientOdds = Math.Clamp(read.BackdropGradientOdds, 0, MostFavouredDesign);
                 read.BackdropSolidOdds = Math.Clamp(read.BackdropSolidOdds, 0, MostFavouredDesign);
+                read.BackdropAmbientBlurOdds = Math.Clamp(read.BackdropAmbientBlurOdds, 0, MostFavouredDesign);
                 read.FewestPictures = Math.Clamp(read.FewestPictures, FewestAllowed, MosaicLayout.MaxShown);
                 read.MostPictures = Math.Clamp(read.MostPictures, read.FewestPictures, MosaicLayout.MaxShown);
                 read.TogetherChance = Math.Clamp(read.TogetherChance, 0, 1);

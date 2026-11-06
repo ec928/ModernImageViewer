@@ -13,8 +13,9 @@ plays as before, and a version 1 Cinematic show takes the app's cinematic values
 storyboard settings in Generator Advanced write into the open cinematic storyboard, as they always applied to it. Not
 checked: an older app opening a version 2 file (only from the code); no saved show exists on this machine to try. 5a built: Frame color and Frame width reach every frame
 (Gallery wall's card, hero outline, print border, circle outline; Hero, prints and circles were always white), and
-Backdrop odds (vignette, gradient, solid; default Normal, Normal, Rare) every design with a backdrop. 5b, the ambient
-blur backdrop, needs new drawing on screen and in export and waits until 5a has been seen. 6 built: Sequence beats (odds, default off) and Scenes per step (2 to 4) in Advanced > Camera until 3c moves them to the
+Backdrop odds (vignette, gradient, solid; default Normal, Normal, Rare) every design with a backdrop. 5b built: ambient
+blur (Rare) joins the backdrop odds; on screen the plain colour shows until the blurred copy is made; export draws
+it too. Not watched on screen, and not exported to check. 6 built: Sequence beats (odds, default off) and Scenes per step (2 to 4) in Advanced > Camera until 3c moves them to the
 storyboard; the director writes closer views as kept scenes; Cut between views of one image, no overrun before one.
 Not in the show file yet (3c). Not watched: the Cut and the snap on screen. 3c not started. "Today" means v0.31.2. File and line references were read on
 6 Nov 2026 and will drift.

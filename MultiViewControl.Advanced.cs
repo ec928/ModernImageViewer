@@ -671,13 +671,13 @@ namespace ModernImageViewer
             {
                 string chosen = hex;
                 color.Items.Add(MakeChoiceItem(name, string.Equals(_canvasColor, hex, StringComparison.OrdinalIgnoreCase),
-                    () => SetCanvas(chosen, _canvasSurface)));
+                    () => SetCanvas(chosen, _canvasSurface, _blurPath)));
             }
             bool customCanvas = !CanvasLook.Colors.Any(c => string.Equals(c.Hex, _canvasColor, StringComparison.OrdinalIgnoreCase));
             color.Items.Add(new MenuFlyoutSeparator());
             color.Items.Add(MakeChoiceItem("Custom…", customCanvas, () => PickCustomColor(() => _canvasColor, hex =>
             {
-                SetCanvas(hex, _canvasSurface);
+                SetCanvas(hex, _canvasSurface, _blurPath);
                 NoteUserAction();
             })));
             menu.Items.Add(color);
@@ -778,10 +778,17 @@ namespace ModernImageViewer
             _canvasFrame = frame?.Clone() ?? FrameLooks.Flush();
             ApplyCanvasFrame();
         }
-        private void SetCanvas(string? color, string? surface)
+        // The picture an ambient blur backdrop is made from, and which blur is wanted, so a slower earlier one does not land.
+        private string? _blurPath;
+        private int _blurTicket;
+
+        private void SetCanvas(string? color, string? surface, string? blurPath = null)
         {
             _canvasColor = string.IsNullOrWhiteSpace(color) ? CanvasLook.DefaultColor : color;
-            _canvasSurface = CanvasLook.Surfaces.Contains(surface) ? surface! : CanvasLook.Solid;
+            _canvasSurface = CanvasLook.Surfaces.Contains(surface) || (surface == CanvasLook.AmbientBlur && !string.IsNullOrEmpty(blurPath))
+                ? surface! : CanvasLook.Solid;
+            _blurPath = blurPath;
+            int ticket = ++_blurTicket;
             var near = ToColor(FrameColor.Parse(_canvasColor));
             var far = ToColor(CanvasLook.FarColor(_canvasColor));
             if (_canvasSurface == CanvasLook.Gradient)
@@ -800,7 +807,30 @@ namespace ModernImageViewer
             }
             else
             {
+                // A blur shows the plain colour until it is made, so a slow picture never leaves the backdrop empty.
                 RootGrid.Background = new SolidColorBrush(near);
+                if (_canvasSurface == CanvasLook.AmbientBlur && _blurPath is string path) _ = ShowAmbientBlurAsync(path, ticket);
+            }
+        }
+
+        private async System.Threading.Tasks.Task ShowAmbientBlurAsync(string path, int ticket)
+        {
+            try
+            {
+                var device = CanvasDevice.GetSharedDevice();
+                using var blurred = await BlurredBackdropAsync(path, device);
+                if (blurred == null || ticket != _blurTicket) return;
+                var software = await Windows.Graphics.Imaging.SoftwareBitmap.CreateCopyFromSurfaceAsync(blurred, Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied);
+                if (software.BitmapPixelFormat != Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8)
+                    software = Windows.Graphics.Imaging.SoftwareBitmap.Convert(software, Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8, Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied);
+                var source = new Microsoft.UI.Xaml.Media.Imaging.SoftwareBitmapSource();
+                await source.SetBitmapAsync(software);
+                if (ticket != _blurTicket) return;
+                RootGrid.Background = new ImageBrush { ImageSource = source, Stretch = Stretch.UniformToFill };
+            }
+            catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException or ArgumentException or System.Runtime.InteropServices.COMException)
+            {
+                // The plain colour stays.
             }
         }
     }

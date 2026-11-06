@@ -48,8 +48,8 @@ namespace ModernImageViewer.Tests
         public void Backdrop_odds_decide_the_backdrop()
         {
             // Fresh options each time: Only() turns the other designs off in the options it is given.
-            SurpriseOptions SolidOnly() => new() { BackdropVignetteOdds = 0, BackdropGradientOdds = 0, BackdropSolidOdds = 1 };
-            SurpriseOptions VignetteOnly() => new() { BackdropVignetteOdds = 1, BackdropGradientOdds = 0, BackdropSolidOdds = 0 };
+            SurpriseOptions SolidOnly() => new() { BackdropVignetteOdds = 0, BackdropGradientOdds = 0, BackdropSolidOdds = 1, BackdropAmbientBlurOdds = 0 };
+            SurpriseOptions VignetteOnly() => new() { BackdropVignetteOdds = 1, BackdropGradientOdds = 0, BackdropSolidOdds = 0, BackdropAmbientBlurOdds = 0 };
             foreach (string design in Framed)
                 for (int seed = 0; seed < 10; seed++)
                 {
@@ -62,6 +62,10 @@ namespace ModernImageViewer.Tests
             Assert.InRange(surfaces.GetValueOrDefault(CanvasLook.Solid), 15, 70);
             Assert.InRange(surfaces.GetValueOrDefault(CanvasLook.Vignette), 100, 170);
             Assert.InRange(surfaces.GetValueOrDefault(CanvasLook.Gradient), 100, 170);
+            Assert.InRange(surfaces.GetValueOrDefault(CanvasLook.AmbientBlur), 10, 60);
+            // Ambient blur alone is every backdrop.
+            var blurOnly = Only(LayoutComposer.Circles, new SurpriseOptions { BackdropVignetteOdds = 0, BackdropGradientOdds = 0, BackdropSolidOdds = 0, BackdropAmbientBlurOdds = 1 });
+            Assert.Equal(CanvasLook.AmbientBlur, LayoutComposer.Compose(Photos(4), 1920, 1080, 2, options: blurOnly)!.CanvasSurface);
         }
     }
 }

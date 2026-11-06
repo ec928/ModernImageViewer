@@ -948,6 +948,11 @@ namespace ModernImageViewer
             var device = CanvasDevice.GetSharedDevice();
             var target = new CanvasRenderTarget(device, width, height, 96);
             double frameScale = width / (shots.Count > 0 ? shots[0].CanvasW : width);
+            // Made before the drawing starts: nothing is awaited while a drawing session is open.
+            string? blurPath = canvasSurface == CanvasLook.AmbientBlur
+                ? shots.Where(s => !string.IsNullOrEmpty(s.Path)).OrderByDescending(s => s.Card.Width * s.Card.Height).Select(s => s.Path).FirstOrDefault()
+                : null;
+            using var blurred = blurPath == null ? null : await BlurredBackdropAsync(blurPath, device);
             using (var clear = target.CreateDrawingSession())
             {
                 var near = ToColor(FrameColor.Parse(canvasColor));
@@ -971,6 +976,16 @@ namespace ModernImageViewer
                         RadiusY = height * 0.75f
                     };
                     clear.FillRectangle(0, 0, width, height, brush);
+                }
+                else if (canvasSurface == CanvasLook.AmbientBlur)
+                {
+                    if (blurred != null)
+                    {
+                        float bw = blurred.SizeInPixels.Width, bh = blurred.SizeInPixels.Height;
+                        float cover = Math.Max(width / bw, height / bh);
+                        float dw = bw * cover, dh = bh * cover;
+                        clear.DrawImage(blurred, new Rect((width - dw) / 2, (height - dh) / 2, dw, dh), blurred.Bounds, 1f, CanvasImageInterpolation.Linear);
+                    }
                 }
                 DrawCanvasMat(clear, device, canvasFrame, width, height, frameScale);
                 DrawCanvasShadow(clear, device, canvasFrame, width, height, frameScale);
@@ -1451,6 +1466,35 @@ namespace ModernImageViewer
             }
         }
 
+        /// <summary>The picture an ambient blur backdrop is made from: the layout's largest floating cell, else its first photo.</summary>
+        private static string? BlurPictureOf(MultiViewLayoutFile layoutFile) =>
+            layoutFile.Freeform?.Where(c => !string.IsNullOrEmpty(c.Path)).OrderByDescending(c => c.Width * c.Height).Select(c => c.Path).FirstOrDefault()
+            ?? layoutFile.Photos?.Select(p => p.Path).FirstOrDefault(p => !string.IsNullOrEmpty(p));
+
+        /// <summary>
+        /// The ambient blur backdrop: the picture small, darkened by half and blurred, as Cinematic Slideshow bakes its
+        /// background. Drawn stretched to cover the canvas.
+        /// </summary>
+        private static async Task<CanvasRenderTarget?> BlurredBackdropAsync(string path, CanvasDevice device)
+        {
+            using var small = await DecodeForCellAsync(path, device, 480, 480);
+            if (small == null) return null;
+            var size = small.SizeInPixels;
+            using var dim = new Microsoft.Graphics.Canvas.Effects.ColorMatrixEffect
+            {
+                Source = small,
+                ColorMatrix = new Microsoft.Graphics.Canvas.Effects.Matrix5x4 { M11 = 0.5f, M22 = 0.5f, M33 = 0.5f, M44 = 1f }
+            };
+            using var blur = new Microsoft.Graphics.Canvas.Effects.GaussianBlurEffect { Source = dim, BlurAmount = 6f, BorderMode = Microsoft.Graphics.Canvas.Effects.EffectBorderMode.Hard };
+            var baked = new CanvasRenderTarget(device, size.Width, size.Height, 96);
+            using (var ds = baked.CreateDrawingSession())
+            {
+                ds.Clear(Microsoft.UI.Colors.Transparent);
+                ds.DrawImage(blur);
+            }
+            return baked;
+        }
+
         private static async Task<CanvasBitmap?> DecodeForCellAsync(string path, CanvasDevice device, int decodeW, int decodeH)
         {
             StorageFile imageFile = await StorageFile.GetFileFromPathAsync(path);
@@ -1796,7 +1840,7 @@ namespace ModernImageViewer
 
             // Clear the cells of the session being replaced before anything counts them.
             ClearAllFreeformCards();
-            SetCanvas(layoutFile.Canvas?.BackgroundColor, layoutFile.Canvas?.Surface);
+            SetCanvas(layoutFile.Canvas?.BackgroundColor, layoutFile.Canvas?.Surface, BlurPictureOf(layoutFile));
             SetCanvasFrame(layoutFile.Canvas?.Frame);
 
             if (layoutFile.Photos != null && layoutFile.Photos.Count > 0)
