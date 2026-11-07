@@ -17,6 +17,9 @@ namespace ModernImageViewer
 
         private const string MultiImagePreset = "Multi-Image";
 
+        // Whether the Show card's Designs section is open; it starts folded, as Engine settings' sections do.
+        private bool _showDesignsOpen;
+
         /// <summary>The open show's values, for a change: the show takes every value it is played with now, if it held none.</summary>
         private ShowGlobalDefaults HoldingShowValues()
         {
@@ -55,7 +58,7 @@ namespace ModernImageViewer
             var dialog = new ContentDialog
             {
                 Title = "Start a new show?",
-                Content = $"The storyboard's {count} scene{(count == 1 ? "" : "s")} will be replaced. Save it first from the storyboard to keep it.",
+                Content = $"The show's {count} scene{(count == 1 ? "" : "s")} will be replaced. Save it first from Save/Load to keep it.",
                 PrimaryButtonText = "New show",
                 CloseButtonText = "Cancel",
                 DefaultButton = ContentDialogButton.Close,
@@ -273,7 +276,7 @@ namespace ModernImageViewer
                 {
                     Text = making
                         ? "The scene on screen stays. Scenes not yet shown are made again with these."
-                        : "Scenes already in the storyboard stay as they are. These are used for scenes Play has not made yet.",
+                        : "Scenes already made stay as they are. These are used for scenes Play has not made yet.",
                     FontSize = 11,
                     Opacity = 0.7,
                     TextWrapping = TextWrapping.Wrap,
@@ -353,7 +356,31 @@ namespace ModernImageViewer
                 var applyBeats = Settled(() => ChangeShowValues(v => v.SequenceBeats = Math.Clamp(beats.Value, 0, 100) / 100.0, changed));
                 beats.ValueChanged += (_, e) => { beatsReadout.Text = Chance(e.NewValue); ShowScenesUsed(); applyBeats(); };
 
-                Heading("Designs");
+                // Designs fold under one header, as Engine settings' sections do, so the card fits beside an open drawer.
+                int designsOn = LayoutComposer.Recipes.Count(r => !values.IsDesignOff(r));
+                var designsBody = new StackPanel { Spacing = 2, Visibility = _showDesignsOpen ? Visibility.Visible : Visibility.Collapsed };
+                var designsTitle = new TextBlock { Text = "Designs", FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+                var designsSummary = new TextBlock { FontSize = 12, Opacity = 0.75, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
+                void ShowDesignsSummary() => designsSummary.Text = (designsOn == LayoutComposer.Recipes.Length ? "All 6" : $"{designsOn} of 6") + (_showDesignsOpen ? "  \u25B4" : "  \u25BE");
+                ShowDesignsSummary();
+                var designsHead = new Grid { MinHeight = 32, Margin = new Thickness(0, 8, 0, 0), Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent) };
+                designsHead.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                designsHead.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                Grid.SetColumn(designsSummary, 1);
+                designsHead.Children.Add(designsTitle);
+                designsHead.Children.Add(designsSummary);
+                var designsToggle = new Button { Content = designsHead, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(0), Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent), BorderThickness = new Thickness(0) };
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(designsToggle, "Designs");
+                ToolTipService.SetToolTip(designsToggle, "How often this show uses each design.");
+                designsToggle.Click += (_, _) =>
+                {
+                    _showDesignsOpen = !_showDesignsOpen;
+                    designsBody.Visibility = _showDesignsOpen ? Visibility.Visible : Visibility.Collapsed;
+                    ShowDesignsSummary();
+                };
+                valuesPanel.Children.Add(designsToggle);
+                valuesPanel.Children.Add(designsBody);
+                into = designsBody;
                 static string Step(double v) => v <= -1.1 ? "Off" : v < -0.6 ? "Rare" : v < -0.15 ? "Less" : v <= 0.15 ? "Normal" : v <= 0.6 ? "More" : "Often";
                 foreach (string design in LayoutComposer.Recipes)
                 {

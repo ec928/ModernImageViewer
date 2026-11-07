@@ -216,7 +216,7 @@ namespace ModernImageViewer
 
             // Named for what it opens, the drawer, so "Storyboard" is on the bar once, on the mode switch beside it.
             // The count is the tab it opens on: images off the canvas, or scenes.
-            string name = storyboard ? "Storyboard" : "Image Pool";
+            string name = storyboard ? "Show" : "Image Pool";
             int count = storyboard ? scenes : offCanvas;
             string label = count > 0 ? $"Drawer ({count})" : "Drawer";
             if (StoryDeckText != null) StoryDeckText.Text = label;
@@ -228,8 +228,8 @@ namespace ModernImageViewer
                     ? (scenes == 1 ? "1 scene" : $"{scenes} scenes")
                     : (offCanvas == 1 ? "1 image not on the canvas" : $"{offCanvas} images not on the canvas");
                 string tip = open
-                    ? $"Close the drawer. B opens it on the storyboard."
-                    : $"Open the drawer on the {(storyboard ? "storyboard" : "image pool")}: {what}. B opens it on the storyboard.";
+                    ? $"Close the drawer. B opens it on the show."
+                    : $"Open the drawer on the {(storyboard ? "show" : "image pool")}: {what}. B opens it on the show.";
                 ToolTipService.SetToolTip(StoryDeckButton, tip);
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(StoryDeckButton, label);
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetHelpText(StoryDeckButton, $"Opens on the {name}: {what}");

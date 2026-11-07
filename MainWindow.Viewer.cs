@@ -954,7 +954,7 @@ namespace ModernImageViewer
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Failed to open storyboard file: {ex.Message}");
+                Debug.WriteLine($"Failed to open the show file: {ex.Message}");
             }
         }
 
@@ -1207,7 +1207,6 @@ namespace ModernImageViewer
             MultiSelectPlayRule.Visibility = other;
             MultiSelectPlayButton.Visibility = other;
             MultiSelectStoryboardButton.Visibility = other;
-            MultiSelectCinematicStoryboardButton.Visibility = other;
             MultiSelectDeleteRule.Visibility = other;
             MultiSelectDeleteButton.Visibility = other;
             var wholeFolder = adding && _parkedCell == null ? Visibility.Visible : Visibility.Collapsed;

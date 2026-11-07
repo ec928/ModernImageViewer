@@ -332,7 +332,7 @@
                                     Click="AutoPlayButton_Click"
                                     MinWidth="88"
                                     AutomationProperties.Name="Play auto-play"
-                                    ToolTipService.ToolTip="Play the show: scenes are made as it plays and kept in the storyboard. Space does the same."
+                                    ToolTipService.ToolTip="Play the show: scenes are made as it plays and kept. Space does the same."
                                     Style="{StaticResource QuietButtonStyle}"
                                     Padding="8,5"
                                     CornerRadius="12">
@@ -430,7 +430,7 @@
                             Style="{StaticResource QuietButtonStyle}"
                             Padding="8,5"
                             CornerRadius="12"
-                            ToolTipService.ToolTip="Save the canvas as JPEG or PNG, copy it, or save and open layouts and storyboards (Ctrl+S)">
+                            ToolTipService.ToolTip="Save the canvas as JPEG or PNG, copy it, or save and open layouts and shows (Ctrl+S)">
                         <Button.Flyout>
                             <Flyout x:Name="SaveFlyout" 
                                     Placement="Top"

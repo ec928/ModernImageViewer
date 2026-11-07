@@ -706,7 +706,7 @@ namespace ModernImageViewer
                 body.Children.Add(header);
                 body.Children.Add(new TextBlock
                 {
-                    Text = "Play plays this show: each scene is made from its values and kept in the storyboard, so you can step back to it.",
+                    Text = "Play plays this show: each scene is made from its values and kept, so you can step back to it in the drawer.",
                     FontSize = 11,
                     Opacity = 0.65,
                     TextWrapping = TextWrapping.Wrap,
@@ -1888,7 +1888,7 @@ namespace ModernImageViewer
         private string StoryTabLabel()
         {
             int n = _activeShow?.VisibleSceneCount ?? 0;
-            return n > 0 ? $"Storyboard ({n})" : "Storyboard";
+            return n > 0 ? $"Show ({n})" : "Show";
         }
 
         /// <summary>Opens or closes the drawer on the tab it was last left on. It never changes what Play plays.</summary>
@@ -1990,7 +1990,7 @@ namespace ModernImageViewer
                 Visibility = Visibility.Collapsed,
                 Style = Resources.TryGetValue("QuietButtonStyle", out var clStyle) && clStyle is Style cls ? cls : null
             };
-            ToolTipService.SetToolTip(clearShowBtn, "Clears all scenes from the storyboard.");
+            ToolTipService.SetToolTip(clearShowBtn, "Clears all scenes from the show.");
 
             var close = new Button
             {
@@ -2419,7 +2419,7 @@ namespace ModernImageViewer
                 Padding = new Thickness(14, 4, 14, 4),
                 VerticalAlignment = VerticalAlignment.Center
             };
-            ToolTipService.SetToolTip(playShowDrawerBtn, "Play the storyboard. Space does the same.");
+            ToolTipService.SetToolTip(playShowDrawerBtn, "Play the show. Space does the same.");
             playShowDrawerBtn.Click += async (_, _) =>
             {
                 await PlayStoryboardAsync();
@@ -2428,11 +2428,9 @@ namespace ModernImageViewer
             var storyHeaderRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
             storyHeaderRow.Children.Add(playShowDrawerBtn);
             storyHeaderRow.Children.Add(MakeDivider());
+            // Play makes the show's scenes (R17); the preset and the show's values are on the Show card, opened from Show on
+            // the bar. Add this layout stays: it keeps what is on the canvas as a scene, which Play cannot.
             storyHeaderRow.Children.Add(addCanvasBtn);
-            storyHeaderRow.Children.Add(addNewBtn);
-            storyHeaderRow.Children.Add(MakeDivider());
-            storyHeaderRow.Children.Add(autoDraftBtn);
-            storyHeaderRow.Children.Add(draftRangeBtn);
             storyHeaderRow.Children.Add(MakeDivider());
             storyHeaderRow.Children.Add(storySummary);
             headerMiddle.Children.Add(storyHeaderRow);
@@ -2527,7 +2525,7 @@ namespace ModernImageViewer
             };
             var emptyDesc = new TextBlock
             {
-                Text = "Make a show from the image pool, or use Add this layout for the images on the canvas.",
+                Text = "Press Play: the show's scenes are made as it plays, from the preset on the Show card. Add this layout keeps the images on the canvas as a scene.",
                 FontSize = 12,
                 Opacity = 0.75
             };
@@ -2734,17 +2732,17 @@ namespace ModernImageViewer
                 {
                     double dur = _activeShow!.TotalEstimatedDuration;
                     string length = ShowLength(dur);
-                    // Names the overrides a show was made with, so it is clear what Add new layout will use.
-                    string made = _activeShow.GeneratorOverrides is string set ? $"{set} · " : "";
-                    storySummary.Text = $"{made}{sceneCount} {(sceneCount == 1 ? "scene" : "scenes")} · {length}";
+                    storySummary.Text = $"Preset: {ActivePresetName(_activeShow)} · {sceneCount} {(sceneCount == 1 ? "scene" : "scenes")} · {length}";
                     autoDraftBtn.Content = "Replace show";
                     ToolTipService.SetToolTip(autoDraftBtn, "Makes a new show from the image pool and replaces these scenes. It asks first.");
                 }
                 else
                 {
+                    // One count, said in full: every image in the session is on the canvas or in the Image Pool.
+                    int inPool = TrayImages().Count;
                     storySummary.Text = totalPhotos == 0
-                        ? "No scenes yet"
-                        : $"No scenes yet · {totalPhotos} image{(totalPhotos == 1 ? "" : "s")}";
+                        ? $"Preset: {ActivePresetName(_activeShow)} · No scenes yet"
+                        : $"Preset: {ActivePresetName(_activeShow)} · No scenes yet · {totalPhotos} image{(totalPhotos == 1 ? "" : "s")}: {totalPhotos - inPool} on the canvas, {inPool} in the Image Pool";
                     autoDraftBtn.Content = "Make a show";
                     ToolTipService.SetToolTip(autoDraftBtn, "Makes a show from the image pool, one screen at a time.");
                 }
@@ -3276,7 +3274,7 @@ namespace ModernImageViewer
                 {
                     var dialog = new ContentDialog
                     {
-                        Title = "Replace the storyboard?",
+                        Title = "Replace the show?",
                         Content = sceneCount == 1
                             ? "This replaces the scene with a new draft."
                             : $"This replaces all {sceneCount} scenes with a new draft.",
@@ -3438,7 +3436,7 @@ namespace ModernImageViewer
                 int count = _activeShow.Scenes.Count;
                 var dialog = new ContentDialog
                 {
-                    Title = "Clear the storyboard?",
+                    Title = "Clear the show?",
                     Content = count == 1 ? "This removes the scene." : $"This removes all {count} scenes.",
                     PrimaryButtonText = "Clear",
                     CloseButtonText = "Cancel",
@@ -3723,7 +3721,15 @@ namespace ModernImageViewer
             else
             {
                 show = new ShowProject { Title = cinematic ? "Cinematic storyboard" : "Storyboard" };
-                SetCinematic(show, cinematic);
+                if (overrides == null && _activeShow is ShowProject previous && previous.GlobalDefaults.HoldsValues)
+                {
+                    // Play show from the folders uses the preset chosen on the Show card, not a fresh Multi-Image.
+                    show.GeneratorOverrides = previous.GeneratorOverrides;
+                    show.PresetName = previous.PresetName;
+                    show.PresetSlot = previous.PresetSlot;
+                    show.GlobalDefaults.TakeValues(CinematicOverrides.From(GeneratorSettingsFor(previous)));
+                }
+                else SetCinematic(show, cinematic);
             }
             _activeShow = show;
             _selectedShowScene = null;
@@ -4245,13 +4251,13 @@ namespace ModernImageViewer
 
             string playTip = playing
                 ? (storyboardMode
-                    ? $"Pause the storyboard show (Scene {curScene} of {totalScenes}: {currentSceneTitle}). Space does the same. Left and Right move between scenes."
+                    ? $"Pause the show (Scene {curScene} of {totalScenes}: {currentSceneTitle}). Space does the same. Left and Right move between scenes."
                     : "Pause the show. Space does the same.")
                 : (storyboardMode
                     ? (curScene > 1 && curScene <= totalScenes
-                        ? $"Resume the storyboard show at Scene {curScene} of {totalScenes} ({currentSceneTitle}). Space does the same."
-                        : $"Play the storyboard ({totalScenes} {(totalScenes == 1 ? "scene" : "scenes")}, {ShowLength(_activeShow!.TotalEstimatedDuration)}). Space does the same.")
-                    : "Play the show: its scenes are made as it plays, from the preset and values on the Show card, and kept in the storyboard. Space does the same.");
+                        ? $"Resume the show at Scene {curScene} of {totalScenes} ({currentSceneTitle}). Space does the same."
+                        : $"Play the show ({totalScenes} {(totalScenes == 1 ? "scene" : "scenes")}, {ShowLength(_activeShow!.TotalEstimatedDuration)}). Space does the same.")
+                    : "Play the show: its scenes are made as it plays, from the preset and values on the Show card, and kept. Space does the same.");
 
             // The label already says Pause while something plays; the name is the label.
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(AutoPlayButton, text);
