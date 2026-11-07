@@ -61,6 +61,61 @@ namespace ModernImageViewer.Tests
             Assert.True(plain.Usable);
         }
 
+        /// <summary>Steady clicks whose loudness follows <paramref name="level"/> over time (seconds to 0..1).</summary>
+        private static float[] Shaped(double seconds, Func<double, double> level, int seed)
+        {
+            var times = Enumerable.Range(0, (int)(seconds * 2) - 1).Select(i => 0.3 + i * 0.5).ToArray();
+            var s = Clicks(seconds, times, seed, level: 1.0);
+            var random = new Random(seed + 100);
+            for (int i = 0; i < s.Length; i++)
+            {
+                double l = level(i / (double)Rate);
+                s[i] = (float)(s[i] * l + (random.NextDouble() * 2 - 1) * 0.05 * l);
+            }
+            return s;
+        }
+
+        [Fact]
+        public void A_sudden_lift_is_a_big_moment_and_a_slow_build_or_steady_music_is_not()
+        {
+            var sudden = BeatGrid.Find(Shaped(70, t => t < 35 ? 0.1 : 0.9, 12));
+            var build = BeatGrid.Find(Shaped(70, t => 0.1 + 0.8 * t / 70, 13));
+            var steady = BeatGrid.Find(Shaped(70, _ => 0.8, 14));
+            _out.WriteLine($"sudden: {string.Join(" ", sudden.Lifts.Select(l => l.ToString("0.00")))}; build: {build.Lifts.Count}; steady: {steady.Lifts.Count}");
+            Assert.Single(sudden.Lifts);
+            Assert.InRange(sudden.Lifts[0], 34.5, 35.6);
+            Assert.Contains(sudden.Beats, b => Math.Abs(b - sudden.Lifts[0]) < 0.001);
+            Assert.Empty(build.Lifts);
+            Assert.Empty(steady.Lifts);
+        }
+
+        [Fact]
+        public void A_big_moment_in_reach_takes_the_change_as_a_hard_cut_by_its_odds()
+        {
+            var grid = BeatGrid.Find(Shaped(70, t => t < 35 ? 0.1 : 0.9, 15));
+            _out.WriteLine($"confidence {grid.Confidence:0.0}, lifts {string.Join(" ", grid.Lifts.Select(l => l.ToString("0.00")))}");
+            Assert.True(grid.Usable);
+            double lift = grid.Lifts.Single();
+            // Scene began 6 s before the lift, Duration 10 to 15 s: the lift is early but past 3 s, so it takes the change.
+            double wait = BeatGrid.WaitBeforeChange(grid, lift - 6, 12, 10, 15, 0.2, true, 0, out var landing, hardCuts: 1, roll: 0.5);
+            Assert.Equal(BeatGrid.Landing.HardCut, landing);
+            Assert.Equal(lift, lift - 6 + wait + 0.2, 3);
+            // The roll above the odds, or the odds at Off: no cut.
+            BeatGrid.WaitBeforeChange(grid, lift - 6, 12, 10, 15, 0.2, true, 0, out landing, hardCuts: 0.4, roll: 0.5);
+            Assert.NotEqual(BeatGrid.Landing.HardCut, landing);
+            BeatGrid.WaitBeforeChange(grid, lift - 6, 12, 10, 15, 0.2, true, 0, out landing, hardCuts: 0, roll: 0);
+            Assert.NotEqual(BeatGrid.Landing.HardCut, landing);
+            // A lift under three seconds into the scene is too soon; one more than three seconds past Duration's longest is
+            // out of reach. One just past the longest is reached by holding a little longer: else it would come under three
+            // seconds into the next scene and no scene would take it (seen in the app, 7 Nov).
+            BeatGrid.WaitBeforeChange(grid, lift - 2, 12, 10, 15, 0.2, true, 0, out landing, hardCuts: 1, roll: 0);
+            Assert.NotEqual(BeatGrid.Landing.HardCut, landing);
+            BeatGrid.WaitBeforeChange(grid, lift - 20, 12, 10, 15, 0.2, true, 0, out landing, hardCuts: 1, roll: 0);
+            Assert.NotEqual(BeatGrid.Landing.HardCut, landing);
+            BeatGrid.WaitBeforeChange(grid, lift - 15.2, 12, 10, 15, 0.2, true, 0, out landing, hardCuts: 1, roll: 0);
+            Assert.Equal(BeatGrid.Landing.HardCut, landing);
+        }
+
         [Fact]
         public void Following_the_music_holds_shorter_when_loud_and_longer_when_quiet()
         {

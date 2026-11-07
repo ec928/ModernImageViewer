@@ -20,6 +20,8 @@ namespace ModernImageViewer.Cinematic
         private const double Middle = Window / 2.0 / SampleRate;
         private const int BeatsInABar = 4;
         private const double EnergyStep = 0.5;
+        // An energy block is a whole number of frames; this is its real length, which gives its time.
+        private static readonly double EnergyBlock = Math.Max(1, (int)(EnergyStep / FrameSeconds)) * FrameSeconds;
 
         /// <summary>
         /// Below this, the beats are not used: the scene holds as planned. Set from real songs (design check M1, 7 Nov):
@@ -80,30 +82,52 @@ namespace ModernImageViewer.Cinematic
         public double? EnergyBetween(double from, double to)
         {
             if (_energy.Length == 0 || !Usable) return null;
-            int a = Math.Max(0, (int)(from / EnergyStep)), b = Math.Min(_energy.Length - 1, (int)(to / EnergyStep));
+            int a = Math.Max(0, (int)(from / EnergyBlock)), b = Math.Min(_energy.Length - 1, (int)(to / EnergyBlock));
             if (a >= _energy.Length || b < a) return null;
             double sum = 0;
             for (int i = a; i <= b; i++) sum += _energy[i];
             return sum / (b - a + 1);
         }
 
-        /// <summary>How a scene's hold was chosen, for the timing log.</summary>
-        public enum Landing { AsPlanned, Beat, BarStart }
+        /// <summary>How a scene's hold was chosen. <see cref="Landing.HardCut"/>: on a big moment, and the change is a cut.</summary>
+        public enum Landing { AsPlanned, Beat, BarStart, HardCut }
+
+        /// <summary>A scene takes a big moment from this far in, even before Duration's shortest: the moment is worth more.</summary>
+        public const double EarliestHardCut = 3;
 
         /// <summary>
-        /// For a scene just shown: how long to wait before starting the next change (design 3.10). Follow the music first
-        /// moves the planned end within Duration by the song's energy over the hold, toward the shortest when loud and the
-        /// longest when quiet, by <paramref name="follow"/> (0 to 1). Cut on the beat then puts the change on the first
-        /// beat of the bar nearest that end, or the nearest beat when the bars are not trusted. The change starts
-        /// <paramref name="changeDelay"/> after the wait ends, so the wait is that much shorter. With no beats, no song
-        /// position, or one fixed duration: the planned hold.
+        /// For a scene just shown: how long to wait before starting the next change (design 3.10). A big moment of the
+        /// song (<see cref="Lifts"/>) within reach takes the change, as a hard cut, by the odds <paramref name="hardCuts"/>
+        /// against <paramref name="roll"/> (both 0 to 1). Otherwise Follow the music moves the planned end within Duration
+        /// by the song's energy over the hold, toward the shortest when loud and the longest when quiet, by
+        /// <paramref name="follow"/> (0 to 1), and Cut on the beat puts the change on the first beat of the bar nearest that
+        /// end, or the nearest beat when the bars are not trusted. The change starts <paramref name="changeDelay"/> after the
+        /// wait ends, so the wait is that much shorter. With no beats or no song position: the planned hold.
         /// </summary>
         public static double WaitBeforeChange(BeatGrid? beats, double? songNow, double plannedHold, double shortest, double longest,
-            double changeDelay, bool cutOnBeat, double follow, out Landing landing)
+            double changeDelay, bool cutOnBeat, double follow, out Landing landing, double hardCuts = 0, double roll = 1)
         {
             landing = Landing.AsPlanned;
-            if (beats == null || !beats.Usable || songNow is not double now || longest - shortest < 0.01) return plannedHold;
-            double low = Math.Min(shortest, plannedHold), high = Math.Max(longest, plannedHold);
+            if (beats == null || !beats.Usable || songNow is not double now) return plannedHold;
+            bool fixedHold = longest - shortest < 0.01;
+            double low = fixedHold ? plannedHold : Math.Min(shortest, plannedHold), high = fixedHold ? plannedHold : Math.Max(longest, plannedHold);
+
+            if (hardCuts > 0 && roll < hardCuts)
+            {
+                // A scene may run up to EarliestHardCut past Duration's longest to reach a big moment: one just out of its
+                // reach would come under EarliestHardCut into the next scene, too soon for either, and be lost.
+                double from = now + Math.Max(EarliestHardCut, 0.4 * low), to = now + high + EarliestHardCut;
+                foreach (double lift in beats.Lifts)
+                {
+                    if (lift < from) continue;
+                    if (lift > to) break;
+                    double cutWait = lift - now - changeDelay;
+                    if (cutWait < 1) break;
+                    landing = Landing.HardCut;
+                    return cutWait;
+                }
+            }
+            if (fixedHold) return plannedHold;
 
             double target = plannedHold;
             if (follow > 0 && beats.EnergyBetween(now, now + plannedHold) is double energy)
@@ -196,10 +220,74 @@ namespace ModernImageViewer.Cinematic
 
             var (downbeats, barStrength, barsAgree, barChanges) = Bars(frames, onset, bass);
             return new BeatGrid(frames.Select(Seconds).ToList(), downbeats.Select(Seconds).ToList(), 60.0 / (period * FrameSeconds),
-                confidence, barStrength, barsAgree, Energy(loudness)) { BarChanges = barChanges };
+                confidence, barStrength, barsAgree, Energy(loudness)) { BarChanges = barChanges }
+                .WithLifts(loudness, frames.Select(Seconds).ToList(), barsAgree && barStrength >= LeastBarStrength ? downbeats.Select(Seconds).ToList() : null);
         }
 
         private static double Seconds(int frame) => frame * FrameSeconds + Middle;
+
+        /// <summary>The song's big moments: where it suddenly gets much louder, such as a chorus kicking in. On a beat.</summary>
+        public IReadOnlyList<double> Lifts { get; private set; } = Array.Empty<double>();
+
+        // A big moment: the next two seconds this much louder than the four before, on the song's own scale from its quiet
+        // (0) to its loud (1), and loud after it. A slow build rises too little in four seconds; steady music not at all.
+        public const double LeastLift = 0.35, LoudAfterLift = 0.6, LiftsApart = 15;
+        private const double LiftStep = 0.25;
+
+        private BeatGrid WithLifts(double[] loudness, List<double> beats, List<double>? downbeats)
+        {
+            int per = Math.Max(1, (int)(LiftStep / FrameSeconds));
+            int steps = loudness.Length / per;
+            if (steps < 40 || beats.Count == 0) return this;
+            var level = new double[steps];
+            for (int s = 0; s < steps; s++)
+            {
+                double sum = 0;
+                for (int f = s * per; f < (s + 1) * per; f++) sum += loudness[f];
+                level[s] = Math.Log(1e-6 + sum / per);
+            }
+            var sorted = level.OrderBy(v => v).ToArray();
+            double quiet = sorted[sorted.Length / 10], loud = sorted[sorted.Length * 9 / 10];
+            if (loud - quiet < 0.5) return this;
+            for (int s = 0; s < steps; s++) level[s] = Math.Clamp((level[s] - quiet) / (loud - quiet), 0, 1.2);
+
+            // A block is a whole number of frames: its real length, not LiftStep, gives its time (0.25 s was 2.5% off,
+            // nearly a second by 35 s into a song).
+            double block = per * FrameSeconds;
+            int before = (int)(4 / block), after = (int)(2 / block);
+            var rise = new double[steps];
+            var beforeLevel = new double[steps];
+            var afterLevel = new double[steps];
+            for (int s = before; s + after <= steps; s++)
+            {
+                double b = 0, a = 0;
+                for (int i = s - before; i < s; i++) b += level[i];
+                for (int i = s; i < s + after; i++) a += level[i];
+                b /= before; a /= after;
+                beforeLevel[s] = b;
+                afterLevel[s] = a;
+                rise[s] = a >= LoudAfterLift ? a - b : 0;
+            }
+            double LevelAt(double t) => level[Math.Clamp((int)(t / block), 0, steps - 1)];
+            // The steepest point of each rise, the biggest first, kept apart. The moment is the first beat at which the
+            // sound has risen halfway, where it is heard to change (the nearest beat to the steepest point was often the
+            // second loud one); a bar start within a quarter second of it is taken instead.
+            var lifts = new List<double>();
+            foreach (int s in Enumerable.Range(0, steps).Where(s => rise[s] >= LeastLift).OrderByDescending(s => rise[s]))
+            {
+                double at = s * block;
+                if (lifts.Any(l => Math.Abs(l - at) < LiftsApart)) continue;
+                double halfway = (beforeLevel[s] + afterLevel[s]) / 2;
+                double? first = beats.Where(t => t >= at - 1 && t <= at + 1.5).Cast<double?>().FirstOrDefault(t => LevelAt(t!.Value) >= halfway);
+                if (first is not double on) continue;
+                if (downbeats is { Count: > 0 } && downbeats.OrderBy(t => Math.Abs(t - on)).First() is double bar && Math.Abs(bar - on) <= 0.25) on = bar;
+                if (lifts.Any(l => Math.Abs(l - on) < LiftsApart)) continue;
+                lifts.Add(on);
+            }
+            lifts.Sort();
+            Lifts = lifts;
+            return this;
+        }
 
         /// <summary>
         /// Which beat of every four starts a bar: the one where the bass, and then everything, hits hardest on average.
@@ -288,7 +376,7 @@ namespace ModernImageViewer.Cinematic
                 for (int f = s * per; f < (s + 1) * per; f++) sum += loudness[f];
                 raw[s] = Math.Log(1e-6 + sum / per);
             }
-            int reach = (int)(2.0 / EnergyStep);
+            int reach = (int)(2.0 / EnergyBlock);
             var smooth = new double[steps];
             for (int s = 0; s < steps; s++)
             {

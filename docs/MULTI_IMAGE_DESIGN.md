@@ -563,6 +563,16 @@ planned hold within Duration by the song's energy over it (loudness smoothed ove
 quiet to its own loud): toward the shortest when loud, the longest when quiet. It works without Cut on the beat. In the
 app, a quiet opening (energy 0.06 to 0.33) held 13 to 14 s of a 10 to 15 s Duration, every change on a bar start.
 
+**Hard cuts (7 Nov, Ed: "just implement that").** A big moment of the song is where the next two seconds are at least
+0.35 louder than the four before, on the song's own quiet-to-loud scale, and loud (0.6) after it; one per 15 s at most,
+placed on the first beat where the sound has risen halfway (a bar start within a quarter second instead). When one is in
+reach, by the odds **Hard cuts** (0 to 100%, default 100%, under Soundtrack), it takes the next change as a straight
+cut, whatever transition the scene was made with. It may come from 3 s into a scene, and a scene may hold up to 3 s past
+Duration's longest to reach one (else a moment just past one scene's reach and under 3 s into the next is lost: seen in
+the app). Eight songs gave none to four each, mostly one to three minutes in; Over the Rainbow's four are more than a
+gentle song should have, and none has been judged by ear. In the app, Because The Night held its second scene 14.4 s to
+cut on its moment at 0:25, then held 11 and 12 s through the loud part.
+
 The director chooses each scene's hold; landing the change on a beat is one more way it chooses. The engine does not
 change and does not read the music (R13). **Not part of approving this design:** nothing here is in the six slices, and it is reviewed and approved on its own when its turn comes.
 

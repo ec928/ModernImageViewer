@@ -1508,6 +1508,37 @@ namespace ModernImageViewer
                 saveFollow.Start();
             };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(followSlider, "Follow the music");
+
+            // Hard cuts: the odds a scene changes on a big moment of the song (a chorus kicking in), as a straight cut.
+            var cutsRow = new Grid { ColumnSpacing = 12, MinHeight = 34 };
+            cutsRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            cutsRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
+            var cutsLabel = new TextBlock { Text = "Hard cuts", VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
+            var cutsRight = new Grid { Width = 230, ColumnSpacing = 8, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+            cutsRight.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(146) });
+            cutsRight.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(76) });
+            var cutsReadout = new TextBlock { Text = FollowText(music?.HardCuts ?? 100), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, FontSize = 12, Opacity = isMusicActive ? 0.82 : 0.4, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
+            var cutsSlider = new Slider { Minimum = 0, Maximum = 100, StepFrequency = 5, Value = music?.HardCuts ?? 100, Width = 146, VerticalAlignment = VerticalAlignment.Center, IsEnabled = isMusicActive };
+            var saveCuts = DispatcherQueue.CreateTimer();
+            saveCuts.Interval = TimeSpan.FromMilliseconds(350);
+            saveCuts.IsRepeating = false;
+            saveCuts.Tick += (_, _) => MainWindow.Instance?.SetMusicHardCuts(cutsSlider.Value);
+            cutsSlider.ValueChanged += (_, e) =>
+            {
+                cutsReadout.Text = FollowText(e.NewValue);
+                saveCuts.Stop();
+                saveCuts.Start();
+            };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(cutsSlider, "Hard cuts");
+            ToolTipService.SetToolTip(cutsRow, "How often a big moment of the song, such as a chorus kicking in, takes the next scene change, as a straight cut instead of the scene's transition. It can come early in a scene. Off never cuts for the music.");
+            Grid.SetColumn(cutsSlider, 0);
+            Grid.SetColumn(cutsReadout, 1);
+            cutsRight.Children.Add(cutsSlider);
+            cutsRight.Children.Add(cutsReadout);
+            Grid.SetColumn(cutsLabel, 0);
+            Grid.SetColumn(cutsRight, 1);
+            cutsRow.Children.Add(cutsLabel);
+            cutsRow.Children.Add(cutsRight);
             ToolTipService.SetToolTip(followRow, "How far scene lengths follow the song: loud, busy passages hold toward Duration's shortest, quiet ones toward its longest. Off keeps the planned lengths.");
             Grid.SetColumn(followSlider, 0);
             Grid.SetColumn(followReadout, 1);
@@ -1518,6 +1549,7 @@ namespace ModernImageViewer
             followRow.Children.Add(followLabel);
             followRow.Children.Add(followRight);
             panel.Children.Add(followRow);
+            panel.Children.Add(cutsRow);
 
             onToggle.Toggled += (_, _) =>
             {
@@ -1525,6 +1557,8 @@ namespace ModernImageViewer
                 volSlider.IsEnabled = hasFolder && onToggle.IsOn;
                 beatToggle.IsEnabled = hasFolder && onToggle.IsOn;
                 followSlider.IsEnabled = hasFolder && onToggle.IsOn;
+                cutsSlider.IsEnabled = hasFolder && onToggle.IsOn;
+                cutsReadout.Opacity = onToggle.IsOn ? 0.82 : 0.4;
                 followReadout.Opacity = onToggle.IsOn ? 0.82 : 0.4;
                 volReadout.Opacity = onToggle.IsOn ? 0.82 : 0.4;
                 if (!onToggle.IsOn) StopAutoPlayMusic();
@@ -3509,6 +3543,8 @@ namespace ModernImageViewer
 
         // How long a scene change takes to start once its turn comes (decoding is done ahead; this is putting it on screen).
         private double _changeDelaySeconds = 0.3;
+        // The coming change lands on a big moment of the song: it is a straight cut.
+        private bool _nextChangeIsHardCut;
 
         /// <summary>
         /// The wait before the next scene's change: its planned hold, or, with Cut on the beat and a song whose beats are
@@ -3519,14 +3555,17 @@ namespace ModernImageViewer
         {
             double planned = _layoutSeconds;
             var music = MainWindow.Instance?.MyMusic;
-            if (music == null || _surpriseMusic == null || (!music.CutOnBeat && music.Follow <= 0)) return planned;
+            _nextChangeIsHardCut = false;
+            if (music == null || _surpriseMusic == null || (!music.CutOnBeat && music.Follow <= 0 && music.HardCuts <= 0)) return planned;
             var settings = GeneratorSettingsFor(_activeShow);
-            if (!settings.AutoPlayRandom) return planned;
+            double shortest = settings.AutoPlayRandom ? Math.Min(settings.RandomFewestSeconds, settings.RandomMostSeconds) : planned;
+            double longest = settings.AutoPlayRandom ? Math.Max(settings.RandomFewestSeconds, settings.RandomMostSeconds) : planned;
             var beats = _surpriseMusic.Beats;
             double? now = _surpriseMusic.Position;
-            double wait = Cinematic.BeatGrid.WaitBeforeChange(beats, now, planned,
-                Math.Min(settings.RandomFewestSeconds, settings.RandomMostSeconds), Math.Max(settings.RandomFewestSeconds, settings.RandomMostSeconds),
-                _changeDelaySeconds, music.CutOnBeat, music.Follow / 100.0, out var landing);
+            double wait = Cinematic.BeatGrid.WaitBeforeChange(beats, now, planned, shortest, longest,
+                _changeDelaySeconds, music.CutOnBeat, music.Follow / 100.0, out var landing, music.HardCuts / 100.0, Random.Shared.NextDouble());
+            // On a big moment the change is a straight cut, whatever transition the scene was made with.
+            _nextChangeIsHardCut = landing == Cinematic.BeatGrid.Landing.HardCut;
             string energy = beats != null && now is double at && beats.EnergyBetween(at, at + planned) is double e ? $", energy {e:0.00}" : "";
             string bars = beats == null ? "no beats read" : beats.BarsUsable ? $"bars trusted ({beats.BarStrength:0.00})" : $"bars not trusted ({beats.BarStrength:0.00}, {beats.BarChanges} changes)";
             PlayTiming.Write($"music: {planned} s planned, holds {(wait == planned ? wait : wait + _changeDelaySeconds):0.00} s, lands on {landing}{energy}; {bars}");
@@ -3713,8 +3752,12 @@ namespace ModernImageViewer
             // How long putting a scene on screen takes, from its turn to its change, for Cut on the beat. A turn that waited
             // for its scene to be made says nothing about that.
             if (!heldForNext) _changeDelaySeconds = 0.7 * _changeDelaySeconds + 0.3 * turnClock.Elapsed.TotalSeconds;
+            bool hardCut = _nextChangeIsHardCut;
+            _nextChangeIsHardCut = false;
             if (before != null)
-                ChangeLayoutOver(before, outgoingStep, Enum.TryParse<LayoutTransition>(scene.Transition, out var planned) ? planned : LayoutTransition.Crossfade);
+                ChangeLayoutOver(before, outgoingStep, hardCut ? LayoutTransition.Cut
+                    : Enum.TryParse<LayoutTransition>(scene.Transition, out var planned) ? planned : LayoutTransition.Crossfade);
+            if (hardCut) PlayTiming.Write($"scene {currentIndex + 1}: hard cut on a big moment of the song");
 
             int displayIndex = liveIndex + 1;
             int totalDisplay = liveScenes.Count;
@@ -3903,6 +3946,8 @@ namespace ModernImageViewer
             if (_autoPlaySeconds == 0) return;
             _autoPlaySeconds = 0;
             _isStoryboardPlayback = false;
+            // A cut planned for a big moment belongs to that moment: a scene shown after a pause comes in as made.
+            _nextChangeIsHardCut = false;
             StopPlaybackProgress();
             _autoPlayTimer?.Stop();
             _autoPlayTimer = null;
