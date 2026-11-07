@@ -34,8 +34,8 @@ answer. A reviewer should start at section 11.
 
 The foundation is the multi-image engine. It was built from scratch, from fundamentals. Cinematic slideshow is not that
 foundation. Sequence beats were removed so the cinematic engine could be rebuilt from fundamentals, and that rebuild
-did not succeed. Cinematic slideshow was then abandoned as the engine to rebuild. Its window is still in the app
-(v0.31.2). Development does not continue from it, and `CINEMATIC_PROPOSAL.md` is not the direction.
+did not succeed. Cinematic slideshow was then abandoned as the engine to rebuild, and its window was removed in 0.33.0,
+ once its framing and long dissolves had been brought across; the Cinematic preset is its place.
 
 Sequence beats come back on the director (R14), as **odds** the user sets, like every other choice (R2): the chance
 that a step of the show is written as two scenes of the same picture, splitting one span of time across them. The

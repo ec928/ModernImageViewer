@@ -71,9 +71,9 @@ Cards can be dragged into a new order.
 
 ## Play show, from the folders
 
-**Play show** in the sidebar, under Cinematic Slideshow, plays the whole folder with the preset chosen on the Show card. The same button on the selection bar plays the selected images. Either opens Multi-View with those images, starts a new show and plays it once the first scene is made. While it plays it makes the next scenes from images not in it yet, a few ahead of the screen. While it is paused, drafting stops once every image has been dealt once. It stops if the show is replaced or cleared.
+**Play show** in the sidebar plays the whole folder with the preset chosen on the Show card, and so do **Play show** in the folder menu and the play button in the image viewer. The same button on the selection bar plays the selected images. Either opens Multi-View with those images, starts a new show and plays it once the first scene is made. While it plays it makes the next scenes from images not in it yet, a few ahead of the screen. While it is paused, drafting stops once every image has been dealt once. It stops if the show is replaced or cleared.
 
-**Cinematic** is a preset on the Show card, not a second sidebar button. One image at a time, Edge to edge most of the time, Hero spotlight rarely, the other designs off, 10 to 15 seconds. Cinematic Slideshow remains the separate window opened by the sidebar button of that name.
+**Cinematic** is a preset on the Show card, not a second sidebar button. One image at a time, Edge to edge most of the time, Hero spotlight rarely, the other designs off, 10 to 15 seconds. It took the place of Cinematic Slideshow, the separate window, which was removed in 0.33.0; shows saved from it no longer open.
 
 To play with the Multi-Image preset again, press Multi-Image on the Show card. **New show** in the drawer starts an empty show and keeps the preset. Reset on the card puts the preset back to its starting values.
 
@@ -183,8 +183,8 @@ A Cinematic storyboard uses your main Transitions settings.
 
 Under Camera:
 
-- **Faces are framed by the eyes**: a zoom or a sideways drift aimed at a person, the face views of sequence beats and the close shot of a two-shot put the eyes a third of the way down the screen, as Cinematic Slideshow does, rather than the middle of the face in the middle. On a face view of one image the whole face stays in view, up to the closest zoom it allows. A drift up or down a picture travels past the eyes, and a picture with no face is centred on its focus point. At a gentle zoom the edge of the picture can stop the view, and the eyes then sit a little lower.
-- **Two-shot scenes** (default 25%): the chance that a scene with a face, on screen 8 seconds or more (the camera's run-on past the change does not count), is two shots, as Cinematic Slideshow makes them: a wide shot, then either a snap zoom in to the face or a cut to the face and a slow push in. Only with the camera on Auto.
+- **Faces are framed by the eyes**: a zoom or a sideways drift aimed at a person, the face views of sequence beats and the close shot of a two-shot put the eyes a third of the way down the screen, rather than the middle of the face in the middle. On a face view of one image the whole face stays in view, up to the closest zoom it allows. A drift up or down a picture travels past the eyes, and a picture with no face is centred on its focus point. At a gentle zoom the edge of the picture can stop the view, and the eyes then sit a little lower.
+- **Two-shot scenes** (default 25%): the chance that a scene with a face, on screen 8 seconds or more (the camera's run-on past the change does not count), is two shots: a wide shot, then either a snap zoom in to the face or a cut to the face and a slow push in. Only with the camera on Auto.
 - **Movement curves**: odds for how each move gets going and comes to rest, on the Off to Often scale, with the mix shown underneath.
 
 | Curve | What it looks like | Default |
@@ -192,11 +192,11 @@ Under Camera:
 | Steady | The same speed throughout, so it is still moving through a crossfade | Normal |
 | Gentle | The mildest start and stop | Often |
 | Smooth | A soft start and stop; every move eased this way before there was a choice | Normal |
-| Cinematic | Lingers at both ends, quicker in the middle, as Cinematic Slideshow | Less |
+| Cinematic | Lingers at both ends, quicker in the middle | Less |
 | Settle | Under way at once, then glides to rest | Rare |
 | Snap | Slow, a quick push, then a long settle; zooms only | Off |
 
-- **Curved path** (default 0–50%): how far a pan's path bows to one side, up to Cinematic Slideshow's bend.
+- **Curved path** (default 0–50%): how far a pan's path bows to one side, at most a gentle arc.
 - **Rotation** (default Off, up to 6°): how far the view turns over a move. It zooms in just enough to keep every corner covered.
 
 Storyboard scenes store their curve, bend, turn and shots, and play them; scenes made before these play as they did.
@@ -205,7 +205,7 @@ Storyboard scenes store their curve, bend, turn and shots, and play them; scenes
 
 In its own section, Transitions, each kind of scene change has its own slider, on the same Off to Often scale as the designs: **Crossfade**, **Zoom through**, **Fade through black** and **Slide**. They are odds against each other. The line under them gives the mix they make, for example `Mix: crossfade 65% · zoom through 14% · fade through black 14% · slide 8%`. The same kind never comes twice in a row, except a crossfade, and the mix allows for that. With all four off, every change is a crossfade. They apply to Auto-Mix while it plays and to the scenes a storyboard makes; each storyboard scene keeps the transition it was made with and plays it. A change made by hand in Auto-Mix is a crossfade.
 
-**Transition length** (default 0.75 to 2.5 seconds, from 0.25 to 4) is how long a change takes. Each change picks a length in the range, and the whole transition stretches to it, so a long crossfade is a slow dissolve, as in Cinematic Slideshow; drag the ends together for one length. The outgoing scene keeps moving for as long as the change takes. A hard cut on the music, and the cut between views of one image, stay cuts.
+**Transition length** (default 0.75 to 2.5 seconds, from 0.25 to 4) is how long a change takes. Each change picks a length in the range, and the whole transition stretches to it, so a long crossfade is a slow dissolve; drag the ends together for one length. The outgoing scene keeps moving for as long as the change takes. A hard cut on the music, and the cut between views of one image, stay cuts.
 
 These replace the single Transition variety slider. A saved Transition variety is converted once to odds giving the same mix.
 

@@ -78,13 +78,11 @@ Every frame is held whole on the GPU, so `ViewerMath.AnimationBudget` caps an an
 
 Tests live at `tests\ModernImageViewer.Tests` **inside** the repo. `ViewerMath.cs` is linked in by source rather than by project reference: the app targets `net8.0-windows10.0.19041.0` with WinUI, which an ordinary test project cannot reference. Keep pure geometry in `ViewerMath` so it stays testable.
 
-## Cinematic direction
+## Shows and music
 
-**Direction (6 Nov 2026, brought back 7 Nov).** The foundation is the multi-image engine, built from scratch. Cinematic slideshow is not being rebuilt. The window remains in the app. Sequence beats and cutting on the music are on the director, in `MULTI_IMAGE_DESIGN.md`: the Show card, and Soundtrack on that card. `CINEMATIC_PROPOSAL.md` describes the window as it was proposed. It is not the direction.
+**Cinematic Slideshow was removed in 0.33.0.** Its separate window, its editor and its `.json` show files are gone; the Cinematic preset on the Show card is its place, and Play show is reached from the sidebar, the selection bar, the folder menu and the image viewer. Shows are the multi-image engine and its director, in `MULTI_IMAGE_DESIGN.md`. On first start 0.33.0 deletes the slideshow's `WindowBounds.json` and `CinematicAutoSave.json`. VideoDirector remains the compositor / MP4 export app.
 
-The window is split into `CinematicWindow.xaml.cs` (window, keys, chrome), `.Playback.cs` (decode, clock, draw), `.Edit.cs` (Edit show) and `.Music.cs`. Edit show draws over a full-window canvas, so the shot keeps the shape it plays at, and the picture being framed stays clear of the panel and strip. VideoDirector remains the compositor / MP4 export app.
-
-Slide length and no-repeat live in `ShowPacing`, and `CameraFraming.KeepCovered` keeps an Auto frame over the whole screen; both are plain maths with tests. A slide duration of 0 means Auto. `MusicBed` is the player Cinematic and Surprise me each own, and `MusicLibrary` reads ratings from tags directly, because Windows' own rating loses half-stars. Songs open as `StorageFile`, because the player cannot resolve a `file:` address with non-English letters in it. A folder is scanned in random order, so the first qualifying song is random and starts at once. A new Play from the grid or viewer starts from the launch list. `CinematicAutoSave.json` is a crash restore only: written atomically while a show is open, deleted on clean close of the last cinematic window, offered once on the next Play if the file is still there.
+The music code is in `Music\`. `MusicBed` is the player a Multi-View show owns, and `MusicLibrary` reads ratings from tags directly, because Windows' own rating loses half-stars. `BeatReader` and `BeatGrid` read a song's beats, bars, energy and big moments for the director (design 3.10). Songs open as `StorageFile`, because the player cannot resolve a `file:` address with non-English letters in it. A folder is scanned in random order, so the first qualifying song is random and starts at once. 
 
 ## Multi-view
 
@@ -183,8 +181,8 @@ Anything that orders file or folder names for display goes through `NaturalSort`
 
 ## Known remaining debt
 
-- Cinematic slideshow has not been audited with the rest of the app. It is not due to be redone. The direction (6 Nov 2026) is to leave it and build on the multi-image engine. See `MULTI_IMAGE_DESIGN.md`. I3 in `REVIEW.md` is the separate job of splitting oversized code-behinds.
+- I3 in `REVIEW.md` is the job of splitting oversized code-behinds, `MultiViewControl.Surprise.cs` above all.
 - HEIC/AVIF need the Windows codecs pack. Decode failure shows a HUD.
 - Unsigned portable zip: SmartScreen warning is expected.
 - `ShowTrayCard` builds the whole drawer, both tabs and the scene cards, in one method of about 1,800 lines. Split it when it is next changed.
-- Cinematic and the Multi-View storyboard are two slideshow systems in the app today, each with a show file, a camera editor and music. The direction is chosen: the multi-image engine is the foundation, and cinematic slideshow is not the one to extend. `CINEMATIC_MULTIVIEW_UNIFICATION.md` is the earlier options analysis, not an open choice.
+- Cinematic Slideshow was removed in 0.33.0, so the Multi-View show is the one slideshow system.

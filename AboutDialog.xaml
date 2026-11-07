@@ -47,7 +47,7 @@
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                            Margin="0,2,0,0"/>
 
-                <TextBlock Text="A fast, hardware-accelerated image and comic book viewer built with WinUI 3 and Win2D. Browse large high-resolution folders in Tile or List mode, read CBR and CBZ comics with automatic two-page spreads, tear images off into floating reference windows, build collages and shows in Multi-View, or play a cinematic slideshow."
+                <TextBlock Text="A fast, hardware-accelerated image and comic book viewer built with WinUI 3 and Win2D. Browse large high-resolution folders in Tile or List mode, read CBR and CBZ comics with automatic two-page spreads, tear images off into floating reference windows, and build collages in Multi-View and play them as shows, cut to your music."
                            TextWrapping="Wrap" Margin="0,10,0,0"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
 
@@ -85,12 +85,12 @@
                     <Run Text="&#x2022;  "/><Run Text="Responsive two-page spread" FontWeight="SemiBold"/><Run Text=" &#x2014; automatically displays side-by-side double-page spreads when the window is stretched wide enough (toggle anytime with B), while keeping covers and wide landscapes on a single page."/>
                 </TextBlock>
 
-                <TextBlock Text="Cinematic (Beta)" Style="{StaticResource AboutSectionHeader}"/>
+                <TextBlock Text="Shows and music" Style="{StaticResource AboutSectionHeader}"/>
                 <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Cinematic slideshow" FontWeight="SemiBold"/><Run Text=" &#x2014; Cinematic Slideshow plays the folder with Ken Burns moves and its own editor. The same pictures can play inside Multi-View: choose the Cinematic preset on the Show card, then Play show."/>
+                    <Run Text="&#x2022;  "/><Run Text="Cinematic preset" FontWeight="SemiBold"/><Run Text=" &#x2014; one image at a time, mostly edge to edge, with slow camera moves, faces framed by the eyes, and long dissolves. Choose it on the Show card, then Play show. It replaced the separate Cinematic Slideshow window."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Custom direction" FontWeight="SemiBold"/><Run Text=" &#x2014; Edit show lets you hide, reorder and duplicate images, and set start and end frames and timing for a slide."/>
+                    <Run Text="&#x2022;  "/><Run Text="Editing a show" FontWeight="SemiBold"/><Run Text=" &#x2014; the Show tab of the drawer reorders, duplicates and removes scenes; Camera Director sets a scene's frames, curve and turn."/>
                 </TextBlock>
 
                 <TextBlock Style="{StaticResource AboutBullet}">
