@@ -282,4 +282,4 @@ storyboard; Multi-Image, Cinematic and My presets 1, 2, 3 in the app's settings.
 | 4. One move on one image | The zoom order (design 3.5): the cell opens on the fit or fill, Zoom is where the move arrives; `AimAtSubject` no longer zooms a one-image cell before the camera does | Zoom frequency at 100% and 0% doing what it says (design check 15) |
 | 5. Design settings | Frame color and width for every frame; Backdrop odds for every design with a backdrop; ambient blur backdrop | Cost of a blurred copy per image during Play |
 | 6. Sequence beats | The director rolls Sequence beats and Scenes per step, writes closer views, keeps the layout for views of one image, Cut transition, no overrun before a change of view, two-shot off inside the step; `SceneRequest` gains the start frame | What "closer view" picks on a group with no featured image |
-| Later | Design 3.10, cut on the music | Approved on its own when its turn comes |
+| 3.10, built 7 Nov | `Cinematic/BeatGrid.cs`, `BeatReader.cs`, the Soundtrack controls on the Show card | Cut on the beat, bars, Follow the music, hard cuts. See design 3.10 |

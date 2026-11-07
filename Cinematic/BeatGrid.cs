@@ -8,7 +8,7 @@ namespace ModernImageViewer.Cinematic
     /// The beats, bars and energy of one song, found from its sound alone (design 3.10). Beats: an onset strength from how
     /// much the spectrum rises frame to frame, a tempo from how that strength repeats, and beats placed on it by dynamic
     /// programming. Bars: which beat of every four is the strong one, weighted to the bass, where a kick lands; trusted only
-    /// when it stands out and both halves of the song agree. Energy: loudness, smoothed over seconds, from the song's own
+    /// when it stands out and the count changes rarely. Energy: loudness, smoothed over seconds, from the song's own
     /// quiet (0) to its own loud (1). Free-time music and speech score low on confidence and are not cut to.
     /// </summary>
     public sealed class BeatGrid
@@ -291,8 +291,8 @@ namespace ModernImageViewer.Cinematic
 
         /// <summary>
         /// Which beat of every four starts a bar: the one where the bass, and then everything, hits hardest on average.
-        /// Strength is how far it stands above the other three; the two halves of the song must pick the same one, or a
-        /// skipped beat or a change of time has moved the bars and they are not trusted.
+        /// The count may move where a beat was skipped or added. Trusted when bar starts stand out and the count changes
+        /// no more than about once in 30 seconds.
         /// </summary>
         private static (List<int> Downbeats, double Strength, bool Agree, int Changes) Bars(List<int> frames, double[] onset, double[] bass)
         {
@@ -304,17 +304,6 @@ namespace ModernImageViewer.Cinematic
                 return b + 0.5 * o;
             }
             var hits = frames.Select(Hit).ToArray();
-            int BestPhase(int start, int stop, out double strength)
-            {
-                var sums = new double[BeatsInABar];
-                var counts = new int[BeatsInABar];
-                for (int i = Math.Max(0, start); i < Math.Min(hits.Length, stop); i++) { sums[i % BeatsInABar] += hits[i]; counts[i % BeatsInABar]++; }
-                var means = sums.Select((s, p) => counts[p] == 0 ? 0 : s / counts[p]).ToArray();
-                int best = Array.IndexOf(means, means.Max());
-                double others = means.Where((_, p) => p != best).Average();
-                strength = others <= 0 ? 0 : means[best] / others;
-                return best;
-            }
             // One count for the song that may change where the music says so: one beat the tracker skipped or added moves
             // every later bar by a beat, so a single whole-song count would be wrong after it. Each beat scores for the count
             // that makes it a bar's first beat and against the others; a change of count costs about two bars' evidence,

@@ -258,7 +258,7 @@ show's. Section 7 has the file rules.
 
 Still out, and stated in section 1 where they are requirements: a locked design and backdrop (R16), a special first or
 last scene (R16), the engine reading the music, titles, chapters, and the slideshow's shot templates (R14). The director chooses
-durations. Landing a cut on the music is a later way of choosing them (3.10).
+durations. Landing a cut on the music is how the director chooses them at play time (3.10). The engine still does not read the music.
 
 ---
 
@@ -281,7 +281,7 @@ seen.
 | 4. One move on one image | 3.5: the zoom order, no double zoom | Zoom frequency doing what it says | |
 | 5. Design settings | 3.3, Frame color and Backdrop for every design | Frames and backdrops varying by the odds | |
 | 6. Sequence beats | The director section: the odds, Scenes per step, closer views, Cut between views of one image | A portrait as wide then its faces, a group as group then one image then a face, all kept | |
-| Later | 3.10, cut on the music | | |
+| 3.10, built 7 Nov | Cut on the beat, bars, Follow the music, and hard cuts on a big moment. Outside the six slices | A straight cut when the song suddenly gets louder; other changes still inside Duration, apart from up to 3 s to reach a big moment | Motion timed to the music |
 
 The fundamentals, which are expensive to reverse and get the most care: the engine is one call, one entry point, one layout and one move, with no memory
 (Core principle); what a show file saves (section 7); Play never stalling (the director); and anything unread,
@@ -518,12 +518,12 @@ They do not stay as a named override group inside the generator's settings.
 
 Face detection, Face kept in frame (85%), Pick from the best (3), Same folder and date (80%), Skip screens and repeats,
 Images per scene (default 1 to 9, ceiling 16), the Duration range, smart pace, transitions, movement curves, Camera
-Director, and today's two-shot. Titles, chapters and a shot list are not added; the music is read only by the director, later (3.10).
+Director, and today's two-shot. Titles, chapters and a shot list are not added; the music is read only by the director (3.10).
 
 ### 3.9 What the storyboard does, and the engine does not
 
 The engine holds for the duration it was given. It does not read the soundtrack. If a cut should land on the music, the
-director chooses the durations it passes (3.10, later).
+director chooses the durations it passes (3.10).
 
 Beyond today's two-shot, the engine does not play two views in one call. Showing the photo, then the face, as two kept scenes is sequence beats.
 
@@ -542,7 +542,7 @@ cinematic slideshow. Sequence beats are views, not music: they never read the so
 
 ---
 
-### 3.10 Cut on the music (later, after the six slices)
+### 3.10 Cut on the music (built 7 Nov, outside the six slices)
 
 **Built 7 Nov, as below (Ed: "let's see if it works").** `Cinematic/BeatGrid.cs` finds the beats (spectral-flux onsets,
 tempo by autocorrelation leaning to 120 bpm, beats by dynamic programming); `Cinematic/BeatReader.cs` decodes with
@@ -573,61 +573,46 @@ the app). Eight songs gave none to four each, mostly one to three minutes in; Ov
 gentle song should have, and none has been judged by ear. In the app, Because The Night held its second scene 14.4 s to
 cut on its moment at 0:25, then held 11 and 12 s through the loud part.
 
-The director chooses each scene's hold; landing the change on a beat is one more way it chooses. The engine does not
-change and does not read the music (R13). **Not part of approving this design:** nothing here is in the six slices, and it is reviewed and approved on its own when its turn comes.
+The director chooses each scene's hold at play time. The engine does not read the music (R13). The draft still saves
+`DwellSeconds` as the planned hold, and that saved value is not changed, so the show plays as drafted with other music
+or with music off. The song under a scene is not known when the scene is drafted. The camera move is planned from that
+saved hold. It is not stretched to the music's wait.
 
-**Today.** The hold is chosen when a scene is drafted (`ShowDirector.BuildScene` -> `SurpriseOptions.NextPlaySeconds`)
-and saved as `ShowScene.DwellSeconds`. The music is `Cinematic/MusicBed.cs`: a Windows `MediaPlayer` playing one file
-on a loop, or a folder of songs filtered by stars, with next and previous, saved in `ShowSoundtrackSettings`. Nothing
-reads the audio. A folder shuffles, the user can skip, and a saved show replays over other music, so the song under a
-scene is not known when it is drafted.
+**The rule, in order.** When a scene has just come on, the wait until the next change is chosen as follows.
 
-**The rule: the cut moves at play time, inside Duration.** The draft keeps choosing and saving the hold as today; that is
-the planned end. When a scene starts playing, the director moves its end to the beat nearest the planned end, between
-start + shortest and start + longest Duration. `DwellSeconds` is not changed, so a show replayed over other music, or
-with music off, plays as drafted. The transition starts on the beat.
+| Situation | What the scene holds | How the next scene comes in |
+|---|---|---|
+| Music off, volume 0, no song, the read failed, or the beats are not trusted | The planned hold | The scene's own transition |
+| Hard cuts rolls, and a big moment falls between 3 s into the scene and 3 s past Duration's longest | Until that moment | A straight cut |
+| Duration is one fixed value, and no big moment was taken | The planned hold | The scene's own transition |
+| Follow the music | The planned hold, moved toward Duration's shortest when the passage is loud and its longest when quiet | The scene's own transition |
+| Cut on the beat | That end, moved onto the nearest bar start inside Duration, or the nearest beat when the bars are not trusted | The scene's own transition |
+| No bar or beat inside Duration | The end after Follow | The scene's own transition |
+| The song changes during the hold | The song now playing, if its beats are read; otherwise the planned hold | As the row above |
 
-| Situation | What the scene holds |
-|---|---|
-| Music off, failed, volume 0, beats not yet read, or read with low confidence | The planned hold |
-| Random duration off (one fixed value) | The planned hold |
-| Beats read, one inside the window | The beat nearest the planned end |
-| No beat inside the window | The planned hold |
-| The song changes during the hold | The next song's beats if read by then, else the planned hold |
-| The scene has a Camera Director path | Same rule; the path is stretched to the new hold. Not checked: how a path behaves today when a hold changes |
+No rule for the first or last scene (R16). The first scene of a song holds as planned when its beats are not read yet.
 
-No rule for the first or last scene (R16).
-
-**Reading the beats.** A song is decoded in the background to a low-rate mono signal; an onset envelope gives tempo and
-beat times. Assumption, not verified: `Windows.Media.Audio.AudioGraph` decodes the same files `MediaPlayer` plays, with
-no new dependency. The song starts at once; until it is read, scenes take the planned hold. A read below a confidence
-threshold counts as unread, so free-time music and speech fall back to smart pace. Results are cached per file (path,
-size, modified time). The audio never leaves the machine.
-
-**The control.** One switch in the storyboard's Soundtrack section, **Cut on the beat**, default on: with nothing read
-it changes nothing. A canvas layout is not affected; Play, which is always the director, is (R15, R17).
+**The controls,** under Soundtrack on the Show card. **Cut on the beat**, default on. **Follow the music**, 0 to 100%, default 50%. **Hard cuts**, 0 to 100%, default 100%. With nothing read, all three change nothing. A canvas layout is not affected. Play is (R15, R17).
 
 | Number | Value |
 |---|---|
-| Beat window | Duration's shortest to longest, from the scene's start |
-| Which beat | Nearest the planned end. Bars do not outrank beats |
-| Confidence threshold | Internal; set from check M1, then fixed and stated |
-| Cache key | Path, size, modified time |
+| Hard-cut window | From 3 s into the scene to 3 s past Duration's longest |
+| Beat window | Duration's shortest to longest, from the scene's start, after Follow |
+| Which beat | The first beat of the bar. The nearest beat when the bars are not trusted |
+| Confidence threshold | 3.0, from check M1 |
+| Big-moment spacing | At most one per 15 s |
+| Cache | For the session, by path, size and modified time |
 
-Working defaults, not reviewed decisions: on by default; the transition's start, not its midpoint, sits on the beat;
-beats not bars; adjust at play time only, never save the snapped hold.
+The transition's start sits on the moment, not its midpoint. The snapped hold is not saved.
 
-Checks before it is called done:
-- M1. A corpus of real songs (steady pop, rubato piano, spoken word, silence, a very short file, one that will not
-  decode): how many read, how many fall back; listened to on the steady ones.
-- M2. 30 scenes over a steady song: every hold inside Duration, every change on a beat of the read grid.
+What has been run: the nine `BeatGrid` tests; eight songs read for tempo, confidence, bar strength and big moments (above); Because The Night in the app, one song, from the timing log. Not judged by ear: whether those moments are the drops a listener would name. Not run as written: M2, M3 and M4 below. M2's "every hold inside Duration" does not cover a hard cut, which may run 3 s past the longest.
+
+- M1. A corpus of real songs (steady pop, rubato piano, spoken word, silence, a very short file, one that will not decode): how many read, how many fall back; listened to on the steady ones. Eight songs were read (above). Spoken word, silence, a very short file and a file that will not decode were not in that set. The moments were not listened to.
+- M2. 30 scenes over a steady song: every ordinary hold inside Duration, every such change on a bar or a beat of the read grid, and a hard cut only on a listed big moment.
 - M3. Music off, volume 0, a failed song, random duration off: every hold equals its saved `DwellSeconds`.
-- M4. Skip a song mid-hold: no error, the hold ends inside Duration. A saved show replayed with other music keeps its
-  saved holds. The first song starts without waiting for its read.
-- Each check fails with the change taken out.
+- M4. Skip a song mid-hold: no error. A saved show replayed with other music keeps its saved holds. The first song starts without waiting for its read.
 
-Out of scope: motion timed to the music, effects that react to it, drops or sections, and any change to how music is
-chosen or played.
+Out of scope: motion timed to the music, effects that react to it, and any change to how music is chosen or played.
 
 ## 4. What the user sees change
 
@@ -780,7 +765,7 @@ effect on the look, stays fixed; **P** = decided and stated. Not a setting, and 
 | Transition between views of one image | none | -- | P: Cut. Any other transition blends the picture into itself |
 | Smart pace | long and short halves alternate; layout density weighs 35% | `NextPlaySeconds` | Q11 |
 | Storyboards: one scene at the top of the range | always one | `ShowDirector` | P: goes. A forced outcome, not odds (R2, R16); every scene rolls in the range. Q11 |
-| Onsets | not read | the soundtrack player | P: not in the engine. The director reads them later (3.10) |
+| Onsets | read at play time by the director | `BeatGrid` | S: not in the engine (3.10, built 7 Nov) |
 | Single duration fallback | 5 s when none is set | `PlaySeconds` | I |
 
 ---
@@ -907,7 +892,7 @@ option (R4, R12).
 - A layout file stays one canvas. A show stays an ordered list of scenes. This proposal does not add a shot list or a
   soundtrack reader to either file (3.10 reads songs at play time and saves nothing in them). The cinematic parameter values that today live in the generator's settings move to
   the storyboard; they do not remain a named group inside those settings. Camera Director and transitions are unchanged.
-- No titles, chapters or timeline editor. No soundtrack reader in the engine or the slices; the director's, later, is 3.10. The engine holds for the duration it is given.
+- No titles, chapters or timeline editor. No soundtrack reader in the engine. The director reads songs at play time (3.10) and saves nothing. The engine holds for the duration it is given.
 - Sequence beats are on the director (director section). Putting them in the engine, or in Generator Advanced,
   or resuming the cinematic slideshow to get them, is the wrong direction.
 
