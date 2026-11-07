@@ -426,6 +426,7 @@ namespace ModernImageViewer
             public bool MusicInSurprise { get; set; } = true;
             public double MusicVolume { get; set; } = 60;
             public bool MusicCutOnBeat { get; set; } = true;
+            public double MusicFollow { get; set; } = 50;
             public string SortOrder { get; set; } = "NameAsc";
             public bool ListMode { get; set; }
             public double TileSize { get; set; } = 164;

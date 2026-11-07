@@ -5,16 +5,21 @@ using System.Linq;
 namespace ModernImageViewer.Cinematic
 {
     /// <summary>
-    /// The beats of one song, found from its sound alone (design 3.10): an onset strength from how much the spectrum rises
-    /// frame to frame, a tempo from how that strength repeats, and beats placed on it by dynamic programming, so each beat
-    /// sits on a strong onset and keeps to the tempo. Confidence says how much stronger the onsets are on the beats than
-    /// between them: free-time music and speech score low and are not cut to.
+    /// The beats, bars and energy of one song, found from its sound alone (design 3.10). Beats: an onset strength from how
+    /// much the spectrum rises frame to frame, a tempo from how that strength repeats, and beats placed on it by dynamic
+    /// programming. Bars: which beat of every four is the strong one, weighted to the bass, where a kick lands; trusted only
+    /// when it stands out and both halves of the song agree. Energy: loudness, smoothed over seconds, from the song's own
+    /// quiet (0) to its own loud (1). Free-time music and speech score low on confidence and are not cut to.
     /// </summary>
     public sealed class BeatGrid
     {
         public const int SampleRate = 11025;
         private const int Window = 1024, Hop = 128;
         private const double FrameSeconds = Hop / (double)SampleRate;
+        // A frame's time is the middle of its window, where an onset in it is heard; its start put beats 70 ms early.
+        private const double Middle = Window / 2.0 / SampleRate;
+        private const int BeatsInABar = 4;
+        private const double EnergyStep = 0.5;
 
         /// <summary>
         /// Below this, the beats are not used: the scene holds as planned. Set from real songs (design check M1, 7 Nov):
@@ -22,53 +27,109 @@ namespace ModernImageViewer.Cinematic
         /// </summary>
         public const double LeastConfidence = 3.0;
 
+        /// <summary>How much the strongest beat of the four must stand above the others to count as the bar's first.</summary>
+        public const double LeastBarStrength = 1.12;
+
         public IReadOnlyList<double> Beats { get; }
+        /// <summary>The first beat of each bar, when <see cref="BarsUsable"/>.</summary>
+        public IReadOnlyList<double> Downbeats { get; }
         public double Bpm { get; }
         public double Confidence { get; }
-        public bool Usable => Confidence >= LeastConfidence && Beats.Count >= 8;
+        public double BarStrength { get; }
+        public bool BarsAgree { get; }
+        /// <summary>How many times the count of beats in a bar moved (a beat skipped or added), for the timing log.</summary>
+        public int BarChanges { get; private set; }
+        private readonly double[] _energy;
 
-        private BeatGrid(IReadOnlyList<double> beats, double bpm, double confidence)
+        public bool Usable => Confidence >= LeastConfidence && Beats.Count >= 8;
+        public bool BarsUsable => Usable && BarsAgree && BarStrength >= LeastBarStrength && Downbeats.Count >= 4;
+
+        private BeatGrid(IReadOnlyList<double> beats, IReadOnlyList<double> downbeats, double bpm, double confidence, double barStrength, bool barsAgree, double[] energy)
         {
             Beats = beats;
+            Downbeats = downbeats;
             Bpm = bpm;
             Confidence = confidence;
+            BarStrength = barStrength;
+            BarsAgree = barsAgree;
+            _energy = energy;
         }
 
-        public static readonly BeatGrid None = new(Array.Empty<double>(), 0, 0);
+        public static readonly BeatGrid None = new(Array.Empty<double>(), Array.Empty<double>(), 0, 0, 0, false, Array.Empty<double>());
 
         /// <summary>The beat nearest <paramref name="planned"/> seconds, if one lies between the two limits.</summary>
-        public double? NearestBeat(double planned, double earliest, double latest)
+        public double? NearestBeat(double planned, double earliest, double latest) => Usable ? Nearest(Beats, planned, earliest, latest) : null;
+
+        /// <summary>The first beat of a bar nearest <paramref name="planned"/>, if the bars are trusted and one lies between the limits.</summary>
+        public double? NearestDownbeat(double planned, double earliest, double latest) => BarsUsable ? Nearest(Downbeats, planned, earliest, latest) : null;
+
+        private static double? Nearest(IReadOnlyList<double> times, double planned, double earliest, double latest)
         {
-            if (!Usable || latest < earliest) return null;
+            if (latest < earliest) return null;
             double? best = null;
-            foreach (double beat in Beats)
+            foreach (double time in times)
             {
-                if (beat < earliest) continue;
-                if (beat > latest) break;
-                if (best == null || Math.Abs(beat - planned) < Math.Abs(best.Value - planned)) best = beat;
+                if (time < earliest) continue;
+                if (time > latest) break;
+                if (best == null || Math.Abs(time - planned) < Math.Abs(best.Value - planned)) best = time;
             }
             return best;
         }
 
-        /// <summary>
-        /// Cut on the beat (design 3.10), for a scene just shown: how long to wait before starting the next change, so the
-        /// change lands on the beat nearest the planned end, inside Duration's shortest to longest. The change starts
-        /// <paramref name="changeDelay"/> after the wait ends (the next scene being put on screen), so the wait is that
-        /// much shorter. With no beats, no song position, one fixed duration, or no beat in reach: the planned hold.
-        /// </summary>
-        public static double WaitBeforeChange(BeatGrid? beats, double? songNow, double plannedHold, double shortest, double longest, double changeDelay)
+        /// <summary>The song's energy from <paramref name="from"/> to <paramref name="to"/> seconds: 0 its quietest, 1 its loudest. Null past its end.</summary>
+        public double? EnergyBetween(double from, double to)
         {
-            if (beats == null || songNow is not double now || longest - shortest < 0.01) return plannedHold;
-            double earliest = now + Math.Min(shortest, plannedHold), latest = now + Math.Max(longest, plannedHold);
-            if (beats.NearestBeat(now + plannedHold, earliest, latest) is not double beat) return plannedHold;
-            double wait = beat - now - changeDelay;
-            return wait < 1 ? plannedHold : wait;
+            if (_energy.Length == 0 || !Usable) return null;
+            int a = Math.Max(0, (int)(from / EnergyStep)), b = Math.Min(_energy.Length - 1, (int)(to / EnergyStep));
+            if (a >= _energy.Length || b < a) return null;
+            double sum = 0;
+            for (int i = a; i <= b; i++) sum += _energy[i];
+            return sum / (b - a + 1);
+        }
+
+        /// <summary>How a scene's hold was chosen, for the timing log.</summary>
+        public enum Landing { AsPlanned, Beat, BarStart }
+
+        /// <summary>
+        /// For a scene just shown: how long to wait before starting the next change (design 3.10). Follow the music first
+        /// moves the planned end within Duration by the song's energy over the hold, toward the shortest when loud and the
+        /// longest when quiet, by <paramref name="follow"/> (0 to 1). Cut on the beat then puts the change on the first
+        /// beat of the bar nearest that end, or the nearest beat when the bars are not trusted. The change starts
+        /// <paramref name="changeDelay"/> after the wait ends, so the wait is that much shorter. With no beats, no song
+        /// position, or one fixed duration: the planned hold.
+        /// </summary>
+        public static double WaitBeforeChange(BeatGrid? beats, double? songNow, double plannedHold, double shortest, double longest,
+            double changeDelay, bool cutOnBeat, double follow, out Landing landing)
+        {
+            landing = Landing.AsPlanned;
+            if (beats == null || !beats.Usable || songNow is not double now || longest - shortest < 0.01) return plannedHold;
+            double low = Math.Min(shortest, plannedHold), high = Math.Max(longest, plannedHold);
+
+            double target = plannedHold;
+            if (follow > 0 && beats.EnergyBetween(now, now + plannedHold) is double energy)
+            {
+                double byEnergy = longest - energy * (longest - shortest);
+                target = plannedHold + Math.Clamp(follow, 0, 1) * (byEnergy - plannedHold);
+            }
+            if (!cutOnBeat)
+            {
+                double plain = target - changeDelay;
+                return plain < 1 ? plannedHold : plain;
+            }
+
+            double end;
+            if (beats.NearestDownbeat(now + target, now + low, now + high) is double bar) { end = bar; landing = Landing.BarStart; }
+            else if (beats.NearestBeat(now + target, now + low, now + high) is double beat) { end = beat; landing = Landing.Beat; }
+            else { landing = Landing.AsPlanned; return target < 1 ? plannedHold : target; }
+            double wait = end - now - changeDelay;
+            if (wait < 1) { landing = Landing.AsPlanned; return plannedHold; }
+            return wait;
         }
 
         /// <summary>Beats from mono samples at <see cref="SampleRate"/>.</summary>
         public static BeatGrid Find(float[] samples)
         {
-            var onset = OnsetStrength(samples);
+            var (onset, bass, loudness) = Measure(samples);
             if (onset.Length < 200) return None;
 
             // Tempo: the lag at which the onsets best repeat, from 60 to 180 beats a minute, leaning toward 120 as listeners do.
@@ -98,7 +159,7 @@ namespace ModernImageViewer.Cinematic
             // Beats: each frame's best score is its onset plus the best earlier beat about one period back, less a cost for
             // straying from the period. The last strong beat is traced back.
             int n = onset.Length;
-            var score2 = new double[n];
+            var total = new double[n];
             var from = new int[n];
             const double tightness = 100;
             for (int t = 0; t < n; t++)
@@ -109,14 +170,14 @@ namespace ModernImageViewer.Cinematic
                 {
                     if (prev < 0) continue;
                     double stray = Math.Log((t - prev) / (double)period);
-                    double s = score2[prev] - tightness * stray * stray;
+                    double s = total[prev] - tightness * stray * stray;
                     if (bestFrom < 0 || s > best) { best = s; bestFrom = prev; }
                 }
-                score2[t] = onset[t] + (bestFrom >= 0 ? best : 0);
+                total[t] = onset[t] + (bestFrom >= 0 ? best : 0);
                 from[t] = bestFrom;
             }
             int end = n - 1;
-            for (int t = n - 1; t >= Math.Max(0, n - period); t--) if (score2[t] > score2[end]) end = t;
+            for (int t = n - 1; t >= Math.Max(0, n - period); t--) if (total[t] > total[end]) end = t;
             var frames = new List<int>();
             for (int t = end; t >= 0; t = from[t])
             {
@@ -133,37 +194,160 @@ namespace ModernImageViewer.Cinematic
                     if (onset[f] > onset[frames[i]]) frames[i] = f;
             }
 
-            // A frame's time is the middle of its window, where an onset in it is heard; its start put beats 70 ms early.
-            const double middle = Window / 2.0 / SampleRate;
-            return new BeatGrid(frames.Select(f => f * FrameSeconds + middle).ToList(), 60.0 / (period * FrameSeconds), confidence);
+            var (downbeats, barStrength, barsAgree, barChanges) = Bars(frames, onset, bass);
+            return new BeatGrid(frames.Select(Seconds).ToList(), downbeats.Select(Seconds).ToList(), 60.0 / (period * FrameSeconds),
+                confidence, barStrength, barsAgree, Energy(loudness)) { BarChanges = barChanges };
         }
 
-        /// <summary>How much the spectrum rises, frame to frame, summed over frequencies; less its local average, never below zero.</summary>
-        private static double[] OnsetStrength(float[] samples)
+        private static double Seconds(int frame) => frame * FrameSeconds + Middle;
+
+        /// <summary>
+        /// Which beat of every four starts a bar: the one where the bass, and then everything, hits hardest on average.
+        /// Strength is how far it stands above the other three; the two halves of the song must pick the same one, or a
+        /// skipped beat or a change of time has moved the bars and they are not trusted.
+        /// </summary>
+        private static (List<int> Downbeats, double Strength, bool Agree, int Changes) Bars(List<int> frames, double[] onset, double[] bass)
+        {
+            if (frames.Count < 4 * BeatsInABar) return (new List<int>(), 0, false, 0);
+            double Hit(int frame)
+            {
+                double b = 0, o = 0;
+                for (int f = Math.Max(0, frame - 2); f <= Math.Min(onset.Length - 1, frame + 2); f++) { b = Math.Max(b, bass[f]); o = Math.Max(o, onset[f]); }
+                return b + 0.5 * o;
+            }
+            var hits = frames.Select(Hit).ToArray();
+            int BestPhase(int start, int stop, out double strength)
+            {
+                var sums = new double[BeatsInABar];
+                var counts = new int[BeatsInABar];
+                for (int i = Math.Max(0, start); i < Math.Min(hits.Length, stop); i++) { sums[i % BeatsInABar] += hits[i]; counts[i % BeatsInABar]++; }
+                var means = sums.Select((s, p) => counts[p] == 0 ? 0 : s / counts[p]).ToArray();
+                int best = Array.IndexOf(means, means.Max());
+                double others = means.Where((_, p) => p != best).Average();
+                strength = others <= 0 ? 0 : means[best] / others;
+                return best;
+            }
+            // One count for the song that may change where the music says so: one beat the tracker skipped or added moves
+            // every later bar by a beat, so a single whole-song count would be wrong after it. Each beat scores for the count
+            // that makes it a bar's first beat and against the others; a change of count costs about two bars' evidence,
+            // so the count holds through ordinary variation and moves only at a real slip.
+            double mean = hits.Average();
+            if (mean <= 0) return (new List<int>(), 0, false, 0);
+            int n = hits.Length;
+            var score = new double[n, BeatsInABar];
+            var back = new int[n, BeatsInABar];
+            double changeCost = 2.0 * BeatsInABar * 0.25;
+            for (int i = 0; i < n; i++)
+                for (int p = 0; p < BeatsInABar; p++)
+                {
+                    double gain = (i % BeatsInABar == p ? 1.0 : -1.0 / (BeatsInABar - 1)) * (hits[i] / mean - 1);
+                    if (i == 0) { score[i, p] = gain; continue; }
+                    int bestFrom = p;
+                    double best = score[i - 1, p];
+                    for (int q = 0; q < BeatsInABar; q++)
+                        if (q != p && score[i - 1, q] - changeCost > best) { best = score[i - 1, q] - changeCost; bestFrom = q; }
+                    score[i, p] = best + gain;
+                    back[i, p] = bestFrom;
+                }
+            var phases = new int[n];
+            int last = 0;
+            for (int p = 1; p < BeatsInABar; p++) if (score[n - 1, p] > score[n - 1, last]) last = p;
+            for (int i = n - 1; i >= 0; i--) { phases[i] = last; if (i > 0) last = back[i, last]; }
+
+            var downbeats = new List<int>();
+            double onDown = 0, offDown = 0;
+            int countDown = 0, countOff = 0, lastDown = -BeatsInABar, changes = 0;
+            for (int i = 0; i < n; i++)
+            {
+                if (i > 0 && phases[i] != phases[i - 1]) changes++;
+                if (i % BeatsInABar == phases[i] && i - lastDown >= BeatsInABar - 1)
+                {
+                    downbeats.Add(frames[i]);
+                    lastDown = i;
+                    onDown += hits[i]; countDown++;
+                }
+                else { offDown += hits[i]; countOff++; }
+            }
+            double strength = countDown == 0 || countOff == 0 || offDown <= 0 ? 0 : (onDown / countDown) / (offDown / countOff);
+            // Trusted when bar starts stand out and the count changes rarely: no more than once in thirty seconds. Eight real
+            // songs changed about once in fifty (at section breaks, where the tracker slips); the bar starts follow each change.
+            int beatsIn30s = Math.Max(16, (int)(30 / Math.Max(0.2, (Seconds(frames[^1]) - Seconds(frames[0])) / Math.Max(1, n - 1))));
+            return (downbeats, strength, changes <= Math.Max(1, n / beatsIn30s), changes);
+        }
+
+        /// <summary>Loudness every half second, smoothed over four seconds, from the song's tenth percentile (0) to its ninetieth (1).</summary>
+        private static double[] Energy(double[] loudness)
+        {
+            int per = Math.Max(1, (int)(EnergyStep / FrameSeconds));
+            int steps = loudness.Length / per;
+            if (steps < 8) return Array.Empty<double>();
+            var raw = new double[steps];
+            for (int s = 0; s < steps; s++)
+            {
+                double sum = 0;
+                for (int f = s * per; f < (s + 1) * per; f++) sum += loudness[f];
+                raw[s] = Math.Log(1e-6 + sum / per);
+            }
+            int reach = (int)(2.0 / EnergyStep);
+            var smooth = new double[steps];
+            for (int s = 0; s < steps; s++)
+            {
+                int a = Math.Max(0, s - reach), b = Math.Min(steps - 1, s + reach);
+                double sum = 0;
+                for (int i = a; i <= b; i++) sum += raw[i];
+                smooth[s] = sum / (b - a + 1);
+            }
+            var sorted = smooth.OrderBy(v => v).ToArray();
+            double quiet = sorted[sorted.Length / 10], loud = sorted[sorted.Length * 9 / 10];
+            if (loud - quiet < 1e-6) return smooth.Select(_ => 0.5).ToArray();
+            return smooth.Select(v => Math.Clamp((v - quiet) / (loud - quiet), 0, 1)).ToArray();
+        }
+
+        /// <summary>
+        /// Per frame: the onset strength (how much the spectrum rises, less its local average, never below zero), the same
+        /// for the bass alone (below about 200 Hz, where a kick lands), and the loudness.
+        /// </summary>
+        private static (double[] Onset, double[] Bass, double[] Loudness) Measure(float[] samples)
         {
             int frames = (samples.Length - Window) / Hop;
-            if (frames <= 0) return Array.Empty<double>();
+            if (frames <= 0) return (Array.Empty<double>(), Array.Empty<double>(), Array.Empty<double>());
+            const int bassTop = (int)(200.0 * Window / SampleRate);
             var hann = new double[Window];
             for (int i = 0; i < Window; i++) hann[i] = 0.5 - 0.5 * Math.Cos(2 * Math.PI * i / (Window - 1));
             var re = new double[Window];
             var im = new double[Window];
             var last = new double[Window / 2];
             var flux = new double[frames];
+            var bassFlux = new double[frames];
+            var loudness = new double[frames];
             for (int f = 0; f < frames; f++)
             {
                 int at = f * Hop;
-                for (int i = 0; i < Window; i++) { re[i] = samples[at + i] * hann[i]; im[i] = 0; }
+                double power = 0;
+                for (int i = 0; i < Window; i++) { re[i] = samples[at + i] * hann[i]; im[i] = 0; power += samples[at + i] * (double)samples[at + i]; }
+                loudness[f] = power / Window;
                 Fft(re, im);
-                double rise = 0;
+                double rise = 0, bassRise = 0;
                 for (int k = 1; k < Window / 2; k++)
                 {
                     double mag = Math.Log(1 + 100 * Math.Sqrt(re[k] * re[k] + im[k] * im[k]));
-                    if (f > 0 && mag > last[k]) rise += mag - last[k];
+                    if (f > 0 && mag > last[k])
+                    {
+                        rise += mag - last[k];
+                        if (k <= bassTop) bassRise += mag - last[k];
+                    }
                     last[k] = mag;
                 }
                 flux[f] = rise;
+                bassFlux[f] = bassRise;
             }
-            // Less the average of the half second around it, so a loud passage is not all onsets.
+            return (LessLocalAverage(flux), LessLocalAverage(bassFlux), loudness);
+        }
+
+        /// <summary>Less the average of the half second around it, so a loud passage is not all onsets; scaled to unit size.</summary>
+        private static double[] LessLocalAverage(double[] flux)
+        {
+            int frames = flux.Length;
             int half = (int)(0.25 / FrameSeconds);
             var onset = new double[frames];
             double running = 0;

@@ -1478,7 +1478,7 @@ namespace ModernImageViewer
                 Margin = new Thickness(0, 0, 4, 0)
             };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(beatToggle, "Cut on the beat");
-            ToolTipService.SetToolTip(beatRow, "Each scene changes on the beat of the song nearest its planned end, within Duration. A song without a clear beat, or one still being read, leaves the timing as it is. The show itself is not changed.");
+            ToolTipService.SetToolTip(beatRow, "Each scene changes on the first beat of a bar nearest its planned end, within Duration, or on the nearest beat when the bars are not clear. A song without a clear beat, or one still being read, leaves the timing as it is. The show itself is not changed.");
             beatToggle.Toggled += (_, _) => MainWindow.Instance?.SetMusicCutOnBeat(beatToggle.IsOn);
             Grid.SetColumn(beatLabel, 0);
             Grid.SetColumn(beatToggle, 1);
@@ -1486,11 +1486,46 @@ namespace ModernImageViewer
             beatRow.Children.Add(beatToggle);
             panel.Children.Add(beatRow);
 
+            // Follow the music: loud passages hold toward Duration's shortest, quiet ones toward its longest.
+            var followRow = new Grid { ColumnSpacing = 12, MinHeight = 34 };
+            followRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            followRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
+            var followLabel = new TextBlock { Text = "Follow the music", VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
+            var followRight = new Grid { Width = 230, ColumnSpacing = 8, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+            followRight.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(146) });
+            followRight.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(76) });
+            string FollowText(double v) => v < 0.5 ? "Off" : $"{v:0}%";
+            var followReadout = new TextBlock { Text = FollowText(music?.Follow ?? 50), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, FontSize = 12, Opacity = isMusicActive ? 0.82 : 0.4, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
+            var followSlider = new Slider { Minimum = 0, Maximum = 100, StepFrequency = 5, Value = music?.Follow ?? 50, Width = 146, VerticalAlignment = VerticalAlignment.Center, IsEnabled = isMusicActive };
+            var saveFollow = DispatcherQueue.CreateTimer();
+            saveFollow.Interval = TimeSpan.FromMilliseconds(350);
+            saveFollow.IsRepeating = false;
+            saveFollow.Tick += (_, _) => MainWindow.Instance?.SetMusicFollow(followSlider.Value);
+            followSlider.ValueChanged += (_, e) =>
+            {
+                followReadout.Text = FollowText(e.NewValue);
+                saveFollow.Stop();
+                saveFollow.Start();
+            };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(followSlider, "Follow the music");
+            ToolTipService.SetToolTip(followRow, "How far scene lengths follow the song: loud, busy passages hold toward Duration's shortest, quiet ones toward its longest. Off keeps the planned lengths.");
+            Grid.SetColumn(followSlider, 0);
+            Grid.SetColumn(followReadout, 1);
+            followRight.Children.Add(followSlider);
+            followRight.Children.Add(followReadout);
+            Grid.SetColumn(followLabel, 0);
+            Grid.SetColumn(followRight, 1);
+            followRow.Children.Add(followLabel);
+            followRow.Children.Add(followRight);
+            panel.Children.Add(followRow);
+
             onToggle.Toggled += (_, _) =>
             {
                 MainWindow.Instance?.SetMusicInSurprise(onToggle.IsOn);
                 volSlider.IsEnabled = hasFolder && onToggle.IsOn;
                 beatToggle.IsEnabled = hasFolder && onToggle.IsOn;
+                followSlider.IsEnabled = hasFolder && onToggle.IsOn;
+                followReadout.Opacity = onToggle.IsOn ? 0.82 : 0.4;
                 volReadout.Opacity = onToggle.IsOn ? 0.82 : 0.4;
                 if (!onToggle.IsOn) StopAutoPlayMusic();
                 else if (_autoPlaySeconds > 0) StartAutoPlayMusic();
@@ -3483,15 +3518,18 @@ namespace ModernImageViewer
         private double WaitOnTheBeat()
         {
             double planned = _layoutSeconds;
-            if (MainWindow.Instance?.MyMusic is not { CutOnBeat: true } || _surpriseMusic == null) return planned;
+            var music = MainWindow.Instance?.MyMusic;
+            if (music == null || _surpriseMusic == null || (!music.CutOnBeat && music.Follow <= 0)) return planned;
             var settings = GeneratorSettingsFor(_activeShow);
             if (!settings.AutoPlayRandom) return planned;
-            double wait = Cinematic.BeatGrid.WaitBeforeChange(_surpriseMusic.Beats, _surpriseMusic.Position, planned,
+            var beats = _surpriseMusic.Beats;
+            double? now = _surpriseMusic.Position;
+            double wait = Cinematic.BeatGrid.WaitBeforeChange(beats, now, planned,
                 Math.Min(settings.RandomFewestSeconds, settings.RandomMostSeconds), Math.Max(settings.RandomFewestSeconds, settings.RandomMostSeconds),
-                _changeDelaySeconds);
-            PlayTiming.Write(wait == planned
-                ? $"cut on the beat: none in reach, holds {planned} s"
-                : $"cut on the beat: holds {wait + _changeDelaySeconds:0.00} s for {planned} s planned (change takes {_changeDelaySeconds * 1000:0} ms)");
+                _changeDelaySeconds, music.CutOnBeat, music.Follow / 100.0, out var landing);
+            string energy = beats != null && now is double at && beats.EnergyBetween(at, at + planned) is double e ? $", energy {e:0.00}" : "";
+            string bars = beats == null ? "no beats read" : beats.BarsUsable ? $"bars trusted ({beats.BarStrength:0.00})" : $"bars not trusted ({beats.BarStrength:0.00}, {beats.BarChanges} changes)";
+            PlayTiming.Write($"music: {planned} s planned, holds {(wait == planned ? wait : wait + _changeDelaySeconds):0.00} s, lands on {landing}{energy}; {bars}");
             return wait;
         }
 

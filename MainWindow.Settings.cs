@@ -12,7 +12,15 @@ namespace ModernImageViewer
     {
         public MusicChoices MyMusic => new(
             _currentSettings.MusicFolder, _currentSettings.MusicLowestStars, _currentSettings.MusicIncludesUnrated,
-            _currentSettings.MusicInCinematic, _currentSettings.MusicInSurprise, _currentSettings.MusicVolume, _currentSettings.MusicCutOnBeat);
+            _currentSettings.MusicInCinematic, _currentSettings.MusicInSurprise, _currentSettings.MusicVolume, _currentSettings.MusicCutOnBeat,
+            _currentSettings.MusicFollow);
+
+        /// <summary>Follow the music (design 3.10): how far a show's scene lengths follow the song's energy, 0 to 100.</summary>
+        public void SetMusicFollow(double percent)
+        {
+            _currentSettings.MusicFollow = Math.Clamp(percent, 0, 100);
+            SaveAllSettings();
+        }
 
         public event Action? MusicSettingsChanged;
 
@@ -209,7 +217,7 @@ namespace ModernImageViewer
     }
 
     /// <summary>The music set in the options, and the controls for a rating, which a show's own music uses too.</summary>
-    public sealed record MusicChoices(string? Folder, double LowestStars, bool IncludesUnrated, bool InCinematic, bool InSurprise, double Volume, bool CutOnBeat = true)
+    public sealed record MusicChoices(string? Folder, double LowestStars, bool IncludesUnrated, bool InCinematic, bool InSurprise, double Volume, bool CutOnBeat = true, double Follow = 50)
     {
         public const string FormatsNote = "Ratings are read from MP3 and FLAC tags. M4A and WMA count as unrated.";
 
