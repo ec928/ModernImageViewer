@@ -424,6 +424,9 @@ namespace ModernImageViewer
         /// </summary>
         public CinematicOverrides? MultiImage { get; set; }
 
+        /// <summary>The preset last chosen or kept on the Show card ("Multi-Image", "Cinematic", "My preset 1" to "3"): a new show starts from it.</summary>
+        public string? LastPreset { get; set; }
+
         /// <summary>
         /// These settings with a set of overrides applied, by its name; this same object when the name is none or unknown.
         /// A copy, so the saved settings are never changed by it.

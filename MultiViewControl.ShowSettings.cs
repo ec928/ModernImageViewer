@@ -17,13 +17,44 @@ namespace ModernImageViewer
 
         private const string MultiImagePreset = "Multi-Image";
 
+        /// <summary>A new show, starting from the preset last chosen on the Show card, so the choice is kept across shows and sessions.</summary>
+        private ShowProject NewShowWithLastPreset()
+        {
+            var show = new ShowProject { Title = "Storyboard" };
+            ApplyPreset(show, SurpriseChoices.LastPreset);
+            return show;
+        }
+
+        /// <summary>The show takes a preset's values by its name. A My preset that is empty, or an unknown name, is Multi-Image.</summary>
+        private void ApplyPreset(ShowProject target, string? name)
+        {
+            if (name != null && name.StartsWith("My preset ", StringComparison.Ordinal)
+                && int.TryParse(name.Substring("My preset ".Length), out int number)
+                && SurpriseChoices.MyPresets.ElementAtOrDefault(number - 1) is CinematicOverrides saved)
+            {
+                target.GeneratorOverrides = null;
+                target.PresetSlot = number - 1;
+                target.PresetName = name;
+                target.GlobalDefaults.TakeValues(saved);
+            }
+            else SetCinematic(target, name == CinematicOverrides.Name);
+        }
+
+        /// <summary>Remembers the preset the open show uses, in the app's settings.</summary>
+        private void RememberPreset(ShowProject show)
+        {
+            string name = ActivePresetName(show);
+            if (name == "Custom" || name == SurpriseChoices.LastPreset) return;
+            ChangeSurpriseChoices(o => o.LastPreset = name);
+        }
+
         // Whether the Show card's Designs section is open; it starts folded, as Engine settings' sections do.
         private bool _showDesignsOpen;
 
         /// <summary>The open show's values, for a change: the show takes every value it is played with now, if it held none.</summary>
         private ShowGlobalDefaults HoldingShowValues()
         {
-            var show = _activeShow ??= new ShowProject { Title = "Storyboard" };
+            var show = _activeShow ??= NewShowWithLastPreset();
             if (!show.GlobalDefaults.HoldsValues)
                 show.GlobalDefaults.TakeValues(CinematicOverrides.From(GeneratorSettingsFor(show)));
             return show.GlobalDefaults;
@@ -82,6 +113,7 @@ namespace ModernImageViewer
                 show.PresetSlot = old.PresetSlot;
                 show.GlobalDefaults.TakeValues(CinematicOverrides.From(GeneratorSettingsFor(old)));
             }
+            else ApplyPreset(show, SurpriseChoices.LastPreset);
             _activeShow = show;
             _selectedShowScene = null;
             _canvasSceneId = null;
@@ -105,7 +137,8 @@ namespace ModernImageViewer
         private void FillShowSettings(StackPanel panel, Action? changed)
         {
             panel.Children.Clear();
-            var show = _activeShow;
+            // With no show open yet, the card shows the show Play would make: the last preset chosen.
+            var show = _activeShow ??= NewShowWithLastPreset();
             var values = GeneratorSettingsFor(show);
 
             StackPanel into = panel;
@@ -192,6 +225,7 @@ namespace ModernImageViewer
 
             void Applied(string message)
             {
+                if (_activeShow != null) RememberPreset(_activeShow);
                 CancelPreparedSurprise();
                 DropScenesDraftedAhead();
                 _updateStorySummary?.Invoke();
@@ -205,7 +239,7 @@ namespace ModernImageViewer
             // Restores a preset: the show takes its values. An empty My preset has nothing to restore.
             void Restore(string name, int? slot)
             {
-                var target = _activeShow ??= new ShowProject { Title = "Storyboard" };
+                var target = _activeShow ??= NewShowWithLastPreset();
                 if (slot is int i)
                 {
                     if (presets.ElementAtOrDefault(i) is not CinematicOverrides saved)
@@ -225,7 +259,7 @@ namespace ModernImageViewer
             // Keeps this show's values in a preset, and makes it the one in use.
             void Keep(string name, int? slot)
             {
-                var target = _activeShow ??= new ShowProject { Title = "Storyboard" };
+                var target = _activeShow ??= NewShowWithLastPreset();
                 var snapshot = CinematicOverrides.From(GeneratorSettingsFor(target));
                 ChangeSurpriseChoices(o =>
                 {
@@ -327,8 +361,9 @@ namespace ModernImageViewer
                     DialogFooter.MainButtonOnRight(dialog);
                     if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
                 }
-                var target = _activeShow ??= new ShowProject { Title = "Storyboard" };
+                var target = _activeShow ??= NewShowWithLastPreset();
                 ResetShowPresetToDefaults(target);
+                RememberPreset(target);
                 _updateStorySummary?.Invoke();
                 NoteUserAction();
                 changed?.Invoke();

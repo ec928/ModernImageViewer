@@ -3729,6 +3729,7 @@ namespace ModernImageViewer
                     show.PresetSlot = previous.PresetSlot;
                     show.GlobalDefaults.TakeValues(CinematicOverrides.From(GeneratorSettingsFor(previous)));
                 }
+                else if (overrides == null) ApplyPreset(show, SurpriseChoices.LastPreset);
                 else SetCinematic(show, cinematic);
             }
             _activeShow = show;
