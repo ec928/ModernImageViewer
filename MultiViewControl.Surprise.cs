@@ -3549,6 +3549,19 @@ namespace ModernImageViewer
         private double _changeDelaySeconds = 0.3;
         // The coming change lands on a big moment of the song: it is a straight cut.
         private bool _nextChangeIsHardCut;
+        // The wait the music chose for the scene on screen, and since when: chosen once, before its camera was planned.
+        private (double Wait, System.Diagnostics.Stopwatch Since)? _musicWait;
+
+        /// <summary>The wait before the next change: the one chosen for this scene's camera, less the time since, or chosen now.</summary>
+        private double TakeWait()
+        {
+            if (_musicWait is { } chosen)
+            {
+                _musicWait = null;
+                return chosen.Wait - chosen.Since.Elapsed.TotalSeconds;
+            }
+            return WaitOnTheBeat();
+        }
 
         /// <summary>
         /// The wait before the next scene's change: its planned hold, or, with Cut on the beat and a song whose beats are
@@ -3627,11 +3640,11 @@ namespace ModernImageViewer
                     StopAutoPlay();
                     return;
                 }
-                timer.Interval = TimeSpan.FromSeconds(Math.Max(1, WaitOnTheBeat()));
+                timer.Interval = TimeSpan.FromSeconds(Math.Max(1, TakeWait()));
                 if (ReferenceEquals(_autoPlayTimer, timer)) timer.Start();
             };
             await PlayNextStoryboardSceneAsync(fade: true);
-            timer.Interval = TimeSpan.FromSeconds(Math.Max(1, WaitOnTheBeat()));
+            timer.Interval = TimeSpan.FromSeconds(Math.Max(1, TakeWait()));
             if (ReferenceEquals(_autoPlayTimer, timer)) timer.Start();
         }
 
@@ -3725,9 +3738,26 @@ namespace ModernImageViewer
             // Before a Cut to a closer view of this image the move ends with the hold: its end frame is where the next starts.
             bool cutNext = liveIndex + 1 < liveScenes.Count && liveScenes[liveIndex + 1].Transition == nameof(LayoutTransition.Cut);
             double overrun = cutNext ? 0 : CameraOverrunSeconds;
+            // Whether this change is a hard cut was decided with the last scene's hold: read it before this scene's hold is
+            // chosen, which decides the next one.
+            bool hardCut = _nextChangeIsHardCut;
+            _nextChangeIsHardCut = false;
+            // The music chooses this scene's hold now, before the camera is planned, so the move fills the hold it gets
+            // (design 3.10). Planned from the saved hold, a scene held longer for the music sat still after its move, up
+            // to 5.5 s before a hard cut. The saved hold is unchanged: a replay with the music off plays as drafted.
+            double hold = _layoutSeconds;
+            _musicWait = null;
+            if (_autoPlaySeconds > 0)
+            {
+                double wait = WaitOnTheBeat();
+                _musicWait = (wait, System.Diagnostics.Stopwatch.StartNew());
+                hold = wait == _layoutSeconds ? _layoutSeconds : wait + _changeDelaySeconds;
+            }
+            double? moveSeconds = null;
             if (scene.CameraOverride != null)
             {
-                var move = scene.CameraOverride.ToCameraMove(_layoutSeconds + overrun);
+                var move = scene.CameraOverride.ToCameraMove(hold + overrun);
+                moveSeconds = move?.Seconds;
                 if (move != null)
                 {
                     _lastCameraKind = move.Kind;
@@ -3741,9 +3771,10 @@ namespace ModernImageViewer
                 // Dynamic: the scene keeps its saved layout, and this call plans only the move, aimed at the faces as shown.
                 var subjects = await SubjectsOnCanvasAsync();
                 var made = SceneCall.Make(new SceneRequest(Array.Empty<PhotoFacts>(), RootGrid.ActualWidth, RootGrid.ActualHeight,
-                    showSettings, _layoutSeconds, Random.Shared.Next(), LastKind: _lastCameraKind,
+                    showSettings, hold, Random.Shared.Next(), LastKind: _lastCameraKind,
                     Keep: new KeptLayout(null, subjects)));
                 var move = made?.Move;
+                moveSeconds = move?.Seconds;
                 if (move != null)
                 {
                     _lastCameraKind = move.Kind;
@@ -3757,8 +3788,6 @@ namespace ModernImageViewer
             // How long putting a scene on screen takes, from its turn to its change, for Cut on the beat. A turn that waited
             // for its scene to be made says nothing about that.
             if (!heldForNext) _changeDelaySeconds = 0.7 * _changeDelaySeconds + 0.3 * turnClock.Elapsed.TotalSeconds;
-            bool hardCut = _nextChangeIsHardCut;
-            _nextChangeIsHardCut = false;
             if (before != null)
                 ChangeLayoutOver(before, outgoingStep, fadeSeconds, hardCut ? LayoutTransition.Cut
                     : Enum.TryParse<LayoutTransition>(scene.Transition, out var planned) ? planned : LayoutTransition.Crossfade);
@@ -3769,10 +3798,10 @@ namespace ModernImageViewer
             string sceneName = scene.Title ?? scene.Recipe ?? $"Scene {displayIndex}";
             // Only with the bar up: once it has hidden for want of movement, nothing else should come up over the picture.
             if (_isHudVisible) ShowAutoPlayToast($"Scene {displayIndex} of {totalDisplay}: {sceneName}");
-            if (_autoPlaySeconds > 0) StartPlaybackProgress(_layoutSeconds);
+            if (_autoPlaySeconds > 0) StartPlaybackProgress(hold);
             else StopPlaybackProgress();
 
-            PlayTiming.Write($"scene {currentIndex + 1} shown {PlayTiming.Now - turnCame} ms after its turn came, holds {_layoutSeconds} s, came in by {(hardCut ? "hard cut" : $"{scene.Transition} over {fadeSeconds:0.00} s")}");
+            PlayTiming.Write($"scene {currentIndex + 1} shown {PlayTiming.Now - turnCame} ms after its turn came, holds {hold:0.00} s ({_layoutSeconds} s saved), camera move {(moveSeconds is double ms ? $"{ms:0.00} s" : "none")}, came in by {(hardCut ? "hard cut" : $"{scene.Transition} over {fadeSeconds:0.00} s")}");
             // A show still being made goes on to its next scene when that is ready; a finished one goes round again.
             bool growing = ReferenceEquals(_activeShow, _showBeingBuilt);
             _showPlaybackIndex = liveScenes.Count == 0 ? 0
@@ -3832,7 +3861,7 @@ namespace ModernImageViewer
             {
                 _autoPlayTimer.Stop();
                 // The scene after it lands on the music as any other does, not on the plain planned hold.
-                _autoPlayTimer.Interval = TimeSpan.FromSeconds(Math.Max(1, _autoPlaySeconds > 0 ? WaitOnTheBeat() : _layoutSeconds));
+                _autoPlayTimer.Interval = TimeSpan.FromSeconds(Math.Max(1, _autoPlaySeconds > 0 ? TakeWait() : _layoutSeconds));
                 _autoPlayTimer.Start();
             }
         }
