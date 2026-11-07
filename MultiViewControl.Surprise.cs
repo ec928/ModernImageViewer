@@ -3306,15 +3306,25 @@ namespace ModernImageViewer
                     });
 
                     // Replace show keeps the show's overrides: a Cinematic storyboard is replaced by another one.
-                    string? overrides = _activeShow?.GeneratorOverrides;
+                    var old = _activeShow;
+                    string? overrides = old?.GeneratorOverrides;
+                    var oldSettings = GeneratorSettingsFor(old);
                     _activeShow = await ShowDirector.DraftAsync(
                         facts,
-                        GeneratorSettingsFor(_activeShow),
+                        oldSettings,
                         ActualWidth,
                         ActualHeight,
                         overrides != null ? $"{overrides} storyboard" : "Auto-Drafted Presentation",
                         progress);
-                    SetCinematic(_activeShow, overrides == CinematicOverrides.Name);
+                    // The new show keeps the old one's preset and values (a My preset too), not only Cinematic.
+                    if (old != null && old.GlobalDefaults.HoldsValues)
+                    {
+                        _activeShow.GeneratorOverrides = old.GeneratorOverrides;
+                        _activeShow.PresetName = old.PresetName;
+                        _activeShow.PresetSlot = old.PresetSlot;
+                        _activeShow.GlobalDefaults.TakeValues(CinematicOverrides.From(oldSettings));
+                    }
+                    else ApplyPreset(_activeShow, SurpriseChoices.LastPreset);
                     _selectedShowScene = null;
                     _canvasSceneId = null;
                     _isStoryboardPlayback = false;
@@ -3450,8 +3460,7 @@ namespace ModernImageViewer
                 _selectedShowScene = null;
                 _canvasSceneId = null;
                 _activeShow.Scenes.Clear();
-                // Clearing ends the show, so the next one is made with the main settings.
-                SetCinematic(_activeShow, false);
+                // Clearing empties the show but keeps its preset and values: the next Play makes scenes the same way.
                 scenesCollection.Clear();
                 SyncStoryImageRange();
             };
@@ -3744,6 +3753,8 @@ namespace ModernImageViewer
             _showBeingBuilt = show;
             PlayTiming.Start(SurpriseChoices.LogPlayTiming);
 
+            // Every image dealt at least once, placed or not: the end of the first round through the session.
+            var dealtOnce = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             bool started = false;
             while (Current())
             {
@@ -3757,8 +3768,10 @@ namespace ModernImageViewer
                 var session = SessionPictures();
                 if (session.Count == 0) break;
                 deck.MatchSession(session);
-                // Every image is in a scene: more are made only while the show plays, so a pause does not draft forever.
-                if (started && !IsPlayingStoryboard && !show.ImagesNotInShow(session).Any())
+                // Every image has been dealt once: more are made only while the show plays, so a pause does not draft forever.
+                // Dealt, not placed: screens and near-repeats are left out and a layout may take fewer, so some images
+                // are never in a scene, and waiting for that drafted without end (409 scenes from 182 images).
+                if (started && !IsPlayingStoryboard && session.All(dealtOnce.Contains))
                 {
                     await _storyboardAdvanced.WaitAsync(TimeSpan.FromSeconds(2));
                     continue;
@@ -3769,6 +3782,7 @@ namespace ModernImageViewer
                 int draftedAt = _upcomingStepRevision;
                 var chosen = DealHand(deck, settings).Where(p => !_imagesBeingDrafted.Contains(p)).ToList();
                 if (chosen.Count == 0) break;
+                dealtOnce.UnionWith(chosen);
                 _imagesBeingDrafted.UnionWith(chosen);
                 ShowScene? scene;
                 try
