@@ -206,8 +206,21 @@ namespace ModernImageViewer
         /// </summary>
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public double? HeroSize { get; set; }
-        /// <summary>Frame width, for every frame: Gallery wall's card and gaps, a hero's outline, a print's border, a circle's outline.</summary>
+        /// <summary>
+        /// Frame width, for every frame: Gallery wall's card and gaps, a hero's outline, a print's border, a circle's outline.
+        /// A range: each layout picks one width in it. GapScale is the narrow end (the single width of earlier versions).
+        /// </summary>
         public double GapScale { get; set; } = 1;
+        public double GapScaleLargest { get; set; } = 1;
+        public const double NarrowestFrame = 0.25, WidestFrame = 3;
+
+        /// <summary>One frame width for a layout, in the Frame width range.</summary>
+        public double PickFrameWidth(Random random)
+        {
+            // A wide end below the narrow one is a single width, as a file from before the range reads.
+            double low = GapScale, high = Math.Max(GapScale, GapScaleLargest);
+            return high - low < 0.001 ? low : low + random.NextDouble() * (high - low);
+        }
         /// <summary>Frame color, for every frame. Any: each layout picks white, black or a tone from its images.</summary>
         public string Card { get; set; } = CardAny;
 
@@ -472,7 +485,9 @@ namespace ModernImageViewer
                 }
                 read.HeroSmallest = Math.Clamp(read.HeroSmallest, HeroLowest, HeroHighest);
                 read.HeroLargest = Math.Clamp(read.HeroLargest, read.HeroSmallest, HeroHighest);
-                read.GapScale = Math.Clamp(read.GapScale, 0.25, 3);
+                read.GapScale = Math.Clamp(read.GapScale, NarrowestFrame, WidestFrame);
+                // A file from before the range holds one width: the range is that width alone.
+                read.GapScaleLargest = Math.Clamp(read.GapScaleLargest, read.GapScale, WidestFrame);
                 read.BackdropVignetteOdds = Math.Clamp(read.BackdropVignetteOdds, 0, MostFavouredDesign);
                 read.BackdropGradientOdds = Math.Clamp(read.BackdropGradientOdds, 0, MostFavouredDesign);
                 read.BackdropSolidOdds = Math.Clamp(read.BackdropSolidOdds, 0, MostFavouredDesign);
@@ -1023,7 +1038,7 @@ namespace ModernImageViewer
         {
             // One sheet of card with the pictures set into it: the margin all round matches the gaps between them.
             string card = FrameColorFor(photos, random, options);
-            double gap = Math.Clamp(Math.Min(w, h) * (0.012 + random.NextDouble() * 0.012), 6, 20) * options.GapScale;
+            double gap = Math.Clamp(Math.Min(w, h) * (0.012 + random.NextDouble() * 0.012), 6, 20) * options.PickFrameWidth(random);
             double radius = random.Next(3) == 0 ? gap * 0.6 : 0;
             var cellFrame = new CellBorderDto { Color = "#00000000", Padding = gap / 2, CornerRadius = radius, GutterMaterial = "Solid", GutterColor = card };
             var canvasFrame = new CellBorderDto { Color = "#00000000", Padding = gap / 2, GutterMaterial = "Solid", GutterColor = card };
@@ -1067,7 +1082,7 @@ namespace ModernImageViewer
             double cx = w * across[random.Next(across.Length)];
             double cy = h * (0.46 + random.NextDouble() * 0.08);
             double shadowRoom = Math.Min(w, h) * 0.035;
-            double line = Math.Clamp(Math.Min(w, h) * 0.007, 3, 8) * options.GapScale;
+            double line = Math.Clamp(Math.Min(w, h) * 0.007, 3, 8) * options.PickFrameWidth(random);
             string outline = FrameColorFor(photos, random, options);
             cells.Add(new ComposedCell
             {
@@ -1107,7 +1122,7 @@ namespace ModernImageViewer
             }
 
             double share = 1.05 + random.NextDouble() * 0.25;
-            double border = Math.Clamp(Math.Min(w, h) * 0.012, 5, 12) * options.GapScale;
+            double border = Math.Clamp(Math.Min(w, h) * 0.012, 5, 12) * options.PickFrameWidth(random);
             string borderColor = FrameColorFor(photos, random, options);
             double shadowRoom = Math.Min(w, h) * 0.03;
             // A featured print is larger and lies on top.
@@ -1192,7 +1207,7 @@ namespace ModernImageViewer
             int rows = (int)Math.Ceiling(count / (double)columns);
             var order = photos.OrderBy(_ => random.Next()).ToList();
             var boldest = order.Where(p => p.Featured).FirstOrDefault() ?? Boldest(order, random);
-            double line = Math.Clamp(Math.Min(w, h) * 0.006, 3, 7) * options.GapScale;
+            double line = Math.Clamp(Math.Min(w, h) * 0.006, 3, 7) * options.PickFrameWidth(random);
             string outline = FrameColorFor(photos, random, options);
             double shadowRoom = Math.Min(w, h) * 0.03;
             double evenArea = w * h * 0.8 / count;

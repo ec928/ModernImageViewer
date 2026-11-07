@@ -381,7 +381,7 @@ Shared by every design that has the thing, shown once above the designs:
 | Setting | Applies to | Default |
 |---|---|---|
 | **Frame color**: Any / White / Black / From the images (Any picks per layout) | Every frame: Gallery wall card, Hero outline, print borders, circle outlines | Any (Q13). Today Hero, prints and circles are white, so this changes them |
-| **Frame width** | The same frames (0 for borderless) | 1x |
+| **Frame width**: range | The same frames; each layout picks a width in the range | 1x to 1x (0.25x to 3x allowed). It was a single value here, against the rule that settings are ranges unless a fixed value is justified; a saved single width reads as that width alone |
 | **Backdrop**: odds of ambient blur, vignette, gradient, solid | Every design with a backdrop | Vignette Normal, Gradient Normal, Ambient blur Rare, Solid Rare (Q5). Today is vignette or gradient, 50/50 |
 
 Under each design, folded away:
