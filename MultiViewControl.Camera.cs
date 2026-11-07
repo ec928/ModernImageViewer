@@ -49,12 +49,22 @@ namespace ModernImageViewer
                 return;
             }
             _lastCameraKind = move.Kind;
+            StartFloats(amount);
+            RunCamera(move, goingHome: false);
+        }
+
+        /// <summary>
+        /// The floating cells (the hero, prints, circles) drift a little on paths of their own and follow the camera a little
+        /// further than the grid, by the strength the move was planned with. Every camera move over a layout starts them,
+        /// a show's scenes included: only the old direct mix did, so they stood still once Play always played the show.
+        /// </summary>
+        private void StartFloats(double amount)
+        {
+            RestFloatingCells();
             var cards = _freeformCards.Where(c => !IsEmptyCell(c.Item)).OrderBy(c => c.ZIndex).ToList();
-            _floats.Clear();
             for (int i = 0; i < cards.Count; i++)
                 _floats.Add((cards[i], new CellFloat(i, cards.Count, amount, Random.Shared)));
             _floatClock.Restart();
-            RunCamera(move, goingHome: false);
         }
 
         /// <summary>Back to the whole layout, gently, so a pause does not jump.</summary>

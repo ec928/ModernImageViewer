@@ -3946,6 +3946,8 @@ namespace ModernImageViewer
                 if (move != null)
                 {
                     _lastCameraKind = move.Kind;
+                    // A path set by hand has no planned strength: the floats take one rolled in the show's Motion range.
+                    StartFloats(showSettings.PickMotion(Random.Shared));
                     RunCamera(move, goingHome: false);
                 }
             }
@@ -3953,12 +3955,14 @@ namespace ModernImageViewer
             {
                 // Dynamic: the scene keeps its saved layout, and this call plans only the move, aimed at the faces as shown.
                 var subjects = await SubjectsOnCanvasAsync();
-                var move = SceneCall.Make(new SceneRequest(Array.Empty<PhotoFacts>(), RootGrid.ActualWidth, RootGrid.ActualHeight,
+                var made = SceneCall.Make(new SceneRequest(Array.Empty<PhotoFacts>(), RootGrid.ActualWidth, RootGrid.ActualHeight,
                     showSettings, _layoutSeconds, Random.Shared.Next(), LastKind: _lastCameraKind,
-                    Keep: new KeptLayout(null, subjects)))?.Move;
+                    Keep: new KeptLayout(null, subjects)));
+                var move = made?.Move;
                 if (move != null)
                 {
                     _lastCameraKind = move.Kind;
+                    StartFloats(made!.Amount);
                     RunCamera(move, goingHome: false);
                 }
             }
