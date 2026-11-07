@@ -72,15 +72,6 @@ namespace ModernImageViewer
             changed?.Invoke();
         }
 
-        /// <summary>The storyboard's settings button names this show's preset, so the presets can be found there.</summary>
-        private string ShowSettingsLabel()
-        {
-            var values = GeneratorSettingsFor(_activeShow);
-            string preset = ActivePresetName(_activeShow);
-            string images = values.FewestPictures == values.MostPictures ? $"{values.FewestPictures}" : $"{values.FewestPictures}–{values.MostPictures}";
-            return $"Preset: {preset} · {images} images ▾";
-        }
-
         /// <summary>Before a show with scenes is replaced: true when it has none, or the user says to replace it.</summary>
         private async System.Threading.Tasks.Task<bool> ConfirmReplaceShowAsync()
         {
@@ -121,7 +112,6 @@ namespace ModernImageViewer
             _showPlaybackIndex = 0;
             _updateStorySummary?.Invoke();
             ShowShownBadge();
-            RefreshStoryboardSettingsLabel?.Invoke();
         }
 
         private static string PresetName(int slot, CinematicOverrides? preset) => $"My preset {slot + 1}" + (preset == null ? " (empty)" : "");
@@ -475,14 +465,23 @@ namespace ModernImageViewer
                 var designsBody = new StackPanel { Spacing = 2, Visibility = _showDesignsOpen ? Visibility.Visible : Visibility.Collapsed };
                 var designsTitle = new TextBlock { Text = "Designs", FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
                 var designsSummary = new TextBlock { FontSize = 12, Opacity = 0.75, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
-                void ShowDesignsSummary() => designsSummary.Text = (designsOn == LayoutComposer.Recipes.Length ? "All 6" : $"{designsOn} of 6") + (_showDesignsOpen ? "  \u25B4" : "  \u25BE");
+                // The same chevron as Engine settings' sections (the Expander's), not a text triangle.
+                var designsChevron = new FontIcon { FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), FontSize = 12, Opacity = 0.75, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 4, 0) };
+                void ShowDesignsSummary()
+                {
+                    designsSummary.Text = designsOn == LayoutComposer.Recipes.Length ? "All 6" : $"{designsOn} of 6";
+                    designsChevron.Glyph = _showDesignsOpen ? "\uE70E" : "\uE70D";
+                }
                 ShowDesignsSummary();
                 var designsHead = new Grid { MinHeight = 32, Margin = new Thickness(0, 8, 0, 0), Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent) };
                 designsHead.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 designsHead.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                designsHead.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 Grid.SetColumn(designsSummary, 1);
+                Grid.SetColumn(designsChevron, 2);
                 designsHead.Children.Add(designsTitle);
                 designsHead.Children.Add(designsSummary);
+                designsHead.Children.Add(designsChevron);
                 var designsToggle = new Button { Content = designsHead, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(0), Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent), BorderThickness = new Thickness(0) };
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(designsToggle, "Designs");
                 ToolTipService.SetToolTip(designsToggle, "How often this show uses each design.");

@@ -366,6 +366,16 @@ namespace ModernImageViewer
                 column.Children.Add(row);
             }
 
+            // Runs once input has been still for 350 ms: a drag is one change, not one per step.
+            Action SettledAction(Action apply)
+            {
+                var timer = DispatcherQueue.CreateTimer();
+                timer.Interval = TimeSpan.FromMilliseconds(350);
+                timer.IsRepeating = false;
+                timer.Tick += (_, _) => apply();
+                return () => { timer.Stop(); timer.Start(); };
+            }
+
             Slider Slide(StackPanel column, string label, string tip, double min, double max, double step, double value, Func<double, string> format, Action<SurpriseOptions, double> chosen)
             {
                 var row = new Grid { ColumnSpacing = 12, MinHeight = 34 };
@@ -405,10 +415,15 @@ namespace ModernImageViewer
                 slider.Resources["SliderTrackValueFill"] = winBlue;
                 slider.Resources["SliderTrackValueFillPointerOver"] = winBlue;
                 slider.Resources["SliderTrackValueFillPressed"] = winBlue;
+                // The readout follows the drag; the setting is written once the drag settles, as on the Show card, not on
+                // every step of it (each write saved the settings file and dropped the layout being prepared).
+                double pending = value;
+                var save = SettledAction(() => ChangeSurpriseChoices(o => chosen(o, pending)));
                 slider.ValueChanged += (_, e) =>
                 {
-                    ChangeSurpriseChoices(o => chosen(o, e.NewValue));
+                    pending = e.NewValue;
                     readout.Text = format(e.NewValue);
+                    save();
                 };
                 ToolTipService.SetToolTip(row, tip);
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(slider, label);
@@ -442,12 +457,14 @@ namespace ModernImageViewer
                 high = Math.Max(low, Snap(high));
                 var readout = new TextBlock { Text = format(low, high), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, FontSize = 12, Opacity = 0.82, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
                 var range = new RangeSlider { Minimum = min, Maximum = max, StepFrequency = step, RangeStart = low, RangeEnd = high, Width = 146, VerticalAlignment = VerticalAlignment.Center };
+                double pendingA = low, pendingB = high;
+                var save = SettledAction(() => { ChangeSurpriseChoices(o => chosen(o, pendingA, pendingB)); changed?.Invoke(); });
                 range.RangeChanged += (_, r) =>
                 {
-                    double a = Snap(r.Start), b = Math.Max(a, Snap(r.End));
-                    readout.Text = format(a, b);
-                    ChangeSurpriseChoices(o => chosen(o, a, b));
-                    changed?.Invoke();
+                    pendingA = Snap(r.Start);
+                    pendingB = Math.Max(pendingA, Snap(r.End));
+                    readout.Text = format(pendingA, pendingB);
+                    save();
                 };
                 ToolTipService.SetToolTip(row, tip);
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(range, label);
@@ -667,7 +684,7 @@ namespace ModernImageViewer
 
             var imagesLabel = new TextBlock
             {
-                Text = "Images per scene:",
+                Text = "Images per scene",
                 VerticalAlignment = VerticalAlignment.Center,
                 FontSize = 13,
                 Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White)
@@ -677,17 +694,6 @@ namespace ModernImageViewer
 
             imagesRow.Children.Add(imagesLabel);
             imagesRow.Children.Add(imageControlsPanel);
-
-            void SpeedChanged()
-            {
-                if (_autoPlaySeconds > 0 && _autoPlayTimer != null)
-                {
-                    _autoPlaySeconds = SurpriseChoices.PlaySeconds;
-                    _layoutSeconds = SurpriseChoices.NextPlaySeconds(Random.Shared);
-                    _autoPlayTimer.Interval = TimeSpan.FromSeconds(_layoutSeconds);
-                }
-                ShowAutoPlayState();
-            }
 
             if (!_showingSurpriseAdvanced)
             {
@@ -715,7 +721,7 @@ namespace ModernImageViewer
 
                 var showPanel = new StackPanel { Spacing = 4 };
                 body.Children.Add(showPanel);
-                FillShowSettings(showPanel, () => { ShowAutoPlayState(); RefreshStoryboardSettingsLabel?.Invoke(); });
+                FillShowSettings(showPanel, () => ShowAutoPlayState());
 
                 body.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle { Height = 1, Opacity = 0.15, Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White), Margin = new Thickness(0, 6, 0, 4) });
                 // The music library's own settings (folder, ratings, which shows play music) open from here, so
@@ -954,51 +960,18 @@ namespace ModernImageViewer
                 }
                 if (design == LayoutComposer.HeroSpotlight)
                 {
-                    // A range like Duration: each Hero layout picks its hero's height from it.
-                    var detail = Detail();
-                    var row = new Grid { ColumnSpacing = 12, MinHeight = 34 };
-                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
-                    var label = new TextBlock { Text = "Hero size", VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
-                    var right = new Grid { Width = 230, ColumnSpacing = 8, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-                    right.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(146) });
-                    right.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(76) });
-                    string Sizes(int low, int high) => low == high ? $"{low}%" : $"{low}% - {high}%";
-                    int from = (int)Math.Round(options.HeroSmallest * 100), to = (int)Math.Round(options.HeroLargest * 100);
-                    var readout = new TextBlock { Text = Sizes(from, to), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, FontSize = 12, Opacity = 0.82, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
-                    var range = new RangeSlider
-                    {
-                        Minimum = SurpriseOptions.HeroLowest * 100,
-                        Maximum = SurpriseOptions.HeroHighest * 100,
-                        StepFrequency = 1,
-                        RangeStart = from,
-                        RangeEnd = to,
-                        Width = 146,
-                        VerticalAlignment = VerticalAlignment.Center
-                    };
-                    range.RangeChanged += (_, r) =>
-                    {
-                        int low = (int)Math.Round(r.Start), high = (int)Math.Round(r.End);
-                        readout.Text = Sizes(low, high);
-                        ChangeSurpriseChoices(o => { o.HeroSmallest = low / 100.0; o.HeroLargest = Math.Max(low, high) / 100.0; });
-                    };
-                    ToolTipService.SetToolTip(row, "The height of the hero image against the canvas. Each Hero spotlight layout picks a height in this range; drag the ends together for one size.");
-                    Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(range, "Hero size");
-                    Grid.SetColumn(range, 0);
-                    Grid.SetColumn(readout, 1);
-                    right.Children.Add(range);
-                    right.Children.Add(readout);
-                    Grid.SetColumn(right, 1);
-                    row.Children.Add(label);
-                    row.Children.Add(right);
-                    detail.Children.Add(row);
+                    // The same range control as every other range, in percent of the canvas height.
+                    RangeRow(Detail(), "Hero size", "The height of the hero image against the canvas. Each Hero spotlight layout picks a height in this range; drag the ends together for one size.",
+                        SurpriseOptions.HeroLowest, SurpriseOptions.HeroHighest, 0.01, options.HeroSmallest, options.HeroLargest,
+                        (a, b) => Math.Abs(a - b) < 0.005 ? $"{a * 100:0}%" : $"{a * 100:0}% - {b * 100:0}%",
+                        (o, a, b) => { o.HeroSmallest = a; o.HeroLargest = Math.Max(a, b); });
                 }
                 else if (design == LayoutComposer.ScatteredPrints)
                 {
-                    Slide(Detail(), "Print tilt", "How far a print can turn. Each print turns between about a quarter of this and all of it, either way.",
-                        0, 20, 0.5, options.MostTilt,
-                        v => v < 0.1 ? "0°" : $"up to {v:0.0}°",
-                        (o, v) => o.MostTilt = v);
+                    RangeRow(Detail(), "Print tilt", "How far a print turns, either way. Each print turns within the range; drag the ends together for one angle, both to 0 for straight prints.",
+                        0, SurpriseOptions.MostTiltAllowed, 0.5, options.LeastTilt, options.MostTilt,
+                        (a, b) => b < 0.1 ? "0°" : Math.Abs(a - b) < 0.05 ? $"{a:0.#}°" : $"{a:0.#}° - {b:0.#}°",
+                        (o, a, b) => { o.LeastTilt = a; o.MostTilt = Math.Max(a, b); });
                 }
             }
             // For every design, so it sits with them and not under Single images.
@@ -2252,20 +2225,6 @@ namespace ModernImageViewer
                 TextTrimming = TextTrimming.CharacterEllipsis
             };
 
-            var autoDraftBtn = new Button
-            {
-                Content = "Make a show",
-                Background = winBlueDeep,
-                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White),
-                BorderBrush = winBlue,
-                CornerRadius = new CornerRadius(12),
-                Padding = new Thickness(10, 4, 10, 4),
-                FontSize = 12,
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            ToolTipService.SetToolTip(autoDraftBtn, "Makes a show from the image pool, one screen at a time.");
-
             var addCanvasBtn = new Button
             {
                 Content = "Add this layout",
@@ -2276,117 +2235,6 @@ namespace ModernImageViewer
                 VerticalAlignment = VerticalAlignment.Center
             };
             ToolTipService.SetToolTip(addCanvasBtn, "Adds the images on screen as a new scene.");
-
-            // Grows the show one scene at a time, without replacing it. "Update scene" stood here; while a scene is on the
-            // canvas its edits are already kept, so it nearly always had nothing to store. The card menu still has it.
-            var addNewBtn = new Button
-            {
-                Content = "Add new layout",
-                CornerRadius = new CornerRadius(12),
-                Padding = new Thickness(8, 4, 8, 4),
-                FontSize = 12,
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            ToolTipService.SetToolTip(addNewBtn, "Makes one new scene at the end of the show, from images not in it yet. Once every image is in the show, from the whole Image Pool.");
-
-            var onAccent = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White);
-            void ShowAsPrimary(Button button, bool primary)
-            {
-                if (primary)
-                {
-                    button.Background = winBlueDeep;
-                    button.Foreground = onAccent;
-                    button.BorderBrush = winBlue;
-                }
-                else
-                {
-                    button.ClearValue(Control.BackgroundProperty);
-                    button.ClearValue(Control.ForegroundProperty);
-                    button.ClearValue(Control.BorderBrushProperty);
-                }
-            }
-
-            // Storyboard Pacing & Images Range Selector (Min to Max SpinNumberBoxes inside compact Flyout)
-            bool syncingStoryRange = false;
-            var storyFewestBox = new SpinNumberBox
-            {
-                Minimum = 1,
-                Maximum = MosaicLayout.MaxShown,
-                Value = GeneratorSettingsFor(_activeShow).FewestPictures,
-                Width = 72,
-                Height = 28,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            ToolTipService.SetToolTip(storyFewestBox, "Fewest images in a scene, from 1 to 16");
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(storyFewestBox, "Minimum images per scene");
-
-            var storyToLabel = new TextBlock
-            {
-                Text = "to",
-                FontSize = 12,
-                Opacity = 0.7,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(4, 0, 4, 0)
-            };
-
-            var storyMostBox = new SpinNumberBox
-            {
-                Minimum = 1,
-                Maximum = MosaicLayout.MaxShown,
-                Value = GeneratorSettingsFor(_activeShow).MostPictures,
-                Width = 72,
-                Height = 28,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            ToolTipService.SetToolTip(storyMostBox, "Most images in a scene, from 1 to 16");
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(storyMostBox, "Maximum images per scene");
-
-            var rangeFlyoutStack = new StackPanel { Spacing = 8, Padding = new Thickness(6) };
-            var rangeHeader = new TextBlock
-            {
-                Text = "Images per scene:",
-                FontSize = 12,
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
-            };
-            var rangeInputsRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
-            rangeInputsRow.Children.Add(storyFewestBox);
-            rangeInputsRow.Children.Add(storyToLabel);
-            rangeInputsRow.Children.Add(storyMostBox);
-            rangeFlyoutStack.Children.Add(rangeHeader);
-            rangeFlyoutStack.Children.Add(rangeInputsRow);
-
-            // The rest of this show's settings, filled each time the pop-up opens so it shows the show as it is now.
-            var showSettingsPanel = new StackPanel { Spacing = 4, MinWidth = 330 };
-            rangeFlyoutStack.Children.Add(showSettingsPanel);
-            var draftRangeFlyout = new Flyout { Content = new ScrollViewer { Content = rangeFlyoutStack, MaxHeight = 560, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
-
-            var draftRangeText = new TextBlock
-            {
-                Text = ShowSettingsLabel(),
-                FontSize = 11,
-                VerticalAlignment = VerticalAlignment.Center,
-                Opacity = 0.9
-            };
-            var draftRangeBtn = new Button
-            {
-                Content = draftRangeText,
-                Flyout = draftRangeFlyout,
-                CornerRadius = new CornerRadius(12),
-                Padding = new Thickness(8, 4, 8, 4),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            ToolTipService.SetToolTip(draftRangeBtn, "This show's settings: its preset, images per scene, duration, motion, sequence beats and designs. They are the show's own; Layout Generator Settings are not changed.");
-            RefreshStoryboardSettingsLabel = () => draftRangeText.Text = ShowSettingsLabel();
-            draftRangeFlyout.Opening += (_, _) =>
-            {
-                var now = GeneratorSettingsFor(_activeShow);
-                syncingStoryRange = true;
-                storyFewestBox.Value = now.FewestPictures;
-                storyMostBox.Value = now.MostPictures;
-                syncingStoryRange = false;
-                FillShowSettings(showSettingsPanel, () => draftRangeText.Text = ShowSettingsLabel());
-            };
 
             Border MakeDivider() => new Border { Width = 1, Height = 16, Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x35, 0xFF, 0xFF, 0xFF)), VerticalAlignment = VerticalAlignment.Center };
 
@@ -2399,65 +2247,6 @@ namespace ModernImageViewer
             storyHeaderRow.Children.Add(storySummary);
             headerMiddle.Children.Add(storyHeaderRow);
 
-            void SetStoryRange(int f, int m)
-            {
-                f = Math.Clamp(f, 1, MosaicLayout.MaxShown);
-                m = Math.Clamp(m, f, MosaicLayout.MaxShown);
-                if (syncingStoryRange) return;
-                syncingStoryRange = true;
-                try
-                {
-                    if (storyFewestBox.Value != f) storyFewestBox.Value = f;
-                    if (storyMostBox.Value != m) storyMostBox.Value = m;
-                    // The range is the show's own: its new scenes use it; Layout Generator Settings are not changed.
-                    ChangeShowValues(v => { v.FewestImages = f; v.MostImages = m; }, null);
-                    SyncStoryImageRange();
-                }
-                finally
-                {
-                    syncingStoryRange = false;
-                }
-            }
-
-            storyFewestBox.ValueChanged += (_, newVal) =>
-            {
-                if (syncingStoryRange) return;
-                int f = Math.Clamp(newVal, 1, MosaicLayout.MaxShown);
-                int m = Math.Max(f, storyMostBox.Value);
-                SetStoryRange(f, m);
-            };
-
-            storyMostBox.ValueChanged += (_, newVal) =>
-            {
-                if (syncingStoryRange) return;
-                int m = Math.Clamp(newVal, 1, MosaicLayout.MaxShown);
-                int f = Math.Min(m, storyFewestBox.Value);
-                SetStoryRange(f, m);
-            };
-
-            void SyncStoryImageRange()
-            {
-                var showSettings = GeneratorSettingsFor(_activeShow);
-                int f = showSettings.FewestPictures;
-                int m = showSettings.MostPictures;
-
-                if (!syncingStoryRange)
-                {
-                    syncingStoryRange = true;
-                    try
-                    {
-                        if (storyFewestBox.Value != f) storyFewestBox.Value = f;
-                        if (storyMostBox.Value != m) storyMostBox.Value = m;
-                        draftRangeText.Text = ShowSettingsLabel();
-                    }
-                    finally
-                    {
-                        syncingStoryRange = false;
-                    }
-                }
-            }
-
-            SyncStoryImageRange();
             var draftProgressRow = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
@@ -2682,22 +2471,17 @@ namespace ModernImageViewer
                 int sceneCount = _activeShow?.Scenes.Count ?? 0;
                 bool hasScenes = sceneCount > 0;
 
-                SyncStoryImageRange();
                 emptyPanel.Visibility = hasScenes ? Visibility.Collapsed : Visibility.Visible;
                 scenesView.Visibility = hasScenes ? Visibility.Visible : Visibility.Collapsed;
 
                 clearShowBtn.Visibility = (_trayTab == 1 && hasScenes) ? Visibility.Visible : Visibility.Collapsed;
                 clearShowBtn.IsEnabled = hasScenes;
 
-                ShowAsPrimary(autoDraftBtn, !hasScenes);
-
                 if (hasScenes)
                 {
                     double dur = _activeShow!.TotalEstimatedDuration;
                     string length = ShowLength(dur);
                     storySummary.Text = $"Preset: {ActivePresetName(_activeShow)} · {sceneCount} {(sceneCount == 1 ? "scene" : "scenes")} · {length}";
-                    autoDraftBtn.Content = "Replace show";
-                    ToolTipService.SetToolTip(autoDraftBtn, "Makes a new show from the image pool and replaces these scenes. It asks first.");
                 }
                 else
                 {
@@ -2706,12 +2490,8 @@ namespace ModernImageViewer
                     storySummary.Text = totalPhotos == 0
                         ? $"Preset: {ActivePresetName(_activeShow)} · No scenes yet"
                         : $"Preset: {ActivePresetName(_activeShow)} · No scenes yet · {totalPhotos} image{(totalPhotos == 1 ? "" : "s")}: {totalPhotos - inPool} on the canvas, {inPool} in the Image Pool";
-                    autoDraftBtn.Content = "Make a show";
-                    ToolTipService.SetToolTip(autoDraftBtn, "Makes a show from the image pool, one screen at a time.");
                 }
 
-                addNewBtn.IsEnabled = totalPhotos > 0;
-                SyncStoryImageRange();
                 storyTab.Content = StoryTabLabel();
                 ShowShownBadge();
                 ShowAutoPlayState();
@@ -3227,83 +3007,6 @@ namespace ModernImageViewer
                 }
             };
 
-            async Task RunAutoDraftAsync()
-            {
-                var pictures = SessionPictures();
-                if (pictures.Count == 0) return;
-
-                int sceneCount = _activeShow?.Scenes.Count ?? 0;
-                if (sceneCount > 0)
-                {
-                    var dialog = new ContentDialog
-                    {
-                        Title = "Replace the show?",
-                        Content = sceneCount == 1
-                            ? "This replaces the scene with a new draft."
-                            : $"This replaces all {sceneCount} scenes with a new draft.",
-                        PrimaryButtonText = "Replace",
-                        CloseButtonText = "Cancel",
-                        DefaultButton = ContentDialogButton.Close,
-                        XamlRoot = XamlRoot,
-                        RequestedTheme = MainWindow.Instance?.CurrentRequestedTheme ?? ElementTheme.Default
-                    };
-                    DialogFooter.MainButtonOnRight(dialog);
-                    if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
-                }
-
-                autoDraftBtn.IsEnabled = false;
-                draftProgressRow.Visibility = Visibility.Visible;
-                progressText.Text = "Reading images...";
-
-                try
-                {
-                    pictures = SessionPictures();
-                    if (pictures.Count == 0) return;
-
-                    var ready = DecodedBitmaps();
-                    var facts = await ReadFactsAsync(pictures, path => ready.TryGetValue(path, out var bitmap) ? (bitmap.PixelWidth, bitmap.PixelHeight) : null);
-
-                    var progress = new Progress<ShowDraftProgress>(p =>
-                    {
-                        progressText.Text = $"Making scene {p.CompletedScenes} of {p.TotalEstimatedScenes}...";
-                    });
-
-                    // Replace show keeps the show's overrides: a Cinematic storyboard is replaced by another one.
-                    var old = _activeShow;
-                    string? overrides = old?.GeneratorOverrides;
-                    var oldSettings = GeneratorSettingsFor(old);
-                    _activeShow = await ShowDirector.DraftAsync(
-                        facts,
-                        oldSettings,
-                        ActualWidth,
-                        ActualHeight,
-                        overrides != null ? $"{overrides} storyboard" : "Auto-Drafted Presentation",
-                        progress);
-                    // The new show keeps the old one's preset and values (a My preset too), not only Cinematic.
-                    if (old != null && old.GlobalDefaults.HoldsValues)
-                    {
-                        _activeShow.GeneratorOverrides = old.GeneratorOverrides;
-                        _activeShow.PresetName = old.PresetName;
-                        _activeShow.PresetSlot = old.PresetSlot;
-                        _activeShow.GlobalDefaults.TakeValues(CinematicOverrides.From(oldSettings));
-                    }
-                    else ApplyPreset(_activeShow, SurpriseChoices.LastPreset);
-                    _selectedShowScene = null;
-                    _canvasSceneId = null;
-                    _isStoryboardPlayback = false;
-                    _showPlaybackIndex = 0;
-                }
-                finally
-                {
-                    draftProgressRow.Visibility = Visibility.Collapsed;
-                    autoDraftBtn.IsEnabled = true;
-                    SyncStoryboardUI();
-                    // The click's own step was taken while the show was still being made, so the new show is
-                    // its own step here, and Undo puts the old one back.
-                    CaptureUndoPoint();
-                }
-            }
-
             void CaptureCurrentCanvasAsScene()
             {
                 var pictures = SessionPictures();
@@ -3338,71 +3041,15 @@ namespace ModernImageViewer
                     Transition = "Crossfade"
                 };
 
-                _activeShow ??= new ShowProject { Title = "Custom Presentation" };
+                // No show yet: a new one starts from the preset last chosen, as Play's does.
+                _activeShow ??= NewShowWithLastPreset();
                 scenesCollection.Add(scene);
                 _selectedShowScene = scene;
                 _canvasSceneId = scene.Id;
                 ShowAutoPlayToast($"Added this layout as scene {scenesCollection.Count}");
             }
 
-            // One new scene at the end, from images no scene uses yet, so new images join the show without
-            // Replace show. With every image already in the show, it picks from the whole Image Pool.
-            async Task AddNewLayoutAsync()
-            {
-                var pool = SessionPictures();
-                if (pool.Count == 0) return;
-                var fresh = (_activeShow?.ImagesNotInShow(pool) ?? pool).Where(p => !_imagesBeingDrafted.Contains(p)).ToList();
-                bool reusing = fresh.Count == 0;
-                var candidates = reusing ? pool.OrderBy(_ => Random.Shared.Next()).ToList() : fresh;
-                // A show made by Cinematic storyboard grows with the same overrides.
-                var settings = GeneratorSettingsFor(_activeShow);
-                var chosen = candidates.Take(Math.Clamp(settings.MostPictures, 1, MosaicLayout.MaxShown)).ToList();
-
-                addNewBtn.IsEnabled = false;
-                draftProgressRow.Visibility = Visibility.Visible;
-                progressText.Text = "Making a scene...";
-                _imagesBeingDrafted.UnionWith(chosen);
-                try
-                {
-                    var ready = DecodedBitmaps();
-                    var facts = await ReadFactsAsync(chosen, path => ready.TryGetValue(path, out var bitmap) ? (bitmap.PixelWidth, bitmap.PixelHeight) : null);
-                    var previous = scenesCollection.Count > 0 ? scenesCollection[^1] : null;
-                    var scene = await ShowDirector.DraftSceneAsync(facts, settings, ActualWidth, ActualHeight, previous);
-                    if (scene == null)
-                    {
-                        ShowAutoPlayToast("Could not make a layout from these images");
-                        return;
-                    }
-
-                    // The scene on the canvas keeps its edits before the new one replaces it.
-                    if (_selectedShowScene != null && !_isStoryboardPlayback) SyncCanvasToSelectedScene(showToast: false);
-                    _activeShow ??= new ShowProject { Title = "Custom Presentation" };
-                    scenesCollection.Add(scene);
-                    _selectedShowScene = scene;
-                    scenesView.SelectedItem = scene;
-                    scenesView.ScrollIntoView(scene);
-                    if (scene.Layout != null)
-                    {
-                        ApplyLayoutFile(WithRestInTray(scene.Layout, SessionPictures()), restoreAspect: false, preserveUndo: true);
-                        _canvasSceneId = scene.Id;
-                    }
-                    RefreshCardBadges();
-                    int images = scene.GetPhotoPaths().Count();
-                    ShowAutoPlayToast(reusing
-                        ? $"Added scene {scenesCollection.Count}. Every image was already in the show, so it reuses some."
-                        : $"Added scene {scenesCollection.Count} with {images} new {(images == 1 ? "image" : "images")}");
-                }
-                finally
-                {
-                    _imagesBeingDrafted.ExceptWith(chosen);
-                    draftProgressRow.Visibility = Visibility.Collapsed;
-                    addNewBtn.IsEnabled = SessionPictures().Count > 0;
-                }
-            }
-
-            addNewBtn.Click += async (_, _) => await AddNewLayoutAsync();
             addCanvasBtn.Click += (_, _) => CaptureCurrentCanvasAsScene();
-            autoDraftBtn.Click += async (_, _) => await RunAutoDraftAsync();
             clearShowBtn.Click += async (_, _) =>
             {
                 if (_activeShow == null || _activeShow.Scenes.Count == 0) return;
@@ -3411,7 +3058,6 @@ namespace ModernImageViewer
                 StartEmptyShowLikeThisOne();
                 _isStoryboardPlayback = false;
                 scenesCollection.Clear();
-                SyncStoryImageRange();
             };
 
             storyContainer.Children.Add(draftProgressRow);
@@ -3574,7 +3220,6 @@ namespace ModernImageViewer
         }
 
         // Brings the storyboard's settings button up to date after the Show card changes this show's values.
-        private Action? RefreshStoryboardSettingsLabel;
         private int _storyboardBuildTicket;
         // The show Play from images is still making scenes for: it holds at its last scene rather than going back to the start.
         private ShowProject? _showBeingBuilt;
