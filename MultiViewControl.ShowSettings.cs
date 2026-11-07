@@ -105,19 +105,56 @@ namespace ModernImageViewer
             var show = _activeShow;
             var values = GeneratorSettingsFor(show);
 
+            StackPanel into = panel;
+            var valuesPanel = new StackPanel { Spacing = 2 };
+            var accent = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x4C, 0xC2, 0xFF));
             Grid Row(string label, string tip, FrameworkElement control)
             {
-                var row = new Grid { ColumnSpacing = 10, MinHeight = 30 };
+                var row = new Grid { ColumnSpacing = 12, MinHeight = 34 };
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                var text = new TextBlock { Text = label, FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
+                var text = new TextBlock { Text = label, FontSize = 13, VerticalAlignment = VerticalAlignment.Center };
+                control.HorizontalAlignment = HorizontalAlignment.Right;
+                control.VerticalAlignment = VerticalAlignment.Center;
                 Grid.SetColumn(control, 1);
                 row.Children.Add(text);
                 row.Children.Add(control);
                 ToolTipService.SetToolTip(row, tip);
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(control, label);
-                panel.Children.Add(row);
+                into.Children.Add(row);
                 return row;
+            }
+            // A slider and its readout, as the card's other settings: 146 wide, the readout beside it.
+            Grid WithReadout(FrameworkElement control, TextBlock readout)
+            {
+                var grid = new Grid { Width = 230, ColumnSpacing = 8 };
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(146) });
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(76) });
+                Grid.SetColumn(readout, 1);
+                grid.Children.Add(control);
+                grid.Children.Add(readout);
+                return grid;
+            }
+            TextBlock Readout(string text) => new() { Text = text, FontSize = 12, Opacity = 0.82, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, TextAlignment = TextAlignment.Right };
+            Slider Slider1(double min, double max, double step, double value)
+            {
+                var slider = new Slider { Minimum = min, Maximum = max, StepFrequency = step, SmallChange = step, Value = value, Width = 146, Foreground = accent, VerticalAlignment = VerticalAlignment.Center };
+                slider.Resources["SliderThumbBackground"] = accent;
+                slider.Resources["SliderTrackValueFill"] = accent;
+                slider.Resources["SliderTrackValueFillPointerOver"] = accent;
+                slider.Resources["SliderTrackValueFillPressed"] = accent;
+                return slider;
+            }
+            RangeSlider Range(double min, double max, double step, double low, double high) =>
+                new() { Minimum = min, Maximum = max, StepFrequency = step, RangeStart = low, RangeEnd = Math.Max(low, high), Width = 146, VerticalAlignment = VerticalAlignment.Center };
+            // A drag sends many values; the show takes the last one once the drag settles, so scenes are not redrafted each step.
+            Action Settled(Action apply)
+            {
+                var timer = DispatcherQueue.CreateTimer();
+                timer.Interval = TimeSpan.FromMilliseconds(350);
+                timer.IsRepeating = false;
+                timer.Tick += (_, _) => apply();
+                return () => { timer.Stop(); timer.Start(); };
             }
             SpinNumberBox Box(int min, int max, int value) => new() { Minimum = min, Maximum = max, Value = Math.Clamp(value, min, max), Width = 72, Height = 28 };
             StackPanel Pair(SpinNumberBox a, SpinNumberBox b)
@@ -128,7 +165,7 @@ namespace ModernImageViewer
                 pair.Children.Add(b);
                 return pair;
             }
-            void Heading(string text) => panel.Children.Add(new TextBlock
+            void Heading(string text) => into.Children.Add(new TextBlock
             {
                 Text = text,
                 FontSize = 12,
@@ -142,6 +179,7 @@ namespace ModernImageViewer
             var names = new System.Collections.Generic.List<string> { MultiImagePreset, CinematicOverrides.Name };
             names.AddRange(Enumerable.Range(0, 3).Select(i => PresetName(i, presets.ElementAtOrDefault(i))));
             string current = ActivePresetName(show);
+            // The same odds scale as the engine's designs: 5 is Often.
             if (current == "Custom") names.Add("Custom");
             var preset = new ComboBox { ItemsSource = names, SelectedItem = current, Width = 190 };
             preset.SelectionChanged += (_, _) =>
@@ -164,8 +202,9 @@ namespace ModernImageViewer
                 _updateStorySummary?.Invoke();
                 NoteUserAction();
                 changed?.Invoke();
-                // Rebuilt once this event is over: the list is part of what is rebuilt.
-                DispatcherQueue.TryEnqueue(() => FillShowSettings(panel, changed));
+                current = chosen;
+                // Only the values below are rebuilt. Rebuilding the list itself while it closes stops the app.
+                DispatcherQueue.TryEnqueue(FillValues);
             };
             Row("Preset", "Where this show's values start from. What you change here is kept for the next Play. Cinematic is one image at a time, full screen, the camera always moving. My presets are yours.", preset);
 
@@ -190,7 +229,7 @@ namespace ModernImageViewer
             save.Flyout = saveMenu;
             Row("Save this show's values", "Keeps this show's values as My preset 1, 2 or 3, to start another show from.", save);
 
-            var reset = new Button { Content = "Reset to defaults", FontSize = 12 };
+            var reset = new Button { Content = "Reset", FontSize = 12 };
             reset.Click += async (_, _) =>
             {
                 var open = _activeShow;
@@ -218,112 +257,123 @@ namespace ModernImageViewer
             };
             Row("Reset to defaults", "Puts this preset back to its starting values and keeps that. Multi-Image follows Layout Generator Settings again, with sequence beats at 25%. Cinematic goes back to one image, Edge to edge Often, Hero spotlight Rare, the others Off, 10 to 15 seconds, smart pace, motion 40% to 60%, sequence beats 25%. A My preset is emptied.", reset);
 
-            // The values this show is played with.
-            Heading("Scenes");
-            bool making = ReferenceEquals(show, _showBeingBuilt);
-            panel.Children.Add(new TextBlock
-            {
-                Text = making
-                    ? "The scene on screen stays. Scenes not yet shown are made again with these."
-                    : "Scenes already in the storyboard stay as they are. These are used for scenes Play has not made yet.",
-                FontSize = 11,
-                Opacity = 0.7,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 0, 0, 4)
-            });
-            var fewestImages = Box(1, MosaicLayout.MaxShown, values.FewestPictures);
-            var mostImages = Box(1, MosaicLayout.MaxShown, values.MostPictures);
-            void SetImages() => ChangeShowValues(v =>
-            {
-                v.FewestImages = Math.Min(fewestImages.Value, mostImages.Value);
-                v.MostImages = Math.Max(fewestImages.Value, mostImages.Value);
-            }, changed);
-            fewestImages.ValueChanged += (_, _) => SetImages();
-            mostImages.ValueChanged += (_, _) => SetImages();
-            Row("Images per scene", "How many images each new scene gets: any count in the range.", Pair(fewestImages, mostImages));
-            var fewestSeconds = Box(SurpriseOptions.FewestSeconds, SurpriseOptions.MostSeconds, values.AutoPlayRandom ? values.RandomFewestSeconds : values.AutoPlaySeconds);
-            var mostSeconds = Box(SurpriseOptions.FewestSeconds, SurpriseOptions.MostSeconds, values.AutoPlayRandom ? values.RandomMostSeconds : values.AutoPlaySeconds);
-            void SetSeconds() => ChangeShowValues(v =>
-            {
-                v.FewestSeconds = Math.Min(fewestSeconds.Value, mostSeconds.Value);
-                v.MostSeconds = Math.Max(fewestSeconds.Value, mostSeconds.Value);
-            }, changed);
-            fewestSeconds.ValueChanged += (_, _) => SetSeconds();
-            mostSeconds.ValueChanged += (_, _) => SetSeconds();
-            Row("Duration, seconds", "How long each scene holds: each picks within the range.", Pair(fewestSeconds, mostSeconds));
+            // The values this show is played with, in their own panel, so a preset change rebuilds them and nothing else.
+            panel.Children.Add(valuesPanel);
+            FillValues();
 
-            var smart = new CheckBox { IsChecked = values.SmartPace, MinWidth = 0 };
-            smart.Checked += (_, _) =>
+            void FillValues()
             {
-                if (GeneratorSettingsFor(_activeShow).SmartPace) return;
-                ChangeShowValues(v => v.SmartPace = true, changed);
-            };
-            smart.Unchecked += (_, _) =>
-            {
-                if (!GeneratorSettingsFor(_activeShow).SmartPace) return;
-                ChangeShowValues(v => v.SmartPace = false, changed);
-            };
-            Row("Smart pace", "Dense layouts toward the longer end of the range, layouts of one or two images toward the shorter.", smart);
+                valuesPanel.Children.Clear();
+                into = valuesPanel;
+                var values = GeneratorSettingsFor(_activeShow);
 
-            var motionLeast = Box(0, 100, (int)Math.Round(values.MotionLeast * 100));
-            var motionMost = Box(0, 100, (int)Math.Round(values.MotionMost * 100));
-            void SetMotion() => ChangeShowValues(v =>
-            {
-                v.MotionLeast = Math.Min(motionLeast.Value, motionMost.Value) / 100.0;
-                v.MotionMost = Math.Max(motionLeast.Value, motionMost.Value) / 100.0;
-            }, changed);
-            motionLeast.ValueChanged += (_, _) => SetMotion();
-            motionMost.ValueChanged += (_, _) => SetMotion();
-            Row("Motion, %", "How far the camera moves in each scene: each picks within the range. 0 is still.", Pair(motionLeast, motionMost));
-
-            var beats = Box(0, 100, (int)Math.Round(values.SequenceBeatsChance * 100));
-            Row("Sequence beats, %", "The chance a step not yet shown is more than one scene: a group, then one image from it, then that image's faces. One picture with no face stays one scene. At 0, every step is one scene and Scenes per step is not used.", beats);
-
-            var fewestScenes = Box(2, SurpriseOptions.MostScenesInAStep, values.FewestScenesPerStep);
-            var mostScenes = Box(2, SurpriseOptions.MostScenesInAStep, values.MostScenesPerStep);
-            void SetScenes() => ChangeShowValues(v =>
-            {
-                v.FewestScenesPerStep = Math.Min(fewestScenes.Value, mostScenes.Value);
-                v.MostScenesPerStep = Math.Max(fewestScenes.Value, mostScenes.Value);
-            }, changed);
-            fewestScenes.ValueChanged += (_, _) => SetScenes();
-            mostScenes.ValueChanged += (_, _) => SetScenes();
-            var scenesRow = Row("Scenes per step", "How many scenes a step may be when Sequence beats rolls, from 2 to 4. Nothing happens while Sequence beats is 0. The step stops early when no closer view is left.", Pair(fewestScenes, mostScenes));
-            void ShowScenesUsed()
-            {
-                bool used = beats.Value > 0;
-                fewestScenes.IsEnabled = used;
-                mostScenes.IsEnabled = used;
-                scenesRow.Opacity = used ? 1 : 0.45;
-            }
-            ShowScenesUsed();
-            beats.ValueChanged += (_, value) =>
-            {
-                ChangeShowValues(v => v.SequenceBeats = Math.Clamp(value, 0, 100) / 100.0, changed);
-                ShowScenesUsed();
-            };
-
-            Heading("Designs");
-            foreach (string design in LayoutComposer.Recipes)
-            {
-                string named = design;
-                double odds = values.IsDesignOff(named) ? 0 : values.OddsOf(named);
-                var nearest = OddsSteps.OrderBy(s => Math.Abs(Math.Log(Math.Max(0.01, s.Odds)) - Math.Log(Math.Max(0.01, odds)))).First().Name;
-                var pick = new ComboBox { ItemsSource = OddsSteps.Select(s => s.Name).ToList(), SelectedItem = nearest, Width = 110 };
-                pick.SelectionChanged += (_, _) =>
+                Heading("Scenes");
+                bool making = ReferenceEquals(_activeShow, _showBeingBuilt);
+                valuesPanel.Children.Add(new TextBlock
                 {
-                    if (pick.SelectedItem is not string step) return;
-                    double chosen = OddsSteps.First(s => s.Name == step).Odds;
-                    var live = GeneratorSettingsFor(_activeShow);
-                    double now = live.IsDesignOff(named) ? 0 : live.OddsOf(named);
-                    if (Math.Abs(chosen - now) < 0.0001) return;
-                    ChangeShowValues(v =>
-                    {
-                        v.DesignOdds ??= new System.Collections.Generic.Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
-                        v.DesignOdds[named] = chosen;
-                    }, changed);
+                    Text = making
+                        ? "The scene on screen stays. Scenes not yet shown are made again with these."
+                        : "Scenes already in the storyboard stay as they are. These are used for scenes Play has not made yet.",
+                    FontSize = 11,
+                    Opacity = 0.7,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 4)
+                });
+
+                var fewestImages = Box(1, MosaicLayout.MaxShown, values.FewestPictures);
+                var mostImages = Box(1, MosaicLayout.MaxShown, values.MostPictures);
+                void SetImages() => ChangeShowValues(v =>
+                {
+                    v.FewestImages = Math.Min(fewestImages.Value, mostImages.Value);
+                    v.MostImages = Math.Max(fewestImages.Value, mostImages.Value);
+                }, changed);
+                fewestImages.ValueChanged += (_, _) => SetImages();
+                mostImages.ValueChanged += (_, _) => SetImages();
+                Row("Images per scene", "How many images each new scene gets: any count in the range.", Pair(fewestImages, mostImages));
+
+                static string Seconds(double a, double b) => a == b ? $"{a:0}s" : $"{a:0}s - {b:0}s";
+                int fromSeconds = values.AutoPlayRandom ? values.RandomFewestSeconds : values.AutoPlaySeconds;
+                int toSeconds = values.AutoPlayRandom ? values.RandomMostSeconds : values.AutoPlaySeconds;
+                var duration = Range(SurpriseOptions.FewestSeconds, SurpriseOptions.MostSeconds, 1, fromSeconds, toSeconds);
+                var durationReadout = Readout(Seconds(fromSeconds, Math.Max(fromSeconds, toSeconds)));
+                (double Start, double End) durationNow = (fromSeconds, toSeconds);
+                var applyDuration = Settled(() => ChangeShowValues(v =>
+                {
+                    v.FewestSeconds = (int)Math.Round(durationNow.Start);
+                    v.MostSeconds = (int)Math.Round(Math.Max(durationNow.Start, durationNow.End));
+                }, changed));
+                duration.RangeChanged += (_, r) => { durationNow = r; durationReadout.Text = Seconds(Math.Round(r.Start), Math.Round(r.End)); applyDuration(); };
+                Row("Duration", "How long each scene holds: each picks within the range. Thumbs together is one fixed duration.", WithReadout(duration, durationReadout));
+
+                var smart = new ToggleSwitch { IsOn = values.SmartPace, OnContent = string.Empty, OffContent = string.Empty, MinWidth = 0, Margin = new Thickness(0, 0, 4, 0) };
+                smart.Toggled += (_, _) =>
+                {
+                    if (GeneratorSettingsFor(_activeShow).SmartPace == smart.IsOn) return;
+                    ChangeShowValues(v => v.SmartPace = smart.IsOn, changed);
                 };
-                Row(named, $"How often this show uses {named}. Off: never in this show.", pick);
+                Row("Smart pace", "Dense layouts toward the longer end of the duration, layouts of one or two images toward the shorter.", smart);
+
+                static string Percents(double a, double b) => a == b ? $"{a:0}%" : $"{a:0}% - {b:0}%";
+                double fromMotion = Math.Round(values.MotionLeast * 100), toMotion = Math.Round(values.MotionMost * 100);
+                var motion = Range(0, 100, 5, fromMotion, toMotion);
+                var motionReadout = Readout(Percents(fromMotion, Math.Max(fromMotion, toMotion)));
+                (double Start, double End) motionNow = (fromMotion, toMotion);
+                var applyMotion = Settled(() => ChangeShowValues(v =>
+                {
+                    v.MotionLeast = motionNow.Start / 100.0;
+                    v.MotionMost = Math.Max(motionNow.Start, motionNow.End) / 100.0;
+                }, changed));
+                motion.RangeChanged += (_, r) => { motionNow = r; motionReadout.Text = Percents(Math.Round(r.Start), Math.Round(r.End)); applyMotion(); };
+                Row("Motion", "How far the camera moves in each scene: each picks within the range. 0 is still.", WithReadout(motion, motionReadout));
+
+                static string Chance(double v) => v < 1 ? "Off" : $"{v:0}%";
+                double beatsNow = Math.Round(values.SequenceBeatsChance * 100);
+                var beats = Slider1(0, 100, 5, beatsNow);
+                var beatsReadout = Readout(Chance(beatsNow));
+                Row("Sequence beats", "The chance a step not yet shown is more than one scene: a group, then one image from it, then that image's faces. One image with no face stays one scene. Off: every step is one scene.", WithReadout(beats, beatsReadout));
+
+                static string Scenes(double a, double b) => a == b ? $"{a:0}" : $"{a:0} to {b:0}";
+                var scenes = Range(2, SurpriseOptions.MostScenesInAStep, 1, values.FewestScenesPerStep, values.MostScenesPerStep);
+                var scenesReadout = Readout(Scenes(values.FewestScenesPerStep, Math.Max(values.FewestScenesPerStep, values.MostScenesPerStep)));
+                (double Start, double End) scenesNow = (values.FewestScenesPerStep, values.MostScenesPerStep);
+                var applyScenes = Settled(() => ChangeShowValues(v =>
+                {
+                    v.FewestScenesPerStep = (int)Math.Round(scenesNow.Start);
+                    v.MostScenesPerStep = (int)Math.Round(Math.Max(scenesNow.Start, scenesNow.End));
+                }, changed));
+                scenes.RangeChanged += (_, r) => { scenesNow = r; scenesReadout.Text = Scenes(Math.Round(r.Start), Math.Round(r.End)); applyScenes(); };
+                var scenesRow = Row("Scenes per step", "How many scenes a step may be when Sequence beats rolls, from 2 to 4. Not used while Sequence beats is Off. The step stops early when no closer view is left.", WithReadout(scenes, scenesReadout));
+                void ShowScenesUsed()
+                {
+                    bool used = beats.Value >= 1;
+                    scenes.IsHitTestVisible = used;
+                    scenesRow.Opacity = used ? 1 : 0.45;
+                }
+                ShowScenesUsed();
+                var applyBeats = Settled(() => ChangeShowValues(v => v.SequenceBeats = Math.Clamp(beats.Value, 0, 100) / 100.0, changed));
+                beats.ValueChanged += (_, e) => { beatsReadout.Text = Chance(e.NewValue); ShowScenesUsed(); applyBeats(); };
+
+                Heading("Designs");
+                static string Step(double v) => v <= -1.1 ? "Off" : v < -0.6 ? "Rare" : v < -0.15 ? "Less" : v <= 0.15 ? "Normal" : v <= 0.6 ? "More" : "Often";
+                foreach (string design in LayoutComposer.Recipes)
+                {
+                    string named = design;
+                    double odds = values.IsDesignOff(named) ? 0 : values.OddsOf(named);
+                    double start = odds <= 0 ? -1.2 : Math.Log(Math.Max(SurpriseOptions.RarestDesign, odds), 5);
+                    var pick = Slider1(-1.2, 1.0, 0.1, start);
+                    var readout = Readout(Step(start));
+                    var apply = Settled(() =>
+                    {
+                        double chosen = pick.Value <= -1.1 ? 0 : Math.Pow(5, pick.Value);
+                        ChangeShowValues(v =>
+                        {
+                            v.DesignOdds ??= new System.Collections.Generic.Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+                            v.DesignOdds[named] = chosen;
+                        }, changed);
+                    });
+                    pick.ValueChanged += (_, e) => { readout.Text = Step(e.NewValue); apply(); };
+                    Row(named, $"How often this show uses {named}. Far left turns it off for this show.", WithReadout(pick, readout));
+                }
             }
         }
     }
