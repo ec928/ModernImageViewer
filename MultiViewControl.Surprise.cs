@@ -3683,7 +3683,7 @@ namespace ModernImageViewer
             var ready = DecodedBitmaps();
             foreach (var pair in _storyPreloaded) ready.TryAdd(pair.Key, pair.Value);
             _storyPreloaded.Clear();
-            double fadeSeconds = SurpriseChoices.PickTransitionSeconds(Random.Shared);
+            double fadeSeconds = SurpriseChoices.PickTransitionSeconds(Random.Shared, _layoutSeconds);
             var outgoingStep = fade ? OutgoingCameraStep(fadeSeconds) : (1.0, 0.0, 0.0);
             Image? before = fade ? await CoverWithPictureOfCanvasAsync() : null;
             ResetCanvasCamera();
@@ -3823,12 +3823,16 @@ namespace ModernImageViewer
             }
 
             _showPlaybackIndex = target;
+            // A step by hand comes in by its own transition: a hard cut the timer planned for a big moment of the song
+            // belongs to that moment, not to this press.
+            _nextChangeIsHardCut = false;
             await PlayNextStoryboardSceneAsync(fade: true);
 
             if (_autoPlayTimer != null)
             {
                 _autoPlayTimer.Stop();
-                _autoPlayTimer.Interval = TimeSpan.FromSeconds(Math.Max(1, _layoutSeconds));
+                // The scene after it lands on the music as any other does, not on the plain planned hold.
+                _autoPlayTimer.Interval = TimeSpan.FromSeconds(Math.Max(1, _autoPlaySeconds > 0 ? WaitOnTheBeat() : _layoutSeconds));
                 _autoPlayTimer.Start();
             }
         }
@@ -4327,7 +4331,7 @@ namespace ModernImageViewer
                 CaptureUndoPoint();
                 _canvasSceneId = null;
                 _cellBorderFlyout?.Hide();
-                double fadeSeconds = SurpriseChoices.PickTransitionSeconds(Random.Shared);
+                double fadeSeconds = SurpriseChoices.PickTransitionSeconds(Random.Shared, SurpriseChoices.AutoPlayRandom ? Math.Min(SurpriseChoices.RandomFewestSeconds, SurpriseChoices.RandomMostSeconds) : SurpriseChoices.PlaySeconds);
             var outgoingStep = fade ? OutgoingCameraStep(fadeSeconds) : (1.0, 0.0, 0.0);
                 Image? before = fade ? await CoverWithPictureOfCanvasAsync() : null;
                 // The cover holds the old layout where the camera had it, and the new one starts from nothing.

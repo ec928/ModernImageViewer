@@ -83,6 +83,10 @@ namespace ModernImageViewer.Tests
             Assert.True(picks.Max() - picks.Min() > 1.4);
             var one = new SurpriseOptions { TransitionShortest = 1.2, TransitionLongest = 1.2 };
             Assert.Equal(1.2, one.PickTransitionSeconds(random));
+            // A transition never takes more than half the scene it brings in: a 3 s scene gets at most 1.5 s.
+            var slow = new SurpriseOptions { TransitionShortest = 3, TransitionLongest = 4 };
+            Assert.All(Enumerable.Range(0, 50), _ => Assert.InRange(slow.PickTransitionSeconds(random, 3), 0, 1.5));
+            Assert.InRange(slow.PickTransitionSeconds(random, 20), 3, 4);
             var wild = SurpriseOptions.FromJson("{\"TransitionShortest\":0,\"TransitionLongest\":99}");
             Assert.Equal((SurpriseOptions.QuickestTransition, SurpriseOptions.SlowestTransition), (wild.TransitionShortest, wild.TransitionLongest));
         }

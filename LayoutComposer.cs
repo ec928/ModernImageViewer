@@ -378,10 +378,13 @@ namespace ModernImageViewer
         public double TransitionLongest { get; set; } = 2.5;
         public const double QuickestTransition = 0.25, SlowestTransition = 4;
 
-        public double PickTransitionSeconds(Random random)
+        /// <param name="holdSeconds">How long the scene coming in holds: a transition takes at most half of it, so it is over
+        /// before the next change starts (Duration goes down to 3 s, a transition up to 4 s).</param>
+        public double PickTransitionSeconds(Random random, double holdSeconds = double.PositiveInfinity)
         {
             double low = TransitionShortest, high = Math.Max(TransitionShortest, TransitionLongest);
-            return high - low < 0.001 ? low : low + random.NextDouble() * (high - low);
+            double picked = high - low < 0.001 ? low : low + random.NextDouble() * (high - low);
+            return Math.Min(picked, Math.Max(QuickestTransition, holdSeconds / 2));
         }
 
         /// <summary>The share of changes each kind takes in a long run, the no-repeat rule included.</summary>
