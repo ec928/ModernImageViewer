@@ -578,6 +578,7 @@ refused 38%, songs with an obvious beat among them; it is 2.0, which refuses abo
 refuses white noise. A beat trusted wrongly moves a change at most half a beat. Energy and big moments come from
 loudness and no longer wait on the beats: every song read has them. A big moment needs a rise of 0.5, not 0.35, which
 took the average from 3.2 to 1.4 a song (a few songs alternating quiet verses and loud choruses still have four to seven).
+Hard cuts stays at 100% by default (Ed, 7 Nov, knowing such a song makes about a third of its changes hard cuts).
 A step by hand with Next or Previous comes in by its own transition, never a hard cut planned for the timer, and the
 scene after it is put on the music again. A transition takes at most half the hold of the scene it brings in.
 
