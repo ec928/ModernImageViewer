@@ -75,9 +75,9 @@ namespace ModernImageViewer
             if (request.Face is UnitRect face && one is { Count: 1 })
                 return new SceneResult(composition, FaceMove(one[0], face, composition!, request.StartFrom, options, seconds, random), amount);
             var move = one is { Count: 1 }
-                ? OneImageMove(one[0], composition!, subjects, options, amount, seconds, request.LastKind, random)
+                ? OneImageMove(one[0], composition!, subjects, options, amount, seconds, request.HoldSeconds, request.LastKind, random)
                 : CameraMove.Plan(subjects, amount, options.MotionZoomChance, options.MotionFaceChance,
-                    seconds, request.LastKind, random, options.ForcedCameraKind, options.CameraStyle());
+                    seconds, request.LastKind, random, options.ForcedCameraKind, options.CameraStyle(), holdSeconds: request.HoldSeconds);
             return new SceneResult(composition, move, move == null ? 0 : amount);
         }
 
@@ -113,7 +113,7 @@ namespace ModernImageViewer
         /// photo shown past its detail.
         /// </summary>
         private static CameraMove? OneImageMove(ComposedCell cell, Composition composition, IReadOnlyList<(double X, double Y)> subjects,
-            SurpriseOptions options, double amount, double seconds, CameraKind? last, Random random)
+            SurpriseOptions options, double amount, double seconds, double hold, CameraKind? last, Random random)
         {
             double mostZoom = LayoutComposer.MostCameraZoom(cell, composition.Width, composition.Height);
             var aim = new List<(double X, double Y)> { LayoutComposer.AimFor(cell, composition.Width, composition.Height) };
@@ -129,18 +129,18 @@ namespace ModernImageViewer
             // The aim is the faces' eye line, or with none the focus point, which is centred.
             bool eyes = cell.Photo.Faces.Count > 0;
             if (forced is CameraKind.ZoomIn or CameraKind.ZoomOut)
-                return CameraMove.Plan(aim, amount, 1, 1, seconds, last, random, forced, options.MostZoom > 1 ? toZoom : style, mostZoom, eyes);
+                return CameraMove.Plan(aim, amount, 1, 1, seconds, last, random, forced, options.MostZoom > 1 ? toZoom : style, mostZoom, eyes, hold);
             if (forced == CameraKind.Drift)
-                return CameraMove.Plan(subjects, amount, 0, options.MotionFaceChance, seconds, last, random, forced, style, mostZoom);
+                return CameraMove.Plan(subjects, amount, 0, options.MotionFaceChance, seconds, last, random, forced, style, mostZoom, holdSeconds: hold);
             if (options.Zooms(random))
             {
                 // Never the same kind twice running, as the planner keeps it.
                 var kind = last == CameraKind.ZoomIn ? CameraKind.ZoomOut
                     : last == CameraKind.ZoomOut ? CameraKind.ZoomIn
                     : random.Next(2) == 0 ? CameraKind.ZoomIn : CameraKind.ZoomOut;
-                return CameraMove.Plan(aim, amount, 1, 1, seconds, last, random, kind, toZoom, mostZoom, eyes);
+                return CameraMove.Plan(aim, amount, 1, 1, seconds, last, random, kind, toZoom, mostZoom, eyes, hold);
             }
-            return CameraMove.Plan(subjects, amount, options.MotionZoomChance, options.MotionFaceChance, seconds, last, random, null, style, mostZoom);
+            return CameraMove.Plan(subjects, amount, options.MotionZoomChance, options.MotionFaceChance, seconds, last, random, null, style, mostZoom, holdSeconds: hold);
         }
     }
 }

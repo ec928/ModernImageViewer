@@ -62,6 +62,17 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
+        public void A_two_shot_needs_eight_seconds_on_screen_not_counting_the_run_on()
+        {
+            // Two-shots every time a face allows; a 6 s scene is 8.5 s with its run-on, which used to let one in.
+            var options = new SurpriseOptions { TwoShotChance = 1, MotionFaceChance = 1 };
+            var kept = new KeptLayout(null, new List<(double X, double Y)> { (0.5, 0.45) });
+            int Shots(double hold, int seed) => SceneCall.Make(new SceneRequest(Array.Empty<PhotoFacts>(), 1920, 1080, options, hold, seed, Keep: kept))!.Move!.Shots.Count;
+            Assert.All(Enumerable.Range(0, 20), seed => Assert.Equal(1, Shots(6, seed)));
+            Assert.Contains(Enumerable.Range(0, 20), seed => Shots(9, seed) == 2);
+        }
+
+        [Fact]
         public void Transition_length_is_picked_in_its_range_and_defaults_to_three_quarters_to_two_and_a_half_seconds()
         {
             var fresh = SurpriseOptions.FromJson("{}");

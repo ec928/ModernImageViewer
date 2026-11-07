@@ -348,7 +348,11 @@ namespace ModernImageViewer
         /// the detail it has. A two-shot that would have no room to move in is not played; a zoom with no room becomes a drift.</param>
         /// <param name="subjectsAreEyes">The subjects are the eye lines of faces, so views on them are framed by the eyes
         /// (<see cref="CameraView.OnEyes"/>); false for a focus point, which is centred.</param>
-        public static CameraMove? Plan(IReadOnlyList<(double X, double Y)> subjects, double amount, double zoomChance, double aimChance, double seconds, CameraKind? last, Random random, CameraKind? forcedKind = null, CameraStyle? style = null, double mostZoom = double.PositiveInfinity, bool subjectsAreEyes = true)
+        /// <param name="holdSeconds">How long the scene is on screen before the next change, when <paramref name="seconds"/>
+        /// also runs on past it. A two-shot needs <see cref="ShortestTwoShotSeconds"/> of that: counting the run-on let one
+        /// into a 5.5 s scene, its close shot gone a second after it came (Cinematic Slideshow never chained two moves under
+        /// 8 s; a flip-book).</param>
+        public static CameraMove? Plan(IReadOnlyList<(double X, double Y)> subjects, double amount, double zoomChance, double aimChance, double seconds, CameraKind? last, Random random, CameraKind? forcedKind = null, CameraStyle? style = null, double mostZoom = double.PositiveInfinity, bool subjectsAreEyes = true, double? holdSeconds = null)
         {
             if (amount <= 0 || seconds <= 0) return null;
             style ??= CameraStyle.Plain;
@@ -356,7 +360,7 @@ namespace ModernImageViewer
             mostZoom = Math.Max(1, mostZoom);
 
             bool roomForTwoShots = mostZoom >= 1.06 + intensity * 0.3 + 0.15;
-            if (subjects.Count > 0 && roomForTwoShots && seconds >= ShortestTwoShotSeconds && style.TwoShotChance > 0 && random.NextDouble() < style.TwoShotChance)
+            if (subjects.Count > 0 && roomForTwoShots && (holdSeconds ?? seconds) >= ShortestTwoShotSeconds && style.TwoShotChance > 0 && random.NextDouble() < style.TwoShotChance)
                 return PlanTwoShots(subjects[random.Next(subjects.Count)], intensity, seconds, random, style, mostZoom);
 
             bool onSubject = subjects.Count > 0 && random.NextDouble() < aimChance;
