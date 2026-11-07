@@ -293,7 +293,7 @@
                                                 </Button>
                                             </StackPanel>
                                             <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.5"/>
-                                            <Button Style="{StaticResource SubtleButtonStyle}" Click="MusicSettings_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Height="28" Padding="8,0" CornerRadius="4" IsTabStop="True" AutomationProperties.Name="Music settings" ToolTipService.ToolTip="The folder and rating for music in Cinematic shows and Auto-Mix">
+                                            <Button Style="{StaticResource SubtleButtonStyle}" Click="MusicSettings_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Height="28" Padding="8,0" CornerRadius="4" IsTabStop="True" AutomationProperties.Name="Music settings" ToolTipService.ToolTip="The folder and rating for music in Cinematic Slideshow and Multi-View shows.">
                                                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                                                     <FontIcon Glyph="&#xE8D6;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                                     <TextBlock x:Name="MusicOptionText" Text="Music: none" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>

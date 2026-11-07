@@ -13,13 +13,11 @@ One pill along the bottom, left to right. Dividers separate the groups. Rows and
 | Control | Words | What it does |
 |---|---|---|
 | Back | Back | Leaves multi-image for the tiles. Esc does the same when no card is open. The layout stays, and Multi-View returns to it. |
-| Drawer | Drawer, or Drawer (N) | Opens or closes the drawer, on the tab it was last left on: Image Pool or Storyboard. N is what that tab shows: images not on the canvas, or scenes; the tooltip names the tab. Named Drawer so "Storyboard" is on the bar once, on the mode switch. It never changes what Play plays. A light plate shows while the drawer is open. |
-| Storyboard | Storyboard | One side of the mode switch. Play walks the storyboard. Greyed out until a storyboard has scenes. Choosing it changes nothing on the canvas; while playing, the next picture is a scene. |
-| Auto-Mix | Auto-Mix | The other side. Play makes a new layout each time, from the Image Pool. Choosing it changes nothing on the canvas; Next makes a new layout now. |
-| Previous | icon | Previous scene while a storyboard is playing. Otherwise the previous layout. Left arrow. |
-| Play | Play Show, Play Show · i/N, Play Mix, or Pause | Starts or pauses. Stopped on a storyboard: `Play Show`, or `Play Show · i/N` when resuming past the first scene. Stopped on Auto-Mix: `Play Mix`. While either is running: `Pause`. Space does the same. Filled while running. |
-| Next | icon | Next scene, or the next layout, made new when there is none ahead. Right arrow. |
-| Generator | Generator | Opens or closes Layout Generator Settings, the settings the Layout Generator makes layouts with, for Auto-Mix and for storyboards. |
+| Drawer | Drawer, or Drawer (N) | Opens or closes the drawer, on the tab it was last left on: Image Pool or Show. N is what that tab shows: images not on the canvas, or scenes. It never changes what Play plays. A light plate shows while the drawer is open. |
+| Previous | icon | Previous scene, or the previous layout when no show is playing. Left arrow. |
+| Play | Play, or Pause | Plays the show. Scenes are made as it plays and kept. While it runs: `Pause`. Space does the same. Filled while running. |
+| Next | icon | Next scene, or one new layout when no show is playing. Right arrow. |
+| Show | Show | Opens the Show card: the preset, this show's values, and Soundtrack. Engine settings are behind **Engine settings…** on that card. |
 | Rows | Rows, or N Rows | Arranges the grid in rows and opens the grid layout card. R switches between rows and columns. B, R, H, + and − work only without Ctrl or Alt held, so Ctrl+B still toggles the sidebar. |
 | Columns | Columns, or N Columns | Arranges the grid in columns. Same card and same R key. |
 | Canvas | Canvas | Aspect ratio, surface, color and Frame & Border; then Fit whole images (or Fill cells), which changes how every image sits in its cell; then Reset canvas and images, on its own at the end. |
@@ -29,15 +27,15 @@ One pill along the bottom, left to right. Dividers separate the groups. Rows and
 
 While a storyboard plays, each new scene's name shows at the top for a moment only while the bar is showing. Once the bar has hidden for want of movement, scenes change with nothing over the picture. Messages that answer something you did, such as Paused or Duplicated scene, still show.
 
-### Which mode is active
+### What Play plays
 
-The mode switch shows it: exactly one side is filled, including while play is paused. A storyboard is the mode once scenes exist, until Auto-Mix is chosen. Opening the drawer, or either of its tabs, does not change the mode. Play Show in the drawer, a scene card's play button and Play show from here choose Storyboard, because they play it. Clicking a scene card shows that scene and editing its camera path opens Camera Director; neither changes the mode.
+Play always plays the show. A show with no scenes yet is made as it plays, from the preset on the Show card. Opening the drawer does not change that. Clicking a scene card shows that scene. Editing its camera path opens Camera Director.
 
 ## Image Pool and storyboard drawer
 
 A sheet along the bottom with two tabs and Close. Esc closes it. A click outside closes it, except a click on the playbar. B opens it on the Storyboard tab, or closes it when that is showing. The drawer can be dragged taller, but never past the playbar, which always sits above it.
 
-The tabs read `Image Pool` or `Image Pool (N)`, where N is the images not on the canvas, and `Storyboard` or `Storyboard (N)`, where N is the scenes.
+The tabs read `Image Pool` or `Image Pool (N)`, where N is the images not on the canvas, and `Show` or `Show (N)`, where N is the scenes. **New show** on the Show tab starts an empty show with the preset and values from the Show card. Play then makes its scenes from the Image Pool.
 
 ### Image Pool
 
@@ -50,21 +48,9 @@ Images in the session that are not on the canvas.
 - Thumbnails: right-click to remove one from the session.
 - Empty states say how images get into and out of the Image Pool.
 
-### Storyboard
+### Show
 
-With no scenes, the middle says `Make a show from the image pool, or use Add this layout for the images on the canvas.`
-
-The toolbar:
-
-| Control | Label | What it does |
-|---|---|---|
-| Play Show | Play Show | Plays from the selected scene and chooses Storyboard. Shown when scenes exist. |
-| Add this layout | Add this layout | The images on the canvas become a new scene at the end. |
-| Add new layout | Add new layout | Makes one new scene at the end, from images no scene uses yet, as many as Images per scene allows, and shows it on the canvas. Once every image is in the show, it picks from the whole Image Pool. Each click is one Undo step. |
-| Make a show | Make a show, or Replace show | Makes scenes from the Image Pool. When scenes exist it reads Replace show and asks before it replaces them. |
-| Images per scene | `(min–max) ▾` | The fewest and most images in a scene, 1 to 16, for the next show made. Auto-Mix uses the same range. |
-| Summary | `N scenes · length` | Scenes and running time. |
-| Clear | Clear | Asks, with Cancel as the default, then removes every scene. |
+**Add this layout** keeps the images on the canvas as a new scene. **New show**, on the right, asks and then starts an empty show with the preset and values from the Show card. Play on the bar makes the scenes. With no scenes yet, the tab says to press Play, and that Add this layout keeps the canvas as a scene. The status line names the preset. The summary is the scene count and the running time.
 
 ### Scene cards
 
@@ -81,25 +67,15 @@ Cards can be dragged into a new order.
 - **Double-click a card**: shows the scene and closes the drawer.
 - **Click the camera and hold badge**: the camera choices (Zoom in, Zoom out, Pan across, Still, then Dynamic, chosen at playback), then Edit camera path…, then Duration (5s, 8s, 12s, 16s, 20s, 30s). The current choice of each is ticked as a radio item.
 - **Right-click a card** (or Shift+F10): Play show from here, Update scene from canvas (copies the canvas into that card's scene), Camera motion (the same choices as the badge), Duration, Duplicate scene, Remove scene, Move earlier, Move later.
-- **Remove scene** never asks. It says `Removed scene. Ctrl+Z brings it back.`, and Undo does. Removing, duplicating or moving a scene is one Undo step, by button, menu, Delete key or drag. Make a show and Replace show are one step each, and Undo can go back to before the storyboard existed.
+- **Remove scene** never asks. It says `Removed scene. Ctrl+Z brings it back.`, and Undo does. Removing, duplicating or moving a scene is one Undo step, by button, menu, Delete key or drag. New show is one step, and Undo can go back to the show it replaced.
 
-## Play storyboard and Cinematic storyboard, from the folders
+## Play show, from the folders
 
-**Play storyboard** in the sidebar, under Cinematic Slideshow, plays the whole folder; the same button on the selection bar plays the selected images. Either opens Multi-View with those images, starts a new storyboard and plays it once its first two scenes are made, so a large folder starts within seconds. While it plays it makes the next scenes from images not in it yet, a few ahead of the screen, one at a time, so building never competes with the show; when it is paused it makes the rest. It goes on until every image is in the show, and stops if the show is replaced or cleared. The drawer's summary and the Image Pool count catch up when the show pauses.
+**Play show** in the sidebar, under Cinematic Slideshow, plays the whole folder with the preset chosen on the Show card. The same button on the selection bar plays the selected images. Either opens Multi-View with those images, starts a new show and plays it once the first scene is made. While it plays it makes the next scenes from images not in it yet, a few ahead of the screen. While it is paused, drafting stops once every image has been dealt once. It stops if the show is replaced or cleared.
 
-**Cinematic storyboard**, under Play storyboard in the sidebar (and on the selection bar), makes a storyboard that looks like Cinematic Slideshow. By default each scene is one image filling the screen, for 10 to 15 seconds, with the camera moving and a crossfade between scenes. You can change this in Layout Generator Settings, under Advanced.
+**Cinematic** is a preset on the Show card, not a second sidebar button. One image at a time, Edge to edge most of the time, Hero spotlight rarely, the other designs off, 10 to 15 seconds. Cinematic Slideshow remains the separate window opened by the sidebar button of that name.
 
-A Cinematic storyboard stays Cinematic. While it is open, Add new layout and Replace show make Cinematic scenes, and the images-per-scene picker in the drawer changes the Cinematic setting. The drawer's summary starts with "Cinematic", and it stays Cinematic when saved and opened again.
-
-To go back to your main settings, do one of these:
-
-- turn off **Use for this storyboard** in Layout Generator Settings, under Advanced > Cinematic storyboard. Scenes already made stay as they are; new ones use your main settings. Turning it on does the reverse for any storyboard.
-- press **Clear** in the drawer (Undo brings the Cinematic storyboard back).
-- start a new storyboard with **Play storyboard**.
-
-Auto-Mix always uses your main settings.
-
-If you press Add new layout while a storyboard is still being made, the new scene never repeats an image the storyboard is using.
+To play with the Multi-Image preset again, press Multi-Image on the Show card. **New show** in the drawer starts an empty show and keeps the preset. Reset on the card puts the preset back to its starting values.
 
 ## Camera Director (Visual Keyframe Editor)
 
@@ -142,7 +118,7 @@ When viewing a storyboard scene on the canvas, any manual layout adjustment auto
 
 ## Layout Generator Settings
 
-Opened from the Generator button on the bar. The Layout Generator is the one generator that makes layouts, live in Auto-Mix and as scenes in storyboards (Make a show, Add new layout, Play storyboard, Cinematic storyboard); the panel says so at the top. The main page has two sections, each heading with its "more settings" on the right as the same gear-and-label button: **Layout** (images per scene, duration, smart pace, motion), whose **Advanced…** opens the rest in sections, one open at a time; and **Soundtrack**, whose **Configure…** opens the music settings (folder, lowest rating, which shows play music).
+Opened from **Engine settings…** on the Show card. These are how one layout and one move are made. The show's own images per scene, duration, smart pace, motion, sequence beats, scenes per step and design odds are on the Show card, not here. The page is in sections: Images & faces, Designs, Camera, Transitions, Canvas & progress.
 
 The defaults, which **Reset to defaults** on the Advanced page puts back. A settings file saved before a default changed keeps its own values until then.
 
@@ -197,7 +173,7 @@ A Cinematic storyboard is a show started from the **Cinematic** preset. Its valu
 | Motion | 40% to 60% |
 | Sequence beats | 25% |
 
-The storyboard's images-per-scene button opens **this show's settings**: a **Preset** (Multi-Image, which follows Layout Generator Settings; Cinematic; or My preset 1, 2 or 3), **Save as** My preset 1, 2 or 3, and the values this show is played with: images per scene, duration, smart pace, motion, sequence beats, scenes per step and each design's odds. They are the show's own and are saved in its file; Layout Generator Settings are not changed. A show that holds none follows Layout Generator Settings; the first change makes it hold the full set it was using.
+**Show** on the bar opens this show's settings. Presets are one line: Multi-Image, Cinematic, 1, 2 and 3. Press one to use it. Hold or right-click to keep this show's values in it. The reset symbol puts that preset back. What you change is kept in the app's settings for the next Play of that preset. The values are images per scene, duration, smart pace, motion, sequence beats (default 25%), scenes per step and each design's odds. A saved `.mivshow` file carries its own values. **Soundtrack** on the card sets Cut on the beat (default on), Follow the music (default 50%) and Hard cuts (default 100%).
 
 A Cinematic storyboard uses your main Transitions settings.
 
