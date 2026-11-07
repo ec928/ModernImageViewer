@@ -40,6 +40,49 @@ namespace ModernImageViewer.Cinematic
         public bool IsFolder => _deck != null;
         public bool IsOn => _player != null;
 
+        // Cut on the music (design 3.10): the beats of the song now playing, read in the background when it opens.
+        private string? _songPath;
+        private BeatGrid _beats = BeatGrid.None;
+
+        /// <summary>The song's beats, once read and trusted; otherwise null, and scenes hold as planned.</summary>
+        public BeatGrid? Beats => _player != null && _beats.Usable ? _beats : null;
+
+        /// <summary>Where the song is now, in seconds, while it plays and can be heard; null otherwise.</summary>
+        public double? Position
+        {
+            get
+            {
+                if (_player == null || _volume <= 0.001 || !_wantPlaying) return null;
+                try
+                {
+                    var session = _player.PlaybackSession;
+                    if (session.PlaybackState != MediaPlaybackState.Playing) return null;
+                    return session.Position.TotalSeconds;
+                }
+                catch (System.Runtime.InteropServices.COMException) { return null; }
+            }
+        }
+
+        /// <summary>Only a player that cuts on the beat asks for them: reading costs about a second of work a song.</summary>
+        public bool ReadsBeats { get; set; }
+
+        private void ReadBeats(string path)
+        {
+            _songPath = path;
+            _beats = BeatGrid.None;
+            if (!ReadsBeats) return;
+            _ = BeatReader.ReadAsync(path).ContinueWith(t =>
+            {
+                if (t.Status != TaskStatus.RanToCompletion) return;
+                var grid = t.Result;
+                _dispatcher.TryEnqueue(() =>
+                {
+                    // A song changed while it was read keeps none of its beats.
+                    if (string.Equals(_songPath, path, StringComparison.OrdinalIgnoreCase)) _beats = grid;
+                });
+            }, TaskScheduler.Default);
+        }
+
         public bool IsPlayingFolder(string folder, double lowestStars, bool includeUnrated) =>
             _player != null && _asked == FolderKey(folder, lowestStars, includeUnrated);
 
@@ -151,6 +194,7 @@ namespace ModernImageViewer.Cinematic
                 var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(path);
                 if (ticket != _openTicket || _player == null) return;
                 _player.Source = MediaSource.CreateFromStorageFile(file);
+                ReadBeats(path);
                 Sync();
                 string shown = await ShownNameAsync(file, name);
                 if (ticket == _openTicket && _player != null) NowPlayingChanged?.Invoke(shown);
@@ -191,6 +235,8 @@ namespace ModernImageViewer.Cinematic
             _deck = null;
             _songChosen = false;
             _failedInARow = 0;
+            _songPath = null;
+            _beats = BeatGrid.None;
             if (_player != null)
             {
                 _player.MediaFailed -= Player_Failed;

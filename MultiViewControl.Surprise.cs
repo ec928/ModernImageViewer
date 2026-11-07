@@ -1461,10 +1461,36 @@ namespace ModernImageViewer
             volRow.Children.Add(volRightGrid);
             panel.Children.Add(volRow);
 
+            // Cut on the beat (design 3.10): scene changes land on the song's beats. With nothing read it changes nothing.
+            var beatRow = new Grid { ColumnSpacing = 12, MinHeight = 34 };
+            beatRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            beatRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
+            var beatLabel = new TextBlock { Text = "Cut on the beat", VerticalAlignment = VerticalAlignment.Center, FontSize = 13, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White) };
+            var beatToggle = new ToggleSwitch
+            {
+                IsOn = music?.CutOnBeat != false,
+                OnContent = string.Empty,
+                OffContent = string.Empty,
+                MinWidth = 0,
+                IsEnabled = isMusicActive,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 4, 0)
+            };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(beatToggle, "Cut on the beat");
+            ToolTipService.SetToolTip(beatRow, "Each scene changes on the beat of the song nearest its planned end, within Duration. A song without a clear beat, or one still being read, leaves the timing as it is. The show itself is not changed.");
+            beatToggle.Toggled += (_, _) => MainWindow.Instance?.SetMusicCutOnBeat(beatToggle.IsOn);
+            Grid.SetColumn(beatLabel, 0);
+            Grid.SetColumn(beatToggle, 1);
+            beatRow.Children.Add(beatLabel);
+            beatRow.Children.Add(beatToggle);
+            panel.Children.Add(beatRow);
+
             onToggle.Toggled += (_, _) =>
             {
                 MainWindow.Instance?.SetMusicInSurprise(onToggle.IsOn);
                 volSlider.IsEnabled = hasFolder && onToggle.IsOn;
+                beatToggle.IsEnabled = hasFolder && onToggle.IsOn;
                 volReadout.Opacity = onToggle.IsOn ? 0.82 : 0.4;
                 if (!onToggle.IsOn) StopAutoPlayMusic();
                 else if (_autoPlaySeconds > 0) StartAutoPlayMusic();
@@ -3446,6 +3472,29 @@ namespace ModernImageViewer
             }
         }
 
+        // How long a scene change takes to start once its turn comes (decoding is done ahead; this is putting it on screen).
+        private double _changeDelaySeconds = 0.3;
+
+        /// <summary>
+        /// The wait before the next scene's change: its planned hold, or, with Cut on the beat and a song whose beats are
+        /// read, the wait that puts the change on the beat nearest the planned end (design 3.10). The saved hold is not
+        /// changed, so the show plays as drafted with other music or none.
+        /// </summary>
+        private double WaitOnTheBeat()
+        {
+            double planned = _layoutSeconds;
+            if (MainWindow.Instance?.MyMusic is not { CutOnBeat: true } || _surpriseMusic == null) return planned;
+            var settings = GeneratorSettingsFor(_activeShow);
+            if (!settings.AutoPlayRandom) return planned;
+            double wait = Cinematic.BeatGrid.WaitBeforeChange(_surpriseMusic.Beats, _surpriseMusic.Position, planned,
+                Math.Min(settings.RandomFewestSeconds, settings.RandomMostSeconds), Math.Max(settings.RandomFewestSeconds, settings.RandomMostSeconds),
+                _changeDelaySeconds);
+            PlayTiming.Write(wait == planned
+                ? $"cut on the beat: none in reach, holds {planned} s"
+                : $"cut on the beat: holds {wait + _changeDelaySeconds:0.00} s for {planned} s planned (change takes {_changeDelaySeconds * 1000:0} ms)");
+            return wait;
+        }
+
         private async Task PlayStoryboardAsync(int startIndex = -1)
         {
             if (_activeShow == null || _activeShow.Scenes.Count == 0) return;
@@ -3497,11 +3546,11 @@ namespace ModernImageViewer
                     StopAutoPlay();
                     return;
                 }
-                timer.Interval = TimeSpan.FromSeconds(Math.Max(1, _layoutSeconds));
+                timer.Interval = TimeSpan.FromSeconds(Math.Max(1, WaitOnTheBeat()));
                 if (ReferenceEquals(_autoPlayTimer, timer)) timer.Start();
             };
             await PlayNextStoryboardSceneAsync(fade: true);
-            timer.Interval = TimeSpan.FromSeconds(Math.Max(1, _layoutSeconds));
+            timer.Interval = TimeSpan.FromSeconds(Math.Max(1, WaitOnTheBeat()));
             if (ReferenceEquals(_autoPlayTimer, timer)) timer.Start();
         }
 
@@ -3521,6 +3570,8 @@ namespace ModernImageViewer
             }
 
             long turnCame = PlayTiming.Now;
+            var turnClock = System.Diagnostics.Stopwatch.StartNew();
+            bool heldForNext = false;
             // The next scene is still being made: this one holds, still, until it is ready. Play never goes back to the
             // start of a show that is still growing, and never shows a blank screen.
             if (_showPlaybackIndex >= visibleScenes.Count && ReferenceEquals(_activeShow, _showBeingBuilt))
@@ -3531,6 +3582,7 @@ namespace ModernImageViewer
                        && show.Scenes.Count(s => !s.IsHidden) <= waitingFor)
                     await Task.Delay(50);
                 PlayTiming.Write($"scene {waitingFor + 1} was not ready: held the last one {PlayTiming.Now - turnCame} ms longer");
+                heldForNext = true;
                 if (_autoPlaySeconds == 0 || !ReferenceEquals(_activeShow, show)) return;
                 visibleScenes = show.Scenes.Where(s => !s.IsHidden).ToList();
             }
@@ -3620,6 +3672,9 @@ namespace ModernImageViewer
 
             // The scene's own transition, chosen when it was made and shown on nothing else. It used to be rolled again
             // here from the current settings, so what a scene stored was never what played.
+            // How long putting a scene on screen takes, from its turn to its change, for Cut on the beat. A turn that waited
+            // for its scene to be made says nothing about that.
+            if (!heldForNext) _changeDelaySeconds = 0.7 * _changeDelaySeconds + 0.3 * turnClock.Elapsed.TotalSeconds;
             if (before != null)
                 ChangeLayoutOver(before, outgoingStep, Enum.TryParse<LayoutTransition>(scene.Transition, out var planned) ? planned : LayoutTransition.Crossfade);
 
@@ -4029,7 +4084,7 @@ namespace ModernImageViewer
             }
             if (_surpriseMusic == null)
             {
-                _surpriseMusic = new Cinematic.MusicBed(DispatcherQueue);
+                _surpriseMusic = new Cinematic.MusicBed(DispatcherQueue) { ReadsBeats = true };
                 _surpriseMusic.GaveUp += (title, why) =>
                 {
                     _musicProblem = title;

@@ -12,9 +12,16 @@ namespace ModernImageViewer
     {
         public MusicChoices MyMusic => new(
             _currentSettings.MusicFolder, _currentSettings.MusicLowestStars, _currentSettings.MusicIncludesUnrated,
-            _currentSettings.MusicInCinematic, _currentSettings.MusicInSurprise, _currentSettings.MusicVolume);
+            _currentSettings.MusicInCinematic, _currentSettings.MusicInSurprise, _currentSettings.MusicVolume, _currentSettings.MusicCutOnBeat);
 
         public event Action? MusicSettingsChanged;
+
+        /// <summary>Cut on the beat (design 3.10): a show's scene changes land on the music's beats.</summary>
+        public void SetMusicCutOnBeat(bool on)
+        {
+            _currentSettings.MusicCutOnBeat = on;
+            SaveAllSettings();
+        }
 
         public void OpenMusicSettings() => MusicSettings_Click(this, new RoutedEventArgs());
 
@@ -202,7 +209,7 @@ namespace ModernImageViewer
     }
 
     /// <summary>The music set in the options, and the controls for a rating, which a show's own music uses too.</summary>
-    public sealed record MusicChoices(string? Folder, double LowestStars, bool IncludesUnrated, bool InCinematic, bool InSurprise, double Volume)
+    public sealed record MusicChoices(string? Folder, double LowestStars, bool IncludesUnrated, bool InCinematic, bool InSurprise, double Volume, bool CutOnBeat = true)
     {
         public const string FormatsNote = "Ratings are read from MP3 and FLAC tags. M4A and WMA count as unrated.";
 

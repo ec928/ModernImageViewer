@@ -544,6 +544,15 @@ cinematic slideshow. Sequence beats are views, not music: they never read the so
 
 ### 3.10 Cut on the music (later, after the six slices)
 
+**Built 7 Nov, as below (Ed: "let's see if it works").** `Cinematic/BeatGrid.cs` finds the beats (spectral-flux onsets,
+tempo by autocorrelation leaning to 120 bpm, beats by dynamic programming); `Cinematic/BeatReader.cs` decodes with
+Windows' `MediaTranscoder` to a temp mono WAV (not `AudioGraph`, which plays in real time), under a second for a
+four-minute song, cached for the session. Check M1: eight songs from the music folder read at 84.7 to 143.6 bpm (Only
+Girl 126.0, Over the Rainbow 84.7) with confidence 3.4 to 6.6; white noise 1.1 and clicks at random times 2.7; the
+threshold is 3.0, so the margin under the weakest song is small. On a click track the beats land within 32 ms. In the
+app, the first scene of a song holds as planned (beats not read yet) and later holds move by up to about a quarter of
+a second. The switch is **Cut on the beat** under Soundtrack, on by default, saved with the other music settings.
+
 The director chooses each scene's hold; landing the change on a beat is one more way it chooses. The engine does not
 change and does not read the music (R13). **Not part of approving this design:** nothing here is in the six slices, and it is reviewed and approved on its own when its turn comes.
 
