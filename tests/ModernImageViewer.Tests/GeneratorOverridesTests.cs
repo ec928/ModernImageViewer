@@ -111,7 +111,8 @@ namespace ModernImageViewer.Tests
                 var scene = await ShowDirector.DraftSceneAsync(facts, cine, 1920, 1080, previous: null);
 
                 Assert.Single(scene!.GetPhotoPaths());
-                Assert.Equal(LayoutComposer.EdgeToEdge, scene.Recipe);
+                // Cinematic is Edge to edge Often and Hero spotlight Rare (design 3.7): either, never the designs that are Off.
+                Assert.Contains(scene.Recipe, new[] { LayoutComposer.EdgeToEdge, LayoutComposer.HeroSpotlight });
             }
         }
     }
