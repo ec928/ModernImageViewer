@@ -54,9 +54,12 @@ namespace ModernImageViewer.Tests
             {
                 var move = SceneCall.Make(new SceneRequest(Array.Empty<PhotoFacts>(), 1920, 1080, options, 12, seed, Keep: kept))!.Move!;
                 var end = move.Shots[^1].To;
-                // Near the middle, so no zoom is clamped at the picture's edge.
+                // Near the middle, so no zoom is clamped at the picture's edge. The point is a face's eye line, which the
+                // view puts a third of the way down, not in the middle (Cinematic Slideshow's framing, 7 Nov).
+                // At a gentle zoom the view meets the bottom of the picture first, and the eyes sit a little lower.
                 Assert.InRange(end.X, 0.51, 0.53);
-                Assert.InRange(end.Y, 0.48, 0.50);
+                double framed = Math.Min(0.49 + 1.0 / (6 * end.Zoom), 1 - 0.5 / end.Zoom);
+                Assert.Equal(framed, end.Y, 3);
             }
         }
 

@@ -77,11 +77,14 @@ namespace ModernImageViewer.Tests
         public async Task DraftAsync_Generates_Complete_Project_Off_Thread()
         {
             var photos = MakePhotos(8);
+            // Sequence beats off: at their 25% default a step may add closer views, and the scene count this test checks
+            // varied from run to run (it failed 3 in 8 before any change of 7 Nov).
             var options = new SurpriseOptions
             {
                 FewestPictures = 1,
                 MostPictures = 4,
-                MotionAmount = 0.5
+                MotionAmount = 0.5,
+                SequenceBeatsChance = 0
             };
 
             var progressReports = new List<ShowDraftProgress>();

@@ -14,6 +14,13 @@ namespace ModernImageViewer
     {
         public static readonly CameraView Whole = new(1, 0.5, 0.5);
 
+        /// <summary>
+        /// A view of a person framed by the eyes: the eye line a third of the way down the view, as a camera operator
+        /// frames a face, not in the middle. Covered as any view is, so at the top of a picture the eyes sit higher.
+        /// </summary>
+        public static CameraView OnEyes(double zoom, double eyeX, double eyeY, double angle = 0) =>
+            new CameraView(zoom, eyeX, eyeY + 1.0 / (6 * Math.Max(1, zoom)), angle).Covered();
+
         /// <summary>The nearest view with picture all the way to its edges. A turn is covered when it is drawn (<see cref="TurnCover"/>).</summary>
         public CameraView Covered()
         {
@@ -339,7 +346,9 @@ namespace ModernImageViewer
         /// </summary>
         /// <param name="mostZoom">How far any view of the move may zoom: past it a face would be cut or the photo shown past
         /// the detail it has. A two-shot that would have no room to move in is not played; a zoom with no room becomes a drift.</param>
-        public static CameraMove? Plan(IReadOnlyList<(double X, double Y)> subjects, double amount, double zoomChance, double aimChance, double seconds, CameraKind? last, Random random, CameraKind? forcedKind = null, CameraStyle? style = null, double mostZoom = double.PositiveInfinity)
+        /// <param name="subjectsAreEyes">The subjects are the eye lines of faces, so views on them are framed by the eyes
+        /// (<see cref="CameraView.OnEyes"/>); false for a focus point, which is centred.</param>
+        public static CameraMove? Plan(IReadOnlyList<(double X, double Y)> subjects, double amount, double zoomChance, double aimChance, double seconds, CameraKind? last, Random random, CameraKind? forcedKind = null, CameraStyle? style = null, double mostZoom = double.PositiveInfinity, bool subjectsAreEyes = true)
         {
             if (amount <= 0 || seconds <= 0) return null;
             style ??= CameraStyle.Plain;
@@ -350,9 +359,14 @@ namespace ModernImageViewer
             if (subjects.Count > 0 && roomForTwoShots && seconds >= ShortestTwoShotSeconds && style.TwoShotChance > 0 && random.NextDouble() < style.TwoShotChance)
                 return PlanTwoShots(subjects[random.Next(subjects.Count)], intensity, seconds, random, style, mostZoom);
 
-            (double X, double Y) aim = subjects.Count > 0 && random.NextDouble() < aimChance
+            bool onSubject = subjects.Count > 0 && random.NextDouble() < aimChance;
+            (double X, double Y) aim = onSubject
                 ? subjects[random.Next(subjects.Count)]
                 : (0.5 + (random.NextDouble() - 0.5) * 0.3, 0.5 + (random.NextDouble() - 0.5) * 0.3);
+            // A view on a face is framed by its eyes; any other aim is centred.
+            bool eyes = onSubject && subjectsAreEyes;
+            CameraView View(double zoom, double x, double y, double angle = 0) =>
+                eyes ? CameraView.OnEyes(zoom, x, y, angle) : new CameraView(zoom, x, y, angle).Covered();
 
             CameraKind kind;
             if (mostZoom < WidestZoom + 0.02)
@@ -381,16 +395,18 @@ namespace ModernImageViewer
                 double travel = Math.Min(1 - 2 * margin, 0.08 + intensity * 0.8);
                 bool sideways = random.NextDouble() < 0.75;
                 // Max because at full travel, rounding can put the upper limit a hair below the lower one.
-                double along = Math.Clamp((sideways ? aim.X : aim.Y) - travel / 2, margin, Math.Max(margin, 1 - margin - travel));
+                // A drift across a face keeps the eyes on the upper third; one up or down the picture travels through it.
+                double frameY = sideways && eyes ? aim.Y + 1.0 / (6 * zoom) : aim.Y;
+                double along = Math.Clamp((sideways ? aim.X : frameY) - travel / 2, margin, Math.Max(margin, 1 - margin - travel));
                 double from = along, to = along + travel;
                 if (random.Next(2) == 0) (from, to) = (to, from);
-                var start = sideways ? new CameraView(zoom, from, aim.Y, turn.From) : new CameraView(zoom, aim.X, from, turn.From);
-                var end = sideways ? new CameraView(zoom, to, aim.Y, turn.To) : new CameraView(zoom, aim.X, to, turn.To);
+                var start = sideways ? new CameraView(zoom, from, frameY, turn.From) : new CameraView(zoom, aim.X, from, turn.From);
+                var end = sideways ? new CameraView(zoom, to, frameY, turn.To) : new CameraView(zoom, aim.X, to, turn.To);
                 return new CameraMove(kind, start.Covered(), end.Covered(), seconds, curve, Bow(style, random));
             }
 
-            var wide = new CameraView(WidestZoom, aim.X, aim.Y).Covered();
-            var close = new CameraView(Math.Min(mostZoom, Math.Max(WidestZoom + 0.02, style.PickZoom(random) ?? 1 + intensity * 1.5)), aim.X, aim.Y).Covered();
+            var wide = View(WidestZoom, aim.X, aim.Y);
+            var close = View(Math.Min(mostZoom, Math.Max(WidestZoom + 0.02, style.PickZoom(random) ?? 1 + intensity * 1.5)), aim.X, aim.Y);
             return kind == CameraKind.ZoomIn
                 ? new CameraMove(kind, wide with { Angle = turn.From }, close with { Angle = turn.To }, seconds, curve)
                 : new CameraMove(kind, close with { Angle = turn.From }, wide with { Angle = turn.To }, seconds, curve);
@@ -411,7 +427,7 @@ namespace ModernImageViewer
             // The wide shot drifts a little toward the face, so the second shot follows on from it.
             var wideFrom = new CameraView(wideZoom, 0.5 + (0.5 - face.X) * 0.15, 0.5 + (0.5 - face.Y) * 0.15, turn.From).Covered();
             var wideTo = new CameraView(wideZoom, 0.5 + (face.X - 0.5) * 0.15, 0.5 + (face.Y - 0.5) * 0.15, turn.From).Covered();
-            var close = new CameraView(closeZoom, face.X, face.Y, turn.To).Covered();
+            var close = CameraView.OnEyes(closeZoom, face.X, face.Y, turn.To);
 
             if (random.Next(2) == 0)
             {
@@ -423,7 +439,7 @@ namespace ModernImageViewer
                 }, seconds);
             }
             // Reveal: the wide shot, then a cut to the face, pushing in slowly.
-            var nearer = new CameraView(Math.Min(closeZoom * 1.08, Math.Max(closeZoom, mostZoom)), face.X, face.Y, turn.To).Covered();
+            var nearer = CameraView.OnEyes(Math.Min(closeZoom * 1.08, Math.Max(closeZoom, mostZoom)), face.X, face.Y, turn.To);
             return new CameraMove(CameraKind.ZoomIn, new[]
             {
                 new CameraShot(wideFrom, wideTo, 0.5, calm, Bow(style, random)),

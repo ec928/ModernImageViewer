@@ -72,12 +72,12 @@ namespace ModernImageViewer
             }
         }
 
-        /// <summary>Where the camera may aim: the faces in the largest cells that have them, as shares of the canvas.</summary>
+        /// <summary>Where the camera may aim: the eye line of the faces in the largest cells that have them, as shares of the canvas.</summary>
         public List<(double X, double Y)> CameraSubjects() => Cells
             .Where(c => c.Photo.Faces.Count > 0 && Width >= 1 && Height >= 1)
             .OrderByDescending(c => c.W * c.H)
             .Take(3)
-            .Select(c => LayoutComposer.SubjectOnCanvas(c, Width, Height))
+            .Select(c => LayoutComposer.EyesOnCanvas(c, Width, Height))
             .ToList();
 
         public MultiViewLayoutFile ToLayoutFile()
@@ -370,6 +370,20 @@ namespace ModernImageViewer
         public LayoutTransition PickTransition(LayoutTransition? last, Random random) =>
             LayoutTransitions.Pick(CrossfadeOdds, ZoomThroughOdds, ThroughDarkOdds, SlideOdds, last, random);
 
+        /// <summary>
+        /// How long a change takes, in seconds: each one picks a length in the range, and the whole transition stretches to
+        /// it (a cut stays a cut). Cinematic Slideshow's dissolves ran 1.2 to 2.5 s; Multi-View's were all about 0.75 s.
+        /// </summary>
+        public double TransitionShortest { get; set; } = 0.75;
+        public double TransitionLongest { get; set; } = 2.5;
+        public const double QuickestTransition = 0.25, SlowestTransition = 4;
+
+        public double PickTransitionSeconds(Random random)
+        {
+            double low = TransitionShortest, high = Math.Max(TransitionShortest, TransitionLongest);
+            return high - low < 0.001 ? low : low + random.NextDouble() * (high - low);
+        }
+
         /// <summary>The share of changes each kind takes in a long run, the no-repeat rule included.</summary>
         public IReadOnlyDictionary<LayoutTransition, double> TransitionShares() =>
             LayoutTransitions.Shares(CrossfadeOdds, ZoomThroughOdds, ThroughDarkOdds, SlideOdds);
@@ -478,6 +492,8 @@ namespace ModernImageViewer
                 read.ZoomChance = Math.Clamp(read.ZoomChance, 0, 1);
                 read.Variety = Math.Clamp(read.Variety, 1, 12);
                 read.FaceShown = Math.Clamp(read.FaceShown, 0.5, 1);
+                read.TransitionShortest = Math.Clamp(read.TransitionShortest, QuickestTransition, SlowestTransition);
+                read.TransitionLongest = Math.Clamp(read.TransitionLongest, read.TransitionShortest, SlowestTransition);
                 read.MostTilt = Math.Clamp(read.MostTilt, 0, MostTiltAllowed);
                 // A file from before the range: the low end was always 23% of the high one.
                 if (!json!.Contains("\"LeastTilt\"", StringComparison.OrdinalIgnoreCase)) read.LeastTilt = Math.Round(read.MostTilt * 0.23, 1);
@@ -866,7 +882,7 @@ namespace ModernImageViewer
         /// </summary>
         public static (double X, double Y) AimFor(ComposedCell cell, double canvasW, double canvasH) =>
             cell.Photo.Faces.Count > 0
-                ? SubjectOnCanvas(cell, canvasW, canvasH)
+                ? EyesOnCanvas(cell, canvasW, canvasH)
                 : PointForNormalized(cell, cell.Photo.FocusX, cell.Photo.FocusY, canvasW, canvasH);
 
         /// <summary>The faces of a cell's image worth a view of their own, largest first.</summary>
@@ -877,7 +893,9 @@ namespace ModernImageViewer
         /// 85% of the view, and the photo is never shown past twice its own pixels.</summary>
         public static ((double X, double Y) Point, double MostZoom) OnFace(ComposedCell cell, UnitRect face, double canvasW, double canvasH)
         {
-            var point = PointForNormalized(cell, face.X + face.W / 2, face.Y + face.H / 2, canvasW, canvasH);
+            // The eye line, which the view puts a third of the way down (CameraView.OnEyes). The face still fits: at its
+            // largest (85% of the view) the top of the face is 30% above the eyes, inside the third above them.
+            var point = PointForNormalized(cell, face.X + face.W / 2, face.Y + face.H * EyeLine, canvasW, canvasH);
             var a = PointForNormalized(cell, face.X, face.Y, canvasW, canvasH);
             var b = PointForNormalized(cell, face.X + face.W, face.Y + face.H, canvasW, canvasH);
             double share = Math.Max(Math.Abs(b.X - a.X), Math.Abs(b.Y - a.Y));
@@ -1546,6 +1564,29 @@ namespace ModernImageViewer
                 double w = Math.Max(0.0001, Math.Sqrt(face.Area));
                 normX += (face.X + face.W / 2) * w;
                 normY += (face.Y + face.H / 2) * w;
+                weightSum += w;
+            }
+            return PointForNormalized(cell, normX / weightSum, normY / weightSum, canvasW, canvasH);
+        }
+
+        /// <summary>
+        /// Where the eyes sit in a detected face, down from the top of its box. A camera frames people by the eyes, a third
+        /// of the way down the view (<see cref="CameraView.OnEyes"/>), as Cinematic Slideshow did; centring the face left
+        /// a close view with too much room over the head.
+        /// </summary>
+        public const double EyeLine = 0.35;
+
+        /// <summary>The eye line of a cell's faces on the canvas, weighted to the larger faces, as <see cref="SubjectOnCanvas"/>
+        /// gives their middle. A cell with no faces gives its middle.</summary>
+        public static (double X, double Y) EyesOnCanvas(ComposedCell cell, double canvasW, double canvasH)
+        {
+            if (canvasW < 1 || canvasH < 1 || cell.Photo.Faces.Count == 0) return SubjectOnCanvas(cell, canvasW, canvasH);
+            double weightSum = 0, normX = 0, normY = 0;
+            foreach (var face in cell.Photo.Faces)
+            {
+                double w = Math.Max(0.0001, Math.Sqrt(face.Area));
+                normX += (face.X + face.W / 2) * w;
+                normY += (face.Y + face.H * EyeLine) * w;
                 weightSum += w;
             }
             return PointForNormalized(cell, normX / weightSum, normY / weightSum, canvasW, canvasH);

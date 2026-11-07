@@ -1210,6 +1210,10 @@ namespace ModernImageViewer
             void TransitionGroup(StackPanel column, Action changed)
             {
                 Note(column, "How one layout or scene changes to the next. The same kind never comes twice in a row, except a crossfade. All off is a crossfade.");
+                RangeRow(column, "Transition length", "How long a change takes. Each change picks a length in the range; drag the ends together for one length. Long dissolves read as cinematic, short ones as brisk. A cut on the music stays a cut.",
+                    SurpriseOptions.QuickestTransition, SurpriseOptions.SlowestTransition, 0.05, options.TransitionShortest, options.TransitionLongest,
+                    (a, b) => Math.Abs(a - b) < 0.01 ? $"{a:0.##} s" : $"{a:0.##} - {b:0.##} s",
+                    (o, a, b) => { o.TransitionShortest = a; o.TransitionLongest = Math.Max(a, b); });
                 var mix = new TextBlock { FontSize = 11, Opacity = 0.75, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 6) };
                 void ShowMix()
                 {
@@ -3679,7 +3683,8 @@ namespace ModernImageViewer
             var ready = DecodedBitmaps();
             foreach (var pair in _storyPreloaded) ready.TryAdd(pair.Key, pair.Value);
             _storyPreloaded.Clear();
-            var outgoingStep = fade ? OutgoingCameraStep(0.7) : (1.0, 0.0, 0.0);
+            double fadeSeconds = SurpriseChoices.PickTransitionSeconds(Random.Shared);
+            var outgoingStep = fade ? OutgoingCameraStep(fadeSeconds) : (1.0, 0.0, 0.0);
             Image? before = fade ? await CoverWithPictureOfCanvasAsync() : null;
             ResetCanvasCamera();
 
@@ -3755,7 +3760,7 @@ namespace ModernImageViewer
             bool hardCut = _nextChangeIsHardCut;
             _nextChangeIsHardCut = false;
             if (before != null)
-                ChangeLayoutOver(before, outgoingStep, hardCut ? LayoutTransition.Cut
+                ChangeLayoutOver(before, outgoingStep, fadeSeconds, hardCut ? LayoutTransition.Cut
                     : Enum.TryParse<LayoutTransition>(scene.Transition, out var planned) ? planned : LayoutTransition.Crossfade);
             if (hardCut) PlayTiming.Write($"scene {currentIndex + 1}: hard cut on a big moment of the song");
 
@@ -3767,7 +3772,7 @@ namespace ModernImageViewer
             if (_autoPlaySeconds > 0) StartPlaybackProgress(_layoutSeconds);
             else StopPlaybackProgress();
 
-            PlayTiming.Write($"scene {currentIndex + 1} shown {PlayTiming.Now - turnCame} ms after its turn came, holds {_layoutSeconds} s");
+            PlayTiming.Write($"scene {currentIndex + 1} shown {PlayTiming.Now - turnCame} ms after its turn came, holds {_layoutSeconds} s, came in by {(hardCut ? "hard cut" : $"{scene.Transition} over {fadeSeconds:0.00} s")}");
             // A show still being made goes on to its next scene when that is ready; a finished one goes round again.
             bool growing = ReferenceEquals(_activeShow, _showBeingBuilt);
             _showPlaybackIndex = liveScenes.Count == 0 ? 0
@@ -4322,7 +4327,8 @@ namespace ModernImageViewer
                 CaptureUndoPoint();
                 _canvasSceneId = null;
                 _cellBorderFlyout?.Hide();
-                var outgoingStep = fade ? OutgoingCameraStep(0.7) : (1.0, 0.0, 0.0);
+                double fadeSeconds = SurpriseChoices.PickTransitionSeconds(Random.Shared);
+            var outgoingStep = fade ? OutgoingCameraStep(fadeSeconds) : (1.0, 0.0, 0.0);
                 Image? before = fade ? await CoverWithPictureOfCanvasAsync() : null;
                 // The cover holds the old layout where the camera had it, and the new one starts from nothing.
                 ResetCanvasCamera();
@@ -4353,7 +4359,7 @@ namespace ModernImageViewer
                 CaptureUndoPoint();
                 if (_autoPlaySeconds > 0) _layoutSeconds = options.NextPlaySeconds(Random.Shared, composition.Cells.Count, ref _lastPlayWasLong);
                 if (before != null && _autoPlaySeconds > 0) StartCanvasCamera(composition);
-                if (before != null) ChangeLayoutOver(before, outgoingStep);
+                if (before != null) ChangeLayoutOver(before, outgoingStep, fadeSeconds);
                 if (_autoPlaySeconds > 0) StartPlaybackProgress(_layoutSeconds);
                 StartPreparingNextSurprise();
             }
@@ -4542,15 +4548,19 @@ namespace ModernImageViewer
         /// </summary>
         /// <param name="planned">A storyboard scene's own transition, made with it. Otherwise Auto-Mix picks one from the
         /// odds while it plays, and a change by hand is a crossfade.</param>
-        private void ChangeLayoutOver(Image cover, (double Scale, double X, double Y) outgoingStep = default, LayoutTransition? planned = null)
+        private void ChangeLayoutOver(Image cover, (double Scale, double X, double Y) outgoingStep = default, double seconds = 0.75, LayoutTransition? planned = null)
         {
             var kind = planned
                 ?? (_autoPlaySeconds > 0 ? SurpriseChoices.PickTransition(_lastTransition, Random.Shared) : LayoutTransition.Crossfade);
             _lastTransition = kind;
             var story = new Storyboard();
+            // Each kind is written at its usual length; the whole of it stretches to the length picked from the Transition
+            // length range. A cut stays a cut.
+            double usual = kind switch { LayoutTransition.ZoomThrough => 750, LayoutTransition.ThroughDark => 1000, LayoutTransition.Slide => 850, _ => 700 };
+            double stretch = kind == LayoutTransition.Cut ? 1 : Math.Max(0.1, seconds * 1000 / usual);
             void Animate(DependencyObject target, string property, double from, double to, int ms, int after = 0, EasingFunctionBase? ease = null)
             {
-                var run = new DoubleAnimation { From = from, To = to, Duration = TimeSpan.FromMilliseconds(ms), BeginTime = TimeSpan.FromMilliseconds(after), EasingFunction = ease };
+                var run = new DoubleAnimation { From = from, To = to, Duration = TimeSpan.FromMilliseconds(ms * stretch), BeginTime = TimeSpan.FromMilliseconds(after * stretch), EasingFunction = ease };
                 Storyboard.SetTarget(run, target);
                 Storyboard.SetTargetProperty(run, property);
                 story.Children.Add(run);

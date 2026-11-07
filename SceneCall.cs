@@ -93,8 +93,8 @@ namespace ModernImageViewer
             var start = (startFrom ?? CameraView.Whole) with { Angle = 0 };
             double wanted = options.MostZoom > 1 ? options.PickZoom(random) : 1.6;
             double close = Math.Min(mostZoom, Math.Max(start.Zoom + 0.15, wanted));
-            var closeView = new CameraView(close, point.X, point.Y).Covered();
-            var nearer = new CameraView(Math.Min(mostZoom, close * 1.06), point.X, point.Y).Covered();
+            var closeView = CameraView.OnEyes(close, point.X, point.Y);
+            var nearer = CameraView.OnEyes(Math.Min(mostZoom, close * 1.06), point.X, point.Y);
             var calm = CameraCurves.Pick(options.CurveOdds, false, random);
             if (random.Next(2) == 0)
                 return new CameraMove(CameraKind.ZoomIn, new[]
@@ -126,8 +126,10 @@ namespace ModernImageViewer
                 TwoShotChance = cell.Photo.Faces.Count > 0 ? style.TwoShotChance : 0
             };
             var forced = options.ForcedCameraKind;
+            // The aim is the faces' eye line, or with none the focus point, which is centred.
+            bool eyes = cell.Photo.Faces.Count > 0;
             if (forced is CameraKind.ZoomIn or CameraKind.ZoomOut)
-                return CameraMove.Plan(aim, amount, 1, 1, seconds, last, random, forced, options.MostZoom > 1 ? toZoom : style, mostZoom);
+                return CameraMove.Plan(aim, amount, 1, 1, seconds, last, random, forced, options.MostZoom > 1 ? toZoom : style, mostZoom, eyes);
             if (forced == CameraKind.Drift)
                 return CameraMove.Plan(subjects, amount, 0, options.MotionFaceChance, seconds, last, random, forced, style, mostZoom);
             if (options.Zooms(random))
@@ -136,7 +138,7 @@ namespace ModernImageViewer
                 var kind = last == CameraKind.ZoomIn ? CameraKind.ZoomOut
                     : last == CameraKind.ZoomOut ? CameraKind.ZoomIn
                     : random.Next(2) == 0 ? CameraKind.ZoomIn : CameraKind.ZoomOut;
-                return CameraMove.Plan(aim, amount, 1, 1, seconds, last, random, kind, toZoom, mostZoom);
+                return CameraMove.Plan(aim, amount, 1, 1, seconds, last, random, kind, toZoom, mostZoom, eyes);
             }
             return CameraMove.Plan(subjects, amount, options.MotionZoomChance, options.MotionFaceChance, seconds, last, random, null, style, mostZoom);
         }

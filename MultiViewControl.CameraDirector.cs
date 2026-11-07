@@ -799,8 +799,9 @@ namespace ModernImageViewer
             }
             double w = RootGrid.ActualWidth, h = RootGrid.ActualHeight;
             if (w < 1 || h < 1) return Array.Empty<(double, double)>();
+            // The eye line of each face, which a view on it puts a third of the way down (CameraView.OnEyes).
             return FacesOnCanvas().Take(3)
-                .Select(r => (Math.Clamp((r.X + r.Width / 2) / w, 0, 1), Math.Clamp((r.Y + r.Height / 2) / h, 0, 1)))
+                .Select(r => (Math.Clamp((r.X + r.Width / 2) / w, 0, 1), Math.Clamp((r.Y + r.Height * LayoutComposer.EyeLine) / h, 0, 1)))
                 .ToList();
         }
 

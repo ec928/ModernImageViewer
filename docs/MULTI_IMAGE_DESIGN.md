@@ -763,6 +763,8 @@ effect on the look, stays fixed; **P** = decided and stated. Not a setting, and 
 | Duration | 10 to 15 s, 3 to 60 | setting | S |
 | Scenes per step | none | -- | S: 2 to 2 default, up to 4 |
 | Transition between views of one image | none | -- | P: Cut. Any other transition blends the picture into itself |
+| Transition length | 0.75 to 2.5 s, 0.25 to 4 (built 7 Nov, Ed; from Cinematic Slideshow's 1.2 to 2.5 s dissolves) | `TransitionShortest`, `TransitionLongest` | S: each change picks a length; the whole transition stretches to it; a cut stays a cut. Was about 0.75 s for every kind |
+| Framing a face | eye line (35% down the face box) a third of the way down the view (built 7 Nov, Ed; from Cinematic Slideshow) | `CameraView.OnEyes`, `LayoutComposer.EyeLine` | I. Was the face's middle in the middle of the view. A focus point is still centred; at a gentle zoom the picture's edge can put the eyes a little lower |
 | Smart pace | long and short halves alternate; layout density weighs 35% | `NextPlaySeconds` | Q11 |
 | Storyboards: one scene at the top of the range | always one | `ShowDirector` | P: goes. A forced outcome, not odds (R2, R16); every scene rolls in the range. Q11 |
 | Onsets | read at play time by the director | `BeatGrid` | S: not in the engine (3.10, built 7 Nov) |
