@@ -29,6 +29,25 @@ namespace ModernImageViewer
         [JsonPropertyName("freeform")]
         public List<FreeformCellDto>? Freeform { get; set; }
 
+        /// <summary>
+        /// Keep my canvas: the user's canvas in place of the design's, as a layout made for the screen takes it. A card's solid
+        /// gaps would hide that canvas, so they go clear.
+        /// </summary>
+        public void KeepCanvas(string color, string surface, CellBorderDto frame)
+        {
+            Canvas ??= new CanvasLayoutDto();
+            Canvas.BackgroundColor = color;
+            Canvas.Surface = surface;
+            Canvas.Frame = frame.Clone();
+            var borders = Photos.Select(p => p.Border).Concat(Freeform?.Select(c => c.Border) ?? Enumerable.Empty<CellBorderDto?>());
+            foreach (var border in borders)
+            {
+                if (border == null || border.GutterMaterial != "Solid") continue;
+                border.GutterMaterial = "None";
+                border.GutterColor = "#00000000";
+            }
+        }
+
         [JsonPropertyName("storyboard")]
         public ShowProject? Storyboard { get; set; }
 

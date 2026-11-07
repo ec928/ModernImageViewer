@@ -908,10 +908,10 @@ namespace ModernImageViewer
                     if (frameColor.SelectedItem is string name) ChangeSurpriseChoices(o => o.Card = name);
                 };
                 Row(designsSection, "Frame color", "The color of every frame: Gallery wall's card, a hero's outline, a print's border, a circle's outline. Any: each layout picks white, black or a tone from its images.", frameColor);
-                Slide(designsSection, "Frame width", "How wide every frame is: Gallery wall's card and gaps, a hero's outline, a print's border, a circle's outline. 1x is the usual width.",
-                    0.25, 3, 0.25, options.GapScale,
-                    v => $"{v:0.##}×",
-                    (o, v) => o.GapScale = v);
+                RangeRow(designsSection, "Frame width", "How wide every frame is: Gallery wall's card and gaps, a hero's outline, a print's border, a circle's outline. Each layout picks a width in the range; drag the ends together for one width. 1x is the usual width.",
+                    SurpriseOptions.NarrowestFrame, SurpriseOptions.WidestFrame, 0.25, options.GapScale, options.GapScaleLargest,
+                    (a, b) => Math.Abs(a - b) < 0.01 ? $"{a:0.##}×" : $"{a:0.##}× - {b:0.##}×",
+                    (o, a, b) => { o.GapScale = a; o.GapScaleLargest = Math.Max(a, b); });
                 void BackdropSlide(string name, string tip, double odds, Action<SurpriseOptions, double> set)
                 {
                     double initial = odds <= 0 ? -1.2 : Math.Log(Math.Max(SurpriseOptions.RarestDesign, odds), DesignOddsBase);
@@ -3702,6 +3702,10 @@ namespace ModernImageViewer
             _showBeingBuilt = show;
             PlayTiming.Start(SurpriseChoices.LogPlayTiming);
 
+            // Keep my canvas: every scene takes the canvas as it is now, before the show changes it. Only the old direct mix
+            // applied it, so it did nothing once Play always played the show.
+            var myCanvas = (Color: _canvasColor, Surface: _canvasSurface, Frame: _canvasFrame.Clone());
+
             // Every image dealt at least once, placed or not: the end of the first round through the session.
             var dealtOnce = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             bool started = false;
@@ -3761,6 +3765,8 @@ namespace ModernImageViewer
                         continue;
                     }
                     failedHands = 0;
+                    if (settings.KeepCanvas)
+                        foreach (var made in step) made.Layout?.KeepCanvas(myCanvas.Color, myCanvas.Surface, myCanvas.Frame);
                     show.Scenes.AddRange(step);
                     // Every scene of the step shows in the storyboard; the last is announced below, as a single scene was.
                     foreach (var earlier in step.Take(step.Count - 1)) _sceneAddedBehindDrawer?.Invoke(show, earlier);
