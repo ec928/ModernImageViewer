@@ -553,6 +553,16 @@ threshold is 3.0, so the margin under the weakest song is small. On a click trac
 app, the first scene of a song holds as planned (beats not read yet) and later holds move by up to about a quarter of
 a second. The switch is **Cut on the beat** under Soundtrack, on by default, saved with the other music settings.
 
+**Bars and Follow the music (7 Nov, after Ed found beats alone underwhelming).** A change now lands on the first beat of
+a bar when the bars are trusted, else on the nearest beat. Bars: which beat of every four hits hardest, weighted to the
+bass; one count for the song that may change at a skipped beat (each change costs about two bars of evidence); trusted
+when bar starts stand at least 1.12 times above the other beats and the count changes no more than once in 30 s. On the
+eight songs, strengths ran 1.14 to 1.56 with up to five changes; nothing has checked them against the real bar lines,
+and a kick on beats 1 and 3 can put "bar starts" on beat 3. **Follow the music** (0 to 100%, default 50%) moves each
+planned hold within Duration by the song's energy over it (loudness smoothed over four seconds, from the song's own
+quiet to its own loud): toward the shortest when loud, the longest when quiet. It works without Cut on the beat. In the
+app, a quiet opening (energy 0.06 to 0.33) held 13 to 14 s of a 10 to 15 s Duration, every change on a bar start.
+
 The director chooses each scene's hold; landing the change on a beat is one more way it chooses. The engine does not
 change and does not read the music (R13). **Not part of approving this design:** nothing here is in the six slices, and it is reviewed and approved on its own when its turn comes.
 
