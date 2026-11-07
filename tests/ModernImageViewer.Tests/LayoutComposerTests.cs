@@ -447,8 +447,22 @@ namespace ModernImageViewer.Tests
             foreach (double most in new[] { 0.0, 3, 20 })
             {
                 var made = LayoutComposer.Compose(Photos(6), 1280, 720, 1, null, 1, LayoutComposer.ScatteredPrints, new SurpriseOptions { MostTilt = most })!;
-                Assert.All(made.Cells, c => Assert.InRange(Math.Abs(c.Rotation), most * 0.23 - 1e-9, most + 1e-9));
+                double least = Math.Min(new SurpriseOptions().LeastTilt, most);
+                Assert.All(made.Cells, c => Assert.InRange(Math.Abs(c.Rotation), least - 1e-9, most + 1e-9));
             }
+        }
+
+        [Fact]
+        public void Print_tilt_is_a_range()
+        {
+            // Every print turns within the range, and across layouts the range is used, not one end of it.
+            var turns = Enumerable.Range(0, 20).SelectMany(seed => LayoutComposer.Compose(Photos(6), 1280, 720, seed, null, 1, LayoutComposer.ScatteredPrints,
+                new SurpriseOptions { LeastTilt = 8, MostTilt = 14 })!.Cells.Select(c => Math.Abs(c.Rotation))).ToList();
+            Assert.All(turns, t => Assert.InRange(t, 8 - 1e-9, 14 + 1e-9));
+            Assert.True(turns.Max() - turns.Min() > 3, $"{turns.Min()} to {turns.Max()}");
+            // A file from before the range turned prints from 23% of the most: it reads that way.
+            var old = SurpriseOptions.FromJson("{\"MostTilt\":10}")!;
+            Assert.Equal((2.3, 10.0), (old.LeastTilt, old.MostTilt));
         }
 
         [Fact]

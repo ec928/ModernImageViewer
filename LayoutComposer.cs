@@ -195,6 +195,9 @@ namespace ModernImageViewer
         /// <summary>How much of a face must show for it to count as uncut.</summary>
         public double FaceShown { get; set; } = 0.85;
         public double MostTilt { get; set; } = 6.5;
+        /// <summary>Print tilt is a range: each print turns between this and MostTilt, either way. It was a fixed 23% of MostTilt.</summary>
+        public double LeastTilt { get; set; } = 1.5;
+        public const double MostTiltAllowed = 20;
         /// <summary>The hero's height as a share of the canvas: each layout picks within this range.</summary>
         public double HeroSmallest { get; set; } = 0.62;
         public double HeroLargest { get; set; } = 0.82;
@@ -475,7 +478,10 @@ namespace ModernImageViewer
                 read.ZoomChance = Math.Clamp(read.ZoomChance, 0, 1);
                 read.Variety = Math.Clamp(read.Variety, 1, 12);
                 read.FaceShown = Math.Clamp(read.FaceShown, 0.5, 1);
-                read.MostTilt = Math.Clamp(read.MostTilt, 0, 20);
+                read.MostTilt = Math.Clamp(read.MostTilt, 0, MostTiltAllowed);
+                // A file from before the range: the low end was always 23% of the high one.
+                if (!json!.Contains("\"LeastTilt\"", StringComparison.OrdinalIgnoreCase)) read.LeastTilt = Math.Round(read.MostTilt * 0.23, 1);
+                read.LeastTilt = Math.Clamp(read.LeastTilt, 0, read.MostTilt);
                 if (read.HeroSize is double hero)
                 {
                     double centre = Math.Clamp(hero, 0.4, 0.9);
@@ -1153,7 +1159,8 @@ namespace ModernImageViewer
                 double cx = Math.Clamp(spots[i].X + jitterX, printW * 0.46, w - printW * 0.46);
                 double cy = Math.Clamp(spots[i].Y + jitterY, printH * 0.46, h - printH * 0.46);
                 // From under a quarter of the most tilt up to all of it, so a pile never looks squared up by accident.
-                double turn = (random.NextDouble() < 0.5 ? -1 : 1) * options.MostTilt * (0.23 + random.NextDouble() * 0.77);
+                double leastTilt = Math.Min(options.LeastTilt, options.MostTilt);
+                double turn = (random.NextDouble() < 0.5 ? -1 : 1) * (leastTilt + random.NextDouble() * (options.MostTilt - leastTilt));
                 cells.Add(new ComposedCell
                 {
                     Photo = photo,

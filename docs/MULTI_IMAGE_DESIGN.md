@@ -394,7 +394,7 @@ Under each design, folded away:
 | **Hero size**: range | Hero spotlight | 62% to 82% (exists) |
 | **Hero shape**: odds of arch, oval, squircle, hexagon (and rectangle?) | Hero spotlight | equal; Q7 |
 | **Hero position**: odds of left, centre, right | Hero spotlight | equal |
-| **Print tilt**: range | Scattered prints | up to 6.5 degrees (exists, as a maximum) |
+| **Print tilt**: range | Scattered prints | 1.5 to 6.5 degrees (built 7 Nov; a saved maximum reads as 23% to 100% of it, as it played) |
 | **Print size variety** (today's random 1.05 to 1.3 of an even share) | Scattered prints | as today; Q6 |
 | **Lean**: range | Slanted panels | 0.2 of a panel's width (today fixed) |
 | **Mirrored**: odds | Slanted panels | 50% |
@@ -690,7 +690,7 @@ effect on the look, stays fixed; **P** = decided and stated. Not a setting, and 
 | Hero position | left third, centre, right third | `BuildHeroSpotlight` | S |
 | Hero width at most | 70% of the canvas | `BuildHeroSpotlight` | Q6 |
 | Hero outline | white, 0.7% of the short side | `BuildHeroSpotlight` | S: Frame color, Frame width |
-| Print tilt | up to 6.5 degrees; each print 23% to 100% of it | setting + code | S: range |
+| Print tilt | 1.5 to 6.5 degrees, each print within it | setting | S: range (built; the fixed 23% low end is gone) |
 | Print size | 1.05 to 1.3 of an even share | `BuildScatteredPrints` | Q6 |
 | Print border | off-white, 1.2% of the short side | `BuildScatteredPrints` | S: Frame color, Frame width |
 | Featured print or boldest circle | 1.5x | `FeaturedLarger` | S: Featured size |
