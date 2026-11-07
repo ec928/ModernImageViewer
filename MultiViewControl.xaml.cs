@@ -103,7 +103,8 @@ namespace ModernImageViewer
             if (!RootGrid.Focus(FocusState.Programmatic))
                 Focus(FocusState.Programmatic);
         }
-        public void LoadImages(IEnumerable<ImageItem> items)
+        /// <param name="onCanvas">How many of them start on the canvas; the rest wait in the Image Pool. 0: as many as it shows.</param>
+        public void LoadImages(IEnumerable<ImageItem> items, int onCanvas = 0)
         {
             DeselectCell();
             ForgetSurprise();
@@ -115,9 +116,9 @@ namespace ModernImageViewer
             _cellRoots = Array.Empty<FrameworkElement?>();
             _items.Clear();
             _items.AddRange(items.Where(i => i != null && !i.IsDirectory));
-            _framedSlots = 0;
+            _framedSlots = onCanvas > 0 && onCanvas < _items.Count ? onCanvas : 0;
             _isFillMode = true; // Always default to Fill (crop to fill) to eliminate black bars
-            _lines = MosaicLayout.DefaultLines(_items.Count);
+            _lines = MosaicLayout.DefaultLines(_framedSlots > 0 ? _framedSlots : _items.Count);
             _lineCounts = null;
             _flipped = false;
             _heroActive = false;

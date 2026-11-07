@@ -958,7 +958,7 @@ namespace ModernImageViewer
             }
         }
 
-        public void OpenMultiView(IList<ImageItem> items)
+        public void OpenMultiView(IList<ImageItem> items, int onCanvas = 0)
         {
             if (_multiViewParked)
             {
@@ -982,7 +982,7 @@ namespace ModernImageViewer
             if (MultiViewControl != null)
             {
                 bool firstCanvas = BeginMultiViewCanvas();
-                MultiViewControl.LoadImages(items);
+                MultiViewControl.LoadImages(items, onCanvas);
                 MultiViewControl.Visibility = Visibility.Visible;
                 MultiViewControl.FocusView();
                 if (firstCanvas)
@@ -2997,14 +2997,14 @@ namespace ModernImageViewer
                 return;
             }
 
-            var candidates = Images.Where(i => !i.IsDirectory).ToList();
+            // With nothing selected, the session is the folder: four on the canvas from the current image on, as before,
+            // and every other image of the folder in the Image Pool, in folder order.
+            var candidates = Images.Where(i => !i.IsDirectory && !i.IsComicArchive && !i.IsComicEntry).ToList();
             if (candidates.Count > 0)
             {
                 int start = (_currentIndex >= 0 && _currentIndex < candidates.Count) ? _currentIndex : 0;
-                var slice = candidates.Skip(start).Take(4).ToList();
-                if (slice.Count < 2 && candidates.Count >= 2)
-                    slice = candidates.Take(4).ToList();
-                OpenMultiView(slice);
+                var folder = candidates.Skip(start).Concat(candidates.Take(start)).ToList();
+                OpenMultiView(folder, onCanvas: 4);
             }
             else
             {
