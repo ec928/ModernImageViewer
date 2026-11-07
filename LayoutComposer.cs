@@ -213,8 +213,8 @@ namespace ModernImageViewer
         /// Frame width, for every frame: Gallery wall's card and gaps, a hero's outline, a print's border, a circle's outline.
         /// A range: each layout picks one width in it. GapScale is the narrow end (the single width of earlier versions).
         /// </summary>
-        public double GapScale { get; set; } = 0.25;
-        public double GapScaleLargest { get; set; } = 2;
+        public double GapScale { get; set; } = 0.5;
+        public double GapScaleLargest { get; set; } = 1.5;
         public const double NarrowestFrame = 0.25, WidestFrame = 3;
 
         /// <summary>One frame width for a layout, in the Frame width range.</summary>
@@ -512,9 +512,11 @@ namespace ModernImageViewer
                 read.HeroLargest = Math.Clamp(read.HeroLargest, read.HeroSmallest, HeroHighest);
                 // A file from before the range holds one width. The old default (1x) takes the new default range; a width
                 // the user chose stays that width alone.
-                // 1x to 1x, written by the build that first had the range, is that old default too.
+                // 1x to 1x, written by the build that first had the range, is that old default too, and so is 0.25x to 2x,
+                // the default until 0.33.1 (Ed, 7 Nov: 0.5x to 1.5x; a new default replaces an old one left in a settings file).
                 bool hasLargest = json!.Contains("\"GapScaleLargest\"", StringComparison.OrdinalIgnoreCase);
-                bool oldDefault = Math.Abs(read.GapScale - 1) < 0.001 && (!hasLargest || Math.Abs(read.GapScaleLargest - 1) < 0.001);
+                bool oldDefault = (Math.Abs(read.GapScale - 1) < 0.001 && (!hasLargest || Math.Abs(read.GapScaleLargest - 1) < 0.001))
+                    || (hasLargest && Math.Abs(read.GapScale - 0.25) < 0.001 && Math.Abs(read.GapScaleLargest - 2) < 0.001);
                 if (oldDefault)
                 {
                     var fresh = new SurpriseOptions();

@@ -3445,6 +3445,8 @@ namespace ModernImageViewer
             int failedHands = 0;
             _showBeingBuilt = show;
             PlayTiming.Start(SurpriseChoices.LogPlayTiming);
+            // Said at once: the first scene takes a moment to make, and nothing else on screen names the preset.
+            ShowAutoPlayToast($"Play show · {ActivePresetName(show)}");
 
             // Keep my canvas: every scene takes the canvas as it is now, before the show changes it. Only the old direct mix
             // applied it, so it did nothing once Play always played the show.
@@ -3624,7 +3626,7 @@ namespace ModernImageViewer
             _onStoryboardPlaybackIndexChanged?.Invoke(targetIndex);
             _layoutSeconds = (int)(startScene.DwellSeconds ?? GeneratorSettingsFor(_activeShow).NextPlaySeconds(Random.Shared));
             ShowAutoPlayState();
-            ShowAutoPlayToast($"Playing Scene {targetIndex + 1} of {visibleScenes.Count}: {startScene.Title ?? startScene.Recipe ?? "Scene"}");
+            ShowAutoPlayToast($"Playing {ActivePresetName(_activeShow)} · scene {targetIndex + 1} of {visibleScenes.Count}");
             var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(Math.Max(1, _layoutSeconds)) };
             _autoPlayTimer = timer;
             timer.Tick += async (_, _) =>
