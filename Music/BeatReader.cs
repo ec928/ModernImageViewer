@@ -7,7 +7,7 @@ using Windows.Media.MediaProperties;
 using Windows.Media.Transcoding;
 using Windows.Storage;
 
-namespace ModernImageViewer.Cinematic
+namespace ModernImageViewer.Music
 {
     /// <summary>
     /// Reads a song's beats in the background (design 3.10): Windows' own transcoder turns it into a small mono WAV in the

@@ -5,7 +5,7 @@ using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace ModernImageViewer.Cinematic
+namespace ModernImageViewer.Music
 {
     /// <summary>
     /// Reads star ratings from the tags in music files. Windows' own rating loses half-stars, so the tags are read directly.

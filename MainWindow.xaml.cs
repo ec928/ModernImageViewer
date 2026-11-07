@@ -411,10 +411,6 @@ namespace ModernImageViewer
             public int WindowHeight { get; set; } = -1;
             public int WindowX { get; set; } = -1;
             public int WindowY { get; set; } = -1;
-            public int DirectorWindowWidth { get; set; } = -1;
-            public int DirectorWindowHeight { get; set; } = -1;
-            public int DirectorWindowX { get; set; } = -1;
-            public int DirectorWindowY { get; set; } = -1;
             public int MultiViewWindowWidth { get; set; } = -1;
             public int MultiViewWindowHeight { get; set; } = -1;
             public float Gamma { get; set; } = 2.2f;
@@ -422,7 +418,6 @@ namespace ModernImageViewer
             public string? MusicFolder { get; set; }
             public double MusicLowestStars { get; set; } = 3.5;
             public bool MusicIncludesUnrated { get; set; }
-            public bool MusicInCinematic { get; set; } = true;
             public bool MusicInSurprise { get; set; } = true;
             public double MusicVolume { get; set; } = 60;
             public bool MusicCutOnBeat { get; set; } = true;
@@ -470,52 +465,34 @@ namespace ModernImageViewer
                 settings.WindowHeight = -1;
                 settings.WindowX = -1;
                 settings.WindowY = -1;
-                
-                settings.DirectorWindowWidth = -1;
-                settings.DirectorWindowHeight = -1;
-                settings.DirectorWindowX = -1;
-                settings.DirectorWindowY = -1;
                 settings.MultiViewWindowWidth = -1;
                 settings.MultiViewWindowHeight = -1;
-
-                try
-                {
-                    string cinematicBoundsPath = Path.Combine(AppPaths.LocalDirectory, "WindowBounds.json");
-                    if (File.Exists(cinematicBoundsPath))
-                    {
-                        File.Delete(cinematicBoundsPath);
-                    }
-                }
-                catch { }
             }
 
-            if (settings.WindowWidth == -1 || settings.WindowHeight == -1 || settings.DirectorWindowWidth == -1 || settings.DirectorWindowHeight == -1)
+            // Cinematic Slideshow's window position and autosave, left behind since it was removed in 0.33.0.
+            foreach (string left in new[] { "WindowBounds.json", "CinematicAutoSave.json" })
+            {
+                try
+                {
+                    string path = Path.Combine(AppPaths.LocalDirectory, left);
+                    if (File.Exists(path)) File.Delete(path);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+            }
+
+            if (settings.WindowWidth == -1 || settings.WindowHeight == -1)
             {
                 try
                 {
                     var displayArea = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(_appWindow.Id, Microsoft.UI.Windowing.DisplayAreaFallback.Primary);
                     int targetHeight = (int)(displayArea.WorkArea.Height * 0.9375);
-                    
-                    if (settings.DirectorWindowWidth == -1 || settings.DirectorWindowHeight == -1)
-                    {
-                        int dirTargetWidth = (int)(targetHeight * (16.0 / 9.0));
-                        settings.DirectorWindowWidth = dirTargetWidth;
-                        settings.DirectorWindowHeight = targetHeight;
-                    }
-                    
-                    if (settings.WindowWidth == -1 || settings.WindowHeight == -1)
-                    {
-                        int mainTargetWidth = (int)Math.Round(targetHeight * (1278.0 / 1350.0));
-                        settings.WindowWidth = mainTargetWidth;
-                        settings.WindowHeight = targetHeight;
-                    }
+                    settings.WindowWidth = (int)Math.Round(targetHeight * (1278.0 / 1350.0));
+                    settings.WindowHeight = targetHeight;
                 }
                 catch
                 {
-                    if (settings.DirectorWindowWidth == -1) settings.DirectorWindowWidth = 2400;
-                    if (settings.DirectorWindowHeight == -1) settings.DirectorWindowHeight = 1350;
-                    if (settings.WindowWidth == -1) settings.WindowWidth = 1278;
-                    if (settings.WindowHeight == -1) settings.WindowHeight = 1350;
+                    settings.WindowWidth = 1278;
+                    settings.WindowHeight = 1350;
                 }
             }
 
@@ -634,45 +611,9 @@ namespace ModernImageViewer
         }
 
 
-        private readonly List<ModernImageViewer.Cinematic.CinematicWindow> _cinematicWindows = new();
-
-        public int CinematicWindowCount => _cinematicWindows.Count;
-
-        public void OpenCinematic(List<string> paths, int startIndex)
-        {
-            if (paths == null || paths.Count == 0) return;
-            var window = new ModernImageViewer.Cinematic.CinematicWindow(paths, startIndex);
-            _cinematicWindows.Add(window);
-            window.Closed += (_, _) => _cinematicWindows.Remove(window);
-        }
-
-        private async void OpenCinematicShow_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                var picker = new Windows.Storage.Pickers.FileOpenPicker();
-                WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
-                picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.PicturesLibrary;
-                picker.FileTypeFilter.Add(".json");
-                var file = await picker.PickSingleFileAsync();
-                if (file == null) return;
-
-                var (show, missing) = ModernImageViewer.Cinematic.ViewModels.CinematicViewModel.ReadShow(await Windows.Storage.FileIO.ReadTextAsync(file));
-                if (show == null)
-                {
-                    await ViewerEngine.ShowMessageAsync(RootGrid.XamlRoot, "Could not open the show",
-                        missing > 0 ? "None of its images are still on disk." : "This file is not a saved show.");
-                    return;
-                }
-                var window = new ModernImageViewer.Cinematic.CinematicWindow(ModernImageViewer.Cinematic.ViewModels.CinematicViewModel.PathsOnDisk(show), 0, show, missing);
-                _cinematicWindows.Add(window);
-                window.Closed += (_, _) => _cinematicWindows.Remove(window);
-            }
-            catch (Exception ex)
-            {
-                await ViewerEngine.ShowMessageAsync(RootGrid.XamlRoot, "Could not open the show", ex.Message);
-            }
-        }
+        /// <summary>The folder's images as a show in Multi-View, with the preset chosen on the Show card. Cinematic Slideshow,
+        /// which this replaced from the viewer and the folder menu, was removed in 0.33.0.</summary>
+        public void PlayFolderAsShow() => PlayStoryboard(FolderImagesForStoryboard(), overrides: null);
 
         private readonly object _settingsGate = new();
         private int _settingsSaveNumber;
@@ -758,13 +699,6 @@ namespace ModernImageViewer
                 Debug.WriteLine($"[Settings] {ex.Message}");
             }
         }
-        private void PlayCinematicFolder_Click(object sender, RoutedEventArgs e)
-        {
-            var playable = Images.Where(img => !img.IsDirectory && !img.IsComicArchive && !img.IsComicEntry).Select(img => img.Path).ToList();
-            if (playable.Count == 0) return;
-            OpenCinematic(playable, 0);
-        }
-
         private bool _strippingDirectorySelection;
 
         private void ImageGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -848,15 +782,10 @@ namespace ModernImageViewer
         private void PlayStoryboardFolder_Click(object sender, RoutedEventArgs e) =>
             PlayStoryboard(FolderImagesForStoryboard(), overrides: null);
 
-        private void PlayCinematicStoryboardFolder_Click(object sender, RoutedEventArgs e) =>
-            PlayStoryboard(FolderImagesForStoryboard(), CinematicOverrides.Name);
-
         private List<ImageItem> FolderImagesForStoryboard() =>
             Images.Where(img => !img.IsDirectory && !img.IsComicArchive && !img.IsComicEntry).ToList();
 
         private void MultiSelectStoryboard_Click(object sender, RoutedEventArgs e) => PlaySelectedAsStoryboard(overrides: null);
-
-        private void MultiSelectCinematicStoryboard_Click(object sender, RoutedEventArgs e) => PlaySelectedAsStoryboard(CinematicOverrides.Name);
 
         private void PlaySelectedAsStoryboard(string? overrides)
         {
@@ -867,7 +796,7 @@ namespace ModernImageViewer
         }
 
         /// <summary>
-        /// The storyboard counterpart of Cinematic Slideshow: these images in Multi-View, made into a show that plays at once,
+        /// These images in Multi-View, made into a show that plays at once,
         /// by the Layout Generator with its main settings or with a named set of overrides.
         /// </summary>
         private void PlayStoryboard(IList<ImageItem> items, string? overrides)
@@ -875,14 +804,6 @@ namespace ModernImageViewer
             if (items.Count == 0 || MultiViewControl == null || _multiViewParked) return;
             OpenMultiView(items);
             _ = MultiViewControl.MakeAndPlayStoryboardAsync(overrides);
-        }
-
-        private void MultiSelectCinematic_Click(object sender, RoutedEventArgs e)
-        {
-            var selectedItems = ImageGrid.SelectedItems.OfType<ImageItem>().Where(i => !i.IsDirectory).ToList();
-            if (selectedItems.Count == 0) return;
-            OpenCinematic(selectedItems.Select(i => i.Path).ToList(), 0);
-            ImageGrid.SelectedItems.Clear();
         }
 
         private async void MultiSelectDelete_Click(object sender, RoutedEventArgs e)

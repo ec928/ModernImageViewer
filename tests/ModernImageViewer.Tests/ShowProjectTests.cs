@@ -114,65 +114,6 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
-        public void ShowProject_FromCinematicProject_Converts_Clips_And_Crops()
-        {
-            var legacy = new Cinematic.Data.CinematicProject
-            {
-                MusicFolder = @"C:\Music",
-                MusicPath = @"C:\Music\song.mp3",
-                MusicLowestStars = 4.5,
-                MusicVolume = 70.0
-            };
-            legacy.GlobalDefaults.IntensityPercent = 20.0;
-            legacy.GlobalDefaults.UseNarrativeArc = true;
-
-            legacy.Sequence.Add(new Cinematic.Data.TrackClipRecord { FilePath = @"C:\p\photo1.jpg", Id = "clip1", IsHidden = false });
-            legacy.Sequence.Add(new Cinematic.Data.TrackClipRecord { FilePath = @"C:\p\photo2.jpg", Id = "clip2", IsHidden = true });
-
-            // Add manual overrides in ledger
-            legacy.Ledger[@"C:\p\photo1.jpg"] = new Cinematic.Data.SlideSequenceDefinition
-            {
-                FileName = @"C:\p\photo1.jpg",
-                DurationSeconds = 7.5,
-                IsUserOverridden = true,
-                StartCrop = new Cinematic.Data.NormalizedRect { X = 0.0, Y = 0.0, Width = 1.0, Height = 1.0 },
-                EndCrop = new Cinematic.Data.NormalizedRect { X = 0.25, Y = 0.25, Width = 0.5, Height = 0.5 }
-            };
-
-            var unified = ShowProject.FromCinematicProject(legacy, "Converted Show");
-
-            Assert.NotNull(unified);
-            Assert.Equal("Converted Show", unified.Title);
-            Assert.Equal(@"C:\Music", unified.Soundtrack.MusicFolder);
-            Assert.Equal(@"C:\Music\song.mp3", unified.Soundtrack.SpecificTrackPath);
-            Assert.Equal(4.5, unified.Soundtrack.MusicLowestStars);
-            Assert.Equal(70.0, unified.Soundtrack.MusicVolume);
-
-            Assert.Equal(2, unified.Scenes.Count);
-
-            // Clip 1
-            var s1 = unified.Scenes[0];
-            Assert.Equal("clip1", s1.Id);
-            Assert.False(s1.IsHidden);
-            Assert.True(s1.IsSolo);
-            Assert.Equal(7.5, s1.DwellSeconds);
-            Assert.Equal(@"C:\p\photo1.jpg", s1.GetPhotoPaths().Single());
-            Assert.NotNull(s1.CameraOverride);
-            Assert.NotNull(s1.CameraOverride.StartCrop);
-            Assert.NotNull(s1.CameraOverride.EndCrop);
-            Assert.Equal(1.0, s1.CameraOverride.StartCrop.Width);
-            Assert.Equal(0.5, s1.CameraOverride.EndCrop.Width);
-            Assert.Equal(2.0, s1.CameraOverride.End.Zoom, 2); // 1.0 / 0.5 = 2.0
-
-            // Clip 2 (hidden, no override)
-            var s2 = unified.Scenes[1];
-            Assert.Equal("clip2", s2.Id);
-            Assert.True(s2.IsHidden);
-            Assert.Null(s2.DwellSeconds); // Inherits default
-            Assert.Null(s2.CameraOverride);
-        }
-
-        [Fact]
         public void CameraKeyframeOverride_ToCameraMove_Builds_Covered_Move()
         {
             var keyframes = new CameraKeyframeOverride

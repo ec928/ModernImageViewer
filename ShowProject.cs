@@ -10,8 +10,7 @@ namespace ModernImageViewer
 {
     /// <summary>
     /// A sequenced, replayable presentation of one or more scenes.
-    /// Unifies single-image Cinematic slideshows (where each scene has CellCount == 1)
-    /// and Multi-Image Auto-Play collages into a single deterministic format.
+    /// A show of scenes, each a saved layout of one or more images with its own hold, transition and camera.
     /// </summary>
     public sealed class ShowProject
     {
@@ -166,87 +165,6 @@ namespace ModernImageViewer
             return Scenes.SelectMany(s => s.GetPhotoPaths()).Distinct(StringComparer.OrdinalIgnoreCase);
         }
 
-        /// <summary>
-        /// Converts a legacy CinematicProject into a unified ShowProject where each clip
-        /// is a ShowScene with CellCount == 1.
-        /// </summary>
-        public static ShowProject FromCinematicProject(Cinematic.Data.CinematicProject legacy, string? showTitle = null)
-        {
-            var project = new ShowProject
-            {
-                Title = showTitle ?? "Imported Cinematic Show",
-                Soundtrack = new ShowSoundtrackSettings
-                {
-                    MusicFolder = legacy.MusicFolder,
-                    SpecificTrackPath = legacy.MusicPath,
-                    MusicLowestStars = legacy.MusicLowestStars,
-                    MusicIncludesUnrated = legacy.MusicIncludesUnrated,
-                    MusicOff = legacy.MusicOff,
-                    MusicVolume = legacy.MusicVolume
-                },
-                GlobalDefaults = new ShowGlobalDefaults
-                {
-                    DefaultDwellSeconds = 10.0,
-                    SmartPace = legacy.GlobalDefaults.UseNarrativeArc,
-                    CameraMotionAmount = Math.Clamp(legacy.GlobalDefaults.IntensityPercent / 32.0, 0.0, 1.0)
-                }
-            };
-
-            foreach (var clip in legacy.Sequence)
-            {
-                double? duration = null;
-                Cinematic.Data.NormalizedRect? startCrop = null;
-                Cinematic.Data.NormalizedRect? endCrop = null;
-
-                if (legacy.Ledger.TryGetValue(clip.FilePath, out var slide) && slide.IsUserOverridden)
-                {
-                    if (slide.DurationSeconds > 0) duration = slide.DurationSeconds;
-                    startCrop = slide.StartCrop;
-                    endCrop = slide.EndCrop;
-                }
-
-                var scene = new ShowScene
-                {
-                    Id = string.IsNullOrEmpty(clip.Id) ? Guid.NewGuid().ToString() : clip.Id,
-                    IsHidden = clip.IsHidden,
-                    DwellSeconds = duration,
-                    Recipe = "Solo"
-                };
-
-                // Create a single-photo MultiViewLayoutFile for the slide
-                var layout = new MultiViewLayoutFile();
-                layout.Canvas.Aspect = "16:9";
-                layout.State.Lines = 1;
-                layout.Photos.Add(new PhotoSlotDto
-                {
-                    Slot = 0,
-                    Path = clip.FilePath
-                });
-                scene.Layout = layout;
-
-                // Map start/end crops to CameraKeyframeOverride
-                if (startCrop != null || endCrop != null)
-                {
-                    scene.CameraOverride = new CameraKeyframeOverride();
-                    if (startCrop != null)
-                    {
-                        scene.CameraOverride.StartCrop = new NormalizedRectDto(startCrop.X, startCrop.Y, startCrop.Width, startCrop.Height);
-                        double zoom = startCrop.Width > 0 ? 1.0 / startCrop.Width : 1.0;
-                        scene.CameraOverride.Start = new CameraViewDto(zoom, startCrop.X + startCrop.Width / 2.0, startCrop.Y + startCrop.Height / 2.0);
-                    }
-                    if (endCrop != null)
-                    {
-                        scene.CameraOverride.EndCrop = new NormalizedRectDto(endCrop.X, endCrop.Y, endCrop.Width, endCrop.Height);
-                        double zoom = endCrop.Width > 0 ? 1.0 / endCrop.Width : 1.0;
-                        scene.CameraOverride.End = new CameraViewDto(zoom, endCrop.X + endCrop.Width / 2.0, endCrop.Y + endCrop.Height / 2.0);
-                    }
-                }
-
-                project.Scenes.Add(scene);
-            }
-
-            return project;
-        }
     }
 
     public sealed class ShowGlobalDefaults

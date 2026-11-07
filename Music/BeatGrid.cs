@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace ModernImageViewer.Cinematic
+namespace ModernImageViewer.Music
 {
     /// <summary>
     /// The beats, bars and energy of one song, found from its sound alone (design 3.10). Beats: an onset strength from how

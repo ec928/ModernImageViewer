@@ -24,10 +24,8 @@
     <Compile Include="..\..\NaturalSort.cs" Link="NaturalSort.cs" />
     <Compile Include="..\..\AtomicFile.cs" Link="AtomicFile.cs" />
     <Compile Include="..\..\ListMerge.cs" Link="ListMerge.cs" />
-    <Compile Include="..\..\Cinematic\ShowPacing.cs" Link="ShowPacing.cs" />
-    <Compile Include="..\..\Cinematic\MusicLibrary.cs" Link="MusicLibrary.cs" />
-    <Compile Include="..\..\Cinematic\BeatGrid.cs" Link="BeatGrid.cs" />
-    <Compile Include="..\..\Cinematic\CinematicProject.cs" Link="CinematicProject.cs" />
+    <Compile Include="..\..\Music\MusicLibrary.cs" Link="MusicLibrary.cs" />
+    <Compile Include="..\..\Music\BeatGrid.cs" Link="BeatGrid.cs" />
     <Compile Include="..\..\ShowProject.cs" Link="ShowProject.cs" />
     <Compile Include="..\..\ShowDirector.cs" Link="ShowDirector.cs" />
     <Compile Include="..\..\SceneCall.cs" Link="SceneCall.cs" />

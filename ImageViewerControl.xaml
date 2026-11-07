@@ -139,7 +139,7 @@
                     </MenuFlyoutSubItem>
                     <MenuFlyoutSeparator/>
 
-                    <MenuFlyoutItem Text="Play Cinematic Slideshow" Click="PlayCinematic_Click">
+                    <MenuFlyoutItem Text="Play show" Click="PlayShow_Click">
                         <MenuFlyoutItem.Icon>
                             <SymbolIcon Symbol="Play" />
                         </MenuFlyoutItem.Icon>
@@ -286,7 +286,7 @@
 
                         <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="6,6" Opacity="0.4"/>
 
-                        <Button Click="PlayCinematic_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Play Cinematic Slideshow" AutomationProperties.Name="Play Cinematic Slideshow">
+                        <Button Click="PlayShow_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Play show: this folder as a show in Multi-View" AutomationProperties.Name="Play show">
                             <SymbolIcon Symbol="Play"/>
                         </Button>
 

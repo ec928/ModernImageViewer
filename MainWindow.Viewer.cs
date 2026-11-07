@@ -1205,7 +1205,6 @@ namespace ModernImageViewer
             ViewTogetherButton.Visibility = adding && _parkedCell != null ? Visibility.Collapsed : Visibility.Visible;
             var other = adding ? Visibility.Collapsed : Visibility.Visible;
             MultiSelectPlayRule.Visibility = other;
-            MultiSelectPlayButton.Visibility = other;
             MultiSelectStoryboardButton.Visibility = other;
             MultiSelectDeleteRule.Visibility = other;
             MultiSelectDeleteButton.Visibility = other;
@@ -3815,16 +3814,11 @@ namespace ModernImageViewer
             if (item != null && !item.IsDirectory) LaunchDetachedWindow(item);
         }
 
+        /// <summary>Play show from the folder menu: the selected images as a show, or with none selected the folder.</summary>
         private void GridMenuCinematic_Click(object sender, RoutedEventArgs e)
         {
-            if (ImageGrid.SelectedItems.Count > 0)
-            {
-                MultiSelectCinematic_Click(sender, e);
-                return;
-            }
-            var item = _contextMenuTargetItem ?? CursorItem();
-            int startIdx = item != null ? Math.Max(0, Images.IndexOf(item)) : 0;
-            if (Images.Count > 0) OpenCinematic(Images.Select(i => i.Path).ToList(), startIdx);
+            if (ImageGrid.SelectedItems.Count > 0) PlaySelectedAsStoryboard(overrides: null);
+            else PlayFolderAsShow();
         }
 
         private void GridMenuEdit_Click(object sender, RoutedEventArgs e)

@@ -1074,16 +1074,8 @@ namespace ModernImageViewer
         }
 
         // --- File Operations Handlers ---
-        private void PlayCinematic_Click(object sender, RoutedEventArgs e)
-        {
-            var main = MainWindow.Instance;
-            if (main == null || TargetImage == null) return;
-
-            var currentFiles = main.Images.Select(img => img.Path).ToList();
-            int startIndex = main.Images.IndexOf(TargetImage);
-
-            main.OpenCinematic(currentFiles, startIndex);
-        }
+        /// <summary>The folder as a show in Multi-View (Cinematic Slideshow played it here until 0.33.0).</summary>
+        private void PlayShow_Click(object sender, RoutedEventArgs e) => MainWindow.Instance?.PlayFolderAsShow();
 
         private void EditImage_Click(object sender, RoutedEventArgs e)
         {

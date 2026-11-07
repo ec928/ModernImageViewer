@@ -1,6 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using ModernImageViewer.Cinematic;
+using ModernImageViewer.Music;
 using System;
 using System.IO;
 using System.Threading.Tasks;
@@ -12,7 +12,7 @@ namespace ModernImageViewer
     {
         public MusicChoices MyMusic => new(
             _currentSettings.MusicFolder, _currentSettings.MusicLowestStars, _currentSettings.MusicIncludesUnrated,
-            _currentSettings.MusicInCinematic, _currentSettings.MusicInSurprise, _currentSettings.MusicVolume, _currentSettings.MusicCutOnBeat,
+            _currentSettings.MusicInSurprise, _currentSettings.MusicVolume, _currentSettings.MusicCutOnBeat,
             _currentSettings.MusicFollow, _currentSettings.MusicHardCuts);
 
         /// <summary>Hard cuts (design 3.10): the odds, 0 to 100, that a show cuts straight to the next scene on a big moment of the song.</summary>
@@ -59,8 +59,7 @@ namespace ModernImageViewer
             HeaderSettingsFlyout.Hide();
             string? folder = _currentSettings.MusicFolder;
             var (rating, unrated) = MusicChoices.RatingControls(_currentSettings.MusicLowestStars, _currentSettings.MusicIncludesUnrated);
-            var inCinematic = SettingsCard.Switch("Cinematic shows", _currentSettings.MusicInCinematic);
-            var inSurprise = SettingsCard.Switch("Auto-Mix", _currentSettings.MusicInSurprise);
+            var inSurprise = SettingsCard.Switch("Multi-View shows", _currentSettings.MusicInSurprise);
             var volume = new Slider { Minimum = 0, Maximum = 100, Value = _currentSettings.MusicVolume, Width = 150, VerticalAlignment = VerticalAlignment.Center };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(volume, "Music volume");
             var volumeText = new TextBlock { Width = 38, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Opacity = SettingsCard.Quiet };
@@ -87,7 +86,7 @@ namespace ModernImageViewer
                 choose.Content = folder == null ? "Choose folder..." : "Change...";
                 clear.Visibility = folder == null ? Visibility.Collapsed : Visibility.Visible;
                 // The rest says what to do with a folder, so it waits for one.
-                rating.IsEnabled = unrated.IsEnabled = inCinematic.IsEnabled = inSurprise.IsEnabled = volume.IsEnabled = folder != null;
+                rating.IsEnabled = unrated.IsEnabled = inSurprise.IsEnabled = volume.IsEnabled = folder != null;
             }
             ShowFolder();
             choose.Click += async (_, _) =>
@@ -122,8 +121,7 @@ namespace ModernImageViewer
                 SettingsCard.Row("\uE9CE", "Include unrated songs", null, unrated).Row));
             panel.Children.Add(SettingsCard.Section("Play during"));
             panel.Children.Add(SettingsCard.Card(
-                SettingsCard.Row("\uE714", "Cinematic shows", "A saved show with its own music plays that instead.", inCinematic).Row,
-                SettingsCard.Row("\uE8B1", "Auto-Mix", null, inSurprise).Row));
+                SettingsCard.Row("\uE8B1", "Multi-View shows", null, inSurprise).Row));
             panel.Children.Add(SettingsCard.Section("Sound"));
             panel.Children.Add(SettingsCard.Card(SettingsCard.Row("\uE767", "Volume", null, volumeRow).Row));
 
@@ -143,7 +141,6 @@ namespace ModernImageViewer
             _currentSettings.MusicFolder = folder;
             _currentSettings.MusicLowestStars = MusicChoices.ChosenStars(rating);
             _currentSettings.MusicIncludesUnrated = unrated.IsOn;
-            _currentSettings.MusicInCinematic = inCinematic.IsOn;
             _currentSettings.MusicInSurprise = inSurprise.IsOn;
             _currentSettings.MusicVolume = volume.Value;
             SaveAllSettings();
@@ -224,7 +221,7 @@ namespace ModernImageViewer
     }
 
     /// <summary>The music set in the options, and the controls for a rating, which a show's own music uses too.</summary>
-    public sealed record MusicChoices(string? Folder, double LowestStars, bool IncludesUnrated, bool InCinematic, bool InSurprise, double Volume, bool CutOnBeat = true, double Follow = 50, double HardCuts = 100)
+    public sealed record MusicChoices(string? Folder, double LowestStars, bool IncludesUnrated, bool InSurprise, double Volume, bool CutOnBeat = true, double Follow = 50, double HardCuts = 100)
     {
         public const string FormatsNote = "Ratings are read from MP3 and FLAC tags. M4A and WMA count as unrated.";
 

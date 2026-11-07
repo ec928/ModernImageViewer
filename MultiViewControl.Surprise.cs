@@ -930,7 +930,7 @@ namespace ModernImageViewer
                     options.BackdropGradientOdds, (o, v) => o.BackdropGradientOdds = v);
                 BackdropSlide("Backdrop: solid", "How often a backdrop is one flat colour. Far left turns it off.",
                     options.BackdropSolidOdds, (o, v) => o.BackdropSolidOdds = v);
-                BackdropSlide("Backdrop: ambient blur", "How often a backdrop is the layout's largest picture, darkened and blurred, as Cinematic Slideshow shows a portrait. Far left turns it off.",
+                BackdropSlide("Backdrop: ambient blur", "How often a backdrop is the layout's largest picture, darkened and blurred, behind it. Far left turns it off.",
                     options.BackdropAmbientBlurOdds, (o, v) => o.BackdropAmbientBlurOdds = v);
             }
 
@@ -1156,7 +1156,7 @@ namespace ModernImageViewer
                     0, 100, 5, options.TwoShotChance * 100,
                     v => v < 1 ? "Off" : $"{v:0}%",
                     (o, v) => o.TwoShotChance = v / 100);
-                Note(column, "A wide shot, then a snap zoom or a cut to the face, as Cinematic Slideshow does. Only with the camera on Auto, in a scene held 8 seconds or more.");
+                Note(column, "A wide shot, then a snap zoom or a cut to the face. Only with the camera on Auto, in a scene held 8 seconds or more.");
                 Slide(column, "Still scenes", "The chance that a scene does not move at all.",
                     0, 100, 5, options.StillChance * 100,
                     v => v < 1 ? "Off" : $"{v:0}%",
@@ -1190,13 +1190,13 @@ namespace ModernImageViewer
                 Curve("Steady", "The same speed throughout, so it is still moving through a crossfade.", options.CurveSteadyOdds, (o, v) => o.CurveSteadyOdds = v);
                 Curve("Gentle", "The mildest start and stop.", options.CurveGentleOdds, (o, v) => o.CurveGentleOdds = v);
                 Curve("Smooth", "A soft start and stop: how every move eased before there was a choice.", options.CurveSmoothOdds, (o, v) => o.CurveSmoothOdds = v);
-                Curve("Cinematic", "Lingers at both ends and moves quicker in the middle, as Cinematic Slideshow does.", options.CurveCinematicOdds, (o, v) => o.CurveCinematicOdds = v);
+                Curve("Cinematic", "Lingers at both ends and moves quicker in the middle.", options.CurveCinematicOdds, (o, v) => o.CurveCinematicOdds = v);
                 Curve("Settle", "Under way at once, then glides to rest.", options.CurveSettleOdds, (o, v) => o.CurveSettleOdds = v);
-                Curve("Snap", "Slow, a quick push, then a long settle: Cinematic Slideshow's snap zoom. Zooms only.", options.CurveSnapOdds, (o, v) => o.CurveSnapOdds = v);
+                Curve("Snap", "Slow, a quick push, then a long settle: a snap zoom. Zooms only.", options.CurveSnapOdds, (o, v) => o.CurveSnapOdds = v);
                 column.Children.Add(mix);
                 ShowMix();
 
-                RangeRow(column, "Curved path", "How far a pan's path bows to one side, up to Cinematic Slideshow's bend. Each pan picks within the range.",
+                RangeRow(column, "Curved path", "How far a pan's path bows to one side, at most a gentle arc. Each pan picks within the range.",
                     0, 100, 5, options.PathBendLeast * 100, options.PathBendMost * 100, Percents,
                     (o, a, b) => { o.PathBendLeast = a / 100; o.PathBendMost = b / 100; });
                 RangeRow(column, "Rotation", "How far the view turns over a move, in degrees. Each move picks within the range; it zooms in just enough to keep every corner covered.",
@@ -3579,10 +3579,10 @@ namespace ModernImageViewer
             double longest = settings.AutoPlayRandom ? Math.Max(settings.RandomFewestSeconds, settings.RandomMostSeconds) : planned;
             var beats = _surpriseMusic.Beats;
             double? now = _surpriseMusic.Position;
-            double wait = Cinematic.BeatGrid.WaitBeforeChange(beats, now, planned, shortest, longest,
+            double wait = Music.BeatGrid.WaitBeforeChange(beats, now, planned, shortest, longest,
                 _changeDelaySeconds, music.CutOnBeat, music.Follow / 100.0, out var landing, music.HardCuts / 100.0, Random.Shared.NextDouble());
             // On a big moment the change is a straight cut, whatever transition the scene was made with.
-            _nextChangeIsHardCut = landing == Cinematic.BeatGrid.Landing.HardCut;
+            _nextChangeIsHardCut = landing == Music.BeatGrid.Landing.HardCut;
             string energy = beats != null && now is double at && beats.EnergyBetween(at, at + planned) is double e ? $", energy {e:0.00}" : "";
             string bars = beats == null ? "no beats read" : beats.BarsUsable ? $"bars trusted ({beats.BarStrength:0.00})" : $"bars not trusted ({beats.BarStrength:0.00}, {beats.BarChanges} changes)";
             PlayTiming.Write($"music: {planned} s planned, holds {(wait == planned ? wait : wait + _changeDelaySeconds):0.00} s, lands on {landing}{energy}; {bars}");
@@ -4189,7 +4189,7 @@ namespace ModernImageViewer
             story.Begin();
         }
 
-        private Cinematic.MusicBed? _surpriseMusic;
+        private Music.MusicBed? _surpriseMusic;
         private string? _musicProblem;
         private string? _musicProblemWhy;
 
@@ -4205,7 +4205,7 @@ namespace ModernImageViewer
             }
             if (_surpriseMusic == null)
             {
-                _surpriseMusic = new Cinematic.MusicBed(DispatcherQueue) { ReadsBeats = true };
+                _surpriseMusic = new Music.MusicBed(DispatcherQueue) { ReadsBeats = true };
                 _surpriseMusic.GaveUp += (title, why) =>
                 {
                     _musicProblem = title;

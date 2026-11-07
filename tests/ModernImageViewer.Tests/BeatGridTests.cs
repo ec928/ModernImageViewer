@@ -1,6 +1,6 @@
 using System;
 using System.Linq;
-using ModernImageViewer.Cinematic;
+using ModernImageViewer.Music;
 using Xunit;
 using Xunit.Abstractions;
 

@@ -1,5 +1,5 @@
 using System.Text;
-using ModernImageViewer.Cinematic;
+using ModernImageViewer.Music;
 using Xunit;
 
 namespace ModernImageViewer.Tests

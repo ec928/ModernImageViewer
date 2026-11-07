@@ -7,11 +7,11 @@ using System.Threading.Tasks;
 using Windows.Media.Core;
 using Windows.Media.Playback;
 
-namespace ModernImageViewer.Cinematic
+namespace ModernImageViewer.Music
 {
     /// <summary>
     /// Music under pictures: one file that loops, or random songs from a folder at or above a rating.
-    /// Cinematic and Surprise me's auto-play each own one. The one that starts playing silences the other, which carries on when it stops.
+    /// A Multi-View show owns one. If two are playing, the one started last is heard, and the other carries on when it stops.
     /// </summary>
     public sealed class MusicBed : IDisposable
     {

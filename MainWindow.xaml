@@ -293,7 +293,7 @@
                                                 </Button>
                                             </StackPanel>
                                             <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.5"/>
-                                            <Button Style="{StaticResource SubtleButtonStyle}" Click="MusicSettings_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Height="28" Padding="8,0" CornerRadius="4" IsTabStop="True" AutomationProperties.Name="Music settings" ToolTipService.ToolTip="The folder and rating for music in Cinematic Slideshow and Multi-View shows.">
+                                            <Button Style="{StaticResource SubtleButtonStyle}" Click="MusicSettings_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Height="28" Padding="8,0" CornerRadius="4" IsTabStop="True" AutomationProperties.Name="Music settings" ToolTipService.ToolTip="The folder and rating for music in Multi-View shows.">
                                                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                                                     <FontIcon Glyph="&#xE8D6;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                                     <TextBlock x:Name="MusicOptionText" Text="Music: none" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
@@ -353,17 +353,8 @@
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
-                                <Button Style="{StaticResource SidebarToolButtonStyle}" Click="PlayCinematicFolder_Click" HorizontalAlignment="Stretch" Height="26" Padding="8,0" CornerRadius="4" IsTabStop="False" ToolTipService.ToolTip="Play Cinematic Slideshow">
-                                    <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
-                                        <SymbolIcon Symbol="Play"/>
-                                        <TextBlock Text="Cinematic Slideshow" FontSize="12"/>
-                                    </StackPanel>
-                                </Button>
-                                <Button Grid.Column="1" Style="{StaticResource SidebarToolButtonStyle}" Click="OpenCinematicShow_Click" Height="26" Padding="8,0" CornerRadius="4" IsTabStop="False" ToolTipService.ToolTip="Open a saved Cinematic Slideshow show. Shows made in Multi-View open from its Save/Load." AutomationProperties.Name="Open Cinematic show">
-                                    <TextBlock Text="Open show" FontSize="12"/>
-                                </Button>
-                                <!-- One click to a storyboard of the folder: it starts after the first scenes and makes the rest while it plays. -->
-                                <Button Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource SidebarToolButtonStyle}" Click="PlayStoryboardFolder_Click" HorizontalAlignment="Stretch" Height="26" Padding="8,0" CornerRadius="4" IsTabStop="False" ToolTipService.ToolTip="Play this folder as a show in Multi-View, with the preset chosen on the Show card. Scenes are made as it plays and kept." AutomationProperties.Name="Play show">
+                                <!-- One click to a show of the folder: it starts after the first scenes and makes the rest while it plays. -->
+                                <Button Grid.Row="0" Grid.ColumnSpan="2" Style="{StaticResource SidebarToolButtonStyle}" Click="PlayStoryboardFolder_Click" HorizontalAlignment="Stretch" Height="26" Padding="8,0" CornerRadius="4" IsTabStop="False" ToolTipService.ToolTip="Play this folder as a show in Multi-View, with the preset chosen on the Show card. Scenes are made as it plays and kept." AutomationProperties.Name="Play show">
                                     <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
                                         <FontIcon FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE786;" FontSize="14"/>
                                         <TextBlock Text="Play show" FontSize="12"/>
@@ -479,8 +470,8 @@
                                     <MenuFlyoutItem.Icon><SymbolIcon Symbol="NewWindow"/></MenuFlyoutItem.Icon>
                                 </MenuFlyoutItem>
                                 <MenuFlyoutSeparator x:Name="GridMenuPhotoSep1"/>
-                                <MenuFlyoutItem x:Name="GridMenuCinematicItem" Text="Play Cinematic Slideshow" Click="GridMenuCinematic_Click">
-                                    <MenuFlyoutItem.Icon><SymbolIcon Symbol="Play"/></MenuFlyoutItem.Icon>
+                                <MenuFlyoutItem x:Name="GridMenuCinematicItem" Text="Play show" Click="GridMenuCinematic_Click">
+                                    <MenuFlyoutItem.Icon><FontIcon FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE786;"/></MenuFlyoutItem.Icon>
                                 </MenuFlyoutItem>
                                 <MenuFlyoutSeparator x:Name="GridMenuPhotoSep2"/>
                                 <MenuFlyoutItem x:Name="GridMenuEditItem" Text="Edit Image" Click="GridMenuEdit_Click">
@@ -679,9 +670,6 @@
 
                                 <Rectangle x:Name="MultiSelectPlayRule" Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,0" Opacity="0.5"/>
 
-                                <Button x:Name="MultiSelectPlayButton" Click="MultiSelectCinematic_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" ToolTipService.ToolTip="Play Cinematic Slideshow" AutomationProperties.Name="Play Cinematic Slideshow">
-                                    <SymbolIcon Symbol="Play" />
-                                </Button>
                                 <Button x:Name="MultiSelectStoryboardButton" Click="MultiSelectStoryboard_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" ToolTipService.ToolTip="Play show: these images as a show, with the preset chosen on the Show card" AutomationProperties.Name="Play show">
                                     <FontIcon FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE786;" FontSize="14" />
                                 </Button>
