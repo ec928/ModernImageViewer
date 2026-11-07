@@ -153,17 +153,35 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
-        public void Noise_and_clicks_with_no_tempo_are_not_cut_to()
+        public void Noise_is_not_cut_to()
         {
+            // Clicks at random times are no longer refused: real songs with an obvious beat scored below them, and a beat
+            // trusted wrongly moves a change at most half a beat (7 Nov, 60-song samples). Noise still is.
             var noise = BeatGrid.Find(Noise(30, 0.3, 2));
-            var random = new Random(3);
-            double t = 0.2;
-            var loose = new System.Collections.Generic.List<double>();
-            while (t < 29) { loose.Add(t); t += 0.25 + random.NextDouble() * 1.2; }
-            var unsteady = BeatGrid.Find(Clicks(30, loose.ToArray(), 4));
-            _out.WriteLine($"noise: confidence {noise.Confidence:0.00}; unsteady clicks: confidence {unsteady.Confidence:0.00}, {unsteady.Bpm:0.0} bpm");
+            _out.WriteLine($"noise: confidence {noise.Confidence:0.00}");
             Assert.False(noise.Usable);
-            Assert.False(unsteady.Usable);
+        }
+
+        [Fact]
+        public void A_song_whose_beats_are_not_trusted_still_has_its_energy_and_big_moments()
+        {
+            // Noise with no beat, quiet then suddenly loud: not cut on a beat, but followed and hard-cut on its lift.
+            var random = new Random(16);
+            var s = new float[70 * Rate];
+            for (int i = 0; i < s.Length; i++) s[i] = (float)((random.NextDouble() * 2 - 1) * (i < 35 * Rate ? 0.03 : 0.5));
+            var grid = BeatGrid.Find(s);
+            _out.WriteLine($"confidence {grid.Confidence:0.00}, heard {grid.Heard}, lifts {string.Join(" ", grid.Lifts.Select(l => l.ToString("0.00")))}");
+            Assert.False(grid.Usable);
+            Assert.True(grid.Heard);
+            Assert.True(grid.EnergyBetween(5, 15) < 0.3 && grid.EnergyBetween(45, 55) > 0.7);
+            double lift = Assert.Single(grid.Lifts);
+            Assert.InRange(lift, 34, 36.5);
+            double wait = BeatGrid.WaitBeforeChange(grid, lift - 6, 12, 10, 15, 0.2, true, 0, out var landing, hardCuts: 1, roll: 0);
+            Assert.Equal(BeatGrid.Landing.HardCut, landing);
+            // Not cut on a beat: with no big moment in reach, the plan stands.
+            BeatGrid.WaitBeforeChange(grid, 5, 12, 10, 15, 0.2, true, 0, out landing, hardCuts: 0, roll: 1);
+            Assert.NotEqual(BeatGrid.Landing.Beat, landing);
+            Assert.NotEqual(BeatGrid.Landing.BarStart, landing);
         }
 
         [Fact]

@@ -573,6 +573,14 @@ the app). Eight songs gave none to four each, mostly one to three minutes in; Ov
 gentle song should have, and none has been judged by ear. In the app, Because The Night held its second scene 14.4 s to
 cut on its moment at 0:25, then held 11 and 12 s through the loud part.
 
+**Recalibrated 7 Nov after an audit on 60-song samples of the music folder.** Beat confidence 3.0 (set from eight songs)
+refused 38%, songs with an obvious beat among them; it is 2.0, which refuses about 2 to 7% (free-time pieces) and still
+refuses white noise. A beat trusted wrongly moves a change at most half a beat. Energy and big moments come from
+loudness and no longer wait on the beats: every song read has them. A big moment needs a rise of 0.5, not 0.35, which
+took the average from 3.2 to 1.4 a song (a few songs alternating quiet verses and loud choruses still have four to seven).
+A step by hand with Next or Previous comes in by its own transition, never a hard cut planned for the timer, and the
+scene after it is put on the music again. A transition takes at most half the hold of the scene it brings in.
+
 The director chooses each scene's hold at play time. The engine does not read the music (R13). The draft still saves
 `DwellSeconds` as the planned hold, and that saved value is not changed, so the show plays as drafted with other music
 or with music off. The song under a scene is not known when the scene is drafted. The camera move is planned from that

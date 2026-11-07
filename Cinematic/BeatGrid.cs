@@ -24,10 +24,12 @@ namespace ModernImageViewer.Cinematic
         private static readonly double EnergyBlock = Math.Max(1, (int)(EnergyStep / FrameSeconds)) * FrameSeconds;
 
         /// <summary>
-        /// Below this, the beats are not used: the scene holds as planned. Set from real songs (design check M1, 7 Nov):
-        /// eight songs from the music folder scored 3.4 to 6.6; white noise 1.1 and clicks at random times 2.7.
+        /// Below this, changes are not put on the beats (energy and big moments still are used). Set 7 Nov from two samples
+        /// of 60 songs from the music folder: 3.0, set from eight songs, refused 38% of them, Jailhouse Rock and Interstate
+        /// Lovesong among them; at 2.0 about 7% are refused, mostly free-time pieces, and white noise (1.1) still is.
+        /// Trusting a weak beat wrongly costs little: a change moves at most half a beat from its plan.
         /// </summary>
-        public const double LeastConfidence = 3.0;
+        public const double LeastConfidence = 2.0;
 
         /// <summary>How much the strongest beat of the four must stand above the others to count as the bar's first.</summary>
         public const double LeastBarStrength = 1.12;
@@ -44,6 +46,8 @@ namespace ModernImageViewer.Cinematic
         private readonly double[] _energy;
 
         public bool Usable => Confidence >= LeastConfidence && Beats.Count >= 8;
+        /// <summary>The song was read: its energy and big moments can be used, whether or not its beats can.</summary>
+        public bool Heard => _energy.Length > 0;
         public bool BarsUsable => Usable && BarsAgree && BarStrength >= LeastBarStrength && Downbeats.Count >= 4;
 
         private BeatGrid(IReadOnlyList<double> beats, IReadOnlyList<double> downbeats, double bpm, double confidence, double barStrength, bool barsAgree, double[] energy)
@@ -81,7 +85,8 @@ namespace ModernImageViewer.Cinematic
         /// <summary>The song's energy from <paramref name="from"/> to <paramref name="to"/> seconds: 0 its quietest, 1 its loudest. Null past its end.</summary>
         public double? EnergyBetween(double from, double to)
         {
-            if (_energy.Length == 0 || !Usable) return null;
+            // Loudness needs no beat: a song too free to cut on the beat still has quiet and loud passages.
+            if (_energy.Length == 0) return null;
             int a = Math.Max(0, (int)(from / EnergyBlock)), b = Math.Min(_energy.Length - 1, (int)(to / EnergyBlock));
             if (a >= _energy.Length || b < a) return null;
             double sum = 0;
@@ -108,7 +113,9 @@ namespace ModernImageViewer.Cinematic
             double changeDelay, bool cutOnBeat, double follow, out Landing landing, double hardCuts = 0, double roll = 1)
         {
             landing = Landing.AsPlanned;
-            if (beats == null || !beats.Usable || songNow is not double now) return plannedHold;
+            // Big moments and energy come from loudness and need only a song that was read; landing on the beat needs beats
+            // that are trusted (NearestBeat, NearestDownbeat).
+            if (beats == null || !beats.Heard || songNow is not double now) return plannedHold;
             bool fixedHold = longest - shortest < 0.01;
             double low = fixedHold ? plannedHold : Math.Min(shortest, plannedHold), high = fixedHold ? plannedHold : Math.Max(longest, plannedHold);
 
@@ -180,6 +187,7 @@ namespace ModernImageViewer.Cinematic
             meanRepeat /= highLag - lowLag + 1;
             double confidence = meanRepeat <= 0 ? 0 : repeat[period] / meanRepeat;
 
+
             // Beats: each frame's best score is its onset plus the best earlier beat about one period back, less a cost for
             // straying from the period. The last strong beat is traced back.
             int n = onset.Length;
@@ -231,7 +239,9 @@ namespace ModernImageViewer.Cinematic
 
         // A big moment: the next two seconds this much louder than the four before, on the song's own scale from its quiet
         // (0) to its loud (1), and loud after it. A slow build rises too little in four seconds; steady music not at all.
-        public const double LeastLift = 0.35, LoudAfterLift = 0.6, LiftsApart = 15;
+        // 0.5 since 7 Nov: at 0.35, 60 songs from the music folder averaged 3.2 each and a third had four or more (Tears in
+        // Heaven nine), so ballads would cut abruptly; at 0.45 to 0.55 the average is 1.8 to 0.9.
+        public const double LeastLift = 0.5, LoudAfterLift = 0.6, LiftsApart = 15;
         private const double LiftStep = 0.25;
 
         private BeatGrid WithLifts(double[] loudness, List<double> beats, List<double>? downbeats)
@@ -272,20 +282,19 @@ namespace ModernImageViewer.Cinematic
             // The steepest point of each rise, the biggest first, kept apart. The moment is the first beat at which the
             // sound has risen halfway, where it is heard to change (the nearest beat to the steepest point was often the
             // second loud one); a bar start within a quarter second of it is taken instead.
-            var lifts = new List<double>();
+            var lifts = new List<(double At, double Rise)>();
             foreach (int s in Enumerable.Range(0, steps).Where(s => rise[s] >= LeastLift).OrderByDescending(s => rise[s]))
             {
                 double at = s * block;
-                if (lifts.Any(l => Math.Abs(l - at) < LiftsApart)) continue;
+                if (lifts.Any(l => Math.Abs(l.At - at) < LiftsApart)) continue;
                 double halfway = (beforeLevel[s] + afterLevel[s]) / 2;
                 double? first = beats.Where(t => t >= at - 1 && t <= at + 1.5).Cast<double?>().FirstOrDefault(t => LevelAt(t!.Value) >= halfway);
                 if (first is not double on) continue;
                 if (downbeats is { Count: > 0 } && downbeats.OrderBy(t => Math.Abs(t - on)).First() is double bar && Math.Abs(bar - on) <= 0.25) on = bar;
-                if (lifts.Any(l => Math.Abs(l - on) < LiftsApart)) continue;
-                lifts.Add(on);
+                if (lifts.Any(l => Math.Abs(l.At - on) < LiftsApart)) continue;
+                lifts.Add((on, rise[s]));
             }
-            lifts.Sort();
-            Lifts = lifts;
+            Lifts = lifts.Select(l => l.At).OrderBy(at => at).ToList();
             return this;
         }
 

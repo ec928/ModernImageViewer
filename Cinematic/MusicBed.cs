@@ -44,8 +44,9 @@ namespace ModernImageViewer.Cinematic
         private string? _songPath;
         private BeatGrid _beats = BeatGrid.None;
 
-        /// <summary>The song's beats, once read and trusted; otherwise null, and scenes hold as planned.</summary>
-        public BeatGrid? Beats => _player != null && _beats.Usable ? _beats : null;
+        /// <summary>The song as read: its energy and big moments, and its beats when they are trusted (BeatGrid.Usable).
+        /// Null until it has been read, and scenes hold as planned.</summary>
+        public BeatGrid? Beats => _player != null && _beats.Heard ? _beats : null;
 
         /// <summary>Where the song is now, in seconds, while it plays and can be heard; null otherwise.</summary>
         public double? Position
