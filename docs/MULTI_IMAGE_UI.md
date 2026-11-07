@@ -183,7 +183,8 @@ A Cinematic storyboard uses your main Transitions settings.
 
 Under Camera:
 
-- **Two-shot scenes** (default 25%): the chance that a scene with a face, held 8 seconds or more, is two shots, as Cinematic Slideshow makes them: a wide shot, then either a snap zoom in to the face or a cut to the face and a slow push in. Only with the camera on Auto.
+- **Faces are framed by the eyes**: a zoom or a sideways drift aimed at a person, the face views of sequence beats and the close shot of a two-shot put the eyes a third of the way down the screen, as Cinematic Slideshow does, rather than the middle of the face in the middle. On a face view of one image the whole face stays in view, up to the closest zoom it allows. A drift up or down a picture travels past the eyes, and a picture with no face is centred on its focus point. At a gentle zoom the edge of the picture can stop the view, and the eyes then sit a little lower.
+- **Two-shot scenes** (default 25%): the chance that a scene with a face, on screen 8 seconds or more (the camera's run-on past the change does not count), is two shots, as Cinematic Slideshow makes them: a wide shot, then either a snap zoom in to the face or a cut to the face and a slow push in. Only with the camera on Auto.
 - **Movement curves**: odds for how each move gets going and comes to rest, on the Off to Often scale, with the mix shown underneath.
 
 | Curve | What it looks like | Default |
@@ -203,6 +204,8 @@ Storyboard scenes store their curve, bend, turn and shots, and play them; scenes
 ### Transitions
 
 In its own section, Transitions, each kind of scene change has its own slider, on the same Off to Often scale as the designs: **Crossfade**, **Zoom through**, **Fade through black** and **Slide**. They are odds against each other. The line under them gives the mix they make, for example `Mix: crossfade 65% · zoom through 14% · fade through black 14% · slide 8%`. The same kind never comes twice in a row, except a crossfade, and the mix allows for that. With all four off, every change is a crossfade. They apply to Auto-Mix while it plays and to the scenes a storyboard makes; each storyboard scene keeps the transition it was made with and plays it. A change made by hand in Auto-Mix is a crossfade.
+
+**Transition length** (default 0.75 to 2.5 seconds, from 0.25 to 4) is how long a change takes. Each change picks a length in the range, and the whole transition stretches to it, so a long crossfade is a slow dissolve, as in Cinematic Slideshow; drag the ends together for one length. The outgoing scene keeps moving for as long as the change takes. A hard cut on the music, and the cut between views of one image, stay cuts.
 
 These replace the single Transition variety slider. A saved Transition variety is converted once to odds giving the same mix.
 
