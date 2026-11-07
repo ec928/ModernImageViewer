@@ -7,10 +7,11 @@ this file. Do not read, implement from, or reconcile with them. How it is built,
 `MULTI_IMAGE_IMPLEMENTATION.md`; this file wins where they differ. `MULTI_IMAGE_UI.md` describes the app as it is, not
 the design. Renamed on 6 Nov 2026 from `LAYOUT_GENERATOR_DESIGN.md`.
 
-**Status: proposal, partly built on a branch, not approved.** Slices 1 to 6 were built on 6 Nov on branch
-`slice1-one-engine-call`, engine-first by mistake (see "What the user meets", below); the screen is being rebuilt to this
-file. Nothing here is in the released app until Ed has said yes to it. Where this file says "today", it means v0.31.2,
-the released app, described in `MULTI_IMAGE_UI.md` and the README.
+**Status: built and in the app.** v0.32.0 (released on GitHub) shipped Play as a show, the Show card, presets and
+sequence beats at 25%; the internal builds 0.32.1 to 0.32.3 added eye-line framing, Transition length and the music
+calibration in 3.10. Slices 1 to 6 were first built engine-first by mistake (see "What the user meets", below) and the
+screen was rebuilt to this file. A change to this area still follows this file. Where it says "today", it means v0.31.2,
+the app before this design was built; `MULTI_IMAGE_UI.md` and the README describe the app as it is now.
 
 **How to use this file.** Start with **What the user meets** (R17): it is the first principle and the first thing built.
 The direction below is where the work goes. The core principle is what the engine is. Section 1
@@ -549,7 +550,7 @@ tempo by autocorrelation leaning to 120 bpm, beats by dynamic programming); `Cin
 Windows' `MediaTranscoder` to a temp mono WAV (not `AudioGraph`, which plays in real time), under a second for a
 four-minute song, cached for the session. Check M1: eight songs from the music folder read at 84.7 to 143.6 bpm (Only
 Girl 126.0, Over the Rainbow 84.7) with confidence 3.4 to 6.6; white noise 1.1 and clicks at random times 2.7; the
-threshold is 3.0, so the margin under the weakest song is small. On a click track the beats land within 32 ms. In the
+threshold was 3.0, so the margin under the weakest song was small (2.0 since the recalibration below). On a click track the beats land within 32 ms. In the
 app, the first scene of a song holds as planned (beats not read yet) and later holds move by up to about a quarter of
 a second. The switch is **Cut on the beat** under Soundtrack, on by default, saved with the other music settings.
 
@@ -608,7 +609,7 @@ No rule for the first or last scene (R16). The first scene of a song holds as pl
 | Hard-cut window | From 3 s into the scene to 3 s past Duration's longest |
 | Beat window | Duration's shortest to longest, from the scene's start, after Follow |
 | Which beat | The first beat of the bar. The nearest beat when the bars are not trusted |
-| Confidence threshold | 3.0, from check M1 |
+| Confidence threshold | 2.0 (`BeatGrid.LeastConfidence`), from 60-song samples on 7 Nov; it was 3.0 from check M1 |
 | Big-moment spacing | At most one per 15 s |
 | Cache | For the session, by path, size and modified time |
 
