@@ -144,7 +144,6 @@ namespace ModernImageViewer
             _activeShow = null;
             _selectedShowScene = null;
             _canvasSceneId = null;
-            _shuffleChosen = false;
             _isStoryboardPlayback = false;
             ForgetSurprise();
             CloseCountsCard();
@@ -2253,11 +2252,11 @@ namespace ModernImageViewer
             if (!IsEmptyCell(item))
             {
                 string picture = item.Path;
-                var feature = MakeChoiceItem("Feature in Auto-Mix", _featuredPictures.Contains(picture), () =>
+                var feature = MakeChoiceItem("Feature in the show", _featuredPictures.Contains(picture), () =>
                 {
                     if (!_featuredPictures.Remove(picture)) _featuredPictures.Add(picture);
                 });
-                ToolTipService.SetToolTip(feature, "Auto-Mix always uses this image and gives it the best place");
+                ToolTipService.SetToolTip(feature, "Play always uses this image and gives it the best place");
                 menu.Items.Add(feature);
             }
             if (activeCard != null)

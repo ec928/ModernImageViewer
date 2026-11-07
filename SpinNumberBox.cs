@@ -25,6 +25,18 @@ namespace ModernImageViewer
 
         public event EventHandler<int>? ValueChanged;
 
+        /// <summary>Grid has no IsEnabled. This switches the text and the chevrons together.</summary>
+        public bool IsEnabled
+        {
+            get => _textBox.IsEnabled;
+            set
+            {
+                _textBox.IsEnabled = value;
+                _upBtn.IsEnabled = value;
+                _downBtn.IsEnabled = value;
+            }
+        }
+
         public int Minimum
         {
             get => _minimum;

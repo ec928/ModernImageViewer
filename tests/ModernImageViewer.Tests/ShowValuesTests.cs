@@ -101,6 +101,46 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
+        public void Show_card_values_are_kept_in_the_app_settings()
+        {
+            var options = new SurpriseOptions();
+            options.MultiImage = new CinematicOverrides { SequenceBeatsChance = 1, FewestPictures = 1, MostPictures = 9, FewestScenesPerStep = 2, MostScenesPerStep = 2 };
+            options.Cinematic.SequenceBeatsChance = 1;
+            var read = SurpriseOptions.FromJson(options.ToJson());
+            Assert.Equal(1, read.MultiImage!.SequenceBeatsChance, 3);
+            Assert.Equal(9, read.MultiImage.MostPictures);
+            Assert.Equal(1, read.Cinematic.SequenceBeatsChance, 3);
+
+            var show = new ShowProject();
+            show.GlobalDefaults.TakeValues(read.MultiImage);
+            Assert.Equal(1, show.GlobalDefaults.ApplyTo(new SurpriseOptions()).SequenceBeatsChance, 3);
+            // An old settings file has no saved Multi-Image preset: Play follows the engine settings.
+            Assert.Null(SurpriseOptions.FromJson("{}").MultiImage);
+        }
+
+        [Fact]
+        public void Cinematic_default_is_one_image_and_beats_at_a_quarter()
+        {
+            var factory = CinematicOverrides.Checked(new CinematicOverrides());
+            Assert.Equal(1, factory.FewestPictures);
+            Assert.Equal(1, factory.MostPictures);
+            Assert.Equal(0.25, factory.SequenceBeatsChance, 3);
+            Assert.Equal(2, factory.FewestScenesPerStep);
+            Assert.Equal(2, factory.MostScenesPerStep);
+            Assert.Equal(10, factory.FewestSeconds);
+            Assert.Equal(15, factory.MostSeconds);
+            Assert.True(factory.SmartPace);
+            Assert.Equal(0.4, factory.MotionLeast, 3);
+            Assert.Equal(0.6, factory.MotionMost, 3);
+            Assert.Equal(SurpriseOptions.MostFavouredDesign, factory.OddsFor(LayoutComposer.EdgeToEdge));
+            Assert.Equal(0.25, factory.OddsFor(LayoutComposer.HeroSpotlight));
+            Assert.Equal(0, factory.OddsFor(LayoutComposer.GalleryWall));
+            Assert.Equal(0, factory.OddsFor(LayoutComposer.ScatteredPrints));
+            Assert.Equal(0, factory.OddsFor(LayoutComposer.Circles));
+            Assert.Equal(0, factory.OddsFor(LayoutComposer.SlantedPanels));
+        }
+
+        [Fact]
         public void A_show_holding_nothing_writes_none_of_the_new_fields()
         {
             // So an older app reading it finds what it always found.

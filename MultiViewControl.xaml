@@ -305,31 +305,6 @@
                         </Button>
                     </Border>
 
-                    <!-- The Storyboard / Auto-Mix switch: Play always plays the show now (R17), so it is not shown. -->
-                    <Border x:Name="PlayModeControl" CornerRadius="12" Background="#14FFFFFF" VerticalAlignment="Center" Visibility="Collapsed">
-                        <StackPanel Orientation="Horizontal">
-                            <Button x:Name="StoryboardModeButton"
-                                    Click="StoryboardModeButton_Click"
-                                    Style="{StaticResource QuietButtonStyle}"
-                                    Padding="8,5"
-                                    CornerRadius="12">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <FontIcon x:Name="StoryboardModeIcon" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE786;" FontSize="13" />
-                                    <TextBlock x:Name="StoryboardModeText" Text="Storyboard" VerticalAlignment="Center" FontSize="13" />
-                                </StackPanel>
-                            </Button>
-                            <Button x:Name="SurpriseButton"
-                                    Click="SurpriseButton_Click"
-                                    Style="{StaticResource QuietButtonStyle}"
-                                    Padding="8,5"
-                                    CornerRadius="12">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <FontIcon x:Name="SurpriseIcon" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE8B1;" FontSize="14" />
-                                    <TextBlock x:Name="SurpriseText" Text="Auto-Mix" VerticalAlignment="Center" FontSize="13" />
-                                </StackPanel>
-                            </Button>
-                        </StackPanel>
-                    </Border>
 
                     <Rectangle Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,0" Opacity="0.5"/>
 

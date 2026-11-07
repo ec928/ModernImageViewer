@@ -370,7 +370,7 @@
                                     </StackPanel>
                                 </Button>
                                 <!-- The same, made by the one Layout Generator with its Cinematic overrides: one image filling the screen, at Cinematic's pace. -->
-                                <Button Grid.Row="2" Grid.ColumnSpan="2" Style="{StaticResource SidebarToolButtonStyle}" Click="PlayCinematicStoryboardFolder_Click" HorizontalAlignment="Stretch" Height="26" Padding="8,0" CornerRadius="4" IsTabStop="False" ToolTipService.ToolTip="Play this folder as a storyboard that looks like Cinematic Slideshow: one image at a time, full screen. To change how it looks, open Layout Generator Settings, then Advanced." AutomationProperties.Name="Cinematic storyboard">
+                                <Button Grid.Row="2" Grid.ColumnSpan="2" Style="{StaticResource SidebarToolButtonStyle}" Click="PlayCinematicStoryboardFolder_Click" HorizontalAlignment="Stretch" Height="26" Padding="8,0" CornerRadius="4" IsTabStop="False" ToolTipService.ToolTip="Play this folder as a Cinematic show: one image at a time, full screen. To change how it looks, open Show on the bar." AutomationProperties.Name="Cinematic storyboard">
                                     <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
                                         <FontIcon FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE714;" FontSize="14"/>
                                         <TextBlock Text="Cinematic storyboard" FontSize="12"/>

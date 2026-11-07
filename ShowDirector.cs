@@ -17,6 +17,20 @@ namespace ModernImageViewer
         public const string DefaultShowTitle = "Auto-Drafted Presentation";
 
         /// <summary>
+        /// How many scenes stay when the show's values change while Play is drafting ahead.
+        /// The scene on screen, and every scene before it, stay. Scenes after it were drafted ahead and are made again.
+        /// The whole list stays when that scene is not in it, so a show that is not on screen is left as it is.
+        /// </summary>
+        public static int ScenesKeptWhenValuesChange(IReadOnlyList<ShowScene> scenes, string? sceneOnScreenId)
+        {
+            if (scenes == null || scenes.Count == 0) return 0;
+            if (string.IsNullOrEmpty(sceneOnScreenId)) return scenes.Count;
+            for (int i = 0; i < scenes.Count; i++)
+                if (scenes[i].Id == sceneOnScreenId) return i + 1;
+            return scenes.Count;
+        }
+
+        /// <summary>
         /// Generates a complete ShowProject from a photo pool asynchronously off the UI thread.
         /// </summary>
         public static async Task<ShowProject> DraftAsync(

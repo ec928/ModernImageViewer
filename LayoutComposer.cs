@@ -316,9 +316,9 @@ namespace ModernImageViewer
 
         /// <summary>
         /// Sequence beats: the odds that a step of a show is more than one scene, each a closer view of the one before (a
-        /// group, then one image from it, then its faces). Off by default: one step is one scene, as before.
+        /// group, then one image from it, then its faces). 25% by default (Ed, 7 Nov 2026): about one step in four.
         /// </summary>
-        public double SequenceBeatsChance { get; set; }
+        public double SequenceBeatsChance { get; set; } = 0.25;
         /// <summary>How many scenes a step that rolls Sequence beats may be, as a range. It stops early when no closer view is left.</summary>
         public int FewestScenesPerStep { get; set; } = 2;
         public int MostScenesPerStep { get; set; } = 2;
@@ -419,6 +419,12 @@ namespace ModernImageViewer
         public List<CinematicOverrides?> MyPresets { get; set; } = new() { null, null, null };
 
         /// <summary>
+        /// The Multi-Image preset as the user last left it. Null until they change it on the Show card: Play then follows
+        /// the engine settings. Kept in the app settings, with Cinematic and My presets.
+        /// </summary>
+        public CinematicOverrides? MultiImage { get; set; }
+
+        /// <summary>
         /// These settings with a set of overrides applied, by its name; this same object when the name is none or unknown.
         /// A copy, so the saved settings are never changed by it.
         /// </summary>
@@ -480,6 +486,8 @@ namespace ModernImageViewer
                 read.RandomMostSeconds = Math.Clamp(read.RandomMostSeconds, FewestSeconds, MostSeconds);
                 if (read.RandomMostSeconds < read.RandomFewestSeconds) read.RandomMostSeconds = read.RandomFewestSeconds;
                 read.Cinematic = CinematicOverrides.Checked(read.Cinematic);
+                // Null stays null: the user has not changed Multi-Image, so Play follows the engine settings.
+                read.MultiImage = read.MultiImage == null ? null : CinematicOverrides.Checked(read.MultiImage);
                 // Three slots, whatever the file held; an empty one stays empty.
                 var presets = read.MyPresets ?? new List<CinematicOverrides?>();
                 read.MyPresets = Enumerable.Range(0, 3).Select(i => i < presets.Count && presets[i] != null ? CinematicOverrides.Checked(presets[i]) : null).ToList();
@@ -564,8 +572,8 @@ namespace ModernImageViewer
         public bool SmartPace { get; set; } = true;
         public double MotionLeast { get; set; } = 0.4;
         public double MotionMost { get; set; } = 0.6;
-        /// <summary>Sequence beats: off in both built-in presets; a user's preset may hold any value.</summary>
-        public double SequenceBeatsChance { get; set; }
+        /// <summary>Sequence beats: 25% in both built-in presets. A user may set any value, including 0.</summary>
+        public double SequenceBeatsChance { get; set; } = 0.25;
         public int FewestScenesPerStep { get; set; } = 2;
         public int MostScenesPerStep { get; set; } = 2;
 

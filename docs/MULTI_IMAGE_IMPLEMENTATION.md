@@ -15,7 +15,7 @@ checked: an older app opening a version 2 file (only from the code); no saved sh
 (Gallery wall's card, hero outline, print border, circle outline; Hero, prints and circles were always white), and
 Backdrop odds (vignette, gradient, solid; default Normal, Normal, Rare) every design with a backdrop. 5b built: ambient
 blur (Rare) joins the backdrop odds; on screen the plain colour shows until the blurred copy is made; export draws
-it too. Not watched on screen, and not exported to check. 6 built: Sequence beats (odds, default off) and Scenes per step (2 to 4) in Advanced > Camera until 3c moves them to the
+it too. Not watched on screen, and not exported to check. 6 built: Sequence beats (odds, default 25% as of 7 Nov; it first shipped at 0) and Scenes per step (2 to 4) in Advanced > Camera until 3c moves them to the
 storyboard; the director writes closer views as kept scenes; Cut between views of one image, no overrun before one.
 Not watched: the Cut and the snap on screen. 3c built: the storyboard's images-per-scene pop-up is this show's
 settings (preset, Save as My preset 1-3, images per scene, duration, smart pace, motion, sequence beats, scenes per

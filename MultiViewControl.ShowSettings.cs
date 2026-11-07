@@ -30,6 +30,9 @@ namespace ModernImageViewer
         {
             change(HoldingShowValues());
             CancelPreparedSurprise();
+            // Scenes already drafted were made with the old values. Drop the ones not yet shown so the next one uses these.
+            DropScenesDraftedAhead();
+            if (_activeShow != null) SaveShowPreset(_activeShow);
             _updateStorySummary?.Invoke();
             NoteUserAction();
             changed?.Invoke();
@@ -39,8 +42,7 @@ namespace ModernImageViewer
         private string ShowSettingsLabel()
         {
             var values = GeneratorSettingsFor(_activeShow);
-            string preset = _activeShow == null || !_activeShow.GlobalDefaults.HoldsValues ? MultiImagePreset
-                : _activeShow.GeneratorOverrides == CinematicOverrides.Name ? CinematicOverrides.Name : "Custom";
+            string preset = ActivePresetName(_activeShow);
             string images = values.FewestPictures == values.MostPictures ? $"{values.FewestPictures}" : $"{values.FewestPictures}–{values.MostPictures}";
             return $"Preset: {preset} · {images} images ▾";
         }
@@ -73,6 +75,8 @@ namespace ModernImageViewer
             if (old != null && old.GlobalDefaults.HoldsValues)
             {
                 show.GeneratorOverrides = old.GeneratorOverrides;
+                show.PresetName = old.PresetName;
+                show.PresetSlot = old.PresetSlot;
                 show.GlobalDefaults.TakeValues(CinematicOverrides.From(GeneratorSettingsFor(old)));
             }
             _activeShow = show;
@@ -85,6 +89,14 @@ namespace ModernImageViewer
         }
 
         private static string PresetName(int slot, CinematicOverrides? preset) => $"My preset {slot + 1}" + (preset == null ? " (empty)" : "");
+
+        private static string ActivePresetName(ShowProject? show)
+        {
+            if (!string.IsNullOrEmpty(show?.PresetName)) return show.PresetName!;
+            if (show == null || !show.GlobalDefaults.HoldsValues) return MultiImagePreset;
+            if (show.GeneratorOverrides == CinematicOverrides.Name) return CinematicOverrides.Name;
+            return "Custom";
+        }
 
         /// <summary>Fills the storyboard's settings pop-up with the open show's preset and values, as they are now.</summary>
         private void FillShowSettings(StackPanel panel, Action? changed)
@@ -129,8 +141,7 @@ namespace ModernImageViewer
             var presets = SurpriseChoices.MyPresets;
             var names = new System.Collections.Generic.List<string> { MultiImagePreset, CinematicOverrides.Name };
             names.AddRange(Enumerable.Range(0, 3).Select(i => PresetName(i, presets.ElementAtOrDefault(i))));
-            string current = show == null || !show.GlobalDefaults.HoldsValues ? MultiImagePreset
-                : show.GeneratorOverrides == CinematicOverrides.Name ? CinematicOverrides.Name : "Custom";
+            string current = ActivePresetName(show);
             if (current == "Custom") names.Add("Custom");
             var preset = new ComboBox { ItemsSource = names, SelectedItem = current, Width = 190 };
             preset.SelectionChanged += (_, _) =>
@@ -144,15 +155,19 @@ namespace ModernImageViewer
                     int slot = names.IndexOf(chosen) - 2;
                     if (presets.ElementAtOrDefault(slot) is not CinematicOverrides saved) { preset.SelectedItem = current; return; }
                     target.GeneratorOverrides = null;
+                    target.PresetSlot = slot;
+                    target.PresetName = $"My preset {slot + 1}";
                     target.GlobalDefaults.TakeValues(saved);
                 }
                 CancelPreparedSurprise();
+                DropScenesDraftedAhead();
                 _updateStorySummary?.Invoke();
                 NoteUserAction();
                 changed?.Invoke();
-                FillShowSettings(panel, changed);
+                // Rebuilt once this event is over: the list is part of what is rebuilt.
+                DispatcherQueue.TryEnqueue(() => FillShowSettings(panel, changed));
             };
-            Row("Preset", "Where this show's values start from. Multi-Image follows Layout Generator Settings; Cinematic is one image at a time, full screen, the camera always moving; My presets are what you saved.", preset);
+            Row("Preset", "Where this show's values start from. What you change here is kept for the next Play. Cinematic is one image at a time, full screen, the camera always moving. My presets are yours.", preset);
 
             var save = new Button { Content = "Save as ▾", FontSize = 12 };
             var saveMenu = new MenuFlyout();
@@ -175,8 +190,47 @@ namespace ModernImageViewer
             save.Flyout = saveMenu;
             Row("Save this show's values", "Keeps this show's values as My preset 1, 2 or 3, to start another show from.", save);
 
+            var reset = new Button { Content = "Reset to defaults", FontSize = 12 };
+            reset.Click += async (_, _) =>
+            {
+                var open = _activeShow;
+                if (open?.PresetSlot is int slot && SurpriseChoices.MyPresets.ElementAtOrDefault(slot) != null)
+                {
+                    var dialog = new ContentDialog
+                    {
+                        Title = "Reset to defaults?",
+                        Content = $"This empties My preset {slot + 1}. The show uses Multi-Image.",
+                        PrimaryButtonText = "Reset",
+                        CloseButtonText = "Cancel",
+                        DefaultButton = ContentDialogButton.Close,
+                        XamlRoot = XamlRoot,
+                        RequestedTheme = MainWindow.Instance?.CurrentRequestedTheme ?? ElementTheme.Default
+                    };
+                    DialogFooter.MainButtonOnRight(dialog);
+                    if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+                }
+                var target = _activeShow ??= new ShowProject { Title = "Storyboard" };
+                ResetShowPresetToDefaults(target);
+                _updateStorySummary?.Invoke();
+                NoteUserAction();
+                changed?.Invoke();
+                FillShowSettings(panel, changed);
+            };
+            Row("Reset to defaults", "Puts this preset back to its starting values and keeps that. Multi-Image follows Layout Generator Settings again, with sequence beats at 25%. Cinematic goes back to one image, Edge to edge Often, Hero spotlight Rare, the others Off, 10 to 15 seconds, smart pace, motion 40% to 60%, sequence beats 25%. A My preset is emptied.", reset);
+
             // The values this show is played with.
             Heading("Scenes");
+            bool making = ReferenceEquals(show, _showBeingBuilt);
+            panel.Children.Add(new TextBlock
+            {
+                Text = making
+                    ? "The scene on screen stays. Scenes not yet shown are made again with these."
+                    : "Scenes already in the storyboard stay as they are. These are used for scenes Play has not made yet.",
+                FontSize = 11,
+                Opacity = 0.7,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 4)
+            });
             var fewestImages = Box(1, MosaicLayout.MaxShown, values.FewestPictures);
             var mostImages = Box(1, MosaicLayout.MaxShown, values.MostPictures);
             void SetImages() => ChangeShowValues(v =>
@@ -199,8 +253,16 @@ namespace ModernImageViewer
             Row("Duration, seconds", "How long each scene holds: each picks within the range.", Pair(fewestSeconds, mostSeconds));
 
             var smart = new CheckBox { IsChecked = values.SmartPace, MinWidth = 0 };
-            smart.Checked += (_, _) => ChangeShowValues(v => v.SmartPace = true, changed);
-            smart.Unchecked += (_, _) => ChangeShowValues(v => v.SmartPace = false, changed);
+            smart.Checked += (_, _) =>
+            {
+                if (GeneratorSettingsFor(_activeShow).SmartPace) return;
+                ChangeShowValues(v => v.SmartPace = true, changed);
+            };
+            smart.Unchecked += (_, _) =>
+            {
+                if (!GeneratorSettingsFor(_activeShow).SmartPace) return;
+                ChangeShowValues(v => v.SmartPace = false, changed);
+            };
             Row("Smart pace", "Dense layouts toward the longer end of the range, layouts of one or two images toward the shorter.", smart);
 
             var motionLeast = Box(0, 100, (int)Math.Round(values.MotionLeast * 100));
@@ -215,8 +277,7 @@ namespace ModernImageViewer
             Row("Motion, %", "How far the camera moves in each scene: each picks within the range. 0 is still.", Pair(motionLeast, motionMost));
 
             var beats = Box(0, 100, (int)Math.Round(values.SequenceBeatsChance * 100));
-            beats.ValueChanged += (_, value) => ChangeShowValues(v => v.SequenceBeats = Math.Clamp(value, 0, 100) / 100.0, changed);
-            Row("Sequence beats, %", "The chance a step is more than one scene, each a closer view: a group, then one image, then its faces.", beats);
+            Row("Sequence beats, %", "The chance a step not yet shown is more than one scene: a group, then one image from it, then that image's faces. One picture with no face stays one scene. At 0, every step is one scene and Scenes per step is not used.", beats);
 
             var fewestScenes = Box(2, SurpriseOptions.MostScenesInAStep, values.FewestScenesPerStep);
             var mostScenes = Box(2, SurpriseOptions.MostScenesInAStep, values.MostScenesPerStep);
@@ -227,7 +288,20 @@ namespace ModernImageViewer
             }, changed);
             fewestScenes.ValueChanged += (_, _) => SetScenes();
             mostScenes.ValueChanged += (_, _) => SetScenes();
-            Row("Scenes per step", "How many scenes a step that rolls Sequence beats may be. It stops early when no closer view is left.", Pair(fewestScenes, mostScenes));
+            var scenesRow = Row("Scenes per step", "How many scenes a step may be when Sequence beats rolls, from 2 to 4. Nothing happens while Sequence beats is 0. The step stops early when no closer view is left.", Pair(fewestScenes, mostScenes));
+            void ShowScenesUsed()
+            {
+                bool used = beats.Value > 0;
+                fewestScenes.IsEnabled = used;
+                mostScenes.IsEnabled = used;
+                scenesRow.Opacity = used ? 1 : 0.45;
+            }
+            ShowScenesUsed();
+            beats.ValueChanged += (_, value) =>
+            {
+                ChangeShowValues(v => v.SequenceBeats = Math.Clamp(value, 0, 100) / 100.0, changed);
+                ShowScenesUsed();
+            };
 
             Heading("Designs");
             foreach (string design in LayoutComposer.Recipes)
@@ -240,6 +314,9 @@ namespace ModernImageViewer
                 {
                     if (pick.SelectedItem is not string step) return;
                     double chosen = OddsSteps.First(s => s.Name == step).Odds;
+                    var live = GeneratorSettingsFor(_activeShow);
+                    double now = live.IsDesignOff(named) ? 0 : live.OddsOf(named);
+                    if (Math.Abs(chosen - now) < 0.0001) return;
                     ChangeShowValues(v =>
                     {
                         v.DesignOdds ??= new System.Collections.Generic.Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);

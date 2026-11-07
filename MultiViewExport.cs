@@ -1696,7 +1696,6 @@ namespace ModernImageViewer
                     if (!string.IsNullOrEmpty(openedDir)) MainWindow.Instance?.AddMultiViewSaveLocation(openedDir);
 
                     _activeShow = show;
-                    _shuffleChosen = false;
                     _isStoryboardPlayback = false;
                     _showPlaybackIndex = 0;
                     _trayTab = 1;
@@ -1949,7 +1948,6 @@ namespace ModernImageViewer
                     scene.KeepCanvasPhotos();
                 AdoptOpenedShow(layoutFile.Storyboard);
                 _activeShow = layoutFile.Storyboard;
-                _shuffleChosen = false;
                 _isStoryboardPlayback = false;
                 _showPlaybackIndex = 0;
                 if (!string.IsNullOrEmpty(layoutFile.ActiveSceneId))

@@ -195,7 +195,7 @@ A Cinematic storyboard is a show started from the **Cinematic** preset. Its valu
 | Duration | 10 to 15 seconds |
 | Smart pace | On |
 | Motion | 40% to 60% |
-| Sequence beats | Off |
+| Sequence beats | 25% |
 
 The storyboard's images-per-scene button opens **this show's settings**: a **Preset** (Multi-Image, which follows Layout Generator Settings; Cinematic; or My preset 1, 2 or 3), **Save as** My preset 1, 2 or 3, and the values this show is played with: images per scene, duration, smart pace, motion, sequence beats, scenes per step and each design's odds. They are the show's own and are saved in its file; Layout Generator Settings are not changed. A show that holds none follows Layout Generator Settings; the first change makes it hold the full set it was using.
 

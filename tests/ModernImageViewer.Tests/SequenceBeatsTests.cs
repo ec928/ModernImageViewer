@@ -17,10 +17,11 @@ namespace ModernImageViewer.Tests
             ShowDirector.DraftStepAsync(hand, options, 1920, 1080, null, takeAll: true).Result;
 
         [Fact]
-        public void Off_by_default_a_step_is_one_scene()
+        public void At_zero_a_step_is_one_scene()
         {
+            var options = new SurpriseOptions { SequenceBeatsChance = 0 };
             for (int i = 0; i < 20; i++)
-                Assert.Single(Step(new[] { Photo(0, Big, Small) }, new SurpriseOptions()));
+                Assert.Single(Step(new[] { Photo(0, Big, Small) }, options));
         }
 
         [Fact]
@@ -64,6 +65,21 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
+        public void A_group_without_faces_is_followed_by_one_of_them()
+        {
+            var options = new SurpriseOptions { SequenceBeatsChance = 1, FewestScenesPerStep = 2, MostScenesPerStep = 2 };
+            var hand = new[] { Photo(0), Photo(1), Photo(2), Photo(3) };
+            for (int i = 0; i < 20; i++)
+            {
+                var step = Step(hand, options);
+                Assert.Equal(2, step.Count);
+                Assert.True(step[0].GetPhotoPaths().Count(p => p.Length > 0) > 1);
+                Assert.Single(step[1].GetPhotoPaths(), p => p.Length > 0);
+                Assert.NotEqual("Cut", step[1].Transition);
+            }
+        }
+
+        [Fact]
         public void A_face_view_starts_where_the_last_scene_ended_or_on_the_face_and_never_cuts_the_face()
         {
             var options = new SurpriseOptions { SequenceBeatsChance = 1, FewestScenesPerStep = 2, MostScenesPerStep = 2, FewestPictures = 1, MostPictures = 1 };
@@ -96,6 +112,21 @@ namespace ModernImageViewer.Tests
                 var face = step[1].CameraOverride!.ToCameraMove(10)!;
                 Assert.All(face.Shots, s => Assert.True(s.To.Zoom <= 0.85 / 0.6 + 0.01, $"zoomed to {s.To.Zoom:0.00}"));
             }
+        }
+
+        private static ShowScene Scene(string id) => new() { Id = id };
+
+        [Fact]
+        public void Changing_the_show_keeps_the_scene_on_screen_and_drops_what_was_drafted_ahead()
+        {
+            var scenes = new List<ShowScene> { Scene("a"), Scene("b"), Scene("c"), Scene("d") };
+            Assert.Equal(2, ShowDirector.ScenesKeptWhenValuesChange(scenes, "b"));
+            Assert.Equal(4, ShowDirector.ScenesKeptWhenValuesChange(scenes, "d"));
+            Assert.Equal(1, ShowDirector.ScenesKeptWhenValuesChange(scenes, "a"));
+            // Not on screen, or not this show: nothing is removed.
+            Assert.Equal(4, ShowDirector.ScenesKeptWhenValuesChange(scenes, null));
+            Assert.Equal(4, ShowDirector.ScenesKeptWhenValuesChange(scenes, "missing"));
+            Assert.Equal(0, ShowDirector.ScenesKeptWhenValuesChange(new List<ShowScene>(), "a"));
         }
     }
 }

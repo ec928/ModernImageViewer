@@ -38,7 +38,7 @@ did not succeed. Cinematic slideshow was then abandoned as the engine to rebuild
 
 Sequence beats come back on the director (R14), as **odds** the user sets, like every other choice (R2): the chance
 that a step of the show is written as two scenes of the same picture, splitting one span of time across them. The
-default is **0%, as today**: every step is one scene. Nothing of this comes back inside the engine, inside Generator Advanced, or by reopening the cinematic
+default is **25%** (Ed, 7 Nov): about one step in four is more than one scene. It was 0%. Nothing of this comes back inside the engine, inside Generator Advanced, or by reopening the cinematic
 slideshow. Sections 3 to 6 stay the engine: one call. The
 director's half is the section after the core principle.
 
@@ -177,8 +177,8 @@ preset plays through the same director and the same engine call.
 
 | Preset | Kind | Values |
 |---|---|---|
-| Multi-Image | Built in | The engine's defaults: design odds all six at Normal, sequence beats 0% |
-| Cinematic | Built in | 3.7: one image, Edge to edge Often, Hero spotlight Rare, others Off, 10 to 15 s, smart pace, motion 40% to 60%, sequence beats 0% (Scenes per step 2 to 2) |
+| Multi-Image | Built in | The engine's defaults: design odds all six at Normal, sequence beats 25% |
+| Cinematic | Built in | 3.7: one image, Edge to edge Often, Hero spotlight Rare, others Off, 10 to 15 s, smart pace, motion 40% to 60%, sequence beats 25% (Scenes per step 2 to 2) |
 | My presets 1, 2, 3 | The user's | Whatever the user saved into them, the same full set of values, sequence beats included (25%, say). Empty until saved |
 
 A built-in preset's values can be changed on a show; the preset itself is the starting point. Choosing a preset copies
@@ -205,11 +205,11 @@ storyboard and rolled for every step (R2, R16):
 
 | Setting | What it is | Default |
 |---|---|---|
-| **Sequence beats** | Odds that a step is more than one scene | 0%, as today: one step is one scene |
+| **Sequence beats** | Odds that a step is more than one scene | 25% (Ed, 7 Nov). 0% is one scene every step |
 | **Scenes per step** | A range: how many scenes a step that hits may be | 2 to 2. Up to 4 |
 
-At the 0% default every step is one scene, and that scene's call plays today's two-shot by its own odds, unchanged.
-A user who wants kept further views sets, say, 25%, on a show or in a preset.
+At 25% about one step in four is more than one scene. A miss stays one scene, and that scene's call plays today's two-shot by its own odds, unchanged.
+0% is one scene every step.
 
 When the roll hits, the director rolls a count in Scenes per step and writes that many scenes, each a closer view than
 the one before. It stops early, as an ordinary short step, when there is no closer view left:
@@ -247,8 +247,7 @@ The move inside a call comes from the camera settings, through the one entry poi
 `ShowDirector.ChooseMotionKind` and its odds go (R5). The director's part is passing in the last move so it is not
 repeated (R13).
 
-Both built-in presets ship at sequence beats 0%, so nothing changes until a user raises it. Cinematic may take a
-higher value once multi-scene steps have been seen running; that is a preset value, not a design change.
+Both built-in presets ship at sequence beats 25% (Ed, 7 Nov). A preset may hold any other value, including 0%.
 
 A design that cannot hold the image count drops out of that call's roll of design odds.
 
@@ -505,7 +504,7 @@ storyboard. The engine is unchanged (R2).
 | Duration | Limited | 10 to 15 s. The storyboard may pass a chosen duration instead |
 | Smart pace | Limited | On, when the storyboard does not pass a chosen duration |
 | Motion | Limited | 40% to 60% |
-| Sequence beats | Limited | 0%, as today; Scenes per step 2 to 2 (director section) |
+| Sequence beats | Limited | 25%; Scenes per step 2 to 2 (director section) |
 
 Where the scene does not pass its own zoom, frames, backdrop, camera mode or rotation, the call uses the engine's
 settings. Direct Auto-Mix, today, reads the engine's settings only. Play uses the show's values (R15). A canvas layout
@@ -538,7 +537,7 @@ asks for a count and invents the rest.
 
 Multi-image has no sequence-beats control today. The storyboard passes a duration, and the engine may play today's
 two-shot inside that one call. Under this design that stays, and sequence beats come back on the director as odds,
-default 0% (director section; R14, R15). They do not come back inside this engine, inside Generator Advanced, or by reopening the
+default 25% (Ed, 7 Nov; director section; R14, R15). They do not come back inside this engine, inside Generator Advanced, or by reopening the
 cinematic slideshow. Sequence beats are views, not music: they never read the soundtrack.
 
 ---
@@ -618,7 +617,7 @@ below are what changes inside the engine's settings and in what the engine makes
 | Advanced > Cinematic storyboard: images per scene, Fill / Matted / Whole, duration, smart pace, motion, and "use for this storyboard". The Cinematic storyboard button points here | Removed from the engine's settings. They are the Cinematic preset; the show keeps its values and passes them (3.7). The engine is called the same way |
 | One image is cropped by Zoom, then the camera zooms again | One image opens on the fit or the fill. Zoom is where that move arrives |
 | Direct Auto-Mix plays by an engine call and keeps nothing | Play goes through the director. It drafts the next scene when it is needed and keeps the scenes it has made (R15). A canvas layout stays one engine call |
-| No sequence beats in multi-image | Sequence beats (odds, default 0%, as today) and Scenes per step (range, default 2 to 2) on the Show card. When the roll hits, a step is kept scenes, each a closer view |
+| No sequence beats in multi-image | Sequence beats (odds, default 25%) and Scenes per step (range, default 2 to 2) on the Show card. When the roll hits, a step is kept scenes, each a closer view |
 | Cinematic values in Generator Advanced | Five presets on the Show card: Multi-Image, Cinematic, and three of the user's |
 | The canvas, Auto-Mix and a storyboard plan moves three ways; a storyboard scene with no saved path ignores faces | One entry point plans every move from the same values |
 
@@ -647,7 +646,7 @@ Folded under each design, in the engine's settings behind the Show card (R17), s
 | Storyboard values edited with the storyboard, not inside Generator Advanced | R13. The engine's settings say how one call is made. The storyboard's settings say which calls, and with which values. One surface for both is how cinematic parameters keep being added to the generator |
 | Each call rolls the odds it was given. No locked design and backdrop. No special first or last scene | R16 |
 | One entry point for layout and move; memory passed in; one rule for values | R4 (one mechanism; today three move planners disagree), R13 (the engine is one call), R5 (`ChooseMotionKind`'s odds override the user's Camera mode) |
-| Sequence beats on the director, as odds, default 0% as today | R13 (a second view is another scene, Ed 6 Nov: "do not add that sequence to the engine"), R14 (sequence beats come back on the director). R2 (odds, not a count). Ed 6 Nov: the default is as today; the user enables beats, in a preset or by hand |
+| Sequence beats on the director, as odds, default 25% | R13 (a second view is another scene, Ed 6 Nov: "do not add that sequence to the engine"), R14 (sequence beats come back on the director). R2 (odds, not a count). Ed 7 Nov: the default is 25%. Ed 6 Nov had said 0% |
 | Scenes per step as a range; each scene a closer view; each scene's hold from Duration; two-shot off inside a multi-scene step; Cut between views of one image | R2 (a range, not a cap), R4 (a scene is a scene), R2 (two-shot off inside a step is justified: the step already is the second view). Group then one image is the proposal Ed called the right direction on 6 Nov |
 | Presets: Multi-Image, Cinematic, three user slots, all values of one engine | Ed 6 Nov; R13, R16 |
 | Play goes through the director and keeps the scenes. A canvas layout does not | R15 |

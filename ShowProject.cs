@@ -59,6 +59,14 @@ namespace ModernImageViewer
         /// </summary>
         public string? GeneratorOverrides { get; set; }
 
+        /// <summary>Which preset this show was started from. Not stored in the show file: the preset lives in the app settings.</summary>
+        [JsonIgnore]
+        public string? PresetName { get; set; }
+
+        /// <summary>0, 1 or 2 when the show is My preset 1, 2 or 3. Null for Multi-Image and Cinematic.</summary>
+        [JsonIgnore]
+        public int? PresetSlot { get; set; }
+
         [JsonIgnore]
         public int VisibleSceneCount => Scenes.Count(s => !s.IsHidden);
 

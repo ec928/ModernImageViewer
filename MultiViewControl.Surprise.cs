@@ -49,6 +49,8 @@ namespace ModernImageViewer
         /// writes it back to the show on any change, so a scene added only to the show was dropped by the next drawer action.
         /// </summary>
         private Action<ShowProject, ShowScene>? _sceneAddedBehindDrawer;
+        /// <summary>The open drawer rebuilds its cards from the show. Null while the drawer is closed.</summary>
+        private Action? _syncDrawerToShow;
         /// <summary>
         /// Images a scene is being made from right now. The storyboard build and Add new layout both take images not in the
         /// show yet; without this, one pressed during the build could take the same image as the scene the build was making.
@@ -96,12 +98,84 @@ namespace ModernImageViewer
             : show.GlobalDefaults.HoldsValues ? show.GlobalDefaults.ApplyTo(SurpriseChoices)
             : SurpriseChoices.WithOverrides(show.GeneratorOverrides);
 
-        /// <summary>A cinematic storyboard holds the cinematic values as its own; any other holds none and follows the settings.</summary>
+        /// <summary>
+        /// Cinematic takes the saved Cinematic preset. Multi-Image takes the saved Multi-Image preset, or, until the user
+        /// has changed one, follows the engine settings.
+        /// </summary>
         private void SetCinematic(ShowProject show, bool on)
         {
             show.GeneratorOverrides = on ? CinematicOverrides.Name : null;
-            if (on) show.GlobalDefaults.TakeValues(SurpriseChoices.Cinematic ?? new CinematicOverrides());
-            else show.GlobalDefaults.ClearValues();
+            show.PresetSlot = null;
+            if (on)
+            {
+                show.PresetName = CinematicOverrides.Name;
+                show.GlobalDefaults.TakeValues(SurpriseChoices.Cinematic ?? new CinematicOverrides());
+            }
+            else if (SurpriseChoices.MultiImage is CinematicOverrides multi)
+            {
+                show.PresetName = MultiImagePreset;
+                show.GlobalDefaults.TakeValues(multi);
+            }
+            else
+            {
+                show.PresetName = MultiImagePreset;
+                show.GlobalDefaults.ClearValues();
+            }
+        }
+
+        /// <summary>
+        /// Puts the preset in use back to its starting values and writes that. Multi-Image follows the engine settings
+        /// again. Cinematic is a new built-in preset. A My preset is emptied, and the show goes back to Multi-Image.
+        /// </summary>
+        private void ResetShowPresetToDefaults(ShowProject show)
+        {
+            if (show.PresetSlot is int slot && slot >= 0 && slot < 3)
+            {
+                ChangeSurpriseChoices(o =>
+                {
+                    while (o.MyPresets.Count < 3) o.MyPresets.Add(null);
+                    o.MyPresets[slot] = null;
+                });
+                SetCinematic(show, false);
+            }
+            else if (show.GeneratorOverrides == CinematicOverrides.Name || show.PresetName == CinematicOverrides.Name)
+            {
+                var factory = CinematicOverrides.Checked(new CinematicOverrides());
+                ChangeSurpriseChoices(o => o.Cinematic = factory);
+                show.PresetSlot = null;
+                show.PresetName = CinematicOverrides.Name;
+                show.GeneratorOverrides = CinematicOverrides.Name;
+                show.GlobalDefaults.TakeValues(factory);
+            }
+            else if (show.PresetName == "Custom")
+            {
+                SetCinematic(show, false);
+            }
+            else
+            {
+                ChangeSurpriseChoices(o => o.MultiImage = null);
+                SetCinematic(show, false);
+            }
+            CancelPreparedSurprise();
+            DropScenesDraftedAhead();
+        }
+
+        /// <summary>The show's values are this preset's values, written with the other app settings.</summary>
+        private void SaveShowPreset(ShowProject show)
+        {
+            var snapshot = CinematicOverrides.From(GeneratorSettingsFor(show));
+            ChangeSurpriseChoices(o =>
+            {
+                if (show.PresetSlot is int slot && slot >= 0 && slot < 3)
+                {
+                    while (o.MyPresets.Count < 3) o.MyPresets.Add(null);
+                    o.MyPresets[slot] = snapshot;
+                }
+                else if (show.GeneratorOverrides == CinematicOverrides.Name || show.PresetName == CinematicOverrides.Name)
+                    o.Cinematic = snapshot;
+                else
+                    o.MultiImage = snapshot;
+            });
         }
 
         /// <summary>
@@ -641,7 +715,7 @@ namespace ModernImageViewer
 
                 var showPanel = new StackPanel { Spacing = 4 };
                 body.Children.Add(showPanel);
-                FillShowSettings(showPanel, () => { SpeedChanged(); RefreshStoryboardSettingsLabel?.Invoke(); });
+                FillShowSettings(showPanel, () => { ShowAutoPlayState(); RefreshStoryboardSettingsLabel?.Invoke(); });
 
                 var newShow = new Button { Content = "New show from these images", FontSize = 12, Margin = new Thickness(0, 6, 0, 0) };
                 ToolTipService.SetToolTip(newShow, "Starts an empty show with the same preset and values. Play then makes its scenes from the images on the canvas and in the tray.");
@@ -657,7 +731,7 @@ namespace ModernImageViewer
                 // The music library's own settings (folder, ratings, which shows play music) open from here, so
                 // everything about the soundtrack is in this one place.
                 body.Children.Add(SectionHeading("Soundtrack", MoreButton("Configure\u2026", "Configure music",
-                    "The music folder, the lowest rating played, and whether Auto-Mix and Cinematic play music.",
+                    "The music folder, the lowest rating played, and whether Play uses music.",
                     (_, _) => MainWindow.Instance?.OpenMusicSettings())));
                 body.Children.Add(MusicRow(Icon, IconButton));
 
@@ -1564,18 +1638,9 @@ namespace ModernImageViewer
         private ShowScene? _selectedShowScene;
         /// <summary>The scene whose layout is on the canvas. Null when the canvas is a mix or was never loaded from the selected scene.</summary>
         private string? _canvasSceneId;
-        /// <summary>When set, Play keeps using Surprise me even if a storyboard exists. Otherwise a storyboard is what Play walks.</summary>
-        private bool _shuffleChosen;
 
-        private bool PlayUsesStoryboard()
-        {
-            bool hasScenes = _activeShow != null && _activeShow.Scenes.Count > 0;
-            if (!hasScenes) return false;
-
-            if (_isStoryboardPlayback) return true;
-
-            return !_shuffleChosen;
-        }
+        /// <summary>Play plays the show whenever it has scenes (R17); with none yet, Play makes them as it plays.</summary>
+        private bool PlayUsesStoryboard() => _activeShow != null && _activeShow.Scenes.Count > 0;
 
         /// <summary>The drafted title is "Gallery wall (1)". The card shows the name. The pictures are the count.</summary>
         private static string SceneCardTitle(ShowScene scene)
@@ -1850,14 +1915,6 @@ namespace ModernImageViewer
         }
 
         /// <summary>Play walks the storyboard from now on. Nothing on the canvas changes; while playing, the next picture is a scene.</summary>
-        private void StoryboardModeButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (_activeShow == null || _activeShow.Scenes.Count == 0) return;
-            _shuffleChosen = false;
-            if (_autoPlaySeconds > 0) _isStoryboardPlayback = true;
-            ShowAutoPlayState();
-            RefreshPlayModeCard();
-        }
 
         private const int NoCell = -1;
 
@@ -2365,7 +2422,6 @@ namespace ModernImageViewer
             ToolTipService.SetToolTip(playShowDrawerBtn, "Play the storyboard. Space does the same.");
             playShowDrawerBtn.Click += async (_, _) =>
             {
-                _shuffleChosen = false;
                 await PlayStoryboardAsync();
             };
 
@@ -2777,6 +2833,7 @@ namespace ModernImageViewer
                 finally { isSyncingStoryboard = false; }
                 RefreshCardBadges();
             };
+            _syncDrawerToShow = SyncStoryboardUI;
 
             scenesView.DragItemsCompleted += (_, _) =>
             {
@@ -3262,7 +3319,6 @@ namespace ModernImageViewer
                     SetCinematic(_activeShow, overrides == CinematicOverrides.Name);
                     _selectedShowScene = null;
                     _canvasSceneId = null;
-                    _shuffleChosen = false;
                     _isStoryboardPlayback = false;
                     _showPlaybackIndex = 0;
                 }
@@ -3299,7 +3355,6 @@ namespace ModernImageViewer
                     ShowAutoPlayToast("Put at least one image on the canvas first");
                     return;
                 }
-                _shuffleChosen = false;
                 string recipe = photoCount == 1 ? "Solo" : "Custom";
                 string title = photoCount == 1 ? "Custom Solo" : $"Custom Layout ({photoCount})";
                 var scene = new ShowScene
@@ -3393,7 +3448,6 @@ namespace ModernImageViewer
                 };
                 DialogFooter.MainButtonOnRight(dialog);
                 if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
-                _shuffleChosen = false;
                 _isStoryboardPlayback = false;
                 _selectedShowScene = null;
                 _canvasSceneId = null;
@@ -3573,9 +3627,49 @@ namespace ModernImageViewer
         private const int ScenesAheadWhilePlaying = 3;
         // Released at each change of scene, so the storyboard build makes its next scene then, mid-hold.
         private readonly System.Threading.SemaphoreSlim _storyboardAdvanced = new(0, 1);
+        // Bumped when the show's values change, so a step already being made with the old values is not kept.
+        private int _upcomingStepRevision;
         // Scenes were built while the show played and the summary and badge have not been brought up to date.
         private bool _storyCountsStale;
         private bool IsPlayingStoryboard => _isStoryboardPlayback && _autoPlaySeconds > 0;
+
+        /// <summary>The scene Play is showing, or the one selected when nothing is playing.</summary>
+        private string? SceneOnScreenId()
+        {
+            if (!string.IsNullOrEmpty(_canvasSceneId) && _activeShow?.Scenes.Any(s => s.Id == _canvasSceneId) == true)
+                return _canvasSceneId;
+            if (_selectedShowScene != null && _activeShow?.Scenes.Any(s => s.Id == _selectedShowScene.Id) == true)
+                return _selectedShowScene.Id;
+            if (!_isStoryboardPlayback || _activeShow == null) return null;
+            var visible = _activeShow.Scenes.Where(s => !s.IsHidden).ToList();
+            if (visible.Count == 0) return null;
+            int shown = _showPlaybackIndex >= visible.Count ? visible.Count - 1 : _showPlaybackIndex - 1;
+            return shown >= 0 ? visible[shown].Id : null;
+        }
+
+        /// <summary>
+        /// Play drafts a few scenes ahead. Those were made with the old values, so a change of the show's values removes
+        /// them and wakes the drafter. The scene on screen stays. A storyboard Play is not making is left as it is.
+        /// </summary>
+        private void DropScenesDraftedAhead()
+        {
+            var show = _activeShow;
+            if (show == null || !ReferenceEquals(show, _showBeingBuilt)) return;
+            _upcomingStepRevision++;
+            string? onScreen = SceneOnScreenId();
+            int keep = ShowDirector.ScenesKeptWhenValuesChange(show.Scenes, onScreen);
+            if (keep < show.Scenes.Count)
+                show.Scenes.RemoveRange(keep, show.Scenes.Count - keep);
+            _syncDrawerToShow?.Invoke();
+            if (_isStoryboardPlayback && onScreen != null)
+            {
+                var visible = show.Scenes.Where(s => !s.IsHidden).ToList();
+                int shown = visible.FindIndex(s => s.Id == onScreen);
+                if (shown >= 0) _showPlaybackIndex = shown + 1;
+            }
+            if (IsPlayingStoryboard) _storyCountsStale = true;
+            if (_storyboardAdvanced.CurrentCount == 0) _storyboardAdvanced.Release();
+        }
 
         // The next storyboard scene's images, decoded while the current one holds.
         private readonly Dictionary<string, BitmapSource> _storyPreloaded = new(StringComparer.OrdinalIgnoreCase);
@@ -3634,7 +3728,6 @@ namespace ModernImageViewer
             _activeShow = show;
             _selectedShowScene = null;
             _canvasSceneId = null;
-            _shuffleChosen = false;
             _isStoryboardPlayback = false;
             _showPlaybackIndex = 0;
             ShowShownBadge();
@@ -3663,8 +3756,10 @@ namespace ModernImageViewer
                     await _storyboardAdvanced.WaitAsync(TimeSpan.FromSeconds(2));
                     continue;
                 }
-                // Read for each scene, so a setting changed while it plays applies to the scenes still to come.
+                // Read for each scene. A change also drops scenes drafted ahead but not yet shown, and bumps
+                // _upcomingStepRevision so a step already in flight, made with the old values, is not kept.
                 var settings = GeneratorSettingsFor(show);
+                int draftedAt = _upcomingStepRevision;
                 var chosen = DealHand(deck, settings).Where(p => !_imagesBeingDrafted.Contains(p)).ToList();
                 if (chosen.Count == 0) break;
                 _imagesBeingDrafted.UnionWith(chosen);
@@ -3683,6 +3778,11 @@ namespace ModernImageViewer
                     scene = step.Count > 0 ? step[0] : null;
                     PlayTiming.Write($"scene {show.Scenes.Count + 1} drafted: {chosen.Count} images, {step.Count} scenes, faces and sizes read in {read - dealt} ms, laid out in {PlayTiming.Now - read} ms");
                     if (!Current()) return;
+                    if (draftedAt != _upcomingStepRevision)
+                    {
+                        PlayTiming.Write("draft discarded: the show's values changed before this step was kept");
+                        continue;
+                    }
                     // A hand that cannot be laid out, such as files that will not open: the next hand may. Five in a row
                     // means nothing left can be.
                     if (scene == null)
@@ -3749,7 +3849,6 @@ namespace ModernImageViewer
             RemoveTrayCard();
             StopAutoPlay();
             _isStoryboardPlayback = true;
-            _shuffleChosen = false;
             _showPlaybackIndex = targetIndex;
             _autoPlaySeconds = 12;
             AddAutoPlayShield();
@@ -3773,7 +3872,9 @@ namespace ModernImageViewer
                 }
                 else
                 {
-                    await SurpriseAsync(fade: true);
+                    // The show was cleared or replaced while it played: Play stops, it does not turn into a direct mix (R17).
+                    StopAutoPlay();
+                    return;
                 }
                 timer.Interval = TimeSpan.FromSeconds(Math.Max(1, _layoutSeconds));
                 if (ReferenceEquals(_autoPlayTimer, timer)) timer.Start();
@@ -3856,8 +3957,18 @@ namespace ModernImageViewer
                 _surpriseSettling = false;
             }
 
+            // The list taken at the start of this turn may have lost the scenes drafted ahead: the show's values changed
+            // while this one was coming on. The next scene is whatever is in the show now.
+            if (_activeShow == null)
+            {
+                StopAutoPlay();
+                return;
+            }
+            var liveScenes = _activeShow.Scenes.Where(s => !s.IsHidden).ToList();
+            int liveIndex = liveScenes.FindIndex(s => s.Id == scene.Id);
+            if (liveIndex < 0) liveIndex = Math.Clamp(currentIndex, 0, Math.Max(0, liveScenes.Count - 1));
             // Before a Cut to a closer view of this image the move ends with the hold: its end frame is where the next starts.
-            bool cutNext = currentIndex + 1 < visibleScenes.Count && visibleScenes[currentIndex + 1].Transition == nameof(LayoutTransition.Cut);
+            bool cutNext = liveIndex + 1 < liveScenes.Count && liveScenes[liveIndex + 1].Transition == nameof(LayoutTransition.Cut);
             double overrun = cutNext ? 0 : CameraOverrunSeconds;
             if (scene.CameraOverride != null)
             {
@@ -3887,8 +3998,8 @@ namespace ModernImageViewer
             if (before != null)
                 ChangeLayoutOver(before, outgoingStep, Enum.TryParse<LayoutTransition>(scene.Transition, out var planned) ? planned : LayoutTransition.Crossfade);
 
-            int displayIndex = currentIndex + 1;
-            int totalDisplay = visibleScenes.Count;
+            int displayIndex = liveIndex + 1;
+            int totalDisplay = liveScenes.Count;
             string sceneName = scene.Title ?? scene.Recipe ?? $"Scene {displayIndex}";
             // Only with the bar up: once it has hidden for want of movement, nothing else should come up over the picture.
             if (_isHudVisible) ShowAutoPlayToast($"Scene {displayIndex} of {totalDisplay}: {sceneName}");
@@ -3898,11 +4009,13 @@ namespace ModernImageViewer
             PlayTiming.Write($"scene {currentIndex + 1} shown {PlayTiming.Now - turnCame} ms after its turn came, holds {_layoutSeconds} s");
             // A show still being made goes on to its next scene when that is ready; a finished one goes round again.
             bool growing = ReferenceEquals(_activeShow, _showBeingBuilt);
-            _showPlaybackIndex = growing && currentIndex + 1 >= visibleScenes.Count ? currentIndex + 1 : (currentIndex + 1) % visibleScenes.Count;
+            _showPlaybackIndex = liveScenes.Count == 0 ? 0
+                : growing && liveIndex + 1 >= liveScenes.Count ? liveIndex + 1
+                : (liveIndex + 1) % liveScenes.Count;
             ShowAutoPlayState();
             if (_storyboardAdvanced.CurrentCount == 0) _storyboardAdvanced.Release();
             // The next scene's images load while this one holds, as Auto-Mix's next layout does, so its change does not wait on them.
-            if (_autoPlaySeconds > 0 && _showPlaybackIndex < visibleScenes.Count) PreloadStoryScene(visibleScenes[_showPlaybackIndex]);
+            if (_autoPlaySeconds > 0 && _showPlaybackIndex >= 0 && _showPlaybackIndex < liveScenes.Count) PreloadStoryScene(liveScenes[_showPlaybackIndex]);
         }
 
         private void RefreshTrayCardIfOpen()
@@ -3943,7 +4056,6 @@ namespace ModernImageViewer
                     : (current + 1) % visibleScenes.Count;
             }
 
-            _shuffleChosen = false;
             _showPlaybackIndex = target;
             await PlayNextStoryboardSceneAsync(fade: true);
 
@@ -4016,6 +4128,7 @@ namespace ModernImageViewer
             _refreshStoryboardCards = null;
             _syncStorySceneSelection = null;
             _sceneAddedBehindDrawer = null;
+            _syncDrawerToShow = null;
             _onStoryboardPlaybackIndexChanged = null;
             UpdatePlaybarReaction(0);
             ShowShownBadge();
@@ -4041,6 +4154,8 @@ namespace ModernImageViewer
         /// <summary>The first new layout comes at once, so choosing it visibly does something.</summary>
         private void StartChosenPlay()
         {
+            // Play shows the show: the Show card closes rather than cover it.
+            if (_surpriseCard != null) RemoveSurpriseCard();
             if (PlayUsesStoryboard())
                 _ = PlayStoryboardAsync();
             else
@@ -4091,7 +4206,7 @@ namespace ModernImageViewer
             }
             else
             {
-                ShowAutoPlayToast("Paused Auto-Mix");
+                ShowAutoPlayToast("Paused");
             }
         }
 
@@ -4131,14 +4246,12 @@ namespace ModernImageViewer
             string playTip = playing
                 ? (storyboardMode
                     ? $"Pause the storyboard show (Scene {curScene} of {totalScenes}: {currentSceneTitle}). Space does the same. Left and Right move between scenes."
-                    : "Pause Auto-Mix. Space does the same. Left and Right move between layouts.")
+                    : "Pause the show. Space does the same.")
                 : (storyboardMode
                     ? (curScene > 1 && curScene <= totalScenes
                         ? $"Resume the storyboard show at Scene {curScene} of {totalScenes} ({currentSceneTitle}). Space does the same."
                         : $"Play the storyboard ({totalScenes} {(totalScenes == 1 ? "scene" : "scenes")}, {ShowLength(_activeShow!.TotalEstimatedDuration)}). Space does the same.")
-                    : (hasScenes
-                        ? $"Play a new layout every {SurpriseChoices.PlayWords}, from the image pool. Space does the same."
-                        : $"Play a new layout every {SurpriseChoices.PlayWords}. Space does the same."));
+                    : "Play the show: its scenes are made as it plays, from the preset and values on the Show card, and kept in the storyboard. Space does the same.");
 
             // The label already says Pause while something plays; the name is the label.
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(AutoPlayButton, text);
@@ -4152,25 +4265,6 @@ namespace ModernImageViewer
                 HoldFlyoutSource(StoryDeckButton, _trayCard != null);
             }
 
-            if (StoryboardModeButton != null)
-            {
-                StoryboardModeButton.IsEnabled = hasScenes;
-                PaintSelected(StoryboardModeButton, StoryboardModeText, StoryboardModeIcon, storyboardMode);
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(StoryboardModeButton, storyboardMode ? "Storyboard, selected" : "Storyboard");
-                ToolTipService.SetToolTip(StoryboardModeButton, !hasScenes
-                    ? "Play walks a storyboard once there is one. Make a show in the storyboard (B)."
-                    : storyboardMode
-                        ? $"Play walks the storyboard: {totalScenes} {(totalScenes == 1 ? "scene" : "scenes")}, in order."
-                        : "Play the storyboard instead. Nothing on the canvas changes.");
-            }
-            PaintSelected(SurpriseButton, SurpriseText, SurpriseIcon, !storyboardMode);
-            if (SurpriseButton != null)
-            {
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(SurpriseButton, !storyboardMode ? "Auto-Mix, selected" : "Auto-Mix");
-                ToolTipService.SetToolTip(SurpriseButton, storyboardMode
-                    ? "Play Auto-Mix instead: a new layout each time, from the image pool. Nothing on the canvas changes."
-                    : "Play makes a new layout each time, from the image pool. Next (Right Arrow) makes one now.");
-            }
             if (PrevLayoutButton != null)
             {
                 ToolTipService.SetToolTip(PrevLayoutButton, storyboardMode ? "Previous scene (Left Arrow)" : "Previous layout (Left Arrow). Pauses play.");
@@ -4369,14 +4463,6 @@ namespace ModernImageViewer
             _autoPlayShieldPressed = false;
         }
 
-        /// <summary>Play makes a new layout each time from now on. Nothing on the canvas changes; Next makes one now.</summary>
-        private void SurpriseButton_Click(object sender, RoutedEventArgs e)
-        {
-            _shuffleChosen = true;
-            _isStoryboardPlayback = false;
-            ShowAutoPlayState();
-            RefreshPlayModeCard();
-        }
 
         /// <summary>The same accent fill Play uses while it is running. A white plate is the open-panel look, so it is not used for a mode.</summary>
         private static void PaintSelected(Button? button, TextBlock? label, IconElement? icon, bool selected)
@@ -4418,7 +4504,6 @@ namespace ModernImageViewer
 
             _surpriseBusy = true;
             _quietBar = playing;
-            SurpriseButton.IsEnabled = false;
             try
             {
                 var inFlight = _prepareTask;
@@ -4513,7 +4598,6 @@ namespace ModernImageViewer
             {
                 _surpriseBusy = false;
                 _quietBar = false;
-                SurpriseButton.IsEnabled = true;
             }
         }
 
