@@ -210,8 +210,8 @@ namespace ModernImageViewer
         /// Frame width, for every frame: Gallery wall's card and gaps, a hero's outline, a print's border, a circle's outline.
         /// A range: each layout picks one width in it. GapScale is the narrow end (the single width of earlier versions).
         /// </summary>
-        public double GapScale { get; set; } = 1;
-        public double GapScaleLargest { get; set; } = 1;
+        public double GapScale { get; set; } = 0.25;
+        public double GapScaleLargest { get; set; } = 2;
         public const double NarrowestFrame = 0.25, WidestFrame = 3;
 
         /// <summary>One frame width for a layout, in the Frame width range.</summary>
@@ -485,8 +485,19 @@ namespace ModernImageViewer
                 }
                 read.HeroSmallest = Math.Clamp(read.HeroSmallest, HeroLowest, HeroHighest);
                 read.HeroLargest = Math.Clamp(read.HeroLargest, read.HeroSmallest, HeroHighest);
+                // A file from before the range holds one width. The old default (1x) takes the new default range; a width
+                // the user chose stays that width alone.
+                // 1x to 1x, written by the build that first had the range, is that old default too.
+                bool hasLargest = json!.Contains("\"GapScaleLargest\"", StringComparison.OrdinalIgnoreCase);
+                bool oldDefault = Math.Abs(read.GapScale - 1) < 0.001 && (!hasLargest || Math.Abs(read.GapScaleLargest - 1) < 0.001);
+                if (oldDefault)
+                {
+                    var fresh = new SurpriseOptions();
+                    read.GapScale = fresh.GapScale;
+                    read.GapScaleLargest = fresh.GapScaleLargest;
+                }
+                else if (!hasLargest) read.GapScaleLargest = read.GapScale;
                 read.GapScale = Math.Clamp(read.GapScale, NarrowestFrame, WidestFrame);
-                // A file from before the range holds one width: the range is that width alone.
                 read.GapScaleLargest = Math.Clamp(read.GapScaleLargest, read.GapScale, WidestFrame);
                 read.BackdropVignetteOdds = Math.Clamp(read.BackdropVignetteOdds, 0, MostFavouredDesign);
                 read.BackdropGradientOdds = Math.Clamp(read.BackdropGradientOdds, 0, MostFavouredDesign);

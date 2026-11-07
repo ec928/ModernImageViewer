@@ -38,7 +38,7 @@ namespace ModernImageViewer.Tests
         {
             foreach (string design in Framed)
             {
-                double Width(double scale) => LayoutComposer.Compose(Photos(4), 1920, 1080, 3, options: Only(design, new SurpriseOptions { GapScale = scale }))!
+                double Width(double scale) => LayoutComposer.Compose(Photos(4), 1920, 1080, 3, options: Only(design, new SurpriseOptions { GapScale = scale, GapScaleLargest = scale }))!
                     .Cells.Where(c => c.Floating && c.Frame.Thickness > 0).Max(c => c.Frame.Thickness);
                 Assert.True(Width(3) > 2.5 * Width(1), $"{design}: {Width(3)} against {Width(1)}");
             }
@@ -55,10 +55,18 @@ namespace ModernImageViewer.Tests
                     .Cells.Where(c => c.Floating && c.Frame.Thickness > 0).Max(c => c.Frame.Thickness)).ToList();
                 Assert.True(widths.Max() > 2 * widths.Min(), $"{design}: {widths.Min()} to {widths.Max()}");
             }
-            // A saved file from before the range holds one width, and reads as that width alone.
-            var old = SurpriseOptions.FromJson("{\"GapScale\":1.5}")!;
-            Assert.Equal(1.5, old.GapScale);
-            Assert.Equal(1.5, old.GapScaleLargest);
+            // The default range is 0.25x to 2x.
+            Assert.Equal((0.25, 2.0), (new SurpriseOptions().GapScale, new SurpriseOptions().GapScaleLargest));
+            // A saved file from before the range: a width the user chose reads as that width alone; the old default 1x
+            // takes the new default range.
+            var chosen = SurpriseOptions.FromJson("{\"GapScale\":1.5}")!;
+            Assert.Equal((1.5, 1.5), (chosen.GapScale, chosen.GapScaleLargest));
+            var oldDefault = SurpriseOptions.FromJson("{\"GapScale\":1}")!;
+            Assert.Equal((0.25, 2.0), (oldDefault.GapScale, oldDefault.GapScaleLargest));
+            var firstRangeBuild = SurpriseOptions.FromJson("{\"GapScale\":1,\"GapScaleLargest\":1}")!;
+            Assert.Equal((0.25, 2.0), (firstRangeBuild.GapScale, firstRangeBuild.GapScaleLargest));
+            var ranged = SurpriseOptions.FromJson("{\"GapScale\":0.5,\"GapScaleLargest\":1.5}")!;
+            Assert.Equal((0.5, 1.5), (ranged.GapScale, ranged.GapScaleLargest));
         }
 
         [Fact]

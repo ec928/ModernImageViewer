@@ -88,6 +88,7 @@ namespace ModernImageViewer.Tests
             {
                 var options = Only(LayoutComposer.GalleryWall);
                 options.GapScale = scale;
+                options.GapScaleLargest = scale;
                 return LayoutComposer.Compose(new[] { Photo(0, 1200, 1600) }, 1920, 1080, 3, options: options)!.Cells[0].H;
             }
             Assert.True(Height(3) < Height(1) - 10);
