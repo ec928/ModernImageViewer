@@ -176,63 +176,139 @@ namespace ModernImageViewer
                 Margin = new Thickness(0, 8, 0, 0)
             });
 
-            // Preset: the starting point. Choosing one gives this show its values.
-            Heading("This show");
+            // Presets, on one line: a press restores one, a long press (or right-click) saves this show into it, and the symbol
+            // on the right puts the preset in use back to its defaults. As the window-size slots do: click to use, hold to keep.
             var presets = SurpriseChoices.MyPresets;
-            var names = new System.Collections.Generic.List<string> { MultiImagePreset, CinematicOverrides.Name };
-            names.AddRange(Enumerable.Range(0, 3).Select(i => PresetName(i, presets.ElementAtOrDefault(i))));
             string current = ActivePresetName(show);
-            // The same odds scale as the engine's designs: 5 is Often.
-            if (current == "Custom") names.Add("Custom");
-            var preset = new ComboBox { ItemsSource = names, SelectedItem = current, Width = 190 };
-            preset.SelectionChanged += (_, _) =>
+            var presetLine = new Grid { ColumnSpacing = 8, MinHeight = 36, Margin = new Thickness(0, 4, 0, 4) };
+            presetLine.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            presetLine.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            presetLine.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            presetLine.Children.Add(new TextBlock { Text = "Preset", FontSize = 13, VerticalAlignment = VerticalAlignment.Center });
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
+            Grid.SetColumn(buttons, 1);
+            presetLine.Children.Add(buttons);
+            var selected = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x00, 0x78, 0xD4));
+
+            void Applied(string message)
             {
-                if (preset.SelectedItem is not string chosen || chosen == current || chosen == "Custom") return;
-                var target = _activeShow ??= new ShowProject { Title = "Storyboard" };
-                if (chosen == MultiImagePreset) SetCinematic(target, false);
-                else if (chosen == CinematicOverrides.Name) SetCinematic(target, true);
-                else
-                {
-                    int slot = names.IndexOf(chosen) - 2;
-                    if (presets.ElementAtOrDefault(slot) is not CinematicOverrides saved) { preset.SelectedItem = current; return; }
-                    target.GeneratorOverrides = null;
-                    target.PresetSlot = slot;
-                    target.PresetName = $"My preset {slot + 1}";
-                    target.GlobalDefaults.TakeValues(saved);
-                }
                 CancelPreparedSurprise();
                 DropScenesDraftedAhead();
                 _updateStorySummary?.Invoke();
                 NoteUserAction();
                 changed?.Invoke();
-                current = chosen;
-                // Only the values below are rebuilt. Rebuilding the list itself while it closes stops the app.
-                DispatcherQueue.TryEnqueue(FillValues);
-            };
-            Row("Preset", "Where this show's values start from. What you change here is kept for the next Play. Cinematic is one image at a time, full screen, the camera always moving. My presets are yours.", preset);
+                ShowAutoPlayToast(message);
+                // Rebuilt after this press is over, with the new preset lit.
+                DispatcherQueue.TryEnqueue(() => FillShowSettings(panel, changed));
+            }
 
-            var save = new Button { Content = "Save as ▾", FontSize = 12 };
-            var saveMenu = new MenuFlyout();
-            for (int i = 0; i < 3; i++)
+            // Restores a preset: the show takes its values. An empty My preset has nothing to restore.
+            void Restore(string name, int? slot)
             {
-                int slot = i;
-                var item = new MenuFlyoutItem { Text = PresetName(slot, presets.ElementAtOrDefault(slot)).Replace(" (empty)", "") + (presets.ElementAtOrDefault(slot) == null ? "" : " (replace)") };
-                item.Click += (_, _) =>
+                var target = _activeShow ??= new ShowProject { Title = "Storyboard" };
+                if (slot is int i)
                 {
-                    var saved = CinematicOverrides.From(GeneratorSettingsFor(_activeShow));
-                    ChangeSurpriseChoices(o =>
+                    if (presets.ElementAtOrDefault(i) is not CinematicOverrides saved)
+                    {
+                        ShowAutoPlayToast($"My preset {i + 1} is empty. Hold it to keep this show's values there.");
+                        return;
+                    }
+                    target.GeneratorOverrides = null;
+                    target.PresetSlot = i;
+                    target.PresetName = $"My preset {i + 1}";
+                    target.GlobalDefaults.TakeValues(saved);
+                }
+                else SetCinematic(target, name == CinematicOverrides.Name);
+                Applied($"Preset: {(slot is int n ? $"My preset {n + 1}" : name)}");
+            }
+
+            // Keeps this show's values in a preset, and makes it the one in use.
+            void Keep(string name, int? slot)
+            {
+                var target = _activeShow ??= new ShowProject { Title = "Storyboard" };
+                var snapshot = CinematicOverrides.From(GeneratorSettingsFor(target));
+                ChangeSurpriseChoices(o =>
+                {
+                    if (slot is int i)
                     {
                         while (o.MyPresets.Count < 3) o.MyPresets.Add(null);
-                        o.MyPresets[slot] = saved;
-                    });
-                    FillShowSettings(panel, changed);
-                };
-                saveMenu.Items.Add(item);
+                        o.MyPresets[i] = snapshot;
+                    }
+                    else if (name == CinematicOverrides.Name) o.Cinematic = snapshot;
+                    else o.MultiImage = snapshot;
+                });
+                target.GeneratorOverrides = name == CinematicOverrides.Name ? CinematicOverrides.Name : null;
+                target.PresetSlot = slot;
+                target.PresetName = slot is int k ? $"My preset {k + 1}" : name;
+                target.GlobalDefaults.TakeValues(snapshot);
+                Applied($"Kept this show's values in {(slot is int m ? $"My preset {m + 1}" : name)}");
             }
-            save.Flyout = saveMenu;
-            Row("Save this show's values", "Keeps this show's values as My preset 1, 2 or 3, to start another show from.", save);
 
-            var reset = new Button { Content = "Reset", FontSize = 12 };
+            void AddPreset(string label, string name, int? slot)
+            {
+                bool isCurrent = slot is int i ? current == $"My preset {i + 1}" : current == name;
+                bool empty = slot is int j && presets.ElementAtOrDefault(j) == null;
+                string title = slot is int t ? $"My preset {t + 1}" : name;
+                var button = new Button
+                {
+                    Content = label,
+                    FontSize = 12,
+                    MinWidth = slot == null ? 0 : 36,
+                    Padding = new Thickness(12, 4, 12, 4),
+                    CornerRadius = new CornerRadius(12),
+                    Opacity = empty ? 0.55 : 1
+                };
+                if (isCurrent)
+                {
+                    button.Background = selected;
+                    button.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White);
+                }
+                ToolTipService.SetToolTip(button, empty
+                    ? $"{title}: empty. Hold (or right-click) to keep this show's values here."
+                    : $"{title}{(isCurrent ? ", in use" : "")}. Press to use it; hold (or right-click) to keep this show's values here.");
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, title + (isCurrent ? ", in use" : empty ? ", empty" : ""));
+
+                // A press restores; a hold of 600 ms keeps. The hold is timed from the pointer, which the button would
+                // otherwise swallow; the click that follows a hold is not a press.
+                bool held = false;
+                var hold = DispatcherQueue.CreateTimer();
+                hold.Interval = TimeSpan.FromMilliseconds(600);
+                hold.IsRepeating = false;
+                hold.Tick += (_, _) => { held = true; Keep(name, slot); };
+                button.AddHandler(UIElement.PointerPressedEvent, new Microsoft.UI.Xaml.Input.PointerEventHandler((_, _) => { held = false; hold.Start(); }), true);
+                button.AddHandler(UIElement.PointerReleasedEvent, new Microsoft.UI.Xaml.Input.PointerEventHandler((_, _) => hold.Stop()), true);
+                button.PointerCaptureLost += (_, _) => hold.Stop();
+                button.PointerExited += (_, _) => hold.Stop();
+                button.Click += (_, _) =>
+                {
+                    if (held) { held = false; return; }
+                    Restore(name, slot);
+                };
+                // Right-click keeps too, for a mouse and the keyboard's menu key.
+                var menu = new MenuFlyout();
+                var keepItem = new MenuFlyoutItem { Text = $"Keep this show's values in {title}" };
+                keepItem.Click += (_, _) => Keep(name, slot);
+                menu.Items.Add(keepItem);
+                button.ContextFlyout = menu;
+                buttons.Children.Add(button);
+            }
+            AddPreset(MultiImagePreset, MultiImagePreset, null);
+            AddPreset(CinematicOverrides.Name, CinematicOverrides.Name, null);
+            for (int i = 0; i < 3; i++) AddPreset($"{i + 1}", $"My preset {i + 1}", i);
+
+            // Back to defaults, for the preset in use.
+            var reset = new Button
+            {
+                Content = new FontIcon { FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), Glyph = "\uE777", FontSize = 14 },
+                Padding = new Thickness(8, 6, 8, 6),
+                CornerRadius = new CornerRadius(12),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            string resetWhat = current == "Custom" ? "this show" : current;
+            ToolTipService.SetToolTip(reset, current.StartsWith("My preset")
+                ? $"Reset {current}: it is emptied, and the show goes back to Multi-Image."
+                : $"Reset {resetWhat} to its defaults.");
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(reset, $"Reset {resetWhat} to defaults");
             reset.Click += async (_, _) =>
             {
                 var open = _activeShow;
@@ -256,9 +332,11 @@ namespace ModernImageViewer
                 _updateStorySummary?.Invoke();
                 NoteUserAction();
                 changed?.Invoke();
-                FillShowSettings(panel, changed);
+                DispatcherQueue.TryEnqueue(() => FillShowSettings(panel, changed));
             };
-            Row("Reset to defaults", "Puts this preset back to its starting values and keeps that. Multi-Image follows Layout Generator Settings again, with sequence beats at 25%. Cinematic goes back to one image, Edge to edge Often, Hero spotlight Rare, the others Off, 10 to 15 seconds, smart pace, motion 40% to 60%, sequence beats 25%. A My preset is emptied.", reset);
+            Grid.SetColumn(reset, 2);
+            presetLine.Children.Add(reset);
+            panel.Children.Add(presetLine);
 
             // The values this show is played with, in their own panel, so a preset change rebuilds them and nothing else.
             panel.Children.Add(valuesPanel);
