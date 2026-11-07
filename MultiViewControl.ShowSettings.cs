@@ -96,6 +96,7 @@ namespace ModernImageViewer
                 XamlRoot = XamlRoot,
                 RequestedTheme = MainWindow.Instance?.CurrentRequestedTheme ?? ElementTheme.Default
             };
+            DialogFooter.MainButtonOnRight(dialog);
             return await dialog.ShowAsync() == ContentDialogResult.Primary;
         }
 

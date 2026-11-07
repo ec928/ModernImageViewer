@@ -717,16 +717,6 @@ namespace ModernImageViewer
                 body.Children.Add(showPanel);
                 FillShowSettings(showPanel, () => { ShowAutoPlayState(); RefreshStoryboardSettingsLabel?.Invoke(); });
 
-                var newShow = new Button { Content = "New show from these images", FontSize = 12, Margin = new Thickness(0, 6, 0, 0) };
-                ToolTipService.SetToolTip(newShow, "Starts an empty show with the same preset and values. Play then makes its scenes from the images on the canvas and in the tray.");
-                newShow.Click += async (_, _) =>
-                {
-                    if (!await ConfirmReplaceShowAsync()) return;
-                    StartEmptyShowLikeThisOne();
-                    ShowSurpriseCard();
-                };
-                body.Children.Add(newShow);
-
                 body.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle { Height = 1, Opacity = 0.15, Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White), Margin = new Thickness(0, 6, 0, 4) });
                 // The music library's own settings (folder, ratings, which shows play music) open from here, so
                 // everything about the soundtrack is in this one place.
@@ -1982,7 +1972,7 @@ namespace ModernImageViewer
 
             var clearShowBtn = new Button
             {
-                Content = "Clear",
+                Content = "New show",
                 CornerRadius = new CornerRadius(12),
                 Padding = new Thickness(8, 4, 8, 4),
                 FontSize = 12,
@@ -1990,7 +1980,8 @@ namespace ModernImageViewer
                 Visibility = Visibility.Collapsed,
                 Style = Resources.TryGetValue("QuietButtonStyle", out var clStyle) && clStyle is Style cls ? cls : null
             };
-            ToolTipService.SetToolTip(clearShowBtn, "Clears all scenes from the show.");
+            // Beside the scenes it replaces, and next to the Image Pool its scenes are made from.
+            ToolTipService.SetToolTip(clearShowBtn, "Starts an empty show with this preset and values. Play then makes its scenes from the Image Pool.");
 
             var close = new Button
             {
@@ -2399,35 +2390,8 @@ namespace ModernImageViewer
 
             Border MakeDivider() => new Border { Width = 1, Height = 16, Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x35, 0xFF, 0xFF, 0xFF)), VerticalAlignment = VerticalAlignment.Center };
 
-            var playShowDrawerBtn = new Button
-            {
-                Content = new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 6,
-                    Children =
-                    {
-                        new FontIcon { Glyph = "\uE768", FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe Fluent Icons"), FontSize = 12 },
-                        new TextBlock { Text = "Play Show", VerticalAlignment = VerticalAlignment.Center, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold }
-                    }
-                },
-                Background = winBlueDeep,
-                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White),
-                BorderBrush = winBlue,
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(12),
-                Padding = new Thickness(14, 4, 14, 4),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            ToolTipService.SetToolTip(playShowDrawerBtn, "Play the show. Space does the same.");
-            playShowDrawerBtn.Click += async (_, _) =>
-            {
-                await PlayStoryboardAsync();
-            };
-
+            // Play is on the play bar only: a second Play Show here did the same thing.
             var storyHeaderRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
-            storyHeaderRow.Children.Add(playShowDrawerBtn);
-            storyHeaderRow.Children.Add(MakeDivider());
             // Play makes the show's scenes (R17); the preset and the show's values are on the Show card, opened from Show on
             // the bar. Add this layout stays: it keeps what is on the canvas as a scene, which Play cannot.
             storyHeaderRow.Children.Add(addCanvasBtn);
@@ -2724,7 +2688,6 @@ namespace ModernImageViewer
 
                 clearShowBtn.Visibility = (_trayTab == 1 && hasScenes) ? Visibility.Visible : Visibility.Collapsed;
                 clearShowBtn.IsEnabled = hasScenes;
-                playShowDrawerBtn.Visibility = hasScenes ? Visibility.Visible : Visibility.Collapsed;
 
                 ShowAsPrimary(autoDraftBtn, !hasScenes);
 
@@ -3443,24 +3406,10 @@ namespace ModernImageViewer
             clearShowBtn.Click += async (_, _) =>
             {
                 if (_activeShow == null || _activeShow.Scenes.Count == 0) return;
-                int count = _activeShow.Scenes.Count;
-                var dialog = new ContentDialog
-                {
-                    Title = "Clear the show?",
-                    Content = count == 1 ? "This removes the scene." : $"This removes all {count} scenes.",
-                    PrimaryButtonText = "Clear",
-                    CloseButtonText = "Cancel",
-                    DefaultButton = ContentDialogButton.Close,
-                    XamlRoot = XamlRoot,
-                    RequestedTheme = MainWindow.Instance?.CurrentRequestedTheme ?? ElementTheme.Default
-                };
-                DialogFooter.MainButtonOnRight(dialog);
-                if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+                if (!await ConfirmReplaceShowAsync()) return;
+                // An empty show with the same preset and values; scenes still being made for the old one stop.
+                StartEmptyShowLikeThisOne();
                 _isStoryboardPlayback = false;
-                _selectedShowScene = null;
-                _canvasSceneId = null;
-                _activeShow.Scenes.Clear();
-                // Clearing empties the show but keeps its preset and values: the next Play makes scenes the same way.
                 scenesCollection.Clear();
                 SyncStoryImageRange();
             };
