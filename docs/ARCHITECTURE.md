@@ -186,3 +186,11 @@ Anything that orders file or folder names for display goes through `NaturalSort`
 - Unsigned portable zip: SmartScreen warning is expected.
 - `ShowTrayCard` builds the whole drawer, both tabs and the scene cards, in one method of about 1,800 lines. Split it when it is next changed.
 - Cinematic Slideshow was removed in 0.33.0, so the Multi-View show is the one slideshow system.
+
+
+## Decoupled Extension Architecture (v0.34.0)
+
+- **Zero-Bloat Core**: The core application distribution contains zero ML binaries, zero ONNX runtimes, and zero neural models (~25 MB total portable size). Zero network requests occur at startup.
+- **Interface Contracts**: The base project references ModernImageViewer.Contracts.dll, which exposes IParallaxService and clean DTO records (ParallaxDepthMap, ParallaxSubjectMask, ParallaxFitVerdict). If the extension is absent, NoOpParallaxService acts as a zero-overhead fallback.
+- **Dynamic Collectible Assembly Isolation**: When the 3D Extension is installed, ParallaxHost loads ModernImageViewer.Extensions.Parallax.dll inside a collectible ParallaxLoadContext. Native DLLs (DirectML.dll, onnxruntime.dll) resolve private unmanaged handles directly from %LOCALAPPDATA%\ModernImageViewer\Extensions\3D\.
+- **Atomic Management & Verification**: ExtensionManager verifies SHA-256 and byte length before activating models. Removal executes a multi-pass wipe, renames locked runtime DLLs to *.pending-delete, and cleans up orphaned files on subsequent launch.
