@@ -261,7 +261,6 @@ namespace ModernImageViewer
         /// <summary>A press anywhere but the card or the switch closes the card, and still does what it does.</summary>
         private void CloseCountsCardOnPressOutside(object sender, PointerRoutedEventArgs e)
         {
-            if (_cameraRunning) ResetCanvasCamera();
             ShowHudFromUser();
             CloseCountsCardOnPressOutsideCore(e);
             if (_selectedSlot >= 0 && !IsInsideAnyCell(e.OriginalSource))
@@ -273,12 +272,8 @@ namespace ModernImageViewer
         {
             for (var node = source as DependencyObject; node != null; node = VisualTreeHelper.GetParent(node))
             {
-                if (node is FrameworkElement fe && fe.Tag is CellParts parts)
-                {
-                    int slot = Slot(parts.Bound.Item);
-                    if (IsBareCanvas(slot)) return false;
+                if (node is FrameworkElement fe && fe.Tag is CellParts)
                     return true;
-                }
             }
             return false;
         }
@@ -1232,11 +1227,6 @@ namespace ModernImageViewer
         }
         public void SelectCell(int slot)
         {
-            if (slot >= 0 && IsBareCanvas(slot))
-            {
-                DeselectCell();
-                return;
-            }
             if (_selectedSlot == slot) return;
             if (_selectedSlot >= 0)
             {
@@ -1602,7 +1592,6 @@ namespace ModernImageViewer
                     }
                     if (isFreeform)
                     {
-                        if (_cameraRunning) ResetCanvasCamera();
                         bool isCtrl = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
                         if (isCtrl || prop.IsMiddleButtonPressed)
                         {
@@ -1616,9 +1605,8 @@ namespace ModernImageViewer
                             e.Handled = true;
                             return;
                         }
-                        // Normal mouse drag without Ctrl: candidate to MOVE the freeform window around
-                        isMovingCard = false;
-                        hasDraggedCell = false;
+                        // Normal mouse drag without Ctrl: MOVE the freeform window around
+                        isMovingCard = true;
                         movePointerId = e.Pointer.PointerId;
                         dragStartInRoot = e.GetCurrentPoint(RootGrid).Position;
                         startLeft = Canvas.GetLeft(slotGrid);
@@ -1646,17 +1634,11 @@ namespace ModernImageViewer
                     bool isCtrlHover = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
                     cellGrid.SetCursor(isCtrlHover ? InputSystemCursorShape.Hand : InputSystemCursorShape.SizeAll);
                 }
-                if (isFreeform && movePointerId != 0 && e.Pointer.PointerId == movePointerId)
+                if (isFreeform && isMovingCard && e.Pointer.PointerId == movePointerId)
                 {
                     Point cur = e.GetCurrentPoint(RootGrid).Position;
                     double dx = cur.X - dragStartInRoot.X;
                     double dy = cur.Y - dragStartInRoot.Y;
-                    if (!isMovingCard && (Math.Abs(dx) > 4 || Math.Abs(dy) > 4))
-                    {
-                        isMovingCard = true;
-                        hasDraggedCell = true;
-                    }
-                    if (!isMovingCard) return;
                     double boundW = Math.Max(200, RootGrid.ActualWidth > 0 ? RootGrid.ActualWidth : 1280);
                     double boundH = Math.Max(150, RootGrid.ActualHeight > 0 ? RootGrid.ActualHeight : 720);
                     double cardW = slotGrid.Width > 0 ? slotGrid.Width : (slotGrid.ActualWidth > 0 ? slotGrid.ActualWidth : 300);
@@ -1691,38 +1673,19 @@ namespace ModernImageViewer
             // A tap, so a drag on an empty floating cell still moves it.
             cellGrid.Tapped += (s, e) =>
             {
-                int slot = Slot(photo.Item);
-                if (IsBareCanvas(slot))
-                {
-                    DeselectCell();
-                    return;
-                }
-                SelectCell(slot);
-                if (!IsEmptyCell(photo.Item)) return;
+                SelectCell(Slot(photo.Item));
+                if (!IsEmptyCell(photo.Item) || IsBareCanvas(_items.IndexOf(photo.Item))) return;
                 e.Handled = true;
                 AddImageRequested?.Invoke(this, photo.Item);
             };
             cellGrid.PointerReleased += (s, e) =>
             {
-                if (isFreeform && movePointerId != 0 && e.Pointer.PointerId == movePointerId)
+                if (isFreeform && isMovingCard && e.Pointer.PointerId == movePointerId)
                 {
-                    bool wasMoving = isMovingCard;
                     isMovingCard = false;
-                    movePointerId = 0;
                     HideSnapGuides();
                     try { cellGrid.ReleasePointerCapture(e.Pointer); } catch { }
-                    var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Container, slotGrid));
-                    if (card != null)
-                    {
-                        card.Placed = new Rect(Canvas.GetLeft(slotGrid), Canvas.GetTop(slotGrid), slotGrid.Width, slotGrid.Height);
-                        card.PlacedOn = _freeformBasis;
-                        card.LastSet = card.Placed;
-                    }
-                    SyncCanvasToSelectedScene(showToast: false);
                     CaptureUndoPoint();
-                    int slot = Slot(photo.Item);
-                    if (IsBareCanvas(slot)) DeselectCell();
-                    else SelectCell(slot);
                     e.Handled = true;
                     return;
                 }
@@ -1739,18 +1702,15 @@ namespace ModernImageViewer
                     }
                     if (!hasDraggedCell && !isMovingCard)
                     {
-                        int slot = Slot(photo.Item);
-                        if (IsBareCanvas(slot)) DeselectCell();
-                        else SelectCell(slot);
+                        SelectCell(Slot(photo.Item));
                     }
                 }
             };
             cellGrid.PointerCanceled += (s, e) =>
             {
-                if (isMovingCard || movePointerId != 0)
+                if (isMovingCard)
                 {
                     isMovingCard = false;
-                    movePointerId = 0;
                     HideSnapGuides();
                     try { cellGrid.ReleasePointerCapture(e.Pointer); } catch { }
                     CaptureUndoPoint();
@@ -1759,20 +1719,6 @@ namespace ModernImageViewer
                 {
                     isDragging = false;
                     try { cellGrid.ReleasePointerCapture(e.Pointer); } catch { }
-                }
-            };
-            cellGrid.PointerCaptureLost += (s, e) =>
-            {
-                if (isMovingCard || movePointerId != 0)
-                {
-                    isMovingCard = false;
-                    movePointerId = 0;
-                    HideSnapGuides();
-                    CaptureUndoPoint();
-                }
-                if (isDragging)
-                {
-                    isDragging = false;
                 }
             };
             cellGrid.PointerWheelChanged += (s, e) =>
@@ -1847,6 +1793,7 @@ namespace ModernImageViewer
                 Visibility = Visibility.Collapsed
             };
             Canvas.SetZIndex(selectionBorder, 204);
+            slotGrid.Children.Add(selectionBorder);
             // Top-Right Contextual Micro-HUD Pill
             var topControls = new Border
             {
@@ -1874,7 +1821,7 @@ namespace ModernImageViewer
                 if (!isFreeform) return;
                 var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Container, slotGrid));
                 if (card == null) return;
-                bool active = isCellSelected || isMenuOpen;
+                bool active = isCellSelected || isMenuOpen || isCellHovered;
                 if (active)
                 {
                     Canvas.SetZIndex(slotGrid, 8900);
@@ -1888,13 +1835,6 @@ namespace ModernImageViewer
             }
             void UpdateHudVisibility()
             {
-                int slot = Slot(photo.Item);
-                if (IsBareCanvas(slot))
-                {
-                    topControls.Opacity = 0.0;
-                    topControls.IsHitTestVisible = false;
-                    return;
-                }
                 bool show = isCellSelected || isMenuOpen || (_isHudVisible && isCellHovered);
                 topControls.Opacity = show ? 1.0 : 0.0;
                 topControls.IsHitTestVisible = show;
@@ -1916,11 +1856,6 @@ namespace ModernImageViewer
                 selectionBorder.Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
                 UpdateHudVisibility();
                 UpdateCardElevation();
-                if (isFreeform)
-                {
-                    var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Container, slotGrid));
-                    card?.ShowHandles?.Invoke(selected);
-                }
             }
             // A floating cell's buttons can sit past its shape, where nothing is under the pointer, so they wait for it to arrive.
             DispatcherTimer? hoverOff = null;
@@ -2100,6 +2035,8 @@ namespace ModernImageViewer
             }
             slotGrid.SizeChanged += (s, e) => UpdatePillCompactness(e.NewSize.Width);
             topControls.Child = topStack;
+            // These sit on the cell, outside the shape's clip.
+            slotGrid.Children.Add(topControls);
             // Top-Left Position Badge (for right-click Swap / Move target indication)
             var positionBadge = new Border
             {
@@ -2132,6 +2069,7 @@ namespace ModernImageViewer
                 positionBadge.Margin = new Thickness(0);
                 positionBadge.RenderTransformOrigin = new Point(0.5, 0.5);
             }
+            slotGrid.Children.Add(positionBadge);
             // Right-Click Context Menu, filled when it opens so it names the photo's current place
             var menu = new MenuFlyout
             {
@@ -2208,9 +2146,6 @@ namespace ModernImageViewer
             Canvas.SetZIndex(cellBorder, 1);
             slotGrid.Children.Add(gutterBorder);
             slotGrid.Children.Add(cellBorder);
-            slotGrid.Children.Add(selectionBorder);
-            slotGrid.Children.Add(positionBadge);
-            slotGrid.Children.Add(topControls);
             // Shown when the cell has no image
             var placeholder = new StackPanel
             {
@@ -2399,7 +2334,6 @@ namespace ModernImageViewer
             for (int i = 0; i < _items.Count; i++)
             {
                 if (i == curSlot) continue;
-                if (IsBareCanvas(i)) continue;
                 // A position that cannot be seen means nothing. Those images are in the tray, which Swap with opens.
                 if (i >= cellsOnShow && i < gridCells) continue;
                 int targetSlot = i;
@@ -2614,7 +2548,6 @@ namespace ModernImageViewer
             var accent = GetMultiViewAccentColor();
             for (int i = 0; i < _items.Count; i++)
             {
-                if (IsBareCanvas(i)) continue;
                 if (i < _cellRoots.Length && _cellRoots[i]?.Tag is CellParts parts)
                 {
                     bool isSource = (i == sourceIndex);

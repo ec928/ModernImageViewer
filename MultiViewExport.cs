@@ -1926,22 +1926,11 @@ namespace ModernImageViewer
                 foreach (var dto in layoutFile.Freeform)
                 {
                     int grid = GridCellCount;
-                    ImageItem? sourceItem = null;
-                    if (dto.SourceSlot >= 0 && dto.SourceSlot < grid)
-                    {
-                        var candidate = _items[dto.SourceSlot];
-                        if (IsEmptyCell(candidate) || string.Equals(candidate.Path, dto.Path, StringComparison.OrdinalIgnoreCase))
-                        {
-                            sourceItem = candidate;
-                        }
-                    }
-                    sourceItem ??= new ImageItem
-                    {
-                        Path = dto.Path ?? string.Empty,
-                        Name = dto.Name ?? Path.GetFileName(dto.Path ?? string.Empty),
-                        Dispatcher = DispatcherQueue
-                    };
-                    SpawnFreeformCell(sourceItem, dto);
+                    var sourceItem = dto.SourceSlot >= 0 && dto.SourceSlot < grid
+                        ? _items[dto.SourceSlot]
+                        : _items.FirstOrDefault();
+                    if (sourceItem != null)
+                        SpawnFreeformCell(sourceItem, dto);
                 }
             }
 
@@ -1951,12 +1940,6 @@ namespace ModernImageViewer
             double savedW = layoutFile.Canvas?.Width ?? 0;
             double savedH = layoutFile.Canvas?.Height ?? 0;
             _freeformBasis = savedW > 0 && savedH > 0 ? new Size(savedW, savedH) : new Size(liveW, liveH);
-            if (FreeformCanvas != null && liveW > 0 && liveH > 0)
-            {
-                FreeformCanvas.Width = liveW;
-                FreeformCanvas.Height = liveH;
-                FreeformCanvas.Clip = new RectangleGeometry { Rect = new Rect(0, 0, liveW, liveH) };
-            }
             RescaleFreeformCards(liveW, liveH);
 
             if (layoutFile.Storyboard != null && layoutFile.Storyboard.Scenes.Count > 0)

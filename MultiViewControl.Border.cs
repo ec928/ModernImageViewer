@@ -128,13 +128,6 @@ namespace ModernImageViewer
             var root = (uint)slot < (uint)_cellRoots.Length ? _cellRoots[slot] : null;
             var card = root == null ? null : _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Container, root));
             if (card != null) card.Item = item;
-            if (slot < GridCellCount && !IsEmptyCell(item))
-            {
-                foreach (var fc in _freeformCards)
-                {
-                    if (fc.SourceSlot == slot) fc.SourceSlot = -1;
-                }
-            }
         }
 
         /// <summary>A cell can hold no image. It keeps its parameters, and they apply to the next image it gets.</summary>

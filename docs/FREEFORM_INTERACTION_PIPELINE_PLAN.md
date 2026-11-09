@@ -1,4 +1,4 @@
-﻿# Freeform Card Interaction Pipeline: Implementation Plan & Regression Post-Mortem
+# Freeform Card Interaction Pipeline: Implementation Plan & Regression Post-Mortem
 
 ## 1. Executive Summary & Purpose
 
@@ -979,3 +979,80 @@ User creates / pops out cards                       Generated via LayoutComposer
    - Completely eliminate the SourceSlot = -1 dummy fallback by assigning unique, valid slots and ImageItem instances for every card.
    - Detach all compositor camera animations and clear composition TransformMatrix residue so pure XAML layout and hit-testing regain 100% authority.
    - Release storyboard playback state locks so the layout behaves identically to a freshly opened, user-managed multi-image collage.
+
+---
+
+### 8.11 Architectural Root Cause: Grid Cell Coupling and The Failed Decoupling Attempt (Commit 712d84b)
+
+#### 8.11.1 What Is Really Going On: The Umbilical Cord Between Freeform Cards and Grid Cells
+
+Through rigorous user testing and architectural tracing, the fundamental cause of freeform card corruption has been pinpointed: **Freeform cards in Modern Image Viewer are not architected as autonomous entities; they are treated as "displaced grid cells" tethered by an umbilical cord (`SourceSlot`).**
+
+1. **The Shared Identity Trap**:
+   - When a user pops a grid cell into freeform (`SpawnFreeformCell`), the code instantiates a new floating card but explicitly sets `card.SourceSlot = sourceSlot` (the index of the vacated grid cell).
+   - The vacated grid slot is left on the grid as an empty cell (`EmptyCell(sourceSlot)`), waiting for a replacement photo.
+   - At this moment, the freeform card appears functional because its original slot is sitting empty and undisturbed.
+
+2. **The Corruption Mechanism (Grid Slot Re-Fill)**:
+   - When the user subsequently places a new photo into that vacated grid cell (via Image Pool, Drawer, or File Picker), the grid slot is re-occupied.
+   - Crucially, the system's layout serialization (`BuildLayoutFile`), state reconstruction (`ApplyLayoutFile`), and dock target resolution (`DockTarget`) still hold references to `card.SourceSlot`.
+   - When the layout synchronizes or updates, the data model collides: the floating card is still registered as tied to slot $K$, but slot $K$ now holds an entirely different photo in the underlying grid.
+   - This state collision corrupts the card:
+     - `_cellRoots` index mappings and `_items` index lookups diverge.
+     - WinUI 3 pointer hit-testing and event bubbling fall through the floating card to the underlying grid cell.
+     - The right-click context menu either targets the underlying grid cell or fails to bind to the floating card.
+     - The floating card becomes unselectable, unmovable, or corrupted.
+
+3. **100% Reproducible Test Case Proven by User**:
+   - **Step 1**: Grid of 7 photos. Position 5 is converted to freeform (becomes floating card Position 8).
+   - **Step 2**: While Position 5 is empty, Position 8 works completely: selectable, movable, rotatable, right-click menu opens with full options.
+   - **Step 3**: Position 5 is filled with a new photo from the drawer/pool.
+   - **Step 4**: Floating Position 8 immediately corrupts: clicking or right-clicking on Position 8 hits the grid underneath (Position 4 / Position 5), and the freeform card can no longer be properly selected or manipulated.
+
+---
+
+#### 8.11.2 Post-Mortem of the Failed Decoupling Attempt (Commit 712d84b)
+
+In commit `712d84b`, an attempt was made to decouple the cards, but it failed immediately upon user verification.
+
+1. **What was implemented in `712d84b`**:
+   - In `MultiViewControl.Border.cs`: Added a condition in `PutInCell`:
+     ```csharp
+     if (slot < GridCellCount && !IsEmptyCell(item))
+     {
+         foreach (var fc in _freeformCards)
+         {
+             if (fc.SourceSlot == slot) fc.SourceSlot = -1;
+         }
+     }
+     ```
+   - In `MultiViewControl.Freeform.cs`: Added a check in `SpawnFreeformCell` comparing paths, plus window turn logic.
+   - In `MultiViewExport.cs`: In `ApplyLayoutFile`, created a standalone `ImageItem` fallback instead of taking `_items.FirstOrDefault()`.
+   - In `MultiViewControl.xaml.cs`: Scattered secondary adjustments (drag thresholds, `IsBareCanvas` filters, camera reset triggers, z-index modifications).
+
+2. **Why It Failed Immediately (User Test `media_1794194889296_34332a07.jpg`)**:
+   - **Bypassed Execution Path**: When an empty cell is filled from the tray or pool via `BringFromTray`, the application does **not** call `PutInCell`! Instead, it executes `PlaceInCells(file, ...)` directly on the `MultiViewLayoutFile` DTO and calls `ApplyKeepingBitmaps(file)`.
+   - `PlaceInCells` modifies `file.Photos[i].Path` directly in the DTO while completely ignoring `file.Freeform[card].SourceSlot`.
+   - As a result, when `ApplyKeepingBitmaps` called `ApplyLayoutFile`, the layout file was reloaded with the obsolete `SourceSlot = 0` still intact!
+   - **Fragmented Code Sprawl**: Modifying 6 files with speculative side-fixes introduced complexity without addressing the core requirement: **complete autonomy from birth**.
+   - When the user converted Position 1 to freeform (Position 6) and filled Position 1, Position 6 corrupted immediately as before.
+
+---
+
+#### 8.11.3 The True Autonomy Architecture: Permanent Severance
+
+To guarantee that freeform cards can never be corrupted by grid slot operations, the following principles must be enforced:
+
+1. **Immediate Severance on Spawn**:
+   - The moment any cell is made freeform, its `SourceSlot` is permanently set to `-1`.
+   - The freeform card has zero knowledge of, and zero claim on, any grid slot.
+   - The vacated grid slot is an ordinary empty cell with zero relationship to the floating card.
+
+2. **Complete Data Model Autonomy**:
+   - A freeform card holds its own distinct `ImageItem`.
+   - Any filling, swapping, clearing, or resizing of grid slots ignores freeform cards completely.
+   - `PlaceInCells`, `BuildLayoutFile`, and `ApplyLayoutFile` treat freeform cards as independent overlay entities, never linking them back to grid indices.
+
+3. **Autonomous Docking**:
+   - Docking does not rely on a "birth slot" index.
+   - If docked, a freeform card simply finds any currently available empty grid slot; if none exists, it appends a new grid cell (if under the maximum capacity).
