@@ -24,7 +24,7 @@ In TypoZen (`TypoZen/Extensions.cs`), large optional assets (Kokoro TTS, Whisper
 2. **Declarative Catalog & Checksums**: Each extension declares its remote URLs, target file paths, expected sizes, and SHA-256 hashes.
 3. **Dedicated Isolated Directory**: All extension assets reside in:
    `%LOCALAPPDATA%\ModernImageViewer\Extensions\3D\`
-4. **Clean One-Click Removal**: Uninstalling an extension is simply unloading the runtime context and calling `Directory.Delete()` on the extension folder. This frees 100% of the disk space immediately, leaving zero registry keys, orphaned files, or dangling handles.
+4. **Clean One-Click Removal**: Uninstalling an extension unloads the runtime context, verifies the folder is not a reparse point, executes a multi-pass wipe of all extension assets, renames any locked native DLLs to `*.pending-delete` for automatic cleanup on next process start, and verifies that no active assets remain. On launch, any surviving temporary or orphaned extension files are swept.
 5. **Self-Hiding UI Affordances**: When an extension is not installed, menus and presets that depend on it either gracefully hide or provide a clean prompt directing the user to the Extensions manager.
 
 ---
@@ -178,9 +178,10 @@ The 3D Extension bundle contains five files totaling **~248 MB**:
 | `Models/depth-anything-v2-small.onnx` | Model (Apache-2.0) | HuggingFace `onnx-community` | ~94.5 MB |
 | `Models/birefnet-lite.onnx` | Model (MIT) | HuggingFace `onnx-community` | ~109.2 MB |
 
-### Delivery Methods:
-1. **GitHub Release Asset Zip**: A single pre-packaged `ModernImageViewer-Extension-3D-v1.0.0.zip` published alongside GitHub releases. The Extension Manager downloads this zip directly, validates SHA-256, unzips into `%LOCALAPPDATA%\ModernImageViewer\Extensions\3D\`, and deletes the zip.
-2. **Direct Model Mirrors**: Alternatively, models can stream directly from Hugging Face / GitHub raw LFS endpoints with resumable chunked downloads.
+### Delivery & Packaging Architecture:
+1. **Automated Bundle Publishing**: `publish.bat` publishes `ModernImageViewer.Extensions.Parallax.csproj` into `bin\Extensions\Parallax\bundle\` containing the managed plugin DLL, `Microsoft.ML.OnnxRuntime.dll`, `onnxruntime.dll`, and `DirectML.dll`.
+2. **Model Retrieval & Verification**: On user request, models stream from verified HuggingFace endpoints with non-blocking progress reporting, atomic `.tmp` download writes, 20-minute connection timeouts, and file size / SHA-256 verification before placement.
+3. **Resilient Multi-Pass Wipe**: `Uninstall3D` unloads the collectible context, verifies the target is not a reparse point, performs a 3-pass file deletion, renames locked runtime DLLs to `*.pending-delete`, and verifies the directory is either completely deleted or contains strictly `*.pending-delete` files. Startup sweeps clean up any pending-delete or orphaned files.
 
 ---
 

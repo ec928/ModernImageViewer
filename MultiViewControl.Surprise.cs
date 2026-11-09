@@ -102,6 +102,14 @@ namespace ModernImageViewer
         /// </summary>
         private SurpriseOptions GeneratorSettingsFor(ShowProject? show)
         {
+            if (show != null && !DepthMaps.Available && (Is3DPreset(show.PresetName) || Is3DPreset(show.GeneratorOverrides)))
+            {
+                show.PresetName = MultiImagePreset;
+                show.GeneratorOverrides = null;
+                show.GlobalDefaults.ClearValues();
+                show.GlobalDefaults.ParallaxOnly = false;
+                show.GlobalDefaults.DepthChance = 0;
+            }
             var options = show == null ? SurpriseChoices
                 : show.GlobalDefaults.HoldsValues ? show.GlobalDefaults.ApplyTo(SurpriseChoices)
                 : SurpriseChoices.WithOverrides(show.GeneratorOverrides);
@@ -229,7 +237,18 @@ namespace ModernImageViewer
         /// app's cinematic values once, now; its scenes, holds and camera paths are not touched, and the file is rewritten
         /// only when the user saves.
         /// </summary>
-        private void AdoptOpenedShow(ShowProject show) => show.AdoptOnOpen(SurpriseChoices.Cinematic ?? new CinematicOverrides());
+        private void AdoptOpenedShow(ShowProject show)
+        {
+            if (!DepthMaps.Available && (Is3DPreset(show.PresetName) || Is3DPreset(show.GeneratorOverrides)))
+            {
+                show.PresetName = MultiImagePreset;
+                show.GeneratorOverrides = null;
+                show.GlobalDefaults.ClearValues();
+                show.GlobalDefaults.ParallaxOnly = false;
+                show.GlobalDefaults.DepthChance = 0;
+            }
+            show.AdoptOnOpen(SurpriseChoices.Cinematic ?? new CinematicOverrides());
+        }
 
         private void ChangeSurpriseChoices(Action<SurpriseOptions> change)
         {

@@ -197,7 +197,15 @@ namespace ModernImageViewer
                     SwayInstead = LiveDepthMotion() == SurpriseOptions.DepthSlide && layers == null
                 };
                 // Drawn once before it is shown, so the swap shows the same picture.
-                DrawDepth(state);
+                try
+                {
+                    DrawDepth(state);
+                }
+                catch
+                {
+                    ReleaseDepth(state);
+                    throw;
+                }
                 StopSceneDepth();
                 _depthScene = state;
                 state.Target.Source = state.Surface;
@@ -205,7 +213,7 @@ namespace ModernImageViewer
                 PlayTiming.Write($"3D: on for {System.IO.Path.GetFileName(path)}, {size.Width}x{size.Height}");
                 return true;
             }
-            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.Runtime.InteropServices.COMException or System.IO.IOException or UnauthorizedAccessException)
+            catch (Exception ex)
             {
                 PlayTiming.Write($"3D: not shown: {ex.GetType().Name} {ex.Message}");
             }
@@ -265,14 +273,14 @@ namespace ModernImageViewer
             {
                 DrawDepth(state);
             }
-            catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or ArgumentException or InvalidOperationException)
+            catch (Exception ex)
             {
                 PlayTiming.Write($"3D: stopped drawing: {ex.Message}");
                 StopSceneDepth();
             }
         }
 
-        /// <summary>The motion playing now. A show that names one uses it. Otherwise the engine's, and a missing name is Rock.</summary>
+        /// <summary>The motion playing now. A show that names one uses it. Otherwise the engine's, and a missing name is Slide.</summary>
         private string LiveDepthMotion()
         {
             string? held = _activeShow?.GlobalDefaults.DepthMotion;
@@ -371,7 +379,6 @@ namespace ModernImageViewer
             }
             catch (Exception ex) when (ex is ObjectDisposedException or System.Runtime.InteropServices.COMException or ArgumentException or InvalidOperationException)
             {
-                return;
             }
             // A later turn, so a frame can draw the picture before the surface it was sampling is released.
             if (!DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () => ReleaseDepth(state)))

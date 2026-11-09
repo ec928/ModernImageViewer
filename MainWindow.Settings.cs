@@ -252,6 +252,7 @@ namespace ModernImageViewer
             void RefreshUI()
             {
                 isInstalled = ExtensionManager.Is3DInstalled;
+                long bytes = ExtensionManager.Get3DDiskSizeBytes();
                 if (isInstalled)
                 {
                     string size = ExtensionManager.Get3DDiskSizeFormatted();
@@ -259,6 +260,15 @@ namespace ModernImageViewer
                     statusBadge.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(40, 0, 200, 100));
                     statusText.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 30, 200, 100));
                     actionButton.Content = "Remove";
+                    actionButton.IsEnabled = true;
+                }
+                else if (bytes > 0)
+                {
+                    string size = ExtensionManager.Get3DDiskSizeFormatted();
+                    statusText.Text = "Partially installed (" + size + ")";
+                    statusBadge.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(40, 240, 150, 0));
+                    statusText.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 240, 150, 0));
+                    actionButton.Content = "Clean up / Remove";
                     actionButton.IsEnabled = true;
                 }
                 else
@@ -280,7 +290,8 @@ namespace ModernImageViewer
 
             actionButton.Click += async (_, _) =>
             {
-                if (isInstalled)
+                long currentBytes = ExtensionManager.Get3DDiskSizeBytes();
+                if (isInstalled || currentBytes > 0)
                 {
                     actionButton.IsEnabled = false;
                     progressDetail.Text = "Removing extension...";
@@ -288,8 +299,15 @@ namespace ModernImageViewer
                     progressRing.IsActive = true;
                     progressRing.Visibility = Visibility.Visible;
 
-                    await Task.Run(() => ExtensionManager.Uninstall3D());
-                    MultiViewControl?.On3DExtensionChanged();
+                    bool uninstalled = await Task.Run(() => ExtensionManager.Uninstall3D());
+                    if (uninstalled && !ExtensionManager.Is3DInstalled)
+                    {
+                        MultiViewControl?.On3DExtensionChanged();
+                    }
+                    else
+                    {
+                        progressDetail.Text = "Removal incomplete. Some files were locked.";
+                    }
                     RefreshUI();
                 }
                 else
@@ -315,7 +333,10 @@ namespace ModernImageViewer
                     {
                         progressDetail.Text = "Install failed: " + ex.Message;
                     }
-                    MultiViewControl?.On3DExtensionChanged();
+                    if (ExtensionManager.Is3DInstalled)
+                    {
+                        MultiViewControl?.On3DExtensionChanged();
+                    }
                     RefreshUI();
                 }
             };

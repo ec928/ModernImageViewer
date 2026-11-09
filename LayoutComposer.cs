@@ -432,7 +432,7 @@ namespace ModernImageViewer
 
         public static readonly string[] DepthMotions = { DepthSlide, DepthSway };
 
-        /// <summary>Rock, unless the saved value is Slide. Anything else is Rock, so the working motion stays.</summary>
+        /// <summary>Sway/Rock if named; otherwise Slide is the fallback, so the working motion stays.</summary>
         public static string CanonicalDepthMotion(string? motion) =>
             string.Equals(motion, DepthSway, StringComparison.OrdinalIgnoreCase) || string.Equals(motion, "Rock", StringComparison.OrdinalIgnoreCase) ? DepthSway : DepthSlide;
 
@@ -762,6 +762,12 @@ namespace ModernImageViewer
                 FewestScenesPerStep = o.FewestScenesPerStep,
                 MostScenesPerStep = o.MostScenesPerStep,
                 DepthMotion = SurpriseOptions.CanonicalDepthMotion(o.DepthMotion),
+                DepthChance = o.DepthChance,
+                ParallaxOnly = o.ParallaxOnly,
+                PlayCameraMode = o.CameraMode,
+                StillChance = o.StillChance,
+                PathBendLeast = o.PathBendLeast,
+                PathBendMost = o.PathBendMost,
                 DesignOdds = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
             };
             foreach (string design in LayoutComposer.Recipes) preset.DesignOdds[design] = o.IsDesignOff(design) ? 0 : o.OddsOf(design);

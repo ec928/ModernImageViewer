@@ -47,6 +47,18 @@ namespace ModernImageViewer
                 {
                     try { File.Delete(f); } catch { }
                 }
+                if (!Is3DInstalled)
+                {
+                    // Clean up any orphaned files from an incomplete install or remove
+                    foreach (string f in Directory.GetFiles(Extension3DDir, "*", SearchOption.AllDirectories))
+                    {
+                        try { File.Delete(f); } catch { }
+                    }
+                    foreach (string d in Directory.GetDirectories(Extension3DDir))
+                    {
+                        try { Directory.Delete(d, recursive: true); } catch { }
+                    }
+                }
                 if (Directory.GetFileSystemEntries(Extension3DDir).Length == 0)
                 {
                     try { Directory.Delete(Extension3DDir, recursive: true); } catch { }
@@ -59,7 +71,7 @@ namespace ModernImageViewer
         {
             try
             {
-                if (!Is3DInstalled || !Directory.Exists(Extension3DDir)) return 0;
+                if (!Directory.Exists(Extension3DDir)) return 0;
                 long total = 0;
                 var dirInfo = new DirectoryInfo(Extension3DDir);
                 foreach (var f in dirInfo.EnumerateFiles("*", SearchOption.AllDirectories))
@@ -220,6 +232,14 @@ namespace ModernImageViewer
                     return true;
                 }
 
+                // Refuse wipe if Extension3DDir is a reparse point (Issue 6)
+                var dirInfo = new DirectoryInfo(Extension3DDir);
+                if ((dirInfo.Attributes & FileAttributes.ReparsePoint) != 0)
+                {
+                    PlayTiming.Write("Uninstall3D refused: Extension directory is a reparse point.");
+                    return false;
+                }
+
                 // Delete models and files with retries (TypoZen pattern)
                 for (int attempt = 0; attempt < 3; attempt++)
                 {
@@ -251,14 +271,27 @@ namespace ModernImageViewer
                     }
                     catch { }
 
-                    if (!Directory.Exists(Extension3DDir) || Directory.GetFileSystemEntries(Extension3DDir).Length == 0)
-                        break;
-
+                    if (!Directory.Exists(Extension3DDir)) break;
                     Thread.Sleep(100);
                 }
 
+                // Wipe succeeded only if directory is deleted or holds only *.pending-delete files (Issue 1)
+                bool clean = true;
+                if (Directory.Exists(Extension3DDir))
+                {
+                    var entries = Directory.GetFileSystemEntries(Extension3DDir, "*", SearchOption.AllDirectories);
+                    foreach (var entry in entries)
+                    {
+                        if (File.Exists(entry) && !entry.EndsWith(".pending-delete", StringComparison.OrdinalIgnoreCase))
+                        {
+                            clean = false;
+                            break;
+                        }
+                    }
+                }
+
                 ParallaxHost.ReloadExtension();
-                return true;
+                return clean;
             }
             catch (Exception ex)
             {
@@ -278,35 +311,43 @@ namespace ModernImageViewer
             string url, string destination, double progressStart, double progressEnd,
             IProgress<(double Progress, string Status)>? progress, CancellationToken ct)
         {
-            using var client = new HttpClient();
+            using var client = new HttpClient { Timeout = TimeSpan.FromMinutes(20) };
             using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
             long totalBytes = response.Content.Headers.ContentLength ?? -1;
             string tempFile = destination + ".tmp";
 
-            using (var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false))
-            using (var dest = new FileStream(tempFile, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
+            try
             {
-                var buffer = new byte[81920];
-                long totalRead = 0;
-                int read;
-                while ((read = await stream.ReadAsync(buffer, 0, buffer.Length, ct).ConfigureAwait(false)) > 0)
+                using (var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false))
+                using (var dest = new FileStream(tempFile, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
                 {
-                    await dest.WriteAsync(buffer, 0, read, ct).ConfigureAwait(false);
-                    totalRead += read;
-                    if (totalBytes > 0 && progress != null)
+                    var buffer = new byte[81920];
+                    long totalRead = 0;
+                    int read;
+                    while ((read = await stream.ReadAsync(buffer, 0, buffer.Length, ct).ConfigureAwait(false)) > 0)
                     {
-                        double fileProgress = (double)totalRead / totalBytes;
-                        double overall = progressStart + (fileProgress * (progressEnd - progressStart));
-                        string mb = $"{totalRead / 1048576.0:0.#} / {totalBytes / 1048576.0:0.#} MB";
-                        progress.Report((overall, $"Downloading {Path.GetFileName(destination)} ({mb})..."));
+                        await dest.WriteAsync(buffer, 0, read, ct).ConfigureAwait(false);
+                        totalRead += read;
+                        if (totalBytes > 0 && progress != null)
+                        {
+                            double fileProgress = (double)totalRead / totalBytes;
+                            double overall = progressStart + (fileProgress * (progressEnd - progressStart));
+                            string mb = $"{totalRead / 1048576.0:0.#} / {totalBytes / 1048576.0:0.#} MB";
+                            progress.Report((overall, $"Downloading {Path.GetFileName(destination)} ({mb})..."));
+                        }
                     }
                 }
-            }
 
-            if (File.Exists(destination)) File.Delete(destination);
-            File.Move(tempFile, destination);
+                if (File.Exists(destination)) File.Delete(destination);
+                File.Move(tempFile, destination);
+            }
+            catch
+            {
+                try { if (File.Exists(tempFile)) File.Delete(tempFile); } catch { }
+                throw;
+            }
         }
     }
 }
