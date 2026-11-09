@@ -16,11 +16,12 @@ namespace ModernImageViewer
 
         public static async Task<DateTime> TakenAsync(string path)
         {
+            if (string.IsNullOrWhiteSpace(path)) return DateTime.MinValue;
             if (Known.TryGetValue(path, out var known)) return known;
             DateTime when = FileDate(path);
             try
             {
-                if (!ComicArchive.IsEntryPath(path) && !ComicArchive.IsComicArchivePath(path))
+                if (!ComicArchive.IsEntryPath(path) && !ComicArchive.IsComicArchivePath(path) && File.Exists(path))
                 {
                     var file = await StorageFile.GetFileFromPathAsync(path);
                     var props = await file.Properties.RetrievePropertiesAsync(new[] { "System.Photo.DateTaken" });
@@ -31,15 +32,26 @@ namespace ModernImageViewer
                     }
                 }
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or System.Runtime.InteropServices.COMException) { }
+            catch
+            {
+                // Fall back to file date on any read error
+            }
             Known[path] = when;
             return when;
         }
 
         private static DateTime FileDate(string path)
         {
-            try { return File.GetLastWriteTime(path); }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { return DateTime.MinValue; }
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+                    return File.GetLastWriteTime(path);
+                return DateTime.MinValue;
+            }
+            catch
+            {
+                return DateTime.MinValue;
+            }
         }
     }
 }

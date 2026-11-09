@@ -34,33 +34,40 @@ namespace ModernImageViewer
         /// <summary>Called as each scene of a playing show comes on screen.</summary>
         private async Task ShowSceneWordsAsync(ShowScene scene)
         {
-            var options = SurpriseChoices;
-            string? first = scene.GetPhotoPaths().FirstOrDefault();
-            if (first == null || _autoPlaySeconds == 0) return;
-            DateTime taken = await PhotoDates.TakenAsync(first);
-            string folder = Path.GetFileName(Path.GetDirectoryName(first) ?? "") ?? "";
-            if (_autoPlaySeconds == 0) return;
-
-            if (_titleDue)
+            try
             {
-                _titleDue = false;
+                var options = SurpriseChoices;
+                string? first = scene.GetPhotoPaths().FirstOrDefault(p => !string.IsNullOrEmpty(p));
+                if (string.IsNullOrEmpty(first) || _autoPlaySeconds == 0) return;
+                DateTime taken = await PhotoDates.TakenAsync(first);
+                string folder = Path.GetFileName(Path.GetDirectoryName(first) ?? "") ?? "";
+                if (_autoPlaySeconds == 0) return;
+
+                if (_titleDue)
+                {
+                    _titleDue = false;
+                    _captionedDay = taken.Date;
+                    _captionedFolder = folder;
+                    if (!options.ShowTitleCard) return;
+                    string title = _activeShow is { } show && !IsPlaceholderTitle(show.Title) ? show.Title : folder;
+                    string when = taken == DateTime.MinValue ? "" : taken.ToString("MMMM yyyy", CultureInfo.CurrentCulture);
+                    ShowWords(TitleCard(title, when), holdSeconds: 3.2);
+                    return;
+                }
+
+                if (!options.ShowDateCaptions || taken == DateTime.MinValue) return;
+                bool newDay = _captionedDay != taken.Date;
+                bool newFolder = !string.Equals(_captionedFolder, folder, StringComparison.OrdinalIgnoreCase);
+                if (!newDay) return;
                 _captionedDay = taken.Date;
                 _captionedFolder = folder;
-                if (!options.ShowTitleCard) return;
-                string title = _activeShow is { } show && !IsPlaceholderTitle(show.Title) ? show.Title : folder;
-                string when = taken == DateTime.MinValue ? "" : taken.ToString("MMMM yyyy", CultureInfo.CurrentCulture);
-                ShowWords(TitleCard(title, when), holdSeconds: 3.2);
-                return;
+                string date = taken.ToString("dddd d MMMM yyyy", CultureInfo.CurrentCulture);
+                ShowWords(Caption(newFolder ? $"{date}  ·  {folder}" : date), holdSeconds: 4);
             }
-
-            if (!options.ShowDateCaptions || taken == DateTime.MinValue) return;
-            bool newDay = _captionedDay != taken.Date;
-            bool newFolder = !string.Equals(_captionedFolder, folder, StringComparison.OrdinalIgnoreCase);
-            if (!newDay) return;
-            _captionedDay = taken.Date;
-            _captionedFolder = folder;
-            string date = taken.ToString("dddd d MMMM yyyy", CultureInfo.CurrentCulture);
-            ShowWords(Caption(newFolder ? $"{date}  ·  {folder}" : date), holdSeconds: 4);
+            catch (Exception ex)
+            {
+                PlayTiming.Write($"ShowSceneWordsAsync error: {ex.Message}");
+            }
         }
 
         /// <summary>Names the app gives a show it made, which say nothing to a viewer.</summary>
@@ -127,18 +134,29 @@ namespace ModernImageViewer
             holder.Children.Add(words);
             void Fit()
             {
-                var compositor = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(host).Compositor;
-                var shadow = compositor.CreateDropShadow();
-                shadow.Mask = words.GetAlphaMask();
-                shadow.BlurRadius = blur;
-                shadow.Color = Microsoft.UI.Colors.Black;
-                shadow.Opacity = 0.85f;
-                shadow.Offset = new System.Numerics.Vector3(0, 2, 0);
-                var visual = compositor.CreateSpriteVisual();
-                visual.Size = new System.Numerics.Vector2((float)words.ActualWidth, (float)words.ActualHeight);
-                visual.Offset = new System.Numerics.Vector3((float)words.ActualOffset.X, (float)words.ActualOffset.Y, 0);
-                visual.Shadow = shadow;
-                Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.SetElementChildVisual(host, visual);
+                try
+                {
+                    if (words.ActualWidth <= 0 || words.ActualHeight <= 0) return;
+                    var compositor = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(host)?.Compositor;
+                    if (compositor == null) return;
+                    var shadow = compositor.CreateDropShadow();
+                    var mask = words.GetAlphaMask();
+                    if (mask == null) return;
+                    shadow.Mask = mask;
+                    shadow.BlurRadius = blur;
+                    shadow.Color = Microsoft.UI.Colors.Black;
+                    shadow.Opacity = 0.85f;
+                    shadow.Offset = new System.Numerics.Vector3(0, 2, 0);
+                    var visual = compositor.CreateSpriteVisual();
+                    visual.Size = new System.Numerics.Vector2((float)words.ActualWidth, (float)words.ActualHeight);
+                    visual.Offset = new System.Numerics.Vector3((float)words.ActualOffset.X, (float)words.ActualOffset.Y, 0);
+                    visual.Shadow = shadow;
+                    Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.SetElementChildVisual(host, visual);
+                }
+                catch
+                {
+                    // Composition shadow failure ignored
+                }
             }
             words.SizeChanged += (_, _) => Fit();
             return holder;
@@ -169,27 +187,33 @@ namespace ModernImageViewer
         /// <summary>Fades the words in, holds them, fades them out. A new one replaces any still on screen.</summary>
         private void ShowWords(FrameworkElement words, double holdSeconds)
         {
-            ClearShowWords();
-            words.IsHitTestVisible = false;
-            words.Opacity = 0;
-            _showWords = words;
-            AddOverCanvas(words, WordsLayer);
-            // One animation for the whole life of the words: two on the same property in one storyboard never ran.
-            var life = new DoubleAnimationUsingKeyFrames();
-            life.KeyFrames.Add(new DiscreteDoubleKeyFrame { KeyTime = TimeSpan.Zero, Value = 0 });
-            life.KeyFrames.Add(new LinearDoubleKeyFrame { KeyTime = TimeSpan.FromSeconds(0.7), Value = 1 });
-            life.KeyFrames.Add(new LinearDoubleKeyFrame { KeyTime = TimeSpan.FromSeconds(0.7 + holdSeconds), Value = 1 });
-            life.KeyFrames.Add(new LinearDoubleKeyFrame { KeyTime = TimeSpan.FromSeconds(1.6 + holdSeconds), Value = 0 });
-            Storyboard.SetTarget(life, words);
-            Storyboard.SetTargetProperty(life, "Opacity");
-            var story = new Storyboard();
-            story.Children.Add(life);
-            story.Completed += (_, _) =>
+            try
             {
-                RootGrid.Children.Remove(words);
-                if (ReferenceEquals(_showWords, words)) _showWords = null;
-            };
-            story.Begin();
+                ClearShowWords();
+                words.IsHitTestVisible = false;
+                words.Opacity = 0;
+                _showWords = words;
+                AddOverCanvas(words, WordsLayer);
+                var life = new DoubleAnimationUsingKeyFrames();
+                life.KeyFrames.Add(new DiscreteDoubleKeyFrame { KeyTime = TimeSpan.Zero, Value = 0 });
+                life.KeyFrames.Add(new LinearDoubleKeyFrame { KeyTime = TimeSpan.FromSeconds(0.7), Value = 1 });
+                life.KeyFrames.Add(new LinearDoubleKeyFrame { KeyTime = TimeSpan.FromSeconds(0.7 + holdSeconds), Value = 1 });
+                life.KeyFrames.Add(new LinearDoubleKeyFrame { KeyTime = TimeSpan.FromSeconds(1.6 + holdSeconds), Value = 0 });
+                Storyboard.SetTarget(life, words);
+                Storyboard.SetTargetProperty(life, "Opacity");
+                var story = new Storyboard();
+                story.Children.Add(life);
+                story.Completed += (_, _) =>
+                {
+                    try { RootGrid.Children.Remove(words); } catch { }
+                    if (ReferenceEquals(_showWords, words)) _showWords = null;
+                };
+                story.Begin();
+            }
+            catch (Exception ex)
+            {
+                PlayTiming.Write($"ShowWords error: {ex.Message}");
+            }
         }
 
         /// <summary>Takes any title or caption off at once, as a pause or a stop does.</summary>

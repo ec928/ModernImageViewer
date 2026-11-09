@@ -68,6 +68,10 @@ namespace ModernImageViewer
         /// <summary>Called as a scene comes on, once its camera move has started.</summary>
         private async Task<bool> TryStartSceneDepthAsync(ShowScene scene, ShowScene? next)
         {
+            if (_autoPlaySeconds == 0 || !DepthMaps.Available) return false;
+            var options = GeneratorSettingsFor(_activeShow);
+            if (options.DepthChance <= 0) return false;
+
             int ticket = ++_depthTicket;
             // The next scene's map is made while this one plays, so it is ready when it comes on.
             if (next != null && SinglePhoto(next) is string nextPath)
@@ -80,8 +84,6 @@ namespace ModernImageViewer
                     _ = ParallaxJudge.ForAsync(nextPath);
                 }
             }
-            var options = GeneratorSettingsFor(_activeShow);
-            if (_autoPlaySeconds == 0 || options.DepthChance <= 0 || !DepthMaps.Available) return false;
             if (SinglePhoto(scene) is not string path) return false;
             if (Random.Shared.NextDouble() >= options.DepthChance) { PlayTiming.Write("3D: not this scene (odds)"); return false; }
             var move = _cameraMove;
@@ -216,7 +218,17 @@ namespace ModernImageViewer
         /// front, Rock on any other. A photo fit for no 3D is left out of a Parallax show when it is made (ParallaxFit),
         /// so no scene there should fall back to a plain pan or zoom (Ed, 2026-11-07).
         /// </summary>
-        private async Task StartSceneDepthAsync(ShowScene scene, ShowScene? next) => await TryStartSceneDepthAsync(scene, next);
+        private async Task StartSceneDepthAsync(ShowScene scene, ShowScene? next)
+        {
+            try
+            {
+                await TryStartSceneDepthAsync(scene, next);
+            }
+            catch (Exception ex)
+            {
+                PlayTiming.Write($"StartSceneDepthAsync error: {ex.Message}");
+            }
+        }
 
         /// <summary>The scene's one photo, when it has exactly one.</summary>
         private static string? SinglePhoto(ShowScene scene)
