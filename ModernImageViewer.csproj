@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
 	<WindowsPackageType>None</WindowsPackageType>
 	<SelfContained>true</SelfContained>
@@ -168,9 +168,9 @@
   -->
   <Target Name="RemoveUnusedWindowsML" AfterTargets="Build;Publish">
     <ItemGroup>
-      <_UnusedMl Include="$(OutDir)onnxruntime.dll" />
-      <_UnusedMl Include="$(OutDir)DirectML.dll" />
-      <_UnusedMl Include="$(OutDir)Microsoft.ML.OnnxRuntime.dll" />
+      <!-- Prototype 3D (DepthMaps.cs) uses onnxruntime, DirectML and the managed wrapper: those three stay. -->
+
+
       <_UnusedMl Include="$(OutDir)NPUDetect.dll" />
       <_UnusedMl Include="$(OutDir)Microsoft.Windows.AI.*" />
       <_UnusedMl Include="$(OutDir)Microsoft.Windows.Internal.AI.*" />

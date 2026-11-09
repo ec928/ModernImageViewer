@@ -130,6 +130,51 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
+        public void Parallax_HoldsThePictureStill_WhileDriftStillMoves()
+        {
+            // A moving camera shears the depth map. Motion at 0 would skip the warp, so Parallax keeps a drift and holds it.
+            var photo = new PhotoFacts(@"C:\p\held.jpg", 4000, 3000, new List<UnitRect> { new(0.4, 0.3, 0.2, 0.2) }, 0.2, 0.8, "#000000");
+            SurpriseOptions Options(bool parallax) => EdgeToEdgeOnly(new SurpriseOptions
+            {
+                ParallaxOnly = parallax,
+                CameraMode = SurpriseOptions.CameraDrift,
+                MotionFaceChance = 1,
+                TwoShotChance = 1,
+                PathBendLeast = 0.5,
+                PathBendMost = 0.5,
+                TurnLeast = 5,
+                TurnMost = 5,
+                StillChance = 0,
+                MotionLeast = 0.5,
+                MotionMost = 0.5
+            });
+
+            for (int seed = 0; seed < 20; seed++)
+            {
+                var held = OneImageMove(photo, Options(true), seed);
+                Assert.Equal(CameraKind.Drift, held.Kind);
+                Assert.Equal(1, held.Start.Zoom, 3);
+                Assert.Equal(0.5, held.Start.X, 3);
+                Assert.Equal(0.5, held.Start.Y, 3);
+                Assert.Equal(0, held.Start.Angle, 3);
+                Assert.Equal(held.Start.Zoom, held.End.Zoom, 3);
+                Assert.Equal(held.Start.X, held.End.X, 3);
+                Assert.Equal(held.Start.Y, held.End.Y, 3);
+                Assert.Equal(held.Start.Angle, held.End.Angle, 3);
+                Assert.All(held.Shots, s => Assert.Equal(0, s.Bow, 3));
+                var mid = held.At(held.Seconds / 2);
+                Assert.Equal(1, mid.Zoom, 3);
+                Assert.Equal(0.5, mid.X, 3);
+                Assert.Equal(0.5, mid.Y, 3);
+
+                var moving = OneImageMove(photo, Options(false), seed);
+                double pan = Math.Abs(moving.End.X - moving.Start.X) + Math.Abs(moving.End.Y - moving.Start.Y);
+                Assert.True(moving.Start.Zoom >= 1.06 - 0.001, $"drift zoom was {moving.Start.Zoom:0.00}");
+                Assert.True(pan > 0.05, $"drift pan was {pan:0.000}");
+            }
+        }
+
+        [Fact]
         public void TheLastMove_IsPassedIn_AndNotRepeated()
         {
             var options = new SurpriseOptions { MotionZoomChance = 0.5, TwoShotChance = 0 };

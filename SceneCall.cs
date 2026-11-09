@@ -131,7 +131,16 @@ namespace ModernImageViewer
             if (forced is CameraKind.ZoomIn or CameraKind.ZoomOut)
                 return CameraMove.Plan(aim, amount, 1, 1, seconds, last, random, forced, options.MostZoom > 1 ? toZoom : style, mostZoom, eyes, hold);
             if (forced == CameraKind.Drift)
+            {
+                // Parallax holds the picture still until the mid-distance shimmer is sorted. Motion at 0 would skip the
+                // warp. A zoom of 1 makes this drift travel nothing, so the depth shift is the only motion.
+                if (options.ParallaxOnly)
+                {
+                    var held = style with { BowLeast = 0, BowMost = 0, TurnLeast = 0, TurnMost = 0, TwoShotChance = 0 };
+                    return CameraMove.Plan(subjects, amount, 0, 0, seconds, last, random, forced, held, 1, holdSeconds: hold);
+                }
                 return CameraMove.Plan(subjects, amount, 0, options.MotionFaceChance, seconds, last, random, forced, style, mostZoom, holdSeconds: hold);
+            }
             if (options.Zooms(random))
             {
                 // Never the same kind twice running, as the planner keeps it.

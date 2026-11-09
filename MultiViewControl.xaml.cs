@@ -94,6 +94,7 @@ namespace ModernImageViewer
                 if (_autoPlaySeconds > 0) ApplyPlayEdge(CurrentPlayPercent());
             };
             SetupSoloInteractions();
+            UpdatePresetModePill();
         }
         public bool IsSoloActive => SoloContainer.Visibility == Visibility.Visible;
         /// <summary>Hold keyboard focus on the grid itself, so the first photo's caption button does not draw a focus box.</summary>
@@ -131,12 +132,31 @@ namespace ModernImageViewer
         /// <summary>The session stays as it is, ready to come back to.</summary>
         public void PrepareToLeave()
         {
+            Shutdown();
             RemoveTrayCard();
-            StopAutoPlay();
+            CloseCountsCard();
+        }
+
+        /// <summary>
+        /// Immediately stops playback, releases 3D depth rendering resources and hooks,
+        /// cancels in-flight background drafting, and stops audio for app exit or session termination.
+        /// </summary>
+        public void Shutdown()
+        {
+            ++_storyboardBuildTicket;
+            ++_depthTicket;
+            ++_settleTicket;
+            _activeShow = null;
+            StopSceneDepth();
+            _autoPlayTimer?.Stop();
+            _autoPlayTimer = null;
+            _autoPlaySeconds = 0;
+            _isStoryboardPlayback = false;
             StopAutoPlayMusic();
             ResetCanvasCamera();
-            CloseCountsCard();
-            _hudTimer.Stop();
+            if (_storyboardAdvanced.CurrentCount == 0) _storyboardAdvanced.Release();
+            CancelPreparedSurprise();
+            _hudTimer?.Stop();
         }
         public void Clear()
         {

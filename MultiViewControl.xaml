@@ -361,7 +361,7 @@
                             <Button x:Name="PresetModeButton"
                                     Click="PresetModeButton_Click"
                                     AutomationProperties.Name="Show mode"
-                                    ToolTipService.ToolTip="Switch the show's preset"
+                                    ToolTipService.ToolTip="Switch show preset mode"
                                     Style="{StaticResource QuietButtonStyle}"
                                     Padding="8,5"
                                     CornerRadius="12">

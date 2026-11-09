@@ -229,10 +229,39 @@ namespace ModernImageViewer
         [JsonPropertyName("mostScenesPerStep")]
         public int? MostScenesPerStep { get; set; }
 
+        /// <summary>Odds that a single picture plays in 3D. Null leaves the engine slider.</summary>
+        [JsonPropertyName("depthChance")]
+        public double? DepthChance { get; set; }
+
+        /// <summary>Play keeps only pictures the depth check calls compatible. Null leaves the engine setting.</summary>
+        [JsonPropertyName("parallaxOnly")]
+        public bool? ParallaxOnly { get; set; }
+
+        /// <summary>Rock or Slide. Null leaves the engine's choice. Rock is the motion that works.</summary>
+        [JsonPropertyName("depthMotion")]
+        public string? DepthMotion { get; set; }
+
+        /// <summary>The show's camera mode, when the preset names one. Null leaves the engine mode.</summary>
+        [JsonPropertyName("playCameraMode")]
+        public string? PlayCameraMode { get; set; }
+
+        /// <summary>The chance of a scene with no move, when the preset sets it.</summary>
+        [JsonPropertyName("stillChance")]
+        public double? StillChance { get; set; }
+
+        /// <summary>How far a pan bends, when the preset sets it.</summary>
+        [JsonPropertyName("pathBendLeast")]
+        public double? PathBendLeast { get; set; }
+
+        [JsonPropertyName("pathBendMost")]
+        public double? PathBendMost { get; set; }
+
         [JsonIgnore]
         public bool HoldsValues => FewestImages != null || MostImages != null || DesignOdds != null || FewestSeconds != null
             || MostSeconds != null || SmartPace != null || MotionLeast != null || MotionMost != null
-            || SequenceBeats != null || FewestScenesPerStep != null || MostScenesPerStep != null;
+            || SequenceBeats != null || FewestScenesPerStep != null || MostScenesPerStep != null
+            || DepthChance != null || ParallaxOnly != null || DepthMotion != null || PlayCameraMode != null
+            || StillChance != null || PathBendLeast != null || PathBendMost != null;
 
         /// <summary>The show takes a preset's values as its own, every one of them.</summary>
         public void TakeValues(CinematicOverrides preset)
@@ -249,6 +278,37 @@ namespace ModernImageViewer
             SequenceBeats = preset.SequenceBeatsChance;
             FewestScenesPerStep = preset.FewestScenesPerStep;
             MostScenesPerStep = preset.MostScenesPerStep;
+            DepthChance = preset.DepthChance;
+            ParallaxOnly = preset.ParallaxOnly;
+            DepthMotion = preset.DepthMotion;
+            PlayCameraMode = preset.PlayCameraMode;
+            StillChance = preset.StillChance;
+            PathBendLeast = preset.PathBendLeast;
+            PathBendMost = preset.PathBendMost;
+        }
+
+        /// <summary>Depth and the camera pins, which <see cref="CinematicOverrides.From"/> does not carry.</summary>
+        public void CopyDepthPinsFrom(ShowGlobalDefaults from)
+        {
+            DepthChance = from.DepthChance;
+            ParallaxOnly = from.ParallaxOnly;
+            DepthMotion = from.DepthMotion;
+            PlayCameraMode = from.PlayCameraMode;
+            StillChance = from.StillChance;
+            PathBendLeast = from.PathBendLeast;
+            PathBendMost = from.PathBendMost;
+        }
+
+        /// <summary>Writes the depth pins onto a preset snapshot. Factory values stand in when the show holds none.</summary>
+        public void StampDepthPins(CinematicOverrides snapshot)
+        {
+            snapshot.DepthChance = DepthChance ?? 1;
+            snapshot.ParallaxOnly = ParallaxOnly ?? true;
+            snapshot.DepthMotion = SurpriseOptions.CanonicalDepthMotion(DepthMotion);
+            snapshot.PlayCameraMode = PlayCameraMode ?? SurpriseOptions.CameraDrift;
+            snapshot.StillChance = StillChance ?? 0;
+            snapshot.PathBendLeast = PathBendLeast ?? 0;
+            snapshot.PathBendMost = PathBendMost ?? 0;
         }
 
         /// <summary>The show holds nothing of its own: Layout Generator Settings decide every value.</summary>
@@ -260,6 +320,12 @@ namespace ModernImageViewer
             MotionLeast = MotionMost = null;
             SequenceBeats = null;
             FewestScenesPerStep = MostScenesPerStep = null;
+            DepthChance = null;
+            ParallaxOnly = null;
+            DepthMotion = null;
+            PlayCameraMode = null;
+            StillChance = null;
+            PathBendLeast = PathBendMost = null;
         }
 
         /// <summary>
@@ -297,6 +363,18 @@ namespace ModernImageViewer
             if (SequenceBeats is double beats) o.SequenceBeatsChance = Math.Clamp(beats, 0, 1);
             if (FewestScenesPerStep is int fewestScenes) o.FewestScenesPerStep = Math.Clamp(fewestScenes, 2, SurpriseOptions.MostScenesInAStep);
             if (MostScenesPerStep is int mostScenes) o.MostScenesPerStep = Math.Clamp(mostScenes, o.FewestScenesPerStep, SurpriseOptions.MostScenesInAStep);
+            if (DepthChance is double depth) o.DepthChance = Math.Clamp(depth, 0, 1);
+            if (ParallaxOnly is bool only) o.ParallaxOnly = only;
+            if (!string.IsNullOrEmpty(DepthMotion)) o.DepthMotion = SurpriseOptions.CanonicalDepthMotion(DepthMotion);
+            if (PlayCameraMode != null && SurpriseOptions.CameraModes.Contains(PlayCameraMode)) o.CameraMode = PlayCameraMode;
+            if (StillChance is double still) o.StillChance = Math.Clamp(still, 0, 1);
+            if (PathBendLeast is double bendLeast && PathBendMost is double bendMost)
+            {
+                bendLeast = Math.Clamp(bendLeast, 0, 1);
+                bendMost = Math.Clamp(Math.Max(bendMost, bendLeast), 0, 1);
+                o.PathBendLeast = bendLeast;
+                o.PathBendMost = bendMost;
+            }
             return o;
         }
 

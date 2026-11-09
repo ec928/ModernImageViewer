@@ -406,14 +406,44 @@ namespace ModernImageViewer
 
         /// <summary>The line along a screen edge that fills while a layout holds. Off leaves the pictures clear.</summary>
         public bool ProgressOn { get; set; } = true;
-
-        /// <summary>A title over the first scene when a show plays from its start. The show's name, or the folder's, and the month.</summary>
-        public bool ShowTitleCard { get; set; } = true;
-
-        /// <summary>The date in the lower left when a scene's photos are from a new day.</summary>
-        public bool ShowDateCaptions { get; set; } = true;
         public string ProgressEdge { get; set; } = ProgressBottom;
         public string ProgressColor { get; set; } = ProgressAccent;
+
+        /// <summary>Prototype: a title over the first scene when a show plays from its start.</summary>
+        public bool ShowTitleCard { get; set; } = true;
+        /// <summary>
+        /// Prototype: the odds, 0 to 1, that a scene with one picture plays in 3D, the near things moving against the far
+        /// as the camera moves. Off unless a show sets it. The Parallax preset sets it to 1.
+        /// </summary>
+        public double DepthChance { get; set; }
+
+        /// <summary>Prototype: Play keeps only pictures whose depth map passes <see cref="ParallaxFit"/>. The Parallax preset turns this on.</summary>
+        public bool ParallaxOnly { get; set; }
+
+        /// <summary>Which 3D motion a held picture uses. Rock is the one that works. Slide is the other attempt.</summary>
+        public string DepthMotion { get; set; } = DepthSlide;
+
+        /// <summary>The middle distance stays put. Nearer and farther parts move in opposite directions, then that reverses.</summary>
+        public const string DepthSway = "Sway";
+        public const string DepthRock = DepthSway;
+
+        /// <summary>The far part stays put. Nearer parts slide past it the same way, then come back. Same timing and distance as Rock.</summary>
+        public const string DepthSlide = "Slide";
+
+        public static readonly string[] DepthMotions = { DepthSlide, DepthSway };
+
+        /// <summary>Rock, unless the saved value is Slide. Anything else is Rock, so the working motion stays.</summary>
+        public static string CanonicalDepthMotion(string? motion) =>
+            string.Equals(motion, DepthSway, StringComparison.OrdinalIgnoreCase) || string.Equals(motion, "Rock", StringComparison.OrdinalIgnoreCase) ? DepthSway : DepthSlide;
+
+        /// <summary>
+        /// The depth that stays still. Rock holds the median. Slide holds the far plane, so every nearer depth moves the same way.
+        /// </summary>
+        public static float DepthPivot(string? motion, float middle) =>
+            CanonicalDepthMotion(motion) == DepthSlide ? 0f : middle;
+
+        /// <summary>Prototype: the date in a corner when a scene's photos are from a new day.</summary>
+        public bool ShowDateCaptions { get; set; } = true;
 
         /// <summary>How long Play shows each layout. Not playing is not a setting, so there is always a speed.</summary>
         public int PlaySeconds => AutoPlaySeconds > 0 ? AutoPlaySeconds : 5;
@@ -454,6 +484,9 @@ namespace ModernImageViewer
         /// <summary>The Layout Generator settings that Cinematic storyboard uses in place of these. Everything not in it comes from here.</summary>
         public CinematicOverrides Cinematic { get; set; } = new();
 
+        /// <summary>The Parallax preset: Cinematic's one-picture values, the depth check on, and 3D on every single picture.</summary>
+        public CinematicOverrides Parallax { get; set; } = CinematicOverrides.ParallaxDefaults();
+
         /// <summary>My presets 1, 2 and 3: whatever the user saved into them from a show, the same full set of values. Empty until saved.</summary>
         public List<CinematicOverrides?> MyPresets { get; set; } = new() { null, null, null };
 
@@ -463,7 +496,7 @@ namespace ModernImageViewer
         /// </summary>
         public CinematicOverrides? MultiImage { get; set; }
 
-        /// <summary>The preset last chosen or kept on the Show card ("Multi-Image", "Cinematic", "My preset 1" to "3"): a new show starts from it.</summary>
+        /// <summary>The preset last chosen or kept on the Show card ("Multi-Image", "Cinematic", "Parallax", "My preset 1" to "3"): a new show starts from it.</summary>
         public string? LastPreset { get; set; }
 
         /// <summary>
@@ -472,9 +505,12 @@ namespace ModernImageViewer
         /// </summary>
         public SurpriseOptions WithOverrides(string? overrides)
         {
-            if (!string.Equals(overrides, CinematicOverrides.Name, StringComparison.OrdinalIgnoreCase)) return this;
+            CinematicOverrides? bag = string.Equals(overrides, CinematicOverrides.Name, StringComparison.OrdinalIgnoreCase) ? Cinematic ?? new CinematicOverrides()
+                : (string.Equals(overrides, CinematicOverrides.ParallaxName, StringComparison.OrdinalIgnoreCase) || string.Equals(overrides, CinematicOverrides.LegacyParallaxName, StringComparison.OrdinalIgnoreCase)) ? Parallax ?? CinematicOverrides.ParallaxDefaults()
+                : null;
+            if (bag == null) return this;
             var copy = FromJson(ToJson());
-            (Cinematic ?? new CinematicOverrides()).ApplyTo(copy);
+            bag.ApplyTo(copy);
             return copy;
         }
 
@@ -548,6 +584,9 @@ namespace ModernImageViewer
                 read.RandomMostSeconds = Math.Clamp(read.RandomMostSeconds, FewestSeconds, MostSeconds);
                 if (read.RandomMostSeconds < read.RandomFewestSeconds) read.RandomMostSeconds = read.RandomFewestSeconds;
                 read.Cinematic = CinematicOverrides.Checked(read.Cinematic);
+                read.Parallax = read.Parallax == null || read.Parallax.DepthChance == null
+                    ? CinematicOverrides.ParallaxDefaults()
+                    : CinematicOverrides.Checked(read.Parallax).WithFactoryPins();
                 // Null stays null: the user has not changed Multi-Image, so Play follows the engine settings.
                 read.MultiImage = read.MultiImage == null ? null : CinematicOverrides.Checked(read.MultiImage);
                 // Three slots, whatever the file held; an empty one stays empty.
@@ -577,6 +616,12 @@ namespace ModernImageViewer
                 read.MostScenesPerStep = Math.Clamp(read.MostScenesPerStep, read.FewestScenesPerStep, MostScenesInAStep);
                 read.MotionZoomChance = Math.Clamp(read.MotionZoomChance, 0, 1);
                 read.MotionFaceChance = Math.Clamp(read.MotionFaceChance, 0, 1);
+                read.DepthChance = Math.Clamp(read.DepthChance, 0, 1);
+                read.DepthMotion = CanonicalDepthMotion(read.DepthMotion);
+                // 0.8 was the first default, and it warped single pictures in every mode. A file from before Parallax
+                // existed still has that 0.8; a later 0.8 was chosen on the slider, and the file then has Parallax in it.
+                if (Math.Abs(read.DepthChance - 0.8) < 0.001 && !json!.Contains("\"Parallax\"", StringComparison.Ordinal))
+                    read.DepthChance = 0;
                 // A file from before the four odds: about the mix its single slider gave, so nobody's look changes.
                 if (read.TransitionVariety is double variety)
                 {
@@ -608,6 +653,8 @@ namespace ModernImageViewer
     public sealed class CinematicOverrides
     {
         public const string Name = "Cinematic";
+        public const string ParallaxName = "3D";
+        public const string LegacyParallaxName = "Parallax";
 
         public int FewestPictures { get; set; } = 1;
         public int MostPictures { get; set; } = 1;
@@ -634,10 +681,70 @@ namespace ModernImageViewer
         public bool SmartPace { get; set; } = true;
         public double MotionLeast { get; set; } = 0.4;
         public double MotionMost { get; set; } = 0.6;
-        /// <summary>Sequence beats: 25% in both built-in presets. A user may set any value, including 0.</summary>
+        /// <summary>Sequence beats: 25% in Cinematic. Parallax sets 0, because a beat is a closer zoom. A user may set any value.</summary>
         public double SequenceBeatsChance { get; set; } = 0.25;
         public int FewestScenesPerStep { get; set; } = 2;
         public int MostScenesPerStep { get; set; } = 2;
+
+        /// <summary>When set, the show plays single pictures in 3D at these odds instead of the engine slider. Null leaves the slider.</summary>
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public double? DepthChance { get; set; }
+
+        /// <summary>Play keeps only pictures the depth check calls compatible.</summary>
+        public bool ParallaxOnly { get; set; }
+
+        /// <summary>Rock or Slide. Null leaves the engine's choice. The Parallax preset sets Rock.</summary>
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public string? DepthMotion { get; set; }
+
+        /// <summary>When set, the show's camera mode. Parallax sets Drift, then holds that move still so only the depth shift moves.</summary>
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public string? PlayCameraMode { get; set; }
+
+        /// <summary>When set, the chance of a scene with no camera move. Parallax sets 0: a still does not warp.</summary>
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public double? StillChance { get; set; }
+
+        /// <summary>When set, how far a pan bends. Parallax sets 0: a bowed path would move the picture under the warp.</summary>
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public double? PathBendLeast { get; set; }
+
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public double? PathBendMost { get; set; }
+
+        /// <summary>
+        /// Cinematic's one-picture values, with the depth check on and 3D on every single picture.
+        /// The picture stays still and only the depth shift moves, until the mid-distance shimmer is sorted.
+        /// Zooms, pans, turns, two-shots, sequence beats, hero shapes and stills are off.
+        /// </summary>
+        public static CinematicOverrides ParallaxDefaults()
+        {
+            var preset = Checked(new CinematicOverrides());
+            preset.DepthChance = 1;
+            preset.ParallaxOnly = true;
+            preset.SequenceBeatsChance = 0;
+            preset.DesignOdds[LayoutComposer.HeroSpotlight] = 0;
+            preset.PlayCameraMode = SurpriseOptions.CameraDrift;
+            preset.StillChance = 0;
+            preset.PathBendLeast = 0;
+            preset.PathBendMost = 0;
+            preset.DepthMotion = SurpriseOptions.DepthSlide;
+            return preset;
+        }
+
+        /// <summary>A Parallax preset saved before the camera was pinned takes those pins. One that already names a camera mode is left as saved.</summary>
+        public CinematicOverrides WithFactoryPins()
+        {
+            DepthMotion = SurpriseOptions.CanonicalDepthMotion(DepthMotion);
+            if (PlayCameraMode != null) return this;
+            PlayCameraMode = SurpriseOptions.CameraDrift;
+            StillChance ??= 0;
+            PathBendLeast ??= 0;
+            PathBendMost ??= 0;
+            SequenceBeatsChance = 0;
+            DesignOdds[LayoutComposer.HeroSpotlight] = 0;
+            return this;
+        }
 
         /// <summary>A preset holding the values a show is played with now: what Save as My preset stores.</summary>
         public static CinematicOverrides From(SurpriseOptions o)
@@ -654,6 +761,7 @@ namespace ModernImageViewer
                 SequenceBeatsChance = o.SequenceBeatsChance,
                 FewestScenesPerStep = o.FewestScenesPerStep,
                 MostScenesPerStep = o.MostScenesPerStep,
+                DepthMotion = SurpriseOptions.CanonicalDepthMotion(o.DepthMotion),
                 DesignOdds = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
             };
             foreach (string design in LayoutComposer.Recipes) preset.DesignOdds[design] = o.IsDesignOff(design) ? 0 : o.OddsOf(design);
@@ -686,6 +794,18 @@ namespace ModernImageViewer
             options.SequenceBeatsChance = SequenceBeatsChance;
             options.FewestScenesPerStep = FewestScenesPerStep;
             options.MostScenesPerStep = MostScenesPerStep;
+            options.ParallaxOnly = ParallaxOnly;
+            if (!string.IsNullOrEmpty(DepthMotion)) options.DepthMotion = SurpriseOptions.CanonicalDepthMotion(DepthMotion);
+            if (DepthChance is double depth) options.DepthChance = Math.Clamp(depth, 0, 1);
+            if (PlayCameraMode != null && SurpriseOptions.CameraModes.Contains(PlayCameraMode)) options.CameraMode = PlayCameraMode;
+            if (StillChance is double still) options.StillChance = Math.Clamp(still, 0, 1);
+            if (PathBendLeast is double bendLeast && PathBendMost is double bendMost)
+            {
+                bendLeast = Math.Clamp(bendLeast, 0, 1);
+                bendMost = Math.Clamp(Math.Max(bendMost, bendLeast), 0, 1);
+                options.PathBendLeast = bendLeast;
+                options.PathBendMost = bendMost;
+            }
         }
 
         /// <summary>Anything missing or out of range in the saved file comes back as its default or its limit.</summary>
@@ -712,6 +832,12 @@ namespace ModernImageViewer
             c.SequenceBeatsChance = Math.Clamp(c.SequenceBeatsChance, 0, 1);
             c.FewestScenesPerStep = Math.Clamp(c.FewestScenesPerStep, 2, SurpriseOptions.MostScenesInAStep);
             c.MostScenesPerStep = Math.Clamp(c.MostScenesPerStep, c.FewestScenesPerStep, SurpriseOptions.MostScenesInAStep);
+            if (c.DepthChance is double depth) c.DepthChance = Math.Clamp(depth, 0, 1);
+            c.DepthMotion = string.IsNullOrEmpty(c.DepthMotion) ? null : SurpriseOptions.CanonicalDepthMotion(c.DepthMotion);
+            if (c.PlayCameraMode != null && !SurpriseOptions.CameraModes.Contains(c.PlayCameraMode)) c.PlayCameraMode = null;
+            if (c.StillChance is double still) c.StillChance = Math.Clamp(still, 0, 1);
+            if (c.PathBendLeast is double bendLeast) c.PathBendLeast = Math.Clamp(bendLeast, 0, 1);
+            if (c.PathBendMost is double bendMost) c.PathBendMost = Math.Clamp(bendMost, c.PathBendLeast ?? 0, 1);
             return c;
         }
     }

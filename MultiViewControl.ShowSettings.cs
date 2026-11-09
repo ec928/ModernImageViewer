@@ -1,7 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace ModernImageViewer
@@ -38,7 +38,7 @@ namespace ModernImageViewer
                 target.PresetName = name;
                 target.GlobalDefaults.TakeValues(saved);
             }
-            else SetCinematic(target, name == CinematicOverrides.Name);
+            else SetCinematic(target, name);
         }
 
         /// <summary>Remembers the preset the open show uses, in the app's settings.</summary>
@@ -73,6 +73,50 @@ namespace ModernImageViewer
             changed?.Invoke();
         }
 
+        /// <summary>Rock or Slide, on the show when it holds its own values, and on the engine otherwise. The picture playing picks it up on the next frame.</summary>
+        private void SetDepthMotion(string mode)
+        {
+            mode = SurpriseOptions.CanonicalDepthMotion(mode);
+            var show = _activeShow;
+            if (show?.GlobalDefaults.HoldsValues == true)
+            {
+                show.GlobalDefaults.DepthMotion = mode;
+                SaveShowPreset(show);
+                return;
+            }
+            ChangeSurpriseChoices(o => o.DepthMotion = mode);
+        }
+
+        private FrameworkElement DepthMotionChips()
+        {
+            string shown = LiveDepthMotion();
+            var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+            var chips = new List<Microsoft.UI.Xaml.Controls.Primitives.ToggleButton>();
+            foreach (string mode in SurpriseOptions.DepthMotions)
+            {
+                var chip = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton
+                {
+                    Content = mode,
+                    IsChecked = mode == shown,
+                    Padding = new Thickness(9, 4, 9, 4),
+                    MinWidth = 0,
+                    FontSize = 12
+                };
+                ToolTipService.SetToolTip(chip, mode == SurpriseOptions.DepthSlide
+                    ? "Lateral parallax with background fill. Automatically uses Sway for wide landscapes and flat scenes."
+                    : "Stereo oscillation: sways gently side to side around the focal plane for all 3D photos.");
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chip, "3D motion " + mode);
+                chip.Click += (_, _) =>
+                {
+                    foreach (var other in chips) other.IsChecked = ReferenceEquals(other, chip);
+                    SetDepthMotion(mode);
+                };
+                chips.Add(chip);
+                panel.Children.Add(chip);
+            }
+            return panel;
+        }
+
         /// <summary>Before a show with scenes is replaced: true when it has none, or the user says to replace it.</summary>
         private async System.Threading.Tasks.Task<bool> ConfirmReplaceShowAsync()
         {
@@ -98,13 +142,15 @@ namespace ModernImageViewer
             var old = _activeShow;
             StopAutoPlay();
             _storyboardBuildTicket++;
-            var show = new ShowProject { Title = old?.GeneratorOverrides == CinematicOverrides.Name ? "Cinematic storyboard" : "Storyboard" };
+            var show = new ShowProject { Title = ShowTitleFor(old?.GeneratorOverrides) };
             if (old != null && old.GlobalDefaults.HoldsValues)
             {
                 show.GeneratorOverrides = old.GeneratorOverrides;
                 show.PresetName = old.PresetName;
                 show.PresetSlot = old.PresetSlot;
                 show.GlobalDefaults.TakeValues(CinematicOverrides.From(GeneratorSettingsFor(old)));
+                // From keeps the picture and camera values only. Depth and the filter live beside those.
+                show.GlobalDefaults.CopyDepthPinsFrom(old.GlobalDefaults);
             }
             else ApplyPreset(show, SurpriseChoices.LastPreset);
             _activeShow = show;
@@ -115,33 +161,98 @@ namespace ModernImageViewer
             ShowShownBadge();
         }
 
+        private static bool Is3DPreset(string? name) =>
+            string.Equals(name, CinematicOverrides.ParallaxName, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(name, CinematicOverrides.LegacyParallaxName, StringComparison.OrdinalIgnoreCase);
+
+        private static string ShowTitleFor(string? overrides) =>
+            Is3DPreset(overrides) ? "3D"
+            : overrides == CinematicOverrides.Name ? "Cinematic storyboard"
+            : "Storyboard";
+
         private static string PresetName(int slot, CinematicOverrides? preset) => $"My preset {slot + 1}" + (preset == null ? " (empty)" : "");
 
-        private static string ActivePresetName(ShowProject? show)
+        internal string CurrentPresetName
         {
-            if (!string.IsNullOrEmpty(show?.PresetName)) return show.PresetName!;
-            if (show == null || !show.GlobalDefaults.HoldsValues) return MultiImagePreset;
-            if (show.GeneratorOverrides == CinematicOverrides.Name) return CinematicOverrides.Name;
+            get
+            {
+                if (_activeShow != null) return ActivePresetName(_activeShow);
+                string? last = SurpriseChoices.LastPreset;
+                if (Is3DPreset(last)) return CinematicOverrides.ParallaxName;
+                if (string.Equals(last, CinematicOverrides.Name, StringComparison.OrdinalIgnoreCase)) return CinematicOverrides.Name;
+                if (!string.IsNullOrEmpty(last)) return last;
+                return MultiImagePreset;
+            }
+        }
+
+        internal static string ActivePresetName(ShowProject? show)
+        {
+            if (show == null) return MultiImagePreset;
+            if (Is3DPreset(show.GeneratorOverrides) || Is3DPreset(show.PresetName)) return CinematicOverrides.ParallaxName;
+            if (show.GeneratorOverrides == CinematicOverrides.Name || show.PresetName == CinematicOverrides.Name) return CinematicOverrides.Name;
+            if (!string.IsNullOrEmpty(show.PresetName)) return show.PresetName;
+            if (!show.GlobalDefaults.HoldsValues) return MultiImagePreset;
             return "Custom";
         }
 
-        private static string ActivePresetShortName(ShowProject? show)
+        internal string ActivePresetShortName(ShowProject? show)
         {
-            string name = ActivePresetName(show);
+            string name = show != null ? ActivePresetName(show) : CurrentPresetName;
             if (name.StartsWith("My preset ", StringComparison.OrdinalIgnoreCase))
-                return "P" + name.Substring("My preset ".Length).Trim();
+                return "P" + name.Substring(10).Trim();
             return name;
         }
 
-        /// <summary>The playbar pill and the sidebar chevron. A My preset that is empty is shown and cannot be chosen.</summary>
+        public void SwitchToPreset(string name, int? slot = null)
+        {
+            if (Is3DPreset(name) && !DepthMaps.Available)
+            {
+                ShowAutoPlayToast("3D needs the depth model, which is not beside the app.");
+                return;
+            }
+
+            var target = _activeShow ??= NewShowWithLastPreset();
+            if (slot is int i)
+            {
+                if (SurpriseChoices.MyPresets.ElementAtOrDefault(i) is not CinematicOverrides saved)
+                {
+                    ShowAutoPlayToast($"My preset {i + 1} is empty. Hold it in the Show card to save values there.");
+                    return;
+                }
+                target.GeneratorOverrides = null;
+                target.PresetSlot = i;
+                target.PresetName = $"My preset {i + 1}";
+                target.GlobalDefaults.TakeValues(saved);
+            }
+            else
+            {
+                SetCinematic(target, name);
+            }
+            target.Title = ShowTitleFor(target.GeneratorOverrides);
+            StopSceneDepth();
+            RememberPreset(target);
+            CancelPreparedSurprise();
+            DropScenesDraftedAhead();
+            _updateStorySummary?.Invoke();
+            NoteUserAction();
+            UpdatePresetModePill();
+            ShowAutoPlayState();
+            ShowAutoPlayToast($"Preset: {(slot is int n ? $"My preset {n + 1}" : name)}");
+            if (target.Scenes.Count == 0 && _showBeingBuilt == null)
+            {
+                _ = MakeAndPlayStoryboardAsync(target.GeneratorOverrides);
+            }
+        }
+
         public MenuFlyout BuildPresetMenu(Action<string, int?> onSelect)
         {
             var menu = new MenuFlyout();
-            string current = _activeShow != null ? ActivePresetName(_activeShow) : (SurpriseChoices.LastPreset ?? MultiImagePreset);
+            string current = _activeShow != null ? ActivePresetName(_activeShow) : CurrentPresetName;
 
             void AddMode(string name, string label, string description)
             {
-                bool isCurrent = string.Equals(current, name, StringComparison.OrdinalIgnoreCase);
+                bool isCurrent = string.Equals(current, name, StringComparison.OrdinalIgnoreCase) ||
+                                (Is3DPreset(name) && Is3DPreset(current));
                 var item = new RadioMenuFlyoutItem
                 {
                     Text = $"{label}  ·  {description}",
@@ -157,11 +268,14 @@ namespace ModernImageViewer
                     onSelect(name, null);
                 }
                 item.Click += (_, _) => Select();
+                item.Tapped += (_, _) => Select();
                 menu.Items.Add(item);
             }
 
+            AddMode(CinematicOverrides.ParallaxName, "3D", "Depth & spatial motion");
             AddMode(CinematicOverrides.Name, "Cinematic", "Single-photo slow drift");
-            AddMode(MultiImagePreset, "Multi-Image", "Collages, mosaics and prints");
+            AddMode(MultiImagePreset, "Multi-Image", "Collages, mosaics & prints");
+
             menu.Items.Add(new MenuFlyoutSeparator());
 
             var presets = SurpriseChoices.MyPresets;
@@ -186,59 +300,37 @@ namespace ModernImageViewer
                     onSelect(presetTitle, slot);
                 }
                 item.Click += (_, _) => Select();
+                item.Tapped += (_, _) => Select();
                 menu.Items.Add(item);
             }
 
             menu.Items.Add(new MenuFlyoutSeparator());
+
             var settingsItem = new MenuFlyoutItem
             {
-                Text = "Show settings\u2026",
-                Icon = new FontIcon { Glyph = "\uE713", FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets") }
+                Text = "Show settings…",
+                Icon = new FontIcon { FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), Glyph = "", FontSize = 12 }
             };
             settingsItem.Click += (_, _) => ShowSurpriseCard();
             menu.Items.Add(settingsItem);
-            return menu;
-        }
 
-        /// <summary>The open show takes this preset. With no scenes yet, Play starts.</summary>
-        public void SwitchToPreset(string name, int? slot)
-        {
-            var target = _activeShow ??= NewShowWithLastPreset();
-            if (slot is int i)
-            {
-                if (SurpriseChoices.MyPresets.ElementAtOrDefault(i) is not CinematicOverrides saved)
-                {
-                    ShowAutoPlayToast($"My preset {i + 1} is empty. Hold it on the Show card to keep this show's values there.");
-                    return;
-                }
-                target.GeneratorOverrides = null;
-                target.PresetSlot = i;
-                target.PresetName = $"My preset {i + 1}";
-                target.GlobalDefaults.TakeValues(saved);
-            }
-            else SetCinematic(target, name == CinematicOverrides.Name);
-            RememberPreset(target);
-            CancelPreparedSurprise();
-            DropScenesDraftedAhead();
-            _updateStorySummary?.Invoke();
-            NoteUserAction();
-            ShowAutoPlayState();
-            ShowAutoPlayToast($"Preset: {(slot is int n ? $"My preset {n + 1}" : name)}");
-            if (target.Scenes.Count == 0 && _showBeingBuilt == null)
-                _ = MakeAndPlayStoryboardAsync(target.GeneratorOverrides);
+            return menu;
         }
 
         private void PresetModeButton_Click(object sender, RoutedEventArgs e)
         {
             var menu = BuildPresetMenu((name, slot) => SwitchToPreset(name, slot));
-            if (sender is FrameworkElement anchor) menu.ShowAt(anchor);
+            if (sender is FrameworkElement anchor)
+            {
+                menu.ShowAt(anchor);
+            }
         }
 
-        private void UpdatePresetModePill()
+        public void UpdatePresetModePill()
         {
             if (PresetModeText == null) return;
-            string active = _activeShow != null ? ActivePresetName(_activeShow) : (SurpriseChoices.LastPreset ?? MultiImagePreset);
-            PresetModeText.Text = _activeShow != null ? ActivePresetShortName(_activeShow) : active;
+            string active = _activeShow != null ? ActivePresetName(_activeShow) : CurrentPresetName;
+            PresetModeText.Text = ActivePresetShortName(_activeShow);
             if (PresetModeButton != null)
                 ToolTipService.SetToolTip(PresetModeButton, $"Show mode: {active}. Click to switch.");
         }
@@ -335,9 +427,15 @@ namespace ModernImageViewer
 
             void Applied(string message)
             {
-                if (_activeShow != null) RememberPreset(_activeShow);
+                StopSceneDepth();
+                if (_activeShow != null)
+                {
+                    _activeShow.Title = ShowTitleFor(_activeShow.GeneratorOverrides);
+                    RememberPreset(_activeShow);
+                }
                 CancelPreparedSurprise();
                 DropScenesDraftedAhead();
+                UpdatePresetModePill();
                 _updateStorySummary?.Invoke();
                 NoteUserAction();
                 changed?.Invoke();
@@ -349,6 +447,11 @@ namespace ModernImageViewer
             // Restores a preset: the show takes its values. An empty My preset has nothing to restore.
             void Restore(string name, int? slot)
             {
+                if (Is3DPreset(name) && !DepthMaps.Available)
+                {
+                    ShowAutoPlayToast("3D needs the depth model, which is not beside the app.");
+                    return;
+                }
                 var target = _activeShow ??= NewShowWithLastPreset();
                 if (slot is int i)
                 {
@@ -362,8 +465,12 @@ namespace ModernImageViewer
                     target.PresetName = $"My preset {i + 1}";
                     target.GlobalDefaults.TakeValues(saved);
                 }
-                else SetCinematic(target, name == CinematicOverrides.Name);
+                else SetCinematic(target, name);
                 Applied($"Preset: {(slot is int n ? $"My preset {n + 1}" : name)}");
+                if (target.Scenes.Count == 0 && _showBeingBuilt == null)
+                {
+                    _ = MakeAndPlayStoryboardAsync(target.GeneratorOverrides);
+                }
             }
 
             // Keeps this show's values in a preset, and makes it the one in use.
@@ -379,9 +486,14 @@ namespace ModernImageViewer
                         o.MyPresets[i] = snapshot;
                     }
                     else if (name == CinematicOverrides.Name) o.Cinematic = snapshot;
+                    else if (Is3DPreset(name))
+                    {
+                        target.GlobalDefaults.StampDepthPins(snapshot);
+                        o.Parallax = snapshot;
+                    }
                     else o.MultiImage = snapshot;
                 });
-                target.GeneratorOverrides = name == CinematicOverrides.Name ? CinematicOverrides.Name : null;
+                target.GeneratorOverrides = name == CinematicOverrides.Name ? name : Is3DPreset(name) ? CinematicOverrides.ParallaxName : null;
                 target.PresetSlot = slot;
                 target.PresetName = slot is int k ? $"My preset {k + 1}" : name;
                 target.GlobalDefaults.TakeValues(snapshot);
@@ -407,7 +519,9 @@ namespace ModernImageViewer
                     button.Background = selected;
                     button.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White);
                 }
-                ToolTipService.SetToolTip(button, empty
+                ToolTipService.SetToolTip(button, Is3DPreset(name)
+                    ? "3D. One picture per scene, edge to edge, 3D on every scene, and only pictures with depth information. Slide is the default motion, with automatic Sway on flat scenes. Zooms, pans, turns, two-shots, sequence beats and hero shapes are off. Press to use it; hold to keep this show's values here."
+                    : empty
                     ? $"{title}: empty. Hold (or right-click) to keep this show's values here."
                     : $"{title}{(isCurrent ? ", in use" : "")}. Press to use it; hold (or right-click) to keep this show's values here.");
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, title + (isCurrent ? ", in use" : empty ? ", empty" : ""));
@@ -438,6 +552,7 @@ namespace ModernImageViewer
             }
             AddPreset(MultiImagePreset, MultiImagePreset, null);
             AddPreset(CinematicOverrides.Name, CinematicOverrides.Name, null);
+            AddPreset(CinematicOverrides.ParallaxName, CinematicOverrides.ParallaxName, null);
             for (int i = 0; i < 3; i++) AddPreset($"{i + 1}", $"My preset {i + 1}", i);
 
             // Back to defaults, for the preset in use.
@@ -494,6 +609,26 @@ namespace ModernImageViewer
                 var values = GeneratorSettingsFor(_activeShow);
 
                 Heading("Scenes");
+                var parallaxSwitch = new ToggleSwitch
+                {
+                    IsOn = values.ParallaxOnly,
+                    OnContent = "On",
+                    OffContent = "Off",
+                    MinWidth = 0
+                };
+                parallaxSwitch.Toggled += (_, _) =>
+                {
+                    if (parallaxSwitch.IsOn && !DepthMaps.Available)
+                    {
+                        ShowAutoPlayToast("3D needs the depth model, which is not beside the app.");
+                        parallaxSwitch.IsOn = false;
+                        return;
+                    }
+                    ChangeShowValues(v => v.ParallaxOnly = parallaxSwitch.IsOn, changed);
+                    if (!parallaxSwitch.IsOn) StopSceneDepth();
+                };
+                Row("3D pictures only", "Play keeps only pictures with depth information. The 3D preset turns this on.", parallaxSwitch);
+
                 bool making = ReferenceEquals(_activeShow, _showBeingBuilt);
                 valuesPanel.Children.Add(new TextBlock
                 {

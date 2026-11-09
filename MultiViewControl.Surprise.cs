@@ -102,8 +102,17 @@ namespace ModernImageViewer
         /// Cinematic takes the saved Cinematic preset. Multi-Image takes the saved Multi-Image preset, or, until the user
         /// has changed one, follows the engine settings.
         /// </summary>
-        private void SetCinematic(ShowProject show, bool on)
+        private void SetCinematic(ShowProject show, string? name)
         {
+            if (string.Equals(name, CinematicOverrides.ParallaxName, StringComparison.OrdinalIgnoreCase) || string.Equals(name, CinematicOverrides.LegacyParallaxName, StringComparison.OrdinalIgnoreCase))
+            {
+                show.GeneratorOverrides = CinematicOverrides.ParallaxName;
+                show.PresetSlot = null;
+                show.PresetName = CinematicOverrides.ParallaxName;
+                show.GlobalDefaults.TakeValues(SurpriseChoices.Parallax ?? CinematicOverrides.ParallaxDefaults());
+                return;
+            }
+            bool on = name == CinematicOverrides.Name;
             show.GeneratorOverrides = on ? CinematicOverrides.Name : null;
             show.PresetSlot = null;
             if (on)
@@ -115,11 +124,15 @@ namespace ModernImageViewer
             {
                 show.PresetName = MultiImagePreset;
                 show.GlobalDefaults.TakeValues(multi);
+                show.GlobalDefaults.ParallaxOnly = false;
+                show.GlobalDefaults.DepthChance = 0;
             }
             else
             {
                 show.PresetName = MultiImagePreset;
                 show.GlobalDefaults.ClearValues();
+                show.GlobalDefaults.ParallaxOnly = false;
+                show.GlobalDefaults.DepthChance = 0;
             }
         }
 
@@ -136,7 +149,16 @@ namespace ModernImageViewer
                     while (o.MyPresets.Count < 3) o.MyPresets.Add(null);
                     o.MyPresets[slot] = null;
                 });
-                SetCinematic(show, false);
+                SetCinematic(show, null);
+            }
+            else if (string.Equals(show.GeneratorOverrides, CinematicOverrides.ParallaxName, StringComparison.OrdinalIgnoreCase) || string.Equals(show.PresetName, CinematicOverrides.ParallaxName, StringComparison.OrdinalIgnoreCase) || string.Equals(show.GeneratorOverrides, CinematicOverrides.LegacyParallaxName, StringComparison.OrdinalIgnoreCase) || string.Equals(show.PresetName, CinematicOverrides.LegacyParallaxName, StringComparison.OrdinalIgnoreCase))
+            {
+                var factory = CinematicOverrides.ParallaxDefaults();
+                ChangeSurpriseChoices(o => o.Parallax = factory);
+                show.PresetSlot = null;
+                show.PresetName = CinematicOverrides.ParallaxName;
+                show.GeneratorOverrides = CinematicOverrides.ParallaxName;
+                show.GlobalDefaults.TakeValues(factory);
             }
             else if (show.GeneratorOverrides == CinematicOverrides.Name || show.PresetName == CinematicOverrides.Name)
             {
@@ -149,12 +171,12 @@ namespace ModernImageViewer
             }
             else if (show.PresetName == "Custom")
             {
-                SetCinematic(show, false);
+                SetCinematic(show, null);
             }
             else
             {
                 ChangeSurpriseChoices(o => o.MultiImage = null);
-                SetCinematic(show, false);
+                SetCinematic(show, null);
             }
             CancelPreparedSurprise();
             DropScenesDraftedAhead();
@@ -173,6 +195,11 @@ namespace ModernImageViewer
                 }
                 else if (show.GeneratorOverrides == CinematicOverrides.Name || show.PresetName == CinematicOverrides.Name)
                     o.Cinematic = snapshot;
+                else if (string.Equals(show.GeneratorOverrides, CinematicOverrides.ParallaxName, StringComparison.OrdinalIgnoreCase) || string.Equals(show.PresetName, CinematicOverrides.ParallaxName, StringComparison.OrdinalIgnoreCase) || string.Equals(show.GeneratorOverrides, CinematicOverrides.LegacyParallaxName, StringComparison.OrdinalIgnoreCase) || string.Equals(show.PresetName, CinematicOverrides.LegacyParallaxName, StringComparison.OrdinalIgnoreCase))
+                {
+                    show.GlobalDefaults.StampDepthPins(snapshot);
+                    o.Parallax = snapshot;
+                }
                 else
                     o.MultiImage = snapshot;
             });
@@ -1022,6 +1049,20 @@ namespace ModernImageViewer
                 0, 100, 5, options.MotionFaceChance * 100,
                 v => $"{v:0}%",
                 (o, v) => o.MotionFaceChance = v / 100);
+            cameraSection.Children.Add(new TextBlock { Text = "3D motion style", FontSize = 13, Margin = new Thickness(0, 8, 0, 4) });
+            cameraSection.Children.Add(DepthMotionChips());
+            Slide(cameraSection, "3D on single pictures", "The odds that a scene with one picture plays in 3D. Slide moves the camera laterally over background fill (falling back to Sway on landscapes). Sway gently rocks the picture left and right. Off unless you turn it up. The 3D preset sets it to 100% for that show.",
+                0, 100, 5, GeneratorSettingsFor(_activeShow).DepthChance * 100,
+                v => $"{v:0}%",
+                (o, v) =>
+                {
+                    // A show that holds its own odds, such as Parallax, keeps the change. Other shows follow this slider.
+                    if (_activeShow?.GlobalDefaults.DepthChance is not null)
+                        _activeShow.GlobalDefaults.DepthChance = v / 100;
+                    else
+                        o.DepthChance = v / 100;
+                    if (v <= 0) StopSceneDepth();
+                });
             MovementGroup(cameraSection);
 
             string TransitionSummaryText() => $"{SurpriseChoices.TransitionShares()[LayoutTransition.Crossfade] * 100:0}% crossfade";
@@ -1036,10 +1077,8 @@ namespace ModernImageViewer
 
             Toggle(lookSection, "Play progress", "A line along an edge of the screen fills while each layout holds. It stays when the bar hides.",
                 options.ProgressOn, (o, on) => { o.ProgressOn = on; lookSummary.Text = LookSummaryText(); });
-
             Toggle(lookSection, "Title at the start", "When a show plays from its first scene, its name (or the folder's) and the month of its first photo fade in over it.",
                 options.ShowTitleCard, (o, on) => o.ShowTitleCard = on);
-
             Toggle(lookSection, "Date captions", "When a scene's photos are from a new day, the date shows in the lower left for a few seconds, with the folder when that changes too.",
                 options.ShowDateCaptions, (o, on) => o.ShowDateCaptions = on);
 
@@ -3412,8 +3451,8 @@ namespace ModernImageViewer
         /// waits while it is paused. A show that was opened or saved is not made here: it replays its own scenes. Reading a
         /// large folder's faces first would keep the screen still for minutes. Stops if the show is replaced or cleared.
         /// </summary>
-        /// <param name="overrides">Null to use the preset already chosen. Otherwise a preset name:
-        /// Multi-Image, Cinematic, or "My preset 1" to "3".</param>
+        /// <param name="overrides">Null for the main Layout Generator settings, or the name of a set of overrides
+        /// (<see cref="CinematicOverrides.Name"/>) that the show keeps for every scene made for it.</param>
         public async Task MakeAndPlayStoryboardAsync(string? overrides = null)
         {
             int ticket = ++_storyboardBuildTicket;
@@ -3423,12 +3462,13 @@ namespace ModernImageViewer
             StopAutoPlay();
             RemoveTrayCard();
             bool cinematic = string.Equals(overrides, CinematicOverrides.Name, StringComparison.OrdinalIgnoreCase);
+            bool parallax = string.Equals(overrides, CinematicOverrides.ParallaxName, StringComparison.OrdinalIgnoreCase) || string.Equals(overrides, CinematicOverrides.LegacyParallaxName, StringComparison.OrdinalIgnoreCase);
             // Play with an empty show plays that show: its preset and values were chosen on the Show card.
             ShowProject show;
             if (overrides == null && _activeShow is { Scenes.Count: 0 } empty) show = empty;
             else
             {
-                show = new ShowProject { Title = cinematic ? "Cinematic storyboard" : "Storyboard" };
+                show = new ShowProject();
                 if (overrides == null && _activeShow is ShowProject previous && previous.GlobalDefaults.HoldsValues)
                 {
                     // Play show from the folders uses the preset chosen on the Show card, not a fresh Multi-Image.
@@ -3436,27 +3476,84 @@ namespace ModernImageViewer
                     show.PresetName = previous.PresetName;
                     show.PresetSlot = previous.PresetSlot;
                     show.GlobalDefaults.TakeValues(CinematicOverrides.From(GeneratorSettingsFor(previous)));
+                    show.GlobalDefaults.CopyDepthPinsFrom(previous.GlobalDefaults);
                 }
-                else if (overrides == null) ApplyPreset(show, SurpriseChoices.LastPreset);
+                else if (overrides == null) ApplyPreset(show, CurrentPresetName);
                 else
                 {
-                    ApplyPreset(show, overrides);
+                    ApplyPreset(show, parallax ? CinematicOverrides.ParallaxName : overrides);
                     RememberPreset(show);
                 }
+                show.Title = ShowTitleFor(show.GeneratorOverrides);
             }
+            var replaced = _activeShow;
             _activeShow = show;
+            UpdatePresetModePill();
             _selectedShowScene = null;
             _canvasSceneId = null;
             _isStoryboardPlayback = false;
             _showPlaybackIndex = 0;
             ShowShownBadge();
             bool Current() => ticket == _storyboardBuildTicket && ReferenceEquals(show, _activeShow);
-            var deck = new PictureDeck(PicturesInOrder(), new Random());
+            var pictures = PicturesInOrder();
+            var playSettings = GeneratorSettingsFor(show);
+            string playNote = $"Play show · {ActivePresetName(show)}";
+            // Parallax checks one picture at a time and starts on the first that passes. The rest are checked while it plays.
+            List<string>? stillToCheck = null;
+            int nextCheck = 0, leftOut = 0, unsure = 0, unread = 0;
+            PictureDeck deck;
+            if (playSettings.ParallaxOnly)
+            {
+                if (!DepthMaps.Available)
+                {
+                    if (!ReferenceEquals(replaced, show))
+                    {
+                        _activeShow = replaced;
+                        ShowShownBadge();
+                    }
+                    ShowAutoPlayToast("3D needs the depth model, which is not beside the app.");
+                    return;
+                }
+                ShowAutoPlayToast($"Checking {pictures.Count} pictures for 3D", hold: true);
+                stillToCheck = pictures;
+                string? first = null;
+                while (nextCheck < stillToCheck.Count && first == null)
+                {
+                    if (!Current()) return;
+                    string path = stillToCheck[nextCheck++];
+                    var verdict = await DepthMaps.VerdictAsync(path);
+                    if (verdict == ParallaxFit.Verdict.Pass) first = path;
+                    else if (verdict == null) unread++;
+                    else if (verdict == ParallaxFit.Verdict.Unsure) unsure++;
+                    else leftOut++;
+                    ShowAutoPlayToast($"Checking pictures for 3D, {nextCheck} of {stillToCheck.Count}", hold: true);
+                }
+                if (!Current()) return;
+                if (first == null)
+                {
+                    // A check that keeps nothing does not replace a show that already had scenes.
+                    if (!ReferenceEquals(replaced, show))
+                    {
+                        _activeShow = replaced;
+                        ShowShownBadge();
+                    }
+                    ShowAutoPlayToast("3D: none of these pictures passed the depth check.");
+                    return;
+                }
+                deck = new PictureDeck(new[] { first }, new Random());
+                bool more = nextCheck < stillToCheck.Count;
+                string unreadNote = unread > 0 ? $", {unread} unreadable" : "";
+                playNote = more
+                    ? "Play show · 3D · starting, still checking the rest"
+                    : $"Play show · 3D · {deck.Count} pictures, {leftOut} left out, {unsure} unsure{unreadNote}";
+            }
+            else deck = new PictureDeck(pictures, new Random());
             int failedHands = 0;
             _showBeingBuilt = show;
             PlayTiming.Start(SurpriseChoices.LogPlayTiming);
             // Said at once: the first scene takes a moment to make, and nothing else on screen names the preset.
-            ShowAutoPlayToast($"Play show · {ActivePresetName(show)}");
+            // Held while pictures are still being checked, so the count does not fade before the first scene.
+            ShowAutoPlayToast(playNote, hold: stillToCheck != null && nextCheck < stillToCheck.Count);
 
             // Keep my canvas: every scene takes the canvas as it is now, before the show changes it. Only the old direct mix
             // applied it, so it did nothing once Play always played the show.
@@ -3465,6 +3562,15 @@ namespace ModernImageViewer
             // Every image dealt at least once, placed or not: the end of the first round through the session.
             var dealtOnce = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             bool started = false;
+            int NeverDealt()
+            {
+                int waiting = 0;
+                foreach (string picture in deck.All)
+                    if (!dealtOnce.Contains(picture)) waiting++;
+                return waiting;
+            }
+            int lastRevision = _upcomingStepRevision;
+            int notifiedEmptyForRevision = -1;
             while (Current())
             {
                 // While the show plays, stay only a few scenes ahead of the screen. Building a scene is UI work, and
@@ -3474,23 +3580,98 @@ namespace ModernImageViewer
                     await _storyboardAdvanced.WaitAsync(TimeSpan.FromSeconds(2));
                 if (!Current()) return;
 
+                // Read for each scene. A change also drops scenes drafted ahead but not yet shown, and bumps
+                // _upcomingStepRevision so a step already in flight, made with the old values, is not kept.
+                var settings = GeneratorSettingsFor(show);
+                bool wantParallax = settings.ParallaxOnly;
+
+                if (wantParallax && stillToCheck == null)
+                {
+                    if (!DepthMaps.Available)
+                    {
+                        ShowAutoPlayToast("3D needs the depth model, which is not beside the app.");
+                    }
+                    else
+                    {
+                        stillToCheck = PicturesInOrder();
+                        nextCheck = 0;
+                        var keepers = deck.All.Where(p => DepthMaps.CachedVerdict(p) == ParallaxFit.Verdict.Pass).ToList();
+                        deck = new PictureDeck(keepers, new Random());
+                        dealtOnce = new HashSet<string>(show.Scenes.SelectMany(s => s.GetPhotoPaths()), StringComparer.OrdinalIgnoreCase);
+                        ShowAutoPlayToast("3D · checking pictures for depth motion", hold: true);
+                    }
+                }
+                else if (!wantParallax && stillToCheck != null)
+                {
+                    stillToCheck = null;
+                    var allSession = SessionPictures();
+                    deck = new PictureDeck(allSession, new Random());
+                    deck.MatchSession(allSession);
+                    dealtOnce = new HashSet<string>(show.Scenes.SelectMany(s => s.GetPhotoPaths()), StringComparer.OrdinalIgnoreCase);
+                }
+                else if (_upcomingStepRevision != lastRevision)
+                {
+                    dealtOnce = new HashSet<string>(show.Scenes.SelectMany(s => s.GetPhotoPaths()), StringComparer.OrdinalIgnoreCase);
+                }
+                lastRevision = _upcomingStepRevision;
+
+                int checkedAt = nextCheck;
+                if (stillToCheck != null)
+                {
+                    // One keeper starts the show. After that, two not yet dealt, so the next scene is not the same picture while the folder is still being checked.
+                    int need = started ? 2 : 1;
+                    while (Current() && nextCheck < stillToCheck.Count && NeverDealt() < need)
+                    {
+                        string path = stillToCheck[nextCheck++];
+                        var verdict = await DepthMaps.VerdictAsync(path);
+                        if (verdict == ParallaxFit.Verdict.Pass) deck.Include(new[] { path });
+                        else if (verdict == null) unread++;
+                        else if (verdict == ParallaxFit.Verdict.Unsure) unsure++;
+                        else leftOut++;
+                    }
+                    if (!Current()) return;
+                }
+
                 var session = SessionPictures();
                 if (session.Count == 0) break;
-                deck.MatchSession(session);
+                if (stillToCheck != null)
+                {
+                    // MatchSession adds every picture it is given, and those additions are dealt first. The whole session
+                    // put pictures the filter had rejected at the front of the show, and they were warped anyway.
+                    var live = new HashSet<string>(session, StringComparer.OrdinalIgnoreCase);
+                    deck.MatchSession(deck.All.Where(p => live.Contains(p)).ToList());
+                }
+                else deck.MatchSession(session);
                 // Every image has been dealt once: more are made only while the show plays, so a pause does not draft forever.
                 // Dealt, not placed: screens and near-repeats are left out and a layout may take fewer, so some images
                 // are never in a scene, and waiting for that drafted without end (409 scenes from 182 images).
-                if (started && !IsPlayingStoryboard && session.All(dealtOnce.Contains))
+                // Parallax never deals a picture it rejected, so the round is the keepers, once the folder has been checked.
+                bool firstRoundDone = stillToCheck != null
+                    ? nextCheck >= stillToCheck.Count && deck.All.All(dealtOnce.Contains)
+                    : session.All(dealtOnce.Contains);
+                if (started && !IsPlayingStoryboard && firstRoundDone)
                 {
                     await _storyboardAdvanced.WaitAsync(TimeSpan.FromSeconds(2));
                     continue;
                 }
-                // Read for each scene. A change also drops scenes drafted ahead but not yet shown, and bumps
-                // _upcomingStepRevision so a step already in flight, made with the old values, is not kept.
-                var settings = GeneratorSettingsFor(show);
                 int draftedAt = _upcomingStepRevision;
                 var chosen = DealHand(deck, settings).Where(p => !_imagesBeingDrafted.Contains(p)).ToList();
-                if (chosen.Count == 0) break;
+                if (chosen.Count == 0)
+                {
+                    // Nothing dealt, and the check above moved on: try the pictures still to come. If it did not move, stop.
+                    if (stillToCheck != null && nextCheck > checkedAt) continue;
+                    if (stillToCheck != null && deck.Count == 0)
+                    {
+                        if (notifiedEmptyForRevision != _upcomingStepRevision)
+                        {
+                            notifiedEmptyForRevision = _upcomingStepRevision;
+                            ShowAutoPlayToast("3D: none of these pictures passed the depth check.");
+                        }
+                        await _storyboardAdvanced.WaitAsync(TimeSpan.FromSeconds(2));
+                        continue;
+                    }
+                    break;
+                }
                 dealtOnce.UnionWith(chosen);
                 _imagesBeingDrafted.UnionWith(chosen);
                 ShowScene? scene;
@@ -3656,6 +3837,12 @@ namespace ModernImageViewer
                 timer.Interval = TimeSpan.FromSeconds(Math.Max(1, TakeWait()));
                 if (ReferenceEquals(_autoPlayTimer, timer)) timer.Start();
             };
+            // The depth model loads while the first scene comes on.
+            if (GeneratorSettingsFor(_activeShow).DepthChance > 0 && SinglePhoto(startScene) is string firstPath)
+            {
+                _ = DepthMaps.ForAsync(firstPath);
+                if (LiveDepthMotion() == SurpriseOptions.DepthSlide) _ = SubjectMasks.ForAsync(firstPath);
+            }
             await PlayNextStoryboardSceneAsync(fade: true);
             timer.Interval = TimeSpan.FromSeconds(Math.Max(1, TakeWait()));
             if (ReferenceEquals(_autoPlayTimer, timer)) timer.Start();
@@ -3712,6 +3899,8 @@ namespace ModernImageViewer
             double fadeSeconds = SurpriseChoices.PickTransitionSeconds(Random.Shared, _layoutSeconds);
             var outgoingStep = fade ? OutgoingCameraStep(fadeSeconds) : (1.0, 0.0, 0.0);
             Image? before = fade ? await CoverWithPictureOfCanvasAsync() : null;
+            _depthTicket++;
+            StopSceneDepth();
             ResetCanvasCamera();
 
             _restoringUndo = true;
@@ -3806,6 +3995,7 @@ namespace ModernImageViewer
                     : Enum.TryParse<LayoutTransition>(scene.Transition, out var planned) ? planned : LayoutTransition.Crossfade);
             if (hardCut) PlayTiming.Write($"scene {currentIndex + 1}: hard cut on a big moment of the song");
             _ = ShowSceneWordsAsync(scene);
+            _ = StartSceneDepthAsync(scene, liveIndex + 1 < liveScenes.Count ? liveScenes[liveIndex + 1] : null);
 
             int displayIndex = liveIndex + 1;
             int totalDisplay = liveScenes.Count;
@@ -4001,6 +4191,8 @@ namespace ModernImageViewer
             // A cut planned for a big moment belongs to that moment: a scene shown after a pause comes in as made.
             _nextChangeIsHardCut = false;
             ClearShowWords();
+            _depthTicket++;
+            StopSceneDepth();
             StopPlaybackProgress();
             _autoPlayTimer?.Stop();
             _autoPlayTimer = null;
@@ -4173,8 +4365,8 @@ namespace ModernImageViewer
         private Border? _autoPlayToast;
         private Storyboard? _autoPlayToastFade;
 
-        /// <summary>The bar hides during a show, so a change of state also says so over the picture for a moment.</summary>
-        private void ShowAutoPlayToast(string text)
+        /// <summary>The bar hides during a show, so a change of state also says so over the picture for a moment. Held, it stays until the next message.</summary>
+        private void ShowAutoPlayToast(string text, bool hold = false)
         {
             _autoPlayToastFade?.Stop();
             if (_autoPlayToast != null) RootGrid.Children.Remove(_autoPlayToast);
@@ -4191,6 +4383,11 @@ namespace ModernImageViewer
             };
             _autoPlayToast = toast;
             AddOverCanvas(toast, 6200);
+            if (hold)
+            {
+                _autoPlayToastFade = null;
+                return;
+            }
             var fade = new DoubleAnimation { From = 1, To = 0, BeginTime = TimeSpan.FromSeconds(1.6), Duration = TimeSpan.FromMilliseconds(500) };
             Storyboard.SetTarget(fade, toast);
             Storyboard.SetTargetProperty(fade, "Opacity");

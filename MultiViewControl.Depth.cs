@@ -1,0 +1,387 @@
+using Microsoft.Graphics.Canvas;
+using Microsoft.Graphics.Canvas.Effects;
+using Microsoft.Graphics.Canvas.UI.Xaml;
+using Microsoft.UI.Dispatching;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+using System;
+using System.Linq;
+using System.Numerics;
+using System.Threading.Tasks;
+using Windows.Foundation;
+using Windows.Graphics.Imaging;
+using Windows.Storage;
+using Windows.Storage.Streams;
+
+namespace ModernImageViewer
+{
+    /// <summary>
+    /// Prototype (branch prototype-titles-3d): a scene with one picture played in 3D. The cell keeps its own picture
+    /// element, so its crop, frame and the camera's move are all as before; only what the element shows changes, to the
+    /// photo drawn each frame with its near things moved against the far, by the depth map, as the camera moves. A pan
+    /// moves the near things further the same way; a zoom, which has no sideways move of its own, gets a slow one.
+    /// </summary>
+    public sealed partial class MultiViewControl
+    {
+        // The most the nearest thing moves against the middle distance over a whole move, as a share of the photo's width.
+        private const double DepthTravel = 0.032;
+        // A little in from the edges, so what is drawn past an edge never shows.
+        private const float DepthOverscan = 1.025f;
+        private const double DepthRampSeconds = 0.6;
+        private const int DepthLongestSide = 3072;
+
+        private sealed class DepthScene
+        {
+            public required Image Target { get; init; }
+            public required ImageSource Original { get; init; }
+            public required CanvasImageSource Surface { get; init; }
+            public required CanvasBitmap Photo { get; init; }
+            public required CanvasBitmap Depth { get; init; }
+            public required ColorMatrixEffect Shift { get; init; }
+            public required DisplacementMapEffect Moved { get; init; }
+            public required CameraMove Move { get; init; }
+            public required float Middle { get; init; }
+            public required Vector2 Drift { get; init; }
+            public System.Diagnostics.Stopwatch Shown { get; } = System.Diagnostics.Stopwatch.StartNew();
+            // Slide: the background with what the near layer hides filled in, and the near layer cut out by its mask.
+            public CanvasBitmap? Plate { get; init; }
+            public BorderEffect? PlateBorder { get; init; }
+            public CanvasBitmap? Mask { get; init; }
+            public AlphaMaskEffect? Near { get; init; }
+            /// <summary>Where the camera's move was when Slide began, so its one move fills the rest of the scene.</summary>
+            public double FromSeconds { get; init; }
+            /// <summary>Slide's way across: 1 right, -1 left.</summary>
+            public float Way { get; init; }
+            /// <summary>Slide: the subject's centre in pixels, which the background grows about.</summary>
+            public Vector2 SubjectCentre { get; init; }
+            /// <summary>Slide was chosen but the photo has no clear subject in front: it plays Sway.</summary>
+            public bool SwayInstead { get; init; }
+            public bool RockInstead => SwayInstead;
+        }
+
+        // Slide: how far the background travels behind the foreground over the scene, as a share of the photo's width.
+        private const float SlideTravel = 0.042f;
+
+        private DepthScene? _depthScene;
+        private int _depthTicket;
+
+        /// <summary>Called as a scene comes on, once its camera move has started.</summary>
+        private async Task<bool> TryStartSceneDepthAsync(ShowScene scene, ShowScene? next)
+        {
+            int ticket = ++_depthTicket;
+            // The next scene's map is made while this one plays, so it is ready when it comes on.
+            if (next != null && SinglePhoto(next) is string nextPath)
+            {
+                _ = DepthMaps.ForAsync(nextPath);
+                // Slide's subject takes a few seconds on the graphics card: it is cut while this scene plays.
+                if (LiveDepthMotion() == SurpriseOptions.DepthSlide)
+                {
+                    _ = SubjectMasks.ForAsync(nextPath);
+                    _ = ParallaxJudge.ForAsync(nextPath);
+                }
+            }
+            var options = GeneratorSettingsFor(_activeShow);
+            if (_autoPlaySeconds == 0 || options.DepthChance <= 0 || !DepthMaps.Available) return false;
+            if (SinglePhoto(scene) is not string path) return false;
+            if (Random.Shared.NextDouble() >= options.DepthChance) { PlayTiming.Write("3D: not this scene (odds)"); return false; }
+            var move = _cameraMove;
+            if (move == null || _cameraGoingHome) { PlayTiming.Write("3D: not this scene (no camera move)"); return false; }
+            var parts = Enumerable.Range(0, _items.Count).Select(GetCellParts)
+                .Where(p => p != null && !IsEmptyCell(p.Bound.Item)).ToList();
+            if (parts.Count != 1 || parts[0] is not { } cell) { PlayTiming.Write($"3D: not this scene ({parts.Count} cells)"); return false; }
+            if (!string.Equals(cell.Bound.Item.Path, path, StringComparison.OrdinalIgnoreCase)) { PlayTiming.Write("3D: not this scene (cell shows another photo)"); return false; }
+
+            var map = await DepthMaps.ForAsync(path);
+            if (map == null || map.Grey.Length == 0 || ticket != _depthTicket || _autoPlaySeconds == 0) { PlayTiming.Write($"3D: not this scene (map {(map == null ? "missing" : "late")})"); return false; }
+            try
+            {
+                var device = CanvasDevice.GetSharedDevice();
+                var (pixels, photoWidth, photoHeight) = await LoadDepthPixelsAsync(path);
+                var photo = CanvasBitmap.CreateFromBytes(device, pixels, photoWidth, photoHeight, Windows.Graphics.DirectX.DirectXPixelFormat.B8G8R8A8UIntNormalized);
+                // Slide moves the near part as one piece over a background that holds, so it is cut and filled once, here.
+                bool slide = LiveDepthMotion() == SurpriseOptions.DepthSlide;
+                // Chosen before the layers are made: the fill goes on the side the subject uncovers.
+                float way = Random.Shared.Next(2) == 0 ? -1f : 1f;
+                ParallaxLayers.Layers? layers = null;
+                if (slide)
+                {
+                    // Only a photo with a clear subject in front of its background slides. Any other plays Rock, which
+                    // needs no subject (Ed, 2026-11-07: fall back on the 3D movement that works).
+                    var subject = await SubjectMasks.ForAsync(path);
+                    var judged = await ParallaxJudge.ForAsync(path);
+                    if (subject == null || judged == null || judged.Fit != ParallaxJudge.Fit.Slide)
+                    {
+                        PlayTiming.Write($"3D: Sway instead of Slide ({(judged == null ? "not judged" : judged.Why)})");
+                        slide = false;
+                    }
+                    else
+                    {
+                        // The background slides toward the side away from the subject: the edge it uncovers is then the one
+                        // with the most room behind the subject to cover it.
+                        double sum = 0, weight = 0;
+                        for (int i = 0; i < subject.Alpha.Length; i++) { float a = subject.Alpha[i]; sum += a * (i % subject.Size); weight += a; }
+                        float subjectX = weight > 0 ? (float)(sum / weight / subject.Size) : 0.5f;
+                        way = subjectX < 0.5f ? 1f : -1f;
+                        var clock = System.Diagnostics.Stopwatch.StartNew();
+                        layers = await Task.Run(() => ParallaxLayers.Build(pixels, photoWidth, photoHeight, map.Raw ?? map.Grey, map.Width, map.Height, subject.Alpha, subject.Size, way > 0 ? 1 : -1));
+                        PlayTiming.Write($"3D: Slide layers in {clock.ElapsedMilliseconds} ms, subject {layers.NearShare:P0}, in front by {layers.InFront:0.00}");
+                        if (layers.InFront < 0.08f)
+                        {
+                            PlayTiming.Write("3D: Sway instead of Slide (the subject is not in front)");
+                            layers = null;
+                            slide = false;
+                        }
+                    }
+                }
+                if (ticket != _depthTicket || _autoPlaySeconds == 0 || cell.Photo.Source is not ImageSource original) { photo.Dispose(); return false; }
+                var grey = new byte[map.Width * map.Height * 4];
+                for (int i = 0; i < map.Grey.Length; i++)
+                {
+                    byte v = map.Grey[i];
+                    grey[i * 4] = v; grey[i * 4 + 1] = v; grey[i * 4 + 2] = v; grey[i * 4 + 3] = 255;
+                }
+                var depth = CanvasBitmap.CreateFromBytes(device, grey, map.Width, map.Height, Windows.Graphics.DirectX.DirectXPixelFormat.B8G8R8A8UIntNormalized);
+                var size = photo.SizeInPixels;
+                var depthAtSize = new BorderEffect
+                {
+                    Source = new ScaleEffect
+                    {
+                        Source = depth,
+                        Scale = new Vector2(size.Width / (float)map.Width, size.Height / (float)map.Height),
+                        InterpolationMode = CanvasImageInterpolation.HighQualityCubic
+                    },
+                    ExtendX = CanvasEdgeBehavior.Clamp,
+                    ExtendY = CanvasEdgeBehavior.Clamp
+                };
+                var shift = new ColorMatrixEffect { Source = depthAtSize, ClampOutput = true, AlphaMode = CanvasAlphaMode.Straight };
+                var moved = new DisplacementMapEffect
+                {
+                    Source = new BorderEffect { Source = photo, ExtendX = CanvasEdgeBehavior.Clamp, ExtendY = CanvasEdgeBehavior.Clamp },
+                    Displacement = shift,
+                    XChannelSelect = EffectChannelSelect.Red,
+                    YChannelSelect = EffectChannelSelect.Green,
+                    Amount = (float)(size.Width * DepthTravel * 4)
+                };
+                double angle = Random.Shared.NextDouble() * Math.PI * 2;
+                CanvasBitmap? plate = null, mask = null;
+                BorderEffect? plateBorder = null;
+                AlphaMaskEffect? near = null;
+                if (layers != null)
+                {
+                    plate = CanvasBitmap.CreateFromBytes(device, layers.Plate, photoWidth, photoHeight, Windows.Graphics.DirectX.DirectXPixelFormat.B8G8R8A8UIntNormalized);
+                    plateBorder = new BorderEffect { Source = plate, ExtendX = CanvasEdgeBehavior.Mirror, ExtendY = CanvasEdgeBehavior.Clamp };
+                    mask = CanvasBitmap.CreateFromBytes(device, layers.Mask, photoWidth, photoHeight, Windows.Graphics.DirectX.DirectXPixelFormat.B8G8R8A8UIntNormalized);
+                    near = new AlphaMaskEffect { Source = photo, AlphaMask = mask };
+                }
+                var state = new DepthScene
+                {
+                    Target = cell.Photo,
+                    Original = original,
+                    Surface = new CanvasImageSource(device, size.Width, size.Height, 96),
+                    Photo = photo,
+                    Depth = depth,
+                    Shift = shift,
+                    Moved = moved,
+                    Move = move,
+                    Middle = map.Middle,
+                    Drift = new Vector2((float)Math.Cos(angle), (float)(Math.Sin(angle) * 0.5)),
+                    Plate = plate,
+                    PlateBorder = plateBorder,
+                    Mask = mask,
+                    Near = near,
+                    FromSeconds = ReferenceEquals(_cameraMove, move) ? _cameraClock.Elapsed.TotalSeconds : 0,
+                    Way = way,
+                    SubjectCentre = layers == null ? Vector2.Zero : new Vector2(layers.CentreX * photoWidth, layers.CentreY * photoHeight),
+                    SwayInstead = LiveDepthMotion() == SurpriseOptions.DepthSlide && layers == null
+                };
+                // Drawn once before it is shown, so the swap shows the same picture.
+                DrawDepth(state);
+                StopSceneDepth();
+                _depthScene = state;
+                state.Target.Source = state.Surface;
+                Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += DepthFrame;
+                PlayTiming.Write($"3D: on for {System.IO.Path.GetFileName(path)}, {size.Width}x{size.Height}");
+                return true;
+            }
+            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.Runtime.InteropServices.COMException or System.IO.IOException or UnauthorizedAccessException)
+            {
+                PlayTiming.Write($"3D: not shown: {ex.GetType().Name} {ex.Message}");
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Called as a scene comes on, once its camera move has started. Slide plays on a photo with a clear subject in
+        /// front, Rock on any other. A photo fit for no 3D is left out of a Parallax show when it is made (ParallaxFit),
+        /// so no scene there should fall back to a plain pan or zoom (Ed, 2026-11-07).
+        /// </summary>
+        private async Task StartSceneDepthAsync(ShowScene scene, ShowScene? next) => await TryStartSceneDepthAsync(scene, next);
+
+        /// <summary>The scene's one photo, when it has exactly one.</summary>
+        private static string? SinglePhoto(ShowScene scene)
+        {
+            var paths = scene.GetPhotoPaths().Where(p => !string.IsNullOrEmpty(p)).Distinct(StringComparer.OrdinalIgnoreCase).Take(2).ToList();
+            return paths.Count == 1 ? paths[0] : null;
+        }
+
+        private static async Task<(byte[] Pixels, int Width, int Height)> LoadDepthPixelsAsync(string path)
+        {
+            var file = await StorageFile.GetFileFromPathAsync(path);
+            using IRandomAccessStream stream = await file.OpenReadAsync();
+            var decoder = await BitmapDecoder.CreateAsync(stream);
+            bool turned = decoder.OrientedPixelWidth != decoder.PixelWidth;
+            double w = decoder.OrientedPixelWidth, h = decoder.OrientedPixelHeight;
+            double scale = Math.Min(1, DepthLongestSide / Math.Max(w, h));
+            int width = Math.Max(1, (int)Math.Round(w * scale)), height = Math.Max(1, (int)Math.Round(h * scale));
+            var transform = new BitmapTransform
+            {
+                ScaledWidth = (uint)(turned ? height : width),
+                ScaledHeight = (uint)(turned ? width : height),
+                InterpolationMode = BitmapInterpolationMode.Fant
+            };
+            var data = await decoder.GetPixelDataAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied, transform,
+                ExifOrientationMode.RespectExifOrientation, ColorManagementMode.DoNotColorManage);
+            return (data.DetachPixelData(), width, height);
+        }
+
+        private void DepthFrame(object? sender, object e)
+        {
+            var state = _depthScene;
+            if (state == null) return;
+            try
+            {
+                DrawDepth(state);
+            }
+            catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or ArgumentException or InvalidOperationException)
+            {
+                PlayTiming.Write($"3D: stopped drawing: {ex.Message}");
+                StopSceneDepth();
+            }
+        }
+
+        /// <summary>The motion playing now. A show that names one uses it. Otherwise the engine's, and a missing name is Rock.</summary>
+        private string LiveDepthMotion()
+        {
+            string? held = _activeShow?.GlobalDefaults.DepthMotion;
+            if (_activeShow?.GlobalDefaults.HoldsValues == true && !string.IsNullOrEmpty(held))
+                return SurpriseOptions.CanonicalDepthMotion(held);
+            return SurpriseOptions.CanonicalDepthMotion(SurpriseChoices.DepthMotion);
+        }
+
+        private void DrawDepth(DepthScene state)
+        {
+            if (state.Near != null && state.Plate != null)
+            {
+                DrawSlide(state);
+                return;
+            }
+            var size = state.Photo.SizeInPixels;
+            float width = size.Width, height = size.Height;
+            // Where the camera is in its move. Once it has gone on to another move (a pause going home), the 3D holds.
+            double seconds = ReferenceEquals(_cameraMove, state.Move) ? _cameraClock.Elapsed.TotalSeconds : state.Move.Seconds;
+            var start = state.Move.Start;
+            var end = state.Move.End;
+            var now = state.Move.At(Math.Min(seconds, state.Move.Seconds));
+            double panX = end.X - start.X, panY = end.Y - start.Y;
+            double pan = Math.Sqrt(panX * panX + panY * panY);
+            double ramp = Math.Clamp(state.Shown.Elapsed.TotalSeconds / DepthRampSeconds, 0, 1);
+            ramp = ramp * ramp * (3 - 2 * ramp);
+            Vector2 along;
+            float scale;
+            if (pan > 0.03)
+            {
+                // The near things move further the way the view moves the picture, centred on the middle of the move.
+                along = new Vector2((float)(-((now.X - start.X) / pan - panX / pan * 0.5)), (float)(-((now.Y - start.Y) / pan - panY / pan * 0.5)));
+                scale = (float)(width * DepthTravel * ramp);
+            }
+            else
+            {
+                // Horizontal, one cycle every 2.16 s (24 frames at 90 ms), shift 0.008 of the width.
+                // Starts at 0 when the surface comes on and ramps up smoothly so the swap never jerks.
+                double t = Math.Max(0, seconds - state.FromSeconds);
+                along = new Vector2((float)Math.Sin(t / 2.16 * Math.PI * 2), 0);
+                scale = (float)(width * 0.008 * ramp);
+            }
+            var shift = along * scale;
+            float amount = state.Moved.Amount;
+            float a = -shift.X / amount, b = -shift.Y / amount;
+            // Sway holds the median, so the two depths move opposite ways. Slide holds the far plane.
+            float pivot = state.SwayInstead ? state.Middle : SurpriseOptions.DepthPivot(LiveDepthMotion(), state.Middle);
+            state.Shift.ColorMatrix = new Matrix5x4
+            {
+                M11 = a, M12 = b, M13 = 0, M14 = 0,
+                M21 = 0, M22 = 0, M23 = 0, M24 = 0,
+                M31 = 0, M32 = 0, M33 = 0, M34 = 0,
+                M41 = 0, M42 = 0, M43 = 0, M44 = 0,
+                M51 = 0.5f - a * pivot, M52 = 0.5f - b * pivot, M53 = 0, M54 = 1
+            };
+            using var session = state.Surface.CreateDrawingSession(Microsoft.UI.Colors.Black);
+            float over = 1f + (DepthOverscan - 1f) * (float)ramp;
+            float cropW = width / over, cropH = height / over;
+            session.DrawImage(state.Moved, new Rect(0, 0, width, height),
+                new Rect((width - cropW) / 2, (height - cropH) / 2, cropW, cropH));
+        }
+
+        /// <summary>
+        /// Slide: the foreground (subject + connected scene above the far plane) holds completely still at its original
+        /// position and scale (so swapping in the 3D surface at ~1.5s produces zero jerk), and the distant background
+        /// translates smoothly behind it with mirrored edge extension.
+        /// </summary>
+        private void DrawSlide(DepthScene state)
+        {
+            var size = state.Photo.SizeInPixels;
+            float width = size.Width;
+            double seconds = ReferenceEquals(_cameraMove, state.Move) ? _cameraClock.Elapsed.TotalSeconds : state.Move.Seconds;
+            double span = Math.Max(1, state.Move.Seconds - state.FromSeconds);
+            double p = Math.Clamp((seconds - state.FromSeconds) / span, 0, 1);
+            float eased = (float)(0.5 - 0.5 * Math.Cos(p * Math.PI));
+            float dx = -state.Way * SlideTravel * width * eased;
+            using var session = state.Surface.CreateDrawingSession(Microsoft.UI.Colors.Black);
+            session.Transform = Matrix3x2.CreateTranslation(dx, 0);
+            session.DrawImage((ICanvasImage?)state.PlateBorder ?? state.Plate!);
+            session.Transform = Matrix3x2.Identity;
+            session.DrawImage(state.Near!);
+        }
+
+        /// <summary>The cell shows its own picture again. As a scene goes, and when Play stops.</summary>
+        private void StopSceneDepth()
+        {
+            var state = _depthScene;
+            if (state == null) return;
+            _depthScene = null;
+            Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= DepthFrame;
+            // The source getter returns a new wrapper, so a comparison missed and the cell kept the surface.
+            // Disposing the bitmaps under it then crashed when Play stopped. The picture goes back first.
+            try
+            {
+                state.Target.Source = state.Original;
+            }
+            catch (Exception ex) when (ex is ObjectDisposedException or System.Runtime.InteropServices.COMException or ArgumentException or InvalidOperationException)
+            {
+                return;
+            }
+            // A later turn, so a frame can draw the picture before the surface it was sampling is released.
+            if (!DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () => ReleaseDepth(state)))
+                ReleaseDepth(state);
+        }
+
+        private static void ReleaseDepth(DepthScene state)
+        {
+            try
+            {
+                state.Moved.Dispose();
+                state.Shift.Dispose();
+                state.Near?.Dispose();
+                state.PlateBorder?.Dispose();
+                state.Mask?.Dispose();
+                state.Plate?.Dispose();
+                state.Depth.Dispose();
+                state.Photo.Dispose();
+            }
+            catch (Exception ex) when (ex is ObjectDisposedException or System.Runtime.InteropServices.COMException or ArgumentException or InvalidOperationException)
+            {
+            }
+        }
+    }
+}

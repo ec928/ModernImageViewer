@@ -3,16 +3,16 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using System;
+using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Numerics;
 using System.Threading.Tasks;
 
 namespace ModernImageViewer
 {
     /// <summary>
-    /// Words over a playing show: a title over the first scene when the show plays from its start,
-    /// and the date in the lower left when a scene's photos come from a new day. They sit over the picture,
+    /// Prototype (branch prototype-titles-3d): words over a playing show. A title over the first scene when the show plays
+    /// from its start, and the date in the lower left when a scene's photos come from a new day. They sit over the picture,
     /// above the cover a change fades out, and do not move with the camera.
     /// </summary>
     public sealed partial class MultiViewControl
@@ -34,7 +34,8 @@ namespace ModernImageViewer
         /// <summary>Called as each scene of a playing show comes on screen.</summary>
         private async Task ShowSceneWordsAsync(ShowScene scene)
         {
-            string? first = scene.GetPhotoPaths().FirstOrDefault(p => !string.IsNullOrEmpty(p));
+            var options = SurpriseChoices;
+            string? first = scene.GetPhotoPaths().FirstOrDefault();
             if (first == null || _autoPlaySeconds == 0) return;
             DateTime taken = await PhotoDates.TakenAsync(first);
             string folder = Path.GetFileName(Path.GetDirectoryName(first) ?? "") ?? "";
@@ -45,44 +46,48 @@ namespace ModernImageViewer
                 _titleDue = false;
                 _captionedDay = taken.Date;
                 _captionedFolder = folder;
-                if (!SurpriseChoices.ShowTitleCard) return;
-                string title = ShowProject.OpeningTitle(_activeShow?.Title, folder);
-                string when = ShowProject.OpeningMonth(taken);
-                if (title.Length == 0 && when.Length == 0) return;
+                if (!options.ShowTitleCard) return;
+                string title = _activeShow is { } show && !IsPlaceholderTitle(show.Title) ? show.Title : folder;
+                string when = taken == DateTime.MinValue ? "" : taken.ToString("MMMM yyyy", CultureInfo.CurrentCulture);
                 ShowWords(TitleCard(title, when), holdSeconds: 3.2);
                 return;
             }
 
-            if (!SurpriseChoices.ShowDateCaptions || taken == DateTime.MinValue) return;
+            if (!options.ShowDateCaptions || taken == DateTime.MinValue) return;
             bool newDay = _captionedDay != taken.Date;
             bool newFolder = !string.Equals(_captionedFolder, folder, StringComparison.OrdinalIgnoreCase);
             if (!newDay) return;
             _captionedDay = taken.Date;
             _captionedFolder = folder;
-            ShowWords(Caption(ShowProject.DayCaption(taken, folder, newFolder)), holdSeconds: 4);
+            string date = taken.ToString("dddd d MMMM yyyy", CultureInfo.CurrentCulture);
+            ShowWords(Caption(newFolder ? $"{date}  ·  {folder}" : date), holdSeconds: 4);
         }
+
+        /// <summary>Names the app gives a show it made, which say nothing to a viewer.</summary>
+        private static bool IsPlaceholderTitle(string? title) =>
+            string.IsNullOrWhiteSpace(title) || title is "Storyboard" or "Cinematic storyboard" or ShowProject.DefaultTitle
+            or "Custom Presentation" or "Auto-Drafted Presentation";
 
         private static FrameworkElement TitleCard(string title, string subtitle)
         {
             var white = new SolidColorBrush(Microsoft.UI.Colors.White);
             var stack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Spacing = 8 };
-            if (title.Length > 0)
+            stack.Children.Add(Shadowed(new TextBlock
+            {
+                Text = title,
+                FontFamily = new FontFamily("Segoe UI Variable Display"),
+                FontWeight = Microsoft.UI.Text.FontWeights.Light,
+                FontSize = 72,
+                Foreground = white,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                TextAlignment = TextAlignment.Center,
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth = 1400
+            }, blur: 24));
+            if (!string.IsNullOrEmpty(subtitle))
                 stack.Children.Add(Shadowed(new TextBlock
                 {
-                    Text = title,
-                    FontFamily = new FontFamily("Segoe UI Variable Display"),
-                    FontWeight = Microsoft.UI.Text.FontWeights.Light,
-                    FontSize = 72,
-                    Foreground = white,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    TextAlignment = TextAlignment.Center,
-                    TextWrapping = TextWrapping.Wrap,
-                    MaxWidth = 1400
-                }, blur: 24));
-            if (subtitle.Length > 0)
-                stack.Children.Add(Shadowed(new TextBlock
-                {
-                    Text = subtitle.ToUpper(System.Globalization.CultureInfo.CurrentCulture),
+                    Text = subtitle.ToUpper(CultureInfo.CurrentCulture),
                     FontFamily = new FontFamily("Segoe UI Variable Text"),
                     FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                     FontSize = 16,
@@ -91,6 +96,7 @@ namespace ModernImageViewer
                     Opacity = 0.9,
                     HorizontalAlignment = HorizontalAlignment.Center
                 }, blur: 10));
+            // A soft dark band behind the words, so they read on any picture without a box round them.
             var band = new Grid
             {
                 VerticalAlignment = VerticalAlignment.Center,
@@ -127,10 +133,10 @@ namespace ModernImageViewer
                 shadow.BlurRadius = blur;
                 shadow.Color = Microsoft.UI.Colors.Black;
                 shadow.Opacity = 0.85f;
-                shadow.Offset = new Vector3(0, 2, 0);
+                shadow.Offset = new System.Numerics.Vector3(0, 2, 0);
                 var visual = compositor.CreateSpriteVisual();
-                visual.Size = new Vector2((float)words.ActualWidth, (float)words.ActualHeight);
-                visual.Offset = new Vector3((float)words.ActualOffset.X, (float)words.ActualOffset.Y, 0);
+                visual.Size = new System.Numerics.Vector2((float)words.ActualWidth, (float)words.ActualHeight);
+                visual.Offset = new System.Numerics.Vector3((float)words.ActualOffset.X, (float)words.ActualOffset.Y, 0);
                 visual.Shadow = shadow;
                 Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.SetElementChildVisual(host, visual);
             }
@@ -168,6 +174,7 @@ namespace ModernImageViewer
             words.Opacity = 0;
             _showWords = words;
             AddOverCanvas(words, WordsLayer);
+            // One animation for the whole life of the words: two on the same property in one storyboard never ran.
             var life = new DoubleAnimationUsingKeyFrames();
             life.KeyFrames.Add(new DiscreteDoubleKeyFrame { KeyTime = TimeSpan.Zero, Value = 0 });
             life.KeyFrames.Add(new LinearDoubleKeyFrame { KeyTime = TimeSpan.FromSeconds(0.7), Value = 1 });

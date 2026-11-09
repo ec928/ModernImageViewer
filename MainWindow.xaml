@@ -353,16 +353,22 @@
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
-                                <!-- The button plays with the preset on the Show card. The chevron picks Multi-Image, Cinematic, or a saved preset. -->
-                                <Button Grid.Row="0" Grid.Column="0" Style="{StaticResource SidebarToolButtonStyle}" Click="PlayStoryboardFolder_Click" HorizontalAlignment="Stretch" Height="26" Padding="8,0" CornerRadius="4,0,0,4" IsTabStop="False" ToolTipService.ToolTip="Play this folder as a show in Multi-View, with the preset chosen on the Show card. Scenes are made as it plays and kept." AutomationProperties.Name="Play Show">
+                                <!-- One click to a show of the folder: it starts after the first scenes and makes the rest while it plays. -->
+                                <Grid Grid.Row="0" Grid.ColumnSpan="2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Button Grid.Column="0" Style="{StaticResource SidebarToolButtonStyle}" Click="PlayStoryboardFolder_Click" HorizontalAlignment="Stretch" Height="26" Padding="8,0" CornerRadius="4,0,0,4" IsTabStop="False" ToolTipService.ToolTip="Play this folder as a show in Multi-View. Scenes are made as it plays and kept." AutomationProperties.Name="Play Show">
                                     <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
                                         <FontIcon FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE768;" FontSize="11"/>
                                         <TextBlock Text="Play Show" FontSize="12"/>
                                     </StackPanel>
                                 </Button>
-                                <Button x:Name="PlayFolderModesButton" Grid.Row="0" Grid.Column="1" Style="{StaticResource SidebarToolButtonStyle}" Click="PlayFolderModes_Click" Height="26" Width="24" Padding="0" Margin="1,0,0,0" CornerRadius="0,4,4,0" IsTabStop="False" ToolTipService.ToolTip="Play this folder as Multi-Image, Cinematic, or a saved preset" AutomationProperties.Name="Play Show options">
+                                <Button x:Name="PlayFolderModesButton" Grid.Column="1" Style="{StaticResource SidebarToolButtonStyle}" Click="PlayFolderModes_Click" Height="26" Width="24" Padding="0" Margin="1,0,0,0" CornerRadius="0,4,4,0" IsTabStop="False" ToolTipService.ToolTip="Choose preset mode to play" AutomationProperties.Name="Play Show options">
                                     <FontIcon FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE70D;" FontSize="9"/>
                                 </Button>
+                            </Grid>
                             </Grid>
                         </Border>
 
@@ -673,7 +679,7 @@
 
                                 <Rectangle x:Name="MultiSelectPlayRule" Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,0" Opacity="0.5"/>
 
-                                <Button x:Name="MultiSelectStoryboardButton" Click="MultiSelectStoryboard_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" ToolTipService.ToolTip="Play Show: these images as a show, with the preset chosen on the Show card" AutomationProperties.Name="Play Show">
+                                <Button x:Name="MultiSelectStoryboardButton" Click="MultiSelectStoryboard_Click" Style="{StaticResource SubtleButtonStyle}" Padding="8,5" CornerRadius="12" ToolTipService.ToolTip="Play Show: these images as a show" AutomationProperties.Name="Play Show">
                                     <FontIcon FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE768;" FontSize="11" />
                                 </Button>
 

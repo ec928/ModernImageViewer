@@ -1303,15 +1303,19 @@ namespace ModernImageViewer
 
             if (!string.IsNullOrEmpty(scene.CameraOverride.Kind))
             {
-                return scene.CameraOverride.Kind.ToLowerInvariant() switch
+                string kind = scene.CameraOverride.Kind.ToLowerInvariant();
+                // A held drift is stored as Drift and used to be labelled Pan, which is the move it no longer makes.
+                if (kind is not ("pan" or "drift"))
                 {
-                    "zoomin" => "⤢ Zoom in",
-                    "zoomout" => "⤡ Zoom out",
-                    "pan" or "drift" => "⇄ Pan",
-                    "still" => "• Still",
-                    "twoshot" => "Two shots",
-                    _ => "Dynamic"
-                };
+                    return kind switch
+                    {
+                        "zoomin" => "⤢ Zoom in",
+                        "zoomout" => "⤡ Zoom out",
+                        "still" => "• Still",
+                        "twoshot" => "Two shots",
+                        _ => "Dynamic"
+                    };
+                }
             }
 
             double zDiff = scene.CameraOverride.End.Zoom - scene.CameraOverride.Start.Zoom;

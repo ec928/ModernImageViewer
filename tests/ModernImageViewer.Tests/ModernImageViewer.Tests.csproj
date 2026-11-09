@@ -27,6 +27,7 @@
     <Compile Include="..\..\Music\MusicLibrary.cs" Link="MusicLibrary.cs" />
     <Compile Include="..\..\Music\BeatGrid.cs" Link="BeatGrid.cs" />
     <Compile Include="..\..\ShowProject.cs" Link="ShowProject.cs" />
+    <Compile Include="..\..\ParallaxFit.cs" Link="ParallaxFit.cs" />
     <Compile Include="..\..\ShowDirector.cs" Link="ShowDirector.cs" />
     <Compile Include="..\..\SceneCall.cs" Link="SceneCall.cs" />
   </ItemGroup>

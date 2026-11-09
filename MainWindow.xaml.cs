@@ -236,6 +236,7 @@ namespace ModernImageViewer
 
             this.Closed += (s, e) =>
             {
+                MultiViewControl?.Shutdown();
                 MultiViewControl?.AutoSaveSession();
                 _windowClosed = true;
                 CancelPreviewLoad();
@@ -252,6 +253,8 @@ namespace ModernImageViewer
                 _exifCts?.Cancel();
                 _exifCts?.Dispose();
                 ClearImageCache();
+                DepthMaps.DisposeSession();
+                SubjectMasks.DisposeSession();
 
                 TryDisposeRawGpuBitmap();
             };
@@ -366,7 +369,10 @@ namespace ModernImageViewer
                 args.Cancel = true;
                 _isMainWindowHidden = true;
                 sender.Hide();
+                return;
             }
+
+            MultiViewControl?.Shutdown();
         }
 
         public void UnregisterDetachedWindow(string path)
@@ -788,10 +794,12 @@ namespace ModernImageViewer
             {
                 var items = FolderImagesForStoryboard();
                 if (items.Count == 0) return;
-                PlayStoryboard(items, overrides: slot is int n ? $"My preset {n + 1}" : name);
+                PlayStoryboard(items, overrides: name);
             });
             if (menu != null && sender is FrameworkElement anchor)
+            {
                 menu.ShowAt(anchor);
+            }
         }
 
         private List<ImageItem> FolderImagesForStoryboard() =>
