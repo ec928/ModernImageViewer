@@ -96,6 +96,16 @@
     <Page Remove="tests\**" />
     <EmbeddedResource Remove="tests\**" />
     <ApplicationDefinition Remove="tests\**" />
+    <Compile Remove="extensions\**" />
+    <None Remove="extensions\**" />
+    <Page Remove="extensions\**" />
+    <EmbeddedResource Remove="extensions\**" />
+    <ApplicationDefinition Remove="extensions\**" />
+    <Compile Remove="Contracts\**" />
+    <None Remove="Contracts\**" />
+    <Page Remove="Contracts\**" />
+    <EmbeddedResource Remove="Contracts\**" />
+    <ApplicationDefinition Remove="Contracts\**" />
   </ItemGroup>
 
   <!--
@@ -111,6 +121,7 @@
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.1839" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.0.1" />
     <PackageReference Include="SharpCompress" Version="0.48.0" />
+    <ProjectReference Include="Contracts\ModernImageViewer.Contracts.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Page Update="ImageViewerControl.xaml">
@@ -168,7 +179,9 @@
   -->
   <Target Name="RemoveUnusedWindowsML" AfterTargets="Build;Publish">
     <ItemGroup>
-      <!-- Prototype 3D (DepthMaps.cs) uses onnxruntime, DirectML and the managed wrapper: those three stay. -->
+      <_UnusedMl Include="$(OutDir)onnxruntime.dll" />
+      <_UnusedMl Include="$(OutDir)DirectML.dll" />
+      <_UnusedMl Include="$(OutDir)Microsoft.ML.OnnxRuntime.dll" />
 
 
       <_UnusedMl Include="$(OutDir)NPUDetect.dll" />

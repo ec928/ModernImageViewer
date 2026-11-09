@@ -209,6 +209,142 @@ namespace ModernImageViewer
                 ? "Paint"
                 : Path.GetFileNameWithoutExtension(editor);
 
+        public void OpenExtensionsSettings() => ExtensionsSettings_Click(this, new RoutedEventArgs());
+
+        private async void ExtensionsSettings_Click(object sender, RoutedEventArgs e)
+        {
+            HeaderSettingsFlyout.Hide();
+
+            var statusBadge = new Border
+            {
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(8, 2, 8, 2),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 8, 0)
+            };
+            var statusText = new TextBlock { FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+            statusBadge.Child = statusText;
+
+            var actionButton = new Button { VerticalAlignment = VerticalAlignment.Center };
+            var progressRing = new ProgressRing { IsActive = false, Visibility = Visibility.Collapsed, Width = 20, Height = 20, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
+            var progressBar = new ProgressBar { Minimum = 0, Maximum = 100, Value = 0, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 6, 0, 0) };
+            var progressDetail = new TextBlock { FontSize = 11, Opacity = SettingsCard.Quiet, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 2, 0, 0) };
+
+            var buttonGroup = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            buttonGroup.Children.Add(progressRing);
+            buttonGroup.Children.Add(statusBadge);
+            buttonGroup.Children.Add(actionButton);
+
+            var (parallaxRow, parallaxTitle, parallaxDetail) = SettingsCard.Row(
+                "\uE74C",
+                "3D Parallax Motion",
+                "Transforms 2D photos into immersive 3D scenes with depth and subject layers (~248 MB).",
+                buttonGroup);
+
+            var extraInfoStack = new StackPanel { Margin = new Thickness(42, 0, 14, 8) };
+            extraInfoStack.Children.Add(progressBar);
+            extraInfoStack.Children.Add(progressDetail);
+
+            var cardBorder = SettingsCard.Card(parallaxRow, extraInfoStack);
+
+            bool isInstalled = ExtensionManager.Is3DInstalled;
+
+            void RefreshUI()
+            {
+                isInstalled = ExtensionManager.Is3DInstalled;
+                if (isInstalled)
+                {
+                    string size = ExtensionManager.Get3DDiskSizeFormatted();
+                    statusText.Text = "Installed (" + size + ")";
+                    statusBadge.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(40, 0, 200, 100));
+                    statusText.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 30, 200, 100));
+                    actionButton.Content = "Remove";
+                    actionButton.IsEnabled = true;
+                }
+                else
+                {
+                    statusText.Text = "Not installed";
+                    statusBadge.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(40, 128, 128, 128));
+                    statusText.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 180, 180, 180));
+                    actionButton.Content = "Install (248 MB)";
+                    actionButton.IsEnabled = true;
+                }
+                progressBar.Visibility = Visibility.Collapsed;
+                progressDetail.Visibility = Visibility.Collapsed;
+                progressRing.IsActive = false;
+                progressRing.Visibility = Visibility.Collapsed;
+                SyncOptionsLabels();
+            }
+
+            RefreshUI();
+
+            actionButton.Click += async (_, _) =>
+            {
+                if (isInstalled)
+                {
+                    actionButton.IsEnabled = false;
+                    progressDetail.Text = "Removing extension...";
+                    progressDetail.Visibility = Visibility.Visible;
+                    progressRing.IsActive = true;
+                    progressRing.Visibility = Visibility.Visible;
+
+                    await Task.Run(() => ExtensionManager.Uninstall3D());
+                    RefreshUI();
+                }
+                else
+                {
+                    actionButton.IsEnabled = false;
+                    progressRing.IsActive = true;
+                    progressRing.Visibility = Visibility.Visible;
+                    progressBar.Visibility = Visibility.Visible;
+                    progressDetail.Visibility = Visibility.Visible;
+                    progressBar.Value = 0;
+
+                    var progress = new Progress<(double Progress, string Status)>(report =>
+                    {
+                        progressBar.Value = report.Progress * 100;
+                        progressDetail.Text = report.Status;
+                    });
+
+                    try
+                    {
+                        await Task.Run(() => ExtensionManager.Install3DAsync(progress));
+                    }
+                    catch (Exception ex)
+                    {
+                        progressDetail.Text = "Install failed: " + ex.Message;
+                    }
+                    RefreshUI();
+                }
+            };
+
+            var panel = new StackPanel { Width = 520, Padding = new Thickness(0, 0, 12, 0) };
+            panel.Children.Add(SettingsCard.Section("Available Extensions", first: true));
+            panel.Children.Add(cardBorder);
+
+            var noteBlock = new TextBlock
+            {
+                Text = "Extensions are installed into your local app data (%LOCALAPPDATA%\\ModernImageViewer\\Extensions) and can be removed at any time with zero leftover files.",
+                FontSize = 11,
+                Opacity = SettingsCard.Quiet,
+                Margin = new Thickness(4, 12, 4, 0),
+                TextWrapping = TextWrapping.Wrap
+            };
+            panel.Children.Add(noteBlock);
+
+            var dialog = new ContentDialog
+            {
+                Title = "Extensions",
+                Content = new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto },
+                CloseButtonText = "Close",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = RootGrid.XamlRoot,
+                RequestedTheme = CurrentRequestedTheme
+            };
+            DialogFooter.MainButtonOnRight(dialog);
+            await dialog.ShowAsync();
+        }
+
         private void SyncOptionsLabels()
         {
             if (MusicOptionText != null)
@@ -217,6 +353,12 @@ namespace ModernImageViewer
                 MusicOptionText.Text = music.HasFolder ? "Music: " + music.Summary : "Music: none";
             }
             if (ImageEditorOptionText != null) ImageEditorOptionText.Text = "Image editor: " + EditorName(ImageEditorPath);
+            if (ExtensionsOptionText != null)
+            {
+                ExtensionsOptionText.Text = ExtensionManager.Is3DInstalled
+                    ? $"Extensions: 3D ({ExtensionManager.Get3DDiskSizeFormatted()})"
+                    : "Extensions: none installed";
+            }
         }
     }
 

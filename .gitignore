@@ -365,3 +365,7 @@ FodyWeavers.xsd
 tests/*.mivlayout
 tests/*.cbr
 tests/*.cbz
+
+extensions/**/bundle/
+extensions/**/bin/
+extensions/**/obj/

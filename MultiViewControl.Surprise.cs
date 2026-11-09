@@ -3589,7 +3589,7 @@ namespace ModernImageViewer
                 {
                     if (!DepthMaps.Available)
                     {
-                        ShowAutoPlayToast("3D needs the depth model, which is not beside the app.");
+                        ShowAutoPlayToast("3D requires the 3D Extension (Settings wheel \u2699 \u2192 Extensions).");
                     }
                     else
                     {

@@ -9,7 +9,7 @@ namespace ModernImageViewer
     /// The cut is the depth map's own split (Otsu), put onto the photo's edges by a guided filter; what the near layer
     /// hides is filled from around it (push-pull), so the background has something to show as the near layer moves off.
     /// </summary>
-    internal static class ParallaxLayers
+    public static class ParallaxLayers
     {
         /// <summary>The background, with what the near layer hides filled in, and the near layer's alpha, both at the photo's size.</summary>
         /// <param name="InFront">How much nearer the near layer is than the rest, by the depth map (0 to 1): a subject behind its surroundings is no foreground.</param>
@@ -489,7 +489,7 @@ namespace ModernImageViewer
         /// perch branches) while keeping isolated sky objects (such as a moon) and soft bokeh backgrounds in the background layer,
         /// and stripping thin depth halos around the BiRefNet subject via morphological opening.
         /// </summary>
-        internal static float[] HolisticAlpha(float[] light, float[] depth, byte[] greyDepth, float[] subject, int w, int h, out float unionArea, out float bgP90)
+        public static float[] HolisticAlpha(float[] light, float[] depth, byte[] greyDepth, float[] subject, int w, int h, out float unionArea, out float bgP90)
         {
             int n = w * h;
             var fgDepths = new System.Collections.Generic.List<float>(n / 4);

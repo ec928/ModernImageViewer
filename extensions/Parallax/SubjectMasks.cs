@@ -1,5 +1,6 @@
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
+using ModernImageViewer.Contracts;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -11,22 +12,14 @@ using Windows.Graphics.Imaging;
 using Windows.Storage;
 using Windows.Storage.Streams;
 
-namespace ModernImageViewer
+namespace ModernImageViewer.Extensions.Parallax
 {
-    /// <summary>
-    /// Prototype (branch prototype-titles-3d): the photo's subject, cut out whole by BiRefNet lite (MIT), for Slide. A
-    /// split by depth cut a statue in two, its head with the sky and its chest with the hand, and the fill showed through
-    /// its chin as the near part moved. A subject model keeps the object whole. Its answer is also whether the photo
-    /// has a clear subject at all: Slide plays only on one that does.
-    /// </summary>
     internal static class SubjectMasks
     {
-        /// <summary>The subject, 0 to 255, at the model's 1024 x 1024 (stretched over the photo), and whether it is clear.</summary>
-        /// <param name="Clear">A subject big enough to see, with a sure outline. Whether it suits Slide or Rock is ParallaxJudge's call.</param>
-        /// <param name="Area">The subject's share of the picture.</param>
-        /// <param name="Sides">How much of the top, left and right edges it covers.</param>
-        /// <param name="Vague">How much of the outline is unsure, against the subject's size: lower is a sharper cut.</param>
-        public sealed record Mask(byte[] Alpha, int Size, bool Clear, string Why, float Area = 0, float Sides = 0, float Vague = 0, float Top = 0, float Bottom = 0);
+        public static Action<string>? Logger { get; set; }
+        private static void Log(string msg) => Logger?.Invoke(msg);
+
+        public sealed record Mask(byte[] Alpha, int Size, bool Clear, string Why, float Area = 0, float Sides = 0, float Vague = 0, float Top = 0, float Bottom = 0) : IParallaxMask;
 
         private const string ModelFile = "birefnet-lite.onnx";
         private const int Side = 1024;
@@ -39,9 +32,21 @@ namespace ModernImageViewer
         private static InferenceSession? _session;
         private static bool _unavailable;
 
-        public static string? ModelPath =>
-            new[] { Path.Combine(AppContext.BaseDirectory, "Models", ModelFile), Path.Combine(AppPaths.LocalDirectory, "Models", ModelFile) }
-                .FirstOrDefault(File.Exists);
+        public static string? ModelPath
+        {
+            get
+            {
+                string extDir = Path.GetDirectoryName(typeof(SubjectMasks).Assembly.Location) ?? AppContext.BaseDirectory;
+                string[] candidates = new[]
+                {
+                    Path.Combine(extDir, "Models", ModelFile),
+                    Path.Combine(extDir, ModelFile),
+                    Path.Combine(AppContext.BaseDirectory, "Models", ModelFile),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ModernImageViewer", "Extensions", "3D", "Models", ModelFile)
+                };
+                return candidates.FirstOrDefault(File.Exists);
+            }
+        }
 
         public static bool Available => !_unavailable && ModelPath != null;
 
@@ -67,7 +72,6 @@ namespace ModernImageViewer
             }
         }
 
-        /// <summary>The mask for a photo, made once and kept for the last few. The depth map says whether the subject is in front.</summary>
         public static Task<Mask?> ForAsync(string path)
         {
             if (!Available) return Task.FromResult<Mask?>(null);
@@ -99,40 +103,52 @@ namespace ModernImageViewer
                         input[0, 1, y, x] = (pixels[i + 1] / 255f - Mean[1]) / Spread[1];
                         input[0, 2, y, x] = (pixels[i] / 255f - Mean[2]) / Spread[2];
                     }
-                string name = session.InputMetadata.Keys.First();
-                using var results = session.Run(new[] { NamedOnnxValue.CreateFromTensor(name, input) });
-                // The last output is the finished mask, as logits.
-                var logits = results.Last().AsTensor<float>().ToArray();
-                if (logits.Length != Side * Side) return null;
-                var alpha = new byte[logits.Length];
-                int subject = 0, unsure = 0;
-                for (int i = 0; i < logits.Length; i++)
-                {
-                    float m = 1f / (1f + MathF.Exp(-logits[i]));
-                    alpha[i] = (byte)Math.Clamp(m * 255f + 0.5f, 0, 255);
-                    if (m > 0.5f) subject++;
-                    if (m > 0.1f && m < 0.9f) unsure++;
-                }
-                float area = subject / (float)logits.Length;
-                float vague = unsure / Math.Max(1f, subject);
-                // How much of the top, left and right edges the subject covers: one that spans them is ground or skyline.
-                float top = 0, bottom = 0, left = 0, right = 0;
-                for (int k = 0; k < Side; k++)
-                {
-                    if (alpha[k] > 127) top++;
-                    if (alpha[(Side - 1) * Side + k] > 127) bottom++;
-                    if (alpha[k * Side] > 127) left++;
-                    if (alpha[k * Side + Side - 1] > 127) right++;
-                }
-                float sides = (top + left + right) / (3f * Side);
-                string why = area < 0.04f ? "subject too small" : vague > 0.35f ? "outline unsure" : "";
-                bool clear = why.Length == 0;
-                PlayTiming.Write($"3D: subject for {Path.GetFileName(path)} in {clock.ElapsedMilliseconds} ms, {area:P0} of the picture, {(clear ? "clear" : why)}");
-                return new Mask(alpha, Side, clear, clear ? "clear" : why, area, sides, vague, top / Side, bottom / Side);
+                var namedInput = NamedOnnxValue.CreateFromTensor(session.InputMetadata.Keys.First(), input);
+                using var results = session.Run(new[] { namedInput });
+                var output = results.First().AsTensor<float>();
+
+                var alpha = new byte[Side * Side];
+                int at = 0, subject = 0, vague = 0, top = 0, left = 0, right = 0, bottom = 0;
+                float half = 0.5f;
+                for (int y = 0; y < Side; y++)
+                    for (int x = 0; x < Side; x++)
+                    {
+                        float raw = output[0, 0, y, x];
+                        float p = raw <= -80f ? 0f : raw >= 80f ? 1f : 1f / (1f + (float)Math.Exp(-raw));
+                        byte b = (byte)Math.Clamp((int)Math.Round(p * 255), 0, 255);
+                        alpha[at++] = b;
+                        if (p >= half)
+                        {
+                            subject++;
+                            if (y == 0) top++;
+                            if (y == Side - 1) bottom++;
+                            if (x == 0) left++;
+                            if (x == Side - 1) right++;
+                        }
+                        if (p >= 0.2f && p <= 0.8f) vague++;
+                    }
+
+                int total = Side * Side;
+                float area = subject / (float)total;
+                float edgeTouching = Math.Max(top, Math.Max(left, right)) / (float)Side;
+                float vagueness = subject == 0 ? 1f : vague / (float)subject;
+                float topShare = top / (float)Side;
+                float bottomShare = bottom / (float)Side;
+
+                bool bigEnough = area >= 0.04f && area <= 0.65f;
+                bool withinEdges = edgeTouching < 0.70f;
+                bool sharpEnough = vagueness <= 0.35f;
+                bool clear = bigEnough && withinEdges && sharpEnough;
+                string why = !bigEnough ? (area < 0.04f ? "too small" : "covers the whole photo")
+                    : !withinEdges ? "touches too much of an edge"
+                    : !sharpEnough ? "outline is unsure" : "clear subject";
+
+                Log($"3D: subject for {Path.GetFileName(path)}: {why} ({area:P0}, vague {vagueness:0.00}, edges {edgeTouching:0.00}) in {clock.ElapsedMilliseconds} ms");
+                return new Mask(alpha, Side, clear, why, area, edgeTouching, vagueness, topShare, bottomShare);
             }
             catch (Exception ex) when (ex is OnnxRuntimeException or IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or System.Runtime.InteropServices.COMException)
             {
-                PlayTiming.Write($"3D: no subject for {Path.GetFileName(path)}: {ex.GetType().Name} {ex.Message}");
+                Log($"3D: no subject for {Path.GetFileName(path)}: {ex.GetType().Name} {ex.Message}");
                 return null;
             }
             finally
@@ -156,26 +172,31 @@ namespace ModernImageViewer
                 }
                 catch (Exception ex) when (ex is OnnxRuntimeException or EntryPointNotFoundException or DllNotFoundException)
                 {
-                    PlayTiming.Write($"3D: subject model without DirectML ({ex.Message})");
+                    Log($"3D: no DirectML ({ex.Message}), on the processor");
                 }
                 _session = new InferenceSession(model, options);
-                PlayTiming.Write($"3D: subject model loaded in {clock.ElapsedMilliseconds} ms");
+                Log($"3D: subject model loaded in {clock.ElapsedMilliseconds} ms");
             }
             catch (Exception ex) when (ex is OnnxRuntimeException or DllNotFoundException or IOException or BadImageFormatException)
             {
                 _unavailable = true;
-                PlayTiming.Write($"3D: subject model did not load: {ex.GetType().Name} {ex.Message}");
+                Log($"3D: subject model did not load: {ex.GetType().Name} {ex.Message}");
             }
             return _session;
         }
 
-        /// <summary>The photo turned as it is shown, stretched to 1024 x 1024 as the model was trained.</summary>
         private static async Task<byte[]> DecodeAsync(string path)
         {
             var file = await StorageFile.GetFileFromPathAsync(path);
             using IRandomAccessStream stream = await file.OpenReadAsync();
             var decoder = await BitmapDecoder.CreateAsync(stream);
-            var transform = new BitmapTransform { ScaledWidth = Side, ScaledHeight = Side, InterpolationMode = BitmapInterpolationMode.Fant };
+            bool turned = decoder.OrientedPixelWidth != decoder.PixelWidth;
+            var transform = new BitmapTransform
+            {
+                ScaledWidth = (uint)(turned ? Side : Side),
+                ScaledHeight = (uint)(turned ? Side : Side),
+                InterpolationMode = BitmapInterpolationMode.Fant
+            };
             var data = await decoder.GetPixelDataAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Ignore, transform,
                 ExifOrientationMode.RespectExifOrientation, ColorManagementMode.ColorManageToSRgb);
             return data.DetachPixelData();

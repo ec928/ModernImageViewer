@@ -1,3 +1,4 @@
+using ModernImageViewer.Contracts;
 using System;
 using System.Collections.Concurrent;
 using System.IO;
@@ -102,7 +103,7 @@ namespace ModernImageViewer
             return judged;
         }
 
-        private static Judgement Judge(DepthMaps.Map map, SubjectMasks.Mask subject, bool hasFaces = false)
+        private static Judgement Judge(IParallaxMap map, IParallaxMask subject, bool hasFaces = false)
         {
             if (!subject.Clear) return new Judgement(Fit.Out, subject.Why, subject.Area, 0, 0, subject.Sides);
             if (subject.Area > MostArea || subject.Sides >= MostSides)

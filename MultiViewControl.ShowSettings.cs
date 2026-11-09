@@ -207,7 +207,8 @@ namespace ModernImageViewer
         {
             if (Is3DPreset(name) && !DepthMaps.Available)
             {
-                ShowAutoPlayToast("3D needs the depth model, which is not beside the app.");
+                ShowAutoPlayToast("3D requires the 3D Extension. Opening Extensions...");
+                MainWindow.Instance?.OpenExtensionsSettings();
                 return;
             }
 
@@ -449,7 +450,8 @@ namespace ModernImageViewer
             {
                 if (Is3DPreset(name) && !DepthMaps.Available)
                 {
-                    ShowAutoPlayToast("3D needs the depth model, which is not beside the app.");
+                    ShowAutoPlayToast("3D requires the 3D Extension. Opening Extensions...");
+                MainWindow.Instance?.OpenExtensionsSettings();
                     return;
                 }
                 var target = _activeShow ??= NewShowWithLastPreset();
@@ -620,7 +622,8 @@ namespace ModernImageViewer
                 {
                     if (parallaxSwitch.IsOn && !DepthMaps.Available)
                     {
-                        ShowAutoPlayToast("3D needs the depth model, which is not beside the app.");
+                        ShowAutoPlayToast("3D requires the 3D Extension. Opening Extensions...");
+                MainWindow.Instance?.OpenExtensionsSettings();
                         parallaxSwitch.IsOn = false;
                         return;
                     }

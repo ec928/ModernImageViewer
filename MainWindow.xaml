@@ -306,6 +306,13 @@
                                                 </StackPanel>
                                             </Button>
                                             <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.5"/>
+                                            <Button Style="{StaticResource SubtleButtonStyle}" Click="ExtensionsSettings_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Height="28" Padding="8,0" CornerRadius="4" IsTabStop="True" AutomationProperties.Name="Extensions" ToolTipService.ToolTip="Optional add-ons (3D Parallax, AI models)">
+                                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                                    <FontIcon Glyph="&#xE74C;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                    <TextBlock x:Name="ExtensionsOptionText" Text="Extensions: 3D Parallax" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                </StackPanel>
+                                            </Button>
+                                            <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.5"/>
                                             <Button Style="{StaticResource SubtleButtonStyle}" Click="About_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Height="28" Padding="8,0" CornerRadius="4" IsTabStop="True" AutomationProperties.Name="About" ToolTipService.ToolTip="About Modern Image Viewer">
                                                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                                                     <FontIcon Glyph="&#xE946;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
