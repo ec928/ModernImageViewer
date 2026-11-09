@@ -84,7 +84,14 @@ namespace ModernImageViewer
                 {
                     // The defaults will do.
                 }
-                return _surpriseOptions = SurpriseOptions.FromJson(json);
+                _surpriseOptions = SurpriseOptions.FromJson(json);
+                if (!DepthMaps.Available)
+                {
+                    if (Is3DPreset(_surpriseOptions.LastPreset))
+                        _surpriseOptions.LastPreset = MultiImagePreset;
+                    _surpriseOptions.DepthChance = 0;
+                }
+                return _surpriseOptions;
             }
         }
 
@@ -93,10 +100,18 @@ namespace ModernImageViewer
         /// The Layout Generator settings for a show: the main ones, with every value the show holds in their place. A show
         /// made before shows held values, and not yet opened as one, still takes its overrides by name.
         /// </summary>
-        private SurpriseOptions GeneratorSettingsFor(ShowProject? show) =>
-            show == null ? SurpriseChoices
-            : show.GlobalDefaults.HoldsValues ? show.GlobalDefaults.ApplyTo(SurpriseChoices)
-            : SurpriseChoices.WithOverrides(show.GeneratorOverrides);
+        private SurpriseOptions GeneratorSettingsFor(ShowProject? show)
+        {
+            var options = show == null ? SurpriseChoices
+                : show.GlobalDefaults.HoldsValues ? show.GlobalDefaults.ApplyTo(SurpriseChoices)
+                : SurpriseChoices.WithOverrides(show.GeneratorOverrides);
+            if (!DepthMaps.Available)
+            {
+                options.ParallaxOnly = false;
+                options.DepthChance = 0;
+            }
+            return options;
+        }
 
         /// <summary>
         /// Cinematic takes the saved Cinematic preset. Multi-Image takes the saved Multi-Image preset, or, until the user
@@ -106,11 +121,15 @@ namespace ModernImageViewer
         {
             if (string.Equals(name, CinematicOverrides.ParallaxName, StringComparison.OrdinalIgnoreCase) || string.Equals(name, CinematicOverrides.LegacyParallaxName, StringComparison.OrdinalIgnoreCase))
             {
-                show.GeneratorOverrides = CinematicOverrides.ParallaxName;
-                show.PresetSlot = null;
-                show.PresetName = CinematicOverrides.ParallaxName;
-                show.GlobalDefaults.TakeValues(SurpriseChoices.Parallax ?? CinematicOverrides.ParallaxDefaults());
-                return;
+                if (DepthMaps.Available)
+                {
+                    show.GeneratorOverrides = CinematicOverrides.ParallaxName;
+                    show.PresetSlot = null;
+                    show.PresetName = CinematicOverrides.ParallaxName;
+                    show.GlobalDefaults.TakeValues(SurpriseChoices.Parallax ?? CinematicOverrides.ParallaxDefaults());
+                    return;
+                }
+                name = MultiImagePreset;
             }
             bool on = name == CinematicOverrides.Name;
             show.GeneratorOverrides = on ? CinematicOverrides.Name : null;
@@ -3486,6 +3505,13 @@ namespace ModernImageViewer
                 {
                     ApplyPreset(show, parallax ? CinematicOverrides.ParallaxName : overrides);
                     RememberPreset(show);
+                }
+                if (!DepthMaps.Available)
+                {
+                    if (Is3DPreset(show.GeneratorOverrides)) show.GeneratorOverrides = null;
+                    if (Is3DPreset(show.PresetName)) show.PresetName = MultiImagePreset;
+                    show.GlobalDefaults.ParallaxOnly = false;
+                    show.GlobalDefaults.DepthChance = 0;
                 }
                 show.Title = ShowTitleFor(show.GeneratorOverrides);
             }

@@ -22,7 +22,9 @@ namespace ModernImageViewer
         private ShowProject NewShowWithLastPreset()
         {
             var show = new ShowProject { Title = "Storyboard" };
-            ApplyPreset(show, SurpriseChoices.LastPreset);
+            string? last = SurpriseChoices.LastPreset;
+            if (Is3DPreset(last) && !DepthMaps.Available) last = MultiImagePreset;
+            ApplyPreset(show, last);
             return show;
         }
 
@@ -335,15 +337,19 @@ namespace ModernImageViewer
         {
             if (!DepthMaps.Available)
             {
-                if (Is3DPreset(SurpriseChoices.LastPreset))
+                ChangeSurpriseChoices(o =>
                 {
-                    SurpriseChoices.LastPreset = MultiImagePreset;
-                }
+                    if (Is3DPreset(o.LastPreset)) o.LastPreset = MultiImagePreset;
+                    o.DepthChance = 0;
+                    o.ParallaxOnly = false;
+                });
                 if (_activeShow != null && (Is3DPreset(_activeShow.PresetName) || Is3DPreset(_activeShow.GeneratorOverrides)))
                 {
                     _activeShow.PresetName = MultiImagePreset;
                     _activeShow.GeneratorOverrides = null;
                     _activeShow.GlobalDefaults.ClearValues();
+                    _activeShow.GlobalDefaults.ParallaxOnly = false;
+                    _activeShow.GlobalDefaults.DepthChance = 0;
                     StopSceneDepth();
                 }
             }
