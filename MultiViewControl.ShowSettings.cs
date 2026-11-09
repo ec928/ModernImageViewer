@@ -166,7 +166,7 @@ namespace ModernImageViewer
             string.Equals(name, CinematicOverrides.LegacyParallaxName, StringComparison.OrdinalIgnoreCase);
 
         private static string ShowTitleFor(string? overrides) =>
-            Is3DPreset(overrides) ? "3D"
+            (Is3DPreset(overrides) && DepthMaps.Available) ? "3D"
             : overrides == CinematicOverrides.Name ? "Cinematic storyboard"
             : "Storyboard";
 
@@ -178,7 +178,7 @@ namespace ModernImageViewer
             {
                 if (_activeShow != null) return ActivePresetName(_activeShow);
                 string? last = SurpriseChoices.LastPreset;
-                if (Is3DPreset(last)) return CinematicOverrides.ParallaxName;
+                if (Is3DPreset(last)) return DepthMaps.Available ? CinematicOverrides.ParallaxName : MultiImagePreset;
                 if (string.Equals(last, CinematicOverrides.Name, StringComparison.OrdinalIgnoreCase)) return CinematicOverrides.Name;
                 if (!string.IsNullOrEmpty(last)) return last;
                 return MultiImagePreset;
@@ -188,7 +188,8 @@ namespace ModernImageViewer
         internal static string ActivePresetName(ShowProject? show)
         {
             if (show == null) return MultiImagePreset;
-            if (Is3DPreset(show.GeneratorOverrides) || Is3DPreset(show.PresetName)) return CinematicOverrides.ParallaxName;
+            if (Is3DPreset(show.GeneratorOverrides) || Is3DPreset(show.PresetName))
+                return DepthMaps.Available ? CinematicOverrides.ParallaxName : MultiImagePreset;
             if (show.GeneratorOverrides == CinematicOverrides.Name || show.PresetName == CinematicOverrides.Name) return CinematicOverrides.Name;
             if (!string.IsNullOrEmpty(show.PresetName)) return show.PresetName;
             if (!show.GlobalDefaults.HoldsValues) return MultiImagePreset;
@@ -273,7 +274,10 @@ namespace ModernImageViewer
                 menu.Items.Add(item);
             }
 
-            AddMode(CinematicOverrides.ParallaxName, "3D", "Depth & spatial motion");
+            if (DepthMaps.Available)
+            {
+                AddMode(CinematicOverrides.ParallaxName, "3D", "Depth & spatial motion");
+            }
             AddMode(CinematicOverrides.Name, "Cinematic", "Single-photo slow drift");
             AddMode(MultiImagePreset, "Multi-Image", "Collages, mosaics & prints");
 
@@ -325,6 +329,27 @@ namespace ModernImageViewer
             {
                 menu.ShowAt(anchor);
             }
+        }
+
+        public void On3DExtensionChanged()
+        {
+            if (!DepthMaps.Available)
+            {
+                if (Is3DPreset(SurpriseChoices.LastPreset))
+                {
+                    SurpriseChoices.LastPreset = MultiImagePreset;
+                }
+                if (_activeShow != null && (Is3DPreset(_activeShow.PresetName) || Is3DPreset(_activeShow.GeneratorOverrides)))
+                {
+                    _activeShow.PresetName = MultiImagePreset;
+                    _activeShow.GeneratorOverrides = null;
+                    _activeShow.GlobalDefaults.ClearValues();
+                    StopSceneDepth();
+                }
+            }
+            UpdatePresetModePill();
+            ShowAutoPlayState();
+            if (_surpriseCard != null) ShowSurpriseCard();
         }
 
         public void UpdatePresetModePill()
@@ -554,7 +579,10 @@ namespace ModernImageViewer
             }
             AddPreset(MultiImagePreset, MultiImagePreset, null);
             AddPreset(CinematicOverrides.Name, CinematicOverrides.Name, null);
-            AddPreset(CinematicOverrides.ParallaxName, CinematicOverrides.ParallaxName, null);
+            if (DepthMaps.Available)
+            {
+                AddPreset(CinematicOverrides.ParallaxName, CinematicOverrides.ParallaxName, null);
+            }
             for (int i = 0; i < 3; i++) AddPreset($"{i + 1}", $"My preset {i + 1}", i);
 
             // Back to defaults, for the preset in use.
@@ -610,27 +638,23 @@ namespace ModernImageViewer
                 into = valuesPanel;
                 var values = GeneratorSettingsFor(_activeShow);
 
-                Heading("Scenes");
-                var parallaxSwitch = new ToggleSwitch
+                if (DepthMaps.Available)
                 {
-                    IsOn = values.ParallaxOnly,
-                    OnContent = "On",
-                    OffContent = "Off",
-                    MinWidth = 0
-                };
-                parallaxSwitch.Toggled += (_, _) =>
-                {
-                    if (parallaxSwitch.IsOn && !DepthMaps.Available)
+                    Heading("Scenes");
+                    var parallaxSwitch = new ToggleSwitch
                     {
-                        ShowAutoPlayToast("3D requires the 3D Extension. Opening Extensions...");
-                MainWindow.Instance?.OpenExtensionsSettings();
-                        parallaxSwitch.IsOn = false;
-                        return;
-                    }
-                    ChangeShowValues(v => v.ParallaxOnly = parallaxSwitch.IsOn, changed);
-                    if (!parallaxSwitch.IsOn) StopSceneDepth();
-                };
-                Row("3D pictures only", "Play keeps only pictures with depth information. The 3D preset turns this on.", parallaxSwitch);
+                        IsOn = values.ParallaxOnly,
+                        OnContent = "On",
+                        OffContent = "Off",
+                        MinWidth = 0
+                    };
+                    parallaxSwitch.Toggled += (_, _) =>
+                    {
+                        ChangeShowValues(v => v.ParallaxOnly = parallaxSwitch.IsOn, changed);
+                        if (!parallaxSwitch.IsOn) StopSceneDepth();
+                    };
+                    Row("3D pictures only", "Play keeps only pictures with depth information. The 3D preset turns this on.", parallaxSwitch);
+                }
 
                 bool making = ReferenceEquals(_activeShow, _showBeingBuilt);
                 valuesPanel.Children.Add(new TextBlock

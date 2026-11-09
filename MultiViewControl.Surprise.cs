@@ -1049,20 +1049,23 @@ namespace ModernImageViewer
                 0, 100, 5, options.MotionFaceChance * 100,
                 v => $"{v:0}%",
                 (o, v) => o.MotionFaceChance = v / 100);
-            cameraSection.Children.Add(new TextBlock { Text = "3D motion style", FontSize = 13, Margin = new Thickness(0, 8, 0, 4) });
-            cameraSection.Children.Add(DepthMotionChips());
-            Slide(cameraSection, "3D on single pictures", "The odds that a scene with one picture plays in 3D. Slide moves the camera laterally over background fill (falling back to Sway on landscapes). Sway gently rocks the picture left and right. Off unless you turn it up. The 3D preset sets it to 100% for that show.",
-                0, 100, 5, GeneratorSettingsFor(_activeShow).DepthChance * 100,
-                v => $"{v:0}%",
-                (o, v) =>
-                {
-                    // A show that holds its own odds, such as Parallax, keeps the change. Other shows follow this slider.
-                    if (_activeShow?.GlobalDefaults.DepthChance is not null)
-                        _activeShow.GlobalDefaults.DepthChance = v / 100;
-                    else
-                        o.DepthChance = v / 100;
-                    if (v <= 0) StopSceneDepth();
-                });
+            if (DepthMaps.Available)
+            {
+                cameraSection.Children.Add(new TextBlock { Text = "3D motion style", FontSize = 13, Margin = new Thickness(0, 8, 0, 4) });
+                cameraSection.Children.Add(DepthMotionChips());
+                Slide(cameraSection, "3D on single pictures", "The odds that a scene with one picture plays in 3D. Slide moves the camera laterally over background fill (falling back to Sway on landscapes). Sway gently rocks the picture left and right. Off unless you turn it up. The 3D preset sets it to 100% for that show.",
+                    0, 100, 5, GeneratorSettingsFor(_activeShow).DepthChance * 100,
+                    v => $"{v:0}%",
+                    (o, v) =>
+                    {
+                        // A show that holds its own odds, such as Parallax, keeps the change. Other shows follow this slider.
+                        if (_activeShow?.GlobalDefaults.DepthChance is not null)
+                            _activeShow.GlobalDefaults.DepthChance = v / 100;
+                        else
+                            o.DepthChance = v / 100;
+                        if (v <= 0) StopSceneDepth();
+                    });
+            }
             MovementGroup(cameraSection);
 
             string TransitionSummaryText() => $"{SurpriseChoices.TransitionShares()[LayoutTransition.Crossfade] * 100:0}% crossfade";

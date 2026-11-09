@@ -54,8 +54,7 @@ namespace ModernImageViewer
             Path.Combine(ExtensionDir, "ModernImageViewer.Extensions.Parallax.dll");
 
         public static bool IsInstalled =>
-            File.Exists(ExtensionDllPath) ||
-            File.Exists(Path.Combine(AppContext.BaseDirectory, "Extensions", "3D", "ModernImageViewer.Extensions.Parallax.dll"));
+            ExtensionManager.Is3DInstalled;
 
         public static IParallaxService Service
         {
@@ -71,20 +70,13 @@ namespace ModernImageViewer
             }
         }
 
-        public static bool Available => Service.IsAvailable;
+        public static bool Available => IsInstalled && Service.IsAvailable;
 
         private static IParallaxService? TryLoadExtension()
         {
+            if (!IsInstalled) return null;
             string dir = ExtensionDir;
-            // Also check development bin\Extensions\3D if running from bin
-            string localBinDir = Path.Combine(AppContext.BaseDirectory, "Extensions", "3D");
-            if (!File.Exists(Path.Combine(dir, "ModernImageViewer.Extensions.Parallax.dll")) &&
-                File.Exists(Path.Combine(localBinDir, "ModernImageViewer.Extensions.Parallax.dll")))
-            {
-                dir = localBinDir;
-            }
-
-            string dllPath = Path.Combine(dir, "ModernImageViewer.Extensions.Parallax.dll");
+            string dllPath = ExtensionDllPath;
             if (!File.Exists(dllPath)) return null;
 
             try

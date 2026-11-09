@@ -289,6 +289,7 @@ namespace ModernImageViewer
                     progressRing.Visibility = Visibility.Visible;
 
                     await Task.Run(() => ExtensionManager.Uninstall3D());
+                    MultiViewControl?.On3DExtensionChanged();
                     RefreshUI();
                 }
                 else
@@ -314,6 +315,7 @@ namespace ModernImageViewer
                     {
                         progressDetail.Text = "Install failed: " + ex.Message;
                     }
+                    MultiViewControl?.On3DExtensionChanged();
                     RefreshUI();
                 }
             };
