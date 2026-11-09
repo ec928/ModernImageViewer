@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -93,6 +94,27 @@ namespace ModernImageViewer
             if (sceneNumber > 1 && sceneNumber <= sceneCount)
                 return $"Play Show · {sceneNumber}/{sceneCount}";
             return "Play Show";
+        }
+
+        /// <summary>Names the app gives a show it made. A viewer should see the folder instead.</summary>
+        public static bool IsPlaceholderShowTitle(string? title) =>
+            string.IsNullOrWhiteSpace(title) || title is "Storyboard" or "Cinematic storyboard" or DefaultTitle
+            or "Custom Presentation" or "Auto-Drafted Presentation";
+
+        /// <summary>The large line over the first scene: the show's own name, or the folder when it has none.</summary>
+        public static string OpeningTitle(string? showTitle, string folder) =>
+            IsPlaceholderShowTitle(showTitle) ? folder : showTitle!;
+
+        /// <summary>The small line under the opening title. Empty when the photo has no date.</summary>
+        public static string OpeningMonth(DateTime taken, CultureInfo? culture = null) =>
+            taken == DateTime.MinValue ? "" : taken.ToString("MMMM yyyy", culture ?? CultureInfo.CurrentCulture);
+
+        /// <summary>The lower-left line when a scene's photos are from a new day. The folder is added when that changed too.</summary>
+        public static string DayCaption(DateTime taken, string folder, bool folderChanged, CultureInfo? culture = null)
+        {
+            if (taken == DateTime.MinValue) return "";
+            string date = taken.ToString("dddd d MMMM yyyy", culture ?? CultureInfo.CurrentCulture);
+            return folderChanged && !string.IsNullOrEmpty(folder) ? $"{date}  ·  {folder}" : date;
         }
 
         public string ToJson()

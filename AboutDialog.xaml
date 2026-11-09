@@ -87,7 +87,7 @@
 
                 <TextBlock Text="Shows and music" Style="{StaticResource AboutSectionHeader}"/>
                 <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Cinematic preset" FontWeight="SemiBold"/><Run Text=" &#x2014; one image at a time, mostly edge to edge, with slow camera moves, faces framed by the eyes, and long dissolves. Choose it on the Show card, then Play show. It replaced the separate Cinematic Slideshow window."/>
+                    <Run Text="&#x2022;  "/><Run Text="Cinematic preset" FontWeight="SemiBold"/><Run Text=" &#x2014; one image at a time, mostly edge to edge, with slow camera moves, faces framed by the eyes, and long dissolves. Choose it on the Show card, the sidebar chevron, or the playbar preset pill, then Play Show. It replaced the separate Cinematic Slideshow window."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
                     <Run Text="&#x2022;  "/><Run Text="Editing a show" FontWeight="SemiBold"/><Run Text=" &#x2014; the Show tab of the drawer reorders, duplicates and removes scenes; Camera Director sets a scene's frames, curve and turn."/>

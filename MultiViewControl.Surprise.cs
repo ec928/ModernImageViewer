@@ -1037,6 +1037,12 @@ namespace ModernImageViewer
             Toggle(lookSection, "Play progress", "A line along an edge of the screen fills while each layout holds. It stays when the bar hides.",
                 options.ProgressOn, (o, on) => { o.ProgressOn = on; lookSummary.Text = LookSummaryText(); });
 
+            Toggle(lookSection, "Title at the start", "When a show plays from its first scene, its name (or the folder's) and the month of its first photo fade in over it.",
+                options.ShowTitleCard, (o, on) => o.ShowTitleCard = on);
+
+            Toggle(lookSection, "Date captions", "When a scene's photos are from a new day, the date shows in the lower left for a few seconds, with the folder when that changes too.",
+                options.ShowDateCaptions, (o, on) => o.ShowDateCaptions = on);
+
             void AddLookChoice(StackPanel column, string label, string tip, FrameworkElement control)
             {
                 var row = new Grid { ColumnSpacing = 12, MinHeight = 34 };
@@ -3406,8 +3412,8 @@ namespace ModernImageViewer
         /// waits while it is paused. A show that was opened or saved is not made here: it replays its own scenes. Reading a
         /// large folder's faces first would keep the screen still for minutes. Stops if the show is replaced or cleared.
         /// </summary>
-        /// <param name="overrides">Null for the main Layout Generator settings, or the name of a set of overrides
-        /// (<see cref="CinematicOverrides.Name"/>) that the show keeps for every scene made for it.</param>
+        /// <param name="overrides">Null to use the preset already chosen. Otherwise a preset name:
+        /// Multi-Image, Cinematic, or "My preset 1" to "3".</param>
         public async Task MakeAndPlayStoryboardAsync(string? overrides = null)
         {
             int ticket = ++_storyboardBuildTicket;
@@ -3432,7 +3438,11 @@ namespace ModernImageViewer
                     show.GlobalDefaults.TakeValues(CinematicOverrides.From(GeneratorSettingsFor(previous)));
                 }
                 else if (overrides == null) ApplyPreset(show, SurpriseChoices.LastPreset);
-                else SetCinematic(show, cinematic);
+                else
+                {
+                    ApplyPreset(show, overrides);
+                    RememberPreset(show);
+                }
             }
             _activeShow = show;
             _selectedShowScene = null;
@@ -3616,6 +3626,7 @@ namespace ModernImageViewer
             StopAutoPlay();
             _isStoryboardPlayback = true;
             _showPlaybackIndex = targetIndex;
+            PrepareShowWords(targetIndex);
             _autoPlaySeconds = 12;
             AddAutoPlayShield();
             StartAutoPlayMusic();
@@ -3794,6 +3805,7 @@ namespace ModernImageViewer
                 ChangeLayoutOver(before, outgoingStep, fadeSeconds, hardCut ? LayoutTransition.Cut
                     : Enum.TryParse<LayoutTransition>(scene.Transition, out var planned) ? planned : LayoutTransition.Crossfade);
             if (hardCut) PlayTiming.Write($"scene {currentIndex + 1}: hard cut on a big moment of the song");
+            _ = ShowSceneWordsAsync(scene);
 
             int displayIndex = liveIndex + 1;
             int totalDisplay = liveScenes.Count;
@@ -3988,6 +4000,7 @@ namespace ModernImageViewer
             _isStoryboardPlayback = false;
             // A cut planned for a big moment belongs to that moment: a scene shown after a pause comes in as made.
             _nextChangeIsHardCut = false;
+            ClearShowWords();
             StopPlaybackProgress();
             _autoPlayTimer?.Stop();
             _autoPlayTimer = null;
@@ -4060,6 +4073,7 @@ namespace ModernImageViewer
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(AutoPlayButton, text);
             ToolTipService.SetToolTip(AutoPlayButton, playTip);
             PaintSelected(AutoPlayButton, AutoPlayText, AutoPlayIcon, playing);
+            UpdatePresetModePill();
 
             // The drawer button shows the open-panel plate only. The mode lives on its own switch.
             if (StoryDeckButton != null)

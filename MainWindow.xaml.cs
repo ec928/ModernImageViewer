@@ -782,6 +782,18 @@ namespace ModernImageViewer
         private void PlayStoryboardFolder_Click(object sender, RoutedEventArgs e) =>
             PlayStoryboard(FolderImagesForStoryboard(), overrides: null);
 
+        private void PlayFolderModes_Click(object sender, RoutedEventArgs e)
+        {
+            var menu = MultiViewControl?.BuildPresetMenu((name, slot) =>
+            {
+                var items = FolderImagesForStoryboard();
+                if (items.Count == 0) return;
+                PlayStoryboard(items, overrides: slot is int n ? $"My preset {n + 1}" : name);
+            });
+            if (menu != null && sender is FrameworkElement anchor)
+                menu.ShowAt(anchor);
+        }
+
         private List<ImageItem> FolderImagesForStoryboard() =>
             Images.Where(img => !img.IsDirectory && !img.IsComicArchive && !img.IsComicEntry).ToList();
 

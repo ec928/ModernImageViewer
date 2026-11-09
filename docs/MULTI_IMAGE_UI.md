@@ -71,11 +71,15 @@ Cards can be dragged into a new order.
 
 ## Play show, from the folders
 
-**Play show** in the sidebar plays the whole folder with the preset chosen on the Show card, and so do **Play show** in the folder menu and the play button in the image viewer. The same button on the selection bar plays the selected images. Either opens Multi-View with those images, starts a new show and plays it once the first scene is made. While it plays it makes the next scenes from images not in it yet, a few ahead of the screen. While it is paused, drafting stops once every image has been dealt once. It stops if the show is replaced or cleared.
+**Play Show** in the sidebar plays the whole folder with the preset chosen on the Show card. The chevron beside that button plays the folder as Multi-Image, Cinematic, or a saved My preset. **Play Show** in the folder menu and the play button in the image viewer use the preset on the Show card, and so does the button on the selection bar, which plays the selected images. Any of these opens Multi-View with those images, starts a new show and plays it once the first scene is made. While it plays it makes the next scenes from images not in it yet, a few ahead of the screen. While it is paused, drafting stops once every image has been dealt once. It stops if the show is replaced or cleared.
 
-**Cinematic** is a preset on the Show card, not a second sidebar button. One image at a time, Edge to edge most of the time, Hero spotlight rarely, the other designs off, 10 to 15 seconds. It took the place of Cinematic Slideshow, the separate window, which was removed in 0.33.0; shows saved from it no longer open.
+The playbar has a preset pill between Next and Show. It names the preset in use. Choosing one switches the open show. With no scenes yet, that starts Play.
 
-To play with the Multi-Image preset again, press Multi-Image on the Show card. **New show** in the drawer starts an empty show and keeps the preset. Reset on the card puts the preset back to its starting values.
+When a show plays from its first scene, a title fades in over the picture for a few seconds: the show's own name, or the folder name when the show has only a placeholder name, with the month and year of the first photo underneath. When a later scene's photos are from a new day, the full date shows in the lower left, and the folder name as well when that changed. **Title at the start** and **Date captions**, both on to start, are in Engine settings under Canvas & progress. Pausing or stopping takes the words off.
+
+**Cinematic** is a preset on the Show card, and in the sidebar chevron and the playbar pill, not a second sidebar button. One image at a time, Edge to edge most of the time, Hero spotlight rarely, the other designs off, 10 to 15 seconds. It took the place of Cinematic Slideshow, the separate window, which was removed in 0.33.0; shows saved from it no longer open.
+
+To play with the Multi-Image preset again, press Multi-Image on the Show card, or choose it from the chevron or the pill. **New show** in the drawer starts an empty show and keeps the preset. Reset on the card puts the preset back to its starting values.
 
 ## Camera Director (Visual Keyframe Editor)
 
@@ -118,7 +122,7 @@ When viewing a storyboard scene on the canvas, any manual layout adjustment auto
 
 ## Layout Generator Settings
 
-Opened from **Engine settings…** on the Show card. These are how one layout and one move are made. The show's own images per scene, duration, smart pace, motion, sequence beats, scenes per step and design odds are on the Show card, not here. The page is in sections: Images & faces, Designs, Camera, Transitions, Canvas & progress.
+Opened from **Engine settings…** on the Show card. These are how one layout and one move are made. The show's own images per scene, duration, smart pace, motion, sequence beats, scenes per step and design odds are on the Show card, not here. The page is in sections: Images & faces, Designs, Camera, Transitions, Canvas & progress. Canvas & progress also holds **Title at the start** and **Date captions**.
 
 The defaults, which **Reset to defaults** on the Advanced page puts back. A settings file saved before a default changed keeps its own values until then.
 

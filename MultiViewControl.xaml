@@ -358,6 +358,18 @@
                                           StrokeLineJoin="Round" />
                                 </Viewbox>
                             </Button>
+                            <Button x:Name="PresetModeButton"
+                                    Click="PresetModeButton_Click"
+                                    AutomationProperties.Name="Show mode"
+                                    ToolTipService.ToolTip="Switch the show's preset"
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    Padding="8,5"
+                                    CornerRadius="12">
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <TextBlock x:Name="PresetModeText" Text="Multi-Image" VerticalAlignment="Center" FontSize="13" />
+                                    <FontIcon FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE70D;" FontSize="9" Opacity="0.75" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
                             <Button x:Name="SurpriseCardButton"
                                     Click="SurpriseCardButton_Click"
                                     AutomationProperties.Name="Show"

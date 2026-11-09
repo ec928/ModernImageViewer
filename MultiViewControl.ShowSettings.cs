@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using System;
 using System.Linq;
 
@@ -122,6 +123,124 @@ namespace ModernImageViewer
             if (show == null || !show.GlobalDefaults.HoldsValues) return MultiImagePreset;
             if (show.GeneratorOverrides == CinematicOverrides.Name) return CinematicOverrides.Name;
             return "Custom";
+        }
+
+        private static string ActivePresetShortName(ShowProject? show)
+        {
+            string name = ActivePresetName(show);
+            if (name.StartsWith("My preset ", StringComparison.OrdinalIgnoreCase))
+                return "P" + name.Substring("My preset ".Length).Trim();
+            return name;
+        }
+
+        /// <summary>The playbar pill and the sidebar chevron. A My preset that is empty is shown and cannot be chosen.</summary>
+        public MenuFlyout BuildPresetMenu(Action<string, int?> onSelect)
+        {
+            var menu = new MenuFlyout();
+            string current = _activeShow != null ? ActivePresetName(_activeShow) : (SurpriseChoices.LastPreset ?? MultiImagePreset);
+
+            void AddMode(string name, string label, string description)
+            {
+                bool isCurrent = string.Equals(current, name, StringComparison.OrdinalIgnoreCase);
+                var item = new RadioMenuFlyoutItem
+                {
+                    Text = $"{label}  ·  {description}",
+                    GroupName = "ShowPresetModes",
+                    IsChecked = isCurrent
+                };
+                bool fired = false;
+                void Select()
+                {
+                    if (fired) return;
+                    fired = true;
+                    menu.Hide();
+                    onSelect(name, null);
+                }
+                item.Click += (_, _) => Select();
+                menu.Items.Add(item);
+            }
+
+            AddMode(CinematicOverrides.Name, "Cinematic", "Single-photo slow drift");
+            AddMode(MultiImagePreset, "Multi-Image", "Collages, mosaics and prints");
+            menu.Items.Add(new MenuFlyoutSeparator());
+
+            var presets = SurpriseChoices.MyPresets;
+            for (int i = 0; i < 3; i++)
+            {
+                int slot = i;
+                bool hasValues = presets.ElementAtOrDefault(slot) != null;
+                string presetTitle = $"My preset {slot + 1}";
+                var item = new RadioMenuFlyoutItem
+                {
+                    Text = hasValues ? presetTitle : $"{presetTitle} (empty)",
+                    GroupName = "ShowPresetModes",
+                    IsEnabled = hasValues,
+                    IsChecked = current == presetTitle
+                };
+                bool fired = false;
+                void Select()
+                {
+                    if (fired) return;
+                    fired = true;
+                    menu.Hide();
+                    onSelect(presetTitle, slot);
+                }
+                item.Click += (_, _) => Select();
+                menu.Items.Add(item);
+            }
+
+            menu.Items.Add(new MenuFlyoutSeparator());
+            var settingsItem = new MenuFlyoutItem
+            {
+                Text = "Show settings\u2026",
+                Icon = new FontIcon { Glyph = "\uE713", FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets") }
+            };
+            settingsItem.Click += (_, _) => ShowSurpriseCard();
+            menu.Items.Add(settingsItem);
+            return menu;
+        }
+
+        /// <summary>The open show takes this preset. With no scenes yet, Play starts.</summary>
+        public void SwitchToPreset(string name, int? slot)
+        {
+            var target = _activeShow ??= NewShowWithLastPreset();
+            if (slot is int i)
+            {
+                if (SurpriseChoices.MyPresets.ElementAtOrDefault(i) is not CinematicOverrides saved)
+                {
+                    ShowAutoPlayToast($"My preset {i + 1} is empty. Hold it on the Show card to keep this show's values there.");
+                    return;
+                }
+                target.GeneratorOverrides = null;
+                target.PresetSlot = i;
+                target.PresetName = $"My preset {i + 1}";
+                target.GlobalDefaults.TakeValues(saved);
+            }
+            else SetCinematic(target, name == CinematicOverrides.Name);
+            RememberPreset(target);
+            CancelPreparedSurprise();
+            DropScenesDraftedAhead();
+            _updateStorySummary?.Invoke();
+            NoteUserAction();
+            ShowAutoPlayState();
+            ShowAutoPlayToast($"Preset: {(slot is int n ? $"My preset {n + 1}" : name)}");
+            if (target.Scenes.Count == 0 && _showBeingBuilt == null)
+                _ = MakeAndPlayStoryboardAsync(target.GeneratorOverrides);
+        }
+
+        private void PresetModeButton_Click(object sender, RoutedEventArgs e)
+        {
+            var menu = BuildPresetMenu((name, slot) => SwitchToPreset(name, slot));
+            if (sender is FrameworkElement anchor) menu.ShowAt(anchor);
+        }
+
+        private void UpdatePresetModePill()
+        {
+            if (PresetModeText == null) return;
+            string active = _activeShow != null ? ActivePresetName(_activeShow) : (SurpriseChoices.LastPreset ?? MultiImagePreset);
+            PresetModeText.Text = _activeShow != null ? ActivePresetShortName(_activeShow) : active;
+            if (PresetModeButton != null)
+                ToolTipService.SetToolTip(PresetModeButton, $"Show mode: {active}. Click to switch.");
         }
 
         /// <summary>Fills the storyboard's settings pop-up with the open show's preset and values, as they are now.</summary>

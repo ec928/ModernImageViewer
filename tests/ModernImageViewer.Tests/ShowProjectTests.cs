@@ -216,6 +216,22 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
+        public void Opening_title_uses_the_folder_unless_the_show_has_its_own_name()
+        {
+            var culture = System.Globalization.CultureInfo.InvariantCulture;
+            Assert.Equal("Holiday", ShowProject.OpeningTitle("Storyboard", "Holiday"));
+            Assert.Equal("Holiday", ShowProject.OpeningTitle("Cinematic storyboard", "Holiday"));
+            Assert.Equal("Holiday", ShowProject.OpeningTitle(ShowProject.DefaultTitle, "Holiday"));
+            Assert.Equal("Our trip", ShowProject.OpeningTitle("Our trip", "Holiday"));
+            var taken = new System.DateTime(2024, 11, 4);
+            Assert.Equal("November 2024", ShowProject.OpeningMonth(taken, culture));
+            Assert.Equal("", ShowProject.OpeningMonth(System.DateTime.MinValue, culture));
+            Assert.Equal("Monday 4 November 2024", ShowProject.DayCaption(taken, "Holiday", folderChanged: false, culture));
+            Assert.Equal("Monday 4 November 2024  ·  Holiday", ShowProject.DayCaption(taken, "Holiday", folderChanged: true, culture));
+            Assert.Equal("", ShowProject.DayCaption(System.DateTime.MinValue, "Holiday", folderChanged: true, culture));
+        }
+
+        [Fact]
         public void WithPoolAfter_ASceneOfFloatingPrints_KeepsAnEmptyGridCell_AndThePoolOffTheCanvas()
         {
             // Stored the old way: the empty grid cell was dropped, leaving only floating prints.

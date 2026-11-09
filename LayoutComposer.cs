@@ -406,6 +406,12 @@ namespace ModernImageViewer
 
         /// <summary>The line along a screen edge that fills while a layout holds. Off leaves the pictures clear.</summary>
         public bool ProgressOn { get; set; } = true;
+
+        /// <summary>A title over the first scene when a show plays from its start. The show's name, or the folder's, and the month.</summary>
+        public bool ShowTitleCard { get; set; } = true;
+
+        /// <summary>The date in the lower left when a scene's photos are from a new day.</summary>
+        public bool ShowDateCaptions { get; set; } = true;
         public string ProgressEdge { get; set; } = ProgressBottom;
         public string ProgressColor { get; set; } = ProgressAccent;
 
