@@ -12,6 +12,12 @@ namespace ModernImageViewer
         public const string DepthAnythingUrl = "https://huggingface.co/onnx-community/depth-anything-v2-small/resolve/main/onnx/model.onnx";
         public const string BiRefNetUrl = "https://huggingface.co/onnx-community/BiRefNet_lite-ONNX/resolve/main/onnx/model.onnx";
 
+        public const long DepthModelExpectedBytes = 99060839L;
+        public const string DepthModelSha256 = "AFB6A5C28F3B6BF1618C6E43F02073EF9DFDC70E937502D51603E57B0A1DF10C";
+
+        public const long MaskModelExpectedBytes = 114538221L;
+        public const string MaskModelSha256 = "D39B897CEB16AE654C1731F3DBA0CF9B368D9CAE74B5A57459B455CC8BFEC402";
+
         public static string Extension3DDir =>
             Path.Combine(AppPaths.LocalDirectory, "Extensions", "3D");
 
@@ -77,6 +83,26 @@ namespace ModernImageViewer
             return $"{mb:0.#} MB";
         }
 
+        private static bool VerifyModelFile(string path, long expectedBytes, string expectedSha256)
+        {
+            if (!File.Exists(path)) return false;
+            var fi = new FileInfo(path);
+            if (fi.Length != expectedBytes) return false;
+
+            try
+            {
+                using var stream = File.OpenRead(path);
+                using var sha = System.Security.Cryptography.SHA256.Create();
+                byte[] hash = sha.ComputeHash(stream);
+                string hex = Convert.ToHexString(hash);
+                return string.Equals(hex, expectedSha256, StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         public static async Task Install3DAsync(IProgress<(double Progress, string Status)>? progress = null, CancellationToken ct = default)
         {
             string targetDir = Extension3DDir;
@@ -86,7 +112,7 @@ namespace ModernImageViewer
 
             progress?.Report((0.05, "Locating extension binaries..."));
 
-            // 1. Install DLLs
+            // 1. Install DLLs - verify bundle exists and contains all required DLLs
             string localBundle = Path.Combine(AppContext.BaseDirectory, "Extensions", "Parallax", "bundle");
             if (!Directory.Exists(localBundle))
             {
@@ -108,12 +134,18 @@ namespace ModernImageViewer
 
             foreach (var dll in requiredDlls)
             {
+                string src = Path.Combine(localBundle, dll);
+                if (!File.Exists(src))
+                {
+                    throw new FileNotFoundException($"3D extension binary '{dll}' was not found in '{localBundle}'. Please ensure the extension bundle is published.");
+                }
+            }
+
+            foreach (var dll in requiredDlls)
+            {
                 string dest = Path.Combine(targetDir, dll);
                 string src = Path.Combine(localBundle, dll);
-                if (File.Exists(src))
-                {
-                    File.Copy(src, dest, overwrite: true);
-                }
+                File.Copy(src, dest, overwrite: true);
             }
 
             progress?.Report((0.20, "Preparing AI depth models..."));
@@ -128,28 +160,47 @@ namespace ModernImageViewer
 
             // Depth Anything V2 Small
             string localDepth = Path.Combine(localModels, "depth-anything-v2-small.onnx");
-            if (File.Exists(localDepth))
+            if (File.Exists(localDepth) && new FileInfo(localDepth).Length == DepthModelExpectedBytes)
             {
                 progress?.Report((0.35, "Copying depth estimation model..."));
                 await CopyFileAsync(localDepth, DepthModelPath, ct).ConfigureAwait(false);
             }
-            else if (!File.Exists(DepthModelPath))
+            else if (!File.Exists(DepthModelPath) || new FileInfo(DepthModelPath).Length != DepthModelExpectedBytes)
             {
                 progress?.Report((0.25, "Downloading depth model (99 MB)..."));
                 await DownloadFileWithProgressAsync(DepthAnythingUrl, DepthModelPath, 0.25, 0.55, progress, ct).ConfigureAwait(false);
             }
 
+            progress?.Report((0.55, "Verifying depth model integrity..."));
+            if (!VerifyModelFile(DepthModelPath, DepthModelExpectedBytes, DepthModelSha256))
+            {
+                try { File.Delete(DepthModelPath); } catch { }
+                throw new InvalidOperationException("Depth estimation model verification failed (SHA-256 or size mismatch).");
+            }
+
             // BiRefNet Lite
             string localMask = Path.Combine(localModels, "birefnet-lite.onnx");
-            if (File.Exists(localMask))
+            if (File.Exists(localMask) && new FileInfo(localMask).Length == MaskModelExpectedBytes)
             {
                 progress?.Report((0.70, "Copying subject segmentation model..."));
                 await CopyFileAsync(localMask, MaskModelPath, ct).ConfigureAwait(false);
             }
-            else if (!File.Exists(MaskModelPath))
+            else if (!File.Exists(MaskModelPath) || new FileInfo(MaskModelPath).Length != MaskModelExpectedBytes)
             {
-                progress?.Report((0.55, "Downloading subject mask model (115 MB)..."));
-                await DownloadFileWithProgressAsync(BiRefNetUrl, MaskModelPath, 0.55, 0.95, progress, ct).ConfigureAwait(false);
+                progress?.Report((0.60, "Downloading subject mask model (115 MB)..."));
+                await DownloadFileWithProgressAsync(BiRefNetUrl, MaskModelPath, 0.60, 0.90, progress, ct).ConfigureAwait(false);
+            }
+
+            progress?.Report((0.92, "Verifying subject mask model integrity..."));
+            if (!VerifyModelFile(MaskModelPath, MaskModelExpectedBytes, MaskModelSha256))
+            {
+                try { File.Delete(MaskModelPath); } catch { }
+                throw new InvalidOperationException("Subject segmentation model verification failed (SHA-256 or size mismatch).");
+            }
+
+            if (!Is3DInstalled)
+            {
+                throw new InvalidOperationException("3D Parallax installation could not be verified.");
             }
 
             progress?.Report((0.98, "Initializing 3D Parallax engine..."));

@@ -59,6 +59,22 @@ dotnet publish "%PROJ%" ^
 if errorlevel 1 goto :failed
 if not exist "%OUTDIR%\ModernImageViewer.exe" goto :failed
 
+REM Build the 3D Parallax Extension bundle into %OUTDIR%\Extensions\Parallax\bundle
+set "EXT_PROJ=%~dp0extensions\Parallax\ModernImageViewer.Extensions.Parallax.csproj"
+set "EXT_OUT=%OUTDIR%\Extensions\Parallax\bundle"
+
+echo.
+echo Building 3D Parallax Extension bundle...
+dotnet publish "%EXT_PROJ%" ^
+  -c Release ^
+  -r win-x64 ^
+  -p:Platform=x64 ^
+  -p:PublishDir="%EXT_OUT%\\" ^
+  --nologo
+
+if errorlevel 1 goto :failed
+if not exist "%EXT_OUT%\ModernImageViewer.Extensions.Parallax.dll" goto :failed
+
 echo.
 echo Publish reported success. Copying documentation...
 copy /Y "%~dp0LICENSE" "%OUTDIR%\" >nul
