@@ -88,6 +88,7 @@ namespace ModernImageViewer
             public Rect Placed { get; set; }
             public Size PlacedOn { get; set; }
             public Rect LastSet { get; set; }
+            public Action<bool>? ShowHandles { get; set; }
         }
 
         public void SpawnFreeformCell(ImageItem item, FreeformCellDto? restoreDto = null)
@@ -95,6 +96,14 @@ namespace ModernImageViewer
             if (item == null || (restoreDto == null && IsEmptyCell(item))) return;
 
             int sourceSlot = restoreDto?.SourceSlot ?? Slot(item);
+            if (restoreDto != null && sourceSlot >= 0 && sourceSlot < GridCellCount)
+            {
+                // If the source grid cell is already occupied by a different image, this freeform card is independent
+                if (!IsEmptyCell(_items[sourceSlot]) && !string.Equals(_items[sourceSlot].Path, restoreDto.Path, StringComparison.OrdinalIgnoreCase))
+                {
+                    sourceSlot = -1;
+                }
+            }
 
             // A saved freeform cell may hold a different image from its source cell, after a swap or a copy.
             bool sameAsSource = restoreDto == null
@@ -244,6 +253,7 @@ namespace ModernImageViewer
             FreeformCanvas.Children.Add(freeformCell);
             AttachWindowHandles(card);
             ApplyWindowGeometry(card);
+            ApplyWindowTurn(card);
             freeformCell.SizeChanged += (_, _) => ApplyWindowGeometry(card);
 
             EnsureCellRootsCapacity(_items.Count);
@@ -884,14 +894,27 @@ namespace ModernImageViewer
                     }
                 };
 
+                void CompleteResize()
+                {
+                    var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Container, slotGrid));
+                    if (card != null)
+                    {
+                        ApplyWindowGeometry(card);
+                        card.Placed = new Rect(Canvas.GetLeft(slotGrid), Canvas.GetTop(slotGrid), slotGrid.Width, slotGrid.Height);
+                        card.PlacedOn = _freeformBasis;
+                        card.LastSet = card.Placed;
+                    }
+                    SyncCanvasToSelectedScene(showToast: false);
+                    CaptureUndoPoint();
+                }
+
                 handle.PointerReleased += (s, e) =>
                 {
                     if (isResizing && e.Pointer.PointerId == resizePointerId)
                     {
                         isResizing = false;
                         try { handle.ReleasePointerCapture(e.Pointer); } catch { }
-                        SyncCanvasToSelectedScene(showToast: false);
-                        CaptureUndoPoint();
+                        CompleteResize();
                         e.Handled = true;
                     }
                 };
@@ -902,8 +925,7 @@ namespace ModernImageViewer
                     {
                         isResizing = false;
                         try { handle.ReleasePointerCapture(e.Pointer); } catch { }
-                        SyncCanvasToSelectedScene(showToast: false);
-                        CaptureUndoPoint();
+                        CompleteResize();
                     }
                 };
 
@@ -912,8 +934,7 @@ namespace ModernImageViewer
                     if (isResizing)
                     {
                         isResizing = false;
-                        SyncCanvasToSelectedScene(showToast: false);
-                        CaptureUndoPoint();
+                        CompleteResize();
                     }
                 };
 

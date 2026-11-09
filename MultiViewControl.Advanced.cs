@@ -74,8 +74,15 @@ namespace ModernImageViewer
         /// <summary>Positions count what is on the canvas: the cells on show, then the floating cells. The tray has none.</summary>
         private int PositionOfSlot(int slot)
         {
+            if (IsBareCanvas(slot)) return 0;
             int grid = GridCellCount;
-            return slot >= grid ? VisibleCount(grid) + slot - grid + 1 : slot + 1;
+            int bareOffset = IsBareCanvas(0) ? 1 : 0;
+            if (slot >= grid)
+            {
+                int visibleGrid = Math.Max(0, VisibleCount(grid) - bareOffset);
+                return visibleGrid + (slot - grid) + 1;
+            }
+            return slot - bareOffset + 1;
         }
         /// <summary>A picture chosen for this cell in the app.</summary>
         public void FillCell(ImageItem cell, string path)
@@ -100,6 +107,19 @@ namespace ModernImageViewer
             {
                 change(GetGeometry(item));
                 ShowEmptyState(Slot(item));
+                var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, item));
+                if (card != null)
+                {
+                    ApplyWindowGeometry(card);
+                }
+                else
+                {
+                    int slot = Slot(item);
+                    if (slot >= 0 && slot < _cellRoots.Length && _cellRoots[slot] is Grid g)
+                        ApplyCellShape(g, item, null);
+                }
+                CaptureUndoPoint();
+                SyncCanvasToSelectedScene(showToast: false);
             }
             var window = new MenuFlyoutSubItem { Text = "Shape", Icon = new FontIcon { Glyph = "\uE7C5" } };
             string current = GetGeometry(item).Shape;
@@ -544,10 +564,11 @@ namespace ModernImageViewer
                 rotate.IsHitTestVisible = show;
                 notch.IsHitTestVisible = show;
             }
+            card.ShowHandles = ShowHandles;
             var hideHandles = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(WindowHoverGraceMs) };
             hideHandles.Tick += (_, _) =>
             {
-                if (turning || moving) return;
+                if (turning || moving || _selectedSlot == Slot(card.Item)) return;
                 hideHandles.Stop();
                 ShowHandles(false);
             };
@@ -556,7 +577,11 @@ namespace ModernImageViewer
                 hideHandles.Stop();
                 ShowHandles(true);
             };
-            window.PointerExited += (_, _) => hideHandles.Start();
+            window.PointerExited += (_, _) =>
+            {
+                if (_selectedSlot == Slot(card.Item)) return;
+                hideHandles.Start();
+            };
         }
         private Microsoft.UI.Xaml.Shapes.Rectangle? _guideX;
         private Microsoft.UI.Xaml.Shapes.Rectangle? _guideY;

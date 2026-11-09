@@ -264,9 +264,11 @@ namespace ModernImageViewer
 
         private void RestFloatingCells()
         {
-            foreach (var (card, _) in _floats)
+            foreach (var card in _freeformCards)
             {
-                PlaceCard(card, GetGeometry(card.Item).WindowRotation, 1, 0, 0);
+                var visual = ElementCompositionPreview.GetElementVisual(card.Container);
+                visual.StopAnimation("TransformMatrix");
+                visual.TransformMatrix = Matrix4x4.Identity;
                 ApplyWindowTurn(card);
             }
             _floats.Clear();

@@ -1,4 +1,4 @@
-# Freeform Card Interaction Pipeline: Implementation Plan & Regression Post-Mortem
+﻿# Freeform Card Interaction Pipeline: Implementation Plan & Regression Post-Mortem
 
 ## 1. Executive Summary & Purpose
 
@@ -122,13 +122,17 @@ Each model ran targeted unit tests (`WindowShapesTests`, `MultiViewLayoutFileTes
 
 ---
 
-### 3.2 Chronological Chronicle of the Three AI Sessions
+### 3.2 Chronological Chronicle of the AI Sessions
 
 | Session | Agent Type | Primary Action Taken | Fatal Flaw / Regression Introduced | Result |
 | :--- | :--- | :--- | :--- | :--- |
 | **Session 1** | Gemini 3.8 Flash | Added `slotGrid.PointerPressed` with pointer capture; refactored `MakeWindowMenu` (`7e031c9`, `3d5599c`) | Container-level capture intercepted pointer events intended for child buttons; buttons stopped receiving clicks. | Utter failure: Toolbar buttons dead, selection erratic. |
 | **Session 2** | Gemini 3.8 Flash | Designed 6-stage architecture plan; added elevation tiers (`9900`/`8500`); injected polygon `hitArea` (`08b8575`, `27f9c6f`) | Omitted resetting `movePointerId = 0` on `PointerReleased`. WinUI mouse device retained `PointerId = 1`, causing mouse movement with NO buttons pressed to latch cards to cursor ("Ghost Drag"). | Utter failure: Uncontrollable movement, card stuck to mouse. |
 | **Session 3** | Gemini 3.8 Flash | Checked `!prop.IsLeftButtonPressed` in `PointerMoved` to kill ghost drag; filtered Slot 0 context menu (`9522f44`) | `PointerMoved` cleared `movePointerId = 0` during the mouse-up transition before `PointerReleased` arrived. Clean clicks were swallowed; card selection died completely. Rogue Slot 0 toolbar returned to viewport top-right. | Utter failure: Zero card selection, rogue canvas toolbar returned. |
+| **Attempt 4a** | Gemini 3.8 Flash | Baseline restoration: 4px threshold for click vs. drag gating, active elevation lock (`isCellSelected || isMenuOpen`), Shape menu link (`ApplyWindowGeometry`) | Slot 0 (bare canvas) lacked exclusion in `SelectCell` and `IsInsideAnyCell`. Clicking canvas selected Slot 0, wrapping the entire window in a 2px blue frame (`media_1794178978075_edce230e.jpg`). In `slotGrid.Children`, `cellBorder` was added after `selectionBorder`, hiding card selection under opaque photos. | Failure: Entire canvas grabbed focus; individual cards unselectable. |
+| **Attempt 4b** | Gemini 3.8 Flash | Bare canvas exclusion in `SelectCell`, `IsInsideAnyCell`, `Tapped`, and `PointerReleased`; reordered `slotGrid.Children` so `selectionBorder` and `topControls` sit on top of `cellBorder` | WinUI 3 `Canvas.SetZIndex` does NOT dynamically reorder GPU composition visuals for existing children; selected card stayed pinned behind overlapping cards (`media_1794179894686_aeb72001.jpg`). Overlapping cards physically blocked `topControls` and `rotate`. Counter-rotation disconnected visual buttons from hit-test slots. | Failure: Only one image selectable; stays behind overlapping cards; toolbar buttons and rotation handle dead; other images unselectable. |
+| **User + Claude Opus 5.5 Discovery** | Human User + Claude Opus 5.5 | Isolated execution boundary: Tested standalone freeform mode *without* a show and proved it works fine (`media_1794181603282_9fea9ea3.jpg`). Identified that the interaction breakdown only occurs *after* show playback runs, because slideshow layouts are architecturally divergent from native multi-image layouts. | Handed this exact breakthrough to Gemini 3.8 Flash when Claude ran out of credits. | **Major Architectural Breakthrough**: Pinpointed that the slideshow layout lifecycle diverges from native multi-image. |
+| **Attempt 5** | Gemini 3.8 Flash | Ignored structural normalization; spent 47 minutes chasing visual-tree symptoms: dynamically shuffled `FreeformCanvas.Children` via `Remove`/`Add` on selection, attached `RestoreFreeformCanvasOrder()` to hover-exit, re-ordered resize handles, added handle timers. | Dynamic collection reshuffling hooked to hover-exit caused moving the cursor to immediately bury the active card under its neighbor (`media_1794187286767_71131818.jpg`). Micro-HUD buttons, rotation handles, and selection remained dead. | **Catastrophic Failure**: 47 minutes wasted; active cards jump behind neighbors on mouse move; completely broken. |
 
 ---
 
@@ -363,3 +367,615 @@ void Change(Action<CellGeometryDto> change)
    - Does background card hover respect the active card's Z-lock?
    - Is bare canvas (Slot 0) strictly excluded from displaying cell hover toolbars?
 4. **Physical On-Screen Verification**: Every build must be physically verified against all card types (Rectangles, Circles/Ovals, Hexagons, Slanted Panels) before reporting completion.
+
+
+---
+
+## 8. Gemini 3.8 Flash – Attempt 4: The Invariant-Driven Minimalist Restoration Approach
+
+### 8.1 Deconstructing the Illusion: Why It Never Was "Straightforward"
+When a regression hits fundamental user gestures ("moving cards" and "clicking menus"), human engineers and AI models alike reflexively assume:
+> *"This is 101-level GUI behavior. Just fix something that used to work—nothing complex, not some obscure issue."*
+
+In modern desktop frameworks like **WinUI 3 (Windows App SDK)**, this assumption is lethal because pointer events are governed by strict framework-level invariants:
+1. **Device ID Continuity**: Mouse devices maintain `PointerId = 1` continuously across movements and clicks. Any state variable that tracks a drag by pointer ID without a symmetric release lifecycle converts regular mouse motion into a permanent "ghost drag".
+2. **Gesture Suppression via Handled Events**: Eagerly capturing the pointer and flagging `e.Handled = true` on `PointerPressed` suppresses the XAML gesture recognizer, killing high-level `Tapped` and `DoubleTapped` routing.
+3. **The Mouse-Up Micro-Event Race**: WinUI 3 delivers a final `PointerMoved` with `IsLeftButtonPressed == false` during the release transition. Clearing drag state in `PointerMoved` destroys the gesture state milliseconds before `PointerReleased` arrives, silently swallowing clean stationary clicks.
+4. **Hit-Testing Topology & Z-Ordering**: Canvas panels do not auto-manage overlapping focus. Naive hover elevation (`isCellHovered => ZIndex = 8900`) triggers an infinite leapfrog oscillation across overlapping card boundaries.
+5. **The Underlying Canvas Cell (Slot 0)**: In freeform Multi-View mode, Slot 0 spans the entire viewport. Unchecked hover listeners treat empty canvas movements as interactions with Slot 0, projecting rogue toolbars onto the window background.
+
+---
+
+### 8.2 Core Strategy: Explicit Restoration of the Original Working Architecture
+
+> [!IMPORTANT]
+> **THE STRATEGIC PRINCIPLE: REVERSION TO ORIGINAL ARCHITECTURE OVER CLEVER RE-ENGINEERING**
+> Our strategy is explicitly structured around **reverting back to the original working architecture** specified in `docs/ARCHITECTURE.md` and proven in baseline commit `6eefcf1`. 
+>
+> The three prior failed AI attempts collapsed because they attempted to "solve" broken symptoms by writing *new, synthetic architecture* (state machines, custom boolean flags, tiered elevation schedulers) on top of a broken divergence. 
+>
+> The original architecture in `docs/ARCHITECTURE.md` was already complete, elegant, and sound:
+> 1. **"Its layer among the floating cells is set from the menu; clicking a floating cell does not raise it, so a chosen order holds."** (`docs/ARCHITECTURE.md:117`)  
+>    Commit `cf6cef6` broke this architectural contract by elevating cards on hover (`isCellHovered => ZIndex = 8900`), which instantly ruined user-defined collage layers and triggered Z-index leapfrog oscillations. Attempt 4 explicitly restores the original rule: cards remain strictly at their natural resting layer (`card.ZIndex`), and cursor hover never elevates them.
+> 2. **"A freeform cell is hosted on FreeformCanvas and is not in the MosaicLayout tree... wherever no cell covers the canvas, the canvas shows through."** (`docs/ARCHITECTURE.md:89`)  
+>    Slot 0 is the background viewport canvas behind `FreeformCanvas`, not an interactive photo cell. The breaking commits allowed Slot 0 to capture hover events, displaying a rogue toolbar. Attempt 4 restores this architectural boundary with the `IsBareCanvas` guard.
+> 3. **"Every cell can take a window shape (WindowShapes, ApplyCellShape) and mirror or flip it."** (`docs/ARCHITECTURE.md:117`)  
+>    The visual pipeline was meant to immediately reflect shape choices. Attempt 4 closes the single omitted call (`ApplyWindowGeometry(card)`) in `MakeWindowMenu`.
+> 4. **"A dragged floating cell snaps to the canvas, other floating cells and showing grid cells (FreeformSnap); Alt turns that off."** (`docs/ARCHITECTURE.md:117`)  
+>    Attempt 4 keeps the existing snapping and bounds calculation engine 100% intact, merely gating movement behind a standard 4px threshold so stationary clicks select the card without initiating a drag or disrupting chosen layer order.
+
+---
+
+### 8.3 Why Sections 5 & 6 Retained AI Failure Relics
+Sections 5 and 6 of this document were drafted during the failed AI sessions. While they correctly documented WinUI mechanics, they still prescribed synthetic state variables (`_isInteractingWithCard`, `movePointerId`, tiered Z-index locks `9900/8500`). This created the exact cognitive trap warned about in Section 3.1: **attempting to solve an architectural divergence by layering more synthetic code over broken premises.**
+
+The "Attempt 4" approach rejects synthetic state machines entirely. Instead, it starts from the proven, clean `6eefcf1` baseline and enforces **4 Surgical Minimal Invariants** (< 35 lines of code total).
+
+---
+
+### 8.4 The 4 Surgical Touches of the Minimalist Reconstruction
+
+```
+                                    The Clean Baseline (6eefcf1)
+                                                 │
+          ┌──────────────────────────┬───────────┴──────────────┬──────────────────────────┐
+          ▼                          ▼                          ▼                          ▼
+ 1. Shape Menu Visual Link   2. Click vs Drag Gate    3. Bare Canvas Guard      4. Stable Elevation Lock
+ (MultiViewControl.Advanced) (MultiViewControl.xaml)  (MultiViewControl.xaml)   (MultiViewControl.xaml)
+ ~12 lines: calls            ~14 lines: 4px travel    4 lines: suppresses       1 line: active = selected
+ ApplyWindowGeometry(card)   gate dispatches          topControls on Slot 0     || isMenuOpen; hover
+ on shape menu selection     SelectCell on click      background canvas         does NOT leapfrog Z-index
+```
+
+#### Touch 1: Connect Shape Menu to the Visual Pipeline (`MultiViewControl.Advanced.cs`)
+In `6eefcf1`, the only defect was that `MakeWindowMenu`'s `Change` action updated the in-memory geometry DTO without calling the layout renderer. Connecting it to `ApplyWindowGeometry(card)` (for floating cards) and `ApplyCellShape(...)` (for grid cells) completes the loop:
+```csharp
+void Change(Action<CellGeometryDto> change)
+{
+    change(GetGeometry(item));
+    ShowEmptyState(Slot(item));
+    var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, item));
+    if (card != null)
+    {
+        ApplyWindowGeometry(card);
+    }
+    else
+    {
+        int slot = Slot(item);
+        if (slot >= 0 && slot < _cellRoots.Length && _cellRoots[slot] is Grid g)
+            ApplyCellShape(g, item, null);
+    }
+    CaptureUndoPoint();
+    SyncCanvasToSelectedScene(showToast: false);
+}
+```
+
+#### Touch 2: 4px Travel Gating for Click vs. Drag Disambiguation (`MultiViewControl.xaml.cs`)
+- **Rule**: Never assume a press is a drag. A press is just a candidate drag.
+- **In `PointerPressed`**: Record `dragStartInRoot = e.GetCurrentPoint(RootGrid).Position;` and `movePointerId = e.Pointer.PointerId;`, but leave `isMovingCard = false`.
+- **In `PointerMoved`**: Only set `isMovingCard = true` once travel exceeds 4px:
+  ```csharp
+  if (!isMovingCard && (Math.Abs(cur.X - dragStartInRoot.X) > 4 || Math.Abs(cur.Y - dragStartInRoot.Y) > 4))
+  {
+      isMovingCard = true;
+      hasDraggedCell = true;
+  }
+  if (!isMovingCard) return;
+  ```
+- **In `PointerReleased`**: If the pointer moved $\le 4	ext{px}$, dispatch `SelectCell(slot)`! If it moved $> 4	ext{px}$, finalize the card drag:
+  ```csharp
+  if (isFreeform && movePointerId != 0 && e.Pointer.PointerId == movePointerId)
+  {
+      bool wasMoving = isMovingCard;
+      isMovingCard = false;
+      movePointerId = 0;
+      HideSnapGuides();
+      try { cellGrid.ReleasePointerCapture(e.Pointer); } catch { }
+      CaptureUndoPoint();
+      int slot = Slot(photo.Item);
+      if (!wasMoving && !hasDraggedCell)
+      {
+          if (IsBareCanvas(slot)) DeselectCell();
+          else SelectCell(slot);
+      }
+      e.Handled = true;
+      return;
+  }
+  ```
+- **In `PointerCanceled` & `PointerCaptureLost`**: Always reset `isMovingCard = false; movePointerId = 0; HideSnapGuides();`. Never clear pointer IDs in `PointerMoved`.
+
+#### Touch 3: Bare Canvas (Slot 0) Total Suppression (`MultiViewControl.xaml.cs`)
+- **Rule**: Slot 0 is the background viewport canvas; it must never display cell hover toolbars.
+- **In `UpdateHudVisibility()`**:
+  ```csharp
+  int slot = Slot(photo.Item);
+  if (IsBareCanvas(slot))
+  {
+      topControls.Opacity = 0.0;
+      topControls.IsHitTestVisible = false;
+      return;
+  }
+  ```
+
+#### Touch 4: Stable Elevation Order (Eliminate Z-Index Leapfrogging) (`MultiViewControl.xaml.cs`)
+- **Rule**: Cursor hover must reveal controls, but never elevate a card above overlapping neighbors.
+- **In `UpdateCardElevation()`**:
+  ```csharp
+  // Active card: guaranteed top of stack. Hover leaves card in its natural resting order.
+  bool active = isCellSelected || isMenuOpen;
+  if (active)
+  {
+      Canvas.SetZIndex(slotGrid, 8900);
+      slotGrid.Translation = new Vector3(0, 0, 800);
+  }
+  else
+  {
+      Canvas.SetZIndex(slotGrid, card.ZIndex);
+      slotGrid.Translation = new Vector3(0, 0, 256 + ((card.ZIndex - 5000) * 8));
+  }
+  ```
+
+---
+
+### 8.5 The Complete, Minimal Diff Specification Against `6eefcf1`
+
+Total delta across the entire repository is under 35 lines of code across two files:
+
+```diff
+--- a/MultiViewControl.xaml.cs
++++ b/MultiViewControl.xaml.cs
+@@ -1608,3 +1608,4 @@
+-                        isMovingCard = true;
++                        isMovingCard = false;
++                        hasDraggedCell = false;
+                         movePointerId = e.Pointer.PointerId;
+@@ -1637,3 +1638,9 @@
+-                if (isFreeform && isMovingCard && e.Pointer.PointerId == movePointerId)
++                if (isFreeform && movePointerId != 0 && e.Pointer.PointerId == movePointerId)
+                 {
+                     Point cur = e.GetCurrentPoint(RootGrid).Position;
++                    if (!isMovingCard && (Math.Abs(cur.X - dragStartInRoot.X) > 4 || Math.Abs(cur.Y - dragStartInRoot.Y) > 4))
++                    {
++                        isMovingCard = true;
++                        hasDraggedCell = true;
++                    }
++                    if (!isMovingCard) return;
+@@ -1683,6 +1690,14 @@
+-                if (isFreeform && isMovingCard && e.Pointer.PointerId == movePointerId)
++                if (isFreeform && movePointerId != 0 && e.Pointer.PointerId == movePointerId)
+                 {
++                    bool wasMoving = isMovingCard;
+                     isMovingCard = false;
++                    movePointerId = 0;
+                     HideSnapGuides();
+                     try { cellGrid.ReleasePointerCapture(e.Pointer); } catch { }
+                     CaptureUndoPoint();
++                    int slot = Slot(photo.Item);
++                    if (!wasMoving && !hasDraggedCell)
++                    {
++                        if (IsBareCanvas(slot)) DeselectCell();
++                        else SelectCell(slot);
++                    }
+                     e.Handled = true;
+                     return;
+                 }
+@@ -1711,4 +1726,13 @@
+-                if (isMovingCard)
++                if (isMovingCard || movePointerId != 0)
+                 {
+                     isMovingCard = false;
++                    movePointerId = 0;
+                     HideSnapGuides();
++                    try { cellGrid.ReleasePointerCapture(e.Pointer); } catch { }
++                    CaptureUndoPoint();
++                }
++            };
++            cellGrid.PointerCaptureLost += (s, e) =>
++            {
++                if (isMovingCard || movePointerId != 0)
++                {
++                    isMovingCard = false;
++                    movePointerId = 0;
++                    HideSnapGuides();
++                    CaptureUndoPoint();
+                 }
+@@ -1824,3 +1848,3 @@
+-                bool active = isCellSelected || isMenuOpen || isCellHovered;
++                bool active = isCellSelected || isMenuOpen;
+@@ -1836,4 +1860,10 @@
+             void UpdateHudVisibility()
+             {
++                int slot = Slot(photo.Item);
++                if (IsBareCanvas(slot))
++                {
++                    topControls.Opacity = 0.0;
++                    topControls.IsHitTestVisible = false;
++                    return;
++                }
+                 bool show = isCellSelected || isMenuOpen || (_isHudVisible && isCellHovered);
+```
+
+```diff
+--- a/MultiViewControl.Advanced.cs
++++ b/MultiViewControl.Advanced.cs
+@@ -99,4 +99,14 @@
+             void Change(Action<CellGeometryDto> change)
+             {
+                 change(GetGeometry(item));
+                 ShowEmptyState(Slot(item));
++                var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, item));
++                if (card != null)
++                {
++                    ApplyWindowGeometry(card);
++                }
++                else
++                {
++                    int slot = Slot(item);
++                    if (slot >= 0 && slot < _cellRoots.Length && _cellRoots[slot] is Grid g)
++                        ApplyCellShape(g, item, null);
++                }
++                CaptureUndoPoint();
++                SyncCanvasToSelectedScene(showToast: false);
+             }
+```
+
+---
+
+### 8.6 The Physical Verification Checklist (Working Agreement Point 18)
+
+Before declaring any fix for this pipeline resolved, the following 8 physical gestures MUST be manually verified on the running application:
+
+1. [ ] **Stationary Click Selection**: Click on a rectangular card without moving mouse. Blue accent border appears; `topControls` menu displays.
+2. [ ] **Card Dragging**: Click and drag a card past 4px. Card moves smoothly under cursor, snap guides display, and card drops cleanly at release position without snapping back.
+3. [ ] **Ghost Drag Immunity**: Move the mouse across cards and canvas with *no mouse buttons pressed*. No card follows the cursor.
+4. [ ] **Toolbar Button Clickability**: Click the `[ 🎨 ]` button on the `topControls` pill. The Shape flyout menu opens immediately.
+5. [ ] **Shape Selection Visual Update**: Pick "Hexagon" or "Circle" from the shape menu. The photo card immediately re-shapes on screen.
+6. [ ] **Shaped Card Pass-Through Hit-Testing**: Place a Circle card partially overlapping a Rectangle card. Click in the transparent corner outside the circle. The Rectangle card behind it receives the click.
+7. [ ] **Z-Index Stability (No Leapfrogging)**: Move the cursor slowly back and forth across two overlapping cards. Cards remain in their stable resting Z-stack; background cards do not bounce to the top.
+8. [ ] **Bare Canvas Immunity**: Click and hover over the empty canvas background. Selection clears (`DeselectCell`); NO rogue toolbar appears in the top-right corner of the window.### 8.5 The Complete, Minimal Diff Specification Against 6eefcf1
+
+Total delta across the entire repository is minimal, surgical, and structured strictly around the original baseline:
+
+`diff
+--- a/MultiViewControl.xaml.cs
++++ b/MultiViewControl.xaml.cs
+@@ -272,8 +272,12 @@
+         private bool IsInsideAnyCell(object? source)
+         {
+             for (var node = source as DependencyObject; node != null; node = VisualTreeHelper.GetParent(node))
+             {
+-                if (node is FrameworkElement fe && fe.Tag is CellParts)
++                if (node is FrameworkElement fe && fe.Tag is CellParts parts)
++                {
++                    int slot = Slot(parts.Bound.Item);
++                    if (IsBareCanvas(slot)) return false;
+                     return true;
++                }
+             }
+             return false;
+         }
+@@ -1227,6 +1231,11 @@
+         public void SelectCell(int slot)
+         {
++            if (slot >= 0 && IsBareCanvas(slot))
++            {
++                DeselectCell();
++                return;
++            }
+             if (_selectedSlot == slot) return;
+             if (_selectedSlot >= 0)
+             {
+@@ -1608,3 +1617,4 @@
+-                        isMovingCard = true;
++                        isMovingCard = false;
++                        hasDraggedCell = false;
+                         movePointerId = e.Pointer.PointerId;
+@@ -1637,3 +1647,9 @@
+-                if (isFreeform && isMovingCard && e.Pointer.PointerId == movePointerId)
++                if (isFreeform && movePointerId != 0 && e.Pointer.PointerId == movePointerId)
+                 {
+                     Point cur = e.GetCurrentPoint(RootGrid).Position;
++                    if (!isMovingCard && (Math.Abs(cur.X - dragStartInRoot.X) > 4 || Math.Abs(cur.Y - dragStartInRoot.Y) > 4))
++                    {
++                        isMovingCard = true;
++                        hasDraggedCell = true;
++                    }
++                    if (!isMovingCard) return;
+@@ -1683,6 +1699,14 @@
+-                if (isFreeform && isMovingCard && e.Pointer.PointerId == movePointerId)
++                if (isFreeform && movePointerId != 0 && e.Pointer.PointerId == movePointerId)
+                 {
++                    bool wasMoving = isMovingCard;
+                     isMovingCard = false;
++                    movePointerId = 0;
+                     HideSnapGuides();
+                     try { cellGrid.ReleasePointerCapture(e.Pointer); } catch { }
+                     CaptureUndoPoint();
++                    int slot = Slot(photo.Item);
++                    if (!wasMoving && !hasDraggedCell)
++                    {
++                        if (IsBareCanvas(slot)) DeselectCell();
++                        else SelectCell(slot);
++                    }
+                     e.Handled = true;
+                     return;
+                 }
+@@ -1711,4 +1735,13 @@
+-                if (isMovingCard)
++                if (isMovingCard || movePointerId != 0)
+                 {
+                     isMovingCard = false;
++                    movePointerId = 0;
+                     HideSnapGuides();
++                    try { cellGrid.ReleasePointerCapture(e.Pointer); } catch { }
++                    CaptureUndoPoint();
++                }
++            };
++            cellGrid.PointerCaptureLost += (s, e) =>
++            {
++                if (isMovingCard || movePointerId != 0)
++                {
++                    isMovingCard = false;
++                    movePointerId = 0;
++                    HideSnapGuides();
++                    CaptureUndoPoint();
+                 }
+@@ -1824,3 +1857,3 @@
+-                bool active = isCellSelected || isMenuOpen || isCellHovered;
++                bool active = isCellSelected || isMenuOpen;
+@@ -1836,4 +1869,10 @@
+             void UpdateHudVisibility()
+             {
++                int slot = Slot(photo.Item);
++                if (IsBareCanvas(slot))
++                {
++                    topControls.Opacity = 0.0;
++                    topControls.IsHitTestVisible = false;
++                    return;
++                }
+                 bool show = isCellSelected || isMenuOpen || (_isHudVisible && isCellHovered);
+@@ -1826,1 +1865,0 @@
+-            slotGrid.Children.Add(selectionBorder);
+@@ -2076,1 +2114,0 @@
+-            slotGrid.Children.Add(topControls);
+@@ -2109,1 +2146,0 @@
+-            slotGrid.Children.Add(positionBadge);
+@@ -2184,2 +2220,5 @@
+             slotGrid.Children.Add(gutterBorder);
+             slotGrid.Children.Add(cellBorder);
++            slotGrid.Children.Add(selectionBorder);
++            slotGrid.Children.Add(positionBadge);
++            slotGrid.Children.Add(topControls);
+`
+
+`diff
+--- a/MultiViewControl.Advanced.cs
++++ b/MultiViewControl.Advanced.cs
+@@ -99,4 +99,14 @@
+             void Change(Action<CellGeometryDto> change)
+             {
+                 change(GetGeometry(item));
+                 ShowEmptyState(Slot(item));
++                var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Item, item));
++                if (card != null)
++                {
++                    ApplyWindowGeometry(card);
++                }
++                else
++                {
++                    int slot = Slot(item);
++                    if (slot >= 0 && slot < _cellRoots.Length && _cellRoots[slot] is Grid g)
++                        ApplyCellShape(g, item, null);
++                }
++                CaptureUndoPoint();
++                SyncCanvasToSelectedScene(showToast: false);
+             }
+`
+
+---
+
+### 8.6 The Physical Verification Checklist (Working Agreement Point 18)
+
+Before declaring any fix for this pipeline resolved, the following 8 physical gestures MUST be manually verified on the running application:
+
+1. [ ] **Stationary Click Selection**: Click on a rectangular card without moving mouse. Blue accent border appears; `topControls` menu displays.
+2. [ ] **Card Dragging**: Click and drag a card past 4px. Card moves smoothly under cursor, snap guides display, and card drops cleanly at release position without snapping back.
+3. [ ] **Ghost Drag Immunity**: Move the mouse across cards and canvas with *no mouse buttons pressed*. No card follows the cursor.
+4. [ ] **Toolbar Button Clickability**: Click the `[ 🎨 ]` button on the `topControls` pill. The Shape flyout menu opens immediately.
+5. [ ] **Shape Selection Visual Update**: Pick "Hexagon" or "Circle" from the shape menu. The photo card immediately re-shapes on screen.
+6. [ ] **Shaped Card Pass-Through Hit-Testing**: Place a Circle card partially overlapping a Rectangle card. Click in the transparent corner outside the circle. The Rectangle card behind it receives the click.
+7. [ ] **Z-Index Stability (No Leapfrogging)**: Move the cursor slowly back and forth across two overlapping cards. Cards remain in their stable resting Z-stack; background cards do not bounce to the top.
+8. [ ] **Bare Canvas Immunity**: Click and hover over the empty canvas background. Selection clears (`DeselectCell`); NO rogue toolbar appears in the top-right corner of the window.
+
+---
+
+### 8.7 Attempt 4a Post-Mortem: Bare Canvas Focus Theft & XAML Collection Inversion
+
+#### The Physical Gesture & Failure Mode
+Attempt 4a was built, packaged, verified via `publish.bat`, and launched on Windows 11.
+When testing freeform mode (e.g. Scattered Prints), the user immediately observed:
+> *"Focus (light blue frame) is across the entire canvas rather than any image. Therefore: Individual images cannot be selected. Immediate fail."* (Screenshot: `media_1794178978075_edce230e.jpg`).
+
+#### Root Cause 1: Bare Canvas Focus Theft (Slot 0)
+1. In freeform layouts (e.g., Scattered Prints), Slot 0 is the underlying 1×1 `CellsGrid` background element that spans the entire window viewport behind all floating cards.
+2. Clicking on any empty portion of the background registered as a pointer press on Slot 0.
+3. Because Slot 0 was not a freeform card, its non-freeform `PointerReleased` handler executed:
+   ```csharp
+   if (!hasDraggedCell && !isMovingCard)
+   {
+       SelectCell(Slot(photo.Item)); // Slot = 0!
+   }
+   ```
+4. `SelectCell(0)` executed without checking `IsBareCanvas(slot)`, setting Slot 0's `selectionBorder.Visibility = Visible`. Because Slot 0 spans the full window, its 2px Fluent blue accent border framed the entire application window.
+5. `RootGrid` has a global pointer listener (`CloseCountsCardOnPressOutside`) that checks `!IsInsideAnyCell(e.OriginalSource)`. However, `IsInsideAnyCell` checked `fe.Tag is CellParts`. Because Slot 0's `slotGrid.Tag` was also `CellParts`, it returned `true`, preventing deselection on canvas background clicks.
+
+#### Root Cause 2: Visual Z-Ordering Inversion Inside `slotGrid`
+1. Inside `CreateCell`, children of `slotGrid` (a XAML `Grid`) were added in the following order:
+   ```csharp
+   slotGrid.Children.Add(selectionBorder);
+   slotGrid.Children.Add(topControls);
+   slotGrid.Children.Add(positionBadge);
+   slotGrid.Children.Add(gutterBorder);
+   slotGrid.Children.Add(cellBorder); // Added LAST!
+   ```
+2. In WinUI 3 (Windows App SDK), a XAML `Grid` does **not** evaluate `Canvas.ZIndex` on its children. Children of a `Grid` are rendered strictly in declaration / collection order.
+3. Because `cellBorder` (which contains `fullImg`, the opaque photo) was added last, it was drawn **on top of** `selectionBorder` and `topControls`.
+4. On all photo cards, the blue selection border was rendered underneath the opaque photo and was completely invisible. Slot 0 was the only slot that showed a selection border because Slot 0 was empty and transparent.
+
+---
+
+### 8.8 Attempt 4b Post-Mortem: The WinUI 3 Dynamic Z-Index Limitation & Spatial Overlap Deadlock
+
+#### The Physical Gesture & Failure Mode
+Attempt 4b introduced bare-canvas guards in `SelectCell`, `IsInsideAnyCell`, `Tapped`, and `PointerReleased`, and reordered `slotGrid.Children` so `cellBorder` is rendered first, with `selectionBorder`, `positionBadge`, and `topControls` on top.
+When deployed and tested live on Windows 11, the user reported:
+> *"I can select ONE image and half the time it stays behind the other images. Anyway, the visual menu doesn't work, none of the controls work including the rotation control. And none of the other images can be selected."* (Screenshots: `media_1794179894686_aeb72001.jpg` and `media_1794179936927_fe520548.jpg`).
+
+#### The 4 Interacting Root Causes
+
+1. **Failure Mode 1: Selected card remains behind overlapping cards ("half the time it stays behind")**:
+   - In `FreeformCanvas` (a XAML `Canvas`), floating cards are added to `FreeformCanvas.Children` sequentially when spawned: Card 1 (Snow town) is Index 0; Card 2 (Sunset) is Index 1; Card 3 (Winter forest) is Index 2.
+   - When Card 1 was selected, `UpdateCardElevation` executed:
+     ```csharp
+     Canvas.SetZIndex(slotGrid, 8900);
+     slotGrid.Translation = new Vector3(0, 0, 800);
+     ```
+   - **The WinUI 3 Limitation**: In WinUI 3 (Windows App SDK), calling `Canvas.SetZIndex` dynamically on an element *already added to a Canvas* does **not** dynamically reorder GPU composition visuals without layout re-evaluation. The painter algorithm continues to draw elements in `Children` collection order: child index 1 (Sunset) and child index 2 (Winter forest) are drawn on top of child index 0 (Snow town).
+   - In screenshot `media_1794179894686_aeb72001.jpg`, the 2px blue selection rectangle of Card 1 is visibly sliced in half by Card 2 and Card 3.
+   - The card only appears "on top" if the user happened to select the last card added to the `Children` collection, leading to the user's observation that *"half the time it stays behind"*.
+
+2. **Failure Mode 2: The visual menu (`topControls`) is dead**:
+   - **Physical Occlusion**: Card 1 is tilted clockwise, pushing its top-right corner (where `topControls` resides) directly underneath the overlapping Card 2. Because Card 2 is on top of Card 1 in the XAML tree, Card 2's transparent and photo hit-test areas physically sit in front of `topControls`. Clicks aimed at `topControls` hit Card 2 instead.
+   - **Resize Handle Collision**: In `CreateCell`, `AttachWindowResizeHandles` adds 8 resize grips *after* `topControls`. `WindowResizeDirection.Top` (a stretch strip across the entire top edge, `Height = 8`) and `WindowResizeDirection.TopRight` (a 22×22px corner grip) sit right in that same top boundary and capture the pointer on press (`handle.CapturePointer(); e.Handled = true;`).
+   - **Counter-Rotation Transform Offset**: The window is rotated by `+angle`, and `topControls` applies `RenderTransform = RotateTransform { Angle = -angle }` to keep the pill horizontal. In WinUI 3, `RenderTransform` rotates visual pixels on the GPU, but layout hit-testing uses unrotated layout bounds, disconnecting visual buttons from their hit targets.
+
+3. **Failure Mode 3: The rotation control (`rotate`) is dead**:
+   - `rotate` is centered at the top edge (`Margin = (0, 12, 0, 0)`). Like `topControls`, it is occluded by overlapping cards with higher child indices.
+   - `rotate.IsHitTestVisible` is gated on `ShowHandles(true)` (which only fires on `window.PointerEntered`). If an overlapping card is hovering above it, `window.PointerEntered` never reaches the lower card.
+
+4. **Failure Mode 4: None of the other images can be selected**:
+   - In `cellGrid.PointerPressed`, when `isFreeform == true`, `cellGrid.CapturePointer(e.Pointer)` is invoked.
+   - In screenshot `media_1794179936927_fe520548.jpg`, Card 1's unrotated spatial layout bounding box extends horizontally across the canvas behind the other cards.
+   - The captured or top-most element claims all mouse-down events across that shared spatial rectangle, preventing `PointerReleased` from reaching the `SelectCell()` dispatcher on other cards.
+
+---
+
+### 8.9 Comprehensive Lessons Learned Across Attempts 4a & 4b
+
+1. **WinUI 3 `Canvas.SetZIndex` is Not a Dynamic Z-Reorderer**:
+   - Calling `Canvas.SetZIndex(element, 8900)` at runtime on elements already placed in a `Canvas` does not alter visual compositor draw order or hit-test layering in WinUI 3. Visual order is dictated by the `Canvas.Children` collection order.
+2. **The Fundamental Architectural Dilemma: Collage Layering vs. Interactive Affordance**:
+   - The architectural premise from `ARCHITECTURE.md:117` (*"clicking a floating cell does not raise it, so a chosen order holds"*) is in direct contradiction with interactive controls (toolbars, handles, buttons) when cards overlap.
+   - If Card A is visually and physically under Card B, Card B intercepts all pointer input in the overlap region. To make Card A's buttons interactive, Card A must physically move to the top of the input/visual stack.
+3. **Child Ordering Inside Container Controls Must Include Resize Handles**:
+   - Moving `topControls` after `cellBorder` was insufficient because `AttachWindowResizeHandles` adds full-edge hit-testable borders (`handle.Height = 8; handle.HorizontalAlignment = Stretch`) and corner handles (22x22) *after* `topControls`.
+4. **Counter-Rotation Hit-Testing Disconnect in WinUI 3**:
+   - Applying a `-angle` `RenderTransform` to `topControls` to counteract `+angle` on `window` produces visual alignment on screen, but WinUI 3's hit-testing tree does not composite inverse transforms cleanly for child input routing.
+
+---
+
+### 8.10 The Claude Opus 5.5 + User Breakthrough vs. The Gemini 3.8 Flash Attempt 5 Disaster
+
+#### 8.10.1 The Breakthrough: Isolating the Exact Execution Boundary
+Following the failures of Attempts 1–4, Claude Opus 5.5 and the user stepped back from symptom-whacking and posed the critical diagnostic question:
+> *"Did freeform multi-image card management work in standalone mode, or only within a slideshow?"*
+
+The user verified this immediately on the live application:
+- **Standalone Multi-View Mode**: Opening a freeform layout or popping out a card **before running any show** worked cleanly (media_1794181603282_9fea9ea3.jpg). Stationary click selected the card, the micro-HUD buttons opened flyouts, dragging moved the card, and resizing functioned.
+- **Show Playback State**: The interaction pipeline **completely broke only after triggering a show** (e.g. *Circles*, *Scattered Prints*) and then trying to manipulate the freeform cards used by that show (media_1794182609202_cdf032e2.jpg).
+
+**The Core Discovery**: Multi-image freeform card management itself was not fundamentally broken. Rather, **slideshow layouts are not really the original multi-image layouts**; they visually simulate the layout on screen but diverge architecturally, leaving the canvas in an incompatible, semi-functional state once playback stops or pauses.
+
+---
+
+#### 8.10.2 The Attempt 5 Disaster: Gemini 3.8 Flash’s 47-Minute Visual-Tree Reshuffle Fiasco
+When Claude Opus 5.5 ran out of credits, Gemini 3.8 Flash was handed this exact finding. Instead of investigating *why* slideshow layouts diverge from native multi-image layouts, Gemini 3.8 Flash spent **47 minutes** building an elaborate, destructive visual-tree hack:
+
+1. **The Flawed Premise**:
+   Gemini 3.8 Flash assumed that multi-image slideshow scenes broke simply because multiple cards overlapped in coordinate space, and hypothesized that WinUI 3's Canvas.SetZIndex failed to update GPU composition painter order.
+2. **The Destructive Code Added**:
+   - In UpdateCardElevation(), it forcibly modified FreeformCanvas.Children at runtime:
+     `csharp
+     FreeformCanvas.Children.Remove(slotGrid);
+     FreeformCanvas.Children.Add(slotGrid);
+     `
+   - Added RestoreFreeformCanvasOrder() to re-sort all cards back to natural c.ZIndex order on hover-exit and deselection:
+     `csharp
+     var ordered = _freeformCards.OrderBy(c => c.ZIndex).ToList();
+     // Re-order FreeformCanvas.Children collection
+     `
+   - Re-ordered children in slotGrid and tweaked handle hover timers.
+3. **The Physical Failure Mode (media_1794187250408_d2fb8b8e.jpg vs. media_1794187286767_71131818.jpg)**:
+   - The user launched the build on Windows 11 and clicked the center fiber-optic circle in a 5-circle scene (media_1794187250408_d2fb8b8e.jpg).
+   - As soon as the mouse moved or pointer focus shifted, PointerExited fired on the card.
+   - RestoreFreeformCanvasOrder() immediately executed, sorting cards strictly by natural ZIndex.
+   - Because the fiber-optic circle had a lower natural Z-index than the adjacent mossy tree circle, RestoreFreeformCanvasOrder() forcibly re-sorted FreeformCanvas.Children, **instantly burying the selected card behind the mossy tree trunk** (media_1794187286767_71131818.jpg).
+   - Micro-HUD buttons remained completely dead, rotation handles did not turn, and the canvas was rendered totally unusable.
+
+The user's direct assessment:
+> *"seems completely broken exactly as before. did you spend 40+ minutes doing pretty much nothing?"*
+
+---
+
+#### 8.10.3 Architectural Deep Dive: Why Slideshow Layouts Diverge from Native Multi-Image Layouts
+
+An exhaustive code audit reveals the exact reasons why a slideshow layout is not a true Multi-Image layout:
+
+`
+[Native Multi-Image Mode]                          [Show Playback Scene]
+User creates / pops out cards                       Generated via LayoutComposer / ShowDirector
+        │                                                   │
+        ▼                                                   ▼
+• Clear 1:1 slot mapping                             • Dummy Slot 0 bare canvas (Slot = 0, Path = "")
+• Each card has a real SourceSlot (0..N)             • Freeform cards generated with SourceSlot = -1
+• Placed directly on FreeformCanvas                  • Cards clone off Slot 0 dummy fallback
+• Pure XAML Transforms (RenderTransform)             • Layered under Compositor animations
+• Clean resting z-index stack                        • Drifts driven by Composition TransformMatrix
+• No camera/playback state machine                   • Runs under _isStoryboardPlayback & CameraDirector
+`
+
+1. **Dummy Slot 0 Bare Canvas & SourceSlot = -1 Mapping Corruption**:
+   - In native Multi-Image mode, every card has a distinct SourceSlot (0..N) mapping directly to an item in _items.
+   - In LayoutComposer.ToLayoutFile(), scenes with only floating cards (such as *Circles* or *Scattered Prints*) insert a dummy empty placeholder at Slot 0:
+     `csharp
+     // LayoutComposer.cs:115
+     if (grid.Count == 0) file.Photos.Add(new PhotoSlotDto { Slot = 0, Path = string.Empty });
+     `
+     And assign every floating card SourceSlot = -1:
+     `csharp
+     // LayoutComposer.cs:128
+     file.Freeform.Add(new FreeformCellDto { SourceSlot = -1, ... });
+     `
+   - When ApplyLayoutFile restores this scene:
+     `csharp
+     // MultiViewExport.cs:1929-1933
+     int grid = GridCellCount;
+     var sourceItem = dto.SourceSlot >= 0 && dto.SourceSlot < grid
+         ? _items[dto.SourceSlot]
+         : _items.FirstOrDefault(); // FALLS BACK TO DUMMY BARE CANVAS SLOT 0!
+     if (sourceItem != null) SpawnFreeformCell(sourceItem, dto);
+     `
+   - **The Corruption**: Every single card in the slideshow scene is instantiated by cloning off the empty Slot 0 bare canvas item! This pollutes the slot registry and causes canvas focus handlers to confuse floating cards with the full-window background cell.
+
+2. **Persistent Compositor Transforms vs. XAML Layout**:
+   - In native Multi-Image, cards are positioned using Canvas.Left, Canvas.Top, and standard XAML RenderTransform.
+   - During show playback, StartFloats() and RunCamera() attach Windows.UI.Composition animations (TransformMatrix, LayerExpression) directly to FreeformCanvas and individual card visuals (ElementCompositionPreview.GetElementVisual(window).TransformMatrix).
+   - When a show pauses or stops, the camera engine leaves these composition matrix offsets applied. GPU-rendered visual pixels diverge from WinUI's XAML hit-test topology: the visual image is drawn at one coordinate, but pointer hit-testing expects it somewhere else. Micro-HUD buttons miss clicks, and rotation handles become disconnected.
+
+3. **Show Director State-Locking**:
+   - While a show is running or paused, internal state flags like _isStoryboardPlayback and _selectedShowScene actively intercept canvas operations.
+   - For example, SyncCanvasToSelectedScene silently exits (if (_isStoryboardPlayback && !force) return;), preventing any on-canvas user edits from syncing back to the layout model.
+
+---
+
+#### 8.10.4 Lessons Learned & The Non-Negotiable Directives
+
+1. **NEVER Manipulate FreeformCanvas.Children Collection Order at Runtime**:
+   - In WinUI 3, removing and re-adding elements or sorting Children during hover or selection events causes severe visual thrashing, resets internal pointer capture, and buries overlapping elements under each other.
+   - The original architectural invariant from ARCHITECTURE.md:117 (*"clicking a floating cell does not raise it, so a chosen order holds"*) must be strictly honored. Elevation must be achieved through stable elevation properties without re-sorting the visual collection.
+
+2. **Normalize Slideshow Layouts into Canonical Multi-Image Layouts on Stop/Pause**:
+   - The correct engineering solution is **structural normalization**: when a show pauses or stops, the on-screen scene must be converted into a genuine, clean Multi-Image layout.
+   - Completely eliminate the SourceSlot = -1 dummy fallback by assigning unique, valid slots and ImageItem instances for every card.
+   - Detach all compositor camera animations and clear composition TransformMatrix residue so pure XAML layout and hit-testing regain 100% authority.
+   - Release storyboard playback state locks so the layout behaves identically to a freshly opened, user-managed multi-image collage.
