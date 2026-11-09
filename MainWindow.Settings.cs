@@ -304,11 +304,12 @@ namespace ModernImageViewer
                     {
                         MultiViewControl?.On3DExtensionChanged();
                     }
-                    else
+                    RefreshUI();
+                    if (!uninstalled || ExtensionManager.Is3DInstalled)
                     {
                         progressDetail.Text = "Removal incomplete. Some files were locked.";
+                        progressDetail.Visibility = Visibility.Visible;
                     }
-                    RefreshUI();
                 }
                 else
                 {
@@ -325,19 +326,25 @@ namespace ModernImageViewer
                         progressDetail.Text = report.Status;
                     });
 
+                    string? installError = null;
                     try
                     {
                         await Task.Run(() => ExtensionManager.Install3DAsync(progress));
                     }
                     catch (Exception ex)
                     {
-                        progressDetail.Text = "Install failed: " + ex.Message;
+                        installError = ex.Message;
                     }
                     if (ExtensionManager.Is3DInstalled)
                     {
                         MultiViewControl?.On3DExtensionChanged();
                     }
                     RefreshUI();
+                    if (!string.IsNullOrEmpty(installError))
+                    {
+                        progressDetail.Text = "Install failed: " + installError;
+                        progressDetail.Visibility = Visibility.Visible;
+                    }
                 }
             };
 

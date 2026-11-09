@@ -10,7 +10,7 @@ namespace ModernImageViewer
     internal static class ExtensionManager
     {
         public const string DepthAnythingUrl = "https://huggingface.co/onnx-community/depth-anything-v2-small/resolve/main/onnx/model.onnx";
-        public const string BiRefNetUrl = "https://huggingface.co/onnx-community/BiRefNet_lite-ONNX/resolve/main/onnx/model.onnx";
+        public const string BiRefNetUrl = "https://huggingface.co/onnx-community/BiRefNet_lite-ONNX/resolve/main/onnx/model_fp16.onnx";
 
         public const long DepthModelExpectedBytes = 99060839L;
         public const string DepthModelSha256 = "AFB6A5C28F3B6BF1618C6E43F02073EF9DFDC70E937502D51603E57B0A1DF10C";
