@@ -1926,9 +1926,33 @@ namespace ModernImageViewer
                 foreach (var dto in layoutFile.Freeform)
                 {
                     int grid = GridCellCount;
-                    var sourceItem = dto.SourceSlot >= 0 && dto.SourceSlot < grid
-                        ? _items[dto.SourceSlot]
-                        : _items.FirstOrDefault();
+                    ImageItem? sourceItem = null;
+                    if (dto.SourceSlot >= 0 && dto.SourceSlot < grid)
+                    {
+                        var candidate = _items[dto.SourceSlot];
+                        // This picture, or a card with no picture of its own. A different picture in that cell is not this card.
+                        if (string.IsNullOrEmpty(dto.Path) || string.Equals(candidate.Path, dto.Path, StringComparison.OrdinalIgnoreCase))
+                            sourceItem = candidate;
+                    }
+                    if (sourceItem == null && !string.IsNullOrEmpty(dto.Path))
+                    {
+                        sourceItem = new ImageItem
+                        {
+                            Path = dto.Path,
+                            Name = string.IsNullOrEmpty(dto.Name) ? Path.GetFileName(dto.Path) : dto.Name,
+                            Dispatcher = DispatcherQueue
+                        };
+                        if (known.TryGetValue(dto.Path, out var seen))
+                        {
+                            sourceItem.Thumbnail = seen.Thumbnail;
+                            sourceItem.DateModified = seen.DateModified;
+                            sourceItem.SizeString = seen.SizeString;
+                        }
+                        else
+                        {
+                            FillFileDetails(sourceItem);
+                        }
+                    }
                     if (sourceItem != null)
                         SpawnFreeformCell(sourceItem, dto);
                 }

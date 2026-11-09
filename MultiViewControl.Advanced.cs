@@ -387,7 +387,7 @@ namespace ModernImageViewer
             {
                 order[i].ZIndex = 5001 + i;
                 Canvas.SetZIndex(order[i].Container, order[i].ZIndex);
-                order[i].Container.Translation = new Vector3(0, 0, 256 + ((order[i].ZIndex - 5000) * 8));
+                order[i].Container.Translation = default;
             }
             _maxFreeformZIndex = 5000 + order.Count;
         }

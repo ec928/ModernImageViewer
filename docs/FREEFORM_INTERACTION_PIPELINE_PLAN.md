@@ -1041,6 +1041,8 @@ In commit `712d84b`, an attempt was made to decouple the cards, but it failed im
 
 #### 8.11.3 The True Autonomy Architecture: Permanent Severance
 
+**Not what shipped.** The rules in this subsection were the plan at the time. Section 8.12 is the change that landed. Do not implement this subsection on top of that.
+
 To guarantee that freeform cards can never be corrupted by grid slot operations, the following principles must be enforced:
 
 1. **Immediate Severance on Spawn**:
@@ -1056,3 +1058,28 @@ To guarantee that freeform cards can never be corrupted by grid slot operations,
 3. **Autonomous Docking**:
    - Docking does not rely on a "birth slot" index.
    - If docked, a freeform card simply finds any currently available empty grid slot; if none exists, it appends a new grid cell (if under the maximum capacity).
+
+---
+
+### 8.12 What shipped (Grok 4.7): the click stays on the floating cell
+
+Master version **0.33.2**. This is not commit `cf6cef6`. That commit is the `v0.33.2` named in section 2.2, and it is not an ancestor of this master.
+
+Section 8.11.3 was not implemented. A floating cell still docks back into the cell it left, while that cell is empty. `FreeformCard.SourceSlot` is still that index.
+
+`712d84b` set `SourceSlot` to -1 when the old cell was filled, and the card stayed unclickable. Ed verified that, and `fe5174d` reverted it. Filling the emptied cell does not rebuild the floating card and does not point `card.Item` at the new picture, so changing `SourceSlot` cannot move the click. The live card was already on screen.
+
+What changed:
+
+1. **No `Translation.Z` on a floating cell.** Removed from `FreeformCanvas` (it was `0,0,256`), from the card when it is created, from `MoveCardLayer`, and from hover. Resting order is `Canvas.ZIndex` only: the canvas at 5000, the card at its own index, hover still 8900. `KeepFreeformInHitOrder` puts `Translation` back to the default when a grid cell receives a picture (`PutInCell`), when a grid cell is shown and it is not itself floating (`ShowEmptyState`), and when a grid picture opens or a decoded bitmap is reused (`LoadPhoto`). A `Translation.Z` draws the card above the grid, and a picture loaded into a grid cell afterwards takes the clicks. That was not clicked in the app.
+
+2. **`SourceSlot` is cleared only when the old cell shows a different picture.** It is kept for a fresh pop, and kept while that cell is empty, so Dock can return there. The same picture put back does not clear it. `DockTarget` still requires the cell to be empty, so a filled cell is not written into.
+   - `PutInCell` clears it on the live card.
+   - `PlaceInCells` clears it on the layout being applied, before `ApplyLayoutFile`.
+   - `SpawnFreeformCell`, when restoring, clears a local copy only. The caller's DTO is not changed.
+
+3. **`ApplyLayoutFile` does not take `_items.FirstOrDefault()`.** It uses the source slot only when that slot is in range and either holds this card's path or the card has no path of its own. Otherwise the card is spawned from its own path. A thumbnail and the file date and size are copied when that path is already in the session; otherwise `FillFileDetails` reads them. A show writes `SourceSlot` -1 (`LayoutComposer.ToLayoutFile`) and may insert an empty photo at slot 0. That empty slot is not the card.
+
+Left as they were, on purpose: pointer press, move and release; the order of `FreeformCanvas.Children`; shape hit targets; no solid background on the window. This change does not call `GetElementVisual` on the floating window or on `FreeformCanvas`. The camera still sets a composition `TransformMatrix` on `FreeformCanvas`, and during a show on each floating card it is drifting (`PlaceCard`). `ResetCanvasCamera` rests those drifted cards, and when the camera is running it sets the layer matrices back to identity. If a show still leaves a card unclickable after the refill case works, that matrix is the next place to look. The fix is not to call `GetElementVisual` on a card the camera never touched.
+
+Checked: a Debug build of this change completed with 0 warnings and 0 errors. The two-step refill (pop a cell, put a different picture in the cell it left) and a show were not run in the app.

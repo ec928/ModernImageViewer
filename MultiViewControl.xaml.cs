@@ -8,7 +8,6 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Shapes;
 using System;
-using System.Numerics;
 using System.Collections.Generic;
 using System.Linq;
 using Windows.Foundation;
@@ -1497,6 +1496,7 @@ namespace ModernImageViewer
                         thumb = null;
                     }
                     UpdateImageLayout();
+                    if (!isFreeform) KeepFreeformInHitOrder();
                     return;
                 }
                 if (current.Thumbnail is BitmapSource bs && bs.PixelWidth > 0 && bs.PixelHeight > 0)
@@ -1520,6 +1520,8 @@ namespace ModernImageViewer
                             decodedSize = true;
                             UpdateImageLayout();
                         }
+                        // The bitmap is the moment a grid picture starts taking clicks meant for a floating cell.
+                        if (!isFreeform) KeepFreeformInHitOrder();
                         // The thumbnail would show through a transparent photo, and is no longer needed.
                         if (thumb != null && imgContainer.Children.Contains(thumb))
                         {
@@ -1822,16 +1824,8 @@ namespace ModernImageViewer
                 var card = _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Container, slotGrid));
                 if (card == null) return;
                 bool active = isCellSelected || isMenuOpen || isCellHovered;
-                if (active)
-                {
-                    Canvas.SetZIndex(slotGrid, 8900);
-                    slotGrid.Translation = new Vector3(0, 0, 800);
-                }
-                else
-                {
-                    Canvas.SetZIndex(slotGrid, card.ZIndex);
-                    slotGrid.Translation = new Vector3(0, 0, 256 + ((card.ZIndex - 5000) * 8));
-                }
+                Canvas.SetZIndex(slotGrid, active ? 8900 : card.ZIndex);
+                slotGrid.Translation = default;
             }
             void UpdateHudVisibility()
             {

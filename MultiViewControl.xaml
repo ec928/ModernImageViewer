@@ -577,9 +577,9 @@
         </Grid>
 
         <!-- Floating cells sit above every grid cell, below the playbar. -->
+        <!-- Z-order only. Translation.Z draws a floating cell above the grid, then a picture loaded into a grid cell afterwards takes the clicks. -->
         <Canvas x:Name="FreeformCanvas" 
                 Canvas.ZIndex="5000" 
-                Translation="0,0,256" 
                 HorizontalAlignment="Stretch" 
                 VerticalAlignment="Stretch" 
                 IsHitTestVisible="True" />

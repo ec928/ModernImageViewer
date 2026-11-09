@@ -8,7 +8,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Windows.ApplicationModel.DataTransfer;
@@ -90,11 +89,28 @@ namespace ModernImageViewer
             public Rect LastSet { get; set; }
         }
 
+        /// <summary>
+        /// Floating cells sit above the grid by z-order. A Translation.Z on them draws them above the grid and then
+        /// lets a picture loaded into a grid cell afterwards take the clicks.
+        /// </summary>
+        private void KeepFreeformInHitOrder()
+        {
+            if (FreeformCanvas == null) return;
+            FreeformCanvas.Translation = default;
+            foreach (var card in _freeformCards)
+                card.Container.Translation = default;
+        }
+
         public void SpawnFreeformCell(ImageItem item, FreeformCellDto? restoreDto = null)
         {
             if (item == null || (restoreDto == null && IsEmptyCell(item))) return;
 
             int sourceSlot = restoreDto?.SourceSlot ?? Slot(item);
+            // Dock still returns here while this cell is empty. Once it shows a different picture, the card has no claim on it.
+            if (restoreDto != null && sourceSlot >= 0 && sourceSlot < GridCellCount
+                && !IsEmptyCell(_items[sourceSlot])
+                && !string.Equals(_items[sourceSlot].Path, restoreDto.Path, StringComparison.OrdinalIgnoreCase))
+                sourceSlot = -1;
 
             // A saved freeform cell may hold a different image from its source cell, after a swap or a copy.
             bool sameAsSource = restoreDto == null
@@ -212,7 +228,7 @@ namespace ModernImageViewer
             Canvas.SetLeft(freeformCell, x);
             Canvas.SetTop(freeformCell, y);
             Canvas.SetZIndex(freeformCell, zIndex);
-            freeformCell.Translation = new Vector3(0, 0, 256 + ((zIndex - 5000) * 8));
+            freeformCell.Translation = default;
 
             // Restore zoom / pan if specified
             if (freeformCell.Tag is CellParts parts)
@@ -459,6 +475,15 @@ namespace ModernImageViewer
                 if (!string.IsNullOrEmpty(file.Photos[i].Path)) continue;
                 file.Photos[i].Path = forCells[filled];
                 file.Photos[i].Name = Path.GetFileName(forCells[filled]);
+                if (file.Freeform != null)
+                {
+                    foreach (var card in file.Freeform)
+                    {
+                        if (card.SourceSlot != i) continue;
+                        if (string.Equals(card.Path, forCells[filled], StringComparison.OrdinalIgnoreCase)) continue;
+                        card.SourceSlot = -1;
+                    }
+                }
                 filled++;
             }
             int newCells = forCells.Count - filled;

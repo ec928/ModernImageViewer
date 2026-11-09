@@ -128,6 +128,17 @@ namespace ModernImageViewer
             var root = (uint)slot < (uint)_cellRoots.Length ? _cellRoots[slot] : null;
             var card = root == null ? null : _freeformCards.FirstOrDefault(c => ReferenceEquals(c.Container, root));
             if (card != null) card.Item = item;
+            // The picture that left this cell can still dock back while the cell is empty. A different picture ends that.
+            if (slot < GridCellCount && !IsEmptyCell(item))
+            {
+                foreach (var floating in _freeformCards)
+                {
+                    if (floating.SourceSlot != slot) continue;
+                    if (string.Equals(floating.Item?.Path, item.Path, StringComparison.OrdinalIgnoreCase)) continue;
+                    floating.SourceSlot = -1;
+                }
+                KeepFreeformInHitOrder();
+            }
         }
 
         /// <summary>A cell can hold no image. It keeps its parameters, and they apply to the next image it gets.</summary>
@@ -176,6 +187,7 @@ namespace ModernImageViewer
             }
             parts.Bound.ApplyGeometry?.Invoke();
             ApplyBorderToCell(slot);
+            if (!IsFloatingSlot(slot)) KeepFreeformInHitOrder();
         }
 
         public static Color ParseColor(string? hex)
