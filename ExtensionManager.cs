@@ -27,16 +27,39 @@ namespace ModernImageViewer
         public static bool Is3DInstalled =>
             File.Exists(DllPath) && File.Exists(DepthModelPath) && File.Exists(MaskModelPath);
 
+        static ExtensionManager()
+        {
+            CleanupPendingDeletes();
+        }
+
+        public static void CleanupPendingDeletes()
+        {
+            try
+            {
+                if (!Directory.Exists(Extension3DDir)) return;
+                foreach (string f in Directory.GetFiles(Extension3DDir, "*.pending-delete", SearchOption.AllDirectories))
+                {
+                    try { File.Delete(f); } catch { }
+                }
+                if (Directory.GetFileSystemEntries(Extension3DDir).Length == 0)
+                {
+                    try { Directory.Delete(Extension3DDir, recursive: true); } catch { }
+                }
+            }
+            catch { }
+        }
+
         public static long Get3DDiskSizeBytes()
         {
             try
             {
-                if (!Directory.Exists(Extension3DDir)) return 0;
+                if (!Is3DInstalled || !Directory.Exists(Extension3DDir)) return 0;
                 long total = 0;
                 var dirInfo = new DirectoryInfo(Extension3DDir);
                 foreach (var f in dirInfo.EnumerateFiles("*", SearchOption.AllDirectories))
                 {
-                    total += f.Length;
+                    if (!f.Name.EndsWith(".pending-delete", StringComparison.OrdinalIgnoreCase))
+                        total += f.Length;
                 }
                 return total;
             }
@@ -140,10 +163,49 @@ namespace ModernImageViewer
             try
             {
                 ParallaxHost.UnloadExtension();
-                if (Directory.Exists(Extension3DDir))
+                if (!Directory.Exists(Extension3DDir))
                 {
-                    Directory.Delete(Extension3DDir, recursive: true);
+                    ParallaxHost.ReloadExtension();
+                    return true;
                 }
+
+                // Delete models and files with retries (TypoZen pattern)
+                for (int attempt = 0; attempt < 3; attempt++)
+                {
+                    try
+                    {
+                        foreach (string f in Directory.GetFiles(Extension3DDir, "*", SearchOption.AllDirectories))
+                        {
+                            try { File.SetAttributes(f, FileAttributes.Normal); } catch { }
+                            try { File.Delete(f); }
+                            catch
+                            {
+                                // If locked by OS native module mapping (DirectML/onnxruntime), rename to .pending-delete
+                                try
+                                {
+                                    string pending = f + ".pending-delete";
+                                    if (File.Exists(pending)) File.Delete(pending);
+                                    File.Move(f, pending);
+                                }
+                                catch { }
+                            }
+                        }
+
+                        foreach (string d in Directory.GetDirectories(Extension3DDir))
+                        {
+                            try { Directory.Delete(d, recursive: true); } catch { }
+                        }
+
+                        try { Directory.Delete(Extension3DDir, recursive: false); } catch { }
+                    }
+                    catch { }
+
+                    if (!Directory.Exists(Extension3DDir) || Directory.GetFileSystemEntries(Extension3DDir).Length == 0)
+                        break;
+
+                    Thread.Sleep(100);
+                }
+
                 ParallaxHost.ReloadExtension();
                 return true;
             }
