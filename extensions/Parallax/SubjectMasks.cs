@@ -31,6 +31,7 @@ namespace ModernImageViewer.Extensions.Parallax
         private const int Kept = 4;
         private static InferenceSession? _session;
         private static bool _unavailable;
+        private static string _device = "not loaded";
 
         public static string? ModelPath
         {
@@ -86,14 +87,16 @@ namespace ModernImageViewer.Extensions.Parallax
 
         private static async Task<Mask?> MakeAsync(string path)
         {
+            var clock = System.Diagnostics.Stopwatch.StartNew();
             await OneAtATime.WaitAsync().ConfigureAwait(false);
+            long waited = clock.ElapsedMilliseconds;
             try
             {
                 if (_unavailable) return null;
-                var clock = System.Diagnostics.Stopwatch.StartNew();
                 var session = Session();
                 if (session == null) return null;
                 var pixels = await DecodeAsync(path).ConfigureAwait(false);
+                long decoded = clock.ElapsedMilliseconds;
                 var input = new DenseTensor<float>(new[] { 1, 3, Side, Side });
                 for (int y = 0; y < Side; y++)
                     for (int x = 0; x < Side; x++)
@@ -103,8 +106,10 @@ namespace ModernImageViewer.Extensions.Parallax
                         input[0, 1, y, x] = (pixels[i + 1] / 255f - Mean[1]) / Spread[1];
                         input[0, 2, y, x] = (pixels[i] / 255f - Mean[2]) / Spread[2];
                     }
+                long prepared = clock.ElapsedMilliseconds;
                 var namedInput = NamedOnnxValue.CreateFromTensor(session.InputMetadata.Keys.First(), input);
                 using var results = session.Run(new[] { namedInput });
+                long ran = clock.ElapsedMilliseconds;
                 var output = results.First().AsTensor<float>();
 
                 var alpha = new byte[Side * Side];
@@ -143,7 +148,8 @@ namespace ModernImageViewer.Extensions.Parallax
                     : !withinEdges ? "touches too much of an edge"
                     : !sharpEnough ? "outline is unsure" : "clear subject";
 
-                Log($"3D: subject for {Path.GetFileName(path)}: {why} ({area:P0}, vague {vagueness:0.00}, edges {edgeTouching:0.00}) in {clock.ElapsedMilliseconds} ms");
+                long done = clock.ElapsedMilliseconds;
+                Log($"3D: subject {Path.GetFileName(path)} {_device} {why} wait {waited} decode {decoded - waited} prepare {prepared - decoded} run {ran - prepared} after {done - ran} total {done}");
                 return new Mask(alpha, Side, clear, why, area, edgeTouching, vagueness, topShare, bottomShare);
             }
             catch (Exception ex) when (ex is OnnxRuntimeException or IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or System.Runtime.InteropServices.COMException)
@@ -160,22 +166,28 @@ namespace ModernImageViewer.Extensions.Parallax
         private static InferenceSession? Session()
         {
             if (_session != null || _unavailable) return _session;
+            NativeRuntime.Ensure();
             string? model = ModelPath;
             if (model == null) { _unavailable = true; return null; }
             var clock = System.Diagnostics.Stopwatch.StartNew();
             try
             {
-                var options = new SessionOptions();
+                var options = NativeRuntime.GpuSession();
+                string? whyNot = null;
                 try
                 {
                     options.AppendExecutionProvider_DML(0);
+                    _device = "DirectML";
                 }
                 catch (Exception ex) when (ex is OnnxRuntimeException or EntryPointNotFoundException or DllNotFoundException)
                 {
-                    Log($"3D: no DirectML ({ex.Message}), on the processor");
+                    _device = "processor";
+                    whyNot = ex.GetType().Name + " " + ex.Message;
                 }
                 _session = new InferenceSession(model, options);
-                Log($"3D: subject model loaded in {clock.ElapsedMilliseconds} ms");
+                Log(whyNot == null
+                    ? $"3D: subject session {_device} {clock.ElapsedMilliseconds} ms [{NativeRuntime.Which}]"
+                    : $"3D: subject session {_device} {clock.ElapsedMilliseconds} ms ({whyNot}) [{NativeRuntime.Which}]");
             }
             catch (Exception ex) when (ex is OnnxRuntimeException or DllNotFoundException or IOException or BadImageFormatException)
             {

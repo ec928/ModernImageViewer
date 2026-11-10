@@ -317,11 +317,12 @@ namespace ModernImageViewer
             }
             else
             {
-                // Horizontal, one cycle every 2.16 s (24 frames at 90 ms), shift 0.008 of the width.
+                // One cycle every 4.25 s, nearest against farthest 1.6% of the width at the peak.
+                // It returns through the photograph: a depth map has no unseen side of a person to turn into.
                 // Starts at 0 when the surface comes on and ramps up smoothly so the swap never jerks.
                 double t = Math.Max(0, seconds - state.FromSeconds);
-                along = new Vector2((float)Math.Sin(t / 2.16 * Math.PI * 2), 0);
-                scale = (float)(width * 0.008 * ramp);
+                along = new Vector2((float)Math.Sin(t / 4.25 * Math.PI * 2), 0);
+                scale = (float)(width * 0.016 * ramp);
             }
             var shift = along * scale;
             float amount = state.Moved.Amount;

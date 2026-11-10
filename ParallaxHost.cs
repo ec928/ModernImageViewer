@@ -26,6 +26,14 @@ namespace ModernImageViewer
                 return typeof(IParallaxService).Assembly;
 
             string? path = _resolver.ResolveAssemblyToPath(assemblyName);
+            if (path == null && assemblyName.Name is "Microsoft.ML.OnnxRuntime" or "System.Numerics.Tensors")
+            {
+                foreach (string root in new[] { _extensionDir, AppContext.BaseDirectory })
+                {
+                    string candidate = Path.Combine(root, assemblyName.Name + ".dll");
+                    if (File.Exists(candidate)) { path = candidate; break; }
+                }
+            }
             return path != null ? LoadFromAssemblyPath(path) : null;
         }
 
@@ -34,7 +42,10 @@ namespace ModernImageViewer
             string? path = _resolver.ResolveUnmanagedDllToPath(unmanagedDllName);
             if (path != null) return LoadUnmanagedDllFromPath(path);
 
-            string localDll = Path.Combine(_extensionDir, unmanagedDllName + ".dll");
+            string file = unmanagedDllName.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)
+                ? unmanagedDllName
+                : unmanagedDllName + ".dll";
+            string localDll = Path.Combine(_extensionDir, file);
             if (File.Exists(localDll)) return LoadUnmanagedDllFromPath(localDll);
 
             return base.LoadUnmanagedDll(unmanagedDllName);

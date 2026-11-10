@@ -7,6 +7,12 @@ namespace ModernImageViewer.Extensions.Parallax
 {
     public sealed class ParallaxService : IParallaxService
     {
+        static ParallaxService()
+        {
+            // Before any session type is touched, so the import binds the extension runtime.
+            NativeRuntime.Ensure();
+        }
+
         public static string ExtensionDirectory =>
             Path.GetDirectoryName(typeof(ParallaxService).Assembly.Location) ?? AppContext.BaseDirectory;
 
