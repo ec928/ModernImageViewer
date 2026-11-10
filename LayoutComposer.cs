@@ -424,8 +424,8 @@ namespace ModernImageViewer
         public string DepthMotion { get; set; } = DepthSlide;
 
         /// <summary>
-        /// How far Sway moves the nearest depth against the farthest, as a fraction of the picture width, at the peak.
-        /// The middle stays still. A settings file without this keeps 1.6%.
+        /// Older settings files still carry this. Pictures do not use it.
+        /// Each picture takes its own sway, never above <see cref="SwayRotationMost"/> and never under <see cref="SwayRotationLeast"/>.
         /// </summary>
         public const double SwayRotationDefault = 0.016;
         public const double SwayRotationLeast = 0.004;
@@ -446,6 +446,255 @@ namespace ModernImageViewer
 
         public static double ClampedSwaySwing(double seconds) =>
             Math.Clamp(double.IsFinite(seconds) ? seconds : SwaySwingDefault, SwaySwingLeast, SwaySwingMost);
+
+        /// <summary>
+        /// Where a sway is in its cycle, in turns. 0 and 1 are the center. The first sample stays where it is.
+        /// After that it moves by the time since the last sample, at the swing length it is given now, so a new
+        /// length changes the speed and leaves the picture where it is. A gap longer than a tenth of a second
+        /// counts as a tenth: a stall must not throw the picture across the cycle.
+        /// </summary>
+        public static double NextSwayPhase(double phase, double elapsedSeconds, ref double clockSeconds, double swingSeconds)
+        {
+            if (!double.IsFinite(phase)) phase = 0;
+            swingSeconds = ClampedSwaySwing(swingSeconds);
+            if (!double.IsFinite(elapsedSeconds)) elapsedSeconds = clockSeconds < 0 ? 0 : clockSeconds;
+            if (clockSeconds < 0 || !double.IsFinite(clockSeconds))
+            {
+                clockSeconds = elapsedSeconds;
+                return phase;
+            }
+            double step = Math.Clamp(elapsedSeconds - clockSeconds, 0, 0.1);
+            clockSeconds = elapsedSeconds;
+            return phase + step / swingSeconds;
+        }
+
+        /// <summary>Below this the picture only vibrates. The gap curve may compute less. The picture is lifted to this.</summary>
+        public const double SwayRotationFloor = 0.016;
+
+        /// <summary>
+        /// A local depth step of this size, over <see cref="SwayDepthWindow"/> of the width, is allowed the full 4% cap.
+        /// A smaller step is allowed less, in proportion.
+        /// </summary>
+        public const double SwayFullStep = 0.40;
+
+        /// <summary>How far apart the two depths are, as a fraction of the picture width.</summary>
+        public const double SwayDepthWindow = 0.08;
+
+        /// <summary>Second look, wide enough that a face, a hand, or a pole filling the frame keeps changing, while one edge stays one edge.</summary>
+        public const double SwayWideWindow = 0.25;
+
+        /// <summary>Rotation taken off per extra 1.0 of depth the wide span sees beyond the short one. 0.1 extra is 0.2 percentage points.</summary>
+        public const double SwayWideTrim = 0.02;
+
+        /// <summary>Most the wide span can take off, 0.8 percentage points.</summary>
+        public const double SwayWideTrimMost = 0.008;
+
+        /// <summary>
+        /// Trim only when the wider span adds less than this fraction of a straight slope.
+        /// A wall adds about the whole slope and is left alone. A little extra past one edge is trimmed.
+        /// </summary>
+        public const double SwayWideSlopeFraction = 0.5;
+
+        private const double SwayDepthRank = 0.90;
+
+        /// <summary>
+        /// Sway allowed by the local depth step, never above <paramref name="ceiling"/> and never under 0.4%.
+        /// A bigger step between nearby depths is allowed more. A wider span that adds a little past one edge,
+        /// and less than a straight slope would, takes a few tenths off. A wall is left alone.
+        /// </summary>
+        public static double SwayRotationForDepth(ReadOnlySpan<byte> grey, int width, int height, double ceiling)
+        {
+            ceiling = ClampedSwayRotation(ceiling);
+            if (width < 3 || height < 3 || grey.Length < (long)width * height) return ceiling;
+            int stepGap = Math.Max(2, (int)Math.Round(width * SwayDepthWindow));
+            if (stepGap >= width && stepGap >= height) return ceiling;
+
+            int percentile = DepthStepPercentile(grey, width, height, stepGap);
+            if (percentile == 0) return SwayRotationLeast;
+            double safe = SwayRotationMost * ((percentile / 255.0) / SwayFullStep);
+            int wideGap = Math.Max(stepGap + 1, (int)Math.Round(width * SwayWideWindow));
+            if (wideGap < width || wideGap < height)
+            {
+                int wide = DepthStepPercentile(grey, width, height, wideGap);
+                double continued = (wide - percentile) / 255.0;
+                double straight = (percentile / 255.0) * ((double)wideGap / stepGap - 1.0);
+                if (continued > 0 && continued < SwayWideSlopeFraction * straight)
+                    safe -= Math.Min(SwayWideTrimMost, continued * SwayWideTrim);
+            }
+            return Math.Clamp(safe, SwayRotationLeast, ceiling);
+        }
+
+        /// <summary>90th percentile of the depth change over <paramref name="stepGap"/> pixels, horizontal and vertical. 0 when there is nothing to sample.</summary>
+        private static int DepthStepPercentile(ReadOnlySpan<byte> grey, int width, int height, int stepGap)
+        {
+            Span<int> hist = stackalloc int[256];
+            int count = 0;
+            if (stepGap < width)
+            {
+                for (int y = 0; y < height; y++)
+                {
+                    int row = y * width;
+                    int last = width - stepGap;
+                    for (int x = 0; x < last; x++)
+                    {
+                        int d = grey[row + x] - grey[row + x + stepGap];
+                        hist[d < 0 ? -d : d]++;
+                        count++;
+                    }
+                }
+            }
+            if (stepGap < height)
+            {
+                int lastRow = height - stepGap;
+                for (int y = 0; y < lastRow; y++)
+                {
+                    int row = y * width;
+                    int below = row + stepGap * width;
+                    for (int x = 0; x < width; x++)
+                    {
+                        int d = grey[row + x] - grey[below + x];
+                        hist[d < 0 ? -d : d]++;
+                        count++;
+                    }
+                }
+            }
+            if (count == 0) return 0;
+            int need = (int)Math.Ceiling(count * SwayDepthRank);
+            int seen = 0;
+            for (int d = 0; d < hist.Length; d++)
+            {
+                seen += hist[d];
+                if (seen >= need) return d;
+            }
+            return 255;
+        }
+
+        /// <summary>
+        /// Subject median minus background median, on the stretched map, at or under this: the gap does not hold the picture down.
+        /// </summary>
+        public const double SwayBehindClose = 0.20;
+
+        /// <summary>The same gap at or over this: a lot of depth behind the subject. Held at 0.4%.</summary>
+        public const double SwayBehindFar = 0.75;
+
+        /// <summary>
+        /// How far the gap holds a picture down. A small gap leaves the cap. A large gap falls to 0.4%.
+        /// The picture plays the lower of this and the local step, and never under 1.6%.
+        /// </summary>
+        public static double SwayRotationForBehind(double gap, double ceiling)
+        {
+            ceiling = ClampedSwayRotation(ceiling);
+            if (!double.IsFinite(gap)) return SwayRotationLeast;
+            double span = SwayBehindFar - SwayBehindClose;
+            double t = span <= 0 ? 1 : (gap - SwayBehindClose) / span;
+            if (t < 0) t = 0;
+            else if (t > 1) t = 1;
+            double safe = SwayRotationMost + (SwayRotationLeast - SwayRotationMost) * t;
+            return Math.Clamp(safe, SwayRotationLeast, ceiling);
+        }
+
+        /// <summary>
+        /// Sway for one picture. The local step is the most it may take, so a small gap cannot turn a mild picture up.
+        /// The gap may hold that amount down. Anything under <see cref="SwayRotationFloor"/> is lifted to it, because 0.4% only vibrates.
+        /// </summary>
+        public static double SwayRotationForPicture(ReadOnlySpan<byte> grey, int width, int height, double gap, double ceiling)
+        {
+            ceiling = ClampedSwayRotation(ceiling);
+            double fromStep = SwayRotationForDepth(grey, width, height, ceiling);
+            if (!double.IsFinite(gap))
+                return Math.Clamp(Math.Max(fromStep, SwayRotationFloor), SwayRotationLeast, ceiling);
+            double fromGap = SwayRotationForBehind(gap, ceiling);
+            double safe = Math.Min(fromStep, fromGap);
+            return Math.Clamp(Math.Max(safe, SwayRotationFloor), SwayRotationLeast, ceiling);
+        }
+
+        /// <summary>A second foreground piece this large, as a fraction of the picture, is another subject. Smaller specks do not count.</summary>
+        public const double SlideSecondPiece = 0.02;
+
+        /// <summary>Background depth, 90th percentile minus 10th, above this is not one clean plane.</summary>
+        public const double SlideCleanSpread = 0.28;
+
+        /// <summary>The one subject has to fill this much of its own box. A skyline or a scatter does not.</summary>
+        public const double SlideSolid = 0.40;
+
+        /// <summary>
+        /// True when the foreground is one solid subject and the background depth stays in one band.
+        /// A second subject-sized piece, a thin scatter, or a background that still runs from near to far is not a Slide cut.
+        /// </summary>
+        public static bool SlideIsOneCleanCut(ReadOnlySpan<bool> foreground, ReadOnlySpan<byte> depth, int width, int height)
+        {
+            int n = width * height;
+            if (width < 3 || height < 3 || foreground.Length < n || depth.Length < n) return false;
+            int piece = Math.Max(1, (int)Math.Ceiling(n * SlideSecondPiece));
+            var seen = new bool[n];
+            var stack = new int[n];
+            int big = 0;
+            int mainArea = 0;
+            int mainX0 = 0, mainY0 = 0, mainX1 = 0, mainY1 = 0;
+            for (int start = 0; start < n; start++)
+            {
+                if (!foreground[start] || seen[start]) continue;
+                int sp = 0;
+                stack[sp++] = start;
+                seen[start] = true;
+                int count = 0;
+                int x0 = width, y0 = height, x1 = 0, y1 = 0;
+                while (sp > 0)
+                {
+                    int cur = stack[--sp];
+                    int x = cur % width;
+                    int y = cur / width;
+                    count++;
+                    if (x < x0) x0 = x;
+                    if (y < y0) y0 = y;
+                    if (x > x1) x1 = x;
+                    if (y > y1) y1 = y;
+                    if (x > 0 && !seen[cur - 1] && foreground[cur - 1]) { seen[cur - 1] = true; stack[sp++] = cur - 1; }
+                    if (x + 1 < width && !seen[cur + 1] && foreground[cur + 1]) { seen[cur + 1] = true; stack[sp++] = cur + 1; }
+                    if (y > 0 && !seen[cur - width] && foreground[cur - width]) { seen[cur - width] = true; stack[sp++] = cur - width; }
+                    if (y + 1 < height && !seen[cur + width] && foreground[cur + width]) { seen[cur + width] = true; stack[sp++] = cur + width; }
+                }
+                if (count < piece) continue;
+                big++;
+                if (count > mainArea)
+                {
+                    mainArea = count;
+                    mainX0 = x0;
+                    mainY0 = y0;
+                    mainX1 = x1;
+                    mainY1 = y1;
+                }
+            }
+            if (big != 1) return false;
+            int box = (mainX1 - mainX0 + 1) * (mainY1 - mainY0 + 1);
+            if (box <= 0 || mainArea < SlideSolid * box) return false;
+
+            Span<int> hist = stackalloc int[256];
+            int bg = 0;
+            for (int i = 0; i < n; i++)
+            {
+                if (foreground[i]) continue;
+                hist[depth[i]]++;
+                bg++;
+            }
+            if (bg < 8) return false;
+            int low = DepthBandPercentile(hist, bg, 0.10);
+            int high = DepthBandPercentile(hist, bg, 0.90);
+            return (high - low) / 255.0 <= SlideCleanSpread;
+        }
+
+        private static int DepthBandPercentile(ReadOnlySpan<int> hist, int count, double p)
+        {
+            int need = (int)Math.Ceiling(count * p);
+            if (need < 1) need = 1;
+            int seen = 0;
+            for (int d = 0; d < hist.Length; d++)
+            {
+                seen += hist[d];
+                if (seen >= need) return d;
+            }
+            return 255;
+        }
 
         /// <summary>The middle distance stays put. Nearer and farther parts move in opposite directions, then that reverses.</summary>
         public const string DepthSway = "Sway";

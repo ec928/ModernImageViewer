@@ -147,6 +147,12 @@ namespace ModernImageViewer
             ++_depthTicket;
             ++_settleTicket;
             _activeShow = null;
+            _depthPrepWaiting = false;
+            if (_depthDevice != null)
+            {
+                _depthDevice.DeviceLost -= DepthDeviceLost;
+                _depthDevice = null;
+            }
             StopSceneDepth();
             _autoPlayTimer?.Stop();
             _autoPlayTimer = null;

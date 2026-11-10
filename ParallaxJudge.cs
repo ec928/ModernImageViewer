@@ -16,14 +16,16 @@ namespace ModernImageViewer
     /// of background just around it; and how much texture that ring has. Calibrated on Ed's Pictures folder: the
     /// photos he called rubbish for both motions (a wheel on the floor, people against a near wall, landscapes, a
     /// building against plain sky) all step 0.36 or less at the edge; the subjects that play well step 0.40 or more.
-    /// Known to pass still (2026-11-07): buildings and rock formations against the sky, machine interiors and
-    /// screenshots. The models do not know what a thing is.
+    /// Sway (2026-11-10): the local depth step is the most a picture may take. The gap behind the subject may hold that down.
+    /// The result is never under 1.6%, because 0.4% only vibrates. A small gap cannot turn a mild step up.
+    /// Slide is kept only when that cut is one solid subject on a background whose depth stays in one band. Anything else that
+    /// reached Slide is left out. One solid shape against a clean sky can still pass: the models do not know a building from an animal.
     /// </summary>
     internal static class ParallaxJudge
     {
         public enum Fit { Out, Rock, Slide }
 
-        public sealed record Judgement(Fit Fit, string Why, float Area, float Edge, float Texture, float Sides);
+        public sealed record Judgement(Fit Fit, string Why, float Area, float Edge, float Texture, float Sides, float Gap = 0);
 
         // Ed's marks on 73 clips (2026-11-07): Rock needs only a well-defined subject (13 of 14 passed; the fail was a
         // "subject" covering 92% of the picture and three of its edges). Slide's passes and fails are not separated by any
@@ -99,7 +101,7 @@ namespace ModernImageViewer
             }
             var judged = await Task.Run(() => Judge(map, subject, hasFaces)).ConfigureAwait(false);
             Made[path] = judged;
-            PlayTiming.Write($"3D: judged {Path.GetFileName(path)}: {judged.Fit} ({judged.Why}), subject {judged.Area:0.00}, edge {judged.Edge:0.00}, texture {judged.Texture:0.000}, sides {judged.Sides:0.00}, faces {hasFaces}");
+            PlayTiming.Write($"3D: judged {Path.GetFileName(path)}: {judged.Fit} ({judged.Why}), subject {judged.Area:0.00}, edge {judged.Edge:0.00}, gap {judged.Gap:0.00}, texture {judged.Texture:0.000}, sides {judged.Sides:0.00}, faces {hasFaces}");
             return judged;
         }
 
@@ -150,6 +152,7 @@ namespace ModernImageViewer
             float edge = (Median(rim) - Median(ring)) / 255f;
             float gap = (Median(allFg) - Median(allBg)) / 255f;
             float tex = (float)(texture / ringCount / 255.0 * TextureScale);
+            Judgement Made(Fit fit, string why) => new Judgement(fit, why, subject.Area, edge, tex, subject.Sides, gap);
 
             // Strict Rock filter (Ed, 2026-11-08):
             // - Photos with human faces play Rock when the people step slightly in front of their surroundings (edge >= 0.15, gap >= 0.12).
@@ -157,24 +160,24 @@ namespace ModernImageViewer
             if (hasFaces)
             {
                 if (edge < 0.15f || gap < 0.12f)
-                    return new Judgement(Fit.Out, "people against a flat background", subject.Area, edge, tex, subject.Sides);
+                    return Made(Fit.Out, "people against a flat background");
             }
             else
             {
                 if (edge < LeastEdge || gap < 0.25f)
-                    return new Judgement(Fit.Out, "small depth step at its edge", subject.Area, edge, tex, subject.Sides);
+                    return Made(Fit.Out, "small depth step at its edge");
             }
 
             Judgement FallbackOrOut(string why)
             {
                 if (hasFaces)
-                    return new Judgement(Fit.Rock, why, subject.Area, edge, tex, subject.Sides);
+                    return Made(Fit.Rock, why);
                 // Non-face Rock requires a strong 3D close-up subject (edge >= 0.40, gap >= 0.40) that is either large (area >= 0.48),
                 // against a plain backdrop (tex < 0.03), or a sharp indoor/close-up subject (area >= 0.15, vague <= 0.085, tex < 0.16).
                 // Outdoor landscapes, cliffs, sand dunes, trees, umbrellas and foliage are excluded instead of distorting in Rock.
                 bool cleanRock = edge >= 0.40f && gap >= 0.40f &&
                     (subject.Area >= 0.48f || tex < LeastTexture || (subject.Area >= 0.15f && subject.Vague <= MostSlideVague && tex < 0.16f));
-                return new Judgement(cleanRock ? Fit.Rock : Fit.Out, why, subject.Area, edge, tex, subject.Sides);
+                return Made(cleanRock ? Fit.Rock : Fit.Out, why);
             }
 
             if (edge < LeastEdge) return FallbackOrOut("small depth step at its edge");
@@ -183,7 +186,7 @@ namespace ModernImageViewer
             if (subject.Area > MostSlideArea) return FallbackOrOut("subject fills the picture");
             if (subject.Sides >= MostSlideSides) return FallbackOrOut("subject spans the picture");
             if (subject.Top > 0.05f && subject.Bottom > 0.05f)
-                return new Judgement(hasFaces ? Fit.Rock : Fit.Out, "subject spans top to bottom", subject.Area, edge, tex, subject.Sides);
+                return Made(hasFaces ? Fit.Rock : Fit.Out, "subject spans top to bottom");
 
             // Holistic distant-plane check: verify the remaining background sits on a distant plane (bgP90 <= 0.135) and that
             // connected foreground does not swallow >65% of the frame from a small subject (tabletop/floor/hillside/swamp).
@@ -207,7 +210,10 @@ namespace ModernImageViewer
                 return FallbackOrOut("background is not a distant plane");
             if (unionArea > 0.65f && subject.Area < 0.45f)
                 return FallbackOrOut("subject sits on a continuous ground plane");
-            return new Judgement(Fit.Slide, "clear subject, distant background", subject.Area, edge, tex, subject.Sides);
+            // A Slide that is not one subject on a clean background is left out. It is not turned into Sway.
+            if (!SurpriseOptions.SlideIsOneCleanCut(fg, map.Raw!, w, h))
+                return Made(Fit.Out, "not one subject on a clean background");
+            return Made(Fit.Slide, "clear subject, distant background");
         }
 
         private static float Median(System.Collections.Generic.List<byte> values)

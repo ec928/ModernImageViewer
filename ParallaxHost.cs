@@ -1,5 +1,6 @@
 using ModernImageViewer.Contracts;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Runtime.Loader;
@@ -144,14 +145,38 @@ namespace ModernImageViewer
         public static Task<IParallaxMap?> ForAsync(string path) =>
             ParallaxHost.Service.GetDepthMapAsync(path);
 
+        // Wall time of the last 3D filter check for a path, including any wait behind the picture on screen.
+        private static readonly object CheckTimesGate = new();
+        private static readonly Dictionary<string, long> CheckMilliseconds = new(StringComparer.OrdinalIgnoreCase);
+
+        public static bool TryCheckMilliseconds(string path, out long milliseconds)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                milliseconds = 0;
+                return false;
+            }
+            lock (CheckTimesGate)
+                return CheckMilliseconds.TryGetValue(path, out milliseconds);
+        }
+
         public static async Task<ParallaxFit.Verdict?> VerdictAsync(string path)
         {
             if (!Available || string.IsNullOrEmpty(path)) return null;
-            if (PhotoFactsReader.TryGetCached(path, out var facts) && facts?.ScreenLike == true)
-                return ParallaxFit.Verdict.Exclude;
-            var judged = await ParallaxJudge.ForAsync(path).ConfigureAwait(false);
-            if (judged == null) return null;
-            return judged.Fit == ParallaxJudge.Fit.Out ? ParallaxFit.Verdict.Exclude : ParallaxFit.Verdict.Pass;
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            try
+            {
+                if (PhotoFactsReader.TryGetCached(path, out var facts) && facts?.ScreenLike == true)
+                    return ParallaxFit.Verdict.Exclude;
+                var judged = await ParallaxJudge.ForAsync(path).ConfigureAwait(false);
+                if (judged == null) return null;
+                return judged.Fit == ParallaxJudge.Fit.Out ? ParallaxFit.Verdict.Exclude : ParallaxFit.Verdict.Pass;
+            }
+            finally
+            {
+                lock (CheckTimesGate)
+                    CheckMilliseconds[path] = clock.ElapsedMilliseconds;
+            }
         }
 
         public static ParallaxFit.Verdict? CachedVerdict(string path)

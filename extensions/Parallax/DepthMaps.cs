@@ -35,6 +35,7 @@ namespace ModernImageViewer.Extensions.Parallax
         private const int Kept = 6;
         private static InferenceSession? _session;
         private static bool _unavailable;
+        private static int _directMlMisses;
         private static string _device = "not loaded";
 
         public static string? ModelPath
@@ -65,15 +66,16 @@ namespace ModernImageViewer.Extensions.Parallax
             }
             catch { }
 
-            if (acquired)
+            // A run still inside the session has the queue. Dropping the session under it faults the process.
+            if (!acquired) return;
+            try
             {
                 try { _session?.Dispose(); } catch { }
                 _session = null;
-                try { OneAtATime.Release(); } catch { }
             }
-            else
+            finally
             {
-                _session = null;
+                try { OneAtATime.Release(); } catch { }
             }
         }
 
@@ -116,7 +118,7 @@ namespace ModernImageViewer.Extensions.Parallax
                     }
                 long prepared = clock.ElapsedMilliseconds;
                 var namedInput = NamedOnnxValue.CreateFromTensor(session.InputMetadata.Keys.First(), input);
-                using var results = session.Run(new[] { namedInput });
+                using var results = NativeRuntime.Run(session, new[] { namedInput });
                 long ran = clock.ElapsedMilliseconds;
                 var output = results.First().AsTensor<float>();
 
@@ -174,24 +176,29 @@ namespace ModernImageViewer.Extensions.Parallax
             {
                 var options = NativeRuntime.GpuSession();
                 string? whyNot = null;
-                try
+                if (NativeRuntime.TryUseDirectMl(options, out whyNot))
                 {
-                    options.AppendExecutionProvider_DML(0);
                     _device = "DirectML";
+                    _directMlMisses = 0;
                 }
-                catch (Exception ex) when (ex is OnnxRuntimeException or EntryPointNotFoundException or DllNotFoundException)
+                else
                 {
+                    // One failed attach used to keep a processor session, and every picture then took about ten seconds.
+                    _directMlMisses++;
                     _device = "processor";
-                    whyNot = ex.GetType().Name + " " + ex.Message;
+                    Log($"3D: depth DirectML did not attach ({_directMlMisses}): {whyNot}");
+                    if (_directMlMisses < 3) return null;
+                    options = NativeRuntime.GpuSession();
                 }
-                _session = new InferenceSession(model, options);
+                _session = NativeRuntime.CreateSession(model, options);
                 Log(whyNot == null
                     ? $"3D: depth session {_device} {clock.ElapsedMilliseconds} ms [{NativeRuntime.Which}]"
                     : $"3D: depth session {_device} {clock.ElapsedMilliseconds} ms ({whyNot}) [{NativeRuntime.Which}]");
             }
             catch (Exception ex) when (ex is OnnxRuntimeException or DllNotFoundException or IOException or BadImageFormatException)
             {
-                _unavailable = true;
+                _directMlMisses++;
+                if (_directMlMisses >= 3) _unavailable = true;
                 Log($"3D: model did not load: {ex.GetType().Name} {ex.Message}");
             }
             return _session;

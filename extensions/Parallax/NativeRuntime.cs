@@ -5,6 +5,7 @@ using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.Loader;
+using System.Threading;
 
 namespace ModernImageViewer.Extensions.Parallax
 {
@@ -18,6 +19,9 @@ namespace ModernImageViewer.Extensions.Parallax
     {
         private static int _once;
         public static string Which { get; private set; } = "not loaded";
+        // Depth and the subject mask each have their own queue. The folder check and the picture on
+        // screen were both starting one, and the two runs overlapped on the card.
+        private static readonly SemaphoreSlim Gpu = new(1, 1);
 
         /// <summary>
         /// DirectML rejects memory-pattern planning and parallel execution. Windows ML also leaves
@@ -34,6 +38,36 @@ namespace ModernImageViewer.Extensions.Parallax
             options.AddSessionConfigEntry("session.intra_op.allow_spinning", "1");
             options.AddSessionConfigEntry("session.inter_op.allow_spinning", "1");
             return options;
+        }
+
+        /// <summary>False when DirectML could not be added. The caller decides whether to try again.</summary>
+        public static bool TryUseDirectMl(SessionOptions options, out string? error)
+        {
+            try
+            {
+                options.AppendExecutionProvider_DML(0);
+                error = null;
+                return true;
+            }
+            catch (Exception ex) when (ex is OnnxRuntimeException or EntryPointNotFoundException or DllNotFoundException)
+            {
+                error = ex.GetType().Name + " " + ex.Message;
+                return false;
+            }
+        }
+
+        public static InferenceSession CreateSession(string model, SessionOptions options)
+        {
+            Gpu.Wait();
+            try { return new InferenceSession(model, options); }
+            finally { Gpu.Release(); }
+        }
+
+        public static IDisposableReadOnlyCollection<DisposableNamedOnnxValue> Run(InferenceSession session, NamedOnnxValue[] inputs)
+        {
+            Gpu.Wait();
+            try { return session.Run(inputs); }
+            finally { Gpu.Release(); }
         }
 
         public static void Ensure()

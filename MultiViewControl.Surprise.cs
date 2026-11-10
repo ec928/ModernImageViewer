@@ -482,10 +482,18 @@ namespace ModernImageViewer
                 slider.Resources["SliderTrackValueFillPressed"] = winBlue;
                 // The readout follows the drag; the setting is written once the drag settles, as on the Show card, not on
                 // every step of it (each write saved the settings file and dropped the layout being prepared).
+                // A Slider whose minimum is above 0 coerces its value when it loads, and that event is not the user.
+                // The 3D odds slider turns the live warp off at 0, so a load event must not count.
                 double pending = value;
+                bool fromUser = false;
                 var save = SettledAction(() => ChangeSurpriseChoices(o => chosen(o, pending)));
+                slider.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((_, _) => fromUser = true), true);
+                slider.PreviewKeyDown += (_, _) => fromUser = true;
+                slider.PointerWheelChanged += (_, _) => fromUser = true;
                 slider.ValueChanged += (_, e) =>
                 {
+                    if (!fromUser && slider.FocusState == FocusState.Unfocused) return;
+                    fromUser = true;
                     pending = e.NewValue;
                     readout.Text = format(e.NewValue);
                     save();
@@ -1091,10 +1099,6 @@ namespace ModernImageViewer
             {
                 cameraSection.Children.Add(new TextBlock { Text = "3D motion style", FontSize = 13, Margin = new Thickness(0, 8, 0, 4) });
                 cameraSection.Children.Add(DepthMotionChips());
-                Slide(cameraSection, "Sway rotation", "How far the nearest and farthest parts move apart at the peak of a sway, as a percent of the picture width. The middle stays still, so the picture turns one way and then the other, and always comes back. 1.6% is the current look. Slide does not use this.",
-                    SurpriseOptions.SwayRotationLeast * 100, SurpriseOptions.SwayRotationMost * 100, 0.1, options.SwayRotation * 100,
-                    v => $"{v:0.0}%",
-                    (o, v) => o.SwayRotation = SurpriseOptions.ClampedSwayRotation(Math.Round(v, 1) / 100));
                 Slide(cameraSection, "Each swing", "How long one full sway takes: from the center, out to one side, across to the other, and back to the center. 4.25 seconds is the current look. Slide does not use this.",
                     SurpriseOptions.SwaySwingLeast, SurpriseOptions.SwaySwingMost, 0.25, options.SwaySwing,
                     v => $"{v:0.##} s",
@@ -3576,6 +3580,8 @@ namespace ModernImageViewer
                 while (nextCheck < stillToCheck.Count && first == null)
                 {
                     if (!Current()) return;
+                    while (Current() && _depthPrepWaiting) await Task.Delay(40);
+                    if (!Current()) return;
                     string path = stillToCheck[nextCheck++];
                     var verdict = await DepthMaps.VerdictAsync(path);
                     if (verdict == ParallaxFit.Verdict.Pass) first = path;
@@ -3678,6 +3684,8 @@ namespace ModernImageViewer
                     int need = started ? 2 : 1;
                     while (Current() && nextCheck < stillToCheck.Count && NeverDealt() < need)
                     {
+                        while (Current() && _depthPrepWaiting) await Task.Delay(40);
+                        if (!Current()) return;
                         string path = stillToCheck[nextCheck++];
                         var verdict = await DepthMaps.VerdictAsync(path);
                         if (verdict == ParallaxFit.Verdict.Pass) deck.Include(new[] { path });

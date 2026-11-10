@@ -1,3 +1,4 @@
+using ModernImageViewer;
 using Xunit;
 
 namespace ModernImageViewer.Tests
@@ -164,6 +165,168 @@ namespace ModernImageViewer.Tests
             var loud = SurpriseOptions.FromJson("{\"SwayRotation\":9,\"SwaySwing\":0}");
             Assert.Equal(SurpriseOptions.SwayRotationMost, loud.SwayRotation, 5);
             Assert.Equal(SurpriseOptions.SwaySwingLeast, loud.SwaySwing, 3);
+        }
+
+        [Fact]
+        public void Changing_the_swing_keeps_the_pose_and_changes_the_speed()
+        {
+            double clock = -1;
+            double phase = SurpriseOptions.NextSwayPhase(0, 0, ref clock, SurpriseOptions.SwaySwingDefault);
+            Assert.Equal(0, phase, 5);
+
+            // A quarter of the 4.25 s swing, in steps shorter than the stall cap.
+            for (int i = 1; i <= 17; i++)
+                phase = SurpriseOptions.NextSwayPhase(phase, i * 0.0625, ref clock, 4.25);
+            Assert.Equal(0.25, phase, 5);
+
+            double held = SurpriseOptions.NextSwayPhase(phase, 17 * 0.0625, ref clock, 12);
+            Assert.Equal(0.25, held, 5);
+
+            double later = SurpriseOptions.NextSwayPhase(held, 17 * 0.0625 + 0.05, ref clock, 12);
+            Assert.Equal(0.25 + 0.05 / 12, later, 5);
+
+            double stalled = SurpriseOptions.NextSwayPhase(later, 17 * 0.0625 + 0.05 + 2, ref clock, 4.25);
+            Assert.Equal(later + 0.1 / 4.25, stalled, 5);
+        }
+
+        [Fact]
+        public void Sway_rotation_follows_the_local_bend_and_stays_inside_the_slider()
+        {
+            const int width = 100;
+            const int height = 40;
+            int gap = Math.Max(2, (int)Math.Round(width * SurpriseOptions.SwayDepthWindow));
+            Assert.Equal(8, gap);
+            Assert.Equal(0.40, SurpriseOptions.SwayFullStep, 6);
+
+            // Contrast 64 across every 8% step. 0.04 * (64/255) / 0.40 = 0.025098, under a 4% ceiling.
+            var steep = Stripes(width, height, gap, 0, 64);
+            double stepped = SurpriseOptions.SwayRotationForDepth(steep, width, height, SurpriseOptions.SwayRotationMost);
+            Assert.Equal(0.025098, stepped, 6);
+            Assert.True(stepped < SurpriseOptions.SwayRotationMost);
+            Assert.True(stepped > SurpriseOptions.SwayRotationLeast);
+            Assert.Equal(0.01, SurpriseOptions.SwayRotationForDepth(steep, width, height, 0.01), 6);
+
+            // Almost no local step. Held at the old floor.
+            var split = new byte[width * height];
+            for (int y = 0; y < height; y++)
+                for (int x = width / 2; x < width; x++)
+                    split[y * width + x] = 255;
+            Assert.Equal(SurpriseOptions.SwayRotationLeast, SurpriseOptions.SwayRotationForDepth(split, width, height, 0.04), 6);
+
+            // A smooth ramp steps less than the stripes, so it is allowed less sway.
+            var ramp = new byte[width * height];
+            for (int y = 0; y < height; y++)
+                for (int x = 0; x < width; x++)
+                    ramp[y * width + x] = (byte)(x * 255 / (width - 1));
+            double ramped = SurpriseOptions.SwayRotationForDepth(ramp, width, height, 0.04);
+            Assert.True(ramped < stepped);
+            Assert.True(ramped > SurpriseOptions.SwayRotationLeast);
+
+            // Depth rises by 2 per pixel. The wider span is that same slope, so nothing is taken off.
+            // 0.04 * (16/255) / 0.40 = 0.006275.
+            var grade = new byte[width * height];
+            for (int y = 0; y < height; y++)
+                for (int x = 0; x < width; x++)
+                    grade[y * width + x] = (byte)(x * 2);
+            Assert.Equal(0.006275, SurpriseOptions.SwayRotationForDepth(grade, width, height, 0.04), 6);
+
+            // A tooth every 20 pixels, rising 6 per pixel. The wider span is 90 against a short step of 72.
+            // 0.04 * (72/255) / 0.40 - (18/255) * 0.02 = 0.026824.
+            var tooth = new byte[width * height];
+            for (int y = 0; y < height; y++)
+                for (int x = 0; x < width; x++)
+                    tooth[y * width + x] = (byte)(6 * (x % 20));
+            Assert.Equal(0.026824, SurpriseOptions.SwayRotationForDepth(tooth, width, height, 0.04), 6);
+
+            var hard = Stripes(width, height, gap, 0, 255);
+            Assert.Equal(SurpriseOptions.SwayRotationMost, SurpriseOptions.SwayRotationForDepth(hard, width, height, 0.04), 6);
+            Assert.Equal(SurpriseOptions.SwayRotationLeast, SurpriseOptions.SwayRotationForDepth(split, width, height, 9), 6);
+            Assert.Equal(0.02, SurpriseOptions.SwayRotationForDepth(ReadOnlySpan<byte>.Empty, 10, 10, 0.02), 6);
+        }
+
+        [Fact]
+        public void Sway_cannot_be_raised_by_a_small_gap_and_cannot_vibrate()
+        {
+            const int width = 100;
+            const int height = 40;
+            int step = Math.Max(2, (int)Math.Round(width * SurpriseOptions.SwayDepthWindow));
+            var mild = Stripes(width, height, step, 0, 64);
+            // A small gap on its own is near 4%. The mild step keeps the picture at 2.5%.
+            Assert.Equal(0.025098, SurpriseOptions.SwayRotationForPicture(mild, width, height, 0.22, 0.04), 6);
+
+            var hard = Stripes(width, height, step, 0, 255);
+            // A large gap on its own is 0.4%. That only vibrates, so the picture is lifted to 1.6%.
+            Assert.Equal(SurpriseOptions.SwayRotationFloor, SurpriseOptions.SwayRotationForPicture(hard, width, height, 0.89, 0.04), 6);
+
+            // Gap 0.49 is 2.1%, above the floor. A full step does not replace it.
+            double mid = SurpriseOptions.SwayRotationForPicture(hard, width, height, 0.49, 0.04);
+            Assert.Equal(SurpriseOptions.SwayRotationForBehind(0.49, 0.04), mid, 6);
+            Assert.Equal(0.021018, mid, 6);
+
+            // No gap reading leaves the local step alone.
+            Assert.Equal(SurpriseOptions.SwayRotationMost, SurpriseOptions.SwayRotationForPicture(hard, width, height, double.NaN, 0.04), 6);
+        }
+
+        private static byte[] Stripes(int width, int height, int stripe, byte low, byte high)
+        {
+            var grey = new byte[width * height];
+            for (int y = 0; y < height; y++)
+                for (int x = 0; x < width; x++)
+                    grey[y * width + x] = (x / stripe) % 2 == 0 ? low : high;
+            return grey;
+        }
+
+        [Fact]
+        public void Slide_needs_one_subject_on_a_clean_background()
+        {
+            const int width = 40;
+            const int height = 40;
+            var foreground = new bool[width * height];
+            var depth = new byte[width * height];
+            for (int y = 8; y < 32; y++)
+                for (int x = 10; x < 30; x++)
+                {
+                    foreground[y * width + x] = true;
+                    depth[y * width + x] = 255;
+                }
+            Assert.True(SurpriseOptions.SlideIsOneCleanCut(foreground, depth, width, height));
+
+            // A speck under 2% of the frame is not a second subject.
+            var speck = (bool[])foreground.Clone();
+            for (int i = 0; i < 10; i++) speck[i] = true;
+            Assert.True(SurpriseOptions.SlideIsOneCleanCut(speck, depth, width, height));
+
+            // A second block of 72 pixels is 4.5% of the frame.
+            var two = (bool[])foreground.Clone();
+            for (int y = 8; y < 20; y++)
+                for (int x = 32; x < 38; x++)
+                    two[y * width + x] = true;
+            Assert.False(SurpriseOptions.SlideIsOneCleanCut(two, depth, width, height));
+
+            // The background still runs from near to far.
+            var wide = (byte[])depth.Clone();
+            for (int i = 0; i < wide.Length; i++)
+                if (!foreground[i]) wide[i] = (byte)((i % width) * 255 / (width - 1));
+            Assert.False(SurpriseOptions.SlideIsOneCleanCut(foreground, wide, width, height));
+
+            // One piece, but only the outline of its box.
+            var frame = new bool[width * height];
+            var frameDepth = new byte[width * height];
+            for (int x = 5; x <= 34; x++)
+            {
+                frame[5 * width + x] = true;
+                frame[34 * width + x] = true;
+                frameDepth[5 * width + x] = 200;
+                frameDepth[34 * width + x] = 200;
+            }
+            for (int y = 6; y <= 33; y++)
+            {
+                frame[y * width + 5] = true;
+                frame[y * width + 34] = true;
+                frameDepth[y * width + 5] = 200;
+                frameDepth[y * width + 34] = 200;
+            }
+            Assert.False(SurpriseOptions.SlideIsOneCleanCut(frame, frameDepth, width, height));
         }
 
         [Fact]

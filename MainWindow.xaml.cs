@@ -433,6 +433,8 @@ namespace ModernImageViewer
             public bool ListMode { get; set; }
             public double TileSize { get; set; } = 164;
             public string ThemeMode { get; set; } = "System";
+            /// <summary>On-screen sway rotation and 3D filter time. A settings file without this keeps it on.</summary>
+            public bool DepthDebugReadout { get; set; } = true;
             public string? LastFolder { get; set; }
             public List<WindowPreset?> WindowPresets { get; set; } = new() { null, null, null };
             public List<string> RecentFolders { get; set; } = new();
@@ -571,6 +573,12 @@ namespace ModernImageViewer
                 ViewerControl.SetDetachLimitState((int)CurrentDetachLimit);
                 ViewerControl.SetGammaLevel(_currentGamma);
             }
+
+            _syncingDepthDebug = true;
+            if (DepthDebugToggle != null) DepthDebugToggle.IsOn = _currentSettings.DepthDebugReadout;
+            _syncingDepthDebug = false;
+            if (MultiViewControl != null) MultiViewControl.DepthDebugReadout = _currentSettings.DepthDebugReadout;
+            _depthDebugReady = true;
         }
 
         private List<ImageItem>? _draggedGridItems;

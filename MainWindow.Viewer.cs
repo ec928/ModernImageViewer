@@ -3214,12 +3214,25 @@ namespace ModernImageViewer
         }
 
         private bool _presetSaveMode;
+        private bool _depthDebugReady;
+        private bool _syncingDepthDebug;
 
         private void HeaderSettingsFlyout_Opening(object sender, object e)
         {
             _presetSaveMode = false;
             SyncPresetButtons();
             SyncThemeButtons();
+            _syncingDepthDebug = true;
+            if (DepthDebugToggle != null) DepthDebugToggle.IsOn = _currentSettings.DepthDebugReadout;
+            _syncingDepthDebug = false;
+        }
+
+        private void DepthDebugToggle_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (!_depthDebugReady || _syncingDepthDebug || DepthDebugToggle == null) return;
+            _currentSettings.DepthDebugReadout = DepthDebugToggle.IsOn;
+            if (MultiViewControl != null) MultiViewControl.DepthDebugReadout = DepthDebugToggle.IsOn;
+            SaveAllSettings();
         }
 
         private void ThemeMode_Click(object sender, RoutedEventArgs e)

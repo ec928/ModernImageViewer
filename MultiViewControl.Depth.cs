@@ -2,9 +2,11 @@ using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Effects;
 using Microsoft.Graphics.Canvas.UI.Xaml;
 using Microsoft.UI.Dispatching;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using System;
+using System.Globalization;
 using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
@@ -57,6 +59,14 @@ namespace ModernImageViewer
             /// <summary>Slide was chosen but the photo has no clear subject in front: it plays Sway.</summary>
             public bool SwayInstead { get; init; }
             public bool RockInstead => SwayInstead;
+            /// <summary>Sway's place in the cycle, in turns. 0 is the center. Kept when the swing length changes.</summary>
+            public double SwayPhase;
+            /// <summary>Shown time of the last sway sample. Negative until the first.</summary>
+            public double SwayClock = -1;
+            /// <summary>Sway for this depth map. At most 4% of the width, and never under 0.4%.</summary>
+            public double SafeRotation { get; init; } = SurpriseOptions.SwayRotationMost;
+            /// <summary>How long the 3D filter took to select this picture, when that check was timed.</summary>
+            public long? FilterMilliseconds { get; init; }
         }
 
         // Slide: how far the background travels behind the foreground over the scene, as a share of the photo's width.
@@ -64,6 +74,82 @@ namespace ModernImageViewer
 
         private DepthScene? _depthScene;
         private int _depthTicket;
+        private int _depthDrawFaults;
+        // About three quarters of a second at 60 frames. One missed frame is a stall, not the end of the effect.
+        private const int DepthDrawFaultsBeforeStop = 45;
+        private CanvasDevice? _depthDevice;
+        // The folder check waits while the picture on screen is still asking for its depth or subject.
+        private bool _depthPrepWaiting;
+        // On-screen sway and filter time. The main-menu wheel turns it off. On until a saved choice says otherwise.
+        private bool _depthDebugReadout = true;
+        private Border? _depthReadout;
+        private TextBlock? _depthReadoutText;
+        private int _depthReadoutTenths = int.MinValue;
+        private long _depthReadoutFilter = long.MinValue;
+        private string? _depthReadoutKind;
+
+        /// <summary>While a 3D picture plays, show the sway rotation in use and how long the 3D filter took. The gear menu turns this off.</summary>
+        public bool DepthDebugReadout
+        {
+            get => _depthDebugReadout;
+            set
+            {
+                if (_depthDebugReadout == value) return;
+                _depthDebugReadout = value;
+                if (!value) HideDepthReadout();
+            }
+        }
+
+        // DXGI device removed, hung, or reset. Win2D surfaces from that device cannot be drawn.
+        private static bool DepthDeviceWasLost(Exception ex)
+        {
+            for (Exception? cursor = ex; cursor != null; cursor = cursor.InnerException)
+            {
+                int hr = cursor.HResult;
+                if (hr == unchecked((int)0x887A0005) || hr == unchecked((int)0x887A0006) || hr == unchecked((int)0x887A0007))
+                    return true;
+            }
+            return false;
+        }
+
+        private void NoteDepthDevice(CanvasDevice device)
+        {
+            if (ReferenceEquals(_depthDevice, device)) return;
+            if (_depthDevice != null) _depthDevice.DeviceLost -= DepthDeviceLost;
+            _depthDevice = device;
+            _depthDevice.DeviceLost += DepthDeviceLost;
+        }
+
+        private void DepthDeviceLost(CanvasDevice sender, object args)
+        {
+            DispatcherQueue.TryEnqueue(() => ReplaceLostDepthDevice(sender));
+        }
+
+        /// <summary>
+        /// Win2D keeps handing out the lost device until this handler asks for a new one.
+        /// The bitmaps from the lost device cannot be drawn, so this scene goes back to its own picture.
+        /// The next scene takes the new device.
+        /// </summary>
+        private void ReplaceLostDepthDevice(CanvasDevice lost)
+        {
+            if (!ReferenceEquals(_depthDevice, lost))
+            {
+                if (_depthScene != null) StopSceneDepth();
+                return;
+            }
+            _depthDevice.DeviceLost -= DepthDeviceLost;
+            _depthDevice = null;
+            try
+            {
+                var fresh = CanvasDevice.GetSharedDevice();
+                if (!ReferenceEquals(fresh, lost)) NoteDepthDevice(fresh);
+            }
+            catch (Exception ex)
+            {
+                PlayTiming.Write($"3D: graphics device lost: {ex.GetType().Name}");
+            }
+            if (_depthScene != null) StopSceneDepth();
+        }
 
         /// <summary>Called as a scene comes on, once its camera move has started.</summary>
         private async Task<bool> TryStartSceneDepthAsync(ShowScene scene, ShowScene? next)
@@ -74,30 +160,42 @@ namespace ModernImageViewer
 
             int ticket = ++_depthTicket;
             // The next scene's map is made while this one plays, so it is ready when it comes on.
-            if (next != null && SinglePhoto(next) is string nextPath)
+            // Queued after this picture's own models: a preload must not take the card first.
+            void PreloadNext()
             {
-                _ = DepthMaps.ForAsync(nextPath);
-                // Slide's subject takes a few seconds on the graphics card: it is cut while this scene plays.
-                if (LiveDepthMotion() == SurpriseOptions.DepthSlide)
+                if (next != null && SinglePhoto(next) is string nextPath)
                 {
-                    _ = SubjectMasks.ForAsync(nextPath);
-                    _ = ParallaxJudge.ForAsync(nextPath);
+                    _ = DepthMaps.ForAsync(nextPath);
+                    if (LiveDepthMotion() == SurpriseOptions.DepthSlide)
+                    {
+                        _ = SubjectMasks.ForAsync(nextPath);
+                        _ = ParallaxJudge.ForAsync(nextPath);
+                    }
                 }
             }
-            if (SinglePhoto(scene) is not string path) return false;
-            if (Random.Shared.NextDouble() >= options.DepthChance) { PlayTiming.Write("3D: not this scene (odds)"); return false; }
+            if (SinglePhoto(scene) is not string path) { PreloadNext(); return false; }
+            if (Random.Shared.NextDouble() >= options.DepthChance) { PlayTiming.Write("3D: not this scene (odds)"); PreloadNext(); return false; }
             var move = _cameraMove;
-            if (move == null || _cameraGoingHome) { PlayTiming.Write("3D: not this scene (no camera move)"); return false; }
+            if (move == null || _cameraGoingHome) { PlayTiming.Write("3D: not this scene (no camera move)"); PreloadNext(); return false; }
             var parts = Enumerable.Range(0, _items.Count).Select(GetCellParts)
                 .Where(p => p != null && !IsEmptyCell(p.Bound.Item)).ToList();
-            if (parts.Count != 1 || parts[0] is not { } cell) { PlayTiming.Write($"3D: not this scene ({parts.Count} cells)"); return false; }
-            if (!string.Equals(cell.Bound.Item.Path, path, StringComparison.OrdinalIgnoreCase)) { PlayTiming.Write("3D: not this scene (cell shows another photo)"); return false; }
+            if (parts.Count != 1 || parts[0] is not { } cell) { PlayTiming.Write($"3D: not this scene ({parts.Count} cells)"); PreloadNext(); return false; }
+            if (!string.Equals(cell.Bound.Item.Path, path, StringComparison.OrdinalIgnoreCase)) { PlayTiming.Write("3D: not this scene (cell shows another photo)"); PreloadNext(); return false; }
 
-            var map = await DepthMaps.ForAsync(path);
+            var mapTask = DepthMaps.ForAsync(path);
+            var judgeTask = ParallaxJudge.ForAsync(path);
+            if (LiveDepthMotion() == SurpriseOptions.DepthSlide)
+                _ = SubjectMasks.ForAsync(path);
+            PreloadNext();
+            _depthPrepWaiting = true;
+            try
+            {
+            var map = await mapTask;
             if (map == null || map.Grey.Length == 0 || ticket != _depthTicket || _autoPlaySeconds == 0) { PlayTiming.Write($"3D: not this scene (map {(map == null ? "missing" : "late")})"); return false; }
             try
             {
                 var device = CanvasDevice.GetSharedDevice();
+                NoteDepthDevice(device);
                 var (pixels, photoWidth, photoHeight) = await LoadDepthPixelsAsync(path);
                 var photo = CanvasBitmap.CreateFromBytes(device, pixels, photoWidth, photoHeight, Windows.Graphics.DirectX.DirectXPixelFormat.B8G8R8A8UIntNormalized);
                 // Slide moves the near part as one piece over a background that holds, so it is cut and filled once, here.
@@ -105,12 +203,12 @@ namespace ModernImageViewer
                 // Chosen before the layers are made: the fill goes on the side the subject uncovers.
                 float way = Random.Shared.Next(2) == 0 ? -1f : 1f;
                 ParallaxLayers.Layers? layers = null;
+                var judged = await judgeTask;
                 if (slide)
                 {
                     // Only a photo with a clear subject in front of its background slides. Any other plays Rock, which
                     // needs no subject (Ed, 2026-11-07: fall back on the 3D movement that works).
                     var subject = await SubjectMasks.ForAsync(path);
-                    var judged = await ParallaxJudge.ForAsync(path);
                     if (subject == null || judged == null || judged.Fit != ParallaxJudge.Fit.Slide)
                     {
                         PlayTiming.Write($"3D: Sway instead of Slide ({(judged == null ? "not judged" : judged.Why)})");
@@ -175,6 +273,8 @@ namespace ModernImageViewer
                     mask = CanvasBitmap.CreateFromBytes(device, layers.Mask, photoWidth, photoHeight, Windows.Graphics.DirectX.DirectXPixelFormat.B8G8R8A8UIntNormalized);
                     near = new AlphaMaskEffect { Source = photo, AlphaMask = mask };
                 }
+                double safeRotation = SurpriseOptions.SwayRotationForPicture(map.Grey, map.Width, map.Height, judged?.Gap ?? double.NaN, SurpriseOptions.SwayRotationMost);
+                long? filterMs = DepthMaps.TryCheckMilliseconds(path, out long timedMs) ? timedMs : null;
                 var state = new DepthScene
                 {
                     Target = cell.Photo,
@@ -194,17 +294,38 @@ namespace ModernImageViewer
                     FromSeconds = ReferenceEquals(_cameraMove, move) ? _cameraClock.Elapsed.TotalSeconds : 0,
                     Way = way,
                     SubjectCentre = layers == null ? Vector2.Zero : new Vector2(layers.CentreX * photoWidth, layers.CentreY * photoHeight),
-                    SwayInstead = LiveDepthMotion() == SurpriseOptions.DepthSlide && layers == null
+                    SwayInstead = LiveDepthMotion() == SurpriseOptions.DepthSlide && layers == null,
+                    SafeRotation = safeRotation,
+                    FilterMilliseconds = filterMs
                 };
                 // Drawn once before it is shown, so the swap shows the same picture.
-                try
+                // One failed frame used to abandon the scene. A lost device is not retried: those bitmaps are dead.
+                Exception? drawFailed = null;
+                for (int attempt = 0; attempt < 3; attempt++)
                 {
-                    DrawDepth(state);
+                    try
+                    {
+                        DrawDepth(state);
+                        drawFailed = null;
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        drawFailed = ex;
+                        if (DepthDeviceWasLost(ex))
+                        {
+                            ReplaceLostDepthDevice(device);
+                            break;
+                        }
+                    }
                 }
-                catch
+                if (drawFailed != null)
                 {
                     ReleaseDepth(state);
-                    throw;
+                    // Device loss was already handed to the new device above. Throwing it again would retire that device.
+                    if (!DepthDeviceWasLost(drawFailed)) throw drawFailed;
+                    PlayTiming.Write($"3D: not shown: {drawFailed.GetType().Name} {drawFailed.Message}");
+                    return false;
                 }
                 StopSceneDepth();
                 _depthScene = state;
@@ -215,10 +336,17 @@ namespace ModernImageViewer
             }
             catch (Exception ex)
             {
+                if (DepthDeviceWasLost(ex) && _depthDevice != null)
+                    ReplaceLostDepthDevice(_depthDevice);
                 PlayTiming.Write($"3D: not shown: {ex.GetType().Name} {ex.Message}");
             }
 
             return false;
+            }
+            finally
+            {
+                _depthPrepWaiting = false;
+            }
         }
 
         /// <summary>
@@ -272,9 +400,22 @@ namespace ModernImageViewer
             try
             {
                 DrawDepth(state);
+                _depthDrawFaults = 0;
             }
             catch (Exception ex)
             {
+                if (DepthDeviceWasLost(ex))
+                {
+                    PlayTiming.Write("3D: graphics device lost");
+                    if (_depthDevice != null) ReplaceLostDepthDevice(_depthDevice);
+                    else StopSceneDepth();
+                    return;
+                }
+                // The first failed draw used to put the cell's own picture back for the rest of the scene. Moving a
+                // sway slider writes the settings file on this thread, and the draw after that stall can fail once.
+                if (_depthDrawFaults == 0)
+                    PlayTiming.Write($"3D: draw missed: {ex.GetType().Name} {ex.Message}");
+                if (++_depthDrawFaults < DepthDrawFaultsBeforeStop) return;
                 PlayTiming.Write($"3D: stopped drawing: {ex.Message}");
                 StopSceneDepth();
             }
@@ -294,6 +435,7 @@ namespace ModernImageViewer
             if (state.Near != null && state.Plate != null)
             {
                 DrawSlide(state);
+                ShowDepthReadout(state, "Slide", null);
                 return;
             }
             var size = state.Photo.SizeInPixels;
@@ -309,6 +451,8 @@ namespace ModernImageViewer
             ramp = ramp * ramp * (3 - 2 * ramp);
             Vector2 along;
             float scale;
+            string motion = "Pan";
+            double? rotationUsed = null;
             if (pan > 0.03)
             {
                 // The near things move further the way the view moves the picture, centred on the middle of the move.
@@ -317,14 +461,19 @@ namespace ModernImageViewer
             }
             else
             {
-                // One swing: center, one side, the other side, center. The sliders set its length and how far
-                // nearest and farthest move apart at the peak. It returns through the photograph: a depth map
-                // has no unseen side of a person to turn into. Starts at 0 when the surface comes on.
-                double t = Math.Max(0, seconds - state.FromSeconds);
+                // One swing: center, one side, the other side, center. The swing slider sets the length.
+                // Each picture takes its own rotation, at most 4% of the width. The local depth step is the most it
+                // may take. Depth behind the subject may hold that down. Never under 1.6%: 0.4% only vibrates.
+                // It returns through the photograph: a depth map has no unseen side of a person to turn into.
+                // Starts at the center. A new length keeps this place and changes the speed.
+                // The scene's own clock, so a replaced camera move cannot freeze it.
                 double swing = SurpriseOptions.ClampedSwaySwing(SurpriseChoices.SwaySwing);
-                double rotation = SurpriseOptions.ClampedSwayRotation(SurpriseChoices.SwayRotation);
-                along = new Vector2((float)Math.Sin(t / swing * Math.PI * 2), 0);
+                double rotation = state.SafeRotation;
+                state.SwayPhase = SurpriseOptions.NextSwayPhase(state.SwayPhase, state.Shown.Elapsed.TotalSeconds, ref state.SwayClock, swing);
+                along = new Vector2((float)Math.Sin(state.SwayPhase * Math.PI * 2), 0);
                 scale = (float)(width * rotation * ramp);
+                motion = "Sway";
+                rotationUsed = rotation;
             }
             var shift = along * scale;
             float amount = state.Moved.Amount;
@@ -344,6 +493,7 @@ namespace ModernImageViewer
             float cropW = width / over, cropH = height / over;
             session.DrawImage(state.Moved, new Rect(0, 0, width, height),
                 new Rect((width - cropW) / 2, (height - cropH) / 2, cropW, cropH));
+            ShowDepthReadout(state, motion, rotationUsed);
         }
 
         /// <summary>
@@ -368,8 +518,71 @@ namespace ModernImageViewer
         }
 
         /// <summary>The cell shows its own picture again. As a scene goes, and when Play stops.</summary>
+        private void ShowDepthReadout(DepthScene state, string kind, double? rotation)
+        {
+            if (!ReferenceEquals(_depthScene, state) || !_depthDebugReadout) return;
+            try
+            {
+                int tenths = rotation is double fraction ? (int)Math.Round(fraction * 1000) : -1;
+                long filter = state.FilterMilliseconds ?? -1;
+                if (tenths == _depthReadoutTenths && filter == _depthReadoutFilter && kind == _depthReadoutKind
+                    && _depthReadout != null && _depthReadout.Visibility == Visibility.Visible)
+                    return;
+                string line = tenths < 0
+                    ? kind
+                    : kind + " " + (tenths / 10.0).ToString("0.0", CultureInfo.InvariantCulture) + "%";
+                string text = line + "\n" + FormatDepthFilter(state.FilterMilliseconds);
+                if (_depthReadout == null)
+                {
+                    var block = new TextBlock
+                    {
+                        Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
+                        FontSize = 13
+                    };
+                    _depthReadoutText = block;
+                    _depthReadout = new Border
+                    {
+                        Child = block,
+                        Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0xD8, 0x18, 0x18, 0x18)),
+                        Padding = new Thickness(12, 8, 12, 8),
+                        CornerRadius = new CornerRadius(8),
+                        HorizontalAlignment = HorizontalAlignment.Left,
+                        VerticalAlignment = VerticalAlignment.Top,
+                        Margin = new Thickness(16, 16, 0, 0),
+                        IsHitTestVisible = false
+                    };
+                    AddOverCanvas(_depthReadout, 6400);
+                }
+                _depthReadoutText!.Text = text;
+                _depthReadout.Visibility = Visibility.Visible;
+                _depthReadoutTenths = tenths;
+                _depthReadoutFilter = filter;
+                _depthReadoutKind = kind;
+            }
+            catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException or ArgumentException or System.Runtime.InteropServices.COMException)
+            {
+            }
+        }
+
+        private static string FormatDepthFilter(long? milliseconds)
+        {
+            if (milliseconds == null) return "Filter not timed";
+            if (milliseconds < 100) return "Filter " + milliseconds.Value.ToString(CultureInfo.InvariantCulture) + " ms";
+            return "Filter " + (milliseconds.Value / 1000.0).ToString("0.0", CultureInfo.InvariantCulture) + " s";
+        }
+
+        private void HideDepthReadout()
+        {
+            _depthReadoutTenths = int.MinValue;
+            _depthReadoutFilter = long.MinValue;
+            _depthReadoutKind = null;
+            if (_depthReadout != null) _depthReadout.Visibility = Visibility.Collapsed;
+        }
+
         private void StopSceneDepth()
         {
+            _depthDrawFaults = 0;
+            HideDepthReadout();
             var state = _depthScene;
             if (state == null) return;
             _depthScene = null;
