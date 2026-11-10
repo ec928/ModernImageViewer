@@ -1099,6 +1099,10 @@ namespace ModernImageViewer
             {
                 cameraSection.Children.Add(new TextBlock { Text = "3D motion style", FontSize = 13, Margin = new Thickness(0, 8, 0, 4) });
                 cameraSection.Children.Add(DepthMotionChips());
+                Slide(cameraSection, "Sway rotation", "How far the nearest and farthest parts move apart at the peak of a sway, as a percent of the picture width. The middle stays still, so the picture turns one way and then the other, and always comes back. Changes the playing picture as you drag. Slide does not use this.",
+                    SurpriseOptions.SwayRotationLeast * 100, SurpriseOptions.SwayRotationMost * 100, 0.1, options.SwayRotation * 100,
+                    v => $"{v:0.0}%",
+                    (o, v) => o.SwayRotation = SurpriseOptions.ClampedSwayRotation(Math.Round(v, 1) / 100));
                 Slide(cameraSection, "Each swing", "How long one full sway takes: from the center, out to one side, across to the other, and back to the center. 4.25 seconds is the current look. Slide does not use this.",
                     SurpriseOptions.SwaySwingLeast, SurpriseOptions.SwaySwingMost, 0.25, options.SwaySwing,
                     v => $"{v:0.##} s",

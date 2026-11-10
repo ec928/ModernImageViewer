@@ -424,8 +424,8 @@ namespace ModernImageViewer
         public string DepthMotion { get; set; } = DepthSlide;
 
         /// <summary>
-        /// Older settings files still carry this. Pictures do not use it.
-        /// Each picture takes its own sway, never above <see cref="SwayRotationMost"/> and never under <see cref="SwayRotationLeast"/>.
+        /// How far Sway moves the nearest depth against the farthest, as a fraction of the picture width, at the peak.
+        /// The middle stays still. Every Sway picture plays this. A settings file without this keeps 1.6%.
         /// </summary>
         public const double SwayRotationDefault = 0.016;
         public const double SwayRotationLeast = 0.004;
