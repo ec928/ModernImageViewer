@@ -71,6 +71,7 @@ namespace ModernImageViewer
         public MultiViewControl()
         {
             this.InitializeComponent();
+            InitSwayBar();
             _hudTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2.5) };
             _hudTimer.Tick += HudTimer_Tick;
             RootGrid.PointerMoved += SegmentGesture_PointerMoved;

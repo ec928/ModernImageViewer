@@ -386,6 +386,17 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Prototype: Sway rotation on the bar, for marking each picture's most before it distorts. Shown only with 3D installed. -->
+                    <Border x:Name="SwayBarControl" CornerRadius="12" Background="#14FFFFFF" VerticalAlignment="Center" Margin="4,0,0,0" Visibility="Collapsed">
+                        <StackPanel Orientation="Horizontal" Spacing="2" Padding="6,0">
+                            <TextBlock Text="Sway" VerticalAlignment="Center" FontSize="13" Margin="2,0,4,0" Opacity="0.8"/>
+                            <Button x:Name="SwayDownButton" Click="SwayStep_Click" Tag="-1" Content="&#x2212;" Style="{StaticResource QuietButtonStyle}" Padding="8,3" MinWidth="28" CornerRadius="10" IsTabStop="False" AutomationProperties.Name="Less sway" ToolTipService.ToolTip="0.1% less sway"/>
+                            <Slider x:Name="SwayBarSlider" Width="120" Minimum="0.4" Maximum="4" StepFrequency="0.1" SmallChange="0.1" LargeChange="0.5" VerticalAlignment="Center" IsTabStop="False" ValueChanged="SwayBarSlider_ValueChanged" AutomationProperties.Name="Sway rotation" ToolTipService.ToolTip="Sway rotation, percent of the picture width. Changes the playing picture."/>
+                            <Button x:Name="SwayUpButton" Click="SwayStep_Click" Tag="1" Content="+" Style="{StaticResource QuietButtonStyle}" Padding="8,3" MinWidth="28" CornerRadius="10" IsTabStop="False" AutomationProperties.Name="More sway" ToolTipService.ToolTip="0.1% more sway"/>
+                            <TextBlock x:Name="SwayBarText" Text="1.6%" Width="40" VerticalAlignment="Center" FontSize="13" Typography.NumeralAlignment="Tabular" TextAlignment="Right" Margin="0,0,2,0"/>
+                        </StackPanel>
+                    </Border>
+
                     <!-- How the grid is arranged. Hidden with the control when there is nothing to arrange. -->
                     <Rectangle x:Name="CountsDivider" Width="1" Height="18" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,0" Opacity="0.5"/>
 

@@ -263,6 +263,7 @@ namespace ModernImageViewer
             {
                 // It still applies until the app closes.
             }
+            if (SwayBarControl.Visibility == Visibility.Visible) ShowSwayOnBar(SurpriseChoices.SwayRotation);
             if (_autoPlaySeconds > 0) ApplyPlayEdge(CurrentPlayPercent());
         }
 
