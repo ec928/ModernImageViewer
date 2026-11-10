@@ -317,12 +317,14 @@ namespace ModernImageViewer
             }
             else
             {
-                // One cycle every 4.25 s, nearest against farthest 1.6% of the width at the peak.
-                // It returns through the photograph: a depth map has no unseen side of a person to turn into.
-                // Starts at 0 when the surface comes on and ramps up smoothly so the swap never jerks.
+                // One swing: center, one side, the other side, center. The sliders set its length and how far
+                // nearest and farthest move apart at the peak. It returns through the photograph: a depth map
+                // has no unseen side of a person to turn into. Starts at 0 when the surface comes on.
                 double t = Math.Max(0, seconds - state.FromSeconds);
-                along = new Vector2((float)Math.Sin(t / 4.25 * Math.PI * 2), 0);
-                scale = (float)(width * 0.016 * ramp);
+                double swing = SurpriseOptions.ClampedSwaySwing(SurpriseChoices.SwaySwing);
+                double rotation = SurpriseOptions.ClampedSwayRotation(SurpriseChoices.SwayRotation);
+                along = new Vector2((float)Math.Sin(t / swing * Math.PI * 2), 0);
+                scale = (float)(width * rotation * ramp);
             }
             var shift = along * scale;
             float amount = state.Moved.Amount;

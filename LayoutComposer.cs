@@ -423,6 +423,30 @@ namespace ModernImageViewer
         /// <summary>Which 3D motion a held picture uses. Rock is the one that works. Slide is the other attempt.</summary>
         public string DepthMotion { get; set; } = DepthSlide;
 
+        /// <summary>
+        /// How far Sway moves the nearest depth against the farthest, as a fraction of the picture width, at the peak.
+        /// The middle stays still. A settings file without this keeps 1.6%.
+        /// </summary>
+        public const double SwayRotationDefault = 0.016;
+        public const double SwayRotationLeast = 0.004;
+        public const double SwayRotationMost = 0.04;
+        public double SwayRotation { get; set; } = SwayRotationDefault;
+
+        /// <summary>
+        /// How long one Sway swing takes, in seconds: center, out to one side, across to the other, and back to center.
+        /// The picture always returns. A settings file without this keeps 4.25 s.
+        /// </summary>
+        public const double SwaySwingDefault = 4.25;
+        public const double SwaySwingLeast = 1.5;
+        public const double SwaySwingMost = 12;
+        public double SwaySwing { get; set; } = SwaySwingDefault;
+
+        public static double ClampedSwayRotation(double fraction) =>
+            Math.Clamp(double.IsFinite(fraction) ? fraction : SwayRotationDefault, SwayRotationLeast, SwayRotationMost);
+
+        public static double ClampedSwaySwing(double seconds) =>
+            Math.Clamp(double.IsFinite(seconds) ? seconds : SwaySwingDefault, SwaySwingLeast, SwaySwingMost);
+
         /// <summary>The middle distance stays put. Nearer and farther parts move in opposite directions, then that reverses.</summary>
         public const string DepthSway = "Sway";
         public const string DepthRock = DepthSway;
@@ -618,6 +642,11 @@ namespace ModernImageViewer
                 read.MotionFaceChance = Math.Clamp(read.MotionFaceChance, 0, 1);
                 read.DepthChance = Math.Clamp(read.DepthChance, 0, 1);
                 read.DepthMotion = CanonicalDepthMotion(read.DepthMotion);
+                // Missing keys stay at the look shipped in 0.34.1. A present value is kept inside the slider range.
+                if (!json!.Contains("\"SwayRotation\"", StringComparison.Ordinal)) read.SwayRotation = SwayRotationDefault;
+                else read.SwayRotation = ClampedSwayRotation(read.SwayRotation);
+                if (!json.Contains("\"SwaySwing\"", StringComparison.Ordinal)) read.SwaySwing = SwaySwingDefault;
+                else read.SwaySwing = ClampedSwaySwing(read.SwaySwing);
                 // 0.8 was the first default, and it warped single pictures in every mode. A file from before Parallax
                 // existed still has that 0.8; a later 0.8 was chosen on the slider, and the file then has Parallax in it.
                 if (Math.Abs(read.DepthChance - 0.8) < 0.001 && !json!.Contains("\"Parallax\"", StringComparison.Ordinal))

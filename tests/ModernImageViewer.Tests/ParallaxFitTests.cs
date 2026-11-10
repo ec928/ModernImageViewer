@@ -144,6 +144,29 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
+        public void Sway_settings_keep_the_current_look_when_the_file_omits_them()
+        {
+            var fresh = new SurpriseOptions();
+            Assert.Equal(SurpriseOptions.SwayRotationDefault, fresh.SwayRotation, 5);
+            Assert.Equal(SurpriseOptions.SwaySwingDefault, fresh.SwaySwing, 3);
+
+            var old = SurpriseOptions.FromJson("{\"DepthChance\":0.4}");
+            Assert.Equal(0.016, old.SwayRotation, 5);
+            Assert.Equal(4.25, old.SwaySwing, 3);
+
+            var set = SurpriseOptions.FromJson("{\"SwayRotation\":0.03,\"SwaySwing\":6.5}");
+            Assert.Equal(0.03, set.SwayRotation, 5);
+            Assert.Equal(6.5, set.SwaySwing, 3);
+            var round = SurpriseOptions.FromJson(set.ToJson());
+            Assert.Equal(0.03, round.SwayRotation, 5);
+            Assert.Equal(6.5, round.SwaySwing, 3);
+
+            var loud = SurpriseOptions.FromJson("{\"SwayRotation\":9,\"SwaySwing\":0}");
+            Assert.Equal(SurpriseOptions.SwayRotationMost, loud.SwayRotation, 5);
+            Assert.Equal(SurpriseOptions.SwaySwingLeast, loud.SwaySwing, 3);
+        }
+
+        [Fact]
         public void Preset_names_and_3D_mode_naming_are_consistent()
         {
             Assert.Equal("3D", CinematicOverrides.ParallaxName);

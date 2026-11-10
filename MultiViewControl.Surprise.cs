@@ -1091,6 +1091,14 @@ namespace ModernImageViewer
             {
                 cameraSection.Children.Add(new TextBlock { Text = "3D motion style", FontSize = 13, Margin = new Thickness(0, 8, 0, 4) });
                 cameraSection.Children.Add(DepthMotionChips());
+                Slide(cameraSection, "Sway rotation", "How far the nearest and farthest parts move apart at the peak of a sway, as a percent of the picture width. The middle stays still, so the picture turns one way and then the other, and always comes back. 1.6% is the current look. Slide does not use this.",
+                    SurpriseOptions.SwayRotationLeast * 100, SurpriseOptions.SwayRotationMost * 100, 0.1, options.SwayRotation * 100,
+                    v => $"{v:0.0}%",
+                    (o, v) => o.SwayRotation = SurpriseOptions.ClampedSwayRotation(Math.Round(v, 1) / 100));
+                Slide(cameraSection, "Each swing", "How long one full sway takes: from the center, out to one side, across to the other, and back to the center. 4.25 seconds is the current look. Slide does not use this.",
+                    SurpriseOptions.SwaySwingLeast, SurpriseOptions.SwaySwingMost, 0.25, options.SwaySwing,
+                    v => $"{v:0.##} s",
+                    (o, v) => o.SwaySwing = SurpriseOptions.ClampedSwaySwing(Math.Round(v * 4) / 4.0));
                 Slide(cameraSection, "3D on single pictures", "The odds that a scene with one picture plays in 3D. Slide moves the camera laterally over background fill (falling back to Sway on landscapes). Sway gently rocks the picture left and right. Off unless you turn it up. The 3D preset sets it to 100% for that show.",
                     0, 100, 5, GeneratorSettingsFor(_activeShow).DepthChance * 100,
                     v => $"{v:0}%",
