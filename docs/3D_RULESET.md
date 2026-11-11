@@ -176,3 +176,11 @@ Ed's notes: several pictures were held down by corruption in one small area, not
 | Worst 2% patch of horizontal depth change alone | 9 of 22 | 0.34 |
 
 None of these predicts Ed's maxima. The patch measure scores the jelly (4.0) and the two `ed` photos (1.6) as the worst. Fine detail stretched against black does not read as corruption. Detail at a depth edge is not the same thing as what Ed sees break.
+
+## The forward warp, 2026-11-11
+
+The tears were the warp, not the pictures. Sway read each pixel's depth where the pixel lands, so where depth jumps faster than the shift the same source pixels were read twice: a second ear outline with grass through it, doubled outlines on the strawberry stickers, hair pulled into the carpet. Sway now draws with `Shaders\SwaySplat.hlsl`: for each output pixel it finds the source pixels along the row that land there and keeps the nearest, so an edge is drawn once. Where a gap opens behind a moving edge, the edge is stretched over it. Pan, and Sway when the shader cannot be made, still use the displacement warp.
+
+Checked before Ed watched it: the compiled shader, run off screen on this PC on the elephant at 3%, matched the Python splat in `tools\parallax-lab\sway_warp_spike.py` (mean difference 3 of 255), with both ears whole on both peaks; 0.4 to 0.8 ms a frame at 1920x1080.
+
+Ed's maxima on the same 27-scene show with this warp (the last column of `sway-max-2026-11-11.tsv`): every Sway picture takes 4.0%, the slider's top, except the two `ed` photos (scenes 6 and 7), at 1.6% because the ears look unnaturally big at more. That is the depth map's shape on a face, not a tear. The abbey, the elephant and the strawberry girl, the three that broke up before, all take 4.0%. Because 4.0 is the slider's top, the real maxima for those 20 are not known.
