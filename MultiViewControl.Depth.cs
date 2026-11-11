@@ -45,6 +45,8 @@ namespace ModernImageViewer
             public PixelShaderEffect? Splat { get; init; }
             /// <summary>Pixels between the sources the splat tries.</summary>
             public float SplatStep { get; init; }
+            /// <summary>Sway's depth with the subject's crisp outline (SwayDepth), when the photo had a subject mask.</summary>
+            public CanvasBitmap? CrispDepth { get; init; }
             public required CameraMove Move { get; init; }
             public required float Middle { get; init; }
             public required Vector2 Drift { get; init; }
@@ -274,7 +276,29 @@ namespace ModernImageViewer
                 };
                 var photoAtEdges = new BorderEffect { Source = photo, ExtendX = CanvasEdgeBehavior.Clamp, ExtendY = CanvasEdgeBehavior.Clamp };
                 float splatStep = Math.Max(1f, size.Width / (float)map.Width / 2f);
-                var splat = MakeSwaySplat(photoAtEdges, depthAtSize, (float)(size.Width * SurpriseOptions.SwayRotationMost) + splatStep * 2 + 2);
+                // Sway's depth gets a crisp edge at the subject's outline, so ears and hair move with the head (SwayDepth).
+                // Without a mask it keeps the depth map as it is.
+                ICanvasImage splatDepth = depthAtSize;
+                CanvasBitmap? crispBitmap = null;
+                if (layers == null && await SubjectMasks.ForAsync(path) is { } outline && outline.Size > 0)
+                {
+                    int tw = (int)Math.Min(size.Width, SwayDepth.MostWidth);
+                    int th = Math.Max(1, (int)Math.Round(size.Height * (double)tw / size.Width));
+                    byte[] greyMap = map.Grey;
+                    int gw = map.Width, gh = map.Height;
+                    var crispClock = System.Diagnostics.Stopwatch.StartNew();
+                    var crispBytes = await Task.Run(() => SwayDepth.Crisp(greyMap, gw, gh, outline.Alpha, outline.Size, tw, th));
+                    if (ticket != _depthTicket || _autoPlaySeconds == 0) { photo.Dispose(); depth.Dispose(); return false; }
+                    crispBitmap = CanvasBitmap.CreateFromBytes(device, crispBytes, tw, th, Windows.Graphics.DirectX.DirectXPixelFormat.B8G8R8A8UIntNormalized);
+                    splatDepth = new BorderEffect
+                    {
+                        Source = new ScaleEffect { Source = crispBitmap, Scale = new Vector2(size.Width / (float)tw, size.Height / (float)th), InterpolationMode = CanvasImageInterpolation.Linear },
+                        ExtendX = CanvasEdgeBehavior.Clamp,
+                        ExtendY = CanvasEdgeBehavior.Clamp
+                    };
+                    PlayTiming.Write($"3D: sway depth edge from the subject in {crispClock.ElapsedMilliseconds} ms");
+                }
+                var splat = MakeSwaySplat(photoAtEdges, splatDepth, (float)(size.Width * SurpriseOptions.SwayRotationMost) + splatStep * 2 + 2);
                 double angle = Random.Shared.NextDouble() * Math.PI * 2;
                 CanvasBitmap? plate = null, mask = null;
                 BorderEffect? plateBorder = null;
@@ -299,6 +323,7 @@ namespace ModernImageViewer
                     Moved = moved,
                     Splat = splat,
                     SplatStep = splatStep,
+                    CrispDepth = crispBitmap,
                     Move = move,
                     Middle = map.Middle,
                     Drift = new Vector2((float)Math.Cos(angle), (float)(Math.Sin(angle) * 0.5)),
@@ -703,6 +728,7 @@ namespace ModernImageViewer
             {
                 state.Moved.Dispose();
                 state.Splat?.Dispose();
+                state.CrispDepth?.Dispose();
                 state.Shift.Dispose();
                 state.Near?.Dispose();
                 state.PlateBorder?.Dispose();
