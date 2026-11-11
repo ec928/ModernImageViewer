@@ -47,7 +47,7 @@ namespace ModernImageViewer
                 far[i] = inside[i] ? 2f : d[i];
                 markIn[i] = inside[i] ? 1f : 0f;
             }
-            near = Filter(near, gw, gh, r, true);
+            near = FromInside(d, inside, gw, gh, r);
             far = Filter(far, gw, gh, r, false);
             var anyIn = Filter(markIn, gw, gh, r, true);
             var allIn = Filter(markIn, gw, gh, r, false);
@@ -102,6 +102,57 @@ namespace ModernImageViewer
             float top = alpha[y0 * size + x0] + (alpha[y0 * size + x1] - alpha[y0 * size + x0]) * fx;
             float bottom = alpha[y1 * size + x0] + (alpha[y1 * size + x1] - alpha[y1 * size + x0]) * fx;
             return (top + (bottom - top) * fy) / 255f;
+        }
+
+        /// <summary>
+        /// Inside the mask within r of its edge, the depth of the subject just inside, if that is nearer than the pixel's own;
+        /// -1 outside the mask. "Just inside" is the mask more than r from its edge, grown back outward one ring at a time,
+        /// each ring taking the mean of the rings before it. Taking the nearest depth anywhere within r instead lifted a
+        /// profile's lips to the shoulder in front of them (Let_Me_Tell_You, 2026-11-11).
+        /// </summary>
+        private static float[] FromInside(float[] d, bool[] inside, int w, int h, int r)
+        {
+            int n = w * h;
+            var markIn = new float[n];
+            for (int i = 0; i < n; i++) markIn[i] = inside[i] ? 1f : 0f;
+            var deep = Filter(markIn, w, h, r, false);
+            var value = new float[n];
+            var known = new bool[n];
+            for (int i = 0; i < n; i++)
+            {
+                known[i] = deep[i] > 0.5f;
+                value[i] = known[i] ? d[i] : 0f;
+            }
+            var next = new float[n];
+            var nextKnown = new bool[n];
+            for (int ring = 0; ring <= r + 1; ring++)
+            {
+                bool grew = false;
+                for (int y = 0; y < h; y++)
+                    for (int x = 0; x < w; x++)
+                    {
+                        int i = y * w + x;
+                        next[i] = value[i]; nextKnown[i] = known[i];
+                        if (known[i] || !inside[i]) continue;
+                        float sum = 0; int count = 0;
+                        for (int dy = -1; dy <= 1; dy++)
+                            for (int dx = -1; dx <= 1; dx++)
+                            {
+                                int xx = x + dx, yy = y + dy;
+                                if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
+                                int j = yy * w + xx;
+                                if (known[j]) { sum += value[j]; count++; }
+                            }
+                        if (count > 0) { next[i] = sum / count; nextKnown[i] = true; grew = true; }
+                    }
+                (value, next) = (next, value);
+                (known, nextKnown) = (nextKnown, known);
+                if (!grew) break;
+            }
+            var result = new float[n];
+            for (int i = 0; i < n; i++)
+                result[i] = !inside[i] ? -1f : known[i] ? Math.Max(d[i], value[i]) : d[i];
+            return result;
         }
 
         /// <summary>Square max (or min) over radius r, as two passes.</summary>
