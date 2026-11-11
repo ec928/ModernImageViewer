@@ -107,9 +107,13 @@ namespace ModernImageViewer
 
         private static Judgement Judge(IParallaxMap map, IParallaxMask subject, bool hasFaces = false)
         {
-            if (!subject.Clear) return new Judgement(Fit.Out, subject.Why, subject.Area, 0, 0, subject.Sides);
+            // A close-up whose subject fills the photo or runs off its edges cannot Slide, but it Sways (Ed's marks of
+            // 2026-11-07 passed 12 of the 14 such photos he marked; they were left out until 0.35.1).
+            bool fillsPhoto = subject.Why is "covers the whole photo" or "touches too much of an edge";
+            if (!subject.Clear)
+                return new Judgement(fillsPhoto ? Fit.Rock : Fit.Out, subject.Why, subject.Area, 0, 0, subject.Sides);
             if (subject.Area > MostArea || subject.Sides >= MostSides)
-                return new Judgement(Fit.Out, "the subject is the whole picture", subject.Area, 0, 0, subject.Sides);
+                return new Judgement(Fit.Rock, "the subject is the whole picture", subject.Area, 0, 0, subject.Sides);
             int w = map.Width, h = map.Height, n = w * h;
             var fg = new bool[n];
             for (int y = 0; y < h; y++)
@@ -168,17 +172,12 @@ namespace ModernImageViewer
                     return Made(Fit.Out, "small depth step at its edge");
             }
 
-            Judgement FallbackOrOut(string why)
-            {
-                if (hasFaces)
-                    return Made(Fit.Rock, why);
-                // Non-face Rock requires a strong 3D close-up subject (edge >= 0.40, gap >= 0.40) that is either large (area >= 0.48),
-                // against a plain backdrop (tex < 0.03), or a sharp indoor/close-up subject (area >= 0.15, vague <= 0.085, tex < 0.16).
-                // Outdoor landscapes, cliffs, sand dunes, trees, umbrellas and foliage are excluded instead of distorting in Rock.
-                bool cleanRock = edge >= 0.40f && gap >= 0.40f &&
-                    (subject.Area >= 0.48f || tex < LeastTexture || (subject.Area >= 0.15f && subject.Vague <= MostSlideVague && tex < 0.16f));
-                return Made(cleanRock ? Fit.Rock : Fit.Out, why);
-            }
+            // A picture that passed the gate above has a clear subject with a real depth step. If a check below says it
+            // cannot Slide, it Sways. Until 0.35.1 a non-face picture also needed edge and gap of 0.40 and a large, plain or
+            // sharp subject, or it was left out, because the old displacement warp tore outdoor scenes. The forward warp
+            // and the crisp outline do not (Ed, 2026-11-11), and his 2026-11-07 marks passed 20 of the 29 marked pictures those
+            // Slide checks were leaving out.
+            Judgement FallbackOrOut(string why) => Made(Fit.Rock, why);
 
             if (edge < LeastEdge) return FallbackOrOut("small depth step at its edge");
             if (subject.Vague > MostSlideVague) return FallbackOrOut("outline not sharp enough to slide");
@@ -186,7 +185,7 @@ namespace ModernImageViewer
             if (subject.Area > MostSlideArea) return FallbackOrOut("subject fills the picture");
             if (subject.Sides >= MostSlideSides) return FallbackOrOut("subject spans the picture");
             if (subject.Top > 0.05f && subject.Bottom > 0.05f)
-                return Made(hasFaces ? Fit.Rock : Fit.Out, "subject spans top to bottom");
+                return FallbackOrOut("subject spans top to bottom");
 
             // Holistic distant-plane check: verify the remaining background sits on a distant plane (bgP90 <= 0.135) and that
             // connected foreground does not swallow >65% of the frame from a small subject (tabletop/floor/hillside/swamp).
@@ -210,9 +209,9 @@ namespace ModernImageViewer
                 return FallbackOrOut("background is not a distant plane");
             if (unionArea > 0.65f && subject.Area < 0.45f)
                 return FallbackOrOut("subject sits on a continuous ground plane");
-            // A Slide that is not one subject on a clean background is left out. It is not turned into Sway.
+            // A Slide that is not one subject on a clean background Sways (left out until 0.35.1).
             if (!SurpriseOptions.SlideIsOneCleanCut(fg, map.Raw!, w, h))
-                return Made(Fit.Out, "not one subject on a clean background");
+                return FallbackOrOut("not one subject on a clean background");
             return Made(Fit.Slide, "clear subject, distant background");
         }
 

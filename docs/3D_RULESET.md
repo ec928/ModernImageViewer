@@ -49,33 +49,33 @@ Two maps are kept.
 
 Ed, 2026-11-07: a clear subject with a distant background plays Slide. A clear subject that can be rotated, without that background, plays Sway. Anything else is left out.
 
-The subject mask has to be clear. A subject that covers more than 88% of the picture, or touches 70% of the sides, is the picture and is left out. No background around the subject leaves it out.
+The subject mask has to be clear. A subject that covers more than 88% of the picture, or touches 70% of the sides, is a close-up: since 0.35.1 it plays Sway without the gate below (Ed's 2026-11-07 marks passed 12 of the 14 such photos he marked). Before 0.35.1 it was left out. A subject too small, or an outline the mask is unsure of, is left out. No background around the subject leaves it out.
 
 | Who | Admitted when | Otherwise |
 |---|---|---|
 | A face | Edge at least 0.15 and gap at least 0.12. | Left out. "People against a flat background." |
 | No face | Edge at least 0.30 and gap at least 0.25. | Left out. "Small depth step at its edge." |
 
-A picture that passes that gate is then tried as Slide. Slide also requires all of these. Failing one does not by itself leave the picture out. A face goes to Sway. A picture with no face goes to Sway only when the close-subject test below passes, and is left out otherwise.
+A picture that passes that gate is then tried as Slide. Slide also requires all of these. Since 0.35.1, failing any of them makes the picture Sway, face or not.
 
 | Slide check | Threshold | Fail |
 |---|---|---|
-| Edge | At least 0.30 | Sway if a face or a close subject, else out |
-| Outline | Vague at most 0.085 | Same |
-| Background texture | At least 0.03 | Same. A plain background is this fail. |
-| Subject area | At most 65% | Same |
-| Sides touched | Under 30% | Same |
-| Top and bottom | Not both over 5% | A face Sways. Anything else is out. |
-| Far background | 90th percentile of the remaining background at most 0.135 | Same as the first row |
-| Ground | The connected foreground may not cover more than 65% when the subject itself is under 45% | Same |
+| Edge | At least 0.30 | Sway |
+| Outline | Vague at most 0.085 | Sway |
+| Background texture | At least 0.03 | Sway. A plain background is this fail. |
+| Subject area | At most 65% | Sway |
+| Sides touched | Under 30% | Sway |
+| Top and bottom | Not both over 5% | Sway |
+| Far background | 90th percentile of the remaining background at most 0.135 | Sway |
+| Ground | The connected foreground may not cover more than 65% when the subject itself is under 45% | Sway |
 
-Close subject, the test that lets a non-face Sway after a Slide check fails: edge at least 0.40, gap at least 0.40, and one of these: area at least 48%, texture under 0.03, or a sharp close subject (area at least 15%, vague at most 0.085, texture under 0.16).
+Before 0.35.1 a non-face picture that failed one of these Swayed only if it also passed a close-subject test (edge and gap at least 0.40, and area at least 48%, texture under 0.03, or a sharp close subject), and top-and-bottom sent it out. That test was there because the old displacement warp tore outdoor scenes. On Ed's 2026-11-07 marks, the Slide checks were leaving out 20 pictures he had passed, against 9 he had failed.
 
 On the 73 clips marked 2026-11-07, none of those measures separated Slide's passes from its fails. The best, the outline, got 46 of 59. The fails were mostly buildings and trees.
 
 ### The Slide cut added 2026-11-10
 
-A picture that passes every row above still has to be one subject on a clean background. This is `SlideIsOneCleanCut`. Failing it leaves the picture out. It is not shown as Slide, and it is not turned into Sway.
+A picture that passes every row above still has to be one subject on a clean background. This is `SlideIsOneCleanCut`. Failing it means the picture is not shown as Slide. Since 0.35.1 it Sways; before, it was left out.
 
 | Check | Threshold |
 |---|---|
