@@ -161,3 +161,18 @@ The abbey stays at 2.1% when its local step is at least that. Its edge is 0.49. 
 The Slide cut is unchanged. The show stays at 27 unless a later run judges differently. The hair fringe is unchanged.
 
 This build has not been watched. The sentences above are what the rule does to the logged edge and gap. They are not a new stress test.
+
+## Ed's sway maxima, 2026-11-11
+
+The Sway rotation slider is back on the play bar (branch `prototype-3d-sway`), and the bin plays the slider's value, not a computed one. Ed set the most each Sway picture takes before it distorts, on the 27-scene show. The 22 values, with file, the computed amount and the judge's edge and gap, are in `0-Development\parallax-lab-data\sway-max-2026-11-11.tsv`. They run from 0.6% (baby elephant) to 4.0% (two baby close-ups, a third baby photo, the jelly). 4.0 is the slider's top, so those four may take more.
+
+Ed's notes: several pictures were held down by corruption in one small area, not by the picture as a whole. The baby elephant breaks up near the ears, and the strawberry girl's hair breaks up left and right (4.0 without it). He expects this rarely applies to people. The abbey is 1.0 or left out.
+
+| Predictor | Within 0.3% of Ed (4.0 counts at 3.7 or more) | Rank correlation with Ed |
+|---|---|---|
+| The computed amount in the 23:05 bin | 7 of 22 | 0.20 |
+| Edge or gap alone | No order: gap 0.74 takes 4.0 (jelly), gap 0.73 takes 0.6 (elephant) | -- |
+| Worst 2% patch of horizontal depth change times photo detail (`tools\parallax-lab\worst_spot.py`) | 6 of 22 | 0.18 |
+| Worst 2% patch of horizontal depth change alone | 9 of 22 | 0.34 |
+
+None of these predicts Ed's maxima. The patch measure scores the jelly (4.0) and the two `ed` photos (1.6) as the worst. Fine detail stretched against black does not read as corruption. Detail at a depth edge is not the same thing as what Ed sees break.
