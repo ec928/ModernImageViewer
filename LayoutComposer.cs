@@ -425,9 +425,9 @@ namespace ModernImageViewer
 
         /// <summary>
         /// How far Sway moves the nearest depth against the farthest, as a fraction of the picture width, at the peak.
-        /// The middle stays still. Every Sway picture plays this. A settings file without this keeps 1.6%.
+        /// The middle stays still. Every Sway picture plays this. A settings file without this plays 4% (Ed, 2026-11-11: with the forward warp most pictures take it).
         /// </summary>
-        public const double SwayRotationDefault = 0.016;
+        public const double SwayRotationDefault = 0.04;
         public const double SwayRotationLeast = 0.004;
         public const double SwayRotationMost = 0.06;
         /// <summary>The computed per-picture sway (now only logged beside the slider) keeps its 4% cap, so the log means what it did.</summary>
