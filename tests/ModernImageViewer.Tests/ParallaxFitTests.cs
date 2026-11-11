@@ -152,7 +152,7 @@ namespace ModernImageViewer.Tests
             Assert.Equal(SurpriseOptions.SwaySwingDefault, fresh.SwaySwing, 3);
 
             var old = SurpriseOptions.FromJson("{\"DepthChance\":0.4}");
-            Assert.Equal(0.016, old.SwayRotation, 5);
+            Assert.Equal(0.04, old.SwayRotation, 5);
             Assert.Equal(4.25, old.SwaySwing, 3);
 
             var set = SurpriseOptions.FromJson("{\"SwayRotation\":0.03,\"SwaySwing\":6.5}");
@@ -187,93 +187,6 @@ namespace ModernImageViewer.Tests
 
             double stalled = SurpriseOptions.NextSwayPhase(later, 17 * 0.0625 + 0.05 + 2, ref clock, 4.25);
             Assert.Equal(later + 0.1 / 4.25, stalled, 5);
-        }
-
-        [Fact]
-        public void Sway_rotation_follows_the_local_bend_and_stays_inside_the_slider()
-        {
-            const int width = 100;
-            const int height = 40;
-            int gap = Math.Max(2, (int)Math.Round(width * SurpriseOptions.SwayDepthWindow));
-            Assert.Equal(8, gap);
-            Assert.Equal(0.40, SurpriseOptions.SwayFullStep, 6);
-
-            // Contrast 64 across every 8% step. 0.04 * (64/255) / 0.40 = 0.025098, under a 4% ceiling.
-            var steep = Stripes(width, height, gap, 0, 64);
-            double stepped = SurpriseOptions.SwayRotationForDepth(steep, width, height, SurpriseOptions.SwayFormulaMost);
-            Assert.Equal(0.025098, stepped, 6);
-            Assert.True(stepped < SurpriseOptions.SwayFormulaMost);
-            Assert.True(stepped > SurpriseOptions.SwayRotationLeast);
-            Assert.Equal(0.01, SurpriseOptions.SwayRotationForDepth(steep, width, height, 0.01), 6);
-
-            // Almost no local step. Held at the old floor.
-            var split = new byte[width * height];
-            for (int y = 0; y < height; y++)
-                for (int x = width / 2; x < width; x++)
-                    split[y * width + x] = 255;
-            Assert.Equal(SurpriseOptions.SwayRotationLeast, SurpriseOptions.SwayRotationForDepth(split, width, height, 0.04), 6);
-
-            // A smooth ramp steps less than the stripes, so it is allowed less sway.
-            var ramp = new byte[width * height];
-            for (int y = 0; y < height; y++)
-                for (int x = 0; x < width; x++)
-                    ramp[y * width + x] = (byte)(x * 255 / (width - 1));
-            double ramped = SurpriseOptions.SwayRotationForDepth(ramp, width, height, 0.04);
-            Assert.True(ramped < stepped);
-            Assert.True(ramped > SurpriseOptions.SwayRotationLeast);
-
-            // Depth rises by 2 per pixel. The wider span is that same slope, so nothing is taken off.
-            // 0.04 * (16/255) / 0.40 = 0.006275.
-            var grade = new byte[width * height];
-            for (int y = 0; y < height; y++)
-                for (int x = 0; x < width; x++)
-                    grade[y * width + x] = (byte)(x * 2);
-            Assert.Equal(0.006275, SurpriseOptions.SwayRotationForDepth(grade, width, height, 0.04), 6);
-
-            // A tooth every 20 pixels, rising 6 per pixel. The wider span is 90 against a short step of 72.
-            // 0.04 * (72/255) / 0.40 - (18/255) * 0.02 = 0.026824.
-            var tooth = new byte[width * height];
-            for (int y = 0; y < height; y++)
-                for (int x = 0; x < width; x++)
-                    tooth[y * width + x] = (byte)(6 * (x % 20));
-            Assert.Equal(0.026824, SurpriseOptions.SwayRotationForDepth(tooth, width, height, 0.04), 6);
-
-            var hard = Stripes(width, height, gap, 0, 255);
-            Assert.Equal(SurpriseOptions.SwayFormulaMost, SurpriseOptions.SwayRotationForDepth(hard, width, height, 0.04), 6);
-            Assert.Equal(SurpriseOptions.SwayRotationLeast, SurpriseOptions.SwayRotationForDepth(split, width, height, 9), 6);
-            Assert.Equal(0.02, SurpriseOptions.SwayRotationForDepth(ReadOnlySpan<byte>.Empty, 10, 10, 0.02), 6);
-        }
-
-        [Fact]
-        public void Sway_cannot_be_raised_by_a_small_gap_and_cannot_vibrate()
-        {
-            const int width = 100;
-            const int height = 40;
-            int step = Math.Max(2, (int)Math.Round(width * SurpriseOptions.SwayDepthWindow));
-            var mild = Stripes(width, height, step, 0, 64);
-            // A small gap on its own is near 4%. The mild step keeps the picture at 2.5%.
-            Assert.Equal(0.025098, SurpriseOptions.SwayRotationForPicture(mild, width, height, 0.22, 0.04), 6);
-
-            var hard = Stripes(width, height, step, 0, 255);
-            // A large gap on its own is 0.4%. That only vibrates, so the picture is lifted to 1.6%.
-            Assert.Equal(SurpriseOptions.SwayRotationFloor, SurpriseOptions.SwayRotationForPicture(hard, width, height, 0.89, 0.04), 6);
-
-            // Gap 0.49 is 2.1%, above the floor. A full step does not replace it.
-            double mid = SurpriseOptions.SwayRotationForPicture(hard, width, height, 0.49, 0.04);
-            Assert.Equal(SurpriseOptions.SwayRotationForBehind(0.49, 0.04), mid, 6);
-            Assert.Equal(0.021018, mid, 6);
-
-            // No gap reading leaves the local step alone.
-            Assert.Equal(SurpriseOptions.SwayFormulaMost, SurpriseOptions.SwayRotationForPicture(hard, width, height, double.NaN, 0.04), 6);
-        }
-
-        private static byte[] Stripes(int width, int height, int stripe, byte low, byte high)
-        {
-            var grey = new byte[width * height];
-            for (int y = 0; y < height; y++)
-                for (int x = 0; x < width; x++)
-                    grey[y * width + x] = (x / stripe) % 2 == 0 ? low : high;
-            return grey;
         }
 
         [Fact]

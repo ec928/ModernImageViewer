@@ -69,16 +69,8 @@ namespace ModernImageViewer
             public double SwayPhase;
             /// <summary>Shown time of the last sway sample. Negative until the first.</summary>
             public double SwayClock = -1;
-            /// <summary>Sway for this depth map. At most 4% of the width, and never under 0.4%.</summary>
-            public double SafeRotation { get; init; } = SurpriseOptions.SwayFormulaMost;
             /// <summary>How long the 3D filter took to select this picture, when that check was timed.</summary>
             public long? FilterMilliseconds { get; init; }
-            /// <summary>The picture's file, and the judge's edge and gap, for sway-marks.log.</summary>
-            public string Path { get; init; } = "";
-            public float? Edge { get; init; }
-            public float? Gap { get; init; }
-            /// <summary>The slider's sway on the last frame drawn. Null until a Sway frame draws.</summary>
-            public double? SwayPlayed;
         }
 
         // Slide: how far the background travels behind the foreground over the scene, as a share of the photo's width.
@@ -310,7 +302,6 @@ namespace ModernImageViewer
                     mask = CanvasBitmap.CreateFromBytes(device, layers.Mask, photoWidth, photoHeight, Windows.Graphics.DirectX.DirectXPixelFormat.B8G8R8A8UIntNormalized);
                     near = new AlphaMaskEffect { Source = photo, AlphaMask = mask };
                 }
-                double safeRotation = SurpriseOptions.SwayRotationForPicture(map.Grey, map.Width, map.Height, judged?.Gap ?? double.NaN, SurpriseOptions.SwayFormulaMost);
                 long? filterMs = DepthMaps.TryCheckMilliseconds(path, out long timedMs) ? timedMs : null;
                 var state = new DepthScene
                 {
@@ -335,11 +326,7 @@ namespace ModernImageViewer
                     Way = way,
                     SubjectCentre = layers == null ? Vector2.Zero : new Vector2(layers.CentreX * photoWidth, layers.CentreY * photoHeight),
                     SwayInstead = LiveDepthMotion() == SurpriseOptions.DepthSlide && layers == null,
-                    SafeRotation = safeRotation,
-                    FilterMilliseconds = filterMs,
-                    Path = path,
-                    Edge = judged?.Edge,
-                    Gap = judged?.Gap
+                    FilterMilliseconds = filterMs
                 };
                 // Drawn once before it is shown, so the swap shows the same picture.
                 // One failed frame used to abandon the scene. A lost device is not retried: those bitmaps are dead.
@@ -505,14 +492,12 @@ namespace ModernImageViewer
             else
             {
                 // One swing: center, one side, the other side, center. The swing slider sets the length.
-                // The Sway rotation slider sets the amount, read every frame so a drag shows on the playing picture.
-                // The computed per-picture amount (SafeRotation) is only recorded beside it in sway-marks.log.
+                // The Sway rotation setting is the amount for every picture (default 4%), read every frame.
                 // It returns through the photograph: a depth map has no unseen side of a person to turn into.
                 // Starts at the center. A new length keeps this place and changes the speed.
                 // The scene's own clock, so a replaced camera move cannot freeze it.
                 double swing = SurpriseOptions.ClampedSwaySwing(SurpriseChoices.SwaySwing);
                 double rotation = SurpriseOptions.ClampedSwayRotation(SurpriseChoices.SwayRotation);
-                state.SwayPlayed = rotation;
                 state.SwayPhase = SurpriseOptions.NextSwayPhase(state.SwayPhase, state.Shown.Elapsed.TotalSeconds, ref state.SwayClock, swing);
                 along = new Vector2((float)Math.Sin(state.SwayPhase * Math.PI * 2), 0);
                 scale = (float)(width * rotation * ramp);
@@ -643,7 +628,6 @@ namespace ModernImageViewer
             if (state == null) return;
             _depthScene = null;
             Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= DepthFrame;
-            if (_depthDebugReadout) WriteSwayMark(state);
             // The source getter returns a new wrapper, so a comparison missed and the cell kept the surface.
             // Disposing the bitmaps under it then crashed when Play stopped. The picture goes back first.
             try
@@ -656,33 +640,6 @@ namespace ModernImageViewer
             // A later turn, so a frame can draw the picture before the surface it was sampling is released.
             if (!DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () => ReleaseDepth(state)))
                 ReleaseDepth(state);
-        }
-
-        /// <summary>
-        /// With the 3D debug readout on, each Sway scene adds one line to sway-marks.log beside the app: the file, the
-        /// sway the slider was on when the scene ended, the computed amount, and the judge's edge and gap. Tab-separated.
-        /// Slide and Pan scenes write nothing.
-        /// </summary>
-        private static void WriteSwayMark(DepthScene state)
-        {
-            if (state.SwayPlayed is not double played) return;
-            try
-            {
-                string log = System.IO.Path.Combine(AppContext.BaseDirectory, "sway-marks.log");
-                static string N(double? v, string f) => v is double d && double.IsFinite(d) ? d.ToString(f, CultureInfo.InvariantCulture) : "";
-                if (!System.IO.File.Exists(log))
-                    System.IO.File.AppendAllText(log, "time\tfile\tslider %\tcomputed %\tedge\tgap" + Environment.NewLine);
-                System.IO.File.AppendAllText(log, string.Join("\t",
-                    DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
-                    System.IO.Path.GetFileName(state.Path),
-                    N(played * 100, "0.0"),
-                    N(state.SafeRotation * 100, "0.0"),
-                    N(state.Edge, "0.00"),
-                    N(state.Gap, "0.00")) + Environment.NewLine);
-            }
-            catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
-            {
-            }
         }
 
         private static byte[]? _swaySplatBytes;

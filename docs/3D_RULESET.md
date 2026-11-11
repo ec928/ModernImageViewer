@@ -1,8 +1,8 @@
 # 3D ruleset
 
-What a picture does in a 3D show, and what the two stress tests on 2026-11-10 decided. This matches the code in `ModernImageViewer\bin` published at 23:05 that day (`ModernImageViewer.dll` 3,641,344 bytes). It is a prototype. It is not a release, the version was not bumped, and the copy under `OneDrive\Apps\ModernImageViewer` was not updated.
+What a picture does in a 3D show. The sections "Motions", "The depth map", "Who plays" and "How Sway is drawn" describe v0.35.0 (2026-11-11). Everything after them is the history that led there, kept because it records what was tried and why it was dropped.
 
-The code is `ParallaxJudge.cs`, `LayoutComposer.cs` (`SurpriseOptions`), `MultiViewControl.Depth.cs`, and `extensions\Parallax\DepthMaps.cs`.
+The code is `ParallaxJudge.cs`, `LayoutComposer.cs` (`SurpriseOptions`), `MultiViewControl.Depth.cs`, `SwayDepth.cs`, `Shaders\SwaySplat.hlsl`, and `extensions\Parallax\DepthMaps.cs`.
 
 ## Motions
 
@@ -10,13 +10,25 @@ A picture plays one motion, or it is left out of the show. It is not shown as a 
 
 | Motion | What moves | What stays still | Travel |
 |---|---|---|---|
-| Slide | The background, once, in one direction. The subject is a cutout. | The far plane (`DepthPivot` returns 0). | 3.2% of the width (`DepthTravel` 0.032). |
-| Sway | The whole picture. Near and far move opposite ways, then it comes back. The judge calls this Rock. | The median depth. | The sway amount below. Cap 4%. Played floor 1.6%. |
-| Pan | The same path as Sway, used when the camera move is already larger than 3% of the width. | The median depth. | 3.2% of the width. The auto sway number is not used. |
+| Slide | The background, once, in one direction. The subject and the scene connected to it are a cutout. | The cutout. | 4.2% of the width (`SlideTravel` 0.042). |
+| Sway | The whole picture. Near and far move opposite ways, then it comes back. The judge calls this Rock. | The median depth. | The Sway rotation setting: 4% by default, 0.4% to 6%. The same for every Sway picture. |
+| Pan | The same path as Sway, used when the camera move is already larger than 3% of the width. | The median depth. | 3.2% of the width (`DepthTravel` 0.032). Drawn with the displacement warp, not the forward warp. |
 
-Slide does not use the sway percent or the swing time. Sway and Slide are not combined on the same picture. One swing is center, one side, the other side, center. The swing control sets that time for every Sway picture, from 1.5 s to 12 s. A settings file without the key keeps 4.25 s. The old rotation slider is gone. A settings file may still contain `SwayRotation`. The draw ignores it.
+Slide does not use the sway percent or the swing time. Sway and Slide are not combined on the same picture. One swing is center, one side, the other side, center. Gear > Camera has two sliders for Sway: **Sway rotation** (how far, 0.4% to 6%, default 4%) and **Each swing** (how long one swing takes, 1.5 s to 12 s, default 4.25 s). A settings file without a key gets the default.
 
 The gear "3D debug" readout, on by default, shows `Sway x.x%`, `Slide`, or `Pan`, and `Filter t s`. The percent is the rotation the frame uses. Filter times around 0.7–1.3 s on this machine are the healthy range.
+
+## How Sway is drawn
+
+Ed, 2026-11-11: with this drawing, 20 of the 22 Sway pictures in the Pictures show took 4%, the slider's top then, and 6% was fine on all but one. So the amount is one setting for every picture. The per-picture formula in "Sway amount" below is gone.
+
+**Forward warp** (`Shaders\SwaySplat.hlsl`, a Win2D pixel shader). Each photo pixel lands at its own position plus shift × (depth − pivot), along the row. For each output pixel the shader walks the sources within reach, finds every one that lands there, and keeps the nearest. An edge is drawn once. The old displacement warp read depth where a pixel lands rather than where it came from, so where depth jumped faster than the shift it drew edges twice: ghost ear outlines with grass through them, hair dragged into the carpet. That old warp still draws Pan, and draws Sway if the shader cannot be made (logged to `play-timing.log` when that log is on).
+
+**Gaps.** Where a moving edge uncovers background the photo never saw, the shader finds where the background proper starts beyond the edge and mirrors it into the gap. Stretching the edge across the gap instead made ears grow (`ed.jpg`). Mirroring about each segment's own end gave a barcode. A mirror that would reach something nearer (the other ear) repeats the background edge instead.
+
+**Crisp outline** (`SwayDepth.Crisp`, from the subject mask the judge already made). The depth map fades from subject to background, over a few of its pixels or many. Within 3% of the width of the mask's edge: inside the mask a pixel takes the depth of the subject just inside it, if that is nearer than its own; outside it takes the farthest depth within that distance. Elsewhere the depth is unchanged. Without this, ears sat half in each depth and vanished at both peaks (`ed.jpg`), and hair whose depth faded tore (`IMGP0801.JPG`). Taking the nearest depth anywhere within reach, the first version of the wider rim, lifted a profile's lips to the shoulder in front of them (`Let_Me_Tell_You[1].jpg`). `tests\...\SwayDepthTests.cs` holds the hair and lips cases.
+
+Ed's verdict on the last build: not perfect, but good enough. Left over: a slight stair-step on some outlines, a few dark specks where a shoulder meets a small background gap, and a thin dark crescent beside a nose in profile.
 
 ## The depth map
 
@@ -27,7 +39,7 @@ Two maps are kept.
 | Map | What it is | What uses it |
 |---|---|---|
 | Raw | The stretched values, as bytes. | Edge, gap, and the Slide cut. |
-| Grey | Raw, then a 3×3 max, then a 3×3 blur. | The local sway step, and the median pivot. |
+| Grey | Raw, then a 3×3 max, then a 3×3 blur. | Drawing Sway and Pan (Sway through `SwayDepth.Crisp`), and the median pivot. |
 
 **Edge** is the median depth on the subject's rim minus the median on the ring of background just outside it. **Gap** is the median of all foreground minus the median of all background. Both are fractions of Raw. Foreground is the subject mask, alpha above 127. Texture is a Sobel on the photo's brightness in that ring, scaled by 1/1.08 because the measure was calibrated on 768-wide photos and the depth map is about 518 wide.
 
@@ -75,9 +87,11 @@ One solid shape against a clean sky can still pass. The models do not know a bui
 
 If the Slide layers are built and the subject is not at least 0.08 in front of the rest, the picture Sways instead.
 
-Reading 4% does not leave a picture out. That exclusion was published to bin at 20:19 on 2026-11-10 and taken out the same evening. 4% is the most the sway will go. It is not a reason to drop a picture.
+Reading 4% does not leave a picture out. That exclusion was published to bin at 20:19 on 2026-11-10 and taken out the same evening. 4% was then the most the sway would go (6% since 0.35.0). It is not a reason to drop a picture.
 
-## Sway amount
+## Sway amount (history: removed in 0.35.0)
+
+This was the per-picture formula the 2026-11-10 builds played. Ed's maxima on 2026-11-11 showed it did not predict what a picture could take (see "Ed's sway maxima" below), and the forward warp made it unnecessary. The code and its tests were removed in 0.35.0.
 
 Taken once, when the scene is built, from Grey and from the gap on the judgement. The frame uses that number. Three steps, in order.
 
