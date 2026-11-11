@@ -41,6 +41,10 @@ namespace ModernImageViewer
             public required CanvasBitmap Depth { get; init; }
             public required ColorMatrixEffect Shift { get; init; }
             public required DisplacementMapEffect Moved { get; init; }
+            /// <summary>Sway drawn as a forward warp (Shaders\SwaySplat.hlsl). Null if the shader could not be made: Sway then uses <see cref="Moved"/>.</summary>
+            public PixelShaderEffect? Splat { get; init; }
+            /// <summary>Pixels between the sources the splat tries.</summary>
+            public float SplatStep { get; init; }
             public required CameraMove Move { get; init; }
             public required float Middle { get; init; }
             public required Vector2 Drift { get; init; }
@@ -268,6 +272,9 @@ namespace ModernImageViewer
                     YChannelSelect = EffectChannelSelect.Green,
                     Amount = (float)(size.Width * DepthTravel * 4)
                 };
+                var photoAtEdges = new BorderEffect { Source = photo, ExtendX = CanvasEdgeBehavior.Clamp, ExtendY = CanvasEdgeBehavior.Clamp };
+                float splatStep = Math.Max(1f, size.Width / (float)map.Width / 2f);
+                var splat = MakeSwaySplat(photoAtEdges, depthAtSize, (float)(size.Width * SurpriseOptions.SwayRotationMost) + splatStep * 2 + 2);
                 double angle = Random.Shared.NextDouble() * Math.PI * 2;
                 CanvasBitmap? plate = null, mask = null;
                 BorderEffect? plateBorder = null;
@@ -290,6 +297,8 @@ namespace ModernImageViewer
                     Depth = depth,
                     Shift = shift,
                     Moved = moved,
+                    Splat = splat,
+                    SplatStep = splatStep,
                     Move = move,
                     Middle = map.Middle,
                     Drift = new Vector2((float)Math.Cos(angle), (float)(Math.Sin(angle) * 0.5)),
@@ -501,7 +510,19 @@ namespace ModernImageViewer
             using var session = state.Surface.CreateDrawingSession(Microsoft.UI.Colors.Black);
             float over = 1f + (DepthOverscan - 1f) * (float)ramp;
             float cropW = width / over, cropH = height / over;
-            session.DrawImage(state.Moved, new Rect(0, 0, width, height),
+            ICanvasImage drawn = state.Moved;
+            if (motion == "Sway" && state.Splat is { } splat)
+            {
+                // The splat reads its shift as where a source lands; the displacement above reads where an output looks.
+                // Same motion: an output at x shows the source s with s + shift*(depth(s) - pivot) = x.
+                float s = shift.X;
+                splat.Properties["shift"] = s;
+                splat.Properties["pivot"] = pivot;
+                splat.Properties["stepPx"] = state.SplatStep;
+                splat.Properties["reach"] = Math.Min(splat.MaxSamplerOffset - 1, Math.Abs(s) * Math.Max(pivot, 1 - pivot) + state.SplatStep * 2);
+                drawn = splat;
+            }
+            session.DrawImage(drawn, new Rect(0, 0, width, height),
                 new Rect((width - cropW) / 2, (height - cropH) / 2, cropW, cropH));
             ShowDepthReadout(state, motion, rotationUsed);
         }
@@ -639,11 +660,49 @@ namespace ModernImageViewer
             }
         }
 
+        private static byte[]? _swaySplatBytes;
+        private static bool _swaySplatMissing;
+
+        /// <summary>
+        /// The Sway forward warp for one scene, or null if the shader cannot be loaded or made (Sway then draws with the
+        /// displacement warp as before). Offsets up to <paramref name="maxOffset"/> pixels are sampled.
+        /// </summary>
+        private static PixelShaderEffect? MakeSwaySplat(ICanvasImage photo, ICanvasImage depthAtSize, float maxOffset)
+        {
+            if (_swaySplatMissing) return null;
+            try
+            {
+                if (_swaySplatBytes == null)
+                {
+                    using var stream = typeof(MultiViewControl).Assembly.GetManifestResourceStream("ModernImageViewer.Shaders.SwaySplat.bin");
+                    if (stream == null) { _swaySplatMissing = true; PlayTiming.Write("3D: sway splat shader missing"); return null; }
+                    using var copy = new System.IO.MemoryStream();
+                    stream.CopyTo(copy);
+                    _swaySplatBytes = copy.ToArray();
+                }
+                return new PixelShaderEffect(_swaySplatBytes)
+                {
+                    Source1 = photo,
+                    Source2 = depthAtSize,
+                    Source1Mapping = SamplerCoordinateMapping.Offset,
+                    Source2Mapping = SamplerCoordinateMapping.Offset,
+                    MaxSamplerOffset = (int)Math.Ceiling(maxOffset)
+                };
+            }
+            catch (Exception ex) when (ex is ArgumentException or System.Runtime.InteropServices.COMException or InvalidOperationException or System.IO.IOException)
+            {
+                _swaySplatMissing = true;
+                PlayTiming.Write($"3D: sway splat not made: {ex.GetType().Name} {ex.Message}");
+                return null;
+            }
+        }
+
         private static void ReleaseDepth(DepthScene state)
         {
             try
             {
                 state.Moved.Dispose();
+                state.Splat?.Dispose();
                 state.Shift.Dispose();
                 state.Near?.Dispose();
                 state.PlateBorder?.Dispose();

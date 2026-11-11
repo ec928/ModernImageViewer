@@ -79,6 +79,10 @@
     <EmbeddedResource Include="Assets\ParentFolder.png">
       <LogicalName>ModernImageViewer.Assets.ParentFolder.png</LogicalName>
     </EmbeddedResource>
+    <!-- Compiled by tools\Compile-Shaders.ps1 from Shaders\SwaySplat.hlsl. -->
+    <EmbeddedResource Include="Shaders\SwaySplat.bin">
+      <LogicalName>ModernImageViewer.Shaders.SwaySplat.bin</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
   <ItemGroup>
