@@ -290,7 +290,7 @@ namespace ModernImageViewer
                     };
                     PlayTiming.Write($"3D: sway depth edge from the subject in {crispClock.ElapsedMilliseconds} ms");
                 }
-                var splat = MakeSwaySplat(photoAtEdges, splatDepth, (float)(size.Width * (SurpriseOptions.SwayRotationMost + SwayDepth.GapSkipShare)) + splatStep * 2 + 2);
+                var splat = MakeSwaySplat(photoAtEdges, splatDepth, (float)(size.Width * SurpriseOptions.SwayRotationMost) + splatStep * 2 + 2);
                 double angle = Random.Shared.NextDouble() * Math.PI * 2;
                 CanvasBitmap? plate = null, mask = null;
                 BorderEffect? plateBorder = null;
@@ -529,9 +529,7 @@ namespace ModernImageViewer
                 splat.Properties["shift"] = s;
                 splat.Properties["pivot"] = pivot;
                 splat.Properties["stepPx"] = state.SplatStep;
-                float skip = width * SwayDepth.GapSkipShare;
-                splat.Properties["skip"] = skip;
-                splat.Properties["reach"] = Math.Min(splat.MaxSamplerOffset - 1, Math.Abs(s) * Math.Max(pivot, 1 - pivot) + state.SplatStep * 2 + skip);
+                splat.Properties["reach"] = Math.Min(splat.MaxSamplerOffset - 1, Math.Abs(s) * Math.Max(pivot, 1 - pivot) + state.SplatStep * 2);
                 drawn = splat;
             }
             session.DrawImage(drawn, new Rect(0, 0, width, height),
