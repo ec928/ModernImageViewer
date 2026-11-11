@@ -16,6 +16,7 @@ float shift;   // pixels at depth 1 against pivot, signed
 float pivot;   // depth that stays still, 0..1
 float stepPx;  // distance between sources tried, pixels
 float reach;   // how far either side to look, pixels; at most the effect's MaxSamplerOffset
+float skip;    // pixels of background just past the edge that the gap fill does not read (stray hair, colour fringe)
 
 D2D_PS_ENTRY(main)
 {
@@ -83,8 +84,10 @@ D2D_PS_ENTRY(main)
             sBg += bestAway * stepPx;
             float dBg = D2DSampleInputAtOffset(1, float2(sBg, 0)).r;
             float lBg = sBg + shift * (dBg - pivot);
-            // This pixel is |lBg| short of where that background start lands; read as far beyond the start.
-            float fill = clamp(sBg + bestAway * abs(lBg), -reach, reach);
+            // This pixel is |lBg| short of where that background start lands; read as far beyond the start, plus skip.
+            // Without skip the background right at the edge was mirrored into the gap, and with it whatever lay there
+            // outside the subject's outline: stray hair became a dark smear (IMGP0801), an arm's fringe a pale line (ed.jpg).
+            float fill = clamp(sBg + bestAway * (skip + abs(lBg)), -reach, reach);
             // If the mirror reaches something nearer (the other ear, a second person), repeat the background edge instead.
             if (D2DSampleInputAtOffset(1, float2(fill, 0)).r > dBg + 0.08) fill = sBg;
             bestU = lerp(bestU, fill, gapWeight);

@@ -20,6 +20,13 @@ namespace ModernImageViewer
         public const float RimShare = 0.03f;
 
         /// <summary>
+        /// Background just past the subject's edge, as a share of the width, that Sway's gap fill does not read
+        /// (SwaySplat.hlsl, skip): stray hair the mask misses lies there. 0.6% chosen off screen on IMGP0801, IMGP0997 and
+        /// ed.jpg at 4% and 6%, 2026-11-11; 1.2% was no cleaner.
+        /// </summary>
+        public const float GapSkipShare = 0.006f;
+
+        /// <summary>
         /// <paramref name="grey"/> is the depth map (gw x gh, bytes). <paramref name="alpha"/> is the subject mask, size x size,
         /// stretched over the whole photo. Returns BGRA bytes at tw x th, grey in every colour.
         /// </summary>
@@ -35,7 +42,7 @@ namespace ModernImageViewer
                 {
                     int i = y * gw + x;
                     d[i] = grey[i] / 255f;
-                    inside[i] = SampleMask(alpha, size, (x + 0.5f) / gw, (y + 0.5f) / gh) >= 0.5f;
+                    inside[i] = SampleMask(alpha, size, (x + 0.5f) / gw, (y + 0.5f) / gh) >= 0.15f; // where Edge is past a quarter
                 }
             int r = Math.Max(2, (int)Math.Round(gw * RimShare));
             var near = new float[gn];
@@ -71,7 +78,7 @@ namespace ModernImageViewer
                     float w = Sample(rim, gw, gh, u, v);
                     if (w > 0)
                     {
-                        float a = SampleMask(alpha, size, u, v);
+                        float a = Edge(SampleMask(alpha, size, u, v));
                         float crisp = a * Sample(near, gw, gh, u, v) + (1 - a) * Sample(far, gw, gh, u, v);
                         value += (crisp - value) * w;
                     }
@@ -81,6 +88,17 @@ namespace ModernImageViewer
                 }
             }
             return bytes;
+        }
+
+        /// <summary>
+        /// How much of a pixel goes with the subject, from the mask: all of it from 0.25 up, none below 0.02, smooth between.
+        /// The faint part of the mask is stray hair and the colour fringe along an edge; taken at its own value (0.5 as the
+        /// outline) it stayed with the wall and was mirrored into the gap (IMGP0997's sleeve, ed.jpg's arm, 2026-11-11).
+        /// </summary>
+        private static float Edge(float a)
+        {
+            float t = Math.Clamp((a - 0.02f) / 0.23f, 0, 1);
+            return t * t * (3 - 2 * t);
         }
 
         /// <summary>Bilinear sample of a w x h map at (u, v) in 0..1 across the picture.</summary>

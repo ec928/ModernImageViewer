@@ -37,6 +37,24 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
+        public void Faint_mask_beside_the_outline_goes_with_the_subject()
+        {
+            // Stray hair: the mask is faint (60 of 255) in columns 13 and 14 (within the rim), and the depth map has it at the wall's depth.
+            // Left with the wall it was mirrored into the gap as a dark smear (IMGP0801, 2026-11-11).
+            var alpha = Mask();
+            for (int y = 0; y < N; y++)
+                for (int x = 13; x < 15; x++)
+                    alpha[y * N + x] = 60;
+            var grey = new byte[N * N];
+            for (int y = 0; y < N; y++)
+                for (int x = 0; x < N; x++)
+                    grey[y * N + x] = x < 15 ? (byte)26 : (byte)153;
+            var result = SwayDepth.Crisp(grey, N, N, alpha, N, N, N);
+            Assert.True(At(result, 13, 30) > 128, $"faint mask at column 13 stayed at {At(result, 13, 30)}, not the subject's 153");
+            Assert.True(At(result, 6, 30) < 40, $"background clear of the mask became {At(result, 6, 30)}");
+        }
+
+        [Fact]
         public void Lips_beside_a_nearer_shoulder_keep_the_face_depth()
         {
             // Face at 0.5 everywhere inside; a shoulder at 0.9 from row 30 down. Row 28 at the outline is the lips.
