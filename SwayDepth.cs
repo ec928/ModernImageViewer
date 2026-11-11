@@ -55,6 +55,8 @@ namespace ModernImageViewer
                 markIn[i] = inside[i] ? 1f : 0f;
             }
             near = FromInside(d, inside, gw, gh, r);
+            // The subject's depth carried two cells out past the mask, for the halo the grown outline takes in (GrowShare).
+            near = Spread(near, gw, gh, 2);
             far = Filter(far, gw, gh, r, false);
             var anyIn = Filter(markIn, gw, gh, r, true);
             var allIn = Filter(markIn, gw, gh, r, false);
@@ -78,7 +80,7 @@ namespace ModernImageViewer
                     float w = Sample(rim, gw, gh, u, v);
                     if (w > 0)
                     {
-                        float a = Edge(SampleMask(alpha, size, u, v));
+                        float a = Edge(GrownMask(alpha, size, u, v, GrowShare, GrowShare * tw / th));
                         float crisp = a * Sample(near, gw, gh, u, v) + (1 - a) * Sample(far, gw, gh, u, v);
                         value += (crisp - value) * w;
                     }
@@ -110,6 +112,31 @@ namespace ModernImageViewer
             float top = map[y0 * w + x0] + (map[y0 * w + x1] - map[y0 * w + x0]) * fx;
             float bottom = map[y1 * w + x0] + (map[y1 * w + x1] - map[y1 * w + x0]) * fx;
             return top + (bottom - top) * fy;
+        }
+
+        /// <summary>
+        /// The subject's outline is grown by this share of the width before it is used, so the bright or dark halo that
+        /// sharpening leaves just outside an edge moves with the subject. Left with the wall it stayed behind as a pale line
+        /// beside ed.jpg's arm and trousers. 0.4% chosen off screen 2026-11-11; 0.8% carried a sliver of a cushion stripe
+        /// with IMGP0997's hair.
+        /// </summary>
+        public const float GrowShare = 0.004f;
+
+        /// <summary>The mask's largest value within (hu, hv) of (u, v): the centre, four sides and four diagonals.</summary>
+        private static float GrownMask(byte[] alpha, int size, float u, float v, float hu, float hv)
+        {
+            float a = SampleMask(alpha, size, u, v);
+            if (hu <= 0) return a;
+            const float k = 0.7071f;
+            a = Math.Max(a, SampleMask(alpha, size, u + hu, v));
+            a = Math.Max(a, SampleMask(alpha, size, u - hu, v));
+            a = Math.Max(a, SampleMask(alpha, size, u, v + hv));
+            a = Math.Max(a, SampleMask(alpha, size, u, v - hv));
+            a = Math.Max(a, SampleMask(alpha, size, u + hu * k, v + hv * k));
+            a = Math.Max(a, SampleMask(alpha, size, u - hu * k, v + hv * k));
+            a = Math.Max(a, SampleMask(alpha, size, u + hu * k, v - hv * k));
+            a = Math.Max(a, SampleMask(alpha, size, u - hu * k, v - hv * k));
+            return a;
         }
 
         private static float SampleMask(byte[] alpha, int size, float u, float v)
@@ -171,6 +198,34 @@ namespace ModernImageViewer
             for (int i = 0; i < n; i++)
                 result[i] = !inside[i] ? -1f : known[i] ? Math.Max(d[i], value[i]) : d[i];
             return result;
+        }
+
+        /// <summary>Fills unset cells (below 0) next to set ones with the mean of those neighbours, <paramref name="rings"/> times.</summary>
+        private static float[] Spread(float[] src, int w, int h, int rings)
+        {
+            var cur = (float[])src.Clone();
+            for (int ring = 0; ring < rings; ring++)
+            {
+                var next = (float[])cur.Clone();
+                for (int y = 0; y < h; y++)
+                    for (int x = 0; x < w; x++)
+                    {
+                        int i = y * w + x;
+                        if (cur[i] >= 0) continue;
+                        float sum = 0; int count = 0;
+                        for (int dy = -1; dy <= 1; dy++)
+                            for (int dx = -1; dx <= 1; dx++)
+                            {
+                                int xx = x + dx, yy = y + dy;
+                                if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
+                                float n = cur[yy * w + xx];
+                                if (n >= 0) { sum += n; count++; }
+                            }
+                        if (count > 0) next[i] = sum / count;
+                    }
+                cur = next;
+            }
+            return cur;
         }
 
         /// <summary>Square max (or min) over radius r, as two passes.</summary>
