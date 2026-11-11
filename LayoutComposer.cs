@@ -429,7 +429,9 @@ namespace ModernImageViewer
         /// </summary>
         public const double SwayRotationDefault = 0.016;
         public const double SwayRotationLeast = 0.004;
-        public const double SwayRotationMost = 0.04;
+        public const double SwayRotationMost = 0.06;
+        /// <summary>The computed per-picture sway (now only logged beside the slider) keeps its 4% cap, so the log means what it did.</summary>
+        public const double SwayFormulaMost = 0.04;
         public double SwayRotation { get; set; } = SwayRotationDefault;
 
         /// <summary>
@@ -511,7 +513,7 @@ namespace ModernImageViewer
 
             int percentile = DepthStepPercentile(grey, width, height, stepGap);
             if (percentile == 0) return SwayRotationLeast;
-            double safe = SwayRotationMost * ((percentile / 255.0) / SwayFullStep);
+            double safe = SwayFormulaMost * ((percentile / 255.0) / SwayFullStep);
             int wideGap = Math.Max(stepGap + 1, (int)Math.Round(width * SwayWideWindow));
             if (wideGap < width || wideGap < height)
             {
@@ -589,7 +591,7 @@ namespace ModernImageViewer
             double t = span <= 0 ? 1 : (gap - SwayBehindClose) / span;
             if (t < 0) t = 0;
             else if (t > 1) t = 1;
-            double safe = SwayRotationMost + (SwayRotationLeast - SwayRotationMost) * t;
+            double safe = SwayFormulaMost + (SwayRotationLeast - SwayFormulaMost) * t;
             return Math.Clamp(safe, SwayRotationLeast, ceiling);
         }
 

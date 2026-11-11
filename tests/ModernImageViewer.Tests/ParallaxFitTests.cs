@@ -200,9 +200,9 @@ namespace ModernImageViewer.Tests
 
             // Contrast 64 across every 8% step. 0.04 * (64/255) / 0.40 = 0.025098, under a 4% ceiling.
             var steep = Stripes(width, height, gap, 0, 64);
-            double stepped = SurpriseOptions.SwayRotationForDepth(steep, width, height, SurpriseOptions.SwayRotationMost);
+            double stepped = SurpriseOptions.SwayRotationForDepth(steep, width, height, SurpriseOptions.SwayFormulaMost);
             Assert.Equal(0.025098, stepped, 6);
-            Assert.True(stepped < SurpriseOptions.SwayRotationMost);
+            Assert.True(stepped < SurpriseOptions.SwayFormulaMost);
             Assert.True(stepped > SurpriseOptions.SwayRotationLeast);
             Assert.Equal(0.01, SurpriseOptions.SwayRotationForDepth(steep, width, height, 0.01), 6);
 
@@ -239,7 +239,7 @@ namespace ModernImageViewer.Tests
             Assert.Equal(0.026824, SurpriseOptions.SwayRotationForDepth(tooth, width, height, 0.04), 6);
 
             var hard = Stripes(width, height, gap, 0, 255);
-            Assert.Equal(SurpriseOptions.SwayRotationMost, SurpriseOptions.SwayRotationForDepth(hard, width, height, 0.04), 6);
+            Assert.Equal(SurpriseOptions.SwayFormulaMost, SurpriseOptions.SwayRotationForDepth(hard, width, height, 0.04), 6);
             Assert.Equal(SurpriseOptions.SwayRotationLeast, SurpriseOptions.SwayRotationForDepth(split, width, height, 9), 6);
             Assert.Equal(0.02, SurpriseOptions.SwayRotationForDepth(ReadOnlySpan<byte>.Empty, 10, 10, 0.02), 6);
         }
@@ -264,7 +264,7 @@ namespace ModernImageViewer.Tests
             Assert.Equal(0.021018, mid, 6);
 
             // No gap reading leaves the local step alone.
-            Assert.Equal(SurpriseOptions.SwayRotationMost, SurpriseOptions.SwayRotationForPicture(hard, width, height, double.NaN, 0.04), 6);
+            Assert.Equal(SurpriseOptions.SwayFormulaMost, SurpriseOptions.SwayRotationForPicture(hard, width, height, double.NaN, 0.04), 6);
         }
 
         private static byte[] Stripes(int width, int height, int stripe, byte low, byte high)

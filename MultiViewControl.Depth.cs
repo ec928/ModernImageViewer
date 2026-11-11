@@ -68,7 +68,7 @@ namespace ModernImageViewer
             /// <summary>Shown time of the last sway sample. Negative until the first.</summary>
             public double SwayClock = -1;
             /// <summary>Sway for this depth map. At most 4% of the width, and never under 0.4%.</summary>
-            public double SafeRotation { get; init; } = SurpriseOptions.SwayRotationMost;
+            public double SafeRotation { get; init; } = SurpriseOptions.SwayFormulaMost;
             /// <summary>How long the 3D filter took to select this picture, when that check was timed.</summary>
             public long? FilterMilliseconds { get; init; }
             /// <summary>The picture's file, and the judge's edge and gap, for sway-marks.log.</summary>
@@ -286,7 +286,7 @@ namespace ModernImageViewer
                     mask = CanvasBitmap.CreateFromBytes(device, layers.Mask, photoWidth, photoHeight, Windows.Graphics.DirectX.DirectXPixelFormat.B8G8R8A8UIntNormalized);
                     near = new AlphaMaskEffect { Source = photo, AlphaMask = mask };
                 }
-                double safeRotation = SurpriseOptions.SwayRotationForPicture(map.Grey, map.Width, map.Height, judged?.Gap ?? double.NaN, SurpriseOptions.SwayRotationMost);
+                double safeRotation = SurpriseOptions.SwayRotationForPicture(map.Grey, map.Width, map.Height, judged?.Gap ?? double.NaN, SurpriseOptions.SwayFormulaMost);
                 long? filterMs = DepthMaps.TryCheckMilliseconds(path, out long timedMs) ? timedMs : null;
                 var state = new DepthScene
                 {
