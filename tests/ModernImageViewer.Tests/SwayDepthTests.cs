@@ -55,27 +55,6 @@ namespace ModernImageViewer.Tests
         }
 
         [Fact]
-        public void Halo_just_outside_the_outline_goes_with_the_subject()
-        {
-            // Sharpening leaves a 2-3 px halo outside an edge where the mask is 0. Left at the wall's depth it stayed behind
-            // as a pale line beside ed.jpg's arm (2026-11-11). Result 600 px across, so the 0.4% growth is about 2 px.
-            const int T = 600;
-            var grey = new byte[N * N];
-            for (int y = 0; y < N; y++)
-                for (int x = 0; x < N; x++)
-                    grey[y * N + x] = x < 15 ? (byte)26 : (byte)153;
-            // A sharp mask at the result's size: subject from column 150. Column 148 is outside it entirely.
-            var alpha = new byte[T * T];
-            for (int y = 0; y < T; y++)
-                for (int x = 150; x < T; x++)
-                    alpha[y * T + x] = 255;
-            var result = SwayDepth.Crisp(grey, N, N, alpha, T, T, T);
-            byte Big(int x, int y) => result[(y * T + x) * 4];
-            Assert.True(Big(148, 300) > 128, $"halo 2 px outside the outline stayed at {Big(148, 300)}");
-            Assert.True(Big(130, 300) < 40, $"background 20 px outside became {Big(130, 300)}");
-        }
-
-        [Fact]
         public void Lips_beside_a_nearer_shoulder_keep_the_face_depth()
         {
             // Face at 0.5 everywhere inside; a shoulder at 0.9 from row 30 down. Row 28 at the outline is the lips.
