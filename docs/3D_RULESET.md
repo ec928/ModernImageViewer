@@ -14,7 +14,7 @@ A picture plays one motion, or it is left out of the show. It is not shown as a 
 | Sway | The whole picture. Near and far move opposite ways, then it comes back. The judge calls this Rock. | The median depth. | The Sway rotation setting: 4% by default, 0.4% to 6%. The same for every Sway picture. |
 | Pan | The same path as Sway, used when the camera move is already larger than 3% of the width. | The median depth. | 3.2% of the width (`DepthTravel` 0.032). Drawn with the displacement warp, not the forward warp. |
 
-Slide does not use the sway percent or the swing time. Sway and Slide are not combined on the same picture. One swing is center, one side, the other side, center. Gear > Camera has two sliders for Sway: **Sway rotation** (how far, 0.4% to 6%, default 4%) and **Each swing** (how long one swing takes, 1.5 s to 12 s, default 4.25 s). A settings file without a key gets the default.
+Slide does not use the sway percent or the swing time. Sway and Slide are not combined on the same picture. One swing is center, one side, the other side, center. Engine settings (from the Show card) > Camera has two sliders for Sway: **Sway rotation** (how far, 0.4% to 6%, default 4%) and **Each swing** (how long one swing takes, 1.5 s to 12 s, default 4.25 s). A settings file without a key gets the default.
 
 The gear "3D debug" readout, on by default, shows `Sway x.x%`, `Slide`, or `Pan`, and `Filter t s`. The percent is the rotation the frame uses. Filter times around 0.7–1.3 s on this machine are the healthy range.
 
