@@ -433,8 +433,8 @@ namespace ModernImageViewer
             public bool ListMode { get; set; }
             public double TileSize { get; set; } = 164;
             public string ThemeMode { get; set; } = "System";
-            /// <summary>On-screen sway rotation and 3D filter time. A settings file without this keeps it on.</summary>
-            public bool DepthDebugReadout { get; set; } = true;
+            /// <summary>On-screen sway depth and 3D filter time, for checking 3D. Off unless turned on in Settings.</summary>
+            public bool DepthDebugReadout { get; set; }
             public string? LastFolder { get; set; }
             public List<WindowPreset?> WindowPresets { get; set; } = new() { null, null, null };
             public List<string> RecentFolders { get; set; } = new();

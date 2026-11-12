@@ -60,14 +60,7 @@ namespace ModernImageViewer
                 ("Left, Right", "Previous and next scene or layout, while playing"),
                 ("B", "The show, in the drawer"),
                 ("F11", "Full screen"),
-                ("Esc", "Pause auto-play if it is playing, otherwise back to the folder"),
-            }),
-            ("Cinematic", new[]
-            {
-                ("Space", "Pause or play"),
-                ("Left, Right", "Previous and next slide"),
-                ("F11", "Full screen"),
-                ("Esc", "Back out one step: preview, Edit show, full screen, then the show"),
+                ("Esc", "Pause the show if it is playing, otherwise back to the folder"),
             }),
             ("Floating cells", new[]
             {

@@ -278,7 +278,7 @@
                             CornerRadius="12" 
                             ToolTipService.ToolTip="Back to the tiles (Esc). Your layout stays, and the Multi-View button returns to it.">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE72B;" FontSize="14" />
+                            <FontIcon FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE72B;" FontSize="14" />
                             <TextBlock Text="Back" VerticalAlignment="Center" FontSize="13" />
                         </StackPanel>
                     </Button>
@@ -331,13 +331,13 @@
                             <Button x:Name="AutoPlayButton"
                                     Click="AutoPlayButton_Click"
                                     MinWidth="88"
-                                    AutomationProperties.Name="Play auto-play"
+                                    AutomationProperties.Name="Play"
                                     ToolTipService.ToolTip="Play the show: scenes are made as it plays and kept. Space does the same."
                                     Style="{StaticResource QuietButtonStyle}"
                                     Padding="8,5"
                                     CornerRadius="12">
                                 <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <FontIcon x:Name="AutoPlayIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE768;" FontSize="13" />
+                                    <FontIcon x:Name="AutoPlayIcon" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE768;" FontSize="13" />
                                     <TextBlock x:Name="AutoPlayText" Text="Play" VerticalAlignment="Center" FontSize="13" Typography.NumeralAlignment="Tabular" />
                                 </StackPanel>
                             </Button>
@@ -360,8 +360,8 @@
                             </Button>
                             <Button x:Name="PresetModeButton"
                                     Click="PresetModeButton_Click"
-                                    AutomationProperties.Name="Show mode"
-                                    ToolTipService.ToolTip="Switch show preset mode"
+                                    AutomationProperties.Name="Preset"
+                                    ToolTipService.ToolTip="The preset in use. Click to change."
                                     Style="{StaticResource QuietButtonStyle}"
                                     Padding="8,5"
                                     CornerRadius="12">
@@ -398,7 +398,7 @@
                                     CornerRadius="12"
                                     ToolTipService.ToolTip="Arrange in rows (R). Opens the grid layout and hero.">
                                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                    <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xEA37;" FontSize="14" />
+                                    <FontIcon FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xEA37;" FontSize="14" />
                                     <TextBlock x:Name="RowsSideText" Text="Rows" VerticalAlignment="Center" FontSize="13" />
                                 </StackPanel>
                             </Button>
@@ -409,7 +409,7 @@
                                     CornerRadius="12"
                                     ToolTipService.ToolTip="Arrange in columns (R). Opens the grid layout and hero.">
                                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                    <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8C0;" FontSize="14" />
+                                    <FontIcon FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE8C0;" FontSize="14" />
                                     <TextBlock x:Name="ColumnsSideText" Text="Columns" VerticalAlignment="Center" FontSize="13" />
                                 </StackPanel>
                             </Button>
@@ -431,10 +431,10 @@
                                         Opening="AspectFlyout_Opening" Opened="HudMenu_Opened" Closed="HudMenu_Closed"/>
                         </Button.Flyout>
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE7F4;" FontSize="14" />
+                            <FontIcon FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE7F4;" FontSize="14" />
                             <TextBlock Text="Canvas" VerticalAlignment="Center" FontSize="13" />
                             <TextBlock x:Name="AspectText" Text="16:9" Visibility="Collapsed" />
-                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE70E;" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                            <FontIcon FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE70E;" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
 
@@ -467,7 +467,7 @@
                             </Flyout>
                         </Button.Flyout>
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE74E;" FontSize="14" />
+                            <FontIcon FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE74E;" FontSize="14" />
                             <TextBlock x:Name="SaveText" Text="Save/Load" VerticalAlignment="Center" FontSize="13" />
                         </StackPanel>
                     </Button>
@@ -506,7 +506,7 @@
                             Style="{StaticResource QuietButtonStyle}"
                             Padding="8,5"
                             CornerRadius="12">
-                        <FontIcon x:Name="FullScreenIcon" FontFamily="Segoe Fluent Icons" Glyph="&#xE740;" FontSize="14" />
+                        <FontIcon x:Name="FullScreenIcon" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE740;" FontSize="14" />
                     </Button>
                 </StackPanel>
                 </Grid>
@@ -553,30 +553,31 @@
                     <ThemeShadow/>
                 </Border.Shadow>
                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                    <Button Click="ExitSolo_Click" Style="{StaticResource QuietButtonStyle}" Padding="8,5" CornerRadius="12" ToolTipService.ToolTip="Back to Multi-View (Esc)">
+                    <!-- Back, as on the grid playbar: the same word and arrow for leaving. -->
+                    <Button Click="ExitSolo_Click" Style="{StaticResource QuietButtonStyle}" Padding="8,5" CornerRadius="12" ToolTipService.ToolTip="Back to Multi-View (Esc)" AutomationProperties.Name="Back to Multi-View (Esc)">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <SymbolIcon Symbol="Back" />
-                            <TextBlock Text="All Images" FontSize="13" />
+                            <FontIcon FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE72B;" FontSize="14" />
+                            <TextBlock Text="Back" VerticalAlignment="Center" FontSize="13" />
                         </StackPanel>
                     </Button>
                     <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,4" Opacity="0.4"/>
-                    <Button Click="PrevSolo_Click" Style="{StaticResource QuietButtonStyle}" Padding="6,4" ToolTipService.ToolTip="Previous (Left Arrow)" AutomationProperties.Name="Previous (Left Arrow)">
-                        <SymbolIcon Symbol="Previous" />
+                    <Button Click="PrevSolo_Click" Style="{StaticResource QuietButtonStyle}" Padding="6,4" ToolTipService.ToolTip="Previous image (Left Arrow)" AutomationProperties.Name="Previous image (Left Arrow)">
+                        <FontIcon FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE892;" FontSize="14" />
                     </Button>
                     <TextBlock x:Name="SoloCounterText" Text="1 of 4" VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold" Margin="4,0" />
-                    <Button Click="NextSolo_Click" Style="{StaticResource QuietButtonStyle}" Padding="6,4" ToolTipService.ToolTip="Next (Right Arrow)" AutomationProperties.Name="Next (Right Arrow)">
-                        <SymbolIcon Symbol="Next" />
+                    <Button Click="NextSolo_Click" Style="{StaticResource QuietButtonStyle}" Padding="6,4" ToolTipService.ToolTip="Next image (Right Arrow)" AutomationProperties.Name="Next image (Right Arrow)">
+                        <FontIcon FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE893;" FontSize="14" />
                     </Button>
                     <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,4" Opacity="0.4"/>
-                    <Button Click="ResetSoloZoom_Click" Style="{StaticResource QuietButtonStyle}" Padding="6,4" ToolTipService.ToolTip="Fit to Screen (Middle-Click)" AutomationProperties.Name="Fit to Screen (Middle-Click)">
-                        <SymbolIcon Symbol="ZoomOut" />
+                    <Button Click="ResetSoloZoom_Click" Style="{StaticResource QuietButtonStyle}" Padding="6,4" ToolTipService.ToolTip="Fit to window (middle-click)" AutomationProperties.Name="Fit to window (middle-click)">
+                        <FontIcon FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Glyph="&#xE71F;" FontSize="14" />
                     </Button>
                 </StackPanel>
             </Border>
-            <!-- Solo top-right: back to the grid. Close stays on the grid playbar. -->
+            <!-- Solo top-right, where the window's own buttons sit: the same Back to Multi-View as the bar's Back. -->
             <Grid x:Name="SoloTopRightControls" HorizontalAlignment="Right" VerticalAlignment="Top" Canvas.ZIndex="60"
                   PointerEntered="Hud_PointerEntered" PointerExited="Hud_PointerExited">
-                <Button Click="ExitSolo_Click" Width="46" Height="32" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="0" IsTabStop="False" UseSystemFocusVisuals="False" FocusVisualPrimaryThickness="0" FocusVisualSecondaryThickness="0" ToolTipService.ToolTip="Restore to Multi-View (Esc)">
+                <Button Click="ExitSolo_Click" Width="46" Height="32" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="0" IsTabStop="False" UseSystemFocusVisuals="False" FocusVisualPrimaryThickness="0" FocusVisualSecondaryThickness="0" ToolTipService.ToolTip="Back to Multi-View (Esc)" AutomationProperties.Name="Back to Multi-View (Esc)">
                     <Button.Resources>
                         <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#18FFFFFF"/>
                         <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#10FFFFFF"/>

@@ -574,9 +574,9 @@ namespace ModernImageViewer
             }
             _shotBadgeText = new TextBlock { FontSize = 11.5, Foreground = new SolidColorBrush(Color.FromArgb(230, 255, 255, 255)), VerticalAlignment = VerticalAlignment.Center };
             _shotStepper.Children.Add(MakeDirectorDivider());
-            _shotStepper.Children.Add(ShotStep("", -1, "Previous shot"));
+            _shotStepper.Children.Add(ShotStep("\uE76B", -1, "Previous shot"));
             _shotStepper.Children.Add(_shotBadgeText);
-            _shotStepper.Children.Add(ShotStep("", 1, "Next shot"));
+            _shotStepper.Children.Add(ShotStep("\uE76C", 1, "Next shot"));
             barStack.Children.Add(_shotStepper);
 
             // How the selected shot gets going and comes to rest.
@@ -1229,7 +1229,7 @@ namespace ModernImageViewer
 
         private Border MakeFrameTurnHandle()
         {
-            var handle = MakeWindowHandle(28, "");
+            var handle = MakeWindowHandle(28, "\uE7AD");
             handle.Opacity = 1;
             Canvas.SetZIndex(handle, 310);
             ToolTipService.SetToolTip(handle, $"Drag to turn the selected frame, up to {SurpriseOptions.MostTurn:0}° either way. Hold Shift for whole degrees.");

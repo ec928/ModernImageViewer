@@ -92,8 +92,8 @@ namespace ModernImageViewer
             if (playing) return "Pause";
             if (!storyboard) return "Play";
             if (sceneNumber > 1 && sceneNumber <= sceneCount)
-                return $"Play Show · {sceneNumber}/{sceneCount}";
-            return "Play Show";
+                return $"Play show · {sceneNumber}/{sceneCount}";
+            return "Play show";
         }
 
         /// <summary>Names the app gives a show it made. A viewer should see the folder instead.</summary>

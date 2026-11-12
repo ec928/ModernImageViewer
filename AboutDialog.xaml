@@ -68,7 +68,7 @@
                     <Run Text="&#x2022;  "/><Run Text="Show" FontWeight="SemiBold"/><Run Text=" &#x2014; Play makes a show and keeps every scene, so you can step back, edit and save. The Show card sets the preset (Multi-Image, Cinematic, or three of your own), how many images, how long each scene holds, sequence beats and the designs. The engine's settings are one step behind that card."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Window &amp; Tile Size presets" FontWeight="SemiBold"/><Run Text=" &#x2014; save up to three window and tile size states (Ctrl+1, Ctrl+2, Ctrl+3) to jump between compact browsing and wide two-page layouts."/>
+                    <Run Text="&#x2022;  "/><Run Text="Window sizes" FontWeight="SemiBold"/><Run Text=" &#x2014; save up to three window and tile size states (Ctrl+1, Ctrl+2, Ctrl+3) to jump between compact browsing and wide two-page layouts."/>
                 </TextBlock>
                 <TextBlock Style="{StaticResource AboutBullet}">
                     <Run Text="&#x2022;  "/><Run Text="Tear-off viewports" FontWeight="SemiBold"/><Run Text=" &#x2014; middle-click or drag any image out into its own borderless floating window for multi-monitor reference overlays."/>
@@ -94,7 +94,7 @@
                 </TextBlock>
 
                 <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Music" FontWeight="SemiBold"/><Run Text=" &#x2014; songs from a folder at or above a star rating, set from the gear. On a Multi-View show, Soundtrack can land each change on the beat, hold loud passages shorter, and cut straight through when the song suddenly gets louder."/>
+                    <Run Text="&#x2022;  "/><Run Text="Music" FontWeight="SemiBold"/><Run Text=" &#x2014; songs from a folder at or above a star rating, set from Settings (the gear). On a Multi-View show, Soundtrack can land each change on the beat, hold loud passages shorter, and cut straight through when the song suddenly gets louder."/>
                 </TextBlock>
 
                 <TextBlock Text="Performance and formats" Style="{StaticResource AboutSectionHeader}"/>

@@ -85,7 +85,7 @@
                             <Setter Property="CornerRadius" Value="10"/>
                         </Style>
                     </MenuFlyout.MenuFlyoutPresenterStyle>
-                    <MenuFlyoutItem x:Name="SizeToImageMenuItem" Text="Size Window to Image" Click="SizeToImage_Click" Visibility="Collapsed">
+                    <MenuFlyoutItem x:Name="SizeToImageMenuItem" Text="Size window to image" Click="SizeToImage_Click" Visibility="Collapsed">
                         <MenuFlyoutItem.Icon>
                             <SymbolIcon Symbol="Placeholder"/>
                         </MenuFlyoutItem.Icon>
@@ -97,56 +97,56 @@
                             <SymbolIcon Symbol="ZoomIn"/>
                         </MenuFlyoutItem.Icon>
                     </MenuFlyoutItem>
-                    <MenuFlyoutItem Text="Fit to Window (MB3)" Click="SizeToWindow_Click">
+                    <MenuFlyoutItem Text="Fit to window (middle-click)" Click="SizeToWindow_Click">
                         <MenuFlyoutItem.Icon>
                             <SymbolIcon Symbol="ZoomOut"/>
                         </MenuFlyoutItem.Icon>
                     </MenuFlyoutItem>
-                    <ToggleMenuFlyoutItem x:Name="BookSpreadMenuItem" Text="2-Page Comic Spread (B)" Click="ToggleBookSpread_Click">
+                    <ToggleMenuFlyoutItem x:Name="BookSpreadMenuItem" Text="Two-page comic spread (B)" Click="ToggleBookSpread_Click">
                         <ToggleMenuFlyoutItem.Icon>
                             <FontIcon Glyph="&#xE736;"/>
                         </ToggleMenuFlyoutItem.Icon>
                     </ToggleMenuFlyoutItem>
-                    <ToggleMenuFlyoutItem x:Name="CoverPageSoloMenuItem" Text="Solo Front Cover in Spread" IsChecked="True" Click="ToggleCoverSolo_Click"/>
+                    <ToggleMenuFlyoutItem x:Name="CoverPageSoloMenuItem" Text="Front cover on its own in a spread" IsChecked="True" Click="ToggleCoverSolo_Click"/>
 
                     <MenuFlyoutSeparator/>
-                    <MenuFlyoutItem Text="Fullscreen / Maximize (F11)" Click="ToggleFullscreen_Click">
+                    <MenuFlyoutItem Text="Full screen (F11)" Click="ToggleFullscreen_Click">
                         <MenuFlyoutItem.Icon>
                             <SymbolIcon Symbol="FullScreen"/>
                         </MenuFlyoutItem.Icon>
                     </MenuFlyoutItem>
                     <MenuFlyoutSeparator/>
-                    <MenuFlyoutSubItem Text="Gamma Level">
+                    <MenuFlyoutSubItem Text="Gamma level">
                         <MenuFlyoutSubItem.Icon>
                             <FontIcon Glyph="&#xE793;"/>
                         </MenuFlyoutSubItem.Icon>
                         <RadioMenuFlyoutItem x:Name="Gamma16" Text="1.6" Tag="1.6" Click="SetGamma_Click" GroupName="GammaGroup"/>
                         <RadioMenuFlyoutItem x:Name="Gamma18" Text="1.8" Tag="1.8" Click="SetGamma_Click" GroupName="GammaGroup"/>
                         <RadioMenuFlyoutItem x:Name="Gamma20" Text="2.0" Tag="2.0" Click="SetGamma_Click" GroupName="GammaGroup"/>
-                        <RadioMenuFlyoutItem x:Name="Gamma22" Text="2.2 (Default)" Tag="2.2" Click="SetGamma_Click" IsChecked="True" GroupName="GammaGroup"/>
+                        <RadioMenuFlyoutItem x:Name="Gamma22" Text="2.2 (default)" Tag="2.2" Click="SetGamma_Click" IsChecked="True" GroupName="GammaGroup"/>
                         <RadioMenuFlyoutItem x:Name="Gamma24" Text="2.4" Tag="2.4" Click="SetGamma_Click" GroupName="GammaGroup"/>
                     </MenuFlyoutSubItem>
                     <MenuFlyoutSeparator/>
 
-                    <MenuFlyoutSubItem x:Name="DetachLimitMenu" Text="Detach Size Limit">
+                    <MenuFlyoutSubItem x:Name="DetachLimitMenu" Text="Detach size limit">
                         <MenuFlyoutSubItem.Icon>
                             <FontIcon Glyph="&#xE740;"/>
                         </MenuFlyoutSubItem.Icon>
-                        <RadioMenuFlyoutItem x:Name="LimitZoom" Text="Current Zoom" Tag="0" Click="SetDetachLimit_Click" IsChecked="True" GroupName="DetachLimitGroup"/>
+                        <RadioMenuFlyoutItem x:Name="LimitZoom" Text="Current zoom" Tag="0" Click="SetDetachLimit_Click" IsChecked="True" GroupName="DetachLimitGroup"/>
                         <RadioMenuFlyoutItem x:Name="Limit1200" Text="1200p" Tag="2" Click="SetDetachLimit_Click" GroupName="DetachLimitGroup"/>
                         <RadioMenuFlyoutItem x:Name="Limit1080" Text="1080p" Tag="1" Click="SetDetachLimit_Click" GroupName="DetachLimitGroup"/>
                         <RadioMenuFlyoutItem x:Name="Limit800" Text="800p" Tag="3" Click="SetDetachLimit_Click" GroupName="DetachLimitGroup"/>
                     </MenuFlyoutSubItem>
                     <MenuFlyoutSeparator/>
 
-                    <MenuFlyoutItem Text="Play Show" Click="PlayShow_Click">
+                    <MenuFlyoutItem Text="Play show" Click="PlayShow_Click">
                         <MenuFlyoutItem.Icon>
                             <SymbolIcon Symbol="Play" />
                         </MenuFlyoutItem.Icon>
                     </MenuFlyoutItem>
                     <MenuFlyoutSeparator/>
 
-                    <MenuFlyoutItem x:Name="EditImageMenuItem" Text="Edit Image" Click="EditImage_Click">
+                    <MenuFlyoutItem x:Name="EditImageMenuItem" Text="Edit image" Click="EditImage_Click">
                         <MenuFlyoutItem.Icon>
                             <SymbolIcon Symbol="Edit"/>
                         </MenuFlyoutItem.Icon>
@@ -170,7 +170,7 @@
                     </MenuFlyoutItem>
                     <MenuFlyoutSeparator/>
 
-                    <MenuFlyoutItem x:Name="DetachMenuItem" Text="Detach Image" Click="DetachImage_Click">
+                    <MenuFlyoutItem x:Name="DetachMenuItem" Text="Detach image" Click="DetachImage_Click">
                         <MenuFlyoutItem.Icon>
                             <SymbolIcon Symbol="NewWindow"/>
                         </MenuFlyoutItem.Icon>
@@ -251,13 +251,13 @@
                     <ThemeShadow/>
                 </Border.Shadow>
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Button x:Name="AnimPrevButton" Click="AnimPrev_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Previous Frame (&lt;)" AutomationProperties.Name="Previous Frame (&lt;)">
+                    <Button x:Name="AnimPrevButton" Click="AnimPrev_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Previous frame (,)" AutomationProperties.Name="Previous frame (,)">
                         <SymbolIcon Symbol="Previous"/>
                     </Button>
-                    <Button x:Name="AnimPlayPauseButton" Click="AnimPlayPause_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Play/Pause (Space)" AutomationProperties.Name="Play/Pause (Space)">
+                    <Button x:Name="AnimPlayPauseButton" Click="AnimPlayPause_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Play or pause (Space)" AutomationProperties.Name="Play or pause (Space)">
                         <SymbolIcon x:Name="AnimPlayPauseIcon" Symbol="Pause"/>
                     </Button>
-                    <Button x:Name="AnimNextButton" Click="AnimNext_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Next Frame (&gt;)" AutomationProperties.Name="Next Frame (&gt;)">
+                    <Button x:Name="AnimNextButton" Click="AnimNext_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Next frame (.)" AutomationProperties.Name="Next frame (.)">
                         <SymbolIcon Symbol="Next"/>
                     </Button>
                     <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,6" Opacity="0.4"/>
@@ -277,16 +277,16 @@
                 </Border.Shadow>
                 <StackPanel Orientation="Horizontal" Spacing="16">
                     <StackPanel Orientation="Horizontal" Spacing="2">
-                        <Button x:Name="ZoomModeButton" Click="ToggleZoomMode_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Toggle Zoom Mode (Mouse Thumb Button)" AutomationProperties.Name="Toggle Zoom Mode (Mouse Thumb Button)">
+                        <Button x:Name="ZoomModeButton" Click="ToggleZoomMode_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Zoom mode (mouse thumb button)" AutomationProperties.Name="Zoom mode (mouse thumb button)">
                             <FontIcon x:Name="ZoomModeIcon" Glyph="&#xE71E;"/>
                         </Button>
-                        <Button x:Name="BookSpreadButton" Click="ToggleBookSpread_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Toggle 2-Page Comic Spread (B)" Visibility="Collapsed" AutomationProperties.Name="Toggle 2-Page Comic Spread (B)">
+                        <Button x:Name="BookSpreadButton" Click="ToggleBookSpread_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Two-page comic spread (B)" Visibility="Collapsed" AutomationProperties.Name="Two-page comic spread (B)">
                             <FontIcon x:Name="BookSpreadIcon" Glyph="&#xE736;"/>
                         </Button>
 
                         <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="6,6" Opacity="0.4"/>
 
-                        <Button Click="PlayShow_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Play Show: this folder as a show in Multi-View" AutomationProperties.Name="Play Show">
+                        <Button Click="PlayShow_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Play show: this folder as a show in Multi-View" AutomationProperties.Name="Play show">
                             <SymbolIcon Symbol="Play"/>
                         </Button>
 
@@ -298,13 +298,13 @@
 
                         <Rectangle x:Name="WindowActionsSeparator" Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="6,6" Opacity="0.4"/>
 
-                        <Button x:Name="SwitchToMainButton" Click="SwitchToMain_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Switch Focus to Main Preview" Visibility="Collapsed" AutomationProperties.Name="Switch Focus to Main Preview">
+                        <Button x:Name="SwitchToMainButton" Click="SwitchToMain_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Switch focus to the main preview" Visibility="Collapsed" AutomationProperties.Name="Switch focus to the main preview">
                             <SymbolIcon Symbol="BackToWindow"/>
                         </Button>
                         <Button x:Name="DetachButton" Click="DetachImage_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Detach" AutomationProperties.Name="Detach">
                             <SymbolIcon Symbol="NewWindow"/>
                         </Button>
-                        <Button x:Name="FullscreenButton" Click="ToggleFullscreen_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Fullscreen / Maximize (F11)" AutomationProperties.Name="Fullscreen / Maximize (F11)">
+                        <Button x:Name="FullscreenButton" Click="ToggleFullscreen_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Full screen (F11)" AutomationProperties.Name="Full screen (F11)">
                             <SymbolIcon Symbol="FullScreen"/>
                         </Button>
                     </StackPanel>

@@ -2,7 +2,7 @@
 
 What the multi-image screen shows, taken from the source. The copy that is run day to day lives outside this source tree and can differ until it is deployed.
 
-`docs/UI_UX.md` section 6 is an older description. Where they disagree, this file is the authoritative reference.
+`docs/UI_UX.md` section 6 holds the rules behind this screen. Where they disagree on what the screen shows, this file is the authoritative reference.
 
 The bar hides after 2.5 seconds without a real pointer move. While Play is running, a new layout does not bring the bar back. A pointer move, a key, or a click does. A progress line, when enabled, stays along a screen edge while the bar is hidden.
 
@@ -13,7 +13,7 @@ One pill along the bottom, left to right. Dividers separate the groups. Rows and
 | Control | Words | What it does |
 |---|---|---|
 | Back | Back | Leaves multi-image for the tiles. Esc does the same when no card is open. The layout stays, and Multi-View returns to it. |
-| Drawer | Drawer, or Drawer (N) | Opens or closes the drawer, on the tab it was last left on: Image Pool or Show. N is what that tab shows: images not on the canvas, or scenes. It never changes what Play plays. A light plate shows while the drawer is open. |
+| Drawer | Drawer, or Drawer (N images) / Drawer (N scenes) | Opens or closes the drawer, on the tab it was last left on: Image Pool or Show. The count is what that tab shows, with its unit: images not on the canvas, or scenes. It never changes what Play plays. A light plate shows while the drawer is open. |
 | Previous | icon | Previous scene, or the previous layout when no show is playing. Left arrow. |
 | Play | Play, or Pause | Plays the show. Scenes are made as it plays and kept. While it runs: `Pause`. Space does the same. Filled while running. |
 | Next | icon | Next scene, or one new layout when no show is playing. Right arrow. |
@@ -33,7 +33,7 @@ Play always plays the show. A show with no scenes yet is made as it plays, from 
 
 ## Image Pool and storyboard drawer
 
-A sheet along the bottom with two tabs and Close. Esc closes it. A click outside closes it, except a click on the playbar. B opens it on the Storyboard tab, or closes it when that is showing. The drawer can be dragged taller, but never past the playbar, which always sits above it.
+A sheet along the bottom with two tabs and Close. Esc closes it. A click outside closes it, except a click on the playbar. B opens it on the Show tab, or closes it when that is showing. The drawer can be dragged taller, but never past the playbar, which always sits above it.
 
 The tabs read `Image Pool` or `Image Pool (N)`, where N is the images not on the canvas, and `Show` or `Show (N)`, where N is the scenes. **New show** on the Show tab starts an empty show with the preset and values from the Show card. Play then makes its scenes from the Image Pool.
 
@@ -71,9 +71,9 @@ Cards can be dragged into a new order.
 
 ## Play show, from the folders
 
-**Play Show** in the sidebar plays the whole folder with the preset chosen on the Show card. The chevron beside that button plays the folder as Multi-Image, Cinematic, or a saved My preset. **Play Show** in the folder menu and the play button in the image viewer use the preset on the Show card, and so does the button on the selection bar, which plays the selected images. Any of these opens Multi-View with those images, starts a new show and plays it once the first scene is made. While it plays it makes the next scenes from images not in it yet, a few ahead of the screen. While it is paused, drafting stops once every image has been dealt once. It stops if the show is replaced or cleared.
+**Play show** in the sidebar plays the whole folder with the preset chosen on the Show card. The chevron beside that button plays the folder as Multi-Image, Cinematic, 3D (when the 3D extension is installed), or a saved My preset. **Play show** in the folder menu and the play button in the image viewer use the preset on the Show card, and so does the button on the selection bar, which plays the selected images. Any of these opens Multi-View with those images, starts a new show and plays it once the first scene is made. While it plays it makes the next scenes from images not in it yet, a few ahead of the screen. While it is paused, drafting stops once every image has been dealt once. It stops if the show is replaced or cleared.
 
-The playbar has a preset pill between Next and Show. It names the preset in use. Choosing one switches the open show. With no scenes yet, that starts Play.
+The playbar has a preset pill between Next and Show. It names the preset in use; My preset 1 to 3 show as Preset 1 to 3. Its menu lists the presets in the Show card's order: Multi-Image, Cinematic, 3D (when installed), My preset 1 to 3, then Show settings…. Choosing one switches the open show. With no scenes yet, that starts Play.
 
 When a show plays from its first scene, a title fades in over the picture for a few seconds: the show's own name, or the folder name when the show has only a placeholder name, with the month and year of the first photo underneath. When a later scene's photos are from a new day, the full date shows in the lower left, and the folder name as well when that changed. **Title at the start** and **Date captions**, both on to start, are in Engine settings under Canvas & progress. Pausing or stopping takes the words off.
 
@@ -122,13 +122,13 @@ When viewing a storyboard scene on the canvas, any manual layout adjustment auto
 
 ## Layout Generator Settings
 
-Opened from **Engine settings…** on the Show card. These are how one layout and one move are made. The show's own images per scene, duration, smart pace, motion, sequence beats, scenes per step and design odds are on the Show card, not here. The page is in sections: Images & faces, Designs, Camera, Transitions, Canvas & progress. Canvas & progress also holds **Title at the start** and **Date captions**.
+Opened from **Engine settings…** on the Show card. These are how one layout and one move are made. The show's own images per scene, duration, smart pace, motion, sequence beats, scenes per step, design odds, 3D on single images and 3D motion are on the Show card, not here. Where Engine settings has a setting of the same kind (**Images per layout** under Images & faces; **3D motion style** and **3D on single images** under Camera), it is the engine's default: it applies to Next with no show playing and to a show that holds no values of its own, and changing it never changes the open show. The page is in sections: Images & faces, Designs, Camera, Transitions, Canvas & progress. Canvas & progress also holds **Title at the start** and **Date captions**.
 
 The defaults, which **Reset to defaults** on the Advanced page puts back. A settings file saved before a default changed keeps its own values until then.
 
 | Setting | Default |
 |---|---|
-| Images per scene | 1 to 9 |
+| Images per layout | 1 to 9 |
 | Duration | 10 to 15 seconds (a single duration, with the thumbs together, defaults to 10 seconds) |
 | Smart pace | On |
 | Motion | 40% to 60% |
@@ -145,7 +145,7 @@ Faces are found by Windows on this PC. What follows applies only to faces it fin
 - **Framing.** A cell with faces is framed on the area that holds all of them, a little above the middle of the cell, whether or not it zooms. An image with no faces is framed on its focus point.
 - **Zoom.** Zoom is not only for faces: see **Zoom**, below. With faces, a zoom heads for them and stops short of cutting any: all the faces found stay in, taking at most 85% of the cell. A face that already fills the cell, or a wide group, zooms little or not at all.
 - **No cut faces.** Each layout is tried in several versions. A version cuts a face when less of it than **Face kept in frame, at least** shows, whether the cell's edge, its shape or another cell hides it. The pick is made from the best **Pick from the best** versions that cut no face and mostly hide no image; only when every version cuts a face is the best of them taken anyway. A small face in a crowd weighs less than a face that fills the image.
-- **The big places.** The largest cell goes, by preference, to the image with the most in it, and faces count heavily. Hero spotlight takes its hero from the two images that rank highest, unless an image is featured (**Feature in Auto-Mix**), which always gets the best place.
+- **The big places.** The largest cell goes, by preference, to the image with the most in it, and faces count heavily. Hero spotlight takes its hero from the two images that rank highest, unless an image is featured (**Feature in the show**), which always gets the best place.
 - **One image.** A layout of one image is kept to Crop at most: see **One image**, below.
 - **Camera.** 70% of camera moves head for a large cell with faces. Two-shot scenes are under Camera, below.
 
@@ -177,7 +177,7 @@ A Cinematic storyboard is a show started from the **Cinematic** preset. Its valu
 | Motion | 40% to 60% |
 | Sequence beats | 25% |
 
-**Show** on the bar opens this show's settings. Presets are one line: Multi-Image, Cinematic, 1, 2 and 3. Press one to use it. Hold or right-click to keep this show's values in it. The reset symbol puts that preset back. What you change is kept in the app's settings for the next Play of that preset. The values are images per scene, duration, smart pace, motion, sequence beats (default 25%), scenes per step and each design's odds. A saved `.mivshow` file carries its own values. **Soundtrack** on the card sets Cut on the beat (default on), Follow the music (default 50%) and Hard cuts (default 100%).
+**Show** on the bar opens this show's settings. Presets are one line: Multi-Image, Cinematic, 3D (when the 3D extension is installed), 1, 2 and 3. Press one to use it. Hold or right-click to keep this show's values in it. The reset symbol puts that preset back. What you change is kept in the app's settings for the next Play of that preset. The values are images per scene, duration, smart pace, motion, sequence beats (default 25%), scenes per step and each design's odds. With the 3D extension installed, the card's Scenes group also has **3D images only**, **3D on single images** and **3D motion** (Slide or Sway) for this show. A saved `.mivshow` file carries its own values. **Soundtrack** on the card sets Cut on the beat (default on), Follow the music (default 50%) and Hard cuts (default 100%).
 
 A Cinematic storyboard uses your main Transitions settings.
 
@@ -202,6 +202,7 @@ Under Camera:
 
 - **Curved path** (default 0–50%): how far a pan's path bows to one side, at most a gentle arc.
 - **Rotation** (default Off, up to 6°): how far the view turns over a move. It zooms in just enough to keep every corner covered.
+- With the 3D extension installed, Camera also has **3D motion style** (Slide or Sway), **Sway depth** (how far the nearest and farthest parts move apart at the peak of a sway, 0.4% to 6% of the image width, default 4%; it is not a turn, and is unrelated to Rotation), **Each swing** (how long one full sway takes, default 4.25 s) and **3D on single images**. The style and the odds are the engine's defaults; a show's own are on the Show card.
 
 Storyboard scenes store their curve, bend, turn and shots, and play them; scenes made before these play as they did.
 

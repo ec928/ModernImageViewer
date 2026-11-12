@@ -157,7 +157,7 @@ namespace ModernImageViewer
             var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
             buttons.Children.Add(choose);
             buttons.Children.Add(paint);
-            var (row, name, detail) = SettingsCard.Row("\uE70F", EditorName(editor), "Edit Image opens images in this program.", buttons);
+            var (row, name, detail) = SettingsCard.Row("\uE70F", EditorName(editor), "Edit image opens images in this program.", buttons);
             name.SetValue(Microsoft.UI.Xaml.Automation.AutomationProperties.AutomationIdProperty, "ImageEditorText");
             choose.Click += async (_, _) =>
             {
@@ -238,7 +238,7 @@ namespace ModernImageViewer
             var (parallaxRow, parallaxTitle, parallaxDetail) = SettingsCard.Row(
                 "\uE74C",
                 "3D Parallax Motion",
-                "Transforms 2D photos into immersive 3D scenes with depth and subject layers (~248 MB).",
+                "Transforms 2D images into immersive 3D scenes with depth and subject layers (~248 MB).",
                 buttonGroup);
 
             var extraInfoStack = new StackPanel { Margin = new Thickness(42, 0, 14, 8) };

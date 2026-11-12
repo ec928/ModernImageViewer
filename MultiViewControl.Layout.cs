@@ -102,7 +102,7 @@ namespace ModernImageViewer
                 };
                 emptyPanel.Children.Add(new FontIcon
                 {
-                    Glyph = "",
+                    Glyph = "\uE748",
                     FontSize = 40,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
@@ -214,11 +214,12 @@ namespace ModernImageViewer
             bool storyboard = _trayTab == 1;
             bool open = _trayCard != null;
 
-            // Named for what it opens, the drawer, so "Storyboard" is on the bar once, on the mode switch beside it.
-            // The count is the tab it opens on: images off the canvas, or scenes.
+            // The count says what it counts: images off the canvas, or scenes, for the tab the drawer opens on. Not the tab's
+            // name, which would put "Show" beside the Show button.
             string name = storyboard ? "Show" : "Image Pool";
             int count = storyboard ? scenes : offCanvas;
-            string label = count > 0 ? $"Drawer ({count})" : "Drawer";
+            string unit = storyboard ? (count == 1 ? "scene" : "scenes") : (count == 1 ? "image" : "images");
+            string label = count > 0 ? $"Drawer ({count} {unit})" : "Drawer";
             if (StoryDeckText != null) StoryDeckText.Text = label;
             _refreshPoolTab?.Invoke();
             if (StoryDeckIcon != null) StoryDeckIcon.Glyph = "\uE90E";

@@ -48,7 +48,7 @@ Both themes must provide equivalent hierarchy, contrast, and visual polish:
   - Section headers, active selections, and primary HUD filenames: `SemiBold`.
   - Body text, button labels, and secondary details: `Normal`.
 - **Casing**:
-  - Use **Sentence Case** or **Title Case** for labels and section headers (e.g., *"Favourites"*, *"Recent Folders"*, *"Clear Recent Folders"*).
+  - Use **sentence case** for labels, menu items, tooltips and section headers, across the app (e.g., *"Favourites"*, *"Recent"*, *"Clear recent folders"*, *"Play show"*). Proper names keep their capitals: Multi-View, Image Pool, Explorer, Recycle Bin, Frame & Border.
   - Avoid ALL CAPS in UI labels.
 
 ### Iconography Rules
@@ -77,7 +77,7 @@ The **Favourites and Recent Folders** flyout (`RecentFoldersMenu`) serves as the
 |  [Folder] Downloads                   ☆ |  <-- Outline star reveals on hover
 |  [Folder] Screenshots                 ☆ |
 |------------------------------------------|
-|  [Delete] Clear Recent Folders           |  <-- Dedicated secondary action
+|  [Delete] Clear recent folders           |  <-- Dedicated secondary action
 +------------------------------------------+
 ```
 
@@ -86,7 +86,7 @@ The **Favourites and Recent Folders** flyout (`RecentFoldersMenu`) serves as the
    - Favourites remain pinned at the top, separate from Recent.
    - A favourite is never duplicated in the Recent section.
    - Missing/unplugged folders remain in Favourites (rendered dimmed with `IsEnabled = false` on the path button), but the star remains interactive so users can un-star and remove them.
-   - "Clear Recent Folders" removes only recent history; favourites are never wiped.
+   - "Clear recent folders" removes only recent history; favourites are never wiped.
 2. **Hover Affordance**:
    - Recent items display an outline star only when the row is hovered by pointer or focused via keyboard navigation (`FocusState.Keyboard`).
    - Clicking a star toggles favourite status in place and keeps the flyout open without losing keyboard focus.
@@ -106,7 +106,7 @@ Information overlays must provide instant diagnostic readability without obscuri
 ### Top-Left Inspection HUD (Single Viewer & Multi-View Solo)
 The Single Viewer and Multi-View Solo/Maximize modes share an **identical** HUD specification:
 
-- **Container**: Floating acrylic pill, `CornerRadius="8"`, `Padding="12,8"`, subtle 1px border.
+- **Container**: Floating acrylic pill, `CornerRadius="12"`, `Padding="14,10"`, subtle 1px border.
 - **Backdrop**: Semi-transparent dark acrylic (`rgba(20, 20, 20, 0.85)` / `CardBackgroundFillColorDefaultBrush`).
 - **Hierarchy**:
   - **Line 1 (Title)**: `Filename.ext` — `SemiBold`, `14px`, Primary Text (`#FFFFFF`).
@@ -142,7 +142,7 @@ Shape  (Mirror, Flip and Reset grey out where they would do nothing) >
 Layer  (floating cells)   >   Bring to front, Bring forward, Send backward, Send to back
 Image                     >   Replace image..., Clear cell,
                               Rotate image left / right, Mirror image, Flip image
-Feature in Auto-Mix  (any cell with an image)
+Feature in the show  (any cell with an image)
 --------------------------
 Freeform  (or Dock to Grid, which a grid of 16 cells with none empty leaves out)
 Move to Image Pool  (any cell with an image)
@@ -152,11 +152,13 @@ Add images sends the user to the folders to pick images, and the window keeps it
 
 **Nothing destructive asks; Undo is the safety net.** Reset canvas and images, replacing a session, Remove cell and removing a scene never ask, because Undo and Autosaved bring them back. So Undo and Redo sit on the playbar. The exceptions ask first: Clear (the storyboard), Replace show and Clear pool, each with Cancel as the default, and Reset to defaults in Layout Generator Settings.
 
-**One control per decision on the bar.** The drawer button only opens and closes the drawer, and names the tab it opens with that tab's count. The Storyboard | Auto-Mix switch only chooses what Play plays, and choosing changes nothing on the canvas. Play only plays and pauses; Next makes a new layout in Auto-Mix. A selected side, and Play while running, use the drawer's blue (#0078D4), the same as its selected tab and Play Show; the open-drawer plate is a light wash. Clicking a scene card or editing its camera path never changes the mode.
+**One control per decision on the bar.** The drawer button only opens and closes the drawer. Its count says what it counts, for the tab it opens on: `Drawer (12 images)` or `Drawer (3 scenes)`. It does not take the tab's name, because "Show" is already the button for the Show card. Play always plays the show and only plays and pauses; with no show playing, Next makes one layout on the canvas, which is not kept. The preset pill names the preset in use and lists the presets in the Show card's order: Multi-Image, Cinematic, 3D (when installed), then My presets 1 to 3, which the pill shows as Preset 1 to 3. Play while running uses the drawer's blue (#0078D4), the same as its selected tab and the selected preset; the open-drawer plate is a light wash. Clicking a scene card or editing its camera path never changes the preset.
 
-**Camera motion** during auto-play moves the finished layout as one picture, with the zoom, drift and pacing of a Cinematic show. It is a transform over the layers, never a change to the layout. Floating cells sit nearer than the grid, so they follow the camera a little further, and float a few pixels and under a degree, leaving their saved place and turn alone. All of it moves composition visuals, not XAML transforms: a `RenderTransform` changing every frame leaves images soft, and the `Rotation` and `Scale` properties stop the app when they meet the `RotateTransform` of a turned cell. Layout changes animate the cover: a crossfade most often, then a zoom through, a fade through dark, or least often a slide. Nothing spins or flips. Layout Generator Settings leads with one Motion slider, with the finer odds folded away under Camera and under Transitions. Pausing glides back to the whole layout. `CameraMove` plans a view as a zoom and a centre, and keeps picture to every edge.
+**Engine settings hold the engine's values; a show's values are on the Show card.** Where a setting exists at both levels, Engine settings' version is the default for Next with no show and for a show that holds no values of its own, and its label or tooltip says so: Images per layout (the Show card's Images per scene), 3D on single images and 3D motion style (the Show card's rows of the same names). Engine settings never change the open show.
 
-**Music** has one home, the gear's Music settings, which Layout Generator Settings opens and summarises in the same words. A Cinematic show can have its own music, with its own volume, and otherwise follows those settings. Each owns a `MusicBed`; only one sounds at a time, the last started, and the other carries on when it stops. Asking a bed for what it is already playing leaves the song alone, so saving settings does not restart it. When music cannot play, the image carries on and the user is told why; that is never recorded as a choice of no music.
+**Camera motion** while a show plays moves the finished layout as one picture, with the zoom, drift and pacing of a Cinematic show. It is a transform over the layers, never a change to the layout. Floating cells sit nearer than the grid, so they follow the camera a little further, and float a few pixels and under a degree, leaving their saved place and turn alone. All of it moves composition visuals, not XAML transforms: a `RenderTransform` changing every frame leaves images soft, and the `Rotation` and `Scale` properties stop the app when they meet the `RotateTransform` of a turned cell. Layout changes animate the cover: a crossfade most often, then a zoom through, a fade through dark, or least often a slide. Nothing spins or flips. Motion is a range on the Show card; the finer odds are in Engine settings, under Camera and under Transitions. Pausing glides back to the whole layout. `CameraMove` plans a view as a zoom and a centre, and keeps picture to every edge.
+
+**Music** has one home, Music settings in the main window's Settings (gear), which Soundtrack on the Show card also opens. A Cinematic show can have its own music, with its own volume, and otherwise follows those settings. Each owns a `MusicBed`; only one sounds at a time, the last started, and the other carries on when it stops. Asking a bed for what it is already playing leaves the song alone, so saving settings does not restart it. When music cannot play, the image carries on and the user is told why; that is never recorded as a choice of no music.
 
 Swap with, Copy to and Move to name positions only, never file names, so the two columns stay about the width of a single column of named entries. Each row is one menu entry, and the side of the row under the pointer is the column chosen, shown by a highlight on that half. Pointing at a target marks its cell's badge, with "+ attributes" for the second column. The same layout appears with any number of cells, down to one row with two images.
 
@@ -180,14 +182,14 @@ The Frame & Border card always shows at full height for the window, in front of 
 4. **Unified Solo / Maximize Mode**:
    - Clicking Solo/Maximize expands the chosen image to fill the canvas while preserving all multi-view layout state.
    - The top-left info HUD is identical in visual treatment and data layout to the Single Viewer inspection HUD.
-   - Exit button returns cleanly to the mosaic view.
+   - Exit button returns cleanly to the mosaic view. It is **Back**, with the same arrow and word as the grid playbar's Back; the top-right button does the same and says the same ("Back to Multi-View (Esc)").
 5. **Show Controls Only When They Apply**:
    - Hero is a row in the grid layout card, not on the bar: Off, Banner, Rectangle and Pair, with what the image count does not allow greyed out, and next position only while a hero is on. Grid Layout is disabled below two grid cells that show an image. An empty preset is dimmed.
    - An empty cell's label fades with the playbar, so the composition can be seen without it.
 6. **Floating Cell Labels and Handles**:
    - A floating cell's position label is centered and stays upright, however the window is turned. Its hover buttons and handles are not clipped by its shape, and stay briefly after the pointer leaves so they can be reached.
 7. **One Word for a Thing**:
-   - Menus and the frame card call a place a *Position* and a slot a *cell*. What is not on the canvas is in the *Image Pool*. Generated playback is *Auto-Mix*, never "Surprise me". UI strings use the spelling *color*, and say *image*, not picture or photo, across the app, Cinematic included; a folder's own name, such as Pictures, is shown as it is. Gallery wall's Frame color option "From the pictures" stays because it is the value saved in options. Labels are in sentence case ("Remove scene", "Pan across"). Menus and buttons use Segoe Fluent icons, never emoji, and a current choice is a radio item, never a tick typed into the text.
+   - Menus and the frame card call a place a *Position* and a slot a *cell*. What is not on the canvas is in the *Image Pool*. Play plays a *show*, chosen by a *preset*; it is never "Auto-Mix", "auto-play", "Surprise me" or a "mode". The window sizes saved in Settings are *Window sizes* 1 to 3, never presets, which are the show's. Two settings never share a name across different units: Sway depth (percent of the image width) is not Rotation (degrees). UI strings use the spelling *color*, and say *image*, not picture or photo, across the app, Cinematic included; a folder's own name, such as Pictures, is shown as it is. Gallery wall's Frame color option "From the pictures" stays because it is the value saved in options. Labels are in sentence case ("Remove scene", "Pan across"). Menus and buttons use Segoe Fluent icons, never emoji, and a current choice is a radio item, never a tick typed into the text.
 8. **Immersive Dark Flyout & Menu Presenters**:
    - The image canvas and floating playbar are an immersive dark surface. All playbar flyouts (Aspect menu, Save resolutions) and image cell context menus must render with a dark background (`#F2202020`), subtle 1px border (`#33FFFFFF`), `CornerRadius="10"`, and white text.
    - **WinUI 3 Trap Avoided**: Setting only `<Setter Property="RequestedTheme" Value="Dark" />` on `MenuFlyoutPresenter` causes the presenter's template background to resolve against the Light popup root while child items turn white (resulting in white text on a light beige background). Menus hosted in `XamlRoot` must explicitly set `Background="#F2202020"` and `BorderBrush="#33FFFFFF"` via `MultiViewMenuFlyoutPresenterStyle` and enforce dark styling on open.
@@ -219,31 +221,31 @@ In accordance with workspace UX standards:
 
 ## 9. Keyboard Accessibility & Shortcuts
 
-Pictures can be browsed, viewed and managed without a mouse, and F1 lists the keys. Tab opens the sidebar, so F6 is the way into the header: Left, Right or Tab moves along it, Enter presses, Esc returns to the grid.
+Images can be browsed, viewed and managed without a mouse, and F1 lists the keys. Tab opens the sidebar, so F6 is the way into the header: Left, Right or Tab moves along it, Enter presses, Esc returns to the grid.
 
 | Category | Shortcut | Function |
 | :--- | :--- | :--- |
-| **Navigation** | `Left` / `Right` | Previous / Next photo |
+| **Navigation** | `Left` / `Right` | Previous / Next image |
 | | `Up` / `Down` / `Page Up` / `Page Down` / `Home` / `End` | Grid and list cursor |
 | | `Backspace` | Up one folder |
 | | `Ctrl+B` or `Tab` | Toggle navigation sidebar |
-| **Folder view** | `Enter` | Open the picture, or view the selection together |
-| | `Space` | Select or deselect the picture |
+| **Folder view** | `Enter` | Open the image, or view the selection together |
+| | `Space` | Select or deselect the image |
 | | `F2` / `F5` / `Delete` | Rename / refresh / Recycle Bin |
 | **Viewing** | `Space` / `,` / `.` | Play or pause an animation / previous and next frame |
 | | `F1` / `F6` | Keyboard shortcuts / move to the header buttons |
 | | `F11` | Toggle borderless fullscreen |
 | | `Ctrl + Wheel` | Zoom in / out |
 | | `B` | Toggle 2-page comic book spread mode |
-| **Multi-View** | `Alt + Drag` | Drag and swap photo cells |
+| **Multi-View** | `Alt + Drag` | Drag and swap image cells |
 | | `Ctrl + Z` / `Ctrl + Y` | Undo / redo |
 | | `Ctrl + C` | Copy the canvas as an image |
 | | `Ctrl + S` | Save or load |
 | | `H` / `R` | next hero / rows or columns |
 | | `+` / `-` | More or fewer lines |
-| **Floating cells** | `Ctrl + Drag` | Pan the photo inside the cell |
+| **Floating cells** | `Ctrl + Drag` | Pan the image inside the cell |
 | | `Alt` while dragging | Move without snapping |
-| | `Ctrl` on the rotate handle | Turn the shape and keep the photo still |
+| | `Ctrl` on the rotate handle | Turn the shape and keep the image still |
 | | `Shift` on the rotate handle | Rotate in 15 degree steps |
 | **System** | Bare `Alt` | Handled silently to prevent stealing focus to the Win32 system menu |
 

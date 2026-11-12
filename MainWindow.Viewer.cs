@@ -1178,7 +1178,7 @@ namespace ModernImageViewer
             if (_parkedCell == null)
             {
                 ViewTogetherText.Text = "Add images";
-                if (ViewTogetherIcon != null) ViewTogetherIcon.Glyph = "";
+                if (ViewTogetherIcon != null) ViewTogetherIcon.Glyph = "\uE710";
                 ToolTipService.SetToolTip(ViewTogetherButton, MultiViewControl.AddRuleText + " (Enter)");
                 int inFolder = Images.Count(img => !img.IsDirectory && !img.IsComicEntry && IsPictureFile(img.Path));
                 AddFolderText.Text = $"Add this folder ({inFolder})";
@@ -1197,9 +1197,9 @@ namespace ModernImageViewer
             ImageGrid.SelectionMode = adding ? ListViewSelectionMode.Multiple : ListViewSelectionMode.Extended;
             // Opening, editing or deleting a picture has no place while choosing one.
             ImageGrid.ContextFlyout = adding ? null : GridItemContextFlyout;
-            ToolTipService.SetToolTip(ViewTogetherButton, adding ? "Add these images (Enter)" : "View Together (Enter)");
-            ViewTogetherText.Text = adding ? "Add images" : "View Together";
-            if (ViewTogetherIcon != null) ViewTogetherIcon.Glyph = adding ? "" : "";
+            ToolTipService.SetToolTip(ViewTogetherButton, adding ? "Add these images (Enter)" : "View together (Enter)");
+            ViewTogetherText.Text = adding ? "Add images" : "View together";
+            if (ViewTogetherIcon != null) ViewTogetherIcon.Glyph = adding ? "\uE710" : "\uE748";
             ViewTogetherButton.IsEnabled = true;
             // For one picture the click is the choice, so there is nothing for the button to confirm.
             ViewTogetherButton.Visibility = adding && _parkedCell != null ? Visibility.Collapsed : Visibility.Visible;
@@ -1211,7 +1211,7 @@ namespace ModernImageViewer
             var wholeFolder = adding && _parkedCell == null ? Visibility.Visible : Visibility.Collapsed;
             AddFolderButton.Visibility = wholeFolder;
             AddSubfoldersButton.Visibility = wholeFolder;
-            ToolTipService.SetToolTip(MultiSelectCloseButton, adding ? "Back to the layout (Esc)" : "Clear Selection (Esc)");
+            ToolTipService.SetToolTip(MultiSelectCloseButton, adding ? "Back to the layout (Esc)" : "Clear selection (Esc)");
             if (!adding) MultiSelectActionBar.Visibility = Visibility.Collapsed;
         }
 
@@ -3464,8 +3464,8 @@ namespace ModernImageViewer
                 PresetSaveModeButton.Background = _presetSaveMode ? activeBg : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
                 PresetSaveModeIcon.Foreground = _presetSaveMode ? activeFg : secondaryFg;
                 ToolTipService.SetToolTip(PresetSaveModeButton, _presetSaveMode
-                    ? "Select slot 1, 2, or 3 to save current window & tile size (Click again to cancel)"
-                    : "Save Current Window & Tile Size to a Preset Slot");
+                    ? "Choose 1, 2 or 3 to save the window and tile size. Click again to cancel."
+                    : "Save the window and tile size to 1, 2 or 3");
             }
 
             Button[] buttons = [Preset1Button, Preset2Button, Preset3Button];
@@ -3500,8 +3500,8 @@ namespace ModernImageViewer
                     }
                     if (dot != null) dot.Visibility = Visibility.Collapsed;
                     ToolTipService.SetToolTip(btn, hasPreset
-                        ? $"Overwrite Preset {i + 1} (currently {preset!.WindowWidth}\u00D7{preset.WindowHeight}, Tile {(int)Math.Round(preset.TileSize)}px)"
-                        : $"Save current window & tile size to Preset {i + 1}");
+                        ? $"Overwrite window size {i + 1} (now {preset!.WindowWidth}\u00D7{preset.WindowHeight}, tile {(int)Math.Round(preset.TileSize)}px)"
+                        : $"Save the window and tile size to {i + 1}");
                 }
                 else
                 {
@@ -3518,8 +3518,8 @@ namespace ModernImageViewer
                         dot.Opacity = isActive ? 1.0 : 0.65;
                     }
                     ToolTipService.SetToolTip(btn, hasPreset
-                        ? $"Preset {i + 1}: {preset!.WindowWidth}\u00D7{preset.WindowHeight}, Tile {(int)Math.Round(preset.TileSize)}px (Ctrl+{i + 1})\nClick to apply \u2022 Right-click or Save icon to overwrite"
-                        : $"Preset {i + 1} (Empty)\nClick to save current window & tile size");
+                        ? $"Window size {i + 1}: {preset!.WindowWidth}\u00D7{preset.WindowHeight}, tile {(int)Math.Round(preset.TileSize)}px (Ctrl+{i + 1})\nClick to use it. Right-click, or the save button, to replace it."
+                        : $"Window size {i + 1} (empty)\nClick to save the window and tile size here.");
                 }
             }
         }

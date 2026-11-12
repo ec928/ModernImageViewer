@@ -75,23 +75,12 @@ namespace ModernImageViewer
             changed?.Invoke();
         }
 
-        /// <summary>Rock or Slide, on the show when it holds its own values, and on the engine otherwise. The picture playing picks it up on the next frame.</summary>
-        private void SetDepthMotion(string mode)
-        {
-            mode = SurpriseOptions.CanonicalDepthMotion(mode);
-            var show = _activeShow;
-            if (show?.GlobalDefaults.HoldsValues == true)
-            {
-                show.GlobalDefaults.DepthMotion = mode;
-                SaveShowPreset(show);
-                return;
-            }
-            ChangeSurpriseChoices(o => o.DepthMotion = mode);
-        }
 
-        private FrameworkElement DepthMotionChips()
+
+        /// <summary>Slide or Sway as chips. Engine settings pass the engine's value; the Show card passes the show's.</summary>
+        private FrameworkElement DepthMotionChips(string shown, Action<string> set, string tipSuffix = "")
         {
-            string shown = LiveDepthMotion();
+            shown = SurpriseOptions.CanonicalDepthMotion(shown);
             var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
             var chips = new List<Microsoft.UI.Xaml.Controls.Primitives.ToggleButton>();
             foreach (string mode in SurpriseOptions.DepthMotions)
@@ -104,14 +93,14 @@ namespace ModernImageViewer
                     MinWidth = 0,
                     FontSize = 12
                 };
-                ToolTipService.SetToolTip(chip, mode == SurpriseOptions.DepthSlide
-                    ? "Lateral parallax with background fill. Automatically uses Sway for wide landscapes and flat scenes."
-                    : "Stereo oscillation: sways gently side to side around the focal plane for all 3D photos.");
+                ToolTipService.SetToolTip(chip, (mode == SurpriseOptions.DepthSlide
+                    ? "Slide: the camera moves sideways over background fill. Wide landscapes and flat scenes use Sway instead."
+                    : "Sway: the image rocks gently side to side around its middle depth.") + tipSuffix);
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chip, "3D motion " + mode);
                 chip.Click += (_, _) =>
                 {
                     foreach (var other in chips) other.IsChecked = ReferenceEquals(other, chip);
-                    SetDepthMotion(mode);
+                    set(mode);
                 };
                 chips.Add(chip);
                 panel.Children.Add(chip);
@@ -201,8 +190,9 @@ namespace ModernImageViewer
         internal string ActivePresetShortName(ShowProject? show)
         {
             string name = show != null ? ActivePresetName(show) : CurrentPresetName;
+            // The Show card names My preset 1 as "1" under Preset; the pill stands alone, so it says Preset 1.
             if (name.StartsWith("My preset ", StringComparison.OrdinalIgnoreCase))
-                return "P" + name.Substring(10).Trim();
+                return "Preset " + name.Substring(10).Trim();
             return name;
         }
 
@@ -276,12 +266,13 @@ namespace ModernImageViewer
                 menu.Items.Add(item);
             }
 
+            // The same order as the Show card's preset line: Multi-Image, Cinematic, 3D, then 1 to 3.
+            AddMode(MultiImagePreset, "Multi-Image", "Collages, mosaics & prints");
+            AddMode(CinematicOverrides.Name, "Cinematic", "One image at a time, slow drift");
             if (DepthMaps.Available)
             {
                 AddMode(CinematicOverrides.ParallaxName, "3D", "Depth & spatial motion");
             }
-            AddMode(CinematicOverrides.Name, "Cinematic", "Single-photo slow drift");
-            AddMode(MultiImagePreset, "Multi-Image", "Collages, mosaics & prints");
 
             menu.Items.Add(new MenuFlyoutSeparator());
 
@@ -316,7 +307,7 @@ namespace ModernImageViewer
             var settingsItem = new MenuFlyoutItem
             {
                 Text = "Show settings…",
-                Icon = new FontIcon { FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), Glyph = "", FontSize = 12 }
+                Icon = new FontIcon { FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), Glyph = "\uE713", FontSize = 12 }
             };
             settingsItem.Click += (_, _) => ShowSurpriseCard();
             menu.Items.Add(settingsItem);
@@ -364,7 +355,7 @@ namespace ModernImageViewer
             string active = _activeShow != null ? ActivePresetName(_activeShow) : CurrentPresetName;
             PresetModeText.Text = ActivePresetShortName(_activeShow);
             if (PresetModeButton != null)
-                ToolTipService.SetToolTip(PresetModeButton, $"Show mode: {active}. Click to switch.");
+                ToolTipService.SetToolTip(PresetModeButton, $"Preset: {active}. Click to change.");
         }
 
         /// <summary>Fills the storyboard's settings pop-up with the open show's preset and values, as they are now.</summary>
@@ -553,7 +544,7 @@ namespace ModernImageViewer
                     button.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White);
                 }
                 ToolTipService.SetToolTip(button, Is3DPreset(name)
-                    ? "3D. One picture per scene, edge to edge, 3D on every scene, and only pictures with depth information. Slide is the default motion, with automatic Sway on flat scenes. Zooms, pans, turns, two-shots, sequence beats and hero shapes are off. Press to use it; hold to keep this show's values here."
+                    ? "3D. One image per scene, edge to edge, 3D on every scene, and only images with depth information. Slide is the default motion, with automatic Sway on flat scenes. Zooms, pans, turns, two-shots, sequence beats and hero shapes are off. Press to use it; hold to keep this show's values here."
                     : empty
                     ? $"{title}: empty. Hold (or right-click) to keep this show's values here."
                     : $"{title}{(isCurrent ? ", in use" : "")}. Press to use it; hold (or right-click) to keep this show's values here.");
@@ -659,7 +650,28 @@ namespace ModernImageViewer
                         ChangeShowValues(v => v.ParallaxOnly = parallaxSwitch.IsOn, changed);
                         if (!parallaxSwitch.IsOn) StopSceneDepth();
                     };
-                    Row("3D pictures only", "Play keeps only pictures with depth information. The 3D preset turns this on.", parallaxSwitch);
+                    Row("3D images only", "Play keeps only images with depth information. The 3D preset turns this on.", parallaxSwitch);
+
+                    // This show's 3D odds and motion. Engine settings hold the engine's, for shows without values (R13, R17).
+                    double depthNow = Math.Round(values.DepthChance * 100);
+                    var depth = Slider1(0, 100, 5, depthNow);
+                    var depthReadout = Readout(depthNow < 1 ? "Off" : $"{depthNow:0}%");
+                    var applyDepth = Settled(() =>
+                    {
+                        double chosen = Math.Clamp(depth.Value, 0, 100);
+                        ChangeShowValues(v => v.DepthChance = chosen / 100, changed);
+                        if (chosen <= 0) StopSceneDepth();
+                    });
+                    depth.ValueChanged += (_, e) => { depthReadout.Text = e.NewValue < 1 ? "Off" : $"{e.NewValue:0}%"; applyDepth(); };
+                    Row("3D on single images", "The odds that a scene of this show with one image plays in 3D. The 3D preset sets it to 100%.", WithReadout(depth, depthReadout));
+
+                    Row("3D motion", "How this show's 3D scenes move. The image playing changes on its next frame.",
+                        DepthMotionChips(values.DepthMotion, mode =>
+                        {
+                            var held = HoldingShowValues();
+                            held.DepthMotion = SurpriseOptions.CanonicalDepthMotion(mode);
+                            if (_activeShow != null) SaveShowPreset(_activeShow);
+                        }));
                 }
 
                 bool making = ReferenceEquals(_activeShow, _showBeingBuilt);

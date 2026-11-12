@@ -1215,7 +1215,7 @@ namespace ModernImageViewer
             };
             var customIcon = new FontIcon
             {
-                Glyph = "",
+                Glyph = "\uE790",
                 FontSize = 13,
                 FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
                 Foreground = _menuWhiteSecondary,

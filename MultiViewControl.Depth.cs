@@ -89,14 +89,14 @@ namespace ModernImageViewer
         // The folder check waits while the picture on screen is still asking for its depth or subject.
         private bool _depthPrepWaiting;
         // On-screen sway and filter time. The main-menu wheel turns it off. On until a saved choice says otherwise.
-        private bool _depthDebugReadout = true;
+        private bool _depthDebugReadout;
         private Border? _depthReadout;
         private TextBlock? _depthReadoutText;
         private int _depthReadoutTenths = int.MinValue;
         private long _depthReadoutFilter = long.MinValue;
         private string? _depthReadoutKind;
 
-        /// <summary>While a 3D picture plays, show the sway rotation in use and how long the 3D filter took. The gear menu turns this off.</summary>
+        /// <summary>While a 3D image plays, show the sway depth in use and how long the 3D filter took. Settings (the gear) turns it on.</summary>
         public bool DepthDebugReadout
         {
             get => _depthDebugReadout;
@@ -502,7 +502,7 @@ namespace ModernImageViewer
             else
             {
                 // One swing: center, one side, the other side, center. The swing slider sets the length.
-                // The Sway rotation setting is the amount for every picture (default 4%), read every frame.
+                // The Sway depth setting is the amount for every picture (default 4%), read every frame.
                 // It returns through the photograph: a depth map has no unseen side of a person to turn into.
                 // Starts at the center. A new length keeps this place and changes the speed.
                 // The scene's own clock, so a replaced camera move cannot freeze it.

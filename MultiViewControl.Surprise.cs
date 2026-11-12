@@ -681,8 +681,8 @@ namespace ModernImageViewer
                 Height = 32,
                 VerticalAlignment = VerticalAlignment.Center
             };
-            ToolTipService.SetToolTip(fewestBox, "Minimum images per scene (1 to 16)");
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(fewestBox, "Minimum images per scene");
+            ToolTipService.SetToolTip(fewestBox, "Fewest images per layout (1 to 16)");
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(fewestBox, "Fewest images per layout");
 
             var toLabel = new TextBlock
             {
@@ -702,8 +702,8 @@ namespace ModernImageViewer
                 Height = 32,
                 VerticalAlignment = VerticalAlignment.Center
             };
-            ToolTipService.SetToolTip(mostBox, "Maximum images per scene (1 to 16)");
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(mostBox, "Maximum images per scene");
+            ToolTipService.SetToolTip(mostBox, "Most images per layout (1 to 16)");
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(mostBox, "Most images per layout");
 
             var imageControlsPanel = new StackPanel
             {
@@ -757,7 +757,7 @@ namespace ModernImageViewer
 
             var imagesLabel = new TextBlock
             {
-                Text = "Images per scene",
+                Text = "Images per layout",
                 VerticalAlignment = VerticalAlignment.Center,
                 FontSize = 13,
                 Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White)
@@ -767,6 +767,8 @@ namespace ModernImageViewer
 
             imagesRow.Children.Add(imagesLabel);
             imagesRow.Children.Add(imageControlsPanel);
+            // The engine's count, not a show's: a show's own count is on the Show card (R17).
+            ToolTipService.SetToolTip(imagesLabel, "How many images a layout gets when no show value applies: Next with no show playing, or a show that holds no values of its own. A show's own count is Images per scene, on the Show card.");
 
             if (!_showingSurpriseAdvanced)
             {
@@ -886,7 +888,7 @@ namespace ModernImageViewer
                 (o, v) => o.TogetherChance = v / 100);
             Toggle(imagesSection, "Skip screens and repeats", "Leave out what looks like a screen capture or a graphic, and all but one of near-identical shots.",
                 options.SkipScreens, (o, on) => o.SkipScreens = on);
-            RangeRow(imagesSection, "Zoom", "How far an image is zoomed into its frame when a layout is made, toward its faces or, with none found, its focus point. Each zoomed image picks within the range. It stops short of cutting a face, and of showing the photo past twice its own pixels, so it stays sharp. 1x is off.",
+            RangeRow(imagesSection, "Zoom", "How far an image is zoomed into its frame when a layout is made, toward its faces or, with none found, its focus point. Each zoomed image picks within the range. It stops short of cutting a face, and of showing the image past twice its own pixels, so it stays sharp. 1x is off.",
                 1, SurpriseOptions.MostOfAnyZoom, 0.25, options.LeastZoom, options.MostZoom, Times,
                 (o, a, b) => { o.LeastZoom = a; o.MostZoom = b; }, () => updateImagesSummary());
             Slide(imagesSection, "Zoom frequency", "The odds that an image is zoomed, with or without faces.",
@@ -1003,7 +1005,7 @@ namespace ModernImageViewer
                     options.BackdropGradientOdds, (o, v) => o.BackdropGradientOdds = v);
                 BackdropSlide("Backdrop: solid", "How often a backdrop is one flat colour. Far left turns it off.",
                     options.BackdropSolidOdds, (o, v) => o.BackdropSolidOdds = v);
-                BackdropSlide("Backdrop: ambient blur", "How often a backdrop is the layout's largest picture, darkened and blurred, behind it. Far left turns it off.",
+                BackdropSlide("Backdrop: ambient blur", "How often a backdrop is the layout's largest image, darkened and blurred, behind it. Far left turns it off.",
                     options.BackdropAmbientBlurOdds, (o, v) => o.BackdropAmbientBlurOdds = v);
             }
 
@@ -1097,9 +1099,11 @@ namespace ModernImageViewer
                 (o, v) => o.MotionFaceChance = v / 100);
             if (DepthMaps.Available)
             {
+                // The engine's 3D values. A show that holds its own (the 3D preset does) sets them on the Show card (R13, R17).
                 cameraSection.Children.Add(new TextBlock { Text = "3D motion style", FontSize = 13, Margin = new Thickness(0, 8, 0, 4) });
-                cameraSection.Children.Add(DepthMotionChips());
-                Slide(cameraSection, "Sway rotation", "How far the nearest and farthest parts move apart at the peak of a sway, as a percent of the picture width. The middle stays still, so the picture turns one way and then the other, and always comes back. 4% is the default. Slide does not use this.",
+                cameraSection.Children.Add(DepthMotionChips(SurpriseChoices.DepthMotion, mode => ChangeSurpriseChoices(o => o.DepthMotion = SurpriseOptions.CanonicalDepthMotion(mode)),
+                    " Where a show holds no values of its own. A show's own choice is on the Show card."));
+                Slide(cameraSection, "Sway depth", "How far the nearest and farthest parts move apart at the peak of a sway, as a percent of the image width. The middle stays still, so the image turns one way and then the other, and always comes back. 4% is the default. Slide does not use this.",
                     SurpriseOptions.SwayRotationLeast * 100, SurpriseOptions.SwayRotationMost * 100, 0.1, options.SwayRotation * 100,
                     v => $"{v:0.0}%",
                     (o, v) => o.SwayRotation = SurpriseOptions.ClampedSwayRotation(Math.Round(v, 1) / 100));
@@ -1107,17 +1111,13 @@ namespace ModernImageViewer
                     SurpriseOptions.SwaySwingLeast, SurpriseOptions.SwaySwingMost, 0.25, options.SwaySwing,
                     v => $"{v:0.##} s",
                     (o, v) => o.SwaySwing = SurpriseOptions.ClampedSwaySwing(Math.Round(v * 4) / 4.0));
-                Slide(cameraSection, "3D on single pictures", "The odds that a scene with one picture plays in 3D. Slide moves the camera laterally over background fill (falling back to Sway on landscapes). Sway gently rocks the picture left and right. Off unless you turn it up. The 3D preset sets it to 100% for that show.",
-                    0, 100, 5, GeneratorSettingsFor(_activeShow).DepthChance * 100,
+                Slide(cameraSection, "3D on single images", "The odds that a scene with one image plays in 3D, where a show holds no values of its own. A show's own odds are on the Show card; the 3D preset sets them to 100%. Slide moves the camera sideways over background fill (falling back to Sway on landscapes). Sway gently rocks the image left and right. Off unless you turn it up.",
+                    0, 100, 5, SurpriseChoices.DepthChance * 100,
                     v => $"{v:0}%",
                     (o, v) =>
                     {
-                        // A show that holds its own odds, such as Parallax, keeps the change. Other shows follow this slider.
-                        if (_activeShow?.GlobalDefaults.DepthChance is not null)
-                            _activeShow.GlobalDefaults.DepthChance = v / 100;
-                        else
-                            o.DepthChance = v / 100;
-                        if (v <= 0) StopSceneDepth();
+                        o.DepthChance = v / 100;
+                        if (v <= 0 && _activeShow?.GlobalDefaults.DepthChance is null) StopSceneDepth();
                     });
             }
             MovementGroup(cameraSection);
@@ -1134,9 +1134,9 @@ namespace ModernImageViewer
 
             Toggle(lookSection, "Play progress", "A line along an edge of the screen fills while each layout holds. It stays when the bar hides.",
                 options.ProgressOn, (o, on) => { o.ProgressOn = on; lookSummary.Text = LookSummaryText(); });
-            Toggle(lookSection, "Title at the start", "When a show plays from its first scene, its name (or the folder's) and the month of its first photo fade in over it.",
+            Toggle(lookSection, "Title at the start", "When a show plays from its first scene, its name (or the folder's) and the month of its first image fade in over it.",
                 options.ShowTitleCard, (o, on) => o.ShowTitleCard = on);
-            Toggle(lookSection, "Date captions", "When a scene's photos are from a new day, the date shows in the lower left for a few seconds, with the folder when that changes too.",
+            Toggle(lookSection, "Date captions", "When a scene's images are from a new day, the date shows in the lower left for a few seconds, with the folder when that changes too.",
                 options.ShowDateCaptions, (o, on) => o.ShowDateCaptions = on);
 
             void AddLookChoice(StackPanel column, string label, string tip, FrameworkElement control)
@@ -1500,7 +1500,7 @@ namespace ModernImageViewer
                 Margin = new Thickness(0, 0, 4, 0)
             };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(onToggle, "Background music");
-            ToolTipService.SetToolTip(bgRow, "Play background soundtrack during auto-play");
+            ToolTipService.SetToolTip(bgRow, "Play music during a show");
 
             Grid.SetColumn(bgLabelStack, 0);
             Grid.SetColumn(onToggle, 1);
@@ -2025,7 +2025,7 @@ namespace ModernImageViewer
             items.Add(new MenuFlyoutSeparator());
             Add("Dynamic, chosen at playback", "Dynamic", () => null, "No fixed path: the camera move is chosen each time the scene plays");
             items.Add(new MenuFlyoutSeparator());
-            var edit = new MenuFlyoutItem { Text = "Edit camera path…", Icon = new FontIcon { Glyph = "" } };
+            var edit = new MenuFlyoutItem { Text = "Edit camera path…", Icon = new FontIcon { Glyph = "\uE714" } };
             edit.Click += (_, _) => editPath();
             items.Add(edit);
         }
@@ -2159,7 +2159,7 @@ namespace ModernImageViewer
 
             var close = new Button
             {
-                Content = new FontIcon { FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe Fluent Icons"), Glyph = "\uE711", FontSize = 12 },
+                Content = new FontIcon { FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), Glyph = "\uE711", FontSize = 12 },
                 Padding = new Thickness(8, 5, 8, 5),
                 CornerRadius = new CornerRadius(14),
                 Style = Resources.TryGetValue("QuietButtonStyle", out var qStyle) && qStyle is Style qs ? qs : null
@@ -3578,7 +3578,7 @@ namespace ModernImageViewer
                     ShowAutoPlayToast("3D needs the depth model, which is not beside the app.");
                     return;
                 }
-                ShowAutoPlayToast($"Checking {pictures.Count} pictures for 3D", hold: true);
+                ShowAutoPlayToast($"Checking {pictures.Count} images for 3D", hold: true);
                 stillToCheck = pictures;
                 string? first = null;
                 while (nextCheck < stillToCheck.Count && first == null)
@@ -3592,7 +3592,7 @@ namespace ModernImageViewer
                     else if (verdict == null) unread++;
                     else if (verdict == ParallaxFit.Verdict.Unsure) unsure++;
                     else leftOut++;
-                    ShowAutoPlayToast($"Checking pictures for 3D, {nextCheck} of {stillToCheck.Count}", hold: true);
+                    ShowAutoPlayToast($"Checking images for 3D, {nextCheck} of {stillToCheck.Count}", hold: true);
                 }
                 if (!Current()) return;
                 if (first == null)
@@ -3603,7 +3603,7 @@ namespace ModernImageViewer
                         _activeShow = replaced;
                         ShowShownBadge();
                     }
-                    ShowAutoPlayToast("3D: none of these pictures passed the depth check.");
+                    ShowAutoPlayToast("3D: none of these images passed the depth check.");
                     return;
                 }
                 deck = new PictureDeck(new[] { first }, new Random());
@@ -3611,7 +3611,7 @@ namespace ModernImageViewer
                 string unreadNote = unread > 0 ? $", {unread} unreadable" : "";
                 playNote = more
                     ? "Play show · 3D · starting, still checking the rest"
-                    : $"Play show · 3D · {deck.Count} pictures, {leftOut} left out, {unsure} unsure{unreadNote}";
+                    : $"Play show · 3D · {deck.Count} images, {leftOut} left out, {unsure} unsure{unreadNote}";
             }
             else deck = new PictureDeck(pictures, new Random());
             int failedHands = 0;
@@ -3664,7 +3664,7 @@ namespace ModernImageViewer
                         var keepers = deck.All.Where(p => DepthMaps.CachedVerdict(p) == ParallaxFit.Verdict.Pass).ToList();
                         deck = new PictureDeck(keepers, new Random());
                         dealtOnce = new HashSet<string>(show.Scenes.SelectMany(s => s.GetPhotoPaths()), StringComparer.OrdinalIgnoreCase);
-                        ShowAutoPlayToast("3D · checking pictures for depth motion", hold: true);
+                        ShowAutoPlayToast("3D · checking images for depth motion", hold: true);
                     }
                 }
                 else if (!wantParallax && stillToCheck != null)
@@ -3733,7 +3733,7 @@ namespace ModernImageViewer
                         if (notifiedEmptyForRevision != _upcomingStepRevision)
                         {
                             notifiedEmptyForRevision = _upcomingStepRevision;
-                            ShowAutoPlayToast("3D: none of these pictures passed the depth check.");
+                            ShowAutoPlayToast("3D: none of these images passed the depth check.");
                         }
                         await _storyboardAdvanced.WaitAsync(TimeSpan.FromSeconds(2));
                         continue;

@@ -711,7 +711,7 @@ namespace ModernImageViewer
             {
                 Style = LayoutStyle("LayoutStepperButtonStyle"),
                 Content = glyph,
-                FontFamily = new FontFamily("Segoe Fluent Icons"),
+                FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
                 FontWeight = Microsoft.UI.Text.FontWeights.Normal,
                 Delay = 400,
                 Interval = 80,
@@ -933,7 +933,7 @@ namespace ModernImageViewer
                     HorizontalAlignment = HorizontalAlignment.Right,
                     Padding = new Thickness(8, 4, 8, 4),
                     CornerRadius = new CornerRadius(8),
-                    Content = new FontIcon { FontFamily = new FontFamily("Segoe Fluent Icons"), Glyph = "\uE7AD", FontSize = 13 }
+                    Content = new FontIcon { FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), Glyph = "\uE7AD", FontSize = 13 }
                 };
                 ToolTipService.SetToolTip(next, "Next position");
                 AutomationProperties.SetName(next, "Next position");
