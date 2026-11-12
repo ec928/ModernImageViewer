@@ -87,7 +87,9 @@ D2D_PS_ENTRY(main)
             float fill = clamp(sBg + bestAway * abs(lBg), -reach, reach);
             // If the mirror reaches something nearer (the other ear, a second person), repeat the background edge instead.
             if (D2DSampleInputAtOffset(1, float2(fill, 0)).r > dBg + 0.08) fill = sBg;
-            bestU = lerp(bestU, fill, gapWeight);
+            // Mix the two colours, not the two places: a place partway between them is some third pixel, a stray speck
+            // that changed every frame (IMGP0997's arm, v0.35.4).
+            return lerp(D2DSampleInputAtOffset(0, float2(bestU, 0)), D2DSampleInputAtOffset(0, float2(fill, 0)), gapWeight);
         }
     }
     return D2DSampleInputAtOffset(0, float2(bestU, 0));

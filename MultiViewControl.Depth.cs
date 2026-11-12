@@ -71,6 +71,10 @@ namespace ModernImageViewer
             public double SwayClock = -1;
             /// <summary>How long the 3D filter took to select this picture, when that check was timed.</summary>
             public long? FilterMilliseconds { get; init; }
+            /// <summary>Debug capture folder for this scene (MultiViewControl.SwayCapture.cs); null when off.</summary>
+            public string? CaptureDir;
+            public int CaptureFrames;
+            public double CaptureNext;
         }
 
         // Slide: how far the background travels behind the foreground over the scene, as a share of the photo's width.
@@ -272,6 +276,8 @@ namespace ModernImageViewer
                 // Without a mask it keeps the depth map as it is.
                 ICanvasImage splatDepth = depthAtSize;
                 CanvasBitmap? crispBitmap = null;
+                byte[]? captureMask = null, captureCrisp = null;
+                int captureMaskSize = 0, captureTw = 0, captureTh = 0;
                 if (layers == null && await SubjectMasks.ForAsync(path) is { } outline && outline.Size > 0)
                 {
                     int tw = (int)Math.Min(size.Width, SwayDepth.MostWidth);
@@ -279,9 +285,10 @@ namespace ModernImageViewer
                     byte[] greyMap = map.Grey;
                     int gw = map.Width, gh = map.Height;
                     var crispClock = System.Diagnostics.Stopwatch.StartNew();
-                    var crispBytes = await Task.Run(() => SwayDepth.Crisp(greyMap, gw, gh, outline.Alpha, outline.Size, tw, th));
+                    var crispBytes = await Task.Run(() => SwayDepth.Crisp(greyMap, gw, gh, outline.Alpha, outline.Size, tw, th, pixels, photoWidth, photoHeight));
                     if (ticket != _depthTicket || _autoPlaySeconds == 0) { photo.Dispose(); depth.Dispose(); return false; }
                     crispBitmap = CanvasBitmap.CreateFromBytes(device, crispBytes, tw, th, Windows.Graphics.DirectX.DirectXPixelFormat.B8G8R8A8UIntNormalized);
+                    (captureMask, captureMaskSize, captureCrisp, captureTw, captureTh) = (outline.Alpha, outline.Size, crispBytes, tw, th);
                     splatDepth = new BorderEffect
                     {
                         Source = new ScaleEffect { Source = crispBitmap, Scale = new Vector2(size.Width / (float)tw, size.Height / (float)th), InterpolationMode = CanvasImageInterpolation.Linear },
@@ -328,6 +335,9 @@ namespace ModernImageViewer
                     SwayInstead = LiveDepthMotion() == SurpriseOptions.DepthSlide && layers == null,
                     FilterMilliseconds = filterMs
                 };
+                if (layers == null)
+                    state.CaptureDir = BeginSwayCapture(path, photo, map.Grey, map.Width, map.Height, captureMask, captureMaskSize,
+                        captureCrisp, captureTw, captureTh, map.Middle, splatStep, splat?.MaxSamplerOffset ?? 0);
                 // Drawn once before it is shown, so the swap shows the same picture.
                 // One failed frame used to abandon the scene. A lost device is not retried: those bitmaps are dead.
                 Exception? drawFailed = null;
@@ -529,9 +539,13 @@ namespace ModernImageViewer
                 splat.Properties["shift"] = s;
                 splat.Properties["pivot"] = pivot;
                 splat.Properties["stepPx"] = state.SplatStep;
-                splat.Properties["reach"] = Math.Min(splat.MaxSamplerOffset - 1, Math.Abs(s) * Math.Max(pivot, 1 - pivot) + state.SplatStep * 2);
+                float reach = Math.Min(splat.MaxSamplerOffset - 1, Math.Abs(s) * Math.Max(pivot, 1 - pivot) + state.SplatStep * 2);
+                splat.Properties["reach"] = reach;
                 drawn = splat;
+                CaptureSwayFrame(state, drawn, s, pivot, reach, ramp, true);
             }
+            else if (motion == "Sway")
+                CaptureSwayFrame(state, drawn, shift.X, pivot, 0, ramp, false);
             session.DrawImage(drawn, new Rect(0, 0, width, height),
                 new Rect((width - cropW) / 2, (height - cropH) / 2, cropW, cropH));
             ShowDepthReadout(state, motion, rotationUsed);
