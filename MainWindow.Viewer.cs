@@ -1925,9 +1925,7 @@ namespace ModernImageViewer
 
             if (PreviewThumbnailReady(item.Thumbnail))
             {
-                PreviewImage.Source = item.Thumbnail;
-                PreviewImage.Visibility = Visibility.Visible;
-                PreviewPlaceholder.Visibility = Visibility.Collapsed;
+                ShowPreviewBitmap(item.Thumbnail!, fade: true);
             }
             else
             {
@@ -1940,6 +1938,24 @@ namespace ModernImageViewer
             CancelPreviewLoad();
             _previewCts = new CancellationTokenSource();
             _ = LoadListPreviewAsync(item, generation, _previewCts.Token);
+        }
+
+        private void ShowPreviewBitmap(ImageSource source, bool fade)
+        {
+            var transition = PreviewImage.OpacityTransition;
+            if (fade)
+            {
+                PreviewImage.OpacityTransition = null;
+                PreviewImage.Opacity = 0;
+                PreviewImage.OpacityTransition = transition;
+            }
+            PreviewImage.Source = source;
+            PreviewImage.Visibility = Visibility.Visible;
+            PreviewPlaceholder.Visibility = Visibility.Collapsed;
+            if (fade)
+                DispatcherQueue.TryEnqueue(() => PreviewImage.Opacity = 1);
+            else
+                PreviewImage.Opacity = 1;
         }
 
         private void ShowDirectoryPreview(ImageItem item)
@@ -2022,10 +2038,9 @@ namespace ModernImageViewer
                         thumb = item.Thumbnail;
                     if (thumb != null)
                     {
-                    if (item.Thumbnail == null) item.Thumbnail = thumb;
-                        PreviewImage.Source = thumb;
-                        PreviewImage.Visibility = Visibility.Visible;
-                        PreviewPlaceholder.Visibility = Visibility.Collapsed;
+                        bool alreadyShown = PreviewImage.Source != null && PreviewImage.Visibility == Visibility.Visible;
+                        if (item.Thumbnail == null) item.Thumbnail = thumb;
+                        ShowPreviewBitmap(thumb, fade: !alreadyShown);
                     }
                     if (size.Width >= 1 && size.Height >= 1)
                         PreviewDimensionsText.Text = $"{(int)size.Width} \u00D7 {(int)size.Height}";
@@ -3164,6 +3179,7 @@ namespace ModernImageViewer
             if (_listMode) PinListToLeftEdge();
         }
 
+        // Tiles are sized so a whole number of them fills the row: the slider sets the target size and any spare width is shared across the row.
         private void ApplyItemSize()
         {
             if (_imageWrapGrid == null) return;
@@ -3181,7 +3197,22 @@ namespace ModernImageViewer
             }
             else if (ThumbSizeSlider != null)
             {
-                _imageWrapGrid.ItemWidth = _imageWrapGrid.ItemHeight = ThumbSizeSlider.Value;
+                double target = Math.Clamp(ThumbSizeSlider.Value, 100, 400);
+                double pad = ImageGrid != null ? (ImageGrid.Padding.Left + ImageGrid.Padding.Right) : 0;
+                double rawWidth = ImageGrid != null && ImageGrid.ActualWidth > 1
+                    ? Math.Max(0, ImageGrid.ActualWidth - pad - 16)
+                    : ListViewportWidth();
+                double itemSize = target;
+                if (rawWidth > target + 1)
+                {
+                    int columns = Math.Max(1, (int)(rawWidth / target));
+                    itemSize = Math.Floor(rawWidth / columns);
+                }
+                if (Math.Abs(_imageWrapGrid.ItemWidth - itemSize) > 1.0 || Math.Abs(_imageWrapGrid.ItemHeight - itemSize) > 1.0)
+                {
+                    _imageWrapGrid.ItemWidth = itemSize;
+                    _imageWrapGrid.ItemHeight = itemSize;
+                }
             }
         }
 
@@ -3205,9 +3236,9 @@ namespace ModernImageViewer
 
         private void ImageGrid_SizeChanged(object sender, SizeChangedEventArgs e)
         {
+            ApplyItemSize();
             if (_listMode)
             {
-                ApplyItemSize();
                 PinListToLeftEdge();
             }
             ApplyCaptionInset();
@@ -3437,8 +3468,8 @@ namespace ModernImageViewer
             {
                 _currentSettings.TileSize = preset.TileSize;
                 if (ThumbSizeSlider != null) ThumbSizeSlider.Value = preset.TileSize;
-                if (!_listMode && _imageWrapGrid != null)
-                    _imageWrapGrid.ItemWidth = _imageWrapGrid.ItemHeight = preset.TileSize;
+                if (!_listMode)
+                    ApplyItemSize();
             }
 
             SaveAllSettings();
@@ -3604,7 +3635,10 @@ namespace ModernImageViewer
         private void UpdateThumbnailEdge()
         {
             if (ThumbSizeSlider == null) return;
-            int edge = ViewerMath.ThumbnailEdge(ThumbSizeSlider.Value, RootGrid?.XamlRoot?.RasterizationScale ?? 1);
+            double shownSize = !_listMode && _imageWrapGrid != null && _imageWrapGrid.ItemWidth > 0
+                ? Math.Max(ThumbSizeSlider.Value, _imageWrapGrid.ItemWidth)
+                : ThumbSizeSlider.Value;
+            int edge = ViewerMath.ThumbnailEdge(shownSize, RootGrid?.XamlRoot?.RasterizationScale ?? 1);
             bool grew = edge > ImageItem.ThumbnailEdge;
             ImageItem.ThumbnailEdge = edge;
             if (!grew || _listMode) return;
@@ -3617,14 +3651,15 @@ namespace ModernImageViewer
         private void ImageWrapGrid_Loaded(object sender, RoutedEventArgs e)
         {
             _imageWrapGrid = sender as ItemsWrapGrid;
+            ApplyItemSize();
             UpdateThumbnailEdge();
             if (!_applyingViewMode) ApplyViewMode();
         }
 
         private void ThumbSizeSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
         {
-            if (!_listMode && _imageWrapGrid != null)
-                _imageWrapGrid.ItemWidth = _imageWrapGrid.ItemHeight = e.NewValue;
+            if (!_listMode)
+                ApplyItemSize();
             if (_currentSettings != null)
                 _currentSettings.TileSize = Math.Round(e.NewValue);
             if (_thumbnailEdgeTimer == null)

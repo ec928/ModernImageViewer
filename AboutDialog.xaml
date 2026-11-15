@@ -5,25 +5,30 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    mc:Ignorable="d"
-    Title="About Modern Image Viewer">
+    mc:Ignorable="d">
 
     <ContentDialog.Resources>
-        <Style x:Key="AboutSectionHeader" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="CharacterSpacing" Value="80"/>
-            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}"/>
-            <Setter Property="Margin" Value="0,18,0,6"/>
+        <x:Double x:Key="ContentDialogMaxWidth">820</x:Double>
+        <Style x:Key="AboutGlyph" TargetType="FontIcon">
+            <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets"/>
+            <Setter Property="FontSize" Value="18"/>
+            <Setter Property="Foreground" Value="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+            <Setter Property="VerticalAlignment" Value="Top"/>
+            <Setter Property="Margin" Value="0,2,0,0"/>
         </Style>
-        <Style x:Key="AboutBullet" TargetType="TextBlock">
+        <Style x:Key="AboutItemTitle" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
-            <Setter Property="Margin" Value="0,0,0,6"/>
-            <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}"/>
+        </Style>
+        <Style x:Key="AboutItemBody" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,1,0,0"/>
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}"/>
         </Style>
     </ContentDialog.Resources>
 
-    <Grid Width="440" RowSpacing="16">
+    <Grid x:Name="RootPanel" Width="500" RowSpacing="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
@@ -33,84 +38,92 @@
         <ScrollViewer x:Name="BodyScroller"
                       Grid.Row="0"
                       VerticalScrollBarVisibility="Auto"
-                      MaxHeight="380" IsTabStop="False">
-            <StackPanel Spacing="0" Padding="0,0,12,0">
+                      MaxHeight="560"
+                      IsTabStop="False">
+            <StackPanel Spacing="0">
 
-                <!-- Brand -->
-                <TextBlock Text="Modern Image Viewer"
-                           FontSize="26" FontWeight="SemiBold"
-                           Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                <!-- Header band. -->
+                <Grid CornerRadius="10" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                    <Border x:Name="HeroTint" CornerRadius="10"/>
+                    <Grid Padding="20,18" ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Image x:Name="AppIconImage" Width="64" Height="64" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="Modern Image Viewer" FontSize="28" FontWeight="SemiBold"/>
+                            <TextBlock Text="A fast, hardware-accelerated image, comic book and collage viewer."
+                                       FontSize="15" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                            <!-- Filled at runtime from the assembly version, never hardcoded: a stale
+                                 number here would be a lie the moment the version is bumped. -->
+                            <TextBlock x:Name="VersionText" FontSize="12" Margin="0,6,0,0"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+                    </Grid>
+                </Grid>
 
-                <!-- Filled at runtime from the assembly version, never hardcoded: a stale
-                     number here would be a lie the moment the version is bumped. -->
-                <TextBlock x:Name="VersionText"
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                           Margin="0,2,0,0"/>
+                <!-- One column of six; UseWideLayout() turns it into two columns of three in a wide window. -->
+                <Grid x:Name="FeatureGrid" Margin="2,14,12,0" ColumnSpacing="14" RowSpacing="11">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
 
-                <TextBlock Text="A fast, hardware-accelerated image and comic book viewer built with WinUI 3 and Win2D. Browse large high-resolution folders in Tile or List mode, read CBR and CBZ comics with automatic two-page spreads, tear images off into floating reference windows, and build collages in Multi-View and play them as shows, cut to your music."
-                           TextWrapping="Wrap" Margin="0,10,0,0"
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    <FontIcon Grid.Row="0" Glyph="&#xEB9F;" Style="{StaticResource AboutGlyph}"/>
+                    <StackPanel Grid.Row="0" Grid.Column="1">
+                        <TextBlock Text="Tile, list and instant preview" Style="{StaticResource AboutItemTitle}"/>
+                        <TextBlock Style="{StaticResource AboutItemBody}"
+                                   Text="Browse large folders in a row-fitted tile grid or high-density list with a live metadata and image preview bar, tinted by the current image."/>
+                    </StackPanel>
 
-                <TextBlock Text="Viewing and layout" Style="{StaticResource AboutSectionHeader}"/>
-                <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Tile &amp; List View modes" FontWeight="SemiBold"/><Run Text=" &#x2014; switch between resizable thumbnail grids and high-density multi-column lists with a live metadata and image preview bar."/>
-                </TextBlock>
-                <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Favourite folders" FontWeight="SemiBold"/><Run Text=" &#x2014; star up to 10 folders in the Favourites and Recent Folders menu to keep them; they stay until you remove them."/>
-                </TextBlock>
-                <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Multi-View" FontWeight="SemiBold"/><Run Text=" &#x2014; compare up to 16 images in rows or columns of your choosing, with hero layouts, draggable edges, and Alt+drag to swap. Add a whole folder, and what does not fit waits in the Image Pool."/>
-                </TextBlock>
-                <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Collages" FontWeight="SemiBold"/><Run Text=" &#x2014; frame each cell, rotate and mirror images, float cells above the grid in shapes, drop in images from File Explorer, choose the canvas, undo and redo, save layouts, and export to JPEG, PNG, or the clipboard."/>
-                </TextBlock>
-                <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Show" FontWeight="SemiBold"/><Run Text=" &#x2014; Play makes a show and keeps every scene, so you can step back, edit and save. The Show card sets the preset (Multi-Image, Cinematic, or three of your own), how many images, how long each scene holds, sequence beats and the designs. The engine's settings are one step behind that card."/>
-                </TextBlock>
-                <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Window sizes" FontWeight="SemiBold"/><Run Text=" &#x2014; save up to three window and tile size states (Ctrl+1, Ctrl+2, Ctrl+3) to jump between compact browsing and wide two-page layouts."/>
-                </TextBlock>
-                <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Tear-off viewports" FontWeight="SemiBold"/><Run Text=" &#x2014; middle-click or drag any image out into its own borderless floating window for multi-monitor reference overlays."/>
-                </TextBlock>
-                <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Direct2D GPU rendering" FontWeight="SemiBold"/><Run Text=" &#x2014; smooth zoom, pan, rotation, ICC color profiles, real-time gamma adjustment, and full multi-frame animated GIF playback."/>
-                </TextBlock>
+                    <FontIcon Grid.Row="1" Glyph="&#xEE49;" Style="{StaticResource AboutGlyph}"/>
+                    <StackPanel Grid.Row="1" Grid.Column="1">
+                        <TextBlock Text="Multi-View and collages" Style="{StaticResource AboutItemTitle}"/>
+                        <TextBlock Style="{StaticResource AboutItemBody}"
+                                   Text="Compare up to 16 images in fluid grids with hero layouts, draggable edges, floating shaped cells, custom frames, and export to JPEG, PNG, or the clipboard."/>
+                    </StackPanel>
 
-                <TextBlock Text="Comic book reader (CBR / CBZ)" Style="{StaticResource AboutSectionHeader}"/>
-                <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Native archive browsing" FontWeight="SemiBold"/><Run Text=" &#x2014; open .cbz (ZIP) and .cbr (RAR) comic archives directly like folders without extracting files to disk."/>
-                </TextBlock>
-                <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Responsive two-page spread" FontWeight="SemiBold"/><Run Text=" &#x2014; automatically displays side-by-side double-page spreads when the window is stretched wide enough (toggle anytime with B), while keeping covers and wide landscapes on a single page."/>
-                </TextBlock>
+                    <FontIcon Grid.Row="2" Glyph="&#xE768;" Style="{StaticResource AboutGlyph}"/>
+                    <StackPanel Grid.Row="2" Grid.Column="1">
+                        <TextBlock Text="Shows, 3D parallax and music" Style="{StaticResource AboutItemTitle}"/>
+                        <TextBlock Style="{StaticResource AboutItemBody}"
+                                   Text="Play any folder or selection as a Multi-Image, Cinematic, or 3D Parallax show with camera motion and transitions cut to your music's beats."/>
+                    </StackPanel>
 
-                <TextBlock Text="Shows and music" Style="{StaticResource AboutSectionHeader}"/>
-                <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Cinematic preset" FontWeight="SemiBold"/><Run Text=" &#x2014; one image at a time, mostly edge to edge, with slow camera moves, faces framed by the eyes, and long dissolves. Choose it on the Show card, the sidebar chevron, or the playbar preset pill, then Play Show. It replaced the separate Cinematic Slideshow window."/>
-                </TextBlock>
-                <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Editing a show" FontWeight="SemiBold"/><Run Text=" &#x2014; the Show tab of the drawer reorders, duplicates and removes scenes; Camera Director sets a scene's frames, curve and turn."/>
-                </TextBlock>
+                    <FontIcon Grid.Row="3" Glyph="&#xE736;" Style="{StaticResource AboutGlyph}"/>
+                    <StackPanel Grid.Row="3" Grid.Column="1">
+                        <TextBlock Text="Comic book reader (CBR and CBZ)" Style="{StaticResource AboutItemTitle}"/>
+                        <TextBlock Style="{StaticResource AboutItemBody}"
+                                   Text="Open .cbz and .cbr archives directly like folders with responsive two-page spreads (toggle with B) that keep covers and wide pages solo."/>
+                    </StackPanel>
 
-                <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Music" FontWeight="SemiBold"/><Run Text=" &#x2014; songs from a folder at or above a star rating, set from Settings (the gear). On a Multi-View show, Soundtrack can land each change on the beat, hold loud passages shorter, and cut straight through when the song suddenly gets louder."/>
-                </TextBlock>
+                    <FontIcon Grid.Row="4" Glyph="&#xE8A7;" Style="{StaticResource AboutGlyph}"/>
+                    <StackPanel Grid.Row="4" Grid.Column="1">
+                        <TextBlock Text="Tear-off reference windows" Style="{StaticResource AboutItemTitle}"/>
+                        <TextBlock Style="{StaticResource AboutItemBody}"
+                                   Text="Middle-click or drag any image out into its own borderless floating window for multi-monitor reference, and save up to three window sizes (Ctrl+1–3)."/>
+                    </StackPanel>
 
-                <TextBlock Text="Performance and formats" Style="{StaticResource AboutSectionHeader}"/>
-                <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Tiered async decoding" FontWeight="SemiBold"/><Run Text=" &#x2014; thumbnail, fast preview, display, and high-fidelity stages with predictive lookahead caching keep 10 MB+ image libraries responsive and memory-bounded."/>
-                </TextBlock>
-                <TextBlock Style="{StaticResource AboutBullet}">
-                    <Run Text="&#x2022;  "/><Run Text="Formats &amp; portability" FontWeight="SemiBold"/><Run Text=" &#x2014; JPEG, PNG, GIF, BMP, TIFF, WebP, CBZ, and CBR out of the box (plus HEIC/HEIF and AVIF via Windows codecs). Portable with no registry changes; settings live in your local app data folder."/>
-                </TextBlock>
+                    <FontIcon Grid.Row="5" Glyph="&#xE72E;" Style="{StaticResource AboutGlyph}"/>
+                    <StackPanel Grid.Row="5" Grid.Column="1">
+                        <TextBlock Text="Fast, private and portable" Style="{StaticResource AboutItemTitle}"/>
+                        <TextBlock Style="{StaticResource AboutItemBody}"
+                                   Text="Direct2D GPU rendering with tiered async decoding, ICC color profiles, and animated GIFs. Portable with no account, ads, or registry changes."/>
+                    </StackPanel>
+                </Grid>
 
-                <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,20,0,14"/>
-
-                <TextBlock TextWrapping="Wrap" FontSize="12"
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}">
-                    <Run Text="Free and open source under the MIT licence. Unsigned build, so Windows SmartScreen may warn on first launch."/>
-                </TextBlock>
+                <TextBlock Text="Free and open source under the MIT licence. Unsigned build, so Windows SmartScreen may warn on first launch."
+                           TextWrapping="Wrap" FontSize="12" Margin="2,14,0,0"
+                           Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
             </StackPanel>
         </ScrollViewer>
 

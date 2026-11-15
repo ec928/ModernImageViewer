@@ -103,8 +103,8 @@ The **Favourites and Recent Folders** flyout (`RecentFoldersMenu`) serves as the
 
 Information overlays must provide instant diagnostic readability without obscuring the photograph:
 
-### Top-Left Inspection HUD (Single Viewer & Multi-View Solo)
-The Single Viewer and Multi-View Solo/Maximize modes share an **identical** HUD specification:
+### Top-Left Inspection HUD (Single Viewer & Multi-View, View on its own)
+The Single Viewer and Multi-View's View on its own share an **identical** HUD specification:
 
 - **Container**: Floating acrylic pill, `CornerRadius="12"`, `Padding="14,10"`, subtle 1px border.
 - **Backdrop**: Semi-transparent dark acrylic (`rgba(20, 20, 20, 0.85)` / `CardBackgroundFillColorDefaultBrush`).
@@ -128,6 +128,7 @@ Multi-View shows up to 16 grid cells in fluid mosaics, with floating cells above
 
 ```
 Add image...  (empty cell only, first in the menu)
+View on its own  (a cell with an image, first in the menu)
 Not on the canvas (N)...  (empty cell, when the Image Pool holds any)
 Swap with...              >   Not on the canvas (N)... (when the Image Pool holds any, not on an empty cell)
                               Contents only | With attributes
@@ -179,8 +180,8 @@ The Frame & Border card always shows at full height for the window, in front of 
    - Visual affordance: Drop target glows with a subtle accent highlight.
 3. **Draggable Dividers**:
    - Divider borders support smooth edge dragging to rebalance grid splits without reloading or re-decoding image bitmaps.
-4. **Unified Solo / Maximize Mode**:
-   - Clicking Solo/Maximize expands the chosen image to fill the canvas while preserving all multi-view layout state.
+4. **View on its own**:
+   - One name for it everywhere: the cell's maximise button and the first entry of its right-click menu, both "View on its own", expand the chosen image to fill the canvas while preserving all multi-view layout state. Left and Right step through the other images on the canvas. Double-click zooms inside the cell; it does not open View on its own.
    - The top-left info HUD is identical in visual treatment and data layout to the Single Viewer inspection HUD.
    - Exit button returns cleanly to the mosaic view. It is **Back**, with the same arrow and word as the grid playbar's Back; the top-right button does the same and says the same ("Back to Multi-View (Esc)").
 5. **Show Controls Only When They Apply**:
@@ -241,6 +242,7 @@ Images can be browsed, viewed and managed without a mouse, and F1 lists the keys
 | | `Ctrl + Z` / `Ctrl + Y` | Undo / redo |
 | | `Ctrl + C` | Copy the canvas as an image |
 | | `Ctrl + S` | Save or load |
+| | `Left` / `Right` | What Previous and Next on the bar do: a scene of the show, or with no show the layout before (Undo) or a new one |
 | | `H` / `R` | next hero / rows or columns |
 | | `+` / `-` | More or fewer lines |
 | **Floating cells** | `Ctrl + Drag` | Pan the image inside the cell |

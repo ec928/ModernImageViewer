@@ -513,7 +513,8 @@
             </Border>
         </Grid>
 
-        <!-- Solo View Container (shown when user double-clicks or clicks Solo on a photo) -->
+        <!-- View on its own: one image fills the canvas. Opened from a cell's maximise button or its right-click menu.
+             (Double-click zooms inside the cell instead.) -->
         <Grid x:Name="SoloContainer" Visibility="Collapsed" Canvas.ZIndex="150" Background="#FF080808">
             <Grid x:Name="SoloImageContainer" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#01000000">
                 <!-- Zoom and pan are on the host, so they follow the screen whichever way the photo is turned. -->

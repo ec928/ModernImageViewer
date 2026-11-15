@@ -326,6 +326,7 @@ namespace ModernImageViewer
                     XamlRoot = RootGrid.XamlRoot,
                     RequestedTheme = RootGrid.ActualTheme
                 };
+                if (RootGrid.ActualWidth >= 860) dialog.UseWideLayout();
                 await dialog.ShowAsync();
             }
             catch (Exception ex)

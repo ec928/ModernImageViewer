@@ -57,10 +57,16 @@ namespace ModernImageViewer
                 ("Ctrl+S", "Save or load"),
                 ("Alt+drag", "Swap two images"),
                 ("Space", "Play or pause the show"),
-                ("Left, Right", "Previous and next scene or layout, while playing"),
+                ("Left, Right", "Previous and next scene; with no show, the layout before or a new one"),
                 ("B", "The show, in the drawer"),
                 ("F11", "Full screen"),
                 ("Esc", "Pause the show if it is playing, otherwise back to the folder"),
+            }),
+            ("View on its own (Multi-View)", new[]
+            {
+                ("Right-click, View on its own", "One image fills the canvas; also the maximise button on a cell"),
+                ("Left, Right", "Previous and next image on the canvas"),
+                ("Esc, Enter", "Back to Multi-View"),
             }),
             ("Floating cells", new[]
             {

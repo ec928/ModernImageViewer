@@ -1103,22 +1103,14 @@ namespace ModernImageViewer
                     }
                     CloseRequested?.Invoke(this, EventArgs.Empty);
                     return true;
+                // Left and Right do what Previous and Next on the bar do, playing or not: a scene of the show, or with
+                // no show, the layout before (Undo) or a new one.
                 case VirtualKey.Left:
-                    if (_autoPlaySeconds > 0)
-                    {
-                        if (_isStoryboardPlayback) _ = StepStoryboardScene(back: true);
-                        else StepLayout(back: true);
-                        return true;
-                    }
-                    break;
+                    StepLayout(back: true);
+                    return true;
                 case VirtualKey.Right:
-                    if (_autoPlaySeconds > 0)
-                    {
-                        if (_isStoryboardPlayback) _ = StepStoryboardScene(back: false);
-                        else StepLayout(back: false);
-                        return true;
-                    }
-                    break;
+                    StepLayout(back: false);
+                    return true;
                 case VirtualKey.Add:
                 case (VirtualKey)187: // = / +
                     ChangeLines(1);
@@ -2022,7 +2014,7 @@ namespace ModernImageViewer
             frameBtn.Click += (s, e) => OpenCellBorderFlyout(photo.Item);
             topStack.Children.Add(frameBtn);
             // 4. Solo / Maximize Button
-            var maxBtn = MakePillButton("\uE922", "Solo / Maximize", fontSize: 10);
+            var maxBtn = MakePillButton("\uE922", "View on its own", fontSize: 10);
             maxBtn.Visibility = IsEmptyCell(photo.Item) ? Visibility.Collapsed : Visibility.Visible;
             maxBtn.Click += (s, e) => EnterSolo(Slot(photo.Item));
             topStack.Children.Add(maxBtn);
@@ -2239,6 +2231,14 @@ namespace ModernImageViewer
                 int inTray = TrayImages().Count;
                 if (inTray > 0)
                     menu.Items.Add(MakeAdvancedItem($"Not on the canvas ({inTray})\u2026", "\uE8B9", () => ShowTrayCard(curSlot)));
+                menu.Items.Add(new MenuFlyoutSeparator());
+            }
+            else
+            {
+                // The image filling the canvas, with its own bar. First, as Add image is for an empty cell, so it can be found.
+                var viewAlone = MakeAdvancedItem("View on its own", "", () => EnterSolo(curSlot));
+                ToolTipService.SetToolTip(viewAlone, "This image fills the canvas. Left and Right step through the others; Esc comes back.");
+                menu.Items.Add(viewAlone);
                 menu.Items.Add(new MenuFlyoutSeparator());
             }
             if (_items.Count > 1)

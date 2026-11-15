@@ -14,9 +14,9 @@ One pill along the bottom, left to right. Dividers separate the groups. Rows and
 |---|---|---|
 | Back | Back | Leaves multi-image for the tiles. Esc does the same when no card is open. The layout stays, and Multi-View returns to it. |
 | Drawer | Drawer, or Drawer (N images) / Drawer (N scenes) | Opens or closes the drawer, on the tab it was last left on: Image Pool or Show. The count is what that tab shows, with its unit: images not on the canvas, or scenes. It never changes what Play plays. A light plate shows while the drawer is open. |
-| Previous | icon | Previous scene, or the previous layout when no show is playing. Left arrow. |
+| Previous | icon | Previous scene, or the previous layout when no show is playing. Left arrow, whether or not anything is playing. |
 | Play | Play, or Pause | Plays the show. Scenes are made as it plays and kept. While it runs: `Pause`. Space does the same. Filled while running. |
-| Next | icon | Next scene, or one new layout when no show is playing. Right arrow. |
+| Next | icon | Next scene, or one new layout when no show is playing. Right arrow, whether or not anything is playing. |
 | Show | Show | Opens the Show card: the preset, this show's values, and Soundtrack. Engine settings are behind **Engine settings…** on that card. |
 | Rows | Rows, or N Rows | Arranges the grid in rows and opens the grid layout card. R switches between rows and columns. B, R, H, + and − work only without Ctrl or Alt held, so Ctrl+B still toggles the sidebar. |
 | Columns | Columns, or N Columns | Arranges the grid in columns. Same card and same R key. |
@@ -227,4 +227,4 @@ Opened via `Save/Load` or `Ctrl+S`:
 
 - **Single Viewer**: Animated GIFs automatically decode all animation frames into GPU memory on open.
 - **Playback Controls**: Displays interactive animation HUD (`[◀] [⏸] [▶]  1 / N`), supporting Space (play/pause), Left Arrow (previous frame), and Right Arrow (next frame).
-- **Multi-View Canvas**: Multi-view cells and Solo mode support animated GIF playback with hardware acceleration.
+- **Multi-View Canvas**: Multi-view cells and View on its own support animated GIF playback with hardware acceleration.
