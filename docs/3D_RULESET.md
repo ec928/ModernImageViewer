@@ -16,7 +16,7 @@ A picture plays one motion, or it is left out of the show. It is not shown as a 
 
 Slide does not use the sway percent or the swing time. Sway and Slide are not combined on the same picture. One swing is center, one side, the other side, center. Engine settings (from the Show card) > Camera has two sliders for Sway: **Sway depth** (how far, 0.4% to 6%, default 4%) and **Each swing** (how long one swing takes, 1.5 s to 12 s, default 4.25 s). A settings file without a key gets the default.
 
-The Settings (gear) "3D debug" readout, off by default, shows `Sway x.x%`, `Slide`, or `Pan`, and `Filter t s`. The percent is the sway depth the frame uses. Filter times around 0.7–1.3 s on this machine are the healthy range.
+The "3D debug" readout has no switch in the app since the Settings (gear) row was removed, and a saved setting no longer turns it on. Its code remains: when on, it shows `Sway x.x%`, `Slide`, or `Pan`, and `Filter t s`. The percent is the sway depth the frame uses. Filter times around 0.7–1.3 s on this machine are the healthy range.
 
 ## How Sway is drawn
 

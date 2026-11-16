@@ -495,7 +495,7 @@ namespace ModernImageViewer
                 Text = fileName,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 VerticalAlignment = VerticalAlignment.Center,
-                FontSize = 12.5,
+                FontSize = 13,
                 Foreground = _menuWhitePrimary
             };
             Grid.SetColumn(label, 1);
@@ -600,7 +600,7 @@ namespace ModernImageViewer
             {
                 Glyph = "\uE8B7",
                 FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
-                FontSize = 13.5,
+                FontSize = 14,
                 Foreground = _menuWhiteSecondary,
                 VerticalAlignment = VerticalAlignment.Center
             };

@@ -380,14 +380,14 @@ namespace ModernImageViewer
             if (MusicOptionText != null)
             {
                 var music = MyMusic;
-                MusicOptionText.Text = music.HasFolder ? "Music: " + music.Summary : "Music: none";
+                MusicOptionText.Text = music.HasFolder ? music.Summary : "None";
             }
-            if (ImageEditorOptionText != null) ImageEditorOptionText.Text = "Image editor: " + EditorName(ImageEditorPath);
+            if (ImageEditorOptionText != null) ImageEditorOptionText.Text = EditorName(ImageEditorPath);
             if (ExtensionsOptionText != null)
             {
                 ExtensionsOptionText.Text = ExtensionManager.Is3DInstalled
-                    ? $"Extensions: 3D ({ExtensionManager.Get3DDiskSizeFormatted()})"
-                    : "Extensions: none installed";
+                    ? $"3D ({ExtensionManager.Get3DDiskSizeFormatted()})"
+                    : "None installed";
             }
         }
     }

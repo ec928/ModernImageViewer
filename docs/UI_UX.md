@@ -12,8 +12,9 @@ ModernImageViewer is built with **WinUI 3** (Windows App SDK) and adheres to Win
   - The window uses dynamic theme-aware materials (Acrylic and Mica) for headers, flyouts, and dialog overlays.
   - Image canvases (Single Viewer and Multi-View) intentionally enforce a neutral, ultra-dark backdrop (`#0A0A0A` to `#121212`) so photographic colors remain unskewed by window framing.
 - **Corner Radii**:
-  - Controls, buttons, and badges: `4px`.
-  - Cards, flyouts, and HUD overlays: `8px` – `10px`.
+  - Controls, buttons, and badges: `4px`; a segmented control's outer frame `6px`.
+  - Cards and browser tiles: `8px`. Flyouts and menus: `10px`. Floating info overlays and the empty-folder card: `12px`.
+  - Floating pills (playbars, the selection bar, the loading pill): `24px`, which is a full capsule at their heights. A smaller radius leaves flat ends on the taller ones.
   - Dialog windows: `8px` outer with `4px` nested inputs.
 - **Borders & Elevation**:
   - Card and flyout borders: 1px subtle stroke (`{ThemeResource CardStrokeColorDefaultBrush}` or `{ThemeResource DividerStrokeColorDefaultBrush}`).
@@ -47,6 +48,7 @@ Both themes must provide equivalent hierarchy, contrast, and visual polish:
 - **Weights**:
   - Section headers, active selections, and primary HUD filenames: `SemiBold`.
   - Body text, button labels, and secondary details: `Normal`.
+- **Sizes**: text and icons in XAML use whole sizes, with `12`, `13` and `14` for nearly all labels and header icons. No half sizes (`11.5`, `12.5`, `13.5`): four sizes a half point apart read as untidy without anyone being able to say why.
 - **Casing**:
   - Use **sentence case** for labels, menu items, tooltips and section headers, across the app (e.g., *"Favourites"*, *"Recent"*, *"Clear recent folders"*, *"Play show"*). Proper names keep their capitals: Multi-View, Image Pool, Explorer, Recycle Bin, Frame & Border.
   - Avoid ALL CAPS in UI labels.
@@ -201,9 +203,11 @@ The Frame & Border card always shows at full height for the window, in front of 
 
 | Mode | Target User Workflow | Visual Spec |
 | :--- | :--- | :--- |
-| **Tile Grid** | Visual browsing & curation | Responsive thumbnail grid (`~250px` base), smooth slider zoom scaling, subtle border selection glow. |
-| **List Mode** | High-density asset management | Multi-column table (`Name`, `Dimensions`, `Size`, `Date Modified`, `Type`) with natural alphanumeric sorting (`StrCmpLogicalW`). |
-| **Inspector Bar** | Metadata evaluation in List Mode | Bottom docked panel with complete metadata readouts and an instant live thumbnail preview on the right. |
+| **Tile Grid** | Visual browsing & curation | Square tiles sized by the Tile size slider so a whole number fills the row. The image is the tile: no card, no caption strip, `8px` corners, `6px` between tiles. The file name sits on the image over a dark fade, and shows only while the tile is pointed at, is the keyboard cursor or is selected. A pointed-at or cursor tile grows from its centre by at most `2px` a side, so it stays inside its cell. |
+| **List Mode** | High-density asset management | Names only, in columns about `200px` wide that fill the window, subfolders first, with natural alphanumeric sorting (`StrCmpLogicalW`). A folder shows its own icon; an image shows a small picture of itself, and the image glyph until that is ready. A comic archive or page keeps its glyph. |
+| **Inspector Bar** | Metadata evaluation in List Mode | Bottom docked panel for the cursor row: type, size, date modified, dimensions, date taken and location, with a live thumbnail preview on the right. |
+
+The browser canvas behind tiles and rows is a light wash over the window backdrop (`BrowserCanvasBrush`), kept pale in the light theme now that tiles have no card to set off.
 
 ---
 
@@ -214,6 +218,7 @@ In accordance with workspace UX standards:
 - **Dedicated Footers**: Dialogs (About, Settings, Save / Export) must feature a dedicated bottom footer spanning the full width, separated by a 1px border or subtle tint.
 - **Button Alignment**: Primary actions (e.g., "Save", "Done") anchor to the **bottom-right** of the footer, with secondary actions ("Cancel") immediately to their left. A `ContentDialog` lays them out the other way round, so `DialogFooter.MainButtonOnRight` is called on every dialog with two or more buttons.
 - **Settings in a dialog**: small section headers as in About, with rows on rounded cards (`SettingsCard`): an icon, a title with an optional line under it, and the control at the right. Switches rather than checkboxes. A dialog takes the app's theme (`CurrentRequestedTheme`), so it never shows bright over a dark app. Controls that only mean something with a choice made wait until it is made.
+- **Settings (gear) flyout**: the same rows on cards as the dialogs, in three cards. Tile size, Window sizes and Theme each have their control at the right. Music, Image editor and Extensions are rows that show the current choice and a chevron, and open their dialog. About is on its own card. Titles are in primary text; only the current choice and icons are quiet.
 - **Button Hierarchy**:
   - Primary button: Accent fill (`AccentButtonStyle`).
   - Secondary / Dismiss button: Default or subtle stroke (`Default` / `SubtleButtonStyle`).

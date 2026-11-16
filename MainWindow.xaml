@@ -69,6 +69,44 @@
                 <Setter Property="Margin" Value="-4,4,-4,4"/>
                 <Setter Property="Fill" Value="{ThemeResource DividerStrokeColorDefaultBrush}"/>
             </Style>
+            <!-- Settings (gear): rows on rounded cards, as in the settings dialogs. -->
+            <Style x:Key="SettingsCardStyle" TargetType="Border">
+                <Setter Property="CornerRadius" Value="8"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}"/>
+                <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
+            </Style>
+            <Style x:Key="SettingsRowIconStyle" TargetType="FontIcon">
+                <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets"/>
+                <Setter Property="FontSize" Value="16"/>
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style x:Key="SettingsRowTitleStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="13"/>
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            </Style>
+            <Style x:Key="SettingsRowValueStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                <Setter Property="MaxWidth" Value="150"/>
+            </Style>
+            <Style x:Key="SettingsRowDividerStyle" TargetType="Rectangle">
+                <Setter Property="Height" Value="1"/>
+                <Setter Property="Fill" Value="{ThemeResource DividerStrokeColorDefaultBrush}"/>
+            </Style>
+            <Style x:Key="SettingsLinkRowStyle" TargetType="Button" BasedOn="{StaticResource SubtleButtonStyle}">
+                <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                <Setter Property="Height" Value="42"/>
+                <Setter Property="Padding" Value="12,0,10,0"/>
+                <Setter Property="CornerRadius" Value="0"/>
+                <Setter Property="IsTabStop" Value="True"/>
+            </Style>
         </Grid.Resources>
 
         <Grid.RowDefinitions>
@@ -101,7 +139,7 @@
                                 <FontIcon x:Name="HeaderFolderIcon" Glyph="&#xE8B7;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             </Button>
                             <Button Style="{StaticResource HeaderButtonStyle}" ToolTipService.ToolTip="Favourites and recent folders" AutomationProperties.Name="Favourites and recent folders">
-                                <FontIcon Glyph="&#xE8F1;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <FontIcon Glyph="&#xE8F1;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 <Button.Flyout>
                                     <Flyout x:Name="RecentFoldersMenu" Placement="BottomEdgeAlignedLeft" Opening="RecentFoldersMenu_Opening" Closed="HeaderFlyout_Closed">
                                         <Flyout.FlyoutPresenterStyle>
@@ -141,7 +179,7 @@
                                                 <Setter Property="MinWidth" Value="0"/>
                                                 <Setter Property="MaxWidth" Value="960"/>
                                                 <Setter Property="MinHeight" Value="0"/>
-                                                <Setter Property="CornerRadius" Value="8"/>
+                                                <Setter Property="CornerRadius" Value="10"/>
                                                 <Setter Property="Background" Value="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}"/>
                                                 <Setter Property="BorderBrush" Value="{ThemeResource SurfaceStrokeColorFlyoutBrush}"/>
                                                 <Setter Property="BorderThickness" Value="1"/>
@@ -159,7 +197,7 @@
                                     </Flyout>
                                 </FlyoutBase.AttachedFlyout>
                                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                    <TextBlock x:Name="HeaderFolderText" Text="Pictures" FontSize="12.5" FontWeight="SemiBold" VerticalAlignment="Center" MaxWidth="260" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock x:Name="HeaderFolderText" Text="Pictures" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" MaxWidth="260" TextTrimming="CharacterEllipsis"/>
                                     <Border x:Name="HeaderCountBadge" Background="{ThemeResource SubtleFillColorSecondaryBrush}" CornerRadius="9" Padding="7,1" VerticalAlignment="Center">
                                         <TextBlock x:Name="HeaderCountText" Text="0" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                     </Border>
@@ -171,10 +209,10 @@
 
                         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center" Margin="0,0,4,0">
                             <Button Style="{StaticResource HeaderButtonStyle}" Click="RefreshFolder_Click" ToolTipService.ToolTip="Refresh the folder (F5)" AutomationProperties.Name="Refresh the folder (F5)">
-                                <FontIcon Glyph="&#xE72C;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <FontIcon Glyph="&#xE72C;" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             </Button>
                             <Button Style="{StaticResource HeaderButtonStyle}" ToolTipService.ToolTip="Sort images" AutomationProperties.Name="Sort images">
-                                <FontIcon Glyph="&#xE8CB;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <FontIcon Glyph="&#xE8CB;" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 <Button.Flyout>
                                     <MenuFlyout x:Name="HeaderSortFlyout" Opening="HeaderSortFlyout_Opening" Closed="HeaderFlyout_Closed">
                                         <MenuFlyout.MenuFlyoutPresenterStyle>
@@ -206,123 +244,182 @@
                             </Border>
                             <Rectangle Width="1" Height="16" Margin="6,0,2,0" VerticalAlignment="Center" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"/>
                             <Button Style="{StaticResource HeaderButtonStyle}" ToolTipService.ToolTip="Settings" AutomationProperties.Name="Settings">
-                                <FontIcon Glyph="&#xE713;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <FontIcon Glyph="&#xE713;" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 <Button.Flyout>
                                     <Flyout x:Name="HeaderSettingsFlyout" Placement="BottomEdgeAlignedRight" Opening="HeaderSettingsFlyout_Opening" Closed="HeaderFlyout_Closed">
                                         <Flyout.FlyoutPresenterStyle>
                                             <Style TargetType="FlyoutPresenter">
-                                                <Setter Property="Padding" Value="12,8"/>
+                                                <Setter Property="Padding" Value="10"/>
                                                 <Setter Property="MinWidth" Value="0"/>
                                                 <Setter Property="MinHeight" Value="0"/>
-                                                <Setter Property="CornerRadius" Value="8"/>
+                                                <Setter Property="CornerRadius" Value="10"/>
                                                 <Setter Property="Background" Value="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}"/>
                                                 <Setter Property="BorderBrush" Value="{ThemeResource SurfaceStrokeColorFlyoutBrush}"/>
                                                 <Setter Property="BorderThickness" Value="1"/>
                                             </Style>
                                         </Flyout.FlyoutPresenterStyle>
-                                        <StackPanel Spacing="6">
-                                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                                <TextBlock Text="Tile size" Width="76" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
-                                                <Slider x:Name="ThumbSizeSlider" Minimum="100" Maximum="400" Value="164" Width="136" VerticalAlignment="Center" IsTabStop="True" ValueChanged="ThumbSizeSlider_ValueChanged" ToolTipService.ToolTip="Tile size"/>
-                                                <Rectangle Width="1" Height="18" Margin="4,0,2,0" VerticalAlignment="Center" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"/>
-                                                <Button Style="{StaticResource HeaderButtonStyle}" IsTabStop="True" Click="ResetWindow_Click" ToolTipService.ToolTip="Reset the window and tile size" AutomationProperties.Name="Reset the window and tile size">
-                                                    <FontIcon Glyph="&#xE923;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                                                </Button>
-                                            </StackPanel>
-                                            <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.5"/>
-                                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                                <TextBlock Text="Window sizes" Width="76" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
-                                                <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="5" Padding="2" Width="136" VerticalAlignment="Center">
-                                                    <Grid ColumnSpacing="2">
+                                        <StackPanel Width="344" Spacing="8">
+                                            <Border Style="{StaticResource SettingsCardStyle}">
+                                                <StackPanel>
+                                                    <Grid Height="46" Padding="12,0,8,0" ColumnSpacing="12">
                                                         <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto"/>
                                                             <ColumnDefinition Width="*"/>
-                                                            <ColumnDefinition Width="*"/>
-                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
                                                         </Grid.ColumnDefinitions>
-                                                        <Button x:Name="Preset1Button" Grid.Column="0" Style="{StaticResource HeaderButtonStyle}" IsTabStop="True" Width="42" Height="22" CornerRadius="4" Tag="0" Click="PresetSlot_Click" RightTapped="PresetSlot_RightTapped">
-                                                            <Grid Width="36" Height="20">
-                                                                <TextBlock x:Name="Preset1Text" Text="1" FontSize="11.5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                                <Ellipse x:Name="Preset1Dot" Width="4" Height="4" Fill="{ThemeResource AccentTextFillColorPrimaryBrush}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,2,0" Visibility="Collapsed"/>
-                                                            </Grid>
-                                                        </Button>
-                                                        <Button x:Name="Preset2Button" Grid.Column="1" Style="{StaticResource HeaderButtonStyle}" IsTabStop="True" Width="42" Height="22" CornerRadius="4" Tag="1" Click="PresetSlot_Click" RightTapped="PresetSlot_RightTapped">
-                                                            <Grid Width="36" Height="20">
-                                                                <TextBlock x:Name="Preset2Text" Text="2" FontSize="11.5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                                <Ellipse x:Name="Preset2Dot" Width="4" Height="4" Fill="{ThemeResource AccentTextFillColorPrimaryBrush}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,2,0" Visibility="Collapsed"/>
-                                                            </Grid>
-                                                        </Button>
-                                                        <Button x:Name="Preset3Button" Grid.Column="2" Style="{StaticResource HeaderButtonStyle}" IsTabStop="True" Width="42" Height="22" CornerRadius="4" Tag="2" Click="PresetSlot_Click" RightTapped="PresetSlot_RightTapped">
-                                                            <Grid Width="36" Height="20">
-                                                                <TextBlock x:Name="Preset3Text" Text="3" FontSize="11.5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                                <Ellipse x:Name="Preset3Dot" Width="4" Height="4" Fill="{ThemeResource AccentTextFillColorPrimaryBrush}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,2,0" Visibility="Collapsed"/>
-                                                            </Grid>
-                                                        </Button>
+                                                        <FontIcon Glyph="&#xE8A9;" Style="{StaticResource SettingsRowIconStyle}"/>
+                                                        <TextBlock Grid.Column="1" Text="Tile size" Style="{StaticResource SettingsRowTitleStyle}"/>
+                                                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                                            <Slider x:Name="ThumbSizeSlider" Minimum="100" Maximum="400" Value="164" Width="136" VerticalAlignment="Center" IsTabStop="True" ValueChanged="ThumbSizeSlider_ValueChanged" ToolTipService.ToolTip="Tile size" AutomationProperties.Name="Tile size"/>
+                                                            <Button Style="{StaticResource HeaderButtonStyle}" IsTabStop="True" Click="ResetWindow_Click" ToolTipService.ToolTip="Reset the window and tile size" AutomationProperties.Name="Reset the window and tile size">
+                                                                <FontIcon Glyph="&#xE923;" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                            </Button>
+                                                        </StackPanel>
                                                     </Grid>
-                                                </Border>
-                                                <Rectangle Width="1" Height="18" Margin="4,0,2,0" VerticalAlignment="Center" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"/>
-                                                <Button x:Name="PresetSaveModeButton" Style="{StaticResource HeaderButtonStyle}" IsTabStop="True" Click="PresetSaveMode_Click" ToolTipService.ToolTip="Save the window and tile size to 1, 2 or 3" AutomationProperties.Name="Save the window and tile size to 1, 2 or 3">
-                                                    <FontIcon x:Name="PresetSaveModeIcon" Glyph="&#xE74E;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                                                </Button>
-                                            </StackPanel>
-                                            <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.5"/>
-                                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                                <TextBlock Text="Theme" Width="76" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
-                                                <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="5" Padding="2" Width="136" VerticalAlignment="Center">
-                                                    <Grid ColumnSpacing="2">
+                                                    <Rectangle Style="{StaticResource SettingsRowDividerStyle}"/>
+                                                    <Grid Height="46" Padding="12,0,8,0" ColumnSpacing="12">
                                                         <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto"/>
                                                             <ColumnDefinition Width="*"/>
-                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
                                                         </Grid.ColumnDefinitions>
-                                                        <Button x:Name="ThemeLightButton" Grid.Column="0" Style="{StaticResource HeaderButtonStyle}" IsTabStop="True" Width="64" Height="22" CornerRadius="4" Tag="Light" Click="ThemeMode_Click" ToolTipService.ToolTip="Light theme">
-                                                            <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" HorizontalAlignment="Center">
-                                                                <FontIcon x:Name="ThemeLightIcon" Glyph="&#xE706;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="11.5"/>
-                                                                <TextBlock x:Name="ThemeLightText" Text="Light" FontSize="11.5"/>
-                                                            </StackPanel>
-                                                        </Button>
-                                                        <Button x:Name="ThemeDarkButton" Grid.Column="1" Style="{StaticResource HeaderButtonStyle}" IsTabStop="True" Width="64" Height="22" CornerRadius="4" Tag="Dark" Click="ThemeMode_Click" ToolTipService.ToolTip="Dark theme">
-                                                            <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" HorizontalAlignment="Center">
-                                                                <FontIcon x:Name="ThemeDarkIcon" Glyph="&#xE708;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="11.5"/>
-                                                                <TextBlock x:Name="ThemeDarkText" Text="Dark" FontSize="11.5"/>
-                                                            </StackPanel>
-                                                        </Button>
+                                                        <FontIcon Glyph="&#xE740;" Style="{StaticResource SettingsRowIconStyle}"/>
+                                                        <TextBlock Grid.Column="1" Text="Window sizes" Style="{StaticResource SettingsRowTitleStyle}"/>
+                                                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                                            <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="6" Padding="2" Width="136" VerticalAlignment="Center">
+                                                                <Grid ColumnSpacing="2">
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="*"/>
+                                                                        <ColumnDefinition Width="*"/>
+                                                                        <ColumnDefinition Width="*"/>
+                                                                    </Grid.ColumnDefinitions>
+                                                                    <Button x:Name="Preset1Button" Grid.Column="0" Style="{StaticResource HeaderButtonStyle}" IsTabStop="True" Width="42" Height="24" CornerRadius="4" Tag="0" Click="PresetSlot_Click" RightTapped="PresetSlot_RightTapped">
+                                                                        <Grid Width="36" Height="20">
+                                                                            <TextBlock x:Name="Preset1Text" Text="1" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                            <Ellipse x:Name="Preset1Dot" Width="4" Height="4" Fill="{ThemeResource AccentTextFillColorPrimaryBrush}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,2,0" Visibility="Collapsed"/>
+                                                                        </Grid>
+                                                                    </Button>
+                                                                    <Button x:Name="Preset2Button" Grid.Column="1" Style="{StaticResource HeaderButtonStyle}" IsTabStop="True" Width="42" Height="24" CornerRadius="4" Tag="1" Click="PresetSlot_Click" RightTapped="PresetSlot_RightTapped">
+                                                                        <Grid Width="36" Height="20">
+                                                                            <TextBlock x:Name="Preset2Text" Text="2" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                            <Ellipse x:Name="Preset2Dot" Width="4" Height="4" Fill="{ThemeResource AccentTextFillColorPrimaryBrush}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,2,0" Visibility="Collapsed"/>
+                                                                        </Grid>
+                                                                    </Button>
+                                                                    <Button x:Name="Preset3Button" Grid.Column="2" Style="{StaticResource HeaderButtonStyle}" IsTabStop="True" Width="42" Height="24" CornerRadius="4" Tag="2" Click="PresetSlot_Click" RightTapped="PresetSlot_RightTapped">
+                                                                        <Grid Width="36" Height="20">
+                                                                            <TextBlock x:Name="Preset3Text" Text="3" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                            <Ellipse x:Name="Preset3Dot" Width="4" Height="4" Fill="{ThemeResource AccentTextFillColorPrimaryBrush}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,2,0" Visibility="Collapsed"/>
+                                                                        </Grid>
+                                                                    </Button>
+                                                                </Grid>
+                                                            </Border>
+                                                            <Button x:Name="PresetSaveModeButton" Style="{StaticResource HeaderButtonStyle}" IsTabStop="True" Click="PresetSaveMode_Click" ToolTipService.ToolTip="Save the window and tile size to 1, 2 or 3" AutomationProperties.Name="Save the window and tile size to 1, 2 or 3">
+                                                                <FontIcon x:Name="PresetSaveModeIcon" Glyph="&#xE74E;" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                            </Button>
+                                                        </StackPanel>
                                                     </Grid>
-                                                </Border>
-                                                <Rectangle Width="1" Height="18" Margin="4,0,2,0" VerticalAlignment="Center" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"/>
-                                                <Button x:Name="ThemeSystemButton" Style="{StaticResource HeaderButtonStyle}" IsTabStop="True" Tag="System" Click="ThemeMode_Click" ToolTipService.ToolTip="Use the Windows theme" AutomationProperties.Name="Use the Windows theme">
-                                                    <FontIcon x:Name="ThemeSystemIcon" Glyph="&#xE770;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                                                </Button>
-                                            </StackPanel>
-                                            <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.5"/>
-                                            <Button Style="{StaticResource SubtleButtonStyle}" Click="MusicSettings_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Height="28" Padding="8,0" CornerRadius="4" IsTabStop="True" AutomationProperties.Name="Music settings" ToolTipService.ToolTip="The folder and rating for music in Multi-View shows.">
-                                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                                    <FontIcon Glyph="&#xE8D6;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                                                    <TextBlock x:Name="MusicOptionText" Text="Music: none" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                    <Rectangle Style="{StaticResource SettingsRowDividerStyle}"/>
+                                                    <Grid Height="46" Padding="12,0,8,0" ColumnSpacing="12">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <FontIcon Glyph="&#xE790;" Style="{StaticResource SettingsRowIconStyle}"/>
+                                                        <TextBlock Grid.Column="1" Text="Theme" Style="{StaticResource SettingsRowTitleStyle}"/>
+                                                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                                            <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="6" Padding="2" Width="136" VerticalAlignment="Center">
+                                                                <Grid ColumnSpacing="2">
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="*"/>
+                                                                        <ColumnDefinition Width="*"/>
+                                                                    </Grid.ColumnDefinitions>
+                                                                    <Button x:Name="ThemeLightButton" Grid.Column="0" Style="{StaticResource HeaderButtonStyle}" IsTabStop="True" Width="64" Height="24" CornerRadius="4" Tag="Light" Click="ThemeMode_Click" ToolTipService.ToolTip="Light theme">
+                                                                        <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                                                            <FontIcon x:Name="ThemeLightIcon" Glyph="&#xE706;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12"/>
+                                                                            <TextBlock x:Name="ThemeLightText" Text="Light" FontSize="12"/>
+                                                                        </StackPanel>
+                                                                    </Button>
+                                                                    <Button x:Name="ThemeDarkButton" Grid.Column="1" Style="{StaticResource HeaderButtonStyle}" IsTabStop="True" Width="64" Height="24" CornerRadius="4" Tag="Dark" Click="ThemeMode_Click" ToolTipService.ToolTip="Dark theme">
+                                                                        <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                                                            <FontIcon x:Name="ThemeDarkIcon" Glyph="&#xE708;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12"/>
+                                                                            <TextBlock x:Name="ThemeDarkText" Text="Dark" FontSize="12"/>
+                                                                        </StackPanel>
+                                                                    </Button>
+                                                                </Grid>
+                                                            </Border>
+                                                            <Button x:Name="ThemeSystemButton" Style="{StaticResource HeaderButtonStyle}" IsTabStop="True" Tag="System" Click="ThemeMode_Click" ToolTipService.ToolTip="Use the Windows theme" AutomationProperties.Name="Use the Windows theme">
+                                                                <FontIcon x:Name="ThemeSystemIcon" Glyph="&#xE770;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                            </Button>
+                                                        </StackPanel>
+                                                    </Grid>
                                                 </StackPanel>
-                                            </Button>
-                                            <Button Style="{StaticResource SubtleButtonStyle}" Click="ImageEditorSettings_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Height="28" Padding="8,0" CornerRadius="4" IsTabStop="True" AutomationProperties.Name="Image editor settings" ToolTipService.ToolTip="The program Edit opens an image in">
-                                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                                    <FontIcon Glyph="&#xE70F;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                                                    <TextBlock x:Name="ImageEditorOptionText" Text="Image editor: Paint" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            </Border>
+                                            <Border Style="{StaticResource SettingsCardStyle}">
+                                                <StackPanel>
+                                                    <Button Style="{StaticResource SettingsLinkRowStyle}" Click="MusicSettings_Click" AutomationProperties.Name="Music settings" ToolTipService.ToolTip="The folder and rating for music in Multi-View shows.">
+                                                        <Grid ColumnSpacing="12">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <FontIcon Glyph="&#xE8D6;" Style="{StaticResource SettingsRowIconStyle}"/>
+                                                            <TextBlock Grid.Column="1" Text="Music" Style="{StaticResource SettingsRowTitleStyle}"/>
+                                                            <TextBlock x:Name="MusicOptionText" Grid.Column="2" Style="{StaticResource SettingsRowValueStyle}"/>
+                                                            <FontIcon Grid.Column="3" Glyph="&#xE76C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="10" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Center"/>
+                                                        </Grid>
+                                                    </Button>
+                                                    <Rectangle Style="{StaticResource SettingsRowDividerStyle}"/>
+                                                    <Button Style="{StaticResource SettingsLinkRowStyle}" Click="ImageEditorSettings_Click" AutomationProperties.Name="Image editor settings" ToolTipService.ToolTip="The program Edit opens an image in">
+                                                        <Grid ColumnSpacing="12">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <FontIcon Glyph="&#xE70F;" Style="{StaticResource SettingsRowIconStyle}"/>
+                                                            <TextBlock Grid.Column="1" Text="Image editor" Style="{StaticResource SettingsRowTitleStyle}"/>
+                                                            <TextBlock x:Name="ImageEditorOptionText" Grid.Column="2" Style="{StaticResource SettingsRowValueStyle}"/>
+                                                            <FontIcon Grid.Column="3" Glyph="&#xE76C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="10" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Center"/>
+                                                        </Grid>
+                                                    </Button>
+                                                    <Rectangle Style="{StaticResource SettingsRowDividerStyle}"/>
+                                                    <Button Style="{StaticResource SettingsLinkRowStyle}" Click="ExtensionsSettings_Click" AutomationProperties.Name="Extensions" ToolTipService.ToolTip="Optional add-ons (3D Parallax, AI models)">
+                                                        <Grid ColumnSpacing="12">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <FontIcon Glyph="&#xE74C;" Style="{StaticResource SettingsRowIconStyle}"/>
+                                                            <TextBlock Grid.Column="1" Text="Extensions" Style="{StaticResource SettingsRowTitleStyle}"/>
+                                                            <TextBlock x:Name="ExtensionsOptionText" Grid.Column="2" Style="{StaticResource SettingsRowValueStyle}"/>
+                                                            <FontIcon Grid.Column="3" Glyph="&#xE76C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="10" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Center"/>
+                                                        </Grid>
+                                                    </Button>
                                                 </StackPanel>
-                                            </Button>
-                                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" ToolTipService.ToolTip="While a 3D image plays, show the sway depth in use and how long the 3D filter took to select it.">
-                                                <TextBlock Text="3D debug" Width="76" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
-                                                <ToggleSwitch x:Name="DepthDebugToggle" IsOn="False" MinWidth="0" OffContent="" OnContent="" VerticalAlignment="Center" Toggled="DepthDebugToggle_Toggled" AutomationProperties.Name="3D debug"/>
-                                            </StackPanel>
-                                            <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.5"/>
-                                            <Button Style="{StaticResource SubtleButtonStyle}" Click="ExtensionsSettings_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Height="28" Padding="8,0" CornerRadius="4" IsTabStop="True" AutomationProperties.Name="Extensions" ToolTipService.ToolTip="Optional add-ons (3D Parallax, AI models)">
-                                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                                    <FontIcon Glyph="&#xE74C;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                                                    <TextBlock x:Name="ExtensionsOptionText" Text="Extensions: 3D Parallax" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            </Border>
+                                            <Border Style="{StaticResource SettingsCardStyle}">
+                                                <StackPanel>
+                                                    <Button Style="{StaticResource SettingsLinkRowStyle}" Click="About_Click" AutomationProperties.Name="About" ToolTipService.ToolTip="About Modern Image Viewer">
+                                                        <Grid ColumnSpacing="12">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <FontIcon Glyph="&#xE946;" Style="{StaticResource SettingsRowIconStyle}"/>
+                                                            <TextBlock Grid.Column="1" Text="About Modern Image Viewer" Style="{StaticResource SettingsRowTitleStyle}"/>
+                                                            <FontIcon Grid.Column="3" Glyph="&#xE76C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="10" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Center"/>
+                                                        </Grid>
+                                                    </Button>
                                                 </StackPanel>
-                                            </Button>
-                                            <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.5"/>
-                                            <Button Style="{StaticResource SubtleButtonStyle}" Click="About_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Height="28" Padding="8,0" CornerRadius="4" IsTabStop="True" AutomationProperties.Name="About" ToolTipService.ToolTip="About Modern Image Viewer">
-                                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                                    <FontIcon Glyph="&#xE946;" FontSize="13.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                                                    <TextBlock Text="About Modern Image Viewer" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                                                </StackPanel>
-                                            </Button>
+                                            </Border>
                                         </StackPanel>
                                     </Flyout>
                                 </Button.Flyout>
@@ -385,7 +482,7 @@
 
                         <BreadcrumbBar x:Name="FolderBreadcrumb" Grid.Row="1" Margin="10,3,6,4" ItemClicked="BreadcrumbBar_ItemClicked" IsTabStop="False">
                             <BreadcrumbBar.Resources>
-                                <x:Double x:Key="BreadcrumbBarItemThemeFontSize">12.5</x:Double>
+                                <x:Double x:Key="BreadcrumbBarItemThemeFontSize">13</x:Double>
                                 <x:Double x:Key="BreadcrumbBarChevronFontSize">9.5</x:Double>
                                 <Thickness x:Key="BreadcrumbBarChevronPadding">2,0,2,0</Thickness>
                                 <Style TargetType="BreadcrumbBarItem">
@@ -397,7 +494,7 @@
                             </BreadcrumbBar.Resources>
                             <BreadcrumbBar.ItemTemplate>
                                 <DataTemplate>
-                                    <TextBlock Text="{Binding}" FontSize="12.5" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding}" FontSize="13" VerticalAlignment="Center"/>
                                 </DataTemplate>
                             </BreadcrumbBar.ItemTemplate>
                         </BreadcrumbBar>
@@ -429,12 +526,12 @@
                                             </Grid.ColumnDefinitions>
                                             <Grid Grid.Column="0" Width="18" Height="18" VerticalAlignment="Center">
                                                 <Grid Visibility="{Binding Content.FolderIconVisibility}">
-                                                    <FontIcon Glyph="&#xE8B7;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14.5" Foreground="{ThemeResource TextFillColorPrimaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding Content.FolderIconVisibility}"/>
+                                                    <FontIcon Glyph="&#xE8B7;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Foreground="{ThemeResource TextFillColorPrimaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding Content.FolderIconVisibility}"/>
                                                 </Grid>
-                                                <FontIcon Glyph="&#xE74A;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="1,0,0,0" Visibility="{Binding Content.UpIconVisibility}"/>
+                                                <FontIcon Glyph="&#xE74A;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="1,0,0,0" Visibility="{Binding Content.UpIconVisibility}"/>
                                                 <FontIcon Glyph="&#xE736;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Foreground="{ThemeResource ComicIconBrush}" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding Content.ComicIconVisibility}"/>
                                             </Grid>
-                                            <TextBlock Grid.Column="1" Text="{Binding Content.Name}" FontSize="12.5" TextTrimming="CharacterEllipsis" FontWeight="{Binding Content.NodeFontWeight}" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Content.Name}" FontSize="13" TextTrimming="CharacterEllipsis" FontWeight="{Binding Content.NodeFontWeight}" VerticalAlignment="Center"/>
                                         </Grid>
                                     </Grid>
                                 </DataTemplate>
@@ -566,7 +663,7 @@
                                                        MaxLines="1"
                                                        Margin="9,0,9,7"
                                                        Foreground="White"
-                                                       FontSize="11.5"/>
+                                                       FontSize="12"/>
                                         </Border>
                                         <Border Margin="3" IsHitTestVisible="False" Background="Transparent" BorderThickness="2" CornerRadius="5"
                                                 BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
@@ -608,7 +705,7 @@
                                                 Background="{ThemeResource AccentFillColorDefaultBrush}"
                                                 Opacity="{x:Bind SelectionOpacity, Mode=OneWay}"/>
                                         <Grid Width="20" Height="20" VerticalAlignment="Center">
-                                            <FontIcon Glyph="&#xEB9F;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{x:Bind PhotoListIconVisibility, Mode=OneTime}" Opacity="{x:Bind ListGlyphOpacity, Mode=OneWay}"/>
+                                            <FontIcon Glyph="&#xEB9F;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{x:Bind PhotoListIconVisibility, Mode=OneTime}" Opacity="{x:Bind ListGlyphOpacity, Mode=OneWay}"/>
                                             <Border CornerRadius="3" Visibility="{x:Bind PhotoListIconVisibility, Mode=OneTime}">
                                                 <Image Source="{x:Bind ListThumbnail, Mode=OneWay}" Stretch="UniformToFill" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>
@@ -635,14 +732,14 @@
                     </GridView>
 
                     <Grid x:Name="EmptyFolderOverlay" Grid.Row="0" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" Canvas.ZIndex="100">
-                        <Border Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}" BorderThickness="1" CornerRadius="16" Padding="28,24" MaxWidth="520" Margin="24" Translation="0,0,24">
+                        <Border Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}" BorderThickness="1" CornerRadius="12" Padding="28,24" MaxWidth="520" Margin="24" Translation="0,0,24">
                             <Border.Shadow>
                                 <ThemeShadow/>
                             </Border.Shadow>
                             <StackPanel Spacing="12" HorizontalAlignment="Center">
                                 <FontIcon Glyph="&#xEB9F;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="44" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center"/>
                                 <TextBlock x:Name="EmptyFolderTitle" Text="No images in this folder" FontSize="16" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center"/>
-                                <TextBlock Text="Drag and drop image files or comic archives here to browse, or choose another folder." TextWrapping="Wrap" TextAlignment="Center" MaxWidth="400" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" Margin="0,-4,0,6"/>
+                                <TextBlock Text="Drag and drop image files or comic archives here to browse, or choose another folder." TextWrapping="Wrap" TextAlignment="Center" MaxWidth="400" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" Margin="0,-4,0,6"/>
                                 <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Center">
                                     <Button x:Name="EmptyFolderSubfoldersButton" Click="ListMode_Click" Visibility="Collapsed" Style="{StaticResource SubtleButtonStyle}" Padding="12,6" CornerRadius="6">
                                         <TextBlock x:Name="EmptyFolderSubfoldersText" Text="View subfolders in list mode" FontSize="12"/>
@@ -659,7 +756,7 @@
                     </Grid>
 
                     <Grid x:Name="LoadingOverlay" Visibility="Collapsed" Background="#40000000" Canvas.ZIndex="500">
-                        <Border Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}" BorderThickness="1" CornerRadius="20" Padding="20,12" HorizontalAlignment="Center" VerticalAlignment="Center" Translation="0,0,32">
+                        <Border Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}" BorderThickness="1" CornerRadius="24" Padding="20,12" HorizontalAlignment="Center" VerticalAlignment="Center" Translation="0,0,32">
                             <Border.Shadow>
                                 <ThemeShadow/>
                             </Border.Shadow>
@@ -671,7 +768,7 @@
                     </Grid>
 
                     <Grid x:Name="MultiSelectActionBar" Grid.Row="0" Visibility="Collapsed" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,24" Canvas.ZIndex="300" RequestedTheme="Dark">
-                        <Border Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}" BorderThickness="1" CornerRadius="22" Padding="8,4" Translation="0,0,32">
+                        <Border Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}" BorderThickness="1" CornerRadius="24" Padding="8,4" Translation="0,0,32">
                             <Border.Shadow>
                                 <ThemeShadow/>
                             </Border.Shadow>

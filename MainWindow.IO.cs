@@ -78,6 +78,7 @@ namespace ModernImageViewer
                 var phantomItem = new ImageItem { Path = filePath, Name = Path.GetFileName(filePath), Dispatcher = this.DispatcherQueue };
 
                 ViewerControl.Visibility = Visibility.Visible;
+                SyncTileChrome();
                 if (HoverTriggerZone != null) HoverTriggerZone.Visibility = Visibility.Collapsed;
                 ViewerControl.TargetImage = phantomItem;
 

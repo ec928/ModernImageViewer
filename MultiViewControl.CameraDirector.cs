@@ -572,7 +572,7 @@ namespace ModernImageViewer
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(b, tip);
                 return b;
             }
-            _shotBadgeText = new TextBlock { FontSize = 11.5, Foreground = new SolidColorBrush(Color.FromArgb(230, 255, 255, 255)), VerticalAlignment = VerticalAlignment.Center };
+            _shotBadgeText = new TextBlock { FontSize = 12, Foreground = new SolidColorBrush(Color.FromArgb(230, 255, 255, 255)), VerticalAlignment = VerticalAlignment.Center };
             _shotStepper.Children.Add(MakeDirectorDivider());
             _shotStepper.Children.Add(ShotStep("\uE76B", -1, "Previous shot"));
             _shotStepper.Children.Add(_shotBadgeText);
@@ -605,7 +605,7 @@ namespace ModernImageViewer
                 BorderThickness = new Thickness(0),
                 CornerRadius = new CornerRadius(14),
                 IsTabStop = false,
-                FontSize = 11.5,
+                FontSize = 12,
                 Foreground = new SolidColorBrush(Color.FromArgb(220, 255, 255, 255)),
                 Flyout = curveMenu
             };
@@ -627,7 +627,7 @@ namespace ModernImageViewer
             };
             var prevStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center };
             prevStack.Children.Add(new FontIcon { FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), Glyph = "\uE768", FontSize = 10, Foreground = new SolidColorBrush(Colors.White) });
-            prevStack.Children.Add(new TextBlock { Text = "Preview Move", FontSize = 11.5, Foreground = new SolidColorBrush(Colors.White) });
+            prevStack.Children.Add(new TextBlock { Text = "Preview Move", FontSize = 12, Foreground = new SolidColorBrush(Colors.White) });
             previewBtn.Content = prevStack;
             previewBtn.Click += (_, _) => PreviewCameraMove();
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(previewBtn, "Preview move");
@@ -643,7 +643,7 @@ namespace ModernImageViewer
                 BorderThickness = new Thickness(0),
                 CornerRadius = new CornerRadius(14),
                 IsTabStop = false,
-                Content = new TextBlock { Text = "Reset", FontSize = 11.5, Foreground = new SolidColorBrush(Color.FromArgb(180, 255, 255, 255)) }
+                Content = new TextBlock { Text = "Reset", FontSize = 12, Foreground = new SolidColorBrush(Color.FromArgb(180, 255, 255, 255)) }
             };
             resetBtn.Click += (_, _) =>
             {
@@ -669,7 +669,7 @@ namespace ModernImageViewer
                 CornerRadius = new CornerRadius(14),
                 IsTabStop = false,
                 IsEnabled = false,
-                Content = new TextBlock { Text = "Aim at face", FontSize = 11.5, Foreground = new SolidColorBrush(Color.FromArgb(220, 255, 255, 255)) }
+                Content = new TextBlock { Text = "Aim at face", FontSize = 12, Foreground = new SolidColorBrush(Color.FromArgb(220, 255, 255, 255)) }
             };
             _aimFaceBtn.Click += (_, _) => AimSelectedFrameAtFace();
             ToolTipService.SetToolTip(_aimFaceBtn, "Looking for faces");
@@ -683,7 +683,7 @@ namespace ModernImageViewer
                 BorderThickness = new Thickness(0),
                 CornerRadius = new CornerRadius(14),
                 IsTabStop = false,
-                Content = new TextBlock { Text = "Exact…", FontSize = 11.5, Foreground = new SolidColorBrush(Color.FromArgb(220, 255, 255, 255)) },
+                Content = new TextBlock { Text = "Exact…", FontSize = 12, Foreground = new SolidColorBrush(Color.FromArgb(220, 255, 255, 255)) },
                 Flyout = MakeExactFrameFlyout()
             };
             ToolTipService.SetToolTip(exactBtn, "Type the selected frame's zoom, centre and turn");
@@ -700,7 +700,7 @@ namespace ModernImageViewer
                 BorderThickness = new Thickness(0),
                 CornerRadius = new CornerRadius(14),
                 IsTabStop = false,
-                Content = new TextBlock { Text = "Done", FontSize = 11.5, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = new SolidColorBrush(Colors.White) }
+                Content = new TextBlock { Text = "Done", FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = new SolidColorBrush(Colors.White) }
             };
             doneBtn.Click += (_, _) => ExitCameraDirector(save: true);
             ToolTipService.SetToolTip(doneBtn, "Save camera path and exit (Enter)");
@@ -713,7 +713,7 @@ namespace ModernImageViewer
                 BorderThickness = new Thickness(0),
                 CornerRadius = new CornerRadius(14),
                 IsTabStop = false,
-                Content = new TextBlock { Text = "Cancel", FontSize = 11.5, Foreground = new SolidColorBrush(Color.FromArgb(180, 255, 255, 255)) }
+                Content = new TextBlock { Text = "Cancel", FontSize = 12, Foreground = new SolidColorBrush(Color.FromArgb(180, 255, 255, 255)) }
             };
             cancelBtn.Click += (_, _) => ExitCameraDirector(save: false);
             ToolTipService.SetToolTip(cancelBtn, "Leave without keeping this scene's changes (Esc). A scene you stepped away from keeps its path.");
@@ -978,7 +978,7 @@ namespace ModernImageViewer
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(14),
                 IsTabStop = false,
-                Content = new TextBlock { Text = text, FontSize = 11.5, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = new SolidColorBrush(isStart ? Color.FromArgb(255, 16, 185, 129) : Color.FromArgb(255, 239, 68, 68)) }
+                Content = new TextBlock { Text = text, FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = new SolidColorBrush(isStart ? Color.FromArgb(255, 16, 185, 129) : Color.FromArgb(255, 239, 68, 68)) }
             };
             btn.Click += (_, _) => SelectCameraKeyframe(isStart);
             return btn;

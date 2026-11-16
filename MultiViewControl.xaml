@@ -262,7 +262,7 @@
             <Border Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}" 
                     BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}" 
                     BorderThickness="1" 
-                    CornerRadius="22" 
+                    CornerRadius="24" 
                     Padding="6,4"
                     Translation="0,0,32">
                 <Border.Shadow>
@@ -549,7 +549,7 @@
 
             <!-- Solo Bottom Playbar (auto-hides with HUD) -->
             <Border x:Name="SoloBottomBar" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,32"
-                    Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}" BorderThickness="1" CornerRadius="22" Padding="12,6" Translation="0,0,32">
+                    Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}" BorderThickness="1" CornerRadius="24" Padding="12,6" Translation="0,0,32">
                 <Border.Shadow>
                     <ThemeShadow/>
                 </Border.Shadow>

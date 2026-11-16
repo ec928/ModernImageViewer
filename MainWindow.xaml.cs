@@ -575,11 +575,6 @@ namespace ModernImageViewer
                 ViewerControl.SetGammaLevel(_currentGamma);
             }
 
-            _syncingDepthDebug = true;
-            if (DepthDebugToggle != null) DepthDebugToggle.IsOn = _currentSettings.DepthDebugReadout;
-            _syncingDepthDebug = false;
-            if (MultiViewControl != null) MultiViewControl.DepthDebugReadout = _currentSettings.DepthDebugReadout;
-            _depthDebugReady = true;
         }
 
         private List<ImageItem>? _draggedGridItems;

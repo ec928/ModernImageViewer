@@ -2066,7 +2066,7 @@ namespace ModernImageViewer
             Canvas.SetZIndex(positionBadge, 206);
             var badgeText = new TextBlock
             {
-                FontSize = 11.5,
+                FontSize = 12,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                 Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
                 VerticalAlignment = VerticalAlignment.Center,

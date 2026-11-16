@@ -2242,7 +2242,7 @@ namespace ModernImageViewer
             var trayTextStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Spacing = 2 };
             var emptyTrayTitle = new TextBlock
             {
-                FontSize = 13.5,
+                FontSize = 14,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
             };
             var emptyTrayDesc = new TextBlock
@@ -2474,7 +2474,7 @@ namespace ModernImageViewer
             var emptyTitle = new TextBlock
             {
                 Text = "No scenes in this show yet",
-                FontSize = 13.5,
+                FontSize = 14,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
             };
             var emptyDesc = new TextBlock

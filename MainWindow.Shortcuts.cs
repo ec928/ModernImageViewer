@@ -97,8 +97,8 @@ namespace ModernImageViewer
                     {
                         int row = grid.RowDefinitions.Count;
                         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                        var keyText = new TextBlock { Text = keys, FontSize = 12.5, TextWrapping = TextWrapping.Wrap };
-                        var actionText = new TextBlock { Text = action, FontSize = 12.5, TextWrapping = TextWrapping.Wrap };
+                        var keyText = new TextBlock { Text = keys, FontSize = 13, TextWrapping = TextWrapping.Wrap };
+                        var actionText = new TextBlock { Text = action, FontSize = 13, TextWrapping = TextWrapping.Wrap };
                         Grid.SetRow(keyText, row);
                         Grid.SetRow(actionText, row);
                         Grid.SetColumn(actionText, 1);

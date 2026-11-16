@@ -246,7 +246,7 @@
             <Grid.RenderTransform>
                 <TranslateTransform x:Name="AnimHudTranslate" Y="15" />
             </Grid.RenderTransform>
-            <Border Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}" BorderThickness="1" CornerRadius="20" Padding="12,4" Translation="0,0,32">
+            <Border Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}" BorderThickness="1" CornerRadius="24" Padding="12,4" Translation="0,0,32">
                 <Border.Shadow>
                     <ThemeShadow/>
                 </Border.Shadow>
