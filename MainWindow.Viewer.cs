@@ -1514,6 +1514,8 @@ namespace ModernImageViewer
         private Grid? _hoveredCard;
         private static readonly Vector3 TilePopScale = new(1.035f, 1.035f, 1f);
         private static readonly Vector3 TileRestScale = new(1f, 1f, 1f);
+        // Pixels a raised tile may grow on each side. The tile's margin in MainWindow.xaml is 3.
+        private const double TilePopRoom = 2;
 
         private void SyncTileCursor(bool scroll)
         {
@@ -1556,7 +1558,15 @@ namespace ModernImageViewer
 
         private static void SetTileRaised(Grid card, bool raised)
         {
-            Vector3 scale = raised ? TilePopScale : TileRestScale;
+            // Grows from its centre, by what fits in the gap around a tile: more and the cell cuts off its edges.
+            Vector3 scale = TileRestScale;
+            double width = card.ActualWidth, height = card.ActualHeight;
+            if (raised && width > 1 && height > 1)
+            {
+                float grow = (float)Math.Min(TilePopScale.X, (Math.Min(width, height) + 2 * TilePopRoom) / Math.Min(width, height));
+                scale = new Vector3(grow, grow, 1f);
+            }
+            card.CenterPoint = new Vector3((float)(width / 2), (float)(height / 2), 0f);
             if (card.Scale != scale) card.Scale = scale;
             string key = raised ? "TextFillColorSecondaryBrush" : "CardStrokeColorDefaultBrush";
             if (Application.Current.Resources.TryGetValue(key, out object brush) && brush is Brush stroke && !ReferenceEquals(card.BorderBrush, stroke))
