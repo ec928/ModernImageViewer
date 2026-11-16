@@ -532,45 +532,48 @@
                         <GridView.ItemTemplate>
                             <DataTemplate x:DataType="local:ImageItem">
                                 <Grid>
-                                    <Grid Visibility="{x:Bind TileVisibility, Mode=OneWay}" Margin="5" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="6" PointerEntered="Card_PointerEntered" PointerExited="Card_PointerExited" PointerPressed="Card_PointerPressed">
+                                    <Grid Visibility="{x:Bind TileVisibility, Mode=OneWay}" Margin="3" Background="{ThemeResource SubtleFillColorSecondaryBrush}" CornerRadius="8" PointerEntered="Card_PointerEntered" PointerExited="Card_PointerExited" PointerPressed="Card_PointerPressed">
                                         <Grid.ScaleTransition>
                                             <Vector3Transition Duration="0:0:0.15" />
                                         </Grid.ScaleTransition>
                                         <Grid.OpacityTransition>
                                             <ScalarTransition Duration="0:0:0.15" />
                                         </Grid.OpacityTransition>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="*"/>
-                                            <RowDefinition Height="26"/>
-                                        </Grid.RowDefinitions>
-                                        <Border Grid.Row="0" CornerRadius="5,5,0,0">
-                                            <Image Source="{x:Bind Thumbnail, Mode=OneWay}" x:Phase="2" Stretch="UniformToFill" />
-                                        </Border>
-                                        <Border Grid.Row="0" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="6" Padding="6,2" CornerRadius="4" Background="#B8181818" BorderBrush="#40FFFFFF" BorderThickness="1" IsHitTestVisible="False" Visibility="{x:Bind ComicBadgeVisibility, Mode=OneTime}">
+                                        <Image Source="{x:Bind Thumbnail, Mode=OneWay}" x:Phase="2" Stretch="UniformToFill" HorizontalAlignment="Center" VerticalAlignment="Center" ToolTipService.ToolTip="{x:Bind Name}"/>
+                                        <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="6" Padding="6,2" CornerRadius="4" Background="#B8181818" BorderBrush="#40FFFFFF" BorderThickness="1" IsHitTestVisible="False" Visibility="{x:Bind ComicBadgeVisibility, Mode=OneTime}">
                                             <StackPanel Orientation="Horizontal" Spacing="4">
                                                 <FontIcon Glyph="&#xE736;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="10" Foreground="#FFF8D348" VerticalAlignment="Center"/>
                                                 <TextBlock Text="{x:Bind ComicBadgeText, Mode=OneTime}" FontSize="10" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center"/>
                                             </StackPanel>
                                         </Border>
-                                        <TextBlock Text="{x:Bind Name}"
-                                                   x:Phase="1"
-                                                   Grid.Row="1"
-                                                   HorizontalAlignment="Center"
-                                                   VerticalAlignment="Center"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   MaxLines="1"
-                                                   Margin="8,0,8,1"
-                                                   Style="{ThemeResource CaptionTextBlockStyle}"
-                                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-                                                   FontSize="11.5"
-                                                   ToolTipService.ToolTip="{x:Bind Name}"/>
-                                        <Border Grid.Row="0" Margin="3" IsHitTestVisible="False" Background="Transparent" BorderThickness="2" CornerRadius="4"
+                                        <!-- The name sits on the image, over a fade, while the tile is pointed at, is the keyboard cursor or is selected. -->
+                                        <Border VerticalAlignment="Bottom" Height="52" IsHitTestVisible="False" Opacity="{x:Bind TileNameOpacity, Mode=OneWay}">
+                                            <Border.OpacityTransition>
+                                                <ScalarTransition Duration="0:0:0.12" />
+                                            </Border.OpacityTransition>
+                                            <Border.Background>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                                    <GradientStop Color="#00000000" Offset="0"/>
+                                                    <GradientStop Color="#99000000" Offset="0.55"/>
+                                                    <GradientStop Color="#D9000000" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </Border.Background>
+                                            <TextBlock Text="{x:Bind Name}"
+                                                       x:Phase="1"
+                                                       HorizontalAlignment="Left"
+                                                       VerticalAlignment="Bottom"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       MaxLines="1"
+                                                       Margin="9,0,9,7"
+                                                       Foreground="White"
+                                                       FontSize="11.5"/>
+                                        </Border>
+                                        <Border Margin="3" IsHitTestVisible="False" Background="Transparent" BorderThickness="2" CornerRadius="5"
                                                 BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
                                                 Opacity="{x:Bind SelectionOpacity, Mode=OneWay}"/>
-                                        <Grid Grid.RowSpan="2" IsHitTestVisible="False" Opacity="{x:Bind KeyboardCursorOpacity, Mode=OneWay}">
-                                            <Border Margin="-1" CornerRadius="7" BorderThickness="2" BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"/>
-                                        </Grid>
-                                        <Grid Grid.Row="0" Width="32" Height="32" Margin="10" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                        <Border IsHitTestVisible="False" CornerRadius="8" BorderThickness="2" BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+                                                Opacity="{x:Bind KeyboardCursorOpacity, Mode=OneWay}"/>
+                                        <Grid Width="32" Height="32" Margin="6" HorizontalAlignment="Left" VerticalAlignment="Top"
                                               Background="Transparent" PointerPressed="TileCheck_PointerPressed" Tapped="TileCheck_Tapped" ToolTipService.ToolTip="Select (Space or Ctrl+click)">
                                             <Grid Width="22" Height="22" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                   IsHitTestVisible="False" Opacity="{x:Bind HoverCheckOpacity, Mode=OneWay}">
@@ -605,7 +608,10 @@
                                                 Background="{ThemeResource AccentFillColorDefaultBrush}"
                                                 Opacity="{x:Bind SelectionOpacity, Mode=OneWay}"/>
                                         <Grid Width="20" Height="20" VerticalAlignment="Center">
-                                            <FontIcon Glyph="&#xEB9F;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{x:Bind PhotoListIconVisibility, Mode=OneTime}"/>
+                                            <FontIcon Glyph="&#xEB9F;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{x:Bind PhotoListIconVisibility, Mode=OneTime}" Opacity="{x:Bind ListGlyphOpacity, Mode=OneWay}"/>
+                                            <Border CornerRadius="3" Visibility="{x:Bind PhotoListIconVisibility, Mode=OneTime}">
+                                                <Image Source="{x:Bind ListThumbnail, Mode=OneWay}" Stretch="UniformToFill" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
                                             <FontIcon Glyph="&#xE736;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Foreground="{ThemeResource ComicIconBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{x:Bind ComicListIconVisibility, Mode=OneTime}"/>
                                             <Grid Width="18" Height="18" Visibility="{x:Bind DirectoryListIconVisibility, Mode=OneTime}">
                                                 <Grid Visibility="{x:Bind DirectoryFallbackVisibility, Mode=OneWay}">

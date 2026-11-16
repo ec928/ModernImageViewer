@@ -13,7 +13,7 @@
                 <ResourceDictionary x:Key="Light">
                     <SolidColorBrush x:Key="ComicIconBrush" Color="#FF1F6FEB"/>
                     <SolidColorBrush x:Key="FavouriteStarBrush" Color="#D97706"/>
-                    <SolidColorBrush x:Key="BrowserCanvasBrush" Color="#14000000"/>
+                    <SolidColorBrush x:Key="BrowserCanvasBrush" Color="#0A000000"/>
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Dark">
                     <SolidColorBrush x:Key="ComicIconBrush" Color="#FF58A6FF"/>

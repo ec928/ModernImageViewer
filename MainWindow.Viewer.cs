@@ -3731,12 +3731,14 @@ namespace ModernImageViewer
                 if (a.InRecycleQueue)
                 {
                     if (!_listMode && !_applyingViewMode) i.ClearThumbnail();
+                    if (_listMode) i.ClearListThumbnail();
                 }
-                else if (!_listMode)
+                else if (a.Phase == 2)
                 {
-                    if (a.Phase == 2) _ = i.LoadThumbnailAsync();
-                    else a.RegisterUpdateCallback(ImageGrid_ContainerContentChanging);
+                    if (_listMode) _ = i.LoadListThumbnailAsync();
+                    else _ = i.LoadThumbnailAsync();
                 }
+                else a.RegisterUpdateCallback(ImageGrid_ContainerContentChanging);
             }
         }
 

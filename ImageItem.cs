@@ -142,6 +142,7 @@ namespace ModernImageViewer
                 _isKeyboardCursor = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(KeyboardCursorOpacity));
+                OnPropertyChanged(nameof(TileNameOpacity));
             }
         }
 
@@ -159,6 +160,7 @@ namespace ModernImageViewer
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(SelectionOpacity));
                 OnPropertyChanged(nameof(SelectionWashOpacity));
+                OnPropertyChanged(nameof(TileNameOpacity));
                 OnPropertyChanged(nameof(HoverCheckOpacity));
                 OnPropertyChanged(nameof(ListHoverOpacity));
             }
@@ -175,6 +177,7 @@ namespace ModernImageViewer
                 if (_isPointerHovered == value) return;
                 _isPointerHovered = value;
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(TileNameOpacity));
                 OnPropertyChanged(nameof(HoverCheckOpacity));
                 OnPropertyChanged(nameof(ListHoverOpacity));
             }
@@ -182,6 +185,8 @@ namespace ModernImageViewer
 
         // Soft tint on a selected list row. The tile filename stays as it is.
         public double SelectionWashOpacity => _isGridSelected ? 0.16 : 0;
+        // A tile shows its name on the image only while it is pointed at, is the keyboard cursor or is selected.
+        public double TileNameOpacity => (_isPointerHovered || _isKeyboardCursor || _isGridSelected) ? 1 : 0;
         public double HoverCheckOpacity => (!_isGridSelected && _isPointerHovered && !IsDirectory && !IsComicEntry) ? 1 : 0;
         public double ListHoverOpacity => (!_isGridSelected && _isPointerHovered) ? 1 : 0;
 
@@ -443,6 +448,144 @@ namespace ModernImageViewer
             OnPropertyChanged(nameof(SizeString));
             _loadedEdge = 0;
             if (Thumbnail != null) _ = LoadThumbnailAsync();
+        }
+
+        // A list row's own small picture, in place of the image glyph. Windows' thumbnail when it has one, else the file
+        // decoded small, as a tile does. Comic pages keep the glyph.
+        private const uint ListThumbnailEdge = 96;
+        private ImageSource? _listThumbnail;
+        private bool _isLoadingListThumb;
+        private CancellationTokenSource? _listCts;
+
+        public ImageSource? ListThumbnail
+        {
+            get => _listThumbnail;
+            private set
+            {
+                _listThumbnail = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ListGlyphOpacity));
+            }
+        }
+
+        public double ListGlyphOpacity => _listThumbnail == null ? 1 : 0;
+
+        public async Task LoadListThumbnailAsync()
+        {
+            if (IsDirectory || IsComicArchive || IsComicEntry || _listThumbnail != null || _isLoadingListThumb) return;
+            if (string.IsNullOrEmpty(Path) || Dispatcher == null) return;
+
+            _isLoadingListThumb = true;
+            _listCts?.Cancel();
+            _listCts?.Dispose();
+            _listCts = new CancellationTokenSource();
+            var token = _listCts.Token;
+            bool enteredSemaphore = false;
+            try
+            {
+                await Task.Delay(20, token);
+                await _thumbSemaphore.WaitAsync(token);
+                enteredSemaphore = true;
+
+                ImageSource? small = null;
+                try
+                {
+                    var file = await StorageFile.GetFileFromPathAsync(Path).AsTask(token);
+                    using StorageItemThumbnail shell = await file.GetThumbnailAsync(ThumbnailMode.PicturesView, ListThumbnailEdge, ThumbnailOptions.ResizeThumbnail).AsTask(token);
+                    if (shell != null && shell.Size > 0 && !token.IsCancellationRequested)
+                    {
+                        // Decoded before the thumbnail is let go, as the tile's is.
+                        TaskCompletionSource<ImageSource?> done = new();
+                        using var registration = token.Register(() => done.TrySetCanceled());
+                        var stream = shell.CloneStream();
+                        if (!Dispatcher.TryEnqueue(() =>
+                        {
+                            try
+                            {
+                                BitmapImage bmp = new();
+                                var op = bmp.SetSourceAsync(stream);
+                                op.Completed = (info, status) =>
+                                {
+                                    stream.Dispose();
+                                    done.TrySetResult(status == Windows.Foundation.AsyncStatus.Completed ? bmp : null);
+                                };
+                            }
+                            catch { stream.Dispose(); done.TrySetResult(null); }
+                        }))
+                        {
+                            stream.Dispose();
+                            done.TrySetResult(null);
+                        }
+                        small = await done.Task;
+                    }
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Shell list thumbnail failed for {Path}: {ex.Message}");
+                }
+
+                if (small == null && !token.IsCancellationRequested)
+                {
+                    TaskCompletionSource<ImageSource?> done = new();
+                    using var registration = token.Register(() => done.TrySetCanceled());
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            using var stream = await ViewerEngine.OpenImageStreamAsync(Path, token);
+                            if (stream == null) { done.TrySetResult(null); return; }
+                            var decoder = await BitmapDecoder.CreateAsync(stream).AsTask(token);
+                            double ratio = Math.Min(1.0, (double)ListThumbnailEdge / Math.Min(decoder.PixelWidth, decoder.PixelHeight));
+                            var bitmap = await decoder.GetSoftwareBitmapAsync(
+                                BitmapPixelFormat.Bgra8,
+                                BitmapAlphaMode.Premultiplied,
+                                new BitmapTransform
+                                {
+                                    ScaledWidth = (uint)Math.Max(1, decoder.PixelWidth * ratio),
+                                    ScaledHeight = (uint)Math.Max(1, decoder.PixelHeight * ratio),
+                                    InterpolationMode = BitmapInterpolationMode.Fant
+                                },
+                                ExifOrientationMode.RespectExifOrientation,
+                                ColorManagementMode.ColorManageToSRgb).AsTask(token);
+                            if (!Dispatcher.TryEnqueue(() =>
+                            {
+                                try
+                                {
+                                    SoftwareBitmapSource source = new();
+                                    // The bitmap is never closed, as with a tile's: it goes with the source.
+                                    source.SetBitmapAsync(bitmap).Completed = (info, status) => done.TrySetResult(source);
+                                }
+                                catch { done.TrySetResult(null); }
+                            }))
+                                done.TrySetResult(null);
+                        }
+                        catch { done.TrySetResult(null); }
+                    });
+                    small = await done.Task;
+                }
+
+                if (small != null && !token.IsCancellationRequested)
+                    Dispatcher.TryEnqueue(() => { if (!token.IsCancellationRequested) ListThumbnail = small; });
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"List thumbnail failed for {Path}: {ex.Message}");
+            }
+            finally
+            {
+                _isLoadingListThumb = false;
+                if (enteredSemaphore) _thumbSemaphore.Release();
+            }
+        }
+
+        public void ClearListThumbnail()
+        {
+            _listCts?.Cancel();
+            _listCts?.Dispose();
+            _listCts = null;
+            _isLoadingListThumb = false;
+            if (_listThumbnail != null) ListThumbnail = null;
         }
 
         public void ClearThumbnail()
