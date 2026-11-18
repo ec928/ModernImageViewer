@@ -18,24 +18,28 @@ namespace ModernImageViewer
         {
             if (string.IsNullOrWhiteSpace(path)) return DateTime.MinValue;
             if (Known.TryGetValue(path, out var known)) return known;
-            DateTime when = FileDate(path);
-            try
+            DateTime when = await Task.Run(async () =>
             {
-                if (!ComicArchive.IsEntryPath(path) && !ComicArchive.IsComicArchivePath(path) && File.Exists(path))
+                DateTime resolved = FileDate(path);
+                try
                 {
-                    var file = await StorageFile.GetFileFromPathAsync(path);
-                    var props = await file.Properties.RetrievePropertiesAsync(new[] { "System.Photo.DateTaken" });
-                    if (props.TryGetValue("System.Photo.DateTaken", out object? value))
+                    if (!ComicArchive.IsEntryPath(path) && !ComicArchive.IsComicArchivePath(path) && File.Exists(path))
                     {
-                        if (value is DateTimeOffset dto) when = dto.LocalDateTime;
-                        else if (value is DateTime dt) when = dt;
+                        var file = await StorageFile.GetFileFromPathAsync(path).AsTask().ConfigureAwait(false);
+                        var props = await file.Properties.RetrievePropertiesAsync(new[] { "System.Photo.DateTaken" }).AsTask().ConfigureAwait(false);
+                        if (props.TryGetValue("System.Photo.DateTaken", out object? value))
+                        {
+                            if (value is DateTimeOffset dto) resolved = dto.LocalDateTime;
+                            else if (value is DateTime dt) resolved = dt;
+                        }
                     }
                 }
-            }
-            catch
-            {
-                // Fall back to file date on any read error
-            }
+                catch
+                {
+                    // Fall back to file date on any read error
+                }
+                return resolved;
+            }).ConfigureAwait(false);
             Known[path] = when;
             return when;
         }

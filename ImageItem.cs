@@ -142,11 +142,13 @@ namespace ModernImageViewer
                 _isKeyboardCursor = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(KeyboardCursorOpacity));
+                OnPropertyChanged(nameof(TileCursorBorderOpacity));
                 OnPropertyChanged(nameof(TileNameOpacity));
             }
         }
 
         public double KeyboardCursorOpacity => _isKeyboardCursor ? 1 : 0;
+        public double TileCursorBorderOpacity => (_isKeyboardCursor && !_isGridSelected) ? 1 : 0;
 
         // Multi-select mark on the photograph. The grid's own box is hidden, so this is the visible selection.
         private bool _isGridSelected;
@@ -159,6 +161,7 @@ namespace ModernImageViewer
                 _isGridSelected = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(SelectionOpacity));
+                OnPropertyChanged(nameof(TileCursorBorderOpacity));
                 OnPropertyChanged(nameof(SelectionWashOpacity));
                 OnPropertyChanged(nameof(TileNameOpacity));
                 OnPropertyChanged(nameof(HoverCheckOpacity));

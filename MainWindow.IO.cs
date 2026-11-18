@@ -358,6 +358,7 @@ namespace ModernImageViewer
                         _currentIndex = 0;
                         seeded = true;
                     }
+                    _tileCursorVisible = returnedToItem;
                     bool returnedToFolder = false;
                     if (_listMode)
                     {

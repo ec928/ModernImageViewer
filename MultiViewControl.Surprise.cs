@@ -4839,8 +4839,13 @@ namespace ModernImageViewer
         /// </summary>
         private async Task NextRenderedFrameAsync()
         {
-            var drawn = new TaskCompletionSource();
-            void Once(object? sender, object e) => drawn.TrySetResult();
+            var drawn = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            void Once(object? sender, object e)
+            {
+                Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= Once;
+                if (DispatcherQueue == null || !DispatcherQueue.TryEnqueue(() => drawn.TrySetResult()))
+                    drawn.TrySetResult();
+            }
             Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += Once;
             try
             {

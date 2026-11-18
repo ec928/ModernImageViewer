@@ -69,6 +69,7 @@ namespace ModernImageViewer
         private readonly IntPtr _hWnd;
         private readonly KeyEventHandler _globalKeyDownHandler;
         private readonly KeyEventHandler _globalKeyUpHandler;
+        private readonly PointerEventHandler _gridWheelHandler;
         // True only while the sidebar is open *because* Alt is held, so releasing
         // Alt never closes a pane the user opened by hover or by clicking.
 
@@ -242,6 +243,7 @@ namespace ModernImageViewer
                 CancelPreviewLoad();
                 RootGrid.RemoveHandler(UIElement.KeyDownEvent, _globalKeyDownHandler);
                 RootGrid.RemoveHandler(UIElement.KeyUpEvent, _globalKeyUpHandler);
+                ImageGrid?.RemoveHandler(UIElement.PointerWheelChangedEvent, _gridWheelHandler);
                 Instance = null;
                 SaveAllSettings(finishNow: true);
                 StopFolderWatcher();
@@ -263,6 +265,8 @@ namespace ModernImageViewer
             RootGrid.AddHandler(UIElement.KeyDownEvent, _globalKeyDownHandler, true);
             _globalKeyUpHandler = new KeyEventHandler(Global_KeyUp);
             RootGrid.AddHandler(UIElement.KeyUpEvent, _globalKeyUpHandler, true);
+            _gridWheelHandler = new PointerEventHandler(ImageGrid_PointerWheelChanged);
+            ImageGrid.AddHandler(UIElement.PointerWheelChangedEvent, _gridWheelHandler, true);
 
             this.Activated += MainWindow_Activated;
             RootGrid.PointerMoved += RootGrid_PointerMoved;
@@ -402,13 +406,17 @@ namespace ModernImageViewer
             SaveAllSettings();
         }
 
+        private const double DefaultTileSize = 184;
+        private const double LegacyDefaultTileSize = 164;
+        private const int CurrentSettingsVersion = 2;
+
         private sealed class WindowPreset
         {
             public int WindowWidth { get; set; }
             public int WindowHeight { get; set; }
             public int WindowX { get; set; } = -1;
             public int WindowY { get; set; } = -1;
-            public double TileSize { get; set; } = 164;
+            public double TileSize { get; set; } = DefaultTileSize;
         }
 
         private sealed class AppSettings
@@ -432,7 +440,7 @@ namespace ModernImageViewer
             public double MusicHardCuts { get; set; } = 100;
             public string SortOrder { get; set; } = "NameAsc";
             public bool ListMode { get; set; }
-            public double TileSize { get; set; } = 164;
+            public double TileSize { get; set; } = DefaultTileSize;
             public string ThemeMode { get; set; } = "System";
             /// <summary>On-screen sway depth and 3D filter time, for checking 3D. Off unless turned on in Settings.</summary>
             public bool DepthDebugReadout { get; set; }
@@ -448,6 +456,7 @@ namespace ModernImageViewer
         private void ConfigureWindow(bool forceReset)
         {
             AppSettings settings = new AppSettings();
+            bool migrated = false;
 
             // Always attempt to load existing settings to preserve RecentFolders and Gamma
             if (File.Exists(_settingsPath))
@@ -456,7 +465,26 @@ namespace ModernImageViewer
                 {
                     string json = File.ReadAllText(_settingsPath);
                     var loaded = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(json);
-                    if (loaded != null) settings = loaded;
+                    if (loaded != null)
+                    {
+                        settings = loaded;
+                        if (settings.Version < CurrentSettingsVersion)
+                        {
+                            if (Math.Abs(settings.TileSize - LegacyDefaultTileSize) < 0.5)
+                                settings.TileSize = DefaultTileSize;
+                            foreach (var preset in settings.WindowPresets)
+                            {
+                                if (preset != null && Math.Abs(preset.TileSize - LegacyDefaultTileSize) < 0.5)
+                                    preset.TileSize = DefaultTileSize;
+                            }
+                            settings.Version = CurrentSettingsVersion;
+                            migrated = true;
+                        }
+                    }
+                    else
+                    {
+                        settings.Version = CurrentSettingsVersion;
+                    }
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
                 {
@@ -464,7 +492,12 @@ namespace ModernImageViewer
                     Debug.WriteLine($"[Settings] {ex.Message}");
                     try { File.Copy(_settingsPath, _settingsPath + ".unreadable", overwrite: true); }
                     catch (Exception copy) when (copy is IOException or UnauthorizedAccessException) { Debug.WriteLine($"[Settings] {copy.Message}"); }
+                    settings.Version = CurrentSettingsVersion;
                 }
+            }
+            else
+            {
+                settings.Version = CurrentSettingsVersion;
             }
 
             // Explicitly target window dimensions for reset, leaving arrays and user preferences intact
@@ -509,8 +542,8 @@ namespace ModernImageViewer
             while (_currentSettings.WindowPresets.Count < 3)
                 _currentSettings.WindowPresets.Add(null);
             ApplyTheme(_currentSettings.ThemeMode, save: false);
-            if (forceReset) _currentSettings.TileSize = 164;
-            else if (_currentSettings.TileSize < 100 || _currentSettings.TileSize > 400) _currentSettings.TileSize = 164;
+            if (forceReset) _currentSettings.TileSize = DefaultTileSize;
+            else if (_currentSettings.TileSize < 100 || _currentSettings.TileSize > 400) _currentSettings.TileSize = DefaultTileSize;
             if (ThumbSizeSlider != null) ThumbSizeSlider.Value = _currentSettings.TileSize;
             bool viewChanged = _listMode != settings.ListMode;
             _listMode = settings.ListMode;
@@ -574,6 +607,9 @@ namespace ModernImageViewer
                 ViewerControl.SetDetachLimitState((int)CurrentDetachLimit);
                 ViewerControl.SetGammaLevel(_currentGamma);
             }
+
+            if (migrated)
+                SaveAllSettings();
 
         }
 

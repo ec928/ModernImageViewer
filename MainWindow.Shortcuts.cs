@@ -24,6 +24,7 @@ namespace ModernImageViewer
                 ("Enter", "Open the image, or view the selected images together"),
                 ("Space", "Select or deselect the image"),
                 ("Ctrl+click, Shift+click", "Select several images"),
+                ("Ctrl+mouse wheel", "Resize tiles"),
                 ("Backspace", "Up one folder"),
                 ("F2", "Rename"),
                 ("F5", "Refresh"),

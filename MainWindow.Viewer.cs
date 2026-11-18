@@ -1364,6 +1364,8 @@ namespace ModernImageViewer
 
             if (_currentIndex >= 0 && _currentIndex < Images.Count && ImageGrid != null)
             {
+                _tileCursorVisible = true;
+                SyncTileCursor(scroll: false);
                 var targetItem = Images[_currentIndex];
                 ImageGrid.ScrollIntoView(targetItem);
 
@@ -1511,6 +1513,7 @@ namespace ModernImageViewer
         }
 
         private ImageItem? _tileCursorItem;
+        private bool _tileCursorVisible;
         private Grid? _hoveredCard;
         private static readonly Vector3 TilePopScale = new(1.035f, 1.035f, 1f);
         private static readonly Vector3 TileRestScale = new(1f, 1f, 1f);
@@ -1521,12 +1524,13 @@ namespace ModernImageViewer
         {
             ImageItem? previous = _tileCursorItem;
             ImageItem? next = CursorItem();
+            bool showCursor = _listMode || _tileCursorVisible;
             if (!ReferenceEquals(previous, next))
             {
                 if (previous != null) previous.IsKeyboardCursor = false;
                 _tileCursorItem = next;
-                if (next != null) next.IsKeyboardCursor = true;
             }
+            if (next != null) next.IsKeyboardCursor = showCursor;
             if (scroll && next != null) RevealTile(DisplayIndex());
             UpdateListPreview(next);
             if (_listMode) return;
@@ -1541,7 +1545,7 @@ namespace ModernImageViewer
             });
         }
 
-        // Same raise the pointer uses. A tile stays raised while the pointer is on it or it is the keyboard cursor.
+        // Same raise the pointer uses. A tile stays raised while the pointer is on it or it is the active keyboard cursor.
         private void UpdateTilePop(ImageItem? item)
         {
             if (item == null || ImageGrid == null || _listMode) return;
@@ -1568,9 +1572,6 @@ namespace ModernImageViewer
             }
             card.CenterPoint = new Vector3((float)(width / 2), (float)(height / 2), 0f);
             if (card.Scale != scale) card.Scale = scale;
-            string key = raised ? "TextFillColorSecondaryBrush" : "CardStrokeColorDefaultBrush";
-            if (Application.Current.Resources.TryGetValue(key, out object brush) && brush is Brush stroke && !ReferenceEquals(card.BorderBrush, stroke))
-                card.BorderBrush = stroke;
         }
 
         private int DisplayCount() => _listMode ? _listEntries.Count : Images.Count;
@@ -2220,8 +2221,8 @@ namespace ModernImageViewer
 
         private int TileColumnCount()
         {
-            double itemWidth = _imageWrapGrid?.ItemWidth ?? 164;
-            if (itemWidth < 1) itemWidth = 164;
+            double itemWidth = _imageWrapGrid?.ItemWidth ?? DefaultTileSize;
+            if (itemWidth < 1) itemWidth = DefaultTileSize;
             double width = _imageWrapGrid?.ActualWidth ?? 0;
             if (width < 1 && ImageGrid != null)
                 width = Math.Max(0, ImageGrid.ActualWidth - ImageGrid.Padding.Left - ImageGrid.Padding.Right);
@@ -2231,8 +2232,8 @@ namespace ModernImageViewer
 
         private int VisibleTileRows()
         {
-            double itemHeight = _imageWrapGrid?.ItemHeight ?? 164;
-            if (itemHeight < 1) itemHeight = 164;
+            double itemHeight = _imageWrapGrid?.ItemHeight ?? DefaultTileSize;
+            if (itemHeight < 1) itemHeight = DefaultTileSize;
             var sv = ImageGrid != null ? FindScrollViewer(ImageGrid) : null;
             double viewport = sv?.ViewportHeight ?? 0;
             if (viewport < 1 && ImageGrid != null) viewport = ImageGrid.ActualHeight;
@@ -2246,7 +2247,7 @@ namespace ModernImageViewer
             return ViewerMath.VisibleTileOrigin(
                 scroll?.VerticalOffset ?? 0,
                 ImageGrid?.Padding.Top ?? 0,
-                _imageWrapGrid?.ItemHeight ?? 164,
+                _imageWrapGrid?.ItemHeight ?? DefaultTileSize,
                 TileColumnCount(),
                 DisplayCount());
         }
@@ -2263,8 +2264,8 @@ namespace ModernImageViewer
             }
 
             int cols = TileColumnCount();
-            double itemHeight = _imageWrapGrid?.ItemHeight ?? 164;
-            if (itemHeight < 1) itemHeight = 164;
+            double itemHeight = _imageWrapGrid?.ItemHeight ?? DefaultTileSize;
+            if (itemHeight < 1) itemHeight = DefaultTileSize;
             double itemStart = ImageGrid.Padding.Top + (index / cols) * itemHeight;
             double next = ViewerMath.ScrollOffsetToReveal(sv.VerticalOffset, sv.ViewportHeight, itemStart, itemHeight);
             if (Math.Abs(next - sv.VerticalOffset) > 0.5)
@@ -2280,6 +2281,7 @@ namespace ModernImageViewer
             int next = ViewerMath.MoveTileCursor(
                 DisplayIndex(), count, TileColumnCount(), VisibleTileRows(), TopLeftVisibleTile(), cursorKey);
             if (next < 0) return;
+            _tileCursorVisible = true;
             if (_listMode)
             {
                 _listCursor = next;
@@ -2523,6 +2525,8 @@ namespace ModernImageViewer
             }
             else if (e.Key == Windows.System.VirtualKey.Space)
             {
+                _tileCursorVisible = true;
+                SyncTileCursor(scroll: false);
                 var item = CursorItem();
                 if (item != null && !item.IsDirectory) ToggleGridItemSelection(item);
             }
@@ -3036,18 +3040,33 @@ namespace ModernImageViewer
             }
         }
 
-        private static Brush ResolveThemeBrush(string key, Windows.UI.Color color)
+        private static Brush ResolveThemeBrush(string key, bool isDark, Windows.UI.Color fallback)
         {
-            return new SolidColorBrush(color);
+            if (key == "AccentTextFillColorPrimaryBrush" && Application.Current?.Resources is ResourceDictionary res)
+            {
+                string[] candidates = isDark
+                    ? ["SystemAccentColorLight3", "SystemAccentColorLight2", "SystemAccentColor"]
+                    : ["SystemAccentColorDark2", "SystemAccentColorDark1", "SystemAccentColor"];
+                foreach (string name in candidates)
+                {
+                    if (res.TryGetValue(name, out object? val))
+                    {
+                        if (val is Windows.UI.Color color) return new SolidColorBrush(color);
+                        if (val is SolidColorBrush brush) return new SolidColorBrush(brush.Color);
+                    }
+                }
+            }
+            return new SolidColorBrush(fallback);
         }
 
         private void SyncViewModeButtons()
         {
             if (TilesModeButton == null || ListModeButton == null || MultiModeButton == null) return;
             bool isDark = RootGrid?.ActualTheme == ElementTheme.Dark;
-            var activeBg = ResolveThemeBrush("CardBackgroundFillColorDefaultBrush", isDark ? Windows.UI.Color.FromArgb(18, 255, 255, 255) : Windows.UI.Color.FromArgb(179, 255, 255, 255));
-            var activeFg = ResolveThemeBrush("AccentTextFillColorPrimaryBrush", isDark ? Windows.UI.Color.FromArgb(255, 96, 205, 255) : Windows.UI.Color.FromArgb(255, 0, 95, 184));
-            var inactiveFg = ResolveThemeBrush("TextFillColorSecondaryBrush", isDark ? Windows.UI.Color.FromArgb(197, 255, 255, 255) : Windows.UI.Color.FromArgb(158, 0, 0, 0));
+            var activeBg = ResolveThemeBrush("CardBackgroundFillColorDefaultBrush", isDark, isDark ? Windows.UI.Color.FromArgb(32, 255, 255, 255) : Windows.UI.Color.FromArgb(179, 255, 255, 255));
+            var activeFg = ResolveThemeBrush("AccentTextFillColorPrimaryBrush", isDark, isDark ? Windows.UI.Color.FromArgb(255, 96, 205, 255) : Windows.UI.Color.FromArgb(255, 0, 95, 184));
+            var inactiveFg = ResolveThemeBrush("TextFillColorSecondaryBrush", isDark, isDark ? Windows.UI.Color.FromArgb(197, 255, 255, 255) : Windows.UI.Color.FromArgb(158, 0, 0, 0));
+            var activeBorder = new SolidColorBrush(isDark ? Windows.UI.Color.FromArgb(28, 255, 255, 255) : Windows.UI.Color.FromArgb(24, 0, 0, 0));
             var transparent = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
 
             bool isMulti = _multiViewCanvasActive;
@@ -3057,6 +3076,12 @@ namespace ModernImageViewer
             TilesModeButton.Background = isTiles ? activeBg : transparent;
             ListModeButton.Background = isList ? activeBg : transparent;
             MultiModeButton.Background = isMulti ? activeBg : transparent;
+            TilesModeButton.BorderThickness = new Thickness(1);
+            ListModeButton.BorderThickness = new Thickness(1);
+            MultiModeButton.BorderThickness = new Thickness(1);
+            TilesModeButton.BorderBrush = isTiles ? activeBorder : transparent;
+            ListModeButton.BorderBrush = isList ? activeBorder : transparent;
+            MultiModeButton.BorderBrush = isMulti ? activeBorder : transparent;
 
             if (TilesModeIcon != null) TilesModeIcon.Foreground = isTiles ? activeFg : inactiveFg;
             if (ListModeIcon != null) ListModeIcon.Foreground = isList ? activeFg : inactiveFg;
@@ -3074,7 +3099,7 @@ namespace ModernImageViewer
                 if (_listMode)
                     ImageGrid.Padding = new Thickness(0, 4, 0, 0);
                 else
-                    ImageGrid.Padding = new Thickness(10, 8, 10, 12);
+                    ImageGrid.Padding = new Thickness(TileOuterPaddingX, TileOuterPaddingTop, TileOuterPaddingX, TileOuterPaddingBottom);
                 if (ListPreviewBar != null)
                     ListPreviewBar.Visibility = _listMode ? Visibility.Visible : Visibility.Collapsed;
 
@@ -3189,7 +3214,12 @@ namespace ModernImageViewer
             if (_listMode) PinListToLeftEdge();
         }
 
-        // Tiles are sized so a whole number of them fills the row: the slider sets the target size and any spare width is shared across the row.
+        private const double TileOuterPaddingX = 9;
+        private const double TileOuterPaddingTop = 10;
+        private const double TileOuterPaddingBottom = 12;
+
+        // Tiles are sized so a whole number of them fills the row: the slider sets the target size and any spare width is shared across the row,
+        // with leftover pixels centered evenly between the left and right edges.
         private void ApplyItemSize()
         {
             if (_imageWrapGrid == null) return;
@@ -3208,22 +3238,44 @@ namespace ModernImageViewer
             else if (ThumbSizeSlider != null)
             {
                 double target = Math.Clamp(ThumbSizeSlider.Value, 100, 400);
-                double pad = ImageGrid != null ? (ImageGrid.Padding.Left + ImageGrid.Padding.Right) : 0;
-                double rawWidth = ImageGrid != null && ImageGrid.ActualWidth > 1
-                    ? Math.Max(0, ImageGrid.ActualWidth - pad - 16)
-                    : ListViewportWidth();
+                double containerWidth = TileGridViewportWidth();
                 double itemSize = target;
-                if (rawWidth > target + 1)
+                if (containerWidth > 1)
                 {
-                    int columns = Math.Max(1, (int)(rawWidth / target));
-                    itemSize = Math.Floor(rawWidth / columns);
+                    double flooredWidth = Math.Floor(containerWidth);
+                    double available = Math.Max(0, flooredWidth - (TileOuterPaddingX * 2) - 2);
+                    int columns = available > target + 1 ? Math.Max(1, (int)(available / target)) : 1;
+                    itemSize = available > target + 1
+                        ? Math.Floor(available / columns)
+                        : (available >= 100 ? Math.Min(target, Math.Floor(available)) : target);
+                    double rowWidth = columns * itemSize;
+                    double totalOutside = Math.Max(TileOuterPaddingX * 2, flooredWidth - rowWidth);
+                    double leftPad = Math.Floor(totalOutside / 2.0);
+                    double rightPad = Math.Max(0, Math.Min(TileOuterPaddingX - 1, flooredWidth - leftPad - rowWidth));
+
+                    if (ImageGrid != null)
+                    {
+                        var cur = ImageGrid.Padding;
+                        if (Math.Abs(cur.Left - leftPad) > 0.5 || Math.Abs(cur.Top - TileOuterPaddingTop) > 0.5 ||
+                            Math.Abs(cur.Right - rightPad) > 0.5 || Math.Abs(cur.Bottom - TileOuterPaddingBottom) > 0.5)
+                        {
+                            ImageGrid.Padding = new Thickness(leftPad, TileOuterPaddingTop, rightPad, TileOuterPaddingBottom);
+                        }
+                    }
                 }
-                if (Math.Abs(_imageWrapGrid.ItemWidth - itemSize) > 1.0 || Math.Abs(_imageWrapGrid.ItemHeight - itemSize) > 1.0)
+                if (Math.Abs(_imageWrapGrid.ItemWidth - itemSize) > 0.5 || Math.Abs(_imageWrapGrid.ItemHeight - itemSize) > 0.5)
                 {
                     _imageWrapGrid.ItemWidth = itemSize;
                     _imageWrapGrid.ItemHeight = itemSize;
                 }
             }
+        }
+
+        private double TileGridViewportWidth()
+        {
+            var sv = GetGridScrollViewer();
+            if (sv != null && sv.ViewportWidth > 1) return sv.ViewportWidth;
+            return ImageGrid?.ActualWidth ?? 0;
         }
 
         private double ListViewportWidth()
@@ -3250,6 +3302,10 @@ namespace ModernImageViewer
             if (_listMode)
             {
                 PinListToLeftEdge();
+            }
+            else
+            {
+                ScheduleThumbnailEdgeUpdate();
             }
             ApplyCaptionInset();
         }
@@ -3334,9 +3390,10 @@ namespace ModernImageViewer
         {
             if (ThemeLightButton == null || ThemeDarkButton == null) return;
             bool isDark = RootGrid?.ActualTheme == ElementTheme.Dark;
-            var activeBg = ResolveThemeBrush("CardBackgroundFillColorDefaultBrush", isDark ? Windows.UI.Color.FromArgb(18, 255, 255, 255) : Windows.UI.Color.FromArgb(179, 255, 255, 255));
-            var activeFg = ResolveThemeBrush("AccentTextFillColorPrimaryBrush", isDark ? Windows.UI.Color.FromArgb(255, 96, 205, 255) : Windows.UI.Color.FromArgb(255, 0, 95, 184));
-            var inactiveFg = ResolveThemeBrush("TextFillColorSecondaryBrush", isDark ? Windows.UI.Color.FromArgb(197, 255, 255, 255) : Windows.UI.Color.FromArgb(158, 0, 0, 0));
+            var activeBg = ResolveThemeBrush("CardBackgroundFillColorDefaultBrush", isDark, isDark ? Windows.UI.Color.FromArgb(32, 255, 255, 255) : Windows.UI.Color.FromArgb(179, 255, 255, 255));
+            var activeFg = ResolveThemeBrush("AccentTextFillColorPrimaryBrush", isDark, isDark ? Windows.UI.Color.FromArgb(255, 96, 205, 255) : Windows.UI.Color.FromArgb(255, 0, 95, 184));
+            var inactiveFg = ResolveThemeBrush("TextFillColorSecondaryBrush", isDark, isDark ? Windows.UI.Color.FromArgb(197, 255, 255, 255) : Windows.UI.Color.FromArgb(158, 0, 0, 0));
+            var activeBorder = new SolidColorBrush(isDark ? Windows.UI.Color.FromArgb(28, 255, 255, 255) : Windows.UI.Color.FromArgb(24, 0, 0, 0));
             var transparent = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
 
             string mode = _currentSettings.ThemeMode ?? "System";
@@ -3345,6 +3402,8 @@ namespace ModernImageViewer
             bool systemSelected = mode != "Light" && mode != "Dark";
 
             ThemeLightButton.Background = lightSelected ? activeBg : transparent;
+            ThemeLightButton.BorderThickness = new Thickness(1);
+            ThemeLightButton.BorderBrush = lightSelected ? activeBorder : transparent;
             if (ThemeLightIcon != null) ThemeLightIcon.Foreground = lightSelected ? activeFg : inactiveFg;
             if (ThemeLightText != null)
             {
@@ -3353,6 +3412,8 @@ namespace ModernImageViewer
             }
 
             ThemeDarkButton.Background = darkSelected ? activeBg : transparent;
+            ThemeDarkButton.BorderThickness = new Thickness(1);
+            ThemeDarkButton.BorderBrush = darkSelected ? activeBorder : transparent;
             if (ThemeDarkIcon != null) ThemeDarkIcon.Foreground = darkSelected ? activeFg : inactiveFg;
             if (ThemeDarkText != null)
             {
@@ -3481,15 +3542,17 @@ namespace ModernImageViewer
                 _currentSettings.WindowPresets.Add(null);
 
             bool isDark = RootGrid?.ActualTheme == ElementTheme.Dark;
-            var activeBg = ResolveThemeBrush("CardBackgroundFillColorDefaultBrush", isDark ? Windows.UI.Color.FromArgb(18, 255, 255, 255) : Windows.UI.Color.FromArgb(179, 255, 255, 255));
-            var activeFg = ResolveThemeBrush("AccentTextFillColorPrimaryBrush", isDark ? Windows.UI.Color.FromArgb(255, 96, 205, 255) : Windows.UI.Color.FromArgb(255, 0, 95, 184));
-            var primaryFg = ResolveThemeBrush("TextFillColorPrimaryBrush", isDark ? Windows.UI.Color.FromArgb(255, 255, 255, 255) : Windows.UI.Color.FromArgb(228, 0, 0, 0));
-            var secondaryFg = ResolveThemeBrush("TextFillColorSecondaryBrush", isDark ? Windows.UI.Color.FromArgb(197, 255, 255, 255) : Windows.UI.Color.FromArgb(158, 0, 0, 0));
-            var tertiaryFg = ResolveThemeBrush("TextFillColorTertiaryBrush", isDark ? Windows.UI.Color.FromArgb(135, 255, 255, 255) : Windows.UI.Color.FromArgb(114, 0, 0, 0));
+            var activeBg = ResolveThemeBrush("CardBackgroundFillColorDefaultBrush", isDark, isDark ? Windows.UI.Color.FromArgb(32, 255, 255, 255) : Windows.UI.Color.FromArgb(179, 255, 255, 255));
+            var activeFg = ResolveThemeBrush("AccentTextFillColorPrimaryBrush", isDark, isDark ? Windows.UI.Color.FromArgb(255, 96, 205, 255) : Windows.UI.Color.FromArgb(255, 0, 95, 184));
+            var primaryFg = ResolveThemeBrush("TextFillColorPrimaryBrush", isDark, isDark ? Windows.UI.Color.FromArgb(255, 255, 255, 255) : Windows.UI.Color.FromArgb(228, 0, 0, 0));
+            var secondaryFg = ResolveThemeBrush("TextFillColorSecondaryBrush", isDark, isDark ? Windows.UI.Color.FromArgb(197, 255, 255, 255) : Windows.UI.Color.FromArgb(158, 0, 0, 0));
+            var tertiaryFg = ResolveThemeBrush("TextFillColorTertiaryBrush", isDark, isDark ? Windows.UI.Color.FromArgb(135, 255, 255, 255) : Windows.UI.Color.FromArgb(114, 0, 0, 0));
+            var activeBorder = new SolidColorBrush(isDark ? Windows.UI.Color.FromArgb(28, 255, 255, 255) : Windows.UI.Color.FromArgb(24, 0, 0, 0));
+            var transparent = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
 
             if (PresetSaveModeButton != null && PresetSaveModeIcon != null)
             {
-                PresetSaveModeButton.Background = _presetSaveMode ? activeBg : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+                PresetSaveModeButton.Background = _presetSaveMode ? activeBg : transparent;
                 PresetSaveModeIcon.Foreground = _presetSaveMode ? activeFg : secondaryFg;
                 ToolTipService.SetToolTip(PresetSaveModeButton, _presetSaveMode
                     ? "Choose 1, 2 or 3 to save the window and tile size. Click again to cancel."
@@ -3516,10 +3579,12 @@ namespace ModernImageViewer
                 var btn = buttons[i];
                 var txt = texts[i];
                 var dot = dots[i];
+                btn.BorderThickness = new Thickness(1);
 
                 if (_presetSaveMode)
                 {
                     btn.Background = activeBg;
+                    btn.BorderBrush = activeBorder;
                     if (txt != null)
                     {
                         txt.Text = $"\U0001F4BE{i + 1}";
@@ -3533,7 +3598,8 @@ namespace ModernImageViewer
                 }
                 else
                 {
-                    btn.Background = isActive ? activeBg : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+                    btn.Background = isActive ? activeBg : transparent;
+                    btn.BorderBrush = isActive ? activeBorder : transparent;
                     if (txt != null)
                     {
                         txt.Text = $"{i + 1}";
@@ -3556,7 +3622,7 @@ namespace ModernImageViewer
         {
             HeaderSettingsFlyout?.Hide();
             ConfigureWindow(true);
-            if (ThumbSizeSlider != null) ThumbSizeSlider.Value = 164;
+            if (ThumbSizeSlider != null) ThumbSizeSlider.Value = DefaultTileSize;
             SaveAllSettings();
             FocusGrid();
         }
@@ -3653,12 +3719,8 @@ namespace ModernImageViewer
             if (!_applyingViewMode) ApplyViewMode();
         }
 
-        private void ThumbSizeSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+        private void ScheduleThumbnailEdgeUpdate()
         {
-            if (!_listMode)
-                ApplyItemSize();
-            if (_currentSettings != null)
-                _currentSettings.TileSize = Math.Round(e.NewValue);
             if (_thumbnailEdgeTimer == null)
             {
                 _thumbnailEdgeTimer = DispatcherQueue.CreateTimer();
@@ -3668,8 +3730,74 @@ namespace ModernImageViewer
             }
             _thumbnailEdgeTimer.Stop();
             _thumbnailEdgeTimer.Start();
+        }
+
+        private void ThumbSizeSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+        {
+            if (!_listMode)
+                ApplyItemSize();
+            if (_currentSettings != null)
+                _currentSettings.TileSize = Math.Round(e.NewValue);
+            ScheduleThumbnailEdgeUpdate();
             if (HeaderSettingsFlyout != null && HeaderSettingsFlyout.IsOpen)
                 SyncPresetButtons();
+        }
+
+        private int _gridWheelAccumulator;
+
+        private void ImageGrid_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
+        {
+            if (_listMode || _multiViewCanvasActive ||
+                (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible) ||
+                ThumbSizeSlider == null)
+                return;
+
+            bool isCtrlDown = Microsoft.UI.Input.InputKeyboardSource
+                .GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control)
+                .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+            if (!isCtrlDown) return;
+
+            int delta = e.GetCurrentPoint(ImageGrid).Properties.MouseWheelDelta;
+            if (delta == 0) return;
+
+            if (_gridWheelAccumulator != 0 && Math.Sign(_gridWheelAccumulator) != Math.Sign(delta))
+                _gridWheelAccumulator = 0;
+            _gridWheelAccumulator += delta;
+
+            while (Math.Abs(_gridWheelAccumulator) >= 120)
+            {
+                int direction = Math.Sign(_gridWheelAccumulator);
+                _gridWheelAccumulator -= direction * 120;
+
+                double containerWidth = TileGridViewportWidth();
+                double available = Math.Max(0, Math.Floor(containerWidth) - (TileOuterPaddingX * 2) - 2);
+                double current = Math.Clamp(ThumbSizeSlider.Value, 100, 400);
+                int cols = available > 1 ? Math.Max(1, (int)(available / current)) : 1;
+
+                double nextSize;
+                if (direction > 0)
+                {
+                    if (cols > 1)
+                    {
+                        nextSize = Math.Clamp(Math.Floor(available / (cols - 1)), 100, 400);
+                        if (nextSize <= current) nextSize = Math.Min(400, current + 24);
+                    }
+                    else
+                    {
+                        nextSize = Math.Min(400, current + 24);
+                    }
+                }
+                else
+                {
+                    nextSize = Math.Clamp(Math.Floor(available / (cols + 1)), 100, 400);
+                    if (nextSize >= current) nextSize = Math.Max(100, current - 24);
+                }
+
+                if (Math.Abs(nextSize - ThumbSizeSlider.Value) > 0.1)
+                    ThumbSizeSlider.Value = nextSize;
+            }
+
+            e.Handled = true;
         }
 
         private void HoverZone_PointerEntered(object s, PointerRoutedEventArgs e)

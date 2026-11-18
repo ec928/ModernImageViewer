@@ -203,7 +203,7 @@ The Frame & Border card always shows at full height for the window, in front of 
 
 | Mode | Target User Workflow | Visual Spec |
 | :--- | :--- | :--- |
-| **Tile Grid** | Visual browsing & curation | Square tiles sized by the Tile size slider so a whole number fills the row. The image is the tile: no card, no caption strip, `8px` corners, `6px` between tiles. The file name sits on the image over a dark fade, and shows only while the tile is pointed at, is the keyboard cursor or is selected. A pointed-at or cursor tile grows from its centre by at most `2px` a side, so it stays inside its cell. |
+| **Tile Grid** | Visual browsing & curation | Square tiles sized by the Tile size slider (`184px` default) or `Ctrl+Wheel` so a whole number fills the row, with balanced left/right outer margins (leftover row pixels centered). The image is the tile: no card, no caption strip, no redundant filename tooltip, `8px` corners, `6px` between tiles. The file name sits on the image over a dark fade, and shows only while the tile is pointed at, is the active keyboard cursor, or is selected. Opening a folder starts with a flat grid until keyboard navigation or returning from viewing an image; a pointed-at or active cursor tile grows from its centre by at most `2px` a side, so it stays inside its cell. Selection and cursor borders never overlap and include a `1px` dark inner contrast hairline. |
 | **List Mode** | High-density asset management | Names only, in columns about `200px` wide that fill the window, subfolders first, with natural alphanumeric sorting (`StrCmpLogicalW`). A folder shows its own icon; an image shows a small picture of itself, and the image glyph until that is ready. A comic archive or page keeps its glyph. |
 | **Inspector Bar** | Metadata evaluation in List Mode | Bottom docked panel for the cursor row: type, size, date modified, dimensions, date taken and location, with a live thumbnail preview on the right. |
 
@@ -237,6 +237,7 @@ Images can be browsed, viewed and managed without a mouse, and F1 lists the keys
 | | `Ctrl+B` or `Tab` | Toggle navigation sidebar |
 | **Folder view** | `Enter` | Open the image, or view the selection together |
 | | `Space` | Select or deselect the image |
+| | `Ctrl + Wheel` | Resize tiles |
 | | `F2` / `F5` / `Delete` | Rename / refresh / Recycle Bin |
 | **Viewing** | `Space` / `,` / `.` | Play or pause an animation / previous and next frame |
 | | `F1` / `F6` | Keyboard shortcuts / move to the header buttons |
