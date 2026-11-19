@@ -153,6 +153,7 @@ namespace ModernImageViewer
             _canvasDevice = CanvasDevice.GetSharedDevice();
             if (_canvasDevice != null) _canvasDevice.DeviceLost += CanvasDevice_DeviceLost;
             _effectStack.Initialize();
+            InitializeSway();
 
             _playbackTimer = new DispatcherTimer();
             _playbackTimer.Tick += PlaybackTimer_Tick;
@@ -166,6 +167,7 @@ namespace ModernImageViewer
                 TopLeftInfoOverlay.IsHitTestVisible = false;
                 if (TopRightWindowControls != null) TopRightWindowControls.IsHitTestVisible = false;
                 if (AnimationHud != null) AnimationHud.IsHitTestVisible = false;
+                if (SwayHud != null) SwayHud.IsHitTestVisible = false;
                 FadeOutStoryboard.Begin();
                 _hudTimer.Stop();
             };
@@ -179,7 +181,13 @@ namespace ModernImageViewer
             };
 
             this.Unloaded += ImageViewerControl_Unloaded;
-            this.Loaded += (s, e) => { SyncContextMenus(); UpdateBookSpreadVisibility(); };
+            this.Loaded += (s, e) =>
+            {
+                SyncContextMenus();
+                UpdateBookSpreadVisibility();
+                UpdateSwayAvailability();
+                if (RootGrid != null) UpdateSwayHudLayout(RootGrid.ActualWidth);
+            };
         }
 
         private void SyncContextMenus()
@@ -207,6 +215,7 @@ namespace ModernImageViewer
             {
                 control.ResetPanState();
                 control.UpdateBookSpreadVisibility();
+                control.UpdateSwayAvailability();
             }
         }
 
@@ -331,6 +340,7 @@ namespace ModernImageViewer
                 if (_isFitToWindow) FitToWindow();
                 RequestRender();
             }
+            UpdateSwayAvailability();
             if (notify)
                 BookSpreadChanged?.Invoke(this, EventArgs.Empty);
         }
@@ -341,6 +351,7 @@ namespace ModernImageViewer
             _playbackTimer?.Stop();
             _hudTimer?.Stop();
             _scrollQualityTimer?.Stop();
+            CleanupSwayOnUnload();
             PreviewCanvas?.RemoveFromVisualTree();
             ReleaseDisplayedEntry();
             _effectStack.Dispose();
@@ -353,6 +364,7 @@ namespace ModernImageViewer
                 if (_canvasDevice != null) _canvasDevice.DeviceLost -= CanvasDevice_DeviceLost;
                 _canvasDevice = CanvasDevice.GetSharedDevice();
                 if (_canvasDevice != null) _canvasDevice.DeviceLost += CanvasDevice_DeviceLost;
+                HandleSwayDeviceLost();
                 ReleaseDisplayedEntry();
                 _effectStack.Dispose();
                 _effectStack.Initialize();
@@ -383,6 +395,7 @@ namespace ModernImageViewer
 
             _isPlayingAnimation = true;
             if (AnimationHud != null) AnimationHud.Visibility = Visibility.Collapsed;
+            OnSwayPrepareForNewImage();
 
             if (_effectStack.Crop != null) _effectStack.Crop.Source = null;
 
@@ -484,6 +497,7 @@ namespace ModernImageViewer
                 PlaceholderImage.Visibility = Visibility.Collapsed;
             }
 
+            OnSwayImageInjected();
             RequestRender();
             ShowHud();
         }
@@ -599,9 +613,10 @@ namespace ModernImageViewer
                 }
                 else
                 {
-                    crop.Source = currentTarget;
-                    crop.SourceRectangle = currentTarget.Bounds;
-                    ViewerMath.DrawMappedImage(args.DrawingSession, sender.ActualWidth, sender.ActualHeight, _logicalImageWidth, _logicalImageHeight, panX, panY, _targetZoom, _currentGamma, dpiScale, currentTarget, crop, decode, userGamma, transform, encode);
+                    CanvasBitmap drawTarget = TryGetActiveSwayBitmap() ?? currentTarget;
+                    crop.Source = drawTarget;
+                    crop.SourceRectangle = drawTarget.Bounds;
+                    ViewerMath.DrawMappedImage(args.DrawingSession, sender.ActualWidth, sender.ActualHeight, _logicalImageWidth, _logicalImageHeight, panX, panY, _targetZoom, _currentGamma, dpiScale, drawTarget, crop, decode, userGamma, transform, encode);
                 }
             }
             catch (Exception ex) { Debug.WriteLine($"[Win2D Draw Error]: {ex.Message}"); }
@@ -628,10 +643,12 @@ namespace ModernImageViewer
             if (HudFidelity != null) HudFidelity.Text = _isHighFidelityActive ? "HF" : "LF";
 
             UpdateBookSpreadVisibility();
+            UpdateSwayAvailability();
             if (TopLeftInfoOverlay != null) TopLeftInfoOverlay.IsHitTestVisible = false;
             if (UnifiedHud != null) UnifiedHud.IsHitTestVisible = true;
             if (TopRightWindowControls != null && IsStandaloneMode) TopRightWindowControls.IsHitTestVisible = true;
             if (AnimationHud != null && AnimationHud.Visibility == Visibility.Visible) AnimationHud.IsHitTestVisible = true;
+            if (SwayHud != null && SwayHud.Visibility == Visibility.Visible) SwayHud.IsHitTestVisible = true;
 
             if (FadeInStoryboard != null) FadeInStoryboard.Begin();
             _hudTimer?.Stop();
@@ -791,6 +808,8 @@ namespace ModernImageViewer
         {
             if (InputOverlay == null) return;
             var currentPos = e.GetCurrentPoint(InputOverlay).Position;
+            if (!_isDragging && !_isTearingOffActive)
+                OnSwayPointerMoved(currentPos);
             if (Math.Abs(currentPos.X - _lastHudTriggerPos.X) > 10 || Math.Abs(currentPos.Y - _lastHudTriggerPos.Y) > 10)
             {
                 _lastHudTriggerPos = currentPos;
@@ -897,6 +916,7 @@ namespace ModernImageViewer
                     TopLeftInfoOverlay.IsHitTestVisible = false;
                     if (TopRightWindowControls != null) TopRightWindowControls.IsHitTestVisible = false;
                     if (AnimationHud != null) AnimationHud.IsHitTestVisible = false;
+                    if (SwayHud != null) SwayHud.IsHitTestVisible = false;
                     FadeOutStoryboard.Begin();
                 }
                 else
@@ -1031,6 +1051,7 @@ namespace ModernImageViewer
             {
                 FitToWindow();
             }
+            UpdateSwayHudLayout(RootGrid?.ActualWidth ?? 0);
             RequestRender();
         }
 

@@ -239,7 +239,8 @@ Images can be browsed, viewed and managed without a mouse, and F1 lists the keys
 | | `Space` | Select or deselect the image |
 | | `Ctrl + Wheel` | Resize tiles |
 | | `F2` / `F5` / `Delete` | Rename / refresh / Recycle Bin |
-| **Viewing** | `Space` / `,` / `.` | Play or pause an animation / previous and next frame |
+| **Viewing** | `Space` / `,` / `.` | Play or pause an animation or 3D sway / previous and next frame |
+| | `S` | Toggle 3D sway (Preview and Detached windows) |
 | | `F1` / `F6` | Keyboard shortcuts / move to the header buttons |
 | | `F11` | Toggle borderless fullscreen |
 | | `Ctrl + Wheel` | Zoom in / out |

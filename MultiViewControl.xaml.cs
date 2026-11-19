@@ -95,6 +95,13 @@ namespace ModernImageViewer
             };
             SetupSoloInteractions();
             UpdatePresetModePill();
+            SwayPreferences.Changed += OnExternalSwayPreferencesChanged;
+            Loaded += (_, _) =>
+            {
+                SwayPreferences.Changed -= OnExternalSwayPreferencesChanged;
+                SwayPreferences.Changed += OnExternalSwayPreferencesChanged;
+            };
+            Unloaded += (_, _) => SwayPreferences.Changed -= OnExternalSwayPreferencesChanged;
         }
         public bool IsSoloActive => SoloContainer.Visibility == Visibility.Visible;
         /// <summary>Hold keyboard focus on the grid itself, so the first photo's caption button does not draw a focus box.</summary>

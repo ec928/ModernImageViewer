@@ -656,42 +656,12 @@ namespace ModernImageViewer
                 ReleaseDepth(state);
         }
 
-        private static byte[]? _swaySplatBytes;
-        private static bool _swaySplatMissing;
-
         /// <summary>
         /// The Sway forward warp for one scene, or null if the shader cannot be loaded or made (Sway then draws with the
         /// displacement warp as before). Offsets up to <paramref name="maxOffset"/> pixels are sampled.
         /// </summary>
-        private static PixelShaderEffect? MakeSwaySplat(ICanvasImage photo, ICanvasImage depthAtSize, float maxOffset)
-        {
-            if (_swaySplatMissing) return null;
-            try
-            {
-                if (_swaySplatBytes == null)
-                {
-                    using var stream = typeof(MultiViewControl).Assembly.GetManifestResourceStream("ModernImageViewer.Shaders.SwaySplat.bin");
-                    if (stream == null) { _swaySplatMissing = true; PlayTiming.Write("3D: sway splat shader missing"); return null; }
-                    using var copy = new System.IO.MemoryStream();
-                    stream.CopyTo(copy);
-                    _swaySplatBytes = copy.ToArray();
-                }
-                return new PixelShaderEffect(_swaySplatBytes)
-                {
-                    Source1 = photo,
-                    Source2 = depthAtSize,
-                    Source1Mapping = SamplerCoordinateMapping.Offset,
-                    Source2Mapping = SamplerCoordinateMapping.Offset,
-                    MaxSamplerOffset = (int)Math.Ceiling(maxOffset)
-                };
-            }
-            catch (Exception ex) when (ex is ArgumentException or System.Runtime.InteropServices.COMException or InvalidOperationException or System.IO.IOException)
-            {
-                _swaySplatMissing = true;
-                PlayTiming.Write($"3D: sway splat not made: {ex.GetType().Name} {ex.Message}");
-                return null;
-            }
-        }
+        private static PixelShaderEffect? MakeSwaySplat(ICanvasImage photo, ICanvasImage depthAtSize, float maxOffset) =>
+            SwayShader.CreateSplat(photo, depthAtSize, maxOffset);
 
         private static void ReleaseDepth(DepthScene state)
         {

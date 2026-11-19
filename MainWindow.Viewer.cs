@@ -165,7 +165,9 @@ namespace ModernImageViewer
             int finalW = Math.Clamp((int)Math.Round(targetW), 320, (int)workAreaW);
             int finalH = Math.Clamp((int)Math.Round(targetH), 240, (int)workAreaH);
 
-            var detachedWindow = new DetachedWindow(targetItem, finalW, finalH, _currentGamma);
+            bool inheritSway = ViewerControl != null && ViewerControl.Visibility == Visibility.Visible && ViewerControl.TargetImage == targetItem && ViewerControl.IsSwayEnabled;
+            bool inheritFollow = inheritSway && ViewerControl!.IsSwayFollowPointer;
+            var detachedWindow = new DetachedWindow(targetItem, finalW, finalH, _currentGamma, inheritSway, inheritFollow);
             var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(detachedWindow);
             var appWindowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
             var appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(appWindowId);
@@ -1352,6 +1354,7 @@ namespace ModernImageViewer
             ClearImageCache();
 
 
+            ViewerControl.ResetSwayForClose();
             ViewerControl.PrepareForNewImage(null);
 
             ViewerControl.Visibility = Visibility.Collapsed;
@@ -2605,7 +2608,7 @@ namespace ModernImageViewer
                     return;
                 }
 
-                if (ViewerControl.HandleAnimationKeystroke(e.Key))
+                if (ViewerControl.HandleViewerKeystroke(e.Key))
                 {
                     e.Handled = true;
                     return;

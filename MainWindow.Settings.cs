@@ -303,6 +303,7 @@ namespace ModernImageViewer
                     if (uninstalled && !ExtensionManager.Is3DInstalled)
                     {
                         MultiViewControl?.On3DExtensionChanged();
+                        Notify3DExtensionChanged();
                     }
                     RefreshUI();
                     if (!uninstalled || ExtensionManager.Is3DInstalled)
@@ -338,6 +339,7 @@ namespace ModernImageViewer
                     if (ExtensionManager.Is3DInstalled)
                     {
                         MultiViewControl?.On3DExtensionChanged();
+                        Notify3DExtensionChanged();
                     }
                     RefreshUI();
                     if (!string.IsNullOrEmpty(installError))

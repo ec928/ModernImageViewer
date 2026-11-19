@@ -37,13 +37,16 @@ namespace ModernImageViewer
                 ("Left, Right", "Previous and next image"),
                 ("Home, End", "First and last image"),
                 ("B", "Two pages at once, in a comic book"),
-                ("Space", "Play or pause an animation"),
+                ("S", "Toggle 3D sway (when the 3D extension is installed)"),
+                ("Space", "Play or pause an animation or 3D sway"),
                 (", and .", "Previous and next frame of an animation"),
                 ("Delete", "Move to the Recycle Bin"),
                 ("Enter, Esc", "Back to the folder"),
             }),
             ("Detached window", new[]
             {
+                ("S", "Toggle 3D sway (when the 3D extension is installed)"),
+                ("Space", "Play or pause an animation or 3D sway"),
                 ("F11", "Full screen"),
                 ("Delete", "Move to the Recycle Bin"),
                 ("Esc", "Close the window"),

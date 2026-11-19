@@ -250,8 +250,23 @@ namespace ModernImageViewer
             show.AdoptOnOpen(SurpriseChoices.Cinematic ?? new CinematicOverrides());
         }
 
+        private void OnExternalSwayPreferencesChanged(double depth, double swing)
+        {
+            void Apply()
+            {
+                if (_surpriseOptions == null) return;
+                _surpriseOptions.SwayRotation = depth;
+                _surpriseOptions.SwaySwing = swing;
+            }
+            if (DispatcherQueue == null) return;
+            if (DispatcherQueue.HasThreadAccess) Apply();
+            else DispatcherQueue.TryEnqueue(Apply);
+        }
+
         private void ChangeSurpriseChoices(Action<SurpriseOptions> change)
         {
+            double oldDepth = SurpriseChoices.SwayRotation;
+            double oldSwing = SurpriseChoices.SwaySwing;
             change(SurpriseChoices);
             CancelPreparedSurprise();
             try
@@ -263,6 +278,8 @@ namespace ModernImageViewer
             {
                 // It still applies until the app closes.
             }
+            if (Math.Abs(SurpriseChoices.SwayRotation - oldDepth) > 1e-6 || Math.Abs(SurpriseChoices.SwaySwing - oldSwing) > 1e-6)
+                SwayPreferences.NotifyChanged(SurpriseChoices.SwayRotation, SurpriseChoices.SwaySwing);
             if (_autoPlaySeconds > 0) ApplyPlayEdge(CurrentPlayPercent());
         }
 

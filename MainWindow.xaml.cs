@@ -396,6 +396,13 @@ namespace ModernImageViewer
         }
 
         public event Action<float>? GammaApplied;
+        public event Action? Extension3DChanged;
+
+        public void Notify3DExtensionChanged()
+        {
+            ViewerControl?.On3DExtensionChanged();
+            Extension3DChanged?.Invoke();
+        }
 
         public void ApplyGamma(float gamma)
         {

@@ -264,5 +264,41 @@ namespace ModernImageViewer.Tests
             var c = new CinematicOverrides();
             Assert.False(c.ParallaxOnly);
         }
+
+        [Fact]
+        public void Sway_surface_and_pointer_math_match_expected_bounds()
+        {
+            Assert.Equal((3072, 2048), ViewerMath.SwaySurfaceSize(6000, 4000));
+            Assert.Equal((1536, 1024), ViewerMath.SwaySurfaceSize(1536, 1024));
+            Assert.Equal((1728, 3072), ViewerMath.SwaySurfaceSize(2160, 3840));
+            Assert.Equal((1, 1), ViewerMath.SwaySurfaceSize(0, -5));
+
+            // Fitted image centered inside 1200px viewport (displayed width 800 -> x in [200, 1000])
+            Assert.Equal(-1f, ViewerMath.CalculateSwayPointerAngle(100, 1200, 800, 0), 4);
+            Assert.Equal(-1f, ViewerMath.CalculateSwayPointerAngle(200, 1200, 800, 0), 4);
+            Assert.Equal(0f, ViewerMath.CalculateSwayPointerAngle(600, 1200, 800, 0), 4);
+            Assert.Equal(1f, ViewerMath.CalculateSwayPointerAngle(1000, 1200, 800, 0), 4);
+            Assert.Equal(1f, ViewerMath.CalculateSwayPointerAngle(1150, 1200, 800, 0), 4);
+
+            // Zoomed wider than viewport -> mapped across full viewport [0, 1200]
+            Assert.Equal(-1f, ViewerMath.CalculateSwayPointerAngle(0, 1200, 2400, -300), 4);
+            Assert.Equal(0f, ViewerMath.CalculateSwayPointerAngle(600, 1200, 2400, -300), 4);
+            Assert.Equal(1f, ViewerMath.CalculateSwayPointerAngle(1200, 1200, 2400, -300), 4);
+
+            // Smoothing converges monotonically, snaps inside threshold, and clamps large stalls
+            float s1 = ViewerMath.SmoothSwayAngle(0f, 1f, 0.016);
+            float sStall = ViewerMath.SmoothSwayAngle(0f, 1f, 5.0);
+            float sClamped = ViewerMath.SmoothSwayAngle(0f, 1f, 0.1);
+            Assert.InRange(s1, 0.05f, 0.5f);
+            Assert.Equal(sClamped, sStall, 5);
+            Assert.Equal(0.5f, ViewerMath.SmoothSwayAngle(0.4998f, 0.5f, 0.016), 5);
+
+            // Phase round-trips smoothly through sin(phase * 2pi)
+            foreach (float targetAngle in new[] { -1f, -0.5f, 0f, 0.5f, 1f })
+            {
+                double phase = ViewerMath.SwayPhaseFromAngle(targetAngle);
+                Assert.Equal(targetAngle, Math.Sin(phase * Math.PI * 2.0), 5);
+            }
+        }
     }
 }

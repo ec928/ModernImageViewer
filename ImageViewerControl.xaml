@@ -27,6 +27,7 @@
                 <DoubleAnimation Storyboard.TargetName="TopLeftInfoOverlay" Storyboard.TargetProperty="Opacity" To="1.0" Duration="0:0:0.25" />
                 <DoubleAnimation Storyboard.TargetName="TopRightWindowControls" Storyboard.TargetProperty="Opacity" To="1.0" Duration="0:0:0.25" />
                 <DoubleAnimation Storyboard.TargetName="AnimationHud" Storyboard.TargetProperty="Opacity" To="1.0" Duration="0:0:0.25" />
+                <DoubleAnimation Storyboard.TargetName="SwayHud" Storyboard.TargetProperty="Opacity" To="1.0" Duration="0:0:0.25" />
 
                 <DoubleAnimation Storyboard.TargetName="HudTranslate" Storyboard.TargetProperty="Y" To="0" Duration="0:0:0.25">
                     <DoubleAnimation.EasingFunction>
@@ -39,6 +40,12 @@
                         <QuadraticEase EasingMode="EaseOut" />
                     </DoubleAnimation.EasingFunction>
                 </DoubleAnimation>
+
+                <DoubleAnimation Storyboard.TargetName="SwayHudTranslate" Storyboard.TargetProperty="Y" To="0" Duration="0:0:0.25">
+                    <DoubleAnimation.EasingFunction>
+                        <QuadraticEase EasingMode="EaseOut" />
+                    </DoubleAnimation.EasingFunction>
+                </DoubleAnimation>
             </Storyboard>
 
             <Storyboard x:Name="FadeOutStoryboard">
@@ -46,6 +53,7 @@
                 <DoubleAnimation Storyboard.TargetName="TopLeftInfoOverlay" Storyboard.TargetProperty="Opacity" To="0.0" Duration="0:0:0.25" />
                 <DoubleAnimation Storyboard.TargetName="TopRightWindowControls" Storyboard.TargetProperty="Opacity" To="0.0" Duration="0:0:0.25" />
                 <DoubleAnimation Storyboard.TargetName="AnimationHud" Storyboard.TargetProperty="Opacity" To="0.0" Duration="0:0:0.25" />
+                <DoubleAnimation Storyboard.TargetName="SwayHud" Storyboard.TargetProperty="Opacity" To="0.0" Duration="0:0:0.25" />
 
                 <DoubleAnimation Storyboard.TargetName="HudTranslate" Storyboard.TargetProperty="Y" To="15" Duration="0:0:0.25">
                     <DoubleAnimation.EasingFunction>
@@ -54,6 +62,12 @@
                 </DoubleAnimation>
 
                 <DoubleAnimation Storyboard.TargetName="AnimHudTranslate" Storyboard.TargetProperty="Y" To="15" Duration="0:0:0.25">
+                    <DoubleAnimation.EasingFunction>
+                        <QuadraticEase EasingMode="EaseIn" />
+                    </DoubleAnimation.EasingFunction>
+                </DoubleAnimation>
+
+                <DoubleAnimation Storyboard.TargetName="SwayHudTranslate" Storyboard.TargetProperty="Y" To="15" Duration="0:0:0.25">
                     <DoubleAnimation.EasingFunction>
                         <QuadraticEase EasingMode="EaseIn" />
                     </DoubleAnimation.EasingFunction>
@@ -79,7 +93,7 @@
               Tapped="InputOverlay_Tapped"
               DoubleTapped="InputOverlay_DoubleTapped">
             <Grid.ContextFlyout>
-                <MenuFlyout>
+                <MenuFlyout Opening="ContextFlyout_Opening">
                     <MenuFlyout.MenuFlyoutPresenterStyle>
                         <Style TargetType="MenuFlyoutPresenter">
                             <Setter Property="CornerRadius" Value="10"/>
@@ -108,6 +122,11 @@
                         </ToggleMenuFlyoutItem.Icon>
                     </ToggleMenuFlyoutItem>
                     <ToggleMenuFlyoutItem x:Name="CoverPageSoloMenuItem" Text="Front cover on its own in a spread" IsChecked="True" Click="ToggleCoverSolo_Click"/>
+                    <ToggleMenuFlyoutItem x:Name="SwayMenuItem" Text="3D sway (S)" Click="ToggleSway_Click" Visibility="Collapsed">
+                        <ToggleMenuFlyoutItem.Icon>
+                            <FontIcon Glyph="&#xF158;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"/>
+                        </ToggleMenuFlyoutItem.Icon>
+                    </ToggleMenuFlyoutItem>
 
                     <MenuFlyoutSeparator/>
                     <MenuFlyoutItem Text="Full screen (F11)" Click="ToggleFullscreen_Click">
@@ -266,6 +285,55 @@
             </Border>
         </Grid>
 
+        <Grid x:Name="SwayHud" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="12,0,12,135" Opacity="0" IsHitTestVisible="False" Canvas.ZIndex="60" Visibility="Collapsed"
+              PointerEntered="Hud_PointerEntered" PointerExited="Hud_PointerExited">
+            <Grid.RenderTransform>
+                <TranslateTransform x:Name="SwayHudTranslate" Y="15" />
+            </Grid.RenderTransform>
+            <Border x:Name="SwayHudBorder" Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}" BorderThickness="1" CornerRadius="24" Padding="12,4" Translation="0,0,32" PointerPressed="SwayHud_PointerPressed">
+                <Border.Shadow>
+                    <ThemeShadow/>
+                </Border.Shadow>
+                <Grid>
+                    <StackPanel x:Name="SwayLoadingPanel" Orientation="Horizontal" Spacing="8" Padding="4,3" Visibility="Collapsed">
+                        <ProgressRing x:Name="SwayProgressRing" Width="14" Height="14" IsActive="False" VerticalAlignment="Center"/>
+                        <TextBlock Text="Preparing 3D sway..." Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <Grid x:Name="SwayControlsPanel" ColumnSpacing="10" RowSpacing="4" Visibility="Collapsed">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                            <Button x:Name="SwayPlayPauseButton" Click="SwayPlayPause_Click" Style="{StaticResource HudButtonStyle}" AllowFocusOnInteraction="False" ToolTipService.ToolTip="Pause sway (Space)" AutomationProperties.Name="Pause sway (Space)">
+                                <SymbolIcon x:Name="SwayPlayPauseIcon" Symbol="Pause"/>
+                            </Button>
+                            <Button x:Name="SwayPointerButton" Click="SwayPointerToggle_Click" Style="{StaticResource HudButtonStyle}" AllowFocusOnInteraction="False" ToolTipService.ToolTip="Follow pointer: move mouse across the image to steer 3D angle" AutomationProperties.Name="Follow pointer">
+                                <FontIcon x:Name="SwayPointerIcon" Glyph="&#xE8B0;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14"/>
+                            </Button>
+                        </StackPanel>
+                        <StackPanel x:Name="SwayDepthGroup" Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" ToolTipService.ToolTip="Sway depth: how far near and far parts move apart (default 6%)">
+                            <Rectangle x:Name="SwayDivider1" Width="1" Height="16" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.4" Margin="0,0,4,0"/>
+                            <TextBlock Text="Depth" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                            <Slider x:Name="SwayDepthSlider" Minimum="0.4" Maximum="10.0" StepFrequency="0.1" SmallChange="0.1" LargeChange="0.5" Width="88" VerticalAlignment="Center" IsThumbToolTipEnabled="False" IsTabStop="False" AllowFocusOnInteraction="False" ValueChanged="SwayDepthSlider_ValueChanged" AutomationProperties.Name="Sway depth"/>
+                            <TextBlock x:Name="SwayDepthValue" Text="6.0%" Width="38" TextAlignment="Right" FontSize="12" Typography.NumeralAlignment="Tabular" Foreground="{ThemeResource TextFillColorPrimaryBrush}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <StackPanel x:Name="SwaySwingGroup" Grid.Row="0" Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" ToolTipService.ToolTip="Each swing: seconds for one full sway cycle (default 4.25 s)">
+                            <Rectangle x:Name="SwayDivider2" Width="1" Height="16" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.4" Margin="0,0,4,0"/>
+                            <TextBlock Text="Swing" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                            <Slider x:Name="SwaySwingSlider" Minimum="1.5" Maximum="12.0" StepFrequency="0.25" SmallChange="0.25" LargeChange="1.0" Width="76" VerticalAlignment="Center" IsThumbToolTipEnabled="False" IsTabStop="False" AllowFocusOnInteraction="False" ValueChanged="SwaySwingSlider_ValueChanged" AutomationProperties.Name="Each swing"/>
+                            <TextBlock x:Name="SwaySwingValue" Text="4.25 s" Width="40" TextAlignment="Right" FontSize="12" Typography.NumeralAlignment="Tabular" Foreground="{ThemeResource TextFillColorPrimaryBrush}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
         <Grid x:Name="UnifiedHud" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,80" Opacity="0" IsHitTestVisible="False" Canvas.ZIndex="60"
               PointerEntered="Hud_PointerEntered" PointerExited="Hud_PointerExited">
             <Grid.RenderTransform>
@@ -282,6 +350,9 @@
                         </Button>
                         <Button x:Name="BookSpreadButton" Click="ToggleBookSpread_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Two-page comic spread (B)" Visibility="Collapsed" AutomationProperties.Name="Two-page comic spread (B)">
                             <FontIcon x:Name="BookSpreadIcon" Glyph="&#xE736;"/>
+                        </Button>
+                        <Button x:Name="SwayButton" Click="ToggleSway_Click" Style="{StaticResource HudButtonStyle}" AllowFocusOnInteraction="False" ToolTipService.ToolTip="3D sway (S)" Visibility="Collapsed" AutomationProperties.Name="3D sway (S)">
+                            <FontIcon x:Name="SwayButtonIcon" Glyph="&#xF158;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="16"/>
                         </Button>
 
                         <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="6,6" Opacity="0.4"/>

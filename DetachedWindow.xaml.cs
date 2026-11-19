@@ -36,7 +36,7 @@ namespace ModernImageViewer
         private NativeMethods.POINT _dragStartCursorPos;
         private Windows.Graphics.PointInt32 _dragStartWindowPos;
 
-        public DetachedWindow(ImageItem imageItem, int targetWidth, int targetHeight, float initialGamma)
+        public DetachedWindow(ImageItem imageItem, int targetWidth, int targetHeight, float initialGamma, bool initialSway = false, bool initialFollowPointer = false)
         {
             this.InitializeComponent();
             _imageItem = imageItem;
@@ -60,10 +60,14 @@ namespace ModernImageViewer
 
             MainWindow.Instance?.RegisterDetachedWindow();
             if (MainWindow.Instance != null)
+            {
                 MainWindow.Instance.GammaApplied += OnHostGammaChanged;
+                MainWindow.Instance.Extension3DChanged += OnExtension3DChanged;
+            }
 
             ViewerControl.TargetImage = _imageItem;
             ViewerControl.IsStandaloneMode = true;
+            ViewerControl.SetInitialSway(initialSway, initialFollowPointer);
             ViewerControl.SetGammaLevel(initialGamma);
             ViewerControl.GammaChanged += (_, g) => MainWindow.Instance?.ApplyGamma(g);
             ViewerControl.ZoomChanged += (_, _) => QueuePromote();
@@ -72,6 +76,7 @@ namespace ModernImageViewer
         }
 
         private void OnHostGammaChanged(float gamma) => ViewerControl.SetGammaLevel(gamma);
+        private void OnExtension3DChanged() => ViewerControl.On3DExtensionChanged();
 
         private void AppWindow_Changed(AppWindow sender, AppWindowChangedEventArgs args)
         {
@@ -209,6 +214,12 @@ namespace ModernImageViewer
             var focused = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(this.Content.XamlRoot);
             if (focused is TextBox || focused is PasswordBox || focused is RichEditBox) return;
 
+            if (ViewerControl.HandleViewerKeystroke(e.Key))
+            {
+                e.Handled = true;
+                return;
+            }
+
             if (e.Key == Windows.System.VirtualKey.Escape)
             {
                 this.Close();
@@ -231,7 +242,10 @@ namespace ModernImageViewer
             _appWindow.Changed -= AppWindow_Changed;
             RootGrid.RemoveHandler(UIElement.KeyDownEvent, _globalKeyDownHandler);
             if (MainWindow.Instance != null)
+            {
                 MainWindow.Instance.GammaApplied -= OnHostGammaChanged;
+                MainWindow.Instance.Extension3DChanged -= OnExtension3DChanged;
+            }
             MainWindow.Instance?.UnregisterDetachedWindow(_imageItem.Path);
 
             _closed = true;

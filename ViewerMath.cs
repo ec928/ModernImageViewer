@@ -296,5 +296,51 @@ namespace ModernImageViewer
             target = targetRow * columns + col;
             return target < count ? target : index;
         }
+
+        /// <summary>Capped dimensions for the single-image 3D sway surface, preserving aspect ratio.</summary>
+        public static (int Width, int Height) SwaySurfaceSize(int sourceWidth, int sourceHeight, int maxLongestSide = 3072)
+        {
+            int w = Math.Max(1, sourceWidth);
+            int h = Math.Max(1, sourceHeight);
+            int cap = Math.Max(1, maxLongestSide);
+            double scale = Math.Min(1.0, (double)cap / Math.Max(w, h));
+            return (Math.Max(1, (int)Math.Round(w * scale)), Math.Max(1, (int)Math.Round(h * scale)));
+        }
+
+        /// <summary>Maps horizontal pointer position across the displayed image to a normalized sway angle in [-1, 1].</summary>
+        public static float CalculateSwayPointerAngle(double pointerX, double viewWidth, double displayedImageWidth, double panX)
+        {
+            if (!double.IsFinite(pointerX) || viewWidth <= 0 || displayedImageWidth <= 0)
+                return 0f;
+
+            double t;
+            if (displayedImageWidth <= viewWidth + 1.0)
+            {
+                double drawX = (viewWidth - displayedImageWidth) / 2.0;
+                t = (pointerX - drawX) / displayedImageWidth;
+            }
+            else
+            {
+                t = pointerX / viewWidth;
+            }
+
+            return (float)Math.Clamp(t * 2.0 - 1.0, -1.0, 1.0);
+        }
+
+        /// <summary>Exponentially smooths pointer-driven sway angle and snaps when very close to target.</summary>
+        public static float SmoothSwayAngle(float current, float target, double dtSeconds)
+        {
+            if (!double.IsFinite(current)) current = 0f;
+            if (!double.IsFinite(target)) target = 0f;
+            target = Math.Clamp(target, -1f, 1f);
+            if (Math.Abs(target - current) < 0.0005f) return target;
+            double dt = double.IsFinite(dtSeconds) ? Math.Clamp(dtSeconds, 0.0, 0.1) : 0.0;
+            float alpha = 1f - (float)Math.Exp(-dt * 12.0);
+            return current + (target - current) * alpha;
+        }
+
+        /// <summary>Converts an angle in [-1, 1] back to a continuous sway cycle phase in turns.</summary>
+        public static double SwayPhaseFromAngle(float angle) =>
+            Math.Asin(Math.Clamp(double.IsFinite(angle) ? angle : 0.0, -1.0, 1.0)) / (Math.PI * 2.0);
     }
 }
