@@ -268,7 +268,7 @@ namespace ModernImageViewer
                     Displacement = shift,
                     XChannelSelect = EffectChannelSelect.Red,
                     YChannelSelect = EffectChannelSelect.Green,
-                    Amount = (float)(size.Width * DepthTravel * 4)
+                    Amount = (float)(size.Width * Math.Max(DepthTravel * 4, SurpriseOptions.SwayRotationMost * 2))
                 };
                 var photoAtEdges = new BorderEffect { Source = photo, ExtendX = CanvasEdgeBehavior.Clamp, ExtendY = CanvasEdgeBehavior.Clamp };
                 float splatStep = Math.Max(1f, size.Width / (float)map.Width / 2f);
@@ -502,7 +502,7 @@ namespace ModernImageViewer
             else
             {
                 // One swing: center, one side, the other side, center. The swing slider sets the length.
-                // The Sway depth setting is the amount for every picture (default 4%), read every frame.
+                // The Sway depth setting is the amount for every picture (default 6%), read every frame.
                 // It returns through the photograph: a depth map has no unseen side of a person to turn into.
                 // Starts at the center. A new length keeps this place and changes the speed.
                 // The scene's own clock, so a replaced camera move cannot freeze it.

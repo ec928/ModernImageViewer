@@ -1103,7 +1103,7 @@ namespace ModernImageViewer
                 cameraSection.Children.Add(new TextBlock { Text = "3D motion style", FontSize = 13, Margin = new Thickness(0, 8, 0, 4) });
                 cameraSection.Children.Add(DepthMotionChips(SurpriseChoices.DepthMotion, mode => ChangeSurpriseChoices(o => o.DepthMotion = SurpriseOptions.CanonicalDepthMotion(mode)),
                     " Where a show holds no values of its own. A show's own choice is on the Show card."));
-                Slide(cameraSection, "Sway depth", "How far the nearest and farthest parts move apart at the peak of a sway, as a percent of the image width. The middle stays still, so the image turns one way and then the other, and always comes back. 4% is the default. Slide does not use this.",
+                Slide(cameraSection, "Sway depth", "How far the nearest and farthest parts move apart at the peak of a sway, as a percent of the image width. The middle stays still, so the image turns one way and then the other, and always comes back. 6% is the default. Slide does not use this.",
                     SurpriseOptions.SwayRotationLeast * 100, SurpriseOptions.SwayRotationMost * 100, 0.1, options.SwayRotation * 100,
                     v => $"{v:0.0}%",
                     (o, v) => o.SwayRotation = SurpriseOptions.ClampedSwayRotation(Math.Round(v, 1) / 100));

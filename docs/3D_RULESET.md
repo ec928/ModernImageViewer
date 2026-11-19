@@ -11,10 +11,10 @@ A picture plays one motion, or it is left out of the show. It is not shown as a 
 | Motion | What moves | What stays still | Travel |
 |---|---|---|---|
 | Slide | The background, once, in one direction. The subject and the scene connected to it are a cutout. | The cutout. | 4.2% of the width (`SlideTravel` 0.042). |
-| Sway | The whole picture. Near and far move opposite ways, then it comes back. The judge calls this Rock. | The median depth. | The Sway depth setting: 4% by default, 0.4% to 6%. The same for every Sway picture. |
+| Sway | The whole picture. Near and far move opposite ways, then it comes back. The judge calls this Rock. | The median depth. | The Sway depth setting: 6% by default, 0.4% to 10%. The same for every Sway picture. |
 | Pan | The same path as Sway, used when the camera move is already larger than 3% of the width. | The median depth. | 3.2% of the width (`DepthTravel` 0.032). Drawn with the displacement warp, not the forward warp. |
 
-Slide does not use the sway percent or the swing time. Sway and Slide are not combined on the same picture. One swing is center, one side, the other side, center. Engine settings (from the Show card) > Camera has two sliders for Sway: **Sway depth** (how far, 0.4% to 6%, default 4%) and **Each swing** (how long one swing takes, 1.5 s to 12 s, default 4.25 s). A settings file without a key gets the default.
+Slide does not use the sway percent or the swing time. Sway and Slide are not combined on the same picture. One swing is center, one side, the other side, center. Engine settings (from the Show card) > Camera has two sliders for Sway: **Sway depth** (how far, 0.4% to 10%, default 6%) and **Each swing** (how long one swing takes, 1.5 s to 12 s, default 4.25 s). A settings file without a key gets the default.
 
 The "3D debug" readout has no switch in the app since the Settings (gear) row was removed, and a saved setting no longer turns it on. Its code remains: when on, it shows `Sway x.x%`, `Slide`, or `Pan`, and `Filter t s`. The percent is the sway depth the frame uses. Filter times around 0.7–1.3 s on this machine are the healthy range.
 

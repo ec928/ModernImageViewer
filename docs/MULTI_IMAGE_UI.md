@@ -202,7 +202,7 @@ Under Camera:
 
 - **Curved path** (default 0–50%): how far a pan's path bows to one side, at most a gentle arc.
 - **Rotation** (default Off, up to 6°): how far the view turns over a move. It zooms in just enough to keep every corner covered.
-- With the 3D extension installed, Camera also has **3D motion style** (Slide or Sway), **Sway depth** (how far the nearest and farthest parts move apart at the peak of a sway, 0.4% to 6% of the image width, default 4%; it is not a turn, and is unrelated to Rotation), **Each swing** (how long one full sway takes, default 4.25 s) and **3D on single images**. The style and the odds are the engine's defaults; a show's own are on the Show card.
+- With the 3D extension installed, Camera also has **3D motion style** (Slide or Sway), **Sway depth** (how far the nearest and farthest parts move apart at the peak of a sway, 0.4% to 10% of the image width, default 6%; it is not a turn, and is unrelated to Rotation), **Each swing** (how long one full sway takes, default 4.25 s) and **3D on single images**. The style and the odds are the engine's defaults; a show's own are on the Show card.
 
 Storyboard scenes store their curve, bend, turn and shots, and play them; scenes made before these play as they did.
 

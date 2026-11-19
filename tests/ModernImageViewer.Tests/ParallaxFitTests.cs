@@ -147,13 +147,21 @@ namespace ModernImageViewer.Tests
         [Fact]
         public void Sway_settings_keep_the_current_look_when_the_file_omits_them()
         {
+            Assert.Equal(0.06, SurpriseOptions.SwayRotationDefault, 5);
+            Assert.Equal(0.10, SurpriseOptions.SwayRotationMost, 5);
+
             var fresh = new SurpriseOptions();
             Assert.Equal(SurpriseOptions.SwayRotationDefault, fresh.SwayRotation, 5);
             Assert.Equal(SurpriseOptions.SwaySwingDefault, fresh.SwaySwing, 3);
 
             var old = SurpriseOptions.FromJson("{\"DepthChance\":0.4}");
-            Assert.Equal(0.04, old.SwayRotation, 5);
+            Assert.Equal(0.06, old.SwayRotation, 5);
             Assert.Equal(4.25, old.SwaySwing, 3);
+
+            // Pre-v1 files still holding the old 4% default upgrade once to 6%; custom values stay as chosen.
+            Assert.Equal(0.06, SurpriseOptions.FromJson("{\"SwayRotation\":0.04}").SwayRotation, 5);
+            Assert.Equal(0.04, SurpriseOptions.FromJson(new SurpriseOptions { SwayRotation = 0.04 }.ToJson()).SwayRotation, 5);
+            Assert.Equal(0.095, SurpriseOptions.FromJson("{\"SwayRotation\":0.095}").SwayRotation, 5);
 
             var set = SurpriseOptions.FromJson("{\"SwayRotation\":0.03,\"SwaySwing\":6.5}");
             Assert.Equal(0.03, set.SwayRotation, 5);

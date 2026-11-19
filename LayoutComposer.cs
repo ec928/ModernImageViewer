@@ -425,12 +425,14 @@ namespace ModernImageViewer
 
         /// <summary>
         /// How far Sway moves the nearest depth against the farthest, as a fraction of the picture width, at the peak.
-        /// The middle stays still. Every Sway picture plays this. A settings file without this plays 4% (Ed, 2026-11-11: with the forward warp most pictures take it).
+        /// The middle stays still. Every Sway picture plays this. A settings file without this plays 6% (Ed, 2026-11-11: with the forward warp most pictures take it).
         /// </summary>
-        public const double SwayRotationDefault = 0.04;
+        public const double SwayRotationDefault = 0.06;
         public const double SwayRotationLeast = 0.004;
-        public const double SwayRotationMost = 0.06;
+        public const double SwayRotationMost = 0.10;
         public double SwayRotation { get; set; } = SwayRotationDefault;
+        public const int CurrentOptionsVersion = 1;
+        public int OptionsVersion { get; set; } = CurrentOptionsVersion;
 
         /// <summary>
         /// How long one Sway swing takes, in seconds: center, out to one side, across to the other, and back to center.
@@ -751,9 +753,13 @@ namespace ModernImageViewer
                 read.MotionFaceChance = Math.Clamp(read.MotionFaceChance, 0, 1);
                 read.DepthChance = Math.Clamp(read.DepthChance, 0, 1);
                 read.DepthMotion = CanonicalDepthMotion(read.DepthMotion);
-                // Missing keys stay at the look shipped in 0.34.1. A present value is kept inside the slider range.
-                if (!json!.Contains("\"SwayRotation\"", StringComparison.Ordinal)) read.SwayRotation = SwayRotationDefault;
+                int fileVersion = json!.Contains("\"OptionsVersion\"", StringComparison.Ordinal) ? read.OptionsVersion : 0;
+                // Missing keys take the current defaults. A pre-v1 file still carrying the old 4% default
+                // upgrades once to the 6% default; any other value (or an explicit 4% saved at v1+) is kept.
+                if (!json.Contains("\"SwayRotation\"", StringComparison.Ordinal)) read.SwayRotation = SwayRotationDefault;
+                else if (fileVersion < 1 && Math.Abs(read.SwayRotation - 0.04) < 0.0005) read.SwayRotation = SwayRotationDefault;
                 else read.SwayRotation = ClampedSwayRotation(read.SwayRotation);
+                read.OptionsVersion = Math.Max(fileVersion, CurrentOptionsVersion);
                 if (!json.Contains("\"SwaySwing\"", StringComparison.Ordinal)) read.SwaySwing = SwaySwingDefault;
                 else read.SwaySwing = ClampedSwaySwing(read.SwaySwing);
                 // 0.8 was the first default, and it warped single pictures in every mode. A file from before Parallax
