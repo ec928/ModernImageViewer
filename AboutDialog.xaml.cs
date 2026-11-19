@@ -22,7 +22,10 @@ namespace ModernImageViewer
             VersionText.Text = $"Version {GetDisplayVersion()}";
             try
             {
-                string icon = System.IO.Path.Combine(AppContext.BaseDirectory, "ModernImageViewer.ico");
+                string pngIcon = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.png");
+                string icon = System.IO.File.Exists(pngIcon)
+                    ? pngIcon
+                    : System.IO.Path.Combine(AppContext.BaseDirectory, "ModernImageViewer.ico");
                 if (System.IO.File.Exists(icon))
                     AppIconImage.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(icon));
             }

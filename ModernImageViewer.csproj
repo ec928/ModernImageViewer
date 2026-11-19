@@ -25,9 +25,9 @@
       whose properties disagreed with its own release tag. Bump Version here when
       tagging; the release tag, the zip name and the exe properties then all agree.
     -->
-    <Version>0.37.1</Version>
-    <AssemblyVersion>0.37.1.0</AssemblyVersion>
-    <FileVersion>0.37.1.0</FileVersion>
+    <Version>0.37.2</Version>
+    <AssemblyVersion>0.37.2.0</AssemblyVersion>
+    <FileVersion>0.37.2.0</FileVersion>
     <Product>ModernImageViewer</Product>
 
     <!--
@@ -72,6 +72,7 @@
     <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
     <Content Include="Assets\StoreLogo.png" />
     <Content Include="Assets\Wide310x150Logo.scale-200.png" />
+    <Content Include="Assets\AppIcon.png" />
     <Content Include="ModernImageViewer.ico" />
   </ItemGroup>
   <ItemGroup>
