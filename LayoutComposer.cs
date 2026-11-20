@@ -1040,6 +1040,14 @@ namespace ModernImageViewer
             }
         }
 
+        /// <summary>Marks a picture as already dealt in the current round (e.g. a pinned opening scene) so it is not dealt again immediately.</summary>
+        public void MarkDealt(string picture)
+        {
+            if (string.IsNullOrEmpty(picture)) return;
+            _waiting.Remove(picture);
+            _added.RemoveAll(p => string.Equals(p, picture, StringComparison.OrdinalIgnoreCase));
+        }
+
         /// <summary>The session decides what is in the deck: a picture removed from it does not come round again, and one added comes up soon.</summary>
         public void MatchSession(IReadOnlyCollection<string> pictures)
         {

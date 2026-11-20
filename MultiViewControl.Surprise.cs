@@ -3527,7 +3527,7 @@ namespace ModernImageViewer
         /// </summary>
         /// <param name="overrides">Null for the main Layout Generator settings, or the name of a set of overrides
         /// (<see cref="CinematicOverrides.Name"/>) that the show keeps for every scene made for it.</param>
-        public async Task MakeAndPlayStoryboardAsync(string? overrides = null)
+        public async Task MakeAndPlayStoryboardAsync(string? overrides = null, string? startWithPath = null)
         {
             int ticket = ++_storyboardBuildTicket;
             // The session has only just opened: wait for the canvas to have its size, so scenes take its shape.
@@ -3577,6 +3577,15 @@ namespace ModernImageViewer
             ShowShownBadge();
             bool Current() => ticket == _storyboardBuildTicket && ReferenceEquals(show, _activeShow);
             var pictures = PicturesInOrder();
+            string? pendingStartPath = !string.IsNullOrWhiteSpace(startWithPath) ? startWithPath : null;
+            if (pendingStartPath != null)
+            {
+                int startIdx = pictures.FindIndex(p => string.Equals(p, pendingStartPath, StringComparison.OrdinalIgnoreCase));
+                if (startIdx > 0)
+                    pictures = pictures.Skip(startIdx).Concat(pictures.Take(startIdx)).ToList();
+                else if (startIdx < 0 && System.IO.File.Exists(pendingStartPath))
+                    pictures.Insert(0, pendingStartPath);
+            }
             var playSettings = GeneratorSettingsFor(show);
             string playNote = $"Play show · {ActivePresetName(show)}";
             // Parallax checks one picture at a time and starts on the first that passes. The rest are checked while it plays.
@@ -3595,40 +3604,52 @@ namespace ModernImageViewer
                     ShowAutoPlayToast("3D needs the depth model, which is not beside the app.");
                     return;
                 }
-                ShowAutoPlayToast($"Checking {pictures.Count} images for 3D", hold: true);
-                stillToCheck = pictures;
-                string? first = null;
-                while (nextCheck < stillToCheck.Count && first == null)
+                if (pendingStartPath != null)
                 {
-                    if (!Current()) return;
-                    while (Current() && _depthPrepWaiting) await Task.Delay(40);
-                    if (!Current()) return;
-                    string path = stillToCheck[nextCheck++];
-                    var verdict = await DepthMaps.VerdictAsync(path);
-                    if (verdict == ParallaxFit.Verdict.Pass) first = path;
-                    else if (verdict == null) unread++;
-                    else if (verdict == ParallaxFit.Verdict.Unsure) unsure++;
-                    else leftOut++;
-                    ShowAutoPlayToast($"Checking images for 3D, {nextCheck} of {stillToCheck.Count}", hold: true);
+                    stillToCheck = pictures.Where(p => !string.Equals(p, pendingStartPath, StringComparison.OrdinalIgnoreCase)).ToList();
+                    nextCheck = 0;
+                    deck = new PictureDeck(new[] { pendingStartPath }, new Random());
+                    playNote = stillToCheck.Count > 0
+                        ? "Play show · 3D · starting, still checking the rest"
+                        : "Play show · 3D";
                 }
-                if (!Current()) return;
-                if (first == null)
+                else
                 {
-                    // A check that keeps nothing does not replace a show that already had scenes.
-                    if (!ReferenceEquals(replaced, show))
+                    ShowAutoPlayToast($"Checking {pictures.Count} images for 3D", hold: true);
+                    stillToCheck = pictures;
+                    string? first = null;
+                    while (nextCheck < stillToCheck.Count && first == null)
                     {
-                        _activeShow = replaced;
-                        ShowShownBadge();
+                        if (!Current()) return;
+                        while (Current() && _depthPrepWaiting) await Task.Delay(40);
+                        if (!Current()) return;
+                        string path = stillToCheck[nextCheck++];
+                        var verdict = await DepthMaps.VerdictAsync(path);
+                        if (verdict == ParallaxFit.Verdict.Pass) first = path;
+                        else if (verdict == null) unread++;
+                        else if (verdict == ParallaxFit.Verdict.Unsure) unsure++;
+                        else leftOut++;
+                        ShowAutoPlayToast($"Checking images for 3D, {nextCheck} of {stillToCheck.Count}", hold: true);
                     }
-                    ShowAutoPlayToast("3D: none of these images passed the depth check.");
-                    return;
+                    if (!Current()) return;
+                    if (first == null)
+                    {
+                        // A check that keeps nothing does not replace a show that already had scenes.
+                        if (!ReferenceEquals(replaced, show))
+                        {
+                            _activeShow = replaced;
+                            ShowShownBadge();
+                        }
+                        ShowAutoPlayToast("3D: none of these images passed the depth check.");
+                        return;
+                    }
+                    deck = new PictureDeck(new[] { first }, new Random());
+                    bool more = nextCheck < stillToCheck.Count;
+                    string unreadNote = unread > 0 ? $", {unread} unreadable" : "";
+                    playNote = more
+                        ? "Play show · 3D · starting, still checking the rest"
+                        : $"Play show · 3D · {deck.Count} images, {leftOut} left out, {unsure} unsure{unreadNote}";
                 }
-                deck = new PictureDeck(new[] { first }, new Random());
-                bool more = nextCheck < stillToCheck.Count;
-                string unreadNote = unread > 0 ? $", {unread} unreadable" : "";
-                playNote = more
-                    ? "Play show · 3D · starting, still checking the rest"
-                    : $"Play show · 3D · {deck.Count} images, {leftOut} left out, {unsure} unsure{unreadNote}";
             }
             else deck = new PictureDeck(pictures, new Random());
             int failedHands = 0;
@@ -3740,7 +3761,19 @@ namespace ModernImageViewer
                     continue;
                 }
                 int draftedAt = _upcomingStepRevision;
-                var chosen = DealHand(deck, settings).Where(p => !_imagesBeingDrafted.Contains(p)).ToList();
+                bool isPinnedStart = false;
+                List<string> chosen;
+                if (pendingStartPath != null && show.Scenes.Count == 0 && !_imagesBeingDrafted.Contains(pendingStartPath))
+                {
+                    chosen = new List<string> { pendingStartPath };
+                    deck.MarkDealt(pendingStartPath);
+                    isPinnedStart = true;
+                    pendingStartPath = null;
+                }
+                else
+                {
+                    chosen = DealHand(deck, settings).Where(p => !_imagesBeingDrafted.Contains(p)).ToList();
+                }
                 if (chosen.Count == 0)
                 {
                     // Nothing dealt, and the check above moved on: try the pictures still to come. If it did not move, stop.
@@ -3767,7 +3800,7 @@ namespace ModernImageViewer
                     var facts = await ReadFactsAsync(chosen, path => ready.TryGetValue(path, out var bitmap) ? (bitmap.PixelWidth, bitmap.PixelHeight) : null);
                     if (!Current()) return;
                     long read = PlayTiming.Now;
-                    if (settings.SkipScreens) facts = LayoutComposer.LeaveOutScreensAndRepeats(facts);
+                    if (settings.SkipScreens && !isPinnedStart) facts = LayoutComposer.LeaveOutScreensAndRepeats(facts);
                     var previous = show.Scenes.Count > 0 ? show.Scenes[^1] : null;
                     // The hand is the scene: its size was already rolled in the Images per scene range.
                     var step = await ShowDirector.DraftStepAsync(facts, settings, ActualWidth, ActualHeight, previous, takeAll: true);

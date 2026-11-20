@@ -15,8 +15,9 @@
 
         <local:ImageViewerControl x:Name="ViewerControl" 
                                   AllowDetach="False" 
-                                  CloseRequested="ViewerControl_CloseRequested" 
+                                  CloseRequested="ViewerControl_CloseRequested"
                                   ToggleFullscreenRequested="ViewerControl_ToggleFullscreenRequested"
+                                  ToggleAlwaysOnTopRequested="ViewerControl_ToggleAlwaysOnTopRequested"
                                   SizeToImageRequested="ViewerControl_SizeToImageRequested"
                                   MinimizeRequested="ViewerControl_MinimizeRequested"
                                   DeviceLostRestoring="ViewerControl_DeviceLostRestoring"

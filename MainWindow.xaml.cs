@@ -664,9 +664,24 @@ namespace ModernImageViewer
         }
 
 
-        /// <summary>The folder's images as a show in Multi-View, with the preset chosen on the Show card. Cinematic Slideshow,
-        /// which this replaced from the viewer and the folder menu, was removed in 0.33.0.</summary>
-        public void PlayFolderAsShow() => PlayStoryboard(FolderImagesForStoryboard(), overrides: null);
+        /// <summary>The folder's images as a show in Multi-View, starting on <paramref name="startWith"/> when opened from an image.</summary>
+        public void PlayFolderAsShow(ImageItem? startWith = null)
+        {
+            var items = FolderImagesForStoryboard();
+            string? startPath = null;
+            if (startWith != null && !startWith.IsDirectory && !startWith.IsComicArchive && !startWith.IsComicEntry && !string.IsNullOrEmpty(startWith.Path))
+            {
+                startPath = startWith.Path;
+                int idx = items.FindIndex(i => string.Equals(i.Path, startPath, StringComparison.OrdinalIgnoreCase));
+                if (idx > 0)
+                    items = items.Skip(idx).Concat(items.Take(idx)).ToList();
+                else if (idx < 0 && File.Exists(startPath))
+                    items.Insert(0, startWith);
+            }
+            if (items.Count == 0) return;
+            this.Activate();
+            PlayStoryboard(items, overrides: null, startWithPath: startPath);
+        }
 
         private readonly object _settingsGate = new();
         private int _settingsSaveNumber;
@@ -866,11 +881,11 @@ namespace ModernImageViewer
         /// These images in Multi-View, made into a show that plays at once,
         /// by the Layout Generator with its main settings or with a named set of overrides.
         /// </summary>
-        private void PlayStoryboard(IList<ImageItem> items, string? overrides)
+        private void PlayStoryboard(IList<ImageItem> items, string? overrides, string? startWithPath = null)
         {
             if (items.Count == 0 || MultiViewControl == null || _multiViewParked) return;
-            OpenMultiView(items);
-            _ = MultiViewControl.MakeAndPlayStoryboardAsync(overrides);
+            OpenMultiView(items, onCanvas: string.IsNullOrEmpty(startWithPath) ? 0 : 1);
+            _ = MultiViewControl.MakeAndPlayStoryboardAsync(overrides, startWithPath);
         }
 
         private async void MultiSelectDelete_Click(object sender, RoutedEventArgs e)

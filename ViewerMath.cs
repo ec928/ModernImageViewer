@@ -1,4 +1,5 @@
 using System;
+using System.Numerics;
 
 namespace ModernImageViewer
 {
@@ -307,25 +308,27 @@ namespace ModernImageViewer
             return (Math.Max(1, (int)Math.Round(w * scale)), Math.Max(1, (int)Math.Round(h * scale)));
         }
 
-        /// <summary>Maps horizontal pointer position across the displayed image to a normalized sway angle in [-1, 1].</summary>
-        public static float CalculateSwayPointerAngle(double pointerX, double viewWidth, double displayedImageWidth, double panX)
+        private static float MapPointerAxis(double ptr, double viewLen, double displayedLen)
         {
-            if (!double.IsFinite(pointerX) || viewWidth <= 0 || displayedImageWidth <= 0)
+            if (!double.IsFinite(ptr) || viewLen <= 0 || displayedLen <= 0)
                 return 0f;
 
-            double t;
-            if (displayedImageWidth <= viewWidth + 1.0)
-            {
-                double drawX = (viewWidth - displayedImageWidth) / 2.0;
-                t = (pointerX - drawX) / displayedImageWidth;
-            }
-            else
-            {
-                t = pointerX / viewWidth;
-            }
-
+            double t = displayedLen <= viewLen + 1.0
+                ? (ptr - (viewLen - displayedLen) / 2.0) / displayedLen
+                : ptr / viewLen;
             return (float)Math.Clamp(t * 2.0 - 1.0, -1.0, 1.0);
         }
+
+        /// <summary>Maps horizontal pointer position across the displayed image to a normalized sway angle in [-1, 1].</summary>
+        public static float CalculateSwayPointerAngle(double pointerX, double viewWidth, double displayedImageWidth, double panX) =>
+            MapPointerAxis(pointerX, viewWidth, displayedImageWidth);
+
+        /// <summary>Maps pointer X and Y across the displayed image to normalized [-1, 1] tilt coordinates.</summary>
+        public static (float X, float Y) CalculateSwayPointerVector(
+            double pointerX, double pointerY,
+            double viewWidth, double viewHeight,
+            double displayedWidth, double displayedHeight) =>
+            (MapPointerAxis(pointerX, viewWidth, displayedWidth), MapPointerAxis(pointerY, viewHeight, displayedHeight));
 
         /// <summary>Exponentially smooths pointer-driven sway angle and snaps when very close to target.</summary>
         public static float SmoothSwayAngle(float current, float target, double dtSeconds)
@@ -342,5 +345,120 @@ namespace ModernImageViewer
         /// <summary>Converts an angle in [-1, 1] back to a continuous sway cycle phase in turns.</summary>
         public static double SwayPhaseFromAngle(float angle) =>
             Math.Asin(Math.Clamp(double.IsFinite(angle) ? angle : 0.0, -1.0, 1.0)) / (Math.PI * 2.0);
+
+        public const double SlideCrossfadeOverlap = 0.25;
+
+        /// <summary>Advances phase for one-way Slide: looping wraps cleanly onto [overlap, 1) after the first pass; non-looping clamps at 1.</summary>
+        public static double NextOneWaySlidePhase(double phase, double dtSeconds, double durationSeconds, bool loop)
+        {
+            double p = double.IsFinite(phase) && phase >= 0.0 ? phase : 0.0;
+            double dt = double.IsFinite(dtSeconds) && dtSeconds > 0.0 ? dtSeconds : 0.0;
+            double dur = double.IsFinite(durationSeconds) && durationSeconds >= 0.5 ? durationSeconds : 0.5;
+            if (loop)
+            {
+                double span = 1.0 - SlideCrossfadeOverlap;
+                p += dt * (span / dur);
+                if (p >= 1.0)
+                    p = SlideCrossfadeOverlap + ((p - SlideCrossfadeOverlap) % span);
+                return p;
+            }
+            return Math.Min(1.0, p + dt / dur);
+        }
+
+        /// <summary>Returns background pass offsets (0..1) and Pass-B smoothstep blend (0..1) for unidirectional Slide.</summary>
+        public static (float OffsetA, float OffsetB, float BlendB) SlideOneWayLayers(double phase, bool loop)
+        {
+            double p = double.IsFinite(phase) ? Math.Clamp(phase, 0.0, 1.0) : 0.0;
+            if (!loop)
+            {
+                float eased = (float)(0.5 - 0.5 * Math.Cos(p * Math.PI));
+                return (eased, 0f, 0f);
+            }
+
+            double fadeStart = 1.0 - SlideCrossfadeOverlap;
+            if (p <= fadeStart)
+                return ((float)p, 0f, 0f);
+
+            double f = Math.Clamp((p - fadeStart) / SlideCrossfadeOverlap, 0.0, 1.0);
+            float blend = (float)(f * f * (3.0 - 2.0 * f));
+            return ((float)p, (float)(p - fadeStart), blend);
+        }
+
+        /// <summary>Returns horizontal 3D light position in Slide mode, continuous across the loop wrap boundary.</summary>
+        public static float SlideLightX(double phase, bool loop, float slideOffsetA)
+        {
+            if (!loop)
+                return (slideOffsetA * 2f - 1f) * 0.7f;
+
+            double p = double.IsFinite(phase) ? phase : 0.0;
+            double span = 1.0 - SlideCrossfadeOverlap;
+            double rad = ((p - SlideCrossfadeOverlap) / span) * (Math.PI * 2.0);
+            return (float)Math.Sin(rad) * 0.7f;
+        }
+
+        /// <summary>Overscan crop factor so higher sway depths and radial Breathe mode never reveal clamped edge streaks.</summary>
+        public static float SwayOverscanFor(double depthRotation, bool isBreathe)
+        {
+            double d = double.IsFinite(depthRotation) && depthRotation > 0 ? depthRotation : 0.0;
+            float over = 1.025f;
+            if (d > 0.06) over += (float)((d - 0.06) * 0.65);
+            if (isBreathe) over += Math.Max(0.01f, (float)(d * 0.35));
+            return over;
+        }
+
+        /// <summary>Builds a 2D view transform matrix combining mirror, flip, 90-degree rotations, and output scaling.</summary>
+        public static Matrix3x2 BuildViewTransformMatrix(
+            float bitmapWidth, float bitmapHeight,
+            float drawWidth, float drawHeight,
+            int quarterTurns, bool mirrorHorizontal, bool flipVertical)
+        {
+            int q = ((quarterTurns % 4) + 4) % 4;
+            float bw = Math.Max(1f, bitmapWidth);
+            float bh = Math.Max(1f, bitmapHeight);
+            float outW = (q % 2 == 1) ? bh : bw;
+            float outH = (q % 2 == 1) ? bw : bh;
+
+            var m = Matrix3x2.CreateTranslation(-bw * 0.5f, -bh * 0.5f);
+            if (mirrorHorizontal || flipVertical)
+                m *= Matrix3x2.CreateScale(mirrorHorizontal ? -1f : 1f, flipVertical ? -1f : 1f);
+            if (q != 0)
+                m *= Matrix3x2.CreateRotation(q * (MathF.PI * 0.5f));
+            m *= Matrix3x2.CreateScale(drawWidth / outW, drawHeight / outH);
+            m *= Matrix3x2.CreateTranslation(drawWidth * 0.5f, drawHeight * 0.5f);
+            return m;
+        }
+
+        /// <summary>Maps a pointer position in view coordinates back to normalized source image coordinates [0, 1] x [0, 1].</summary>
+        public static (bool Inside, float U, float V) ScreenToSourceNormalized(
+            double pointerX, double pointerY,
+            double viewW, double viewH,
+            double displayedW, double displayedH,
+            double panX, double panY,
+            int quarterTurns, bool mirrorHorizontal, bool flipVertical)
+        {
+            if (!double.IsFinite(pointerX) || !double.IsFinite(pointerY)
+                || viewW <= 0 || viewH <= 0 || displayedW <= 0 || displayedH <= 0)
+                return (false, 0.5f, 0.5f);
+
+            double drawX = displayedW <= viewW + 1.0 ? (viewW - displayedW) / 2.0 : panX;
+            double drawY = displayedH <= viewH + 1.0 ? (viewH - displayedH) / 2.0 : panY;
+            double dx = (pointerX - drawX) / displayedW;
+            double dy = (pointerY - drawY) / displayedH;
+            if (dx < 0.0 || dx > 1.0 || dy < 0.0 || dy > 1.0)
+                return (false, 0.5f, 0.5f);
+
+            int q = ((quarterTurns % 4) + 4) % 4;
+            double u1, v1;
+            switch (q)
+            {
+                case 1: u1 = dy; v1 = 1.0 - dx; break;
+                case 2: u1 = 1.0 - dx; v1 = 1.0 - dy; break;
+                case 3: u1 = 1.0 - dy; v1 = dx; break;
+                default: u1 = dx; v1 = dy; break;
+            }
+            if (mirrorHorizontal) u1 = 1.0 - u1;
+            if (flipVertical) v1 = 1.0 - v1;
+            return (true, (float)Math.Clamp(u1, 0.0, 1.0), (float)Math.Clamp(v1, 0.0, 1.0));
+        }
     }
 }

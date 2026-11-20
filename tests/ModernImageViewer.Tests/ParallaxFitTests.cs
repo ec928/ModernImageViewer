@@ -300,5 +300,127 @@ namespace ModernImageViewer.Tests
                 Assert.Equal(targetAngle, Math.Sin(phase * Math.PI * 2.0), 5);
             }
         }
+
+        [Fact]
+        public void View_transform_and_2D_pointer_mapping_are_exact_inverses()
+        {
+            // 2-axis tilt vector on fitted image (1200x800 view, 800x600 image -> X in [200,1000], Y in [100,700])
+            var (vxCenter, vyCenter) = ViewerMath.CalculateSwayPointerVector(600, 400, 1200, 800, 800, 600);
+            Assert.Equal(0f, vxCenter, 4);
+            Assert.Equal(0f, vyCenter, 4);
+            var (vxTL, vyTL) = ViewerMath.CalculateSwayPointerVector(200, 100, 1200, 800, 800, 600);
+            Assert.Equal(-1f, vxTL, 4);
+            Assert.Equal(-1f, vyTL, 4);
+
+            // Overscan scales smoothly above 6% and adds breathing margin
+            Assert.Equal(1.025f, ViewerMath.SwayOverscanFor(0.06, false), 4);
+            Assert.True(ViewerMath.SwayOverscanFor(0.10, false) > 1.045f);
+            Assert.True(ViewerMath.SwayOverscanFor(0.06, true) > ViewerMath.SwayOverscanFor(0.06, false));
+
+            // Test every combination of rotation (0..3), mirrorH, flipV
+            float bw = 400f, bh = 300f;
+            foreach (int q in new[] { 0, 1, 2, 3 })
+                foreach (bool mh in new[] { false, true })
+                    foreach (bool fv in new[] { false, true })
+                    {
+                        float dispW = (q % 2 == 1) ? bh : bw;
+                        float dispH = (q % 2 == 1) ? bw : bh;
+                        var m = ViewerMath.BuildViewTransformMatrix(bw, bh, dispW, dispH, q, mh, fv);
+
+                        foreach (var (u, v) in new[] { (0.2f, 0.3f), (0.8f, 0.25f), (0.15f, 0.85f) })
+                        {
+                            var drawn = System.Numerics.Vector2.Transform(new System.Numerics.Vector2(u * bw, v * bh), m);
+                            double viewW = dispW + 200.0;
+                            double viewH = dispH + 100.0;
+                            double ptrX = 100.0 + drawn.X;
+                            double ptrY = 50.0 + drawn.Y;
+
+                            var (inside, ru, rv) = ViewerMath.ScreenToSourceNormalized(
+                                ptrX, ptrY, viewW, viewH, dispW, dispH, 0, 0, q, mh, fv);
+                            Assert.True(inside);
+                            Assert.Equal(u, ru, 3);
+                            Assert.Equal(v, rv, 3);
+                        }
+                    }
+
+            // Letterbox click reports inside=false
+            var (outClick, _, _) = ViewerMath.ScreenToSourceNormalized(20, 400, 1200, 800, 800, 600, 0, 0, 0, false, false);
+            Assert.False(outClick);
+
+            // Zoomed + panned point maps accurately back to source
+            var (inPan, pu, pv) = ViewerMath.ScreenToSourceNormalized(600, 400, 1200, 800, 2400, 1600, -600, -400, 0, false, false);
+            Assert.True(inPan);
+            Assert.Equal(0.5f, pu, 4);
+            Assert.Equal(0.5f, pv, 4);
+        }
+
+        [Fact]
+        public void PictureDeck_MarkDealt_skips_pinned_opening_photo_until_next_round()
+        {
+            var pictures = new[] { "c.jpg", "a.jpg", "b.jpg" };
+            var deck = new PictureDeck(pictures, new Random(42));
+            deck.MarkDealt("c.jpg");
+
+            var remaining = deck.Deal(2);
+            Assert.Equal(2, remaining.Count);
+            Assert.DoesNotContain("c.jpg", remaining);
+            Assert.Contains("a.jpg", remaining);
+            Assert.Contains("b.jpg", remaining);
+
+            var nextRound = deck.Deal(1);
+            Assert.Equal(new[] { "c.jpg" }, nextRound);
+        }
+
+        [Fact]
+        public void Slide_one_way_curve_and_loop_wrap_are_continuous()
+        {
+            // Non-looping once mode eases 0 -> 1 monotonically with no second pass
+            Assert.Equal((0f, 0f, 0f), ViewerMath.SlideOneWayLayers(0.0, loop: false));
+            Assert.Equal(0.5f, ViewerMath.SlideOneWayLayers(0.5, loop: false).OffsetA, 4);
+            Assert.Equal((1f, 0f, 0f), ViewerMath.SlideOneWayLayers(1.0, loop: false));
+
+            // Looping unidirectional mode holds Pass B off until 0.75, then blends seamlessly
+            var start = ViewerMath.SlideOneWayLayers(0.0, loop: true);
+            Assert.Equal(0f, start.OffsetA, 4);
+            Assert.Equal(0f, start.BlendB, 4);
+
+            var preFade = ViewerMath.SlideOneWayLayers(0.5, loop: true);
+            Assert.Equal(0.5f, preFade.OffsetA, 4);
+            Assert.Equal(0f, preFade.BlendB, 4);
+
+            var wrapEnd = ViewerMath.SlideOneWayLayers(1.0, loop: true);
+            var wrapNext = ViewerMath.SlideOneWayLayers(ViewerMath.SlideCrossfadeOverlap, loop: true);
+            Assert.Equal(1.0f, wrapEnd.BlendB, 4);
+            Assert.Equal(wrapEnd.OffsetB, wrapNext.OffsetA, 4);
+            Assert.Equal(0f, wrapNext.BlendB, 4);
+
+            // Phase advancement wraps cleanly inside [0.25, 1) when looping, clamps at 1 when once
+            double p = ViewerMath.NextOneWaySlidePhase(0.25, 2.0, 2.0, loop: true);
+            Assert.Equal(0.25, p, 4);
+            double midWrap = ViewerMath.NextOneWaySlidePhase(0.75, 1.0, 2.0, loop: true);
+            Assert.Equal(0.375, midWrap, 4);
+            double clamped = ViewerMath.NextOneWaySlidePhase(0.8, 1.0, 2.0, loop: false);
+            Assert.Equal(1.0, clamped, 4);
+        }
+
+        [Fact]
+        public void SlideLightX_is_continuous_across_loop_wrap_and_ramps_smoothly_when_once()
+        {
+            // Once mode ramps monotonically from -0.7 to +0.7
+            Assert.Equal(-0.7f, ViewerMath.SlideLightX(0.0, loop: false, 0f), 4);
+            Assert.Equal(0.0f, ViewerMath.SlideLightX(0.5, loop: false, 0.5f), 4);
+            Assert.Equal(0.7f, ViewerMath.SlideLightX(1.0, loop: false, 1f), 4);
+
+            // Loop mode matches exactly at wrap boundary 1.0 -> SlideCrossfadeOverlap (0.25)
+            float atEnd = ViewerMath.SlideLightX(1.0, loop: true, 1f);
+            float atWrap = ViewerMath.SlideLightX(ViewerMath.SlideCrossfadeOverlap, loop: true, (float)ViewerMath.SlideCrossfadeOverlap);
+            Assert.Equal(atWrap, atEnd, 4);
+
+            // Loop mode oscillates smoothly across the cycle rather than staying constant
+            float atMidLoop = ViewerMath.SlideLightX(ViewerMath.SlideCrossfadeOverlap + 0.1875, loop: true, 0.4375f);
+            float atThreeQuarterLoop = ViewerMath.SlideLightX(ViewerMath.SlideCrossfadeOverlap + 0.5625, loop: true, 0.8125f);
+            Assert.True(atMidLoop > 0.65f);
+            Assert.True(atThreeQuarterLoop < -0.65f);
+        }
     }
 }

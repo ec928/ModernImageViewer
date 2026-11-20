@@ -165,9 +165,10 @@ namespace ModernImageViewer
             int finalW = Math.Clamp((int)Math.Round(targetW), 320, (int)workAreaW);
             int finalH = Math.Clamp((int)Math.Round(targetH), 240, (int)workAreaH);
 
-            bool inheritSway = ViewerControl != null && ViewerControl.Visibility == Visibility.Visible && ViewerControl.TargetImage == targetItem && ViewerControl.IsSwayEnabled;
-            bool inheritFollow = inheritSway && ViewerControl!.IsSwayFollowPointer;
-            var detachedWindow = new DetachedWindow(targetItem, finalW, finalH, _currentGamma, inheritSway, inheritFollow);
+            var initialEffects = (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible && ViewerControl.TargetImage == targetItem)
+                ? ViewerControl.CaptureEffectSnapshot()
+                : null;
+            var detachedWindow = new DetachedWindow(targetItem, finalW, finalH, _currentGamma, initialEffects);
             var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(detachedWindow);
             var appWindowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
             var appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(appWindowId);
@@ -1405,7 +1406,10 @@ namespace ModernImageViewer
 
         private void MainWindow_Activated(object sender, WindowActivatedEventArgs args)
         {
-            if (args.WindowActivationState != WindowActivationState.Deactivated) FocusGrid();
+            if (args.WindowActivationState == WindowActivationState.Deactivated)
+                ViewerControl?.SetCompareOriginal(false);
+            else
+                FocusGrid();
         }
 
         private void FocusGrid()
@@ -2539,6 +2543,11 @@ namespace ModernImageViewer
 
         private void Global_KeyUp(object sender, KeyRoutedEventArgs e)
         {
+            if (ViewerControl != null && ViewerControl.Visibility == Visibility.Visible && ViewerControl.HandleViewerKeyUp(e.Key))
+            {
+                e.Handled = true;
+                return;
+            }
             if (e.Key == Windows.System.VirtualKey.Menu)
                 e.Handled = true;
         }
@@ -3996,7 +4005,11 @@ namespace ModernImageViewer
         private void GridMenuCinematic_Click(object sender, RoutedEventArgs e)
         {
             if (ImageGrid.SelectedItems.Count > 0) PlaySelectedAsStoryboard(overrides: null);
-            else PlayFolderAsShow();
+            else
+            {
+                var startItem = _contextMenuTargetItem is { IsDirectory: false, IsComicArchive: false, IsComicEntry: false } target ? target : null;
+                PlayFolderAsShow(startItem);
+            }
         }
 
         private void GridMenuEdit_Click(object sender, RoutedEventArgs e)

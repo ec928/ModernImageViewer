@@ -22,6 +22,35 @@
                 <Setter Property="FocusVisualPrimaryThickness" Value="0"/>
                 <Setter Property="FocusVisualSecondaryThickness" Value="0"/>
             </Style>
+            <Style x:Key="StudioPillButtonStyle" TargetType="Button">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="CornerRadius" Value="12"/>
+                <Setter Property="Padding" Value="8,3"/>
+                <Setter Property="MinHeight" Value="24"/>
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="IsTabStop" Value="False"/>
+                <Setter Property="UseSystemFocusVisuals" Value="False"/>
+                <Setter Property="FocusVisualPrimaryThickness" Value="0"/>
+                <Setter Property="FocusVisualSecondaryThickness" Value="0"/>
+            </Style>
+            <Storyboard x:Name="FocusReticleStoryboard">
+                <DoubleAnimationUsingKeyFrames Storyboard.TargetName="FocusReticle" Storyboard.TargetProperty="Opacity">
+                    <DiscreteDoubleKeyFrame KeyTime="0:0:0" Value="0.95"/>
+                    <DiscreteDoubleKeyFrame KeyTime="0:0:0.35" Value="0.95"/>
+                    <LinearDoubleKeyFrame KeyTime="0:0:0.65" Value="0.0"/>
+                </DoubleAnimationUsingKeyFrames>
+                <DoubleAnimation Storyboard.TargetName="FocusReticleScale" Storyboard.TargetProperty="ScaleX" From="1.35" To="0.9" Duration="0:0:0.22">
+                    <DoubleAnimation.EasingFunction>
+                        <QuadraticEase EasingMode="EaseOut"/>
+                    </DoubleAnimation.EasingFunction>
+                </DoubleAnimation>
+                <DoubleAnimation Storyboard.TargetName="FocusReticleScale" Storyboard.TargetProperty="ScaleY" From="1.35" To="0.9" Duration="0:0:0.22">
+                    <DoubleAnimation.EasingFunction>
+                        <QuadraticEase EasingMode="EaseOut"/>
+                    </DoubleAnimation.EasingFunction>
+                </DoubleAnimation>
+            </Storyboard>
             <Storyboard x:Name="FadeInStoryboard">
                 <DoubleAnimation Storyboard.TargetName="UnifiedHud" Storyboard.TargetProperty="Opacity" To="1.0" Duration="0:0:0.25" />
                 <DoubleAnimation Storyboard.TargetName="TopLeftInfoOverlay" Storyboard.TargetProperty="Opacity" To="1.0" Duration="0:0:0.25" />
@@ -104,6 +133,11 @@
                             <SymbolIcon Symbol="Placeholder"/>
                         </MenuFlyoutItem.Icon>
                     </MenuFlyoutItem>
+                    <ToggleMenuFlyoutItem x:Name="AlwaysOnTopMenuItem" Text="Always on top (T)" Click="ToggleAlwaysOnTop_Click" Visibility="Collapsed">
+                        <ToggleMenuFlyoutItem.Icon>
+                            <FontIcon Glyph="&#xE718;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"/>
+                        </ToggleMenuFlyoutItem.Icon>
+                    </ToggleMenuFlyoutItem>
                     <MenuFlyoutSeparator x:Name="SizeToImageSeparator" Visibility="Collapsed" />
 
                     <MenuFlyoutItem Text="Zoom to 100%" Click="ZoomToActualSize_Click">
@@ -122,7 +156,7 @@
                         </ToggleMenuFlyoutItem.Icon>
                     </ToggleMenuFlyoutItem>
                     <ToggleMenuFlyoutItem x:Name="CoverPageSoloMenuItem" Text="Front cover on its own in a spread" IsChecked="True" Click="ToggleCoverSolo_Click"/>
-                    <ToggleMenuFlyoutItem x:Name="SwayMenuItem" Text="3D sway (S)" Click="ToggleSway_Click" Visibility="Collapsed">
+                    <ToggleMenuFlyoutItem x:Name="SwayMenuItem" Text="3D &amp; depth effects (S)" Click="ToggleSway_Click" Visibility="Collapsed">
                         <ToggleMenuFlyoutItem.Icon>
                             <FontIcon Glyph="&#xF158;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"/>
                         </ToggleMenuFlyoutItem.Icon>
@@ -145,6 +179,20 @@
                         <RadioMenuFlyoutItem x:Name="Gamma22" Text="2.2 (default)" Tag="2.2" Click="SetGamma_Click" IsChecked="True" GroupName="GammaGroup"/>
                         <RadioMenuFlyoutItem x:Name="Gamma24" Text="2.4" Tag="2.4" Click="SetGamma_Click" GroupName="GammaGroup"/>
                     </MenuFlyoutSubItem>
+                    <MenuFlyoutSubItem x:Name="ViewTransformMenu" Text="View">
+                        <MenuFlyoutSubItem.Icon>
+                            <FontIcon Glyph="&#xE7AD;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"/>
+                        </MenuFlyoutSubItem.Icon>
+                        <MenuFlyoutItem x:Name="RotateRightMenuItem" Text="Rotate right (])" Click="RotateRight_Click"/>
+                        <MenuFlyoutItem x:Name="RotateLeftMenuItem" Text="Rotate left ([)" Click="RotateLeft_Click"/>
+                        <ToggleMenuFlyoutItem x:Name="MirrorHorizontalMenuItem" Text="Mirror horizontal (M)" Click="ToggleMirrorHorizontal_Click"/>
+                        <ToggleMenuFlyoutItem x:Name="FlipVerticalMenuItem" Text="Flip vertical" Click="ToggleFlipVertical_Click"/>
+                        <MenuFlyoutSeparator/>
+                        <ToggleMenuFlyoutItem x:Name="GrayscaleMenuItem" Text="Grayscale value check (G)" Click="ToggleGrayscale_Click"/>
+                        <ToggleMenuFlyoutItem x:Name="InvertMenuItem" Text="Invert colors" Click="ToggleInvert_Click"/>
+                        <MenuFlyoutSeparator/>
+                        <MenuFlyoutItem x:Name="ResetViewMenuItem" Text="Reset view" Click="ResetView_Click"/>
+                    </MenuFlyoutSubItem>
                     <MenuFlyoutSeparator/>
 
                     <MenuFlyoutSubItem x:Name="DetachLimitMenu" Text="Detach size limit">
@@ -158,12 +206,17 @@
                     </MenuFlyoutSubItem>
                     <MenuFlyoutSeparator/>
 
-                    <MenuFlyoutItem Text="Play show" Click="PlayShow_Click">
+                    <MenuFlyoutItem x:Name="PlayShowMenuItem" Text="Play show from this image" Click="PlayShow_Click">
                         <MenuFlyoutItem.Icon>
                             <SymbolIcon Symbol="Play" />
                         </MenuFlyoutItem.Icon>
                     </MenuFlyoutItem>
-                    <MenuFlyoutSeparator/>
+                    <MenuFlyoutSeparator x:Name="PlayShowMenuSeparator"/>
+                    <MenuFlyoutItem x:Name="CopyImageMenuItem" Text="Copy image (Ctrl+C)" Click="CopyRenderedImage_Click">
+                        <MenuFlyoutItem.Icon>
+                            <SymbolIcon Symbol="Copy"/>
+                        </MenuFlyoutItem.Icon>
+                    </MenuFlyoutItem>
 
                     <MenuFlyoutItem x:Name="EditImageMenuItem" Text="Edit image" Click="EditImage_Click">
                         <MenuFlyoutItem.Icon>
@@ -204,6 +257,14 @@
             </Grid.ContextFlyout>
         </Grid>
 
+        <Canvas x:Name="FocusReticleLayer" IsHitTestVisible="False" Canvas.ZIndex="55">
+            <Ellipse x:Name="FocusReticle" Width="44" Height="44" Stroke="#E6FFFFFF" StrokeThickness="2" Fill="#220078D4" Opacity="0" Visibility="Collapsed">
+                <Ellipse.RenderTransform>
+                    <ScaleTransform x:Name="FocusReticleScale" CenterX="22" CenterY="22" ScaleX="1" ScaleY="1"/>
+                </Ellipse.RenderTransform>
+            </Ellipse>
+        </Canvas>
+
         <Grid x:Name="TopLeftInfoOverlay" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="24,60,0,0" Opacity="0" IsHitTestVisible="False" Canvas.ZIndex="60">
             <Border Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}" BorderThickness="1" CornerRadius="12" Padding="14,10" Translation="0,0,24">
                 <Border.Shadow>
@@ -221,7 +282,7 @@
             </Border>
         </Grid>
 
-        <!-- Detached Window Top-Right Caption Controls (Min, Max/Restore, Close) -->
+        <!-- Detached Window Top-Right Caption Controls (Pin, Min, Max/Restore, Close) -->
         <Grid x:Name="TopRightWindowControls" HorizontalAlignment="Right" VerticalAlignment="Top" Canvas.ZIndex="60" Opacity="0" IsHitTestVisible="False" Visibility="Collapsed"
               PointerEntered="Hud_PointerEntered" PointerExited="Hud_PointerExited" Margin="0,10,10,0">
             <Border Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}" BorderThickness="1" CornerRadius="8" Padding="2" Translation="0,0,24">
@@ -229,6 +290,15 @@
                     <ThemeShadow/>
                 </Border.Shadow>
                 <StackPanel Orientation="Horizontal">
+                <Button x:Name="TopPinButton" Click="ToggleAlwaysOnTop_Click" AllowFocusOnInteraction="False" Width="46" IsTabStop="False" UseSystemFocusVisuals="False" Height="32" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="4" ToolTipService.ToolTip="Always on top (T)" AutomationProperties.Name="Always on top (T)">
+                    <Button.Resources>
+                        <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#18FFFFFF"/>
+                        <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#10FFFFFF"/>
+                        <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="White"/>
+                        <SolidColorBrush x:Key="ButtonForegroundPressed" Color="#C8FFFFFF"/>
+                    </Button.Resources>
+                    <FontIcon x:Name="TopPinIcon" Glyph="&#xE718;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" Foreground="#F0FFFFFF"/>
+                </Button>
                 <Button x:Name="TopMinButton" Click="Minimize_Click" Width="46" IsTabStop="False" UseSystemFocusVisuals="False" Height="32" Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="0" ToolTipService.ToolTip="Minimize">
                     <Button.Resources>
                         <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#18FFFFFF"/>
@@ -290,46 +360,139 @@
             <Grid.RenderTransform>
                 <TranslateTransform x:Name="SwayHudTranslate" Y="15" />
             </Grid.RenderTransform>
-            <Border x:Name="SwayHudBorder" Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}" BorderThickness="1" CornerRadius="24" Padding="12,4" Translation="0,0,32" PointerPressed="SwayHud_PointerPressed">
+            <Border x:Name="SwayHudBorder" Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}" BorderThickness="1" CornerRadius="16" Padding="12,6" Translation="0,0,32" PointerPressed="SwayHud_PointerPressed">
                 <Border.Shadow>
                     <ThemeShadow/>
                 </Border.Shadow>
                 <Grid>
                     <StackPanel x:Name="SwayLoadingPanel" Orientation="Horizontal" Spacing="8" Padding="4,3" Visibility="Collapsed">
                         <ProgressRing x:Name="SwayProgressRing" Width="14" Height="14" IsActive="False" VerticalAlignment="Center"/>
-                        <TextBlock Text="Preparing 3D sway..." Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                        <TextBlock Text="Preparing 3D &amp; depth..." Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
                     </StackPanel>
-                    <Grid x:Name="SwayControlsPanel" ColumnSpacing="10" RowSpacing="4" Visibility="Collapsed">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-                        <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-                            <Button x:Name="SwayPlayPauseButton" Click="SwayPlayPause_Click" Style="{StaticResource HudButtonStyle}" AllowFocusOnInteraction="False" ToolTipService.ToolTip="Pause sway (Space)" AutomationProperties.Name="Pause sway (Space)">
-                                <SymbolIcon x:Name="SwayPlayPauseIcon" Symbol="Pause"/>
+                    <StackPanel x:Name="SwayControlsPanel" Spacing="4" Visibility="Collapsed">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                <Button x:Name="TabMotionButton" Content="Motion" Click="StudioTabMotion_Click" Style="{StaticResource StudioPillButtonStyle}" AllowFocusOnInteraction="False"/>
+                                <Button x:Name="TabFocusButton" Content="Focus" Click="StudioTabFocus_Click" Style="{StaticResource StudioPillButtonStyle}" AllowFocusOnInteraction="False"/>
+                                <Button x:Name="TabPopButton" Content="Pop" Click="StudioTabPop_Click" Style="{StaticResource StudioPillButtonStyle}" AllowFocusOnInteraction="False"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                                <StackPanel x:Name="SlideOptionsPanel" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center" Margin="6,0,2,0" Visibility="Collapsed">
+                                    <Button x:Name="SlideLoopButton" Content="Loop" Click="SlideLoopToggle_Click" Style="{StaticResource StudioPillButtonStyle}" AllowFocusOnInteraction="False" ToolTipService.ToolTip="Looping one-way slide (click to glide once)" AutomationProperties.Name="Slide loop"/>
+                                    <Button x:Name="SlideReverseButton" Click="SlideReverse_Click" Style="{StaticResource HudButtonStyle}" AllowFocusOnInteraction="False" Width="24" Height="24" MinWidth="24" MinHeight="24" Padding="4" ToolTipService.ToolTip="Flip slide direction (left / right)" AutomationProperties.Name="Flip slide direction">
+                                        <FontIcon Glyph="&#xE8AB;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12"/>
+                                    </Button>
+                                </StackPanel>
+                                <TextBlock x:Name="SwayMaskRefiningText" Text="Refining cutout..." FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Opacity="0.8" VerticalAlignment="Center" Margin="6,0,4,0" Visibility="Collapsed"/>
+                                <Button x:Name="SwayCompareButton" Style="{StaticResource HudButtonStyle}" AllowFocusOnInteraction="False" Width="24" Height="24" MinWidth="24" MinHeight="24" Padding="4" ToolTipService.ToolTip="Hold to compare original (\)" AutomationProperties.Name="Hold to compare original (\)">
+                                    <FontIcon Glyph="&#xE890;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12"/>
+                                </Button>
+                                <Button x:Name="SwayResetEffectsButton" Click="SwayResetEffects_Click" Style="{StaticResource HudButtonStyle}" AllowFocusOnInteraction="False" Width="24" Height="24" MinWidth="24" MinHeight="24" Padding="4" ToolTipService.ToolTip="Reset Focus &amp; Pop effects" AutomationProperties.Name="Reset Focus &amp; Pop effects" Visibility="Collapsed">
+                                    <FontIcon Glyph="&#xE777;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12"/>
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid x:Name="MotionTabPanel" ColumnSpacing="8" RowSpacing="4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <StackPanel x:Name="MotionModeGroup" Grid.Row="0" Grid.Column="0" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
+                                <Button x:Name="SwayPlayPauseButton" Click="SwayPlayPause_Click" Style="{StaticResource HudButtonStyle}" AllowFocusOnInteraction="False" ToolTipService.ToolTip="Pause motion (Space)" AutomationProperties.Name="Pause motion (Space)">
+                                    <SymbolIcon x:Name="SwayPlayPauseIcon" Symbol="Pause"/>
+                                </Button>
+                                <Button x:Name="ModeSwayButton" Content="Sway" Click="ModeSway_Click" Style="{StaticResource StudioPillButtonStyle}" AllowFocusOnInteraction="False" ToolTipService.ToolTip="Horizontal 3D sway"/>
+                                <Button x:Name="ModeSlideButton" Content="Slide" Click="ModeSlide_Click" Style="{StaticResource StudioPillButtonStyle}" AllowFocusOnInteraction="False" ToolTipService.ToolTip="Rigid 2-layer 3D slide: subject stays crisp while background glides behind it"/>
+                                <Button x:Name="ModeOrbitButton" Content="Orbit" Click="ModeOrbit_Click" Style="{StaticResource StudioPillButtonStyle}" AllowFocusOnInteraction="False" ToolTipService.ToolTip="2-axis circular 3D orbit"/>
+                                <Button x:Name="ModeBreatheButton" Content="Breathe" Click="ModeBreathe_Click" Style="{StaticResource StudioPillButtonStyle}" AllowFocusOnInteraction="False" ToolTipService.ToolTip="Subtle 3D dolly zoom breathe"/>
+                                <Button x:Name="ModeTiltButton" Click="ModeTilt_Click" Style="{StaticResource StudioPillButtonStyle}" AllowFocusOnInteraction="False" ToolTipService.ToolTip="2-axis pointer tilt: move mouse across the image" AutomationProperties.Name="Tilt">
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <FontIcon Glyph="&#xE8B0;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12"/>
+                                        <TextBlock Text="Tilt" FontSize="12" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                            <StackPanel x:Name="SwayDepthGroup" Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" ToolTipService.ToolTip="Sway depth: how far near and far parts move apart (default 6%)">
+                                <Rectangle x:Name="SwayDivider1" Width="1" Height="16" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.4" Margin="0,0,2,0"/>
+                                <TextBlock Text="Depth" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                                <Slider x:Name="SwayDepthSlider" Minimum="0.4" Maximum="10.0" StepFrequency="0.1" SmallChange="0.1" LargeChange="0.5" Width="80" VerticalAlignment="Center" IsThumbToolTipEnabled="False" IsTabStop="False" AllowFocusOnInteraction="False" ValueChanged="SwayDepthSlider_ValueChanged" DoubleTapped="SwayDepthSlider_DoubleTapped" AutomationProperties.Name="Sway depth"/>
+                                <TextBlock x:Name="SwayDepthValue" Text="6.0%" Width="38" TextAlignment="Right" FontSize="12" Typography.NumeralAlignment="Tabular" Foreground="{ThemeResource TextFillColorPrimaryBrush}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel x:Name="SwaySwingGroup" Grid.Row="0" Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" ToolTipService.ToolTip="Each swing: seconds for one full cycle (default 4.25 s)">
+                                <Rectangle x:Name="SwayDivider2" Width="1" Height="16" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.4" Margin="0,0,2,0"/>
+                                <TextBlock x:Name="SwaySwingLabel" Text="Swing" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                                <Slider x:Name="SwaySwingSlider" Minimum="1.5" Maximum="12.0" StepFrequency="0.25" SmallChange="0.25" LargeChange="1.0" Width="70" VerticalAlignment="Center" IsThumbToolTipEnabled="False" IsTabStop="False" AllowFocusOnInteraction="False" ValueChanged="SwaySwingSlider_ValueChanged" DoubleTapped="SwaySwingSlider_DoubleTapped" AutomationProperties.Name="Each swing"/>
+                                <TextBlock x:Name="SwaySwingValue" Text="4.25 s" Width="40" TextAlignment="Right" FontSize="12" Typography.NumeralAlignment="Tabular" Foreground="{ThemeResource TextFillColorPrimaryBrush}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid x:Name="FocusTabPanel" ColumnSpacing="8" RowSpacing="4" Visibility="Collapsed">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Button x:Name="PickFocusButton" Grid.Row="0" Grid.Column="0" Click="PickFocusToggle_Click" Style="{StaticResource HudButtonStyle}" AllowFocusOnInteraction="False" ToolTipService.ToolTip="Pick focus point: click on the image (or Alt+click anytime)" AutomationProperties.Name="Pick focus point">
+                                <FontIcon Glyph="&#xE81D;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14"/>
                             </Button>
-                            <Button x:Name="SwayPointerButton" Click="SwayPointerToggle_Click" Style="{StaticResource HudButtonStyle}" AllowFocusOnInteraction="False" ToolTipService.ToolTip="Follow pointer: move mouse across the image to steer 3D angle" AutomationProperties.Name="Follow pointer">
-                                <FontIcon x:Name="SwayPointerIcon" Glyph="&#xE8B0;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14"/>
-                            </Button>
-                        </StackPanel>
-                        <StackPanel x:Name="SwayDepthGroup" Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" ToolTipService.ToolTip="Sway depth: how far near and far parts move apart (default 6%)">
-                            <Rectangle x:Name="SwayDivider1" Width="1" Height="16" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.4" Margin="0,0,4,0"/>
-                            <TextBlock Text="Depth" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
-                            <Slider x:Name="SwayDepthSlider" Minimum="0.4" Maximum="10.0" StepFrequency="0.1" SmallChange="0.1" LargeChange="0.5" Width="88" VerticalAlignment="Center" IsThumbToolTipEnabled="False" IsTabStop="False" AllowFocusOnInteraction="False" ValueChanged="SwayDepthSlider_ValueChanged" AutomationProperties.Name="Sway depth"/>
-                            <TextBlock x:Name="SwayDepthValue" Text="6.0%" Width="38" TextAlignment="Right" FontSize="12" Typography.NumeralAlignment="Tabular" Foreground="{ThemeResource TextFillColorPrimaryBrush}" VerticalAlignment="Center"/>
-                        </StackPanel>
-                        <StackPanel x:Name="SwaySwingGroup" Grid.Row="0" Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" ToolTipService.ToolTip="Each swing: seconds for one full sway cycle (default 4.25 s)">
-                            <Rectangle x:Name="SwayDivider2" Width="1" Height="16" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.4" Margin="0,0,4,0"/>
-                            <TextBlock Text="Swing" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
-                            <Slider x:Name="SwaySwingSlider" Minimum="1.5" Maximum="12.0" StepFrequency="0.25" SmallChange="0.25" LargeChange="1.0" Width="76" VerticalAlignment="Center" IsThumbToolTipEnabled="False" IsTabStop="False" AllowFocusOnInteraction="False" ValueChanged="SwaySwingSlider_ValueChanged" AutomationProperties.Name="Each swing"/>
-                            <TextBlock x:Name="SwaySwingValue" Text="4.25 s" Width="40" TextAlignment="Right" FontSize="12" Typography.NumeralAlignment="Tabular" Foreground="{ThemeResource TextFillColorPrimaryBrush}" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Grid>
+                            <StackPanel x:Name="FocusBlurGroup" Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" ToolTipService.ToolTip="Depth of field bokeh blur amount">
+                                <Rectangle x:Name="FocusDivider1" Width="1" Height="16" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.4" Margin="0,0,2,0"/>
+                                <TextBlock Text="Blur" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                                <Slider x:Name="FocusBlurSlider" Minimum="0" Maximum="100" StepFrequency="2" SmallChange="2" LargeChange="10" Width="96" VerticalAlignment="Center" IsThumbToolTipEnabled="False" IsTabStop="False" AllowFocusOnInteraction="False" ValueChanged="FocusBlurSlider_ValueChanged" DoubleTapped="FocusBlurSlider_DoubleTapped" AutomationProperties.Name="Depth of field blur"/>
+                                <TextBlock x:Name="FocusBlurValue" Text="0%" Width="34" TextAlignment="Right" FontSize="12" Typography.NumeralAlignment="Tabular" Foreground="{ThemeResource TextFillColorPrimaryBrush}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel x:Name="FocusPlaneGroup" Grid.Row="0" Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" ToolTipService.ToolTip="Focal plane from Far (0%) to Near (100%)">
+                                <Rectangle x:Name="FocusDivider2" Width="1" Height="16" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.4" Margin="0,0,2,0"/>
+                                <TextBlock Text="Plane" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                                <Slider x:Name="FocusPlaneSlider" Minimum="0" Maximum="100" StepFrequency="1" SmallChange="1" LargeChange="5" Width="96" VerticalAlignment="Center" IsThumbToolTipEnabled="False" IsTabStop="False" AllowFocusOnInteraction="False" ValueChanged="FocusPlaneSlider_ValueChanged" DoubleTapped="FocusPlaneSlider_DoubleTapped" AutomationProperties.Name="Focal plane"/>
+                                <TextBlock x:Name="FocusPlaneValue" Text="50%" Width="34" TextAlignment="Right" FontSize="12" Typography.NumeralAlignment="Tabular" Foreground="{ThemeResource TextFillColorPrimaryBrush}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid x:Name="PopTabPanel" ColumnSpacing="8" RowSpacing="4" Visibility="Collapsed">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <StackPanel x:Name="PopColorGroup" Grid.Row="0" Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" ToolTipService.ToolTip="Color pop: desaturate background while keeping subject in color">
+                                <TextBlock Text="Color" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                                <Slider x:Name="PopColorSlider" Minimum="0" Maximum="100" StepFrequency="2" SmallChange="2" LargeChange="10" Width="78" VerticalAlignment="Center" IsThumbToolTipEnabled="False" IsTabStop="False" AllowFocusOnInteraction="False" ValueChanged="PopColorSlider_ValueChanged" DoubleTapped="PopColorSlider_DoubleTapped" AutomationProperties.Name="Color pop"/>
+                                <TextBlock x:Name="PopColorValue" Text="0%" Width="34" TextAlignment="Right" FontSize="12" Typography.NumeralAlignment="Tabular" Foreground="{ThemeResource TextFillColorPrimaryBrush}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel x:Name="PopDimGroup" Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" ToolTipService.ToolTip="Background dim: darken backdrop to spotlight subject">
+                                <Rectangle x:Name="PopDivider1" Width="1" Height="16" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.4" Margin="0,0,2,0"/>
+                                <TextBlock Text="Dim" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                                <Slider x:Name="PopDimSlider" Minimum="0" Maximum="100" StepFrequency="2" SmallChange="2" LargeChange="10" Width="78" VerticalAlignment="Center" IsThumbToolTipEnabled="False" IsTabStop="False" AllowFocusOnInteraction="False" ValueChanged="PopDimSlider_ValueChanged" DoubleTapped="PopDimSlider_DoubleTapped" AutomationProperties.Name="Background dim"/>
+                                <TextBlock x:Name="PopDimValue" Text="0%" Width="34" TextAlignment="Right" FontSize="12" Typography.NumeralAlignment="Tabular" Foreground="{ThemeResource TextFillColorPrimaryBrush}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel x:Name="PopLightGroup" Grid.Row="0" Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" ToolTipService.ToolTip="3D relight: directional shading from depth surface normals">
+                                <Rectangle x:Name="PopDivider2" Width="1" Height="16" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.4" Margin="0,0,2,0"/>
+                                <TextBlock Text="Light" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                                <Slider x:Name="PopLightSlider" Minimum="0" Maximum="100" StepFrequency="2" SmallChange="2" LargeChange="10" Width="78" VerticalAlignment="Center" IsThumbToolTipEnabled="False" IsTabStop="False" AllowFocusOnInteraction="False" ValueChanged="PopLightSlider_ValueChanged" DoubleTapped="PopLightSlider_DoubleTapped" AutomationProperties.Name="3D relight"/>
+                                <TextBlock x:Name="PopLightValue" Text="0%" Width="34" TextAlignment="Right" FontSize="12" Typography.NumeralAlignment="Tabular" Foreground="{ThemeResource TextFillColorPrimaryBrush}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
                 </Grid>
             </Border>
         </Grid>
@@ -351,13 +514,20 @@
                         <Button x:Name="BookSpreadButton" Click="ToggleBookSpread_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Two-page comic spread (B)" Visibility="Collapsed" AutomationProperties.Name="Two-page comic spread (B)">
                             <FontIcon x:Name="BookSpreadIcon" Glyph="&#xE736;"/>
                         </Button>
-                        <Button x:Name="SwayButton" Click="ToggleSway_Click" Style="{StaticResource HudButtonStyle}" AllowFocusOnInteraction="False" ToolTipService.ToolTip="3D sway (S)" Visibility="Collapsed" AutomationProperties.Name="3D sway (S)">
+                        <Button x:Name="SwayButton" Click="ToggleSway_Click" Style="{StaticResource HudButtonStyle}" AllowFocusOnInteraction="False" ToolTipService.ToolTip="3D &amp; depth effects (S)" Visibility="Collapsed" AutomationProperties.Name="3D &amp; depth effects (S)">
                             <FontIcon x:Name="SwayButtonIcon" Glyph="&#xF158;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="16"/>
                         </Button>
-
                         <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="6,6" Opacity="0.4"/>
+                        <Button x:Name="MirrorButton" Click="ToggleMirrorHorizontal_Click" Style="{StaticResource HudButtonStyle}" AllowFocusOnInteraction="False" ToolTipService.ToolTip="Mirror horizontal (M)" AutomationProperties.Name="Mirror horizontal (M)">
+                            <FontIcon Glyph="&#xE8AB;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="15"/>
+                        </Button>
+                        <Button x:Name="RotateButton" Click="RotateRight_Click" Style="{StaticResource HudButtonStyle}" AllowFocusOnInteraction="False" ToolTipService.ToolTip="Rotate right (])" AutomationProperties.Name="Rotate right (])">
+                            <FontIcon Glyph="&#xE7AD;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="15"/>
+                        </Button>
 
-                        <Button Click="PlayShow_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Play show: this folder as a show in Multi-View" AutomationProperties.Name="Play show">
+                        <Rectangle x:Name="PlayShowHudSeparator" Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="6,6" Opacity="0.4"/>
+
+                        <Button x:Name="PlayShowButton" Click="PlayShow_Click" Style="{StaticResource HudButtonStyle}" ToolTipService.ToolTip="Play show: start show from this image" AutomationProperties.Name="Play show">
                             <SymbolIcon Symbol="Play"/>
                         </Button>
 

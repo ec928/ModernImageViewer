@@ -239,8 +239,11 @@ Images can be browsed, viewed and managed without a mouse, and F1 lists the keys
 | | `Space` | Select or deselect the image |
 | | `Ctrl + Wheel` | Resize tiles |
 | | `F2` / `F5` / `Delete` | Rename / refresh / Recycle Bin |
-| **Viewing** | `Space` / `,` / `.` | Play or pause an animation or 3D sway / previous and next frame |
-| | `S` | Toggle 3D sway (Preview and Detached windows) |
+| **Viewing** | `Space` / `,` / `.` | Play or pause an animation or 3D motion / previous and next frame |
+| | `S` / `Alt+Click` | Toggle 3D & depth effects / pick focus point (Preview and Detached windows) |
+| | `M` / `[` `]` / `G` | Mirror horizontal / rotate left or right / grayscale value check |
+| | `\` / `Ctrl+C` | Hold to compare original / copy rendered image to clipboard |
+| | `T` | Toggle Always on top (Detached window) |
 | | `F1` / `F6` | Keyboard shortcuts / move to the header buttons |
 | | `F11` | Toggle borderless fullscreen |
 | | `Ctrl + Wheel` | Zoom in / out |

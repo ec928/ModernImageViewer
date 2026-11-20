@@ -14,30 +14,39 @@ namespace ModernImageViewer
     internal static class SwayShader
     {
         private static readonly object Sync = new();
-        private static byte[]? _bytes;
-        private static bool _missing;
+        private static byte[]? _splatBytes;
+        private static bool _splatMissing;
+        private static byte[]? _splat2DBytes;
+        private static bool _splat2DMissing;
+        private static byte[]? _depthLensBytes;
+        private static bool _depthLensMissing;
 
-        public static PixelShaderEffect? CreateSplat(ICanvasImage photo, ICanvasImage depthAtSize, float maxOffset)
+        private static byte[]? TryLoadShaderBytes(string resourceName, ref byte[]? cache, ref bool missingFlag)
         {
-            byte[]? bytes;
             lock (Sync)
             {
-                if (_missing) return null;
-                if (_bytes == null)
+                if (missingFlag) return null;
+                if (cache == null)
                 {
-                    using var stream = typeof(SwayShader).Assembly.GetManifestResourceStream("ModernImageViewer.Shaders.SwaySplat.bin");
+                    using var stream = typeof(SwayShader).Assembly.GetManifestResourceStream(resourceName);
                     if (stream == null)
                     {
-                        _missing = true;
-                        PlayTiming.Write("3D: sway splat shader missing");
+                        missingFlag = true;
+                        PlayTiming.Write($"3D: shader missing ({resourceName})");
                         return null;
                     }
                     using var copy = new MemoryStream();
                     stream.CopyTo(copy);
-                    _bytes = copy.ToArray();
+                    cache = copy.ToArray();
                 }
-                bytes = _bytes;
+                return cache;
             }
+        }
+
+        private static PixelShaderEffect? InstantiateTwoInputSplat(string resourceName, ref byte[]? cache, ref bool missingFlag, ICanvasImage photo, ICanvasImage depthAtSize, float maxOffset)
+        {
+            byte[]? bytes = TryLoadShaderBytes(resourceName, ref cache, ref missingFlag);
+            if (bytes == null) return null;
 
             try
             {
@@ -52,8 +61,44 @@ namespace ModernImageViewer
             }
             catch (Exception ex) when (ex is ArgumentException or COMException or InvalidOperationException or IOException)
             {
-                lock (Sync) _missing = true;
-                PlayTiming.Write($"3D: sway splat not made: {ex.GetType().Name} {ex.Message}");
+                lock (Sync)
+                {
+                    if (resourceName == "ModernImageViewer.Shaders.Sway2DSplat.bin") _splat2DMissing = true;
+                    else _splatMissing = true;
+                }
+                PlayTiming.Write($"3D: shader not made ({resourceName}): {ex.GetType().Name} {ex.Message}");
+                return null;
+            }
+        }
+
+        public static PixelShaderEffect? CreateSplat(ICanvasImage photo, ICanvasImage depthAtSize, float maxOffset) =>
+            InstantiateTwoInputSplat("ModernImageViewer.Shaders.SwaySplat.bin", ref _splatBytes, ref _splatMissing, photo, depthAtSize, maxOffset);
+
+        public static PixelShaderEffect? CreateSplat2D(ICanvasImage photo, ICanvasImage depthAtSize, float maxOffset) =>
+            InstantiateTwoInputSplat("ModernImageViewer.Shaders.Sway2DSplat.bin", ref _splat2DBytes, ref _splat2DMissing, photo, depthAtSize, maxOffset);
+
+        public static PixelShaderEffect? CreateDepthLens(ICanvasImage photo, ICanvasImage depthAtSize, ICanvasImage maskAtSize, int maxSamplerOffset = 40)
+        {
+            byte[]? bytes = TryLoadShaderBytes("ModernImageViewer.Shaders.DepthLens.bin", ref _depthLensBytes, ref _depthLensMissing);
+            if (bytes == null) return null;
+
+            try
+            {
+                return new PixelShaderEffect(bytes)
+                {
+                    Source1 = photo,
+                    Source2 = depthAtSize,
+                    Source3 = maskAtSize,
+                    Source1Mapping = SamplerCoordinateMapping.Offset,
+                    Source2Mapping = SamplerCoordinateMapping.Offset,
+                    Source3Mapping = SamplerCoordinateMapping.Offset,
+                    MaxSamplerOffset = maxSamplerOffset
+                };
+            }
+            catch (Exception ex) when (ex is ArgumentException or COMException or InvalidOperationException or IOException)
+            {
+                lock (Sync) _depthLensMissing = true;
+                PlayTiming.Write($"3D: depth lens shader not made: {ex.GetType().Name} {ex.Message}");
                 return null;
             }
         }

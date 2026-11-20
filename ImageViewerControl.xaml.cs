@@ -45,12 +45,21 @@ namespace ModernImageViewer
         }
 
         // --- Exposing Internal State for Host Windows ---
-        public double LogicalWidth => _logicalImageWidth;
-        public double LogicalHeight => _logicalImageHeight;
+        private bool IsQuarterTurnSwapped => (ViewRotationQuarterTurns & 1) != 0 && !IsShowingTwoPages;
+        public double LogicalWidth => IsQuarterTurnSwapped ? _logicalImageHeight : _logicalImageWidth;
+        public double LogicalHeight => IsQuarterTurnSwapped ? _logicalImageWidth : _logicalImageHeight;
         public float CurrentZoom => _targetZoom;
         public float FitZoom => _currentFitFactor;
         public bool BookSpreadMode { get; private set; }
         public bool CoverPageSolo { get; private set; } = true;
+        public int ViewRotationQuarterTurns { get; private set; }
+        public bool ViewMirrorHorizontal { get; private set; }
+        public bool ViewFlipVertical { get; private set; }
+        public bool ViewGrayscale { get; private set; }
+        public bool ViewInvert { get; private set; }
+        public bool IsAlwaysOnTop { get; private set; }
+        public bool HasViewTransformOrTone =>
+            ViewRotationQuarterTurns != 0 || ViewMirrorHorizontal || ViewFlipVertical || ViewGrayscale || ViewInvert;
         public event EventHandler? BookSpreadChanged;
 
         public bool IsWideEnoughForSpread => RootGrid != null && RootGrid.ActualHeight > 0 && (RootGrid.ActualWidth / RootGrid.ActualHeight) >= 1.15;
@@ -61,7 +70,7 @@ namespace ModernImageViewer
             get
             {
                 if (!IsShowingTwoPages || _secondLogicalWidth <= 0 || _secondLogicalHeight <= 0)
-                    return _logicalImageWidth;
+                    return LogicalWidth;
                 double spreadH = Math.Max(_logicalImageHeight, _secondLogicalHeight);
                 double leftNormW = _logicalImageWidth * (spreadH / Math.Max(1, _logicalImageHeight));
                 double rightNormW = _secondLogicalWidth * (spreadH / Math.Max(1, _secondLogicalHeight));
@@ -71,12 +80,13 @@ namespace ModernImageViewer
 
         private double EffectiveLogicalHeight => IsShowingTwoPages && _secondLogicalHeight > 0
             ? Math.Max(_logicalImageHeight, _secondLogicalHeight)
-            : _logicalImageHeight;
+            : LogicalHeight;
 
         // --- Events for Parent Windows ---
         public event EventHandler? CloseRequested;
         public event EventHandler<Point>? DetachRequested;
         public event EventHandler? ToggleFullscreenRequested;
+        public event EventHandler? ToggleAlwaysOnTopRequested;
         public event EventHandler? MinimizeRequested;
         public event EventHandler<int>? NavigateRequested;
         public event EventHandler? SizeToImageRequested;
@@ -129,6 +139,7 @@ namespace ModernImageViewer
         private bool _isFitToWindow = true;
         private bool _isRenderQueued = false;
         private bool _isPointerOverHud = false;
+        private bool _suppressNextTap = false;
 
         // Tear-Off State
         private bool _isPotentialTearOff = false;
@@ -186,6 +197,7 @@ namespace ModernImageViewer
                 SyncContextMenus();
                 UpdateBookSpreadVisibility();
                 UpdateSwayAvailability();
+                SyncViewChrome();
                 if (RootGrid != null) UpdateSwayHudLayout(RootGrid.ActualWidth);
             };
         }
@@ -194,6 +206,7 @@ namespace ModernImageViewer
         {
             SetGammaLevel(_currentGamma);
             SetDetachLimitState(_currentDetachLimitInt);
+            SyncViewChrome();
         }
 
         private void RequestRender()
@@ -235,6 +248,7 @@ namespace ModernImageViewer
             {
                 bool standalone = (bool)e.NewValue;
                 control.SizeToImageMenuItem.Visibility = standalone ? Visibility.Visible : Visibility.Collapsed;
+                if (control.AlwaysOnTopMenuItem != null) control.AlwaysOnTopMenuItem.Visibility = standalone ? Visibility.Visible : Visibility.Collapsed;
 
                 var separator = control.FindName("SizeToImageSeparator") as MenuFlyoutSeparator;
                 if (separator != null) separator.Visibility = standalone ? Visibility.Visible : Visibility.Collapsed;
@@ -288,6 +302,7 @@ namespace ModernImageViewer
             // In normal preview mode: only show comic spread button if viewing pages inside a comic archive (CBR/CBZ).
             bool isComic = !IsStandaloneMode && TargetImage != null && TargetImage.IsComicEntry;
             BookSpreadButton.Visibility = isComic ? Visibility.Visible : Visibility.Collapsed;
+            SyncViewChrome();
         }
 
         public void ClearSecondPage()
@@ -331,7 +346,7 @@ namespace ModernImageViewer
             {
                 BookSpreadButton.Background = enabled
                     ? (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"]
-                    : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+                    : _transparentBrush;
             }
             if (!enabled)
             {
@@ -341,6 +356,7 @@ namespace ModernImageViewer
                 RequestRender();
             }
             UpdateSwayAvailability();
+            SyncViewChrome();
             if (notify)
                 BookSpreadChanged?.Invoke(this, EventArgs.Empty);
         }
@@ -383,6 +399,10 @@ namespace ModernImageViewer
             if (EditImageMenuItem != null) EditImageMenuItem.Visibility = mutateVis;
             if (RenameImageMenuItem != null) RenameImageMenuItem.Visibility = mutateVis;
             if (DeleteImageMenuItem != null) DeleteImageMenuItem.Visibility = mutateVis;
+            if (PlayShowButton != null) PlayShowButton.Visibility = mutateVis;
+            if (PlayShowHudSeparator != null) PlayShowHudSeparator.Visibility = mutateVis;
+            if (PlayShowMenuItem != null) PlayShowMenuItem.Visibility = mutateVis;
+            if (PlayShowMenuSeparator != null) PlayShowMenuSeparator.Visibility = mutateVis;
             ShowHud();
         }
 
@@ -395,6 +415,7 @@ namespace ModernImageViewer
 
             _isPlayingAnimation = true;
             if (AnimationHud != null) AnimationHud.Visibility = Visibility.Collapsed;
+            if (!IsStandaloneMode) ResetViewTransformAndTone(requestRender: false);
             OnSwayPrepareForNewImage();
 
             if (_effectStack.Crop != null) _effectStack.Crop.Source = null;
@@ -609,14 +630,33 @@ namespace ModernImageViewer
                         panX, panY,
                         _targetZoom, _currentGamma, dpiScale,
                         currentTarget, _secondGpuBitmap,
-                        crop, decode, userGamma, transform, encode);
+                        crop, decode, userGamma, transform, encode,
+                        _effectStack.Grayscale, ViewGrayscale && !_isComparingOriginal, _effectStack.Invert, ViewInvert && !_isComparingOriginal);
                 }
                 else
                 {
                     CanvasBitmap drawTarget = TryGetActiveSwayBitmap() ?? currentTarget;
                     crop.Source = drawTarget;
                     crop.SourceRectangle = drawTarget.Bounds;
-                    ViewerMath.DrawMappedImage(args.DrawingSession, sender.ActualWidth, sender.ActualHeight, _logicalImageWidth, _logicalImageHeight, panX, panY, _targetZoom, _currentGamma, dpiScale, drawTarget, crop, decode, userGamma, transform, encode);
+                    bool showOriginal = _isComparingOriginal;
+                    float drawZoom = (showOriginal && _isFitToWindow && IsQuarterTurnSwapped)
+                        ? Math.Min(
+                            (float)(sender.ActualWidth * dpiScale / Math.Max(1.0, _logicalImageWidth)),
+                            (float)(sender.ActualHeight * dpiScale / Math.Max(1.0, _logicalImageHeight)))
+                        : _targetZoom;
+                    ViewerMath.DrawMappedImage(
+                        args.DrawingSession,
+                        sender.ActualWidth, sender.ActualHeight,
+                        showOriginal ? _logicalImageWidth : LogicalWidth,
+                        showOriginal ? _logicalImageHeight : LogicalHeight,
+                        panX, panY,
+                        drawZoom, _currentGamma, dpiScale,
+                        drawTarget, crop, decode, userGamma, transform, encode,
+                        showOriginal ? 0 : ViewRotationQuarterTurns,
+                        !showOriginal && ViewMirrorHorizontal,
+                        !showOriginal && ViewFlipVertical,
+                        _effectStack.Grayscale, ViewGrayscale && !showOriginal,
+                        _effectStack.Invert, ViewInvert && !showOriginal);
                 }
             }
             catch (Exception ex) { Debug.WriteLine($"[Win2D Draw Error]: {ex.Message}"); }
@@ -640,7 +680,7 @@ namespace ModernImageViewer
                 if (HudSecondaryInfo != null) HudSecondaryInfo.Text = baseInfo;
             }
             if (HudZoomInfo != null) HudZoomInfo.Text = TargetImage.GetZoomString(_targetZoom);
-            if (HudFidelity != null) HudFidelity.Text = _isHighFidelityActive ? "HF" : "LF";
+            if (HudFidelity != null) HudFidelity.Text = _isComparingOriginal ? "Original" : (_isHighFidelityActive ? "HF" : "LF");
 
             UpdateBookSpreadVisibility();
             UpdateSwayAvailability();
@@ -763,6 +803,19 @@ namespace ModernImageViewer
             if (InputOverlay == null) return;
             var prop = e.GetCurrentPoint(InputOverlay).Properties;
             bool isCtrlHeld = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+            bool isAltHeld = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Menu).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+
+            if (prop.IsLeftButtonPressed && (IsPickFocusModeActive || (isAltHeld && _isSwayEnabled && _swayState != null)))
+            {
+                if (!TryPickFocusAt(e.GetCurrentPoint(InputOverlay).Position) && _swayPickingFocus)
+                {
+                    _swayPickingFocus = false;
+                    SyncSwayChrome();
+                }
+                _suppressNextTap = true;
+                e.Handled = true;
+                return;
+            }
 
             if (prop.PointerUpdateKind == Microsoft.UI.Input.PointerUpdateKind.XButton1Pressed || prop.PointerUpdateKind == Microsoft.UI.Input.PointerUpdateKind.XButton2Pressed)
             {
@@ -908,6 +961,12 @@ namespace ModernImageViewer
 
         private void InputOverlay_Tapped(object sender, TappedRoutedEventArgs e)
         {
+            if (_suppressNextTap)
+            {
+                _suppressNextTap = false;
+                e.Handled = true;
+                return;
+            }
             if (UnifiedHud != null)
             {
                 if (UnifiedHud.Opacity > 0.5)
@@ -1096,7 +1155,7 @@ namespace ModernImageViewer
 
         // --- File Operations Handlers ---
         /// <summary>The folder as a show in Multi-View (Cinematic Slideshow played it here until 0.33.0).</summary>
-        private void PlayShow_Click(object sender, RoutedEventArgs e) => MainWindow.Instance?.PlayFolderAsShow();
+        private void PlayShow_Click(object sender, RoutedEventArgs e) => MainWindow.Instance?.PlayFolderAsShow(TargetImage);
 
         private void EditImage_Click(object sender, RoutedEventArgs e)
         {
@@ -1162,6 +1221,144 @@ namespace ModernImageViewer
                 _playbackTimer.Start();
             }
             if (AnimPlayPauseIcon != null) AnimPlayPauseIcon.Symbol = Symbol.Pause;
+        }
+
+        // --- View Transforms, Reference Tone & Always-On-Top ---
+        private void RotateRight_Click(object sender, RoutedEventArgs e) => RotateView(1);
+        private void RotateLeft_Click(object sender, RoutedEventArgs e) => RotateView(-1);
+        private void ToggleMirrorHorizontal_Click(object sender, RoutedEventArgs e) => ToggleMirrorHorizontal();
+        private void ToggleFlipVertical_Click(object sender, RoutedEventArgs e) => ToggleFlipVertical();
+        private void ToggleGrayscale_Click(object sender, RoutedEventArgs e) => ToggleGrayscale();
+        private void ToggleInvert_Click(object sender, RoutedEventArgs e) => ToggleInvert();
+        private void ResetView_Click(object sender, RoutedEventArgs e) => ResetViewTransformAndTone(requestRender: true);
+        private void ToggleAlwaysOnTop_Click(object sender, RoutedEventArgs e) => ToggleAlwaysOnTopRequested?.Invoke(this, EventArgs.Empty);
+
+        public void SetAlwaysOnTopState(bool isOnTop)
+        {
+            IsAlwaysOnTop = isOnTop;
+            SyncViewChrome();
+        }
+
+        private void ApplyViewTransformAndTone(int quarterTurns, bool mirrorHorizontal, bool flipVertical, bool grayscale, bool invert)
+        {
+            ViewRotationQuarterTurns = ((quarterTurns % 4) + 4) % 4;
+            ViewMirrorHorizontal = mirrorHorizontal;
+            ViewFlipVertical = flipVertical;
+            ViewGrayscale = grayscale;
+            ViewInvert = invert;
+            SyncViewChrome();
+        }
+
+        private void RotateView(int deltaQuarterTurns)
+        {
+            bool wasSwapped = IsQuarterTurnSwapped;
+            ViewRotationQuarterTurns = (((ViewRotationQuarterTurns + deltaQuarterTurns) % 4) + 4) % 4;
+            if (wasSwapped != IsQuarterTurnSwapped)
+            {
+                UpdateGridSize();
+                if (_isFitToWindow) FitToWindow();
+            }
+            SyncViewChrome();
+            RequestRender();
+            ShowHud();
+        }
+
+        private void ToggleMirrorHorizontal()
+        {
+            ViewMirrorHorizontal = !ViewMirrorHorizontal;
+            SyncViewChrome();
+            RequestRender();
+            ShowHud();
+        }
+
+        private void ToggleFlipVertical()
+        {
+            ViewFlipVertical = !ViewFlipVertical;
+            SyncViewChrome();
+            RequestRender();
+            ShowHud();
+        }
+
+        private void ToggleGrayscale()
+        {
+            ViewGrayscale = !ViewGrayscale;
+            SyncViewChrome();
+            RequestRender();
+            ShowHud();
+        }
+
+        private void ToggleInvert()
+        {
+            ViewInvert = !ViewInvert;
+            SyncViewChrome();
+            RequestRender();
+            ShowHud();
+        }
+
+        private void ResetViewTransformAndTone(bool requestRender)
+        {
+            bool wasSwapped = IsQuarterTurnSwapped;
+            ViewRotationQuarterTurns = 0;
+            ViewMirrorHorizontal = false;
+            ViewFlipVertical = false;
+            ViewGrayscale = false;
+            ViewInvert = false;
+            SyncViewChrome();
+            if (requestRender)
+            {
+                if (wasSwapped != IsQuarterTurnSwapped)
+                {
+                    UpdateGridSize();
+                    if (_isFitToWindow) FitToWindow();
+                }
+                RequestRender();
+                ShowHud();
+            }
+        }
+
+        private void SyncViewChrome()
+        {
+            var accentBrush = (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"];
+            var transparent = _transparentBrush;
+            bool singlePage = !IsShowingTwoPages;
+
+            if (MirrorButton != null)
+            {
+                MirrorButton.Background = ViewMirrorHorizontal ? accentBrush : transparent;
+                MirrorButton.IsEnabled = singlePage;
+            }
+            if (RotateButton != null)
+            {
+                RotateButton.Background = ViewRotationQuarterTurns != 0 ? accentBrush : transparent;
+                RotateButton.IsEnabled = singlePage;
+                ToolTipService.SetToolTip(RotateButton, ViewRotationQuarterTurns == 0 ? "Rotate right (])" : $"Rotate right (]) \u2014 {ViewRotationQuarterTurns * 90}\u00B0");
+            }
+
+            if (RotateRightMenuItem != null) RotateRightMenuItem.IsEnabled = singlePage;
+            if (RotateLeftMenuItem != null) RotateLeftMenuItem.IsEnabled = singlePage;
+            if (MirrorHorizontalMenuItem != null)
+            {
+                MirrorHorizontalMenuItem.IsChecked = ViewMirrorHorizontal;
+                MirrorHorizontalMenuItem.IsEnabled = singlePage;
+            }
+            if (FlipVerticalMenuItem != null)
+            {
+                FlipVerticalMenuItem.IsChecked = ViewFlipVertical;
+                FlipVerticalMenuItem.IsEnabled = singlePage;
+            }
+            if (GrayscaleMenuItem != null) GrayscaleMenuItem.IsChecked = ViewGrayscale;
+            if (InvertMenuItem != null) InvertMenuItem.IsChecked = ViewInvert;
+            if (ResetViewMenuItem != null) ResetViewMenuItem.IsEnabled = HasViewTransformOrTone;
+
+            if (AlwaysOnTopMenuItem != null) AlwaysOnTopMenuItem.IsChecked = IsAlwaysOnTop;
+            if (TopPinIcon != null) TopPinIcon.Glyph = IsAlwaysOnTop ? "\uE840" : "\uE718";
+            if (TopPinButton != null)
+            {
+                string pinLabel = IsAlwaysOnTop ? "Unpin (T)" : "Always on top (T)";
+                TopPinButton.Background = IsAlwaysOnTop ? accentBrush : transparent;
+                ToolTipService.SetToolTip(TopPinButton, pinLabel);
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(TopPinButton, pinLabel);
+            }
         }
     }
 }

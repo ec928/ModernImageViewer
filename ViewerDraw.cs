@@ -7,6 +7,25 @@ namespace ModernImageViewer
 {
     public static partial class ViewerMath
     {
+        private static ICanvasImage ChainToneEffects(
+            ICanvasImage source,
+            SaturationEffect? grayscale, bool applyGrayscale,
+            InvertEffect? invert, bool applyInvert)
+        {
+            ICanvasImage output = source;
+            if (applyGrayscale && grayscale != null)
+            {
+                grayscale.Source = output;
+                output = grayscale;
+            }
+            if (applyInvert && invert != null)
+            {
+                invert.Source = output;
+                output = invert;
+            }
+            return output;
+        }
+
         public static void DrawMappedImage(
     CanvasDrawingSession session,
     double viewW, double viewH,
@@ -18,7 +37,14 @@ namespace ModernImageViewer
     GammaTransferEffect decode,
     GammaTransferEffect userGamma,
     Transform2DEffect transform,
-    GammaTransferEffect encode)
+    GammaTransferEffect encode,
+    int quarterTurns = 0,
+    bool mirrorHorizontal = false,
+    bool flipVertical = false,
+    SaturationEffect? grayscale = null,
+    bool applyGrayscale = false,
+    InvertEffect? invert = null,
+    bool applyInvert = false)
         {
             if (zoom <= 0) zoom = 1.0f;
             double imgW = (logicalW / dpiScale) * zoom;
@@ -39,10 +65,14 @@ namespace ModernImageViewer
             userGamma.BlueExponent = gamma / 2.2f;
 
             transform.Source = userGamma;
-            transform.TransformMatrix = Matrix3x2.CreateScale((float)(imgW / bitmap.SizeInPixels.Width), (float)(imgH / bitmap.SizeInPixels.Height));
+            transform.TransformMatrix = BuildViewTransformMatrix(
+                bitmap.SizeInPixels.Width, bitmap.SizeInPixels.Height,
+                (float)imgW, (float)imgH,
+                quarterTurns, mirrorHorizontal, flipVertical);
 
             encode.Source = transform;
-            session.DrawImage(encode, new Vector2((float)drawX, (float)drawY));
+            ICanvasImage output = ChainToneEffects(encode, grayscale, applyGrayscale, invert, applyInvert);
+            session.DrawImage(output, new Vector2((float)drawX, (float)drawY));
         }
 
         public static void DrawDualMappedImages(
@@ -58,7 +88,11 @@ namespace ModernImageViewer
             GammaTransferEffect decode,
             GammaTransferEffect userGamma,
             Transform2DEffect transform,
-            GammaTransferEffect encode)
+            GammaTransferEffect encode,
+            SaturationEffect? grayscale = null,
+            bool applyGrayscale = false,
+            InvertEffect? invert = null,
+            bool applyInvert = false)
         {
             if (zoom <= 0) zoom = 1.0f;
             if (leftLogicalW <= 0 || leftLogicalH <= 0 || rightLogicalW <= 0 || rightLogicalH <= 0) return;
@@ -91,7 +125,8 @@ namespace ModernImageViewer
                 (float)(leftDrawW / leftBitmap.SizeInPixels.Width),
                 (float)(totalH / leftBitmap.SizeInPixels.Height));
             encode.Source = transform;
-            session.DrawImage(encode, new Vector2((float)startX, (float)drawY));
+            ICanvasImage output = ChainToneEffects(encode, grayscale, applyGrayscale, invert, applyInvert);
+            session.DrawImage(output, new Vector2((float)startX, (float)drawY));
 
             // Draw Right Page
             crop.Source = rightBitmap;
@@ -99,7 +134,7 @@ namespace ModernImageViewer
             transform.TransformMatrix = Matrix3x2.CreateScale(
                 (float)(rightDrawW / rightBitmap.SizeInPixels.Width),
                 (float)(totalH / rightBitmap.SizeInPixels.Height));
-            session.DrawImage(encode, new Vector2((float)(startX + leftDrawW), (float)drawY));
+            session.DrawImage(output, new Vector2((float)(startX + leftDrawW), (float)drawY));
         }
     }
 }

@@ -194,6 +194,8 @@ namespace ModernImageViewer
         public GammaTransferEffect? UserGamma { get; private set; }
         public Transform2DEffect? Transform { get; private set; }
         public GammaTransferEffect? EncodeToSrgb { get; private set; }
+        public SaturationEffect? Grayscale { get; private set; }
+        public InvertEffect? Invert { get; private set; }
 
         public void Initialize()
         {
@@ -202,6 +204,8 @@ namespace ModernImageViewer
             UserGamma = new GammaTransferEffect();
             Transform = new Transform2DEffect { InterpolationMode = CanvasImageInterpolation.HighQualityCubic };
             EncodeToSrgb = new GammaTransferEffect { RedExponent = 1.0f / 2.2f, GreenExponent = 1.0f / 2.2f, BlueExponent = 1.0f / 2.2f };
+            Grayscale = new SaturationEffect { Saturation = 0f };
+            Invert = new InvertEffect();
         }
 
         public void Dispose()
@@ -211,6 +215,8 @@ namespace ModernImageViewer
             UserGamma?.Dispose();
             Transform?.Dispose();
             EncodeToSrgb?.Dispose();
+            Grayscale?.Dispose();
+            Invert?.Dispose();
         }
     }
 

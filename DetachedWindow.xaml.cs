@@ -24,6 +24,7 @@ namespace ModernImageViewer
         private bool _hasAdjustedChrome = false;
 
         private KeyEventHandler _globalKeyDownHandler;
+        private KeyEventHandler _globalKeyUpHandler;
         private int _currentImageLoadId = 0;
         private CancellationTokenSource? _loadCts;
         private CancellationTokenSource? _promoteCts;
@@ -36,7 +37,7 @@ namespace ModernImageViewer
         private NativeMethods.POINT _dragStartCursorPos;
         private Windows.Graphics.PointInt32 _dragStartWindowPos;
 
-        public DetachedWindow(ImageItem imageItem, int targetWidth, int targetHeight, float initialGamma, bool initialSway = false, bool initialFollowPointer = false)
+        public DetachedWindow(ImageItem imageItem, int targetWidth, int targetHeight, float initialGamma, ViewerEffectSnapshot? initialEffects = null)
         {
             this.InitializeComponent();
             _imageItem = imageItem;
@@ -56,6 +57,9 @@ namespace ModernImageViewer
 
             _globalKeyDownHandler = new KeyEventHandler(Global_KeyDown);
             RootGrid.AddHandler(UIElement.KeyDownEvent, _globalKeyDownHandler, true);
+            _globalKeyUpHandler = new KeyEventHandler(Global_KeyUp);
+            RootGrid.AddHandler(UIElement.KeyUpEvent, _globalKeyUpHandler, true);
+            this.Activated += DetachedWindow_Activated;
             this.Closed += DetachedWindow_Closed;
 
             MainWindow.Instance?.RegisterDetachedWindow();
@@ -67,7 +71,7 @@ namespace ModernImageViewer
 
             ViewerControl.TargetImage = _imageItem;
             ViewerControl.IsStandaloneMode = true;
-            ViewerControl.SetInitialSway(initialSway, initialFollowPointer);
+            ViewerControl.ApplyInitialEffects(initialEffects);
             ViewerControl.SetGammaLevel(initialGamma);
             ViewerControl.GammaChanged += (_, g) => MainWindow.Instance?.ApplyGamma(g);
             ViewerControl.ZoomChanged += (_, _) => QueuePromote();
@@ -237,10 +241,24 @@ namespace ModernImageViewer
             }
         }
 
+        private void DetachedWindow_Activated(object sender, WindowActivatedEventArgs args)
+        {
+            if (args.WindowActivationState == WindowActivationState.Deactivated)
+                ViewerControl.SetCompareOriginal(false);
+        }
+
+        private void Global_KeyUp(object sender, KeyRoutedEventArgs e)
+        {
+            if (ViewerControl.HandleViewerKeyUp(e.Key))
+                e.Handled = true;
+        }
+
         private void DetachedWindow_Closed(object sender, WindowEventArgs args)
         {
             _appWindow.Changed -= AppWindow_Changed;
+            this.Activated -= DetachedWindow_Activated;
             RootGrid.RemoveHandler(UIElement.KeyDownEvent, _globalKeyDownHandler);
+            RootGrid.RemoveHandler(UIElement.KeyUpEvent, _globalKeyUpHandler);
             if (MainWindow.Instance != null)
             {
                 MainWindow.Instance.GammaApplied -= OnHostGammaChanged;
@@ -264,6 +282,7 @@ namespace ModernImageViewer
 
             ViewerControl.CloseRequested -= ViewerControl_CloseRequested;
             ViewerControl.ToggleFullscreenRequested -= ViewerControl_ToggleFullscreenRequested;
+            ViewerControl.ToggleAlwaysOnTopRequested -= ViewerControl_ToggleAlwaysOnTopRequested;
             ViewerControl.SizeToImageRequested -= ViewerControl_SizeToImageRequested;
             ViewerControl.MinimizeRequested -= ViewerControl_MinimizeRequested;
             ViewerControl.DeviceLostRestoring -= ViewerControl_DeviceLostRestoring;
@@ -451,6 +470,14 @@ namespace ModernImageViewer
 
         // Nullable signatures updated for CS8622
         private void ViewerControl_CloseRequested(object? sender, EventArgs e) => this.Close();
+        private void ViewerControl_ToggleAlwaysOnTopRequested(object? sender, EventArgs e)
+        {
+            if (_appWindow.Presenter is OverlappedPresenter presenter)
+            {
+                presenter.IsAlwaysOnTop = !presenter.IsAlwaysOnTop;
+                ViewerControl.SetAlwaysOnTopState(presenter.IsAlwaysOnTop);
+            }
+        }
         private void ViewerControl_ToggleFullscreenRequested(object? sender, EventArgs e)
         {
             if (_isFullscreen)
