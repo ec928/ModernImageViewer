@@ -704,6 +704,9 @@ namespace ModernImageViewer
 
             if (TopLeftInfoOverlay != null) TopLeftInfoOverlay.IsHitTestVisible = false;
             if (UnifiedHud != null) UnifiedHud.IsHitTestVisible = true;
+            if (TopRightWindowControls != null && IsStandaloneMode) TopRightWindowControls.IsHitTestVisible = true;
+            if (AnimationHud != null && AnimationHud.Visibility == Visibility.Visible) AnimationHud.IsHitTestVisible = true;
+            if (SwayHud != null && SwayHud.Visibility == Visibility.Visible) SwayHud.IsHitTestVisible = true;
 
             if (FadeInStoryboard != null) FadeInStoryboard.Begin();
             _hudTimer?.Stop();
@@ -805,7 +808,7 @@ namespace ModernImageViewer
             bool isCtrlHeld = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
             bool isAltHeld = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Menu).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
 
-            if (prop.IsLeftButtonPressed && (IsPickFocusModeActive || (isAltHeld && _isSwayEnabled && _swayState != null)))
+            if (prop.IsLeftButtonPressed && (IsPickFocusModeActive || (isAltHeld && _isSwayEnabled && _swayState != null && _backdropMode == Viewer3DBackdropMode.Original)))
             {
                 if (!TryPickFocusAt(e.GetCurrentPoint(InputOverlay).Position) && _swayPickingFocus)
                 {
@@ -863,7 +866,10 @@ namespace ModernImageViewer
             var currentPos = e.GetCurrentPoint(InputOverlay).Position;
             if (!_isDragging && !_isTearingOffActive)
                 OnSwayPointerMoved(currentPos);
-            if (Math.Abs(currentPos.X - _lastHudTriggerPos.X) > 10 || Math.Abs(currentPos.Y - _lastHudTriggerPos.Y) > 10)
+            bool wakeHudForMove = !(_isSwayEnabled && _motionMode == Viewer3DMotionMode.Tilt)
+                || RootGrid == null
+                || currentPos.Y >= RootGrid.ActualHeight - 165;
+            if (wakeHudForMove && (Math.Abs(currentPos.X - _lastHudTriggerPos.X) > 10 || Math.Abs(currentPos.Y - _lastHudTriggerPos.Y) > 10))
             {
                 _lastHudTriggerPos = currentPos;
                 ShowHud();

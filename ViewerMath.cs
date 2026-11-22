@@ -406,6 +406,26 @@ namespace ModernImageViewer
             return over;
         }
 
+        /// <summary>Overscan crop factor accounting for asymmetric subject-anchored pivots at high sway depths.</summary>
+        public static float SwayOverscanFor(double depthRotation, float pivot, bool isBreathe)
+        {
+            double d = double.IsFinite(depthRotation) && depthRotation > 0 ? depthRotation : 0.0;
+            float p = float.IsFinite(pivot) ? Math.Clamp(pivot, 0.12f, 0.88f) : 0.5f;
+            float worstSideShift = Math.Min(0.090f, (float)(d * Math.Max(p, 1f - p)));
+            float over = Math.Max(1.025f, 1f / (1f - 2f * worstSideShift));
+            if (isBreathe) over += Math.Max(0.012f, (float)(d * 0.35));
+            return Math.Min(over, 1.24f);
+        }
+
+        /// <summary>Tight overscan crop factor when an artificial backdrop renders edge-to-edge behind the warped subject.</summary>
+        public static float BackdropOverscanFor(double depthRotation, bool isBreathe)
+        {
+            double d = double.IsFinite(depthRotation) && depthRotation > 0 ? depthRotation : 0.0;
+            float over = 1.015f;
+            if (isBreathe) over += Math.Max(0.01f, (float)(d * 0.25));
+            return Math.Min(over, 1.08f);
+        }
+
         /// <summary>Builds a 2D view transform matrix combining mirror, flip, 90-degree rotations, and output scaling.</summary>
         public static Matrix3x2 BuildViewTransformMatrix(
             float bitmapWidth, float bitmapHeight,

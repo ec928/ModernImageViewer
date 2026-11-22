@@ -26,6 +26,19 @@ namespace ModernImageViewer
         Tilt
     }
 
+    public enum Viewer3DBackdropMode
+    {
+        Original,
+        CleanBlur,
+        StudioDark,
+        StudioWarm,
+        StudioMatch,
+        Bokeh,
+        Mist,
+        NightSky,
+        CustomImage
+    }
+
     public sealed record ViewerEffectSnapshot(
         bool SwayEnabled,
         Viewer3DMotionMode MotionMode,
@@ -42,7 +55,11 @@ namespace ModernImageViewer
         bool Grayscale,
         bool Invert,
         bool SlideLoop = true,
-        bool SlideReverse = false);
+        bool SlideReverse = false,
+        Viewer3DBackdropMode BackdropMode = Viewer3DBackdropMode.Original,
+        double BackdropBlur = 0.45,
+        double BackdropLightWrap = 0.35,
+        string? CustomBackdropPath = null);
 
     public sealed partial class ImageViewerControl
     {
@@ -50,7 +67,8 @@ namespace ModernImageViewer
         {
             Motion,
             Focus,
-            Pop
+            Pop,
+            Backdrop
         }
 
         private const int MaxSwayLongestSide = 3072;
@@ -63,6 +81,7 @@ namespace ModernImageViewer
             public required string Path { get; init; }
             public required IParallaxMap DepthMap { get; init; }
             public IParallaxMask? SubjectMask { get; set; }
+            public byte[]? SolidMaskAlpha { get; set; }
             public byte[]? CrispBytes { get; set; }
             public int CrispWidth { get; set; }
             public int CrispHeight { get; set; }
@@ -109,6 +128,7 @@ namespace ModernImageViewer
             public bool SlideLayersAttempted { get; set; }
             public bool SlideSupported { get; set; }
             public bool SlideDone { get; set; }
+            public float SlideAutoWay { get; set; } = 1f;
             public float SlideWay { get; set; } = 1f;
             public CanvasBitmap? SlidePlateBitmap { get; set; }
             public BorderEffect? SlidePlateBorder { get; set; }
@@ -117,6 +137,36 @@ namespace ModernImageViewer
             public GaussianBlurEffect? SlidePlateBlur { get; set; }
             public SaturationEffect? SlidePlateDesat { get; set; }
             public ColorMatrixEffect? SlidePlateDim { get; set; }
+
+            public SubjectStats SubjectStats { get; set; }
+            public BackgroundPalette Palette { get; set; } = new(0.15f, 0.20f, 0.28f, 0.09f, 0.11f, 0.16f, 0.88f, 0.64f, 0.36f);
+            public byte[]? SubjectCutoutBytes { get; set; }
+            public int SubjectCutoutWidth { get; set; }
+            public int SubjectCutoutHeight { get; set; }
+            public byte[]? SubjectDepthBytes { get; set; }
+            public int SubjectDepthWidth { get; set; }
+            public int SubjectDepthHeight { get; set; }
+            public bool LensConfiguredForBackdrop { get; set; }
+
+            public CanvasBitmap? SubjectCutoutBitmap { get; set; }
+            public ScaleEffect? SubjectCutoutScale { get; set; }
+            public BorderEffect? SubjectCutoutAtEdges { get; set; }
+            public CanvasBitmap? SubjectDepthBitmap { get; set; }
+            public ScaleEffect? SubjectDepthScale { get; set; }
+            public BorderEffect? SubjectDepthAtSize { get; set; }
+            public CanvasRenderTarget? BackdropSurface { get; set; }
+            public BorderEffect? BackdropAtEdges { get; set; }
+            public PixelShaderEffect? Backdrop3D { get; set; }
+            public PixelShaderEffect? SubjectSplat2D { get; set; }
+            public CanvasBitmap? CleanPlateBitmap { get; set; }
+            public int CleanPlateWidth { get; set; }
+            public int CleanPlateHeight { get; set; }
+            public CanvasBitmap? CustomBackdropBitmap { get; set; }
+            public string? CustomBackdropLoadedPath { get; set; }
+            public GaussianBlurEffect? BackdropBlurEffect { get; set; }
+            public SaturationEffect? BackdropDesatEffect { get; set; }
+            public ColorMatrixEffect? BackdropDimEffect { get; set; }
+            public BorderEffect? BackdropImageBorder { get; set; }
 
             public void DisposeSlideGpuResources()
             {
@@ -129,8 +179,33 @@ namespace ModernImageViewer
                 SlidePlateBitmap?.Dispose(); SlidePlateBitmap = null;
             }
 
+            public void DisposeBackdropGpuResources()
+            {
+                SubjectSplat2D?.Dispose(); SubjectSplat2D = null;
+                Backdrop3D?.Dispose(); Backdrop3D = null;
+                BackdropAtEdges?.Dispose(); BackdropAtEdges = null;
+                BackdropSurface?.Dispose(); BackdropSurface = null;
+                SubjectDepthAtSize?.Dispose(); SubjectDepthAtSize = null;
+                SubjectDepthScale?.Dispose(); SubjectDepthScale = null;
+                SubjectDepthBitmap?.Dispose(); SubjectDepthBitmap = null;
+                SubjectCutoutAtEdges?.Dispose(); SubjectCutoutAtEdges = null;
+                SubjectCutoutScale?.Dispose(); SubjectCutoutScale = null;
+                SubjectCutoutBitmap?.Dispose(); SubjectCutoutBitmap = null;
+                BackdropImageBorder?.Dispose(); BackdropImageBorder = null;
+                BackdropDimEffect?.Dispose(); BackdropDimEffect = null;
+                BackdropDesatEffect?.Dispose(); BackdropDesatEffect = null;
+                BackdropBlurEffect?.Dispose(); BackdropBlurEffect = null;
+                CustomBackdropBitmap?.Dispose(); CustomBackdropBitmap = null;
+                CustomBackdropLoadedPath = null;
+                CleanPlateBitmap?.Dispose(); CleanPlateBitmap = null;
+                CleanPlateWidth = 0;
+                CleanPlateHeight = 0;
+                LensConfiguredForBackdrop = false;
+            }
+
             public void DisposeGpuPipeline()
             {
+                DisposeBackdropGpuResources();
                 DisposeSlideGpuResources();
                 Splat2D?.Dispose(); Splat2D = null;
                 Moved?.Dispose(); Moved = null;
@@ -173,10 +248,14 @@ namespace ModernImageViewer
         private bool _isComparingOriginal;
         private bool _isCopyingImage;
         private bool _swayBuildingSlide;
+        private bool _swayBuildingCleanPlate;
+        private bool _swayLoadingCustomBackdrop;
+        private bool _backdropNotifiedUnsupported;
         private bool _slideLoop = true;
         private bool _slideReverse;
 
         private Viewer3DMotionMode _motionMode = Viewer3DMotionMode.Sway;
+        private Viewer3DBackdropMode _backdropMode = Viewer3DBackdropMode.Original;
         private StudioTab _studioTab = StudioTab.Motion;
 
         private double _swayDepth = SurpriseOptions.SwayRotationDefault;
@@ -186,6 +265,9 @@ namespace ModernImageViewer
         private double _bgDesat;
         private double _bgDim;
         private double _relight;
+        private double _backdropBlur = 0.45;
+        private double _backdropLightWrap = 0.35;
+        private string? _customBackdropPath;
 
         private int _swayTicket;
         private int _swayDrawFaults;
@@ -195,12 +277,23 @@ namespace ModernImageViewer
         private ViewerSwayState? _swayState;
         private readonly SolidColorBrush _transparentBrush = new(Microsoft.UI.Colors.Transparent);
         private readonly SolidColorBrush _subtlePillBrush = new(Windows.UI.Color.FromArgb(0x28, 0xFF, 0xFF, 0xFF));
+        private readonly SolidColorBrush _selectedTabBrush = new(Windows.UI.Color.FromArgb(0x1E, 0xFF, 0xFF, 0xFF));
+        private SolidColorBrush? _matchSwatchBrush;
 
         public bool IsSwayEnabled => _isSwayEnabled;
         public bool IsSwayFollowPointer => _motionMode == Viewer3DMotionMode.Tilt;
         public bool IsComparingOriginal => _isComparingOriginal;
-        private bool IsPickFocusModeActive => _swayPickingFocus && _isSwayEnabled && CanUseSway && _swayState != null;
+        private bool IsPickFocusModeActive =>
+            _swayPickingFocus && _isSwayEnabled && CanUseSway && _swayState != null && _backdropMode == Viewer3DBackdropMode.Original;
         private bool IsLensActive => _focusBlur > 0.001 || _bgDesat > 0.001 || _bgDim > 0.001 || _relight > 0.001;
+        private bool IsBackdropActive =>
+            _backdropMode != Viewer3DBackdropMode.Original
+            && _swayState != null
+            && _swayState.HasMask
+            && _swayState.SubjectStats.HasUsableSubject
+            && _swayState.SubjectCutoutAtEdges != null
+            && _swayState.SubjectSplat2D != null
+            && _swayState.BackdropSurface != null;
 
         private bool CanUseSway =>
             DepthMaps.Available
@@ -295,7 +388,11 @@ namespace ModernImageViewer
             ViewGrayscale,
             ViewInvert,
             _slideLoop,
-            _slideReverse);
+            _slideReverse,
+            _backdropMode,
+            _backdropBlur,
+            _backdropLightWrap,
+            _customBackdropPath);
 
         public void ApplyInitialEffects(ViewerEffectSnapshot? snapshot)
         {
@@ -311,6 +408,10 @@ namespace ModernImageViewer
             _bgDesat = Math.Clamp(snapshot.BgDesat, 0.0, 1.0);
             _bgDim = Math.Clamp(snapshot.BgDim, 0.0, 1.0);
             _relight = Math.Clamp(snapshot.Relight, 0.0, 1.0);
+            _backdropMode = snapshot.BackdropMode;
+            _backdropBlur = Math.Clamp(snapshot.BackdropBlur, 0.0, 1.0);
+            _backdropLightWrap = Math.Clamp(snapshot.BackdropLightWrap, 0.0, 1.0);
+            _customBackdropPath = snapshot.CustomBackdropPath;
             ApplyViewTransformAndTone(
                 snapshot.RotationQuarterTurns,
                 snapshot.MirrorHorizontal,
@@ -328,14 +429,22 @@ namespace ModernImageViewer
             _hasCustomFocusDepth = false;
             _isComparingOriginal = false;
             _swayBuildingSlide = false;
+            _swayBuildingCleanPlate = false;
+            _swayLoadingCustomBackdrop = false;
+            _backdropNotifiedUnsupported = false;
             _slideLoop = true;
             _slideReverse = false;
             _motionMode = Viewer3DMotionMode.Sway;
+            _backdropMode = Viewer3DBackdropMode.Original;
             _studioTab = StudioTab.Motion;
             _focusBlur = 0.0;
             _bgDesat = 0.0;
             _bgDim = 0.0;
             _relight = 0.0;
+            _backdropBlur = 0.45;
+            _backdropLightWrap = 0.35;
+            _customBackdropPath = null;
+            if (SwayHudBorder != null) SwayHudBorder.Opacity = 1.0;
             ResetViewTransformAndTone(requestRender: false);
             StopSwayRuntime(requestRender: false);
             SyncSwayChrome();
@@ -364,6 +473,8 @@ namespace ModernImageViewer
         private void UpdateSwayAvailability()
         {
             bool available = CanUseSway;
+            if (!available && (_swayState != null || _swayRenderingSubscribed || _swayPreparing))
+                StopSwayRuntime(requestRender: false);
             Visibility vis = available ? Visibility.Visible : Visibility.Collapsed;
             if (SwayButton != null) SwayButton.Visibility = vis;
             if (SwayMenuItem != null) SwayMenuItem.Visibility = vis;
@@ -391,6 +502,11 @@ namespace ModernImageViewer
                 if (PopDimValue != null) PopDimValue.Text = $"{Math.Round(_bgDim * 100.0):0}%";
                 if (PopLightSlider != null) PopLightSlider.Value = Math.Round(_relight * 100.0);
                 if (PopLightValue != null) PopLightValue.Text = $"{Math.Round(_relight * 100.0):0}%";
+
+                if (BackdropBlurSlider != null) BackdropBlurSlider.Value = Math.Round(_backdropBlur * 100.0);
+                if (BackdropBlurValue != null) BackdropBlurValue.Text = $"{Math.Round(_backdropBlur * 100.0):0}%";
+                if (BackdropWrapSlider != null) BackdropWrapSlider.Value = Math.Round(_backdropLightWrap * 100.0);
+                if (BackdropWrapValue != null) BackdropWrapValue.Text = $"{Math.Round(_backdropLightWrap * 100.0):0}%";
             }
             finally
             {
@@ -418,6 +534,25 @@ namespace ModernImageViewer
             }
         }
 
+        private void ApplyTabStyle(Button? btn, Border? indicator, bool selected)
+        {
+            if (btn == null) return;
+            if (selected)
+            {
+                btn.Background = _selectedTabBrush;
+                btn.Opacity = 1.0;
+                btn.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
+            }
+            else
+            {
+                btn.Background = _transparentBrush;
+                btn.Opacity = 0.72;
+                btn.FontWeight = Microsoft.UI.Text.FontWeights.Normal;
+            }
+            if (indicator != null)
+                indicator.Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
+        }
+
         private void SyncSwayChrome()
         {
             bool active = _isSwayEnabled && CanUseSway;
@@ -440,14 +575,20 @@ namespace ModernImageViewer
 
             bool hasFocus = _focusBlur > 0.001;
             bool hasPop = _bgDesat > 0.001 || _bgDim > 0.001 || _relight > 0.001;
-            ApplyPillStyle(TabMotionButton, _studioTab == StudioTab.Motion);
-            ApplyPillStyle(TabFocusButton, _studioTab == StudioTab.Focus, hasFocus);
-            ApplyPillStyle(TabPopButton, _studioTab == StudioTab.Pop, hasPop);
+            bool hasBackdrop = _backdropMode != Viewer3DBackdropMode.Original;
+            ApplyTabStyle(TabMotionButton, TabMotionBar, _studioTab == StudioTab.Motion);
+            ApplyTabStyle(TabFocusButton, TabFocusBar, _studioTab == StudioTab.Focus);
+            ApplyTabStyle(TabPopButton, TabPopBar, _studioTab == StudioTab.Pop);
+            ApplyTabStyle(TabBackdropButton, TabBackdropBar, _studioTab == StudioTab.Backdrop);
+            if (FocusActiveDot != null) FocusActiveDot.Visibility = hasFocus ? Visibility.Visible : Visibility.Collapsed;
+            if (PopActiveDot != null) PopActiveDot.Visibility = hasPop ? Visibility.Visible : Visibility.Collapsed;
+            if (BackdropActiveDot != null) BackdropActiveDot.Visibility = hasBackdrop ? Visibility.Visible : Visibility.Collapsed;
 
             if (MotionTabPanel != null) MotionTabPanel.Visibility = _studioTab == StudioTab.Motion ? Visibility.Visible : Visibility.Collapsed;
             if (FocusTabPanel != null) FocusTabPanel.Visibility = _studioTab == StudioTab.Focus ? Visibility.Visible : Visibility.Collapsed;
             if (PopTabPanel != null) PopTabPanel.Visibility = _studioTab == StudioTab.Pop ? Visibility.Visible : Visibility.Collapsed;
-            if (SwayResetEffectsButton != null) SwayResetEffectsButton.Visibility = (hasFocus || hasPop) ? Visibility.Visible : Visibility.Collapsed;
+            if (BackdropTabPanel != null) BackdropTabPanel.Visibility = _studioTab == StudioTab.Backdrop ? Visibility.Visible : Visibility.Collapsed;
+            if (SwayResetEffectsButton != null) SwayResetEffectsButton.Visibility = (hasFocus || hasPop || hasBackdrop) ? Visibility.Visible : Visibility.Collapsed;
             if (SwayMaskRefiningText != null)
             {
                 if (_swayBuildingSlide && _motionMode == Viewer3DMotionMode.Slide && _swayState != null)
@@ -455,7 +596,12 @@ namespace ModernImageViewer
                     SwayMaskRefiningText.Text = "Preparing slide...";
                     SwayMaskRefiningText.Visibility = Visibility.Visible;
                 }
-                else if (_studioTab == StudioTab.Pop && _swayRefiningMask && _swayState != null && !_swayState.HasMask)
+                else if ((_swayBuildingCleanPlate || _swayLoadingCustomBackdrop) && _swayState != null)
+                {
+                    SwayMaskRefiningText.Text = "Preparing backdrop...";
+                    SwayMaskRefiningText.Visibility = Visibility.Visible;
+                }
+                else if ((_studioTab == StudioTab.Pop || _studioTab == StudioTab.Backdrop || hasBackdrop) && _swayRefiningMask && _swayState != null && !_swayState.HasMask)
                 {
                     SwayMaskRefiningText.Text = "Refining cutout...";
                     SwayMaskRefiningText.Visibility = Visibility.Visible;
@@ -467,6 +613,42 @@ namespace ModernImageViewer
             }
             if (SwayCompareButton != null)
                 SwayCompareButton.Background = _isComparingOriginal ? accentBrush : transparent;
+
+            ApplyPillStyle(BgOriginalButton, _backdropMode == Viewer3DBackdropMode.Original);
+            ApplyPillStyle(BgCleanBlurButton, _backdropMode == Viewer3DBackdropMode.CleanBlur);
+            ApplyPillStyle(BgStudioDarkButton, _backdropMode == Viewer3DBackdropMode.StudioDark);
+            ApplyPillStyle(BgStudioWarmButton, _backdropMode == Viewer3DBackdropMode.StudioWarm);
+            ApplyPillStyle(BgStudioMatchButton, _backdropMode == Viewer3DBackdropMode.StudioMatch);
+            ApplyPillStyle(BgBokehButton, _backdropMode == Viewer3DBackdropMode.Bokeh);
+            ApplyPillStyle(BgMistButton, _backdropMode == Viewer3DBackdropMode.Mist);
+            ApplyPillStyle(BgNightButton, _backdropMode == Viewer3DBackdropMode.NightSky);
+            ApplyPillStyle(BgCustomImageButton, _backdropMode == Viewer3DBackdropMode.CustomImage);
+            if (BgMatchSwatch != null && _swayState != null)
+            {
+                var pal = _swayState.Palette;
+                byte mr = (byte)Math.Clamp((int)Math.Round(((pal.TopR + pal.BotR) * 0.5f * 0.85f + 0.12f) * 255f), 0, 255);
+                byte mg = (byte)Math.Clamp((int)Math.Round(((pal.TopG + pal.BotG) * 0.5f * 0.85f + 0.12f) * 255f), 0, 255);
+                byte mb = (byte)Math.Clamp((int)Math.Round(((pal.TopB + pal.BotB) * 0.5f * 0.85f + 0.12f) * 255f), 0, 255);
+                var matchColor = Windows.UI.Color.FromArgb(255, mr, mg, mb);
+                if (_matchSwatchBrush == null)
+                    _matchSwatchBrush = new SolidColorBrush(matchColor);
+                else if (_matchSwatchBrush.Color != matchColor)
+                    _matchSwatchBrush.Color = matchColor;
+                if (!ReferenceEquals(BgMatchSwatch.Fill, _matchSwatchBrush))
+                    BgMatchSwatch.Fill = _matchSwatchBrush;
+            }
+            if (BackdropBlurLabel != null)
+                BackdropBlurLabel.Text = _backdropMode is Viewer3DBackdropMode.StudioDark or Viewer3DBackdropMode.StudioWarm or Viewer3DBackdropMode.StudioMatch
+                    ? "Softness"
+                    : "Blur";
+            if (BackdropChangeImageButton != null)
+                BackdropChangeImageButton.Visibility = _backdropMode == Viewer3DBackdropMode.CustomImage ? Visibility.Visible : Visibility.Collapsed;
+            if (BackdropControlsGroup != null)
+                BackdropControlsGroup.Opacity = hasBackdrop ? 1.0 : 0.45;
+            if (BackdropBlurSlider != null)
+                BackdropBlurSlider.IsEnabled = hasBackdrop;
+            if (BackdropWrapSlider != null)
+                BackdropWrapSlider.IsEnabled = hasBackdrop;
 
             ApplyPillStyle(ModeSwayButton, _motionMode == Viewer3DMotionMode.Sway);
             ApplyPillStyle(ModeSlideButton, _motionMode == Viewer3DMotionMode.Slide);
@@ -491,10 +673,12 @@ namespace ModernImageViewer
             if (SwaySwingLabel != null)
                 SwaySwingLabel.Text = isSlide ? "Time" : "Swing";
             if (SwaySwingGroup != null)
-                ToolTipService.SetToolTip(SwaySwingGroup, isSlide ? "Slide pass duration in seconds (default 4.25 s)" : "Each swing: seconds for one full cycle (default 4.25 s)");
+                ToolTipService.SetToolTip(SwaySwingGroup, isSlide
+                    ? "Slide pass duration in seconds (default 4.25 s) (double-click to reset)"
+                    : "Each swing: seconds for one full cycle (default 4.25 s) (double-click to reset)");
 
             bool isTilt = _motionMode == Viewer3DMotionMode.Tilt;
-            bool slideFinished = isSlideOneWay && _swayState?.SlideDone == true && _swayState.SlideNearEffect != null;
+            bool slideFinished = isSlideOneWay && _swayState?.SlideDone == true && (_swayState.SlideNearEffect != null || IsBackdropActive);
             bool showPlay = _swayPaused || isTilt || slideFinished;
             if (SwayPlayPauseIcon != null) SwayPlayPauseIcon.Symbol = showPlay ? Symbol.Play : Symbol.Pause;
             if (SwayPlayPauseButton != null)
@@ -508,7 +692,24 @@ namespace ModernImageViewer
 
             if (SwaySwingGroup != null) SwaySwingGroup.Opacity = isTilt ? 0.4 : 1.0;
             if (SwaySwingSlider != null) SwaySwingSlider.IsEnabled = !isTilt;
-            if (PickFocusButton != null) PickFocusButton.Background = _swayPickingFocus ? accentBrush : transparent;
+            if (PickFocusButton != null)
+            {
+                PickFocusButton.Background = _swayPickingFocus && !hasBackdrop ? accentBrush : transparent;
+                PickFocusButton.IsEnabled = !hasBackdrop;
+                PickFocusButton.Opacity = hasBackdrop ? 0.4 : 1.0;
+                ToolTipService.SetToolTip(PickFocusButton, hasBackdrop
+                    ? "Focal plane applies to the original photo background"
+                    : "Pick focus point: click on the image (or Alt+click anytime)");
+            }
+            if (FocusPlaneGroup != null)
+            {
+                FocusPlaneGroup.Opacity = hasBackdrop ? 0.4 : 1.0;
+                ToolTipService.SetToolTip(FocusPlaneGroup, hasBackdrop
+                    ? "Focal plane applies to the original photo background"
+                    : "Focal plane from Far (0%) to Near (100%) (double-click to reset)");
+            }
+            if (FocusPlaneSlider != null)
+                FocusPlaneSlider.IsEnabled = !hasBackdrop;
 
             SyncStudioSliders();
         }
@@ -518,6 +719,7 @@ namespace ModernImageViewer
             if (availableWidth > 0) _lastHudWidth = availableWidth;
             double w = _lastHudWidth > 0 ? _lastHudWidth : availableWidth;
             if (SwayHudBorder == null || MotionTabPanel == null) return;
+            SwayHudBorder.MinWidth = w > 0 ? Math.Min(520.0, Math.Max(260.0, w - 32.0)) : 520.0;
 
             bool compactMotion = w > 0 && w < 620;
             bool ultraNarrow = w > 0 && w < 410;
@@ -613,6 +815,15 @@ namespace ModernImageViewer
                     PopLightSlider.Width = 78;
                 }
             }
+
+            if (BackdropPresetScroller != null && BackdropBlurSlider != null && BackdropWrapSlider != null)
+            {
+                bool compactBg = w > 0 && w < 520;
+                BackdropPresetScroller.MaxWidth = w > 0 ? Math.Max(220.0, w - 56.0) : double.PositiveInfinity;
+                double bgSliderW = ultraNarrow ? 60 : (compactBg ? 70 : 88);
+                BackdropBlurSlider.Width = bgSliderW;
+                BackdropWrapSlider.Width = bgSliderW;
+            }
         }
 
         private void OnSwayPrepareForNewImage()
@@ -624,10 +835,14 @@ namespace ModernImageViewer
             _swayPreparing = false;
             _swayRefiningMask = false;
             _swayBuildingSlide = false;
+            _swayBuildingCleanPlate = false;
+            _swayLoadingCustomBackdrop = false;
+            _backdropNotifiedUnsupported = false;
             _swayMaskWake = null;
             _swayPickingFocus = false;
             _hasCustomFocusDepth = false;
             _isComparingOriginal = false;
+            if (SwayHudBorder != null) SwayHudBorder.Opacity = 1.0;
             StopSwayRuntime(requestRender: false);
             UpdateSwayAvailability();
         }
@@ -654,7 +869,8 @@ namespace ModernImageViewer
                     {
                         DrawSwayToSurface(_swayState, advanceClock: false);
                         RequestRender();
-                        if (_motionMode == Viewer3DMotionMode.Slide && _swayState.SlideNearEffect == null && !_swayBuildingSlide && _swayCts != null)
+                        if (_motionMode == Viewer3DMotionMode.Slide && _backdropMode == Viewer3DBackdropMode.Original
+                            && _swayState.SlideNearEffect == null && !_swayBuildingSlide && _swayCts != null)
                             _ = EnsureSlideLayersAsync(_swayState, _swayTicket, _swayCts.Token);
                     }
                 }
@@ -785,8 +1001,10 @@ namespace ModernImageViewer
 
                 // Stage 2 (Non-blocking): refine foreground/background edges & subject mask while 3D is already live.
                 _ = RefineSwaySubjectMaskAsync(state, ticket, path, token);
-                if (_motionMode == Viewer3DMotionMode.Slide)
+                if (_motionMode == Viewer3DMotionMode.Slide && _backdropMode == Viewer3DBackdropMode.Original)
                     _ = EnsureSlideLayersAsync(state, ticket, token);
+                if (_backdropMode == Viewer3DBackdropMode.CustomImage && !string.IsNullOrEmpty(_customBackdropPath))
+                    _ = EnsureCustomBackdropLoadedAsync(state, ticket, _customBackdropPath, token);
             }
             catch (OperationCanceledException)
             {
@@ -823,15 +1041,6 @@ namespace ModernImageViewer
 
             try
             {
-                if (_studioTab != StudioTab.Pop && _bgDesat <= 0.001 && _bgDim <= 0.001)
-                {
-                    var wake = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-                    _swayMaskWake = wake;
-                    await Task.WhenAny(Task.Delay(700, token), wake.Task);
-                    if (ticket != _swayTicket || !_isSwayEnabled || _swayUnloaded || token.IsCancellationRequested || !ReferenceEquals(_swayState, state))
-                        return;
-                }
-
                 var outline = await SubjectMasks.ForAsync(path);
                 if (ticket != _swayTicket || !_isSwayEnabled || _swayUnloaded || token.IsCancellationRequested || !ReferenceEquals(_swayState, state))
                     return;
@@ -848,18 +1057,64 @@ namespace ModernImageViewer
                 if (ticket != _swayTicket || !_isSwayEnabled || _swayUnloaded || token.IsCancellationRequested || !ReferenceEquals(_swayState, state) || state.PhotoSurface == null)
                     return;
 
+                byte[]? photoBytes = state.PhotoSurface.GetPixelBytes();
                 byte[] greyMap = state.DepthMap.Grey;
                 int gw = state.DepthMap.Width, gh = state.DepthMap.Height;
                 byte[] alpha = outline.Alpha;
                 int maskSize = outline.Size;
                 int tw = crispW, th = crispH;
-                byte[]? crispBytes = await Task.Run(() =>
-                    SwayDepth.Crisp(greyMap, gw, gh, alpha, maskSize, tw, th, refPx?.Pixels, refPx?.Width ?? 0, refPx?.Height ?? 0), token);
+
+                var computed = await Task.Run(() =>
+                {
+                    SubjectStats stats = SwayPortrait.ComputeSubjectStats(greyMap, gw, gh, alpha, maskSize);
+                    byte[] solidAlpha = SwayPortrait.SolidifySubjectMask(alpha, maskSize, greyMap, gw, gh, stats);
+                    byte[] shapedGrey = stats.HasUsableSubject
+                        ? SwayPortrait.ShapeDepthGrey(greyMap, gw, gh, solidAlpha, maskSize, stats.SubjectMedianDepth)
+                        : greyMap;
+                    byte[] crisp = SwayDepth.Crisp(shapedGrey, gw, gh, solidAlpha, maskSize, tw, th, refPx?.Pixels, refPx?.Width ?? 0, refPx?.Height ?? 0);
+
+                    BackgroundPalette palette = photoBytes != null
+                        ? SwayPortrait.SampleBackgroundPalette(photoBytes, swayW, swayH, solidAlpha, maskSize)
+                        : new BackgroundPalette(0.15f, 0.20f, 0.28f, 0.09f, 0.11f, 0.16f, 0.88f, 0.64f, 0.36f);
+
+                    byte[]? cutout = null;
+                    byte[]? subjectDepth = null;
+                    if (stats.HasUsableSubject && photoBytes != null)
+                    {
+                        cutout = SwayPortrait.BuildDecontaminatedCutout(photoBytes, swayW, swayH, solidAlpha, maskSize);
+                        subjectDepth = SwayPortrait.BuildSubjectDilatedDepth(greyMap, gw, gh, solidAlpha, maskSize, stats.SubjectMedianDepth);
+                    }
+                    return (crisp, stats, palette, solidAlpha, cutout, subjectDepth);
+                }, token);
 
                 if (ticket != _swayTicket || !_isSwayEnabled || _swayUnloaded || token.IsCancellationRequested || !ReferenceEquals(_swayState, state) || state.PhotoSurface == null)
                     return;
 
-                ApplySubjectMaskToLiveState(state, outline, crispBytes, crispW, crispH);
+                ApplySubjectMaskToLiveState(
+                    state, outline, computed.solidAlpha,
+                    computed.crisp, crispW, crispH,
+                    computed.stats, computed.palette,
+                    computed.cutout, swayW, swayH,
+                    computed.subjectDepth, gw, gh);
+
+                if (_backdropMode != Viewer3DBackdropMode.Original && !computed.stats.HasUsableSubject)
+                {
+                    if (!_backdropNotifiedUnsupported)
+                    {
+                        _backdropNotifiedUnsupported = true;
+                        ShowNotification("No clear subject cutout for artificial backdrop");
+                    }
+                    _backdropMode = Viewer3DBackdropMode.Original;
+                    SyncSwayChrome();
+                }
+                else if (_backdropMode == Viewer3DBackdropMode.CleanBlur && state.CleanPlateBitmap == null && _swayCts != null)
+                {
+                    _ = EnsureCleanPlateAsync(state, ticket, token);
+                }
+                else if (_backdropMode == Viewer3DBackdropMode.CustomImage && !string.IsNullOrEmpty(_customBackdropPath) && state.CustomBackdropBitmap == null && _swayCts != null)
+                {
+                    _ = EnsureCustomBackdropLoadedAsync(state, ticket, _customBackdropPath, token);
+                }
             }
             catch (OperationCanceledException)
             {
@@ -879,7 +1134,12 @@ namespace ModernImageViewer
             }
         }
 
-        private void ApplySubjectMaskToLiveState(ViewerSwayState state, IParallaxMask outline, byte[]? crispBytes, int crispW, int crispH)
+        private void ApplySubjectMaskToLiveState(
+            ViewerSwayState state, IParallaxMask outline, byte[] solidAlpha,
+            byte[]? crispBytes, int crispW, int crispH,
+            SubjectStats stats, BackgroundPalette palette,
+            byte[]? cutoutBytes, int cutoutW, int cutoutH,
+            byte[]? subjectDepthBytes, int subjectDepthW, int subjectDepthH)
         {
             var device = state.PhotoSurface?.Device;
             if (device == null || state.PhotoSurface == null) return;
@@ -911,7 +1171,7 @@ namespace ModernImageViewer
             var maskBgra = new byte[ms * ms * 4];
             for (int i = 0; i < ms * ms; i++)
             {
-                byte a = outline.Alpha[i];
+                byte a = solidAlpha[i];
                 int o = i * 4;
                 maskBgra[o] = a; maskBgra[o + 1] = a; maskBgra[o + 2] = a; maskBgra[o + 3] = 255;
             }
@@ -937,10 +1197,33 @@ namespace ModernImageViewer
             var oldMaskBitmap = state.MaskBitmap;
 
             state.SubjectMask = outline;
+            state.SolidMaskAlpha = solidAlpha;
+            if (ms > 0 && solidAlpha.Length >= ms * ms)
+            {
+                double sum = 0, weight = 0;
+                for (int i = 0; i < ms * ms; i++)
+                {
+                    float a = solidAlpha[i];
+                    sum += a * (i % ms);
+                    weight += a;
+                }
+                float subjectX = weight > 0 ? (float)(sum / weight / ms) : 0.5f;
+                state.SlideAutoWay = subjectX < 0.5f ? 1f : -1f;
+                if (state.SlideLayers == null)
+                    state.SlideWay = _slideReverse ? -state.SlideAutoWay : state.SlideAutoWay;
+            }
             state.CrispBytes = crispBytes;
             state.CrispWidth = crispW;
             state.CrispHeight = crispH;
             state.HasMask = true;
+            state.SubjectStats = stats;
+            state.Palette = palette;
+            state.SubjectCutoutBytes = cutoutBytes;
+            state.SubjectCutoutWidth = cutoutW;
+            state.SubjectCutoutHeight = cutoutH;
+            state.SubjectDepthBytes = subjectDepthBytes;
+            state.SubjectDepthWidth = subjectDepthW;
+            state.SubjectDepthHeight = subjectDepthH;
 
             state.CrispBitmap = crispBitmap;
             state.CrispScale = crispScale;
@@ -949,10 +1232,27 @@ namespace ModernImageViewer
             state.MaskScale = maskScale;
             state.MaskAtSize = maskAtSize;
 
+            AttachSubjectBackdropGpuResources(state, device, w, h);
+            if (stats.HasUsableSubject && cutoutBytes != null
+                && (cutoutW != (int)w || cutoutH != (int)h)
+                && _swayCts != null && !_swayCts.IsCancellationRequested)
+            {
+                _ = RefreshHighResCutoutAsync(state, _swayTicket, _swayCts.Token);
+            }
+
             ICanvasImage splatDepth = (ICanvasImage?)crispAtSize ?? state.DepthAtSize!;
             if (state.DepthLens != null)
             {
-                state.DepthLens.Source2 = splatDepth;
+                if (state.LensConfiguredForBackdrop && state.SubjectCutoutAtEdges != null && state.SubjectDepthAtSize != null)
+                {
+                    state.DepthLens.Source1 = state.SubjectCutoutAtEdges;
+                    state.DepthLens.Source2 = state.SubjectDepthAtSize;
+                }
+                else
+                {
+                    state.DepthLens.Source1 = state.PhotoAtEdges;
+                    state.DepthLens.Source2 = splatDepth;
+                }
                 state.DepthLens.Source3 = maskAtSize;
             }
             if (state.Shift != null)
@@ -968,8 +1268,110 @@ namespace ModernImageViewer
             oldMaskBitmap?.Dispose();
 
             state.LensDirty = true;
-            PlayTiming.Write($"[ViewerSway] Subject mask applied ({outline.Why})");
+            PlayTiming.Write($"[ViewerSway] Subject mask applied ({outline.Why}, area={stats.Area:0.00}, subjMed={stats.SubjectMedianDepth:0.00})");
+            SyncSwayChrome();
             if (!_swayRenderingSubscribed) DrawStaticSwayFrame();
+        }
+
+        private void AttachSubjectBackdropGpuResources(ViewerSwayState state, CanvasDevice device, float w, float h)
+        {
+            if (state.PhotoSurface == null) return;
+
+            // Dispose only cutout/backdrop shader nodes, preserving CleanPlateBitmap / CustomBackdropBitmap if still valid.
+            state.SubjectSplat2D?.Dispose(); state.SubjectSplat2D = null;
+            state.Backdrop3D?.Dispose(); state.Backdrop3D = null;
+            state.BackdropAtEdges?.Dispose(); state.BackdropAtEdges = null;
+            state.BackdropSurface?.Dispose(); state.BackdropSurface = null;
+            state.SubjectDepthAtSize?.Dispose(); state.SubjectDepthAtSize = null;
+            state.SubjectDepthScale?.Dispose(); state.SubjectDepthScale = null;
+            state.SubjectDepthBitmap?.Dispose(); state.SubjectDepthBitmap = null;
+            state.SubjectCutoutAtEdges?.Dispose(); state.SubjectCutoutAtEdges = null;
+            state.SubjectCutoutScale?.Dispose(); state.SubjectCutoutScale = null;
+            state.SubjectCutoutBitmap?.Dispose(); state.SubjectCutoutBitmap = null;
+            state.BackdropImageBorder?.Dispose(); state.BackdropImageBorder = null;
+            state.BackdropDimEffect?.Dispose(); state.BackdropDimEffect = null;
+            state.BackdropDesatEffect?.Dispose(); state.BackdropDesatEffect = null;
+            state.BackdropBlurEffect?.Dispose(); state.BackdropBlurEffect = null;
+
+            if (!state.SubjectStats.HasUsableSubject
+                || state.SubjectCutoutBytes == null || state.SubjectCutoutWidth <= 0 || state.SubjectCutoutHeight <= 0
+                || state.SubjectDepthBytes == null || state.SubjectDepthWidth <= 0 || state.SubjectDepthHeight <= 0)
+            {
+                return;
+            }
+
+            var cutoutBitmap = CanvasBitmap.CreateFromBytes(
+                device, state.SubjectCutoutBytes, state.SubjectCutoutWidth, state.SubjectCutoutHeight,
+                Windows.Graphics.DirectX.DirectXPixelFormat.B8G8R8A8UIntNormalized);
+            ScaleEffect? cutoutScale = null;
+            ICanvasImage cutoutSrc = cutoutBitmap;
+            if (state.SubjectCutoutWidth != (int)w || state.SubjectCutoutHeight != (int)h)
+            {
+                cutoutScale = new ScaleEffect
+                {
+                    Source = cutoutBitmap,
+                    Scale = new Vector2(w / state.SubjectCutoutWidth, h / state.SubjectCutoutHeight),
+                    InterpolationMode = CanvasImageInterpolation.Linear
+                };
+                cutoutSrc = cutoutScale;
+            }
+            var cutoutAtEdges = new BorderEffect
+            {
+                Source = cutoutSrc,
+                ExtendX = CanvasEdgeBehavior.Clamp,
+                ExtendY = CanvasEdgeBehavior.Clamp
+            };
+
+            var subjDepthBitmap = CanvasBitmap.CreateFromBytes(
+                device, state.SubjectDepthBytes, state.SubjectDepthWidth, state.SubjectDepthHeight,
+                Windows.Graphics.DirectX.DirectXPixelFormat.B8G8R8A8UIntNormalized);
+            var subjDepthScale = new ScaleEffect
+            {
+                Source = subjDepthBitmap,
+                Scale = new Vector2(w / state.SubjectDepthWidth, h / state.SubjectDepthHeight),
+                InterpolationMode = CanvasImageInterpolation.Linear
+            };
+            var subjDepthAtSize = new BorderEffect
+            {
+                Source = subjDepthScale,
+                ExtendX = CanvasEdgeBehavior.Clamp,
+                ExtendY = CanvasEdgeBehavior.Clamp
+            };
+
+            var backdropSurface = new CanvasRenderTarget(device, w, h, 96f);
+            var backdropAtEdges = new BorderEffect
+            {
+                Source = backdropSurface,
+                ExtendX = CanvasEdgeBehavior.Clamp,
+                ExtendY = CanvasEdgeBehavior.Clamp
+            };
+            var backdrop3D = SwayShader.CreateBackdrop3D(state.PhotoSurface);
+
+            float maxSplatOffset = MathF.Sqrt(w * w + h * h) * (float)SurpriseOptions.SwayRotationMost + state.SplatStep * 3f + 4f;
+            var subjectSplat2D = SwayShader.CreateSubjectSplat2D(cutoutAtEdges, subjDepthAtSize, backdropAtEdges, maxSplatOffset);
+
+            state.SubjectCutoutBitmap = cutoutBitmap;
+            state.SubjectCutoutScale = cutoutScale;
+            state.SubjectCutoutAtEdges = cutoutAtEdges;
+            state.SubjectDepthBitmap = subjDepthBitmap;
+            state.SubjectDepthScale = subjDepthScale;
+            state.SubjectDepthAtSize = subjDepthAtSize;
+            state.BackdropSurface = backdropSurface;
+            state.BackdropAtEdges = backdropAtEdges;
+            state.Backdrop3D = backdrop3D;
+            state.SubjectSplat2D = subjectSplat2D;
+            state.BackdropBlurEffect = new GaussianBlurEffect
+            {
+                BorderMode = EffectBorderMode.Hard,
+                Optimization = EffectOptimization.Speed
+            };
+            state.BackdropDesatEffect = new SaturationEffect();
+            state.BackdropDimEffect = new ColorMatrixEffect();
+            state.BackdropImageBorder = new BorderEffect
+            {
+                ExtendX = CanvasEdgeBehavior.Mirror,
+                ExtendY = CanvasEdgeBehavior.Mirror
+            };
         }
 
         private bool RebuildSwayGpuPipeline(ViewerSwayState state, CanvasDevice device, CanvasBitmap sourceBitmap)
@@ -1041,10 +1443,13 @@ namespace ModernImageViewer
                 if (hasMask)
                 {
                     int ms = state.SubjectMask!.Size;
+                    byte[] maskAlphaSrc = state.SolidMaskAlpha != null && state.SolidMaskAlpha.Length >= ms * ms
+                        ? state.SolidMaskAlpha
+                        : state.SubjectMask.Alpha;
                     var maskBgra = new byte[ms * ms * 4];
                     for (int i = 0; i < ms * ms; i++)
                     {
-                        byte a = state.SubjectMask.Alpha[i];
+                        byte a = maskAlphaSrc[i];
                         int o = i * 4;
                         maskBgra[o] = a; maskBgra[o + 1] = a; maskBgra[o + 2] = a; maskBgra[o + 3] = 255;
                     }
@@ -1103,7 +1508,7 @@ namespace ModernImageViewer
                     YChannelSelect = EffectChannelSelect.Green,
                     Amount = (float)(Math.Max(w, h) * SurpriseOptions.SwayRotationMost * 2.0)
                 };
-                float splatStep = Math.Max(1f, Math.Max(w, h) / (float)Math.Max(map.Width, map.Height) / 2f);
+                float splatStep = Math.Clamp(Math.Max(w, h) / (float)Math.Max(map.Width, map.Height) / 3.5f, 1.0f, 1.75f);
                 float maxSplatOffset = MathF.Sqrt(w * w + h * h) * (float)SurpriseOptions.SwayRotationMost + splatStep * 3f + 4f;
                 var splat2D = SwayShader.CreateSplat2D(activeSource, splatDepth, maxSplatOffset);
 
@@ -1128,7 +1533,19 @@ namespace ModernImageViewer
                 state.Splat2D = splat2D;
                 state.SplatStep = splatStep;
                 state.HasMask = hasMask;
+                state.LensConfiguredForBackdrop = false;
                 state.LensDirty = true;
+
+                if (hasMask && state.SubjectStats.HasUsableSubject && state.SubjectCutoutBytes != null && state.SubjectDepthBytes != null)
+                {
+                    AttachSubjectBackdropGpuResources(state, device, w, h);
+                    if ((state.SubjectCutoutWidth != w || state.SubjectCutoutHeight != h) && _swayCts != null)
+                        _ = RefreshHighResCutoutAsync(state, _swayTicket, _swayCts.Token);
+                }
+                if (_backdropMode == Viewer3DBackdropMode.CleanBlur && state.CleanPlateBitmap == null && state.HasMask && state.SubjectStats.HasUsableSubject && _swayCts != null)
+                    _ = EnsureCleanPlateAsync(state, _swayTicket, _swayCts.Token);
+                if (_backdropMode == Viewer3DBackdropMode.CustomImage && !string.IsNullOrEmpty(_customBackdropPath) && state.CustomBackdropBitmap == null && _swayCts != null)
+                    _ = EnsureCustomBackdropLoadedAsync(state, _swayTicket, _customBackdropPath, _swayCts.Token);
 
                 if (state.SlideLayers != null && state.SlideSupported && state.SlideLayerWidth == w && state.SlideLayerHeight == h)
                 {
@@ -1149,18 +1566,18 @@ namespace ModernImageViewer
             }
         }
 
-        private void RenderLensSurface(ViewerSwayState state, float w, float h, float lightX, float lightY)
+        private void RenderLensSurface(ViewerSwayState state, float w, float h, float lightX, float lightY, bool subjectOnly = false)
         {
             if (state.LensSurface == null || state.PhotoSurface == null) return;
 
             if (state.DepthLens is { } lens)
             {
                 float maxBlur = Math.Clamp(Math.Max(w, h) * 0.015f, 8f, DepthLensMaxBlurOffset - 2f);
-                lens.Properties["blurPx"] = (float)(_focusBlur * maxBlur);
+                lens.Properties["blurPx"] = subjectOnly ? 0f : (float)(_focusBlur * maxBlur);
                 lens.Properties["focusDepth"] = (float)Math.Clamp(_focusDepth, 0.0, 1.0);
                 lens.Properties["focusBand"] = 0.06f;
-                lens.Properties["bgDesat"] = (float)Math.Clamp(_bgDesat, 0.0, 1.0);
-                lens.Properties["bgDim"] = (float)Math.Clamp(_bgDim, 0.0, 1.0);
+                lens.Properties["bgDesat"] = subjectOnly ? 0f : (float)Math.Clamp(_bgDesat, 0.0, 1.0);
+                lens.Properties["bgDim"] = subjectOnly ? 0f : (float)Math.Clamp(_bgDim, 0.0, 1.0);
                 lens.Properties["relight"] = (float)Math.Clamp(_relight, 0.0, 1.0);
                 lens.Properties["lightX"] = lightX;
                 lens.Properties["lightY"] = lightY;
@@ -1177,7 +1594,7 @@ namespace ModernImageViewer
             {
                 using var ls = state.LensSurface.CreateDrawingSession();
                 ls.Clear(Microsoft.UI.Colors.Transparent);
-                ls.DrawImage(state.PhotoSurface);
+                ls.DrawImage(subjectOnly && state.SubjectCutoutAtEdges != null ? state.SubjectCutoutAtEdges : state.PhotoSurface);
             }
 
             state.LensDirty = false;
@@ -1185,10 +1602,167 @@ namespace ModernImageViewer
             state.LastLensLightY = lightY;
         }
 
+        private void RenderBackdropSurface(
+            ViewerSwayState state, float w, float h,
+            double rotation, float shiftX, float shiftY, float dolly,
+            float slideOffsetA, float slideOffsetB, float slideBlendB, float slideWay)
+        {
+            if (state.BackdropSurface == null) return;
+
+            bool isSlide = _motionMode == Viewer3DMotionMode.Slide;
+            float effectiveBlur = (float)Math.Clamp(_backdropBlur + _focusBlur * 0.55, 0.0, 1.0);
+
+            if (_backdropMode == Viewer3DBackdropMode.CleanBlur || _backdropMode == Viewer3DBackdropMode.CustomImage)
+            {
+                CanvasBitmap? srcBmp = _backdropMode == Viewer3DBackdropMode.CleanBlur
+                    ? state.CleanPlateBitmap
+                    : state.CustomBackdropBitmap;
+                if (srcBmp == null || state.BackdropImageBorder == null) return;
+
+                ICanvasImage plateImg = srcBmp;
+                float blurMax = _backdropMode == Viewer3DBackdropMode.CleanBlur
+                    ? Math.Clamp(Math.Max(w, h) * 0.018f, 10f, 44f)
+                    : Math.Clamp(Math.Max(w, h) * 0.016f, 8f, 38f);
+                float blurAmt = effectiveBlur * blurMax;
+                if (blurAmt > 0.25f && state.BackdropBlurEffect != null)
+                {
+                    if (!ReferenceEquals(state.BackdropBlurEffect.Source, plateImg))
+                        state.BackdropBlurEffect.Source = plateImg;
+                    state.BackdropBlurEffect.BlurAmount = blurAmt;
+                    plateImg = state.BackdropBlurEffect;
+                }
+                if (_bgDesat > 0.001 && state.BackdropDesatEffect != null)
+                {
+                    if (!ReferenceEquals(state.BackdropDesatEffect.Source, plateImg))
+                        state.BackdropDesatEffect.Source = plateImg;
+                    state.BackdropDesatEffect.Saturation = (float)Math.Clamp(1.0 - _bgDesat, 0.0, 1.0);
+                    plateImg = state.BackdropDesatEffect;
+                }
+                if (_bgDim > 0.001 && state.BackdropDimEffect != null)
+                {
+                    float dimScale = (float)(1.0 - Math.Clamp(_bgDim, 0.0, 1.0) * 0.68);
+                    if (!ReferenceEquals(state.BackdropDimEffect.Source, plateImg))
+                        state.BackdropDimEffect.Source = plateImg;
+                    state.BackdropDimEffect.ColorMatrix = new Matrix5x4
+                    {
+                        M11 = dimScale, M22 = dimScale, M33 = dimScale, M44 = 1f
+                    };
+                    plateImg = state.BackdropDimEffect;
+                }
+                if (!ReferenceEquals(state.BackdropImageBorder.Source, plateImg))
+                    state.BackdropImageBorder.Source = plateImg;
+
+                float bw = srcBmp.SizeInPixels.Width;
+                float bh = srcBmp.SizeInPixels.Height;
+                float cover = Math.Max(w / Math.Max(1f, bw), h / Math.Max(1f, bh));
+                if (isSlide)
+                {
+                    // Anchor Slide crop strictly within [0, bw] so trailing edges never hit Mirror.
+                    float slideExtra = 1.0f + (float)(rotation * 1.15);
+                    float slideScale = Math.Max(0.01f, cover * slideExtra);
+                    float viewSpanW = Math.Min(bw, w / slideScale);
+                    float viewSpanH = Math.Min(bh, h / slideScale);
+                    float marginY = (bh - viewSpanH) * 0.5f;
+                    float maxShiftX = Math.Max(0f, bw - viewSpanW);
+                    float srcXA = slideWay > 0f ? maxShiftX * slideOffsetA : maxShiftX * (1f - slideOffsetA);
+
+                    using var bsSlide = state.BackdropSurface.CreateDrawingSession();
+                    bsSlide.Clear(Microsoft.UI.Colors.Black);
+                    bsSlide.DrawImage(state.BackdropImageBorder, new Rect(0, 0, w, h), new Rect(srcXA, marginY, viewSpanW, viewSpanH), 1f, CanvasImageInterpolation.Linear);
+                    if (slideBlendB > 0.001f)
+                    {
+                        float srcXB = slideWay > 0f ? maxShiftX * slideOffsetB : maxShiftX * (1f - slideOffsetB);
+                        bsSlide.DrawImage(state.BackdropImageBorder, new Rect(0, 0, w, h), new Rect(srcXB, marginY, viewSpanW, viewSpanH), slideBlendB, CanvasImageInterpolation.Linear);
+                    }
+                    return;
+                }
+
+                float extra = _backdropMode == Viewer3DBackdropMode.CleanBlur
+                    ? (1.0f + (float)(rotation * 1.75))
+                    : (1.0f + (float)(rotation * 1.85));
+                float zoomFactor = Math.Max(0.6f, 1.0f - dolly * 0.50f);
+                float scale = Math.Max(0.01f, cover * extra * zoomFactor);
+                float viewSpanW2 = w / scale;
+                float viewSpanH2 = h / scale;
+
+                float panA = shiftX * 0.85f;
+                float panY = shiftY * 0.85f;
+                Rect srcRectA = new(
+                    bw * 0.5f - viewSpanW2 * 0.5f + panA / scale,
+                    bh * 0.5f - viewSpanH2 * 0.5f + panY / scale,
+                    viewSpanW2, viewSpanH2);
+
+                using var bs = state.BackdropSurface.CreateDrawingSession();
+                bs.Clear(Microsoft.UI.Colors.Black);
+                bs.DrawImage(state.BackdropImageBorder, new Rect(0, 0, w, h), srcRectA, 1f, CanvasImageInterpolation.Linear);
+                return;
+            }
+
+            if (state.Backdrop3D is not { } shader) return;
+
+            float travel = (float)(w * rotation * 1.15);
+            float slideDxA = -slideWay * travel * slideOffsetA;
+            float slideDxB = -slideWay * travel * slideOffsetB;
+
+            float shaderMode = _backdropMode switch
+            {
+                Viewer3DBackdropMode.StudioDark => 1f,
+                Viewer3DBackdropMode.StudioWarm => 2f,
+                Viewer3DBackdropMode.StudioMatch => 3f,
+                Viewer3DBackdropMode.Bokeh => 4f,
+                Viewer3DBackdropMode.Mist => 5f,
+                Viewer3DBackdropMode.NightSky => 6f,
+                _ => 1f
+            };
+            var pal = state.Palette;
+            shader.Properties["mode"] = shaderMode;
+            shader.Properties["widthPx"] = w;
+            shader.Properties["heightPx"] = h;
+            shader.Properties["shiftX"] = isSlide ? -slideDxA : shiftX;
+            shader.Properties["shiftY"] = isSlide ? 0f : shiftY;
+            shader.Properties["dolly"] = isSlide ? 0f : dolly;
+            shader.Properties["blurAmount"] = effectiveBlur;
+            shader.Properties["dimAmount"] = (float)Math.Clamp(_bgDim, 0.0, 1.0);
+            shader.Properties["desatAmount"] = (float)Math.Clamp(_bgDesat, 0.0, 1.0);
+            shader.Properties["topR"] = pal.TopR;
+            shader.Properties["topG"] = pal.TopG;
+            shader.Properties["topB"] = pal.TopB;
+            shader.Properties["botR"] = pal.BotR;
+            shader.Properties["botG"] = pal.BotG;
+            shader.Properties["botB"] = pal.BotB;
+            shader.Properties["accR"] = pal.AccR;
+            shader.Properties["accG"] = pal.AccG;
+            shader.Properties["accB"] = pal.AccB;
+
+            using var session = state.BackdropSurface.CreateDrawingSession();
+            session.Clear(Microsoft.UI.Colors.Black);
+            session.DrawImage(shader, new Rect(0, 0, w, h), new Rect(0, 0, w, h));
+            if (isSlide && slideBlendB > 0.001f)
+            {
+                session.Flush();
+                shader.Properties["shiftX"] = -slideDxB;
+                session.DrawImage(shader, new Rect(0, 0, w, h), new Rect(0, 0, w, h), slideBlendB);
+            }
+        }
+
         private void DrawSwayToSurface(ViewerSwayState state, bool advanceClock)
         {
             if (state.OutputSurface == null || state.PhotoSurface == null || state.Shift == null || state.Moved == null)
                 return;
+
+            bool backdropReady = _backdropMode switch
+            {
+                Viewer3DBackdropMode.Original => false,
+                Viewer3DBackdropMode.CleanBlur => state.CleanPlateBitmap != null,
+                Viewer3DBackdropMode.CustomImage => state.CustomBackdropBitmap != null,
+                _ => state.Backdrop3D != null
+            };
+            bool useBackdrop = backdropReady
+                && state.HasMask
+                && state.SubjectStats.HasUsableSubject
+                && state.SubjectCutoutAtEdges != null
+                && state.SubjectSplat2D != null
+                && state.BackdropSurface != null;
 
             double rotation = SurpriseOptions.ClampedSwayRotation(_swayDepth);
             double swing = SurpriseOptions.ClampedSwaySwing(_swaySwing);
@@ -1209,7 +1783,7 @@ namespace ModernImageViewer
                 angleX = state.PointerCurrentX;
                 angleY = state.PointerCurrentY * 0.65f;
             }
-            else if (_motionMode == Viewer3DMotionMode.Slide && state.SlideNearEffect != null)
+            else if (_motionMode == Viewer3DMotionMode.Slide && (state.SlideNearEffect != null || useBackdrop))
             {
                 if (advanceClock && !_swayPaused && (_slideLoop || !state.SlideDone))
                 {
@@ -1263,6 +1837,86 @@ namespace ModernImageViewer
                 ? state.PointerCurrentY
                 : (_motionMode == Viewer3DMotionMode.Orbit ? angleY * 0.85f : -0.35f);
 
+            float shiftX = (float)(angleX * w * rotation * ramp);
+            float shiftY = (float)(angleY * Math.Min(h, w * 1.15f) * rotation * ramp);
+            float dolly = _motionMode == Viewer3DMotionMode.Breathe ? (float)(angleD * rotation * 1.25 * ramp) : 0f;
+            float pivot = SwayPortrait.ComputePortraitPivot(state.Middle, state.SubjectStats, useBackdrop);
+
+            if (useBackdrop)
+            {
+                bool relightActive = _relight > 0.001;
+                if (relightActive && state.DepthLens != null && state.SubjectCutoutAtEdges != null && state.SubjectDepthAtSize != null)
+                {
+                    if (!state.LensConfiguredForBackdrop)
+                    {
+                        state.DepthLens.Source1 = state.SubjectCutoutAtEdges;
+                        state.DepthLens.Source2 = state.SubjectDepthAtSize;
+                        state.LensConfiguredForBackdrop = true;
+                        state.LensDirty = true;
+                    }
+                    bool needSubjLens = state.LensDirty
+                        || !float.IsFinite(state.LastLensLightX)
+                        || Math.Abs(state.LastLensLightX - lightX) > 0.002f
+                        || Math.Abs(state.LastLensLightY - lightY) > 0.002f;
+                    if (needSubjLens)
+                        RenderLensSurface(state, w, h, lightX, lightY, subjectOnly: true);
+                }
+
+                float backdropSlideWay = _slideReverse ? -state.SlideAutoWay : state.SlideAutoWay;
+                RenderBackdropSurface(state, w, h, rotation, shiftX, shiftY, dolly, slideOffsetA, slideOffsetB, slideBlendB, backdropSlideWay);
+
+                var splatSubj = state.SubjectSplat2D!;
+                ICanvasImage fgInput = relightActive && state.LensAtEdges != null
+                    ? state.LensAtEdges
+                    : state.SubjectCutoutAtEdges!;
+                if (!ReferenceEquals(splatSubj.Source1, fgInput))
+                    splatSubj.Source1 = fgInput;
+
+                bool isSlide = _motionMode == Viewer3DMotionMode.Slide;
+                float fgShiftX = isSlide ? 0f : shiftX;
+                float fgShiftY = isSlide ? 0f : shiftY;
+                float fgDolly = isSlide ? 0f : dolly;
+                float fgMaxShiftMag = MathF.Sqrt(fgShiftX * fgShiftX + fgShiftY * fgShiftY)
+                    + MathF.Abs(fgDolly) * MathF.Sqrt(w * w * 0.25f + h * h * 0.25f);
+                float fgStep = Math.Clamp(state.SplatStep * 0.4f, 0.75f, 1.25f);
+                float fgReach = Math.Max(0f, Math.Min(splatSubj.MaxSamplerOffset - fgStep - 2f, fgMaxShiftMag * 0.25f + fgStep * 3f));
+                float edgeShadow = _backdropMode switch
+                {
+                    Viewer3DBackdropMode.CleanBlur => 0f,
+                    Viewer3DBackdropMode.StudioWarm or Viewer3DBackdropMode.StudioMatch or Viewer3DBackdropMode.CustomImage => 0.65f,
+                    _ => 0.35f
+                };
+
+                splatSubj.Properties["shiftX"] = fgShiftX;
+                splatSubj.Properties["shiftY"] = fgShiftY;
+                splatSubj.Properties["dolly"] = fgDolly;
+                splatSubj.Properties["centerX"] = w * 0.5f;
+                splatSubj.Properties["centerY"] = h * 0.5f;
+                splatSubj.Properties["pivot"] = pivot;
+                splatSubj.Properties["stepPx"] = fgStep;
+                splatSubj.Properties["reach"] = fgReach;
+                splatSubj.Properties["lightWrap"] = (float)Math.Clamp(_backdropLightWrap, 0.0, 1.0);
+                splatSubj.Properties["edgeShadow"] = edgeShadow;
+                splatSubj.Properties["lightX"] = lightX;
+                splatSubj.Properties["lightY"] = lightY;
+
+                float bgTargetOver = ViewerMath.BackdropOverscanFor(rotation, _motionMode == Viewer3DMotionMode.Breathe);
+                float bgOver = 1f + (bgTargetOver - 1f) * (float)ramp;
+                float bgCropW = w / bgOver, bgCropH = h / bgOver;
+                using var bgSession = state.OutputSurface.CreateDrawingSession();
+                bgSession.Clear(Microsoft.UI.Colors.Transparent);
+                bgSession.DrawImage(splatSubj, new Rect(0, 0, w, h), new Rect((w - bgCropW) / 2f, (h - bgCropH) / 2f, bgCropW, bgCropH));
+                return;
+            }
+
+            if (state.LensConfiguredForBackdrop && state.DepthLens != null)
+            {
+                state.DepthLens.Source1 = state.PhotoAtEdges;
+                state.DepthLens.Source2 = (ICanvasImage?)state.CrispAtSize ?? state.DepthAtSize!;
+                state.LensConfiguredForBackdrop = false;
+                state.LensDirty = true;
+            }
+
             bool lensActive = IsLensActive;
             if (lensActive)
             {
@@ -1271,7 +1925,7 @@ namespace ModernImageViewer
                         || Math.Abs(state.LastLensLightX - lightX) > 0.002f
                         || Math.Abs(state.LastLensLightY - lightY) > 0.002f));
                 if (needLens)
-                    RenderLensSurface(state, w, h, lightX, lightY);
+                    RenderLensSurface(state, w, h, lightX, lightY, subjectOnly: false);
             }
 
             ICanvasImage activeInput = lensActive && state.LensAtEdges != null ? state.LensAtEdges : state.PhotoAtEdges!;
@@ -1287,21 +1941,24 @@ namespace ModernImageViewer
                     float blurAmt = Math.Clamp((float)(_focusBlur * bgBlurFactor * Math.Max(w, h) * 0.012f), 0f, 28f);
                     if (blurAmt > 0.1f)
                     {
-                        state.SlidePlateBlur.Source = plateImg;
+                        if (!ReferenceEquals(state.SlidePlateBlur.Source, plateImg))
+                            state.SlidePlateBlur.Source = plateImg;
                         state.SlidePlateBlur.BlurAmount = blurAmt;
                         plateImg = state.SlidePlateBlur;
                     }
                 }
                 if (_bgDesat > 0.001 && state.SlidePlateDesat != null)
                 {
-                    state.SlidePlateDesat.Source = plateImg;
+                    if (!ReferenceEquals(state.SlidePlateDesat.Source, plateImg))
+                        state.SlidePlateDesat.Source = plateImg;
                     state.SlidePlateDesat.Saturation = (float)Math.Clamp(1.0 - _bgDesat, 0.0, 1.0);
                     plateImg = state.SlidePlateDesat;
                 }
                 if (_bgDim > 0.001 && state.SlidePlateDim != null)
                 {
                     float dimScale = (float)(1.0 - Math.Clamp(_bgDim, 0.0, 1.0) * 0.68);
-                    state.SlidePlateDim.Source = plateImg;
+                    if (!ReferenceEquals(state.SlidePlateDim.Source, plateImg))
+                        state.SlidePlateDim.Source = plateImg;
                     state.SlidePlateDim.ColorMatrix = new Matrix5x4
                     {
                         M11 = dimScale, M22 = dimScale, M33 = dimScale, M44 = 1f
@@ -1311,24 +1968,27 @@ namespace ModernImageViewer
                 if (!ReferenceEquals(state.SlidePlateBorder.Source, plateImg))
                     state.SlidePlateBorder.Source = plateImg;
 
-                float travel = (float)(w * rotation * 1.15);
-                float dxA = -state.SlideWay * travel * slideOffsetA;
-                float dxB = -state.SlideWay * travel * slideOffsetB;
+                // Matched aspect-preserving overscan keeps SlidePlateBorder strictly inside [0, w] so trailing edges never mirror.
+                float slideOver = 1f + (float)(rotation * 1.15);
+                float slideCropW = w / slideOver;
+                float slideCropH = h / slideOver;
+                float slideMarginY = (h - slideCropH) * 0.5f;
+                float maxShift = Math.Max(0f, w - slideCropW);
+                float nearStartX = state.SlideWay > 0f ? 0f : maxShift;
+                float plateXA = state.SlideWay > 0f ? maxShift * slideOffsetA : maxShift * (1f - slideOffsetA);
+                float plateXB = state.SlideWay > 0f ? maxShift * slideOffsetB : maxShift * (1f - slideOffsetB);
+                Rect destRect = new(0, 0, w, h);
+
                 using var slideSession = state.OutputSurface.CreateDrawingSession();
                 slideSession.Clear(Microsoft.UI.Colors.Black);
-                slideSession.DrawImage(state.SlidePlateBorder, new Rect(0, 0, w, h), new Rect(-dxA, 0, w, h), 1f, CanvasImageInterpolation.Linear);
+                slideSession.DrawImage(state.SlidePlateBorder, destRect, new Rect(plateXA, slideMarginY, slideCropW, slideCropH), 1f, CanvasImageInterpolation.Linear);
                 if (slideBlendB > 0.001f)
-                    slideSession.DrawImage(state.SlidePlateBorder, new Rect(0, 0, w, h), new Rect(-dxB, 0, w, h), slideBlendB, CanvasImageInterpolation.Linear);
-                slideSession.DrawImage(state.SlideNearEffect);
+                    slideSession.DrawImage(state.SlidePlateBorder, destRect, new Rect(plateXB, slideMarginY, slideCropW, slideCropH), slideBlendB, CanvasImageInterpolation.Linear);
+                slideSession.DrawImage(state.SlideNearEffect, destRect, new Rect(nearStartX, slideMarginY, slideCropW, slideCropH), 1f, CanvasImageInterpolation.Linear);
                 return;
             }
             if (!ReferenceEquals(state.Moved.Source, activeInput)) state.Moved.Source = activeInput;
             if (state.Splat2D != null && !ReferenceEquals(state.Splat2D.Source1, activeInput)) state.Splat2D.Source1 = activeInput;
-
-            float shiftX = (float)(angleX * w * rotation * ramp);
-            float shiftY = (float)(angleY * h * rotation * ramp);
-            float dolly = _motionMode == Viewer3DMotionMode.Breathe ? (float)(angleD * rotation * 1.25 * ramp) : 0f;
-            float pivot = state.Middle;
 
             float amount = state.Moved.Amount;
             float aX = -shiftX / amount;
@@ -1359,7 +2019,7 @@ namespace ModernImageViewer
                 drawn = splat;
             }
 
-            float targetOver = ViewerMath.SwayOverscanFor(rotation, _motionMode == Viewer3DMotionMode.Breathe);
+            float targetOver = ViewerMath.SwayOverscanFor(rotation, pivot, _motionMode == Viewer3DMotionMode.Breathe);
             float over = 1f + (targetOver - 1f) * (float)ramp;
             float cropW = w / over, cropH = h / over;
             using var session = state.OutputSurface.CreateDrawingSession();
@@ -1400,7 +2060,7 @@ namespace ModernImageViewer
             && !_swayPaused
             && !_isComparingOriginal
             && (_motionMode != Viewer3DMotionMode.Tilt || NeedSwayPointerSettle() || !IsSwayRamped())
-            && !(_motionMode == Viewer3DMotionMode.Slide && !_slideLoop && _swayState.SlideNearEffect != null && _swayState.SlideDone);
+            && !(_motionMode == Viewer3DMotionMode.Slide && !_slideLoop && (_swayState.SlideNearEffect != null || IsBackdropActive) && _swayState.SlideDone);
 
         private void UpdateSwayRenderingSubscription()
         {
@@ -1482,6 +2142,8 @@ namespace ModernImageViewer
             _swayPreparing = false;
             _swayRefiningMask = false;
             _swayBuildingSlide = false;
+            _swayBuildingCleanPlate = false;
+            _swayLoadingCustomBackdrop = false;
             _swayMaskWake = null;
             _swayDrawFaults = 0;
 
@@ -1546,20 +2208,41 @@ namespace ModernImageViewer
                 ViewRotationQuarterTurns, ViewMirrorHorizontal, ViewFlipVertical);
             if (!inside) return false;
 
-            var map = _swayState.DepthMap;
-            int gw = Math.Max(1, map.Width);
-            int gh = Math.Max(1, map.Height);
-            int cx = Math.Clamp((int)Math.Round(u * (gw - 1)), 0, gw - 1);
-            int cy = Math.Clamp((int)Math.Round(v * (gh - 1)), 0, gh - 1);
             int sum = 0, count = 0;
-            for (int dy = -1; dy <= 1; dy++)
+            if (_swayState.CrispBytes != null && _swayState.CrispWidth > 0 && _swayState.CrispHeight > 0)
             {
-                int yy = Math.Clamp(cy + dy, 0, gh - 1);
-                for (int dx = -1; dx <= 1; dx++)
+                // Sample the exact shaped/crisp depth map that DepthLens uses as Source2.
+                int cw = _swayState.CrispWidth;
+                int ch = _swayState.CrispHeight;
+                int cx = Math.Clamp((int)Math.Round(u * (cw - 1)), 0, cw - 1);
+                int cy = Math.Clamp((int)Math.Round(v * (ch - 1)), 0, ch - 1);
+                for (int dy = -1; dy <= 1; dy++)
                 {
-                    int xx = Math.Clamp(cx + dx, 0, gw - 1);
-                    sum += map.Grey[yy * gw + xx];
-                    count++;
+                    int yy = Math.Clamp(cy + dy, 0, ch - 1);
+                    for (int dx = -1; dx <= 1; dx++)
+                    {
+                        int xx = Math.Clamp(cx + dx, 0, cw - 1);
+                        sum += _swayState.CrispBytes[(yy * cw + xx) * 4];
+                        count++;
+                    }
+                }
+            }
+            else
+            {
+                var map = _swayState.DepthMap;
+                int gw = Math.Max(1, map.Width);
+                int gh = Math.Max(1, map.Height);
+                int cx = Math.Clamp((int)Math.Round(u * (gw - 1)), 0, gw - 1);
+                int cy = Math.Clamp((int)Math.Round(v * (gh - 1)), 0, gh - 1);
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    int yy = Math.Clamp(cy + dy, 0, gh - 1);
+                    for (int dx = -1; dx <= 1; dx++)
+                    {
+                        int xx = Math.Clamp(cx + dx, 0, gw - 1);
+                        sum += map.Grey[yy * gw + xx];
+                        count++;
+                    }
                 }
             }
 
@@ -1644,23 +2327,25 @@ namespace ModernImageViewer
                 byte[] photoBytes = state.PhotoSurface.GetPixelBytes();
 
                 float autoWay = 1f;
-                if (outline != null && outline.Size > 0 && outline.Alpha.Length > 0)
+                byte[]? centroidAlpha = state.SolidMaskAlpha ?? outline?.Alpha;
+                if (outline != null && outline.Size > 0 && centroidAlpha != null && centroidAlpha.Length >= outline.Size * outline.Size)
                 {
                     double sum = 0, weight = 0;
-                    for (int i = 0; i < outline.Alpha.Length; i++)
+                    for (int i = 0; i < outline.Size * outline.Size; i++)
                     {
-                        float a = outline.Alpha[i];
+                        float a = centroidAlpha[i];
                         sum += a * (i % outline.Size);
                         weight += a;
                     }
                     float subjectX = weight > 0 ? (float)(sum / weight / outline.Size) : 0.5f;
                     autoWay = subjectX < 0.5f ? 1f : -1f;
                 }
+                state.SlideAutoWay = autoWay;
                 float way = buildReverse ? -autoWay : autoWay;
 
                 byte[] depthBytes = state.DepthMap.Raw ?? state.DepthMap.Grey;
                 int dw = state.DepthMap.Width, dh = state.DepthMap.Height;
-                byte[]? alpha = outline?.Alpha;
+                byte[]? alpha = state.SolidMaskAlpha ?? outline?.Alpha;
                 int maskSize = outline?.Size ?? 0;
 
                 var layers = await Task.Run(() =>
@@ -1757,25 +2442,28 @@ namespace ModernImageViewer
 
             if (mode == Viewer3DMotionMode.Slide && _swayState != null)
             {
-                if (_swayState.SlideLayersAttempted && !_swayState.SlideSupported)
+                if (!IsBackdropActive)
                 {
-                    ShowNotification("No clear foreground subject for Slide \u2014 using Sway");
-                    if (_motionMode == Viewer3DMotionMode.Slide) _motionMode = Viewer3DMotionMode.Sway;
-                    SyncSwayChrome();
-                    return;
-                }
-                if (_swayState.SlideNearEffect == null && !_swayBuildingSlide && _swayCts != null)
-                {
-                    _motionMode = mode;
-                    _swayPaused = false;
-                    _swayState.Phase = 0;
-                    _swayState.Clock = -1;
-                    _swayState.SlideDone = false;
-                    SyncSwayChrome();
-                    UpdateSwayRenderingSubscription();
-                    ShowHud();
-                    _ = EnsureSlideLayersAsync(_swayState, _swayTicket, _swayCts.Token);
-                    return;
+                    if (_swayState.SlideLayersAttempted && !_swayState.SlideSupported)
+                    {
+                        ShowNotification("No clear foreground subject for Slide \u2014 using Sway");
+                        if (_motionMode == Viewer3DMotionMode.Slide) _motionMode = Viewer3DMotionMode.Sway;
+                        SyncSwayChrome();
+                        return;
+                    }
+                    if (_swayState.SlideNearEffect == null && !_swayBuildingSlide && _swayCts != null)
+                    {
+                        _motionMode = mode;
+                        _swayPaused = false;
+                        _swayState.Phase = 0;
+                        _swayState.Clock = -1;
+                        _swayState.SlideDone = false;
+                        SyncSwayChrome();
+                        UpdateSwayRenderingSubscription();
+                        ShowHud();
+                        _ = EnsureSlideLayersAsync(_swayState, _swayTicket, _swayCts.Token);
+                        return;
+                    }
                 }
                 _swayState.Phase = 0;
                 _swayState.Clock = -1;
@@ -1815,6 +2503,7 @@ namespace ModernImageViewer
                 return;
 
             _isComparingOriginal = active;
+            if (SwayHudBorder != null) SwayHudBorder.Opacity = active ? 0.25 : 1.0;
             SyncSwayChrome();
             UpdateSwayRenderingSubscription();
             ShowHud();
@@ -1948,20 +2637,51 @@ namespace ModernImageViewer
             ShowHud();
         }
 
+        private void StudioTabBackdrop_Click(object sender, RoutedEventArgs e)
+        {
+            _studioTab = StudioTab.Backdrop;
+            _swayPickingFocus = false;
+            WakeSubjectMaskRefine();
+            SyncSwayChrome();
+            ShowHud();
+        }
+
         private void SwayResetEffects_Click(object sender, RoutedEventArgs e)
         {
             _focusBlur = 0.0;
             _bgDesat = 0.0;
             _bgDim = 0.0;
             _relight = 0.0;
+            _backdropMode = Viewer3DBackdropMode.Original;
+            _backdropBlur = 0.45;
+            _backdropLightWrap = 0.35;
             _swayPickingFocus = false;
             _hasCustomFocusDepth = false;
             if (_swayState != null)
             {
                 _focusDepth = Math.Clamp(_swayState.Middle, 0.0, 1.0);
+                if (_swayState.LensConfiguredForBackdrop && _swayState.DepthLens != null)
+                {
+                    _swayState.DepthLens.Source1 = _swayState.PhotoAtEdges;
+                    _swayState.DepthLens.Source2 = (ICanvasImage?)_swayState.CrispAtSize ?? _swayState.DepthAtSize!;
+                    _swayState.LensConfiguredForBackdrop = false;
+                }
                 _swayState.LensDirty = true;
+                if (_motionMode == Viewer3DMotionMode.Slide && _swayState.SlideNearEffect == null && !_swayBuildingSlide && _swayCts != null)
+                {
+                    if (_swayState.SlideLayersAttempted && !_swayState.SlideSupported)
+                    {
+                        _motionMode = Viewer3DMotionMode.Sway;
+                        ShowNotification("No clear foreground subject for Slide \u2014 using Sway");
+                    }
+                    else
+                    {
+                        _ = EnsureSlideLayersAsync(_swayState, _swayTicket, _swayCts.Token);
+                    }
+                }
             }
             SyncSwayChrome();
+            UpdateSwayRenderingSubscription();
             if (!_swayRenderingSubscribed) DrawStaticSwayFrame();
             ShowHud();
         }
@@ -2021,6 +2741,26 @@ namespace ModernImageViewer
         private void SlideReverse_Click(object sender, RoutedEventArgs e)
         {
             _slideReverse = !_slideReverse;
+            if (_swayState != null && IsBackdropActive)
+            {
+                if (_swayState.SlideLayers != null)
+                {
+                    _swayState.SlideLayers = null;
+                    _swayState.SlideLayersAttempted = false;
+                    _swayState.SlideSupported = false;
+                    _swayState.DisposeSlideGpuResources();
+                }
+                _swayState.SlideWay = _slideReverse ? -_swayState.SlideAutoWay : _swayState.SlideAutoWay;
+                _swayState.SlideDone = false;
+                _swayState.Phase = 0;
+                _swayState.Clock = -1;
+                _swayPaused = false;
+                SyncSwayChrome();
+                UpdateSwayRenderingSubscription();
+                if (!_swayRenderingSubscribed) DrawStaticSwayFrame();
+                ShowHud();
+                return;
+            }
             if (_swayState != null && _swayCts != null && !_swayBuildingSlide)
             {
                 _swayState.SlideLayers = null;
@@ -2176,6 +2916,308 @@ namespace ModernImageViewer
             e.Handled = true;
             _relight = 0.0;
             MarkLensChanged();
+        }
+
+        private void BackdropPreset_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button btn && btn.Tag is string tag && Enum.TryParse<Viewer3DBackdropMode>(tag, out var mode))
+            {
+                SetBackdropMode(mode);
+            }
+        }
+
+        private void BackdropCustomImage_Click(object sender, RoutedEventArgs e)
+        {
+            if (!string.IsNullOrEmpty(_customBackdropPath) && _backdropMode != Viewer3DBackdropMode.CustomImage)
+            {
+                SetBackdropMode(Viewer3DBackdropMode.CustomImage);
+            }
+            else
+            {
+                _ = PickCustomBackdropImageAsync();
+            }
+        }
+
+        private void BackdropChangeImage_Click(object sender, RoutedEventArgs e) =>
+            _ = PickCustomBackdropImageAsync();
+
+        private void BackdropBlurSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+        {
+            if (_updatingStudioSliders) return;
+            _backdropBlur = Math.Clamp(Math.Round(e.NewValue) / 100.0, 0.0, 1.0);
+            if (BackdropBlurValue != null) BackdropBlurValue.Text = $"{Math.Round(_backdropBlur * 100.0):0}%";
+            ResetHudHideTimer();
+            if (_swayState != null && !_swayRenderingSubscribed) DrawStaticSwayFrame();
+        }
+
+        private void BackdropWrapSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+        {
+            if (_updatingStudioSliders) return;
+            _backdropLightWrap = Math.Clamp(Math.Round(e.NewValue) / 100.0, 0.0, 1.0);
+            if (BackdropWrapValue != null) BackdropWrapValue.Text = $"{Math.Round(_backdropLightWrap * 100.0):0}%";
+            ResetHudHideTimer();
+            if (_swayState != null && !_swayRenderingSubscribed) DrawStaticSwayFrame();
+        }
+
+        private void BackdropBlurSlider_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+        {
+            e.Handled = true;
+            _backdropBlur = 0.45;
+            SyncStudioSliders();
+            ResetHudHideTimer();
+            if (_swayState != null && !_swayRenderingSubscribed) DrawStaticSwayFrame();
+        }
+
+        private void BackdropWrapSlider_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+        {
+            e.Handled = true;
+            _backdropLightWrap = 0.35;
+            SyncStudioSliders();
+            ResetHudHideTimer();
+            if (_swayState != null && !_swayRenderingSubscribed) DrawStaticSwayFrame();
+        }
+
+        private void SetBackdropMode(Viewer3DBackdropMode mode)
+        {
+            if (mode != Viewer3DBackdropMode.Original && _swayState != null && _swayState.HasMask && !_swayState.SubjectStats.HasUsableSubject)
+            {
+                ShowNotification("No clear subject cutout for artificial backdrop");
+                _backdropMode = Viewer3DBackdropMode.Original;
+                SyncSwayChrome();
+                return;
+            }
+
+            _backdropMode = mode;
+            if (mode != Viewer3DBackdropMode.Original)
+                _swayPickingFocus = false;
+            _backdropNotifiedUnsupported = false;
+            WakeSubjectMaskRefine();
+
+            if (_swayState != null)
+            {
+                _swayState.LensDirty = true;
+                if (mode == Viewer3DBackdropMode.Original && _motionMode == Viewer3DMotionMode.Slide
+                    && _swayState.SlideNearEffect == null && !_swayBuildingSlide && _swayCts != null)
+                {
+                    if (_swayState.SlideLayersAttempted && !_swayState.SlideSupported)
+                    {
+                        _motionMode = Viewer3DMotionMode.Sway;
+                        ShowNotification("No clear foreground subject for Slide \u2014 using Sway");
+                    }
+                    else
+                    {
+                        _ = EnsureSlideLayersAsync(_swayState, _swayTicket, _swayCts.Token);
+                    }
+                }
+                else if (mode == Viewer3DBackdropMode.CleanBlur && _swayState.CleanPlateBitmap == null
+                    && _swayState.HasMask && _swayState.SubjectStats.HasUsableSubject && _swayCts != null)
+                {
+                    _ = EnsureCleanPlateAsync(_swayState, _swayTicket, _swayCts.Token);
+                }
+                else if (mode == Viewer3DBackdropMode.CustomImage && !string.IsNullOrEmpty(_customBackdropPath)
+                    && !string.Equals(_swayState.CustomBackdropLoadedPath, _customBackdropPath, StringComparison.OrdinalIgnoreCase)
+                    && _swayCts != null)
+                {
+                    _ = EnsureCustomBackdropLoadedAsync(_swayState, _swayTicket, _customBackdropPath, _swayCts.Token);
+                }
+            }
+
+            SyncSwayChrome();
+            UpdateSwayRenderingSubscription();
+            if (!_swayRenderingSubscribed) DrawStaticSwayFrame();
+            ShowHud();
+        }
+
+        private async Task RefreshHighResCutoutAsync(ViewerSwayState state, int ticket, CancellationToken token)
+        {
+            if (state.PhotoSurface == null || state.SubjectMask == null || !state.SubjectStats.HasUsableSubject) return;
+            try
+            {
+                int w = (int)state.PhotoSurface.SizeInPixels.Width;
+                int h = (int)state.PhotoSurface.SizeInPixels.Height;
+                byte[] photoBytes = state.PhotoSurface.GetPixelBytes();
+                byte[] alpha = state.SolidMaskAlpha ?? state.SubjectMask.Alpha;
+                int maskSize = state.SubjectMask.Size;
+
+                byte[] cutout = await Task.Run(() =>
+                    SwayPortrait.BuildDecontaminatedCutout(photoBytes, w, h, alpha, maskSize), token);
+
+                if (ticket != _swayTicket || !_isSwayEnabled || _swayUnloaded || token.IsCancellationRequested || !ReferenceEquals(_swayState, state) || state.PhotoSurface == null)
+                    return;
+                if ((int)state.PhotoSurface.SizeInPixels.Width != w || (int)state.PhotoSurface.SizeInPixels.Height != h)
+                {
+                    _ = RefreshHighResCutoutAsync(state, ticket, token);
+                    return;
+                }
+
+                state.SubjectCutoutBytes = cutout;
+                state.SubjectCutoutWidth = w;
+                state.SubjectCutoutHeight = h;
+                AttachSubjectBackdropGpuResources(state, state.PhotoSurface.Device, w, h);
+                if (state.DepthLens != null && state.LensConfiguredForBackdrop && state.SubjectCutoutAtEdges != null && state.SubjectDepthAtSize != null)
+                {
+                    state.DepthLens.Source1 = state.SubjectCutoutAtEdges;
+                    state.DepthLens.Source2 = state.SubjectDepthAtSize;
+                    state.LensDirty = true;
+                }
+                if (!_swayRenderingSubscribed) DrawStaticSwayFrame();
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                PlayTiming.Write($"[ViewerSway] High-res cutout refresh skipped: {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+
+        private async Task EnsureCleanPlateAsync(ViewerSwayState state, int ticket, CancellationToken token)
+        {
+            if (_swayBuildingCleanPlate || state.PhotoSurface == null) return;
+            if (ticket != _swayTicket || !_isSwayEnabled || _swayUnloaded || token.IsCancellationRequested || !ReferenceEquals(_swayState, state))
+                return;
+
+            int w = (int)state.PhotoSurface.SizeInPixels.Width;
+            int h = (int)state.PhotoSurface.SizeInPixels.Height;
+
+            _swayBuildingCleanPlate = true;
+            SyncSwayChrome();
+            bool retryBuild = false;
+            try
+            {
+                byte[] photoBytes = state.PhotoSurface.GetPixelBytes();
+                byte[]? alpha = state.SolidMaskAlpha ?? state.SubjectMask?.Alpha;
+                int maskSize = state.SubjectMask?.Size ?? 0;
+
+                byte[] plate = alpha != null && maskSize > 0
+                    ? await Task.Run(() => SwayPortrait.BuildSymmetricCleanPlate(photoBytes, w, h, alpha, maskSize), token)
+                    : photoBytes;
+
+                if (ticket != _swayTicket || !_isSwayEnabled || _swayUnloaded || token.IsCancellationRequested || !ReferenceEquals(_swayState, state) || state.PhotoSurface == null)
+                    return;
+                if ((int)state.PhotoSurface.SizeInPixels.Width != w || (int)state.PhotoSurface.SizeInPixels.Height != h)
+                {
+                    retryBuild = true;
+                    return;
+                }
+
+                state.CleanPlateBitmap?.Dispose();
+                state.CleanPlateBitmap = CanvasBitmap.CreateFromBytes(
+                    state.PhotoSurface.Device, plate, w, h,
+                    Windows.Graphics.DirectX.DirectXPixelFormat.B8G8R8A8UIntNormalized);
+                state.CleanPlateWidth = w;
+                state.CleanPlateHeight = h;
+                if (!_swayRenderingSubscribed) DrawStaticSwayFrame();
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                PlayTiming.Write($"[ViewerSway] Clean plate failed: {ex.GetType().Name}: {ex.Message}");
+            }
+            finally
+            {
+                if (ticket == _swayTicket && !_swayUnloaded)
+                {
+                    _swayBuildingCleanPlate = false;
+                    SyncSwayChrome();
+                    if (retryBuild && _isSwayEnabled && _backdropMode == Viewer3DBackdropMode.CleanBlur
+                        && ReferenceEquals(_swayState, state) && state.CleanPlateBitmap == null && !token.IsCancellationRequested)
+                    {
+                        _ = EnsureCleanPlateAsync(state, ticket, token);
+                    }
+                }
+            }
+        }
+
+        private async Task EnsureCustomBackdropLoadedAsync(ViewerSwayState state, int ticket, string path, CancellationToken token)
+        {
+            if (string.IsNullOrEmpty(path) || state.PhotoSurface == null) return;
+            if (ticket != _swayTicket || !_isSwayEnabled || _swayUnloaded || token.IsCancellationRequested || !ReferenceEquals(_swayState, state))
+                return;
+
+            if (state.CustomBackdropBitmap != null && string.Equals(state.CustomBackdropLoadedPath, path, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            _swayLoadingCustomBackdrop = true;
+            SyncSwayChrome();
+            try
+            {
+                var loaded = await SwayShader.LoadCustomBackdropPixelsAsync(path, 2048, token);
+                if (ticket != _swayTicket || !_isSwayEnabled || _swayUnloaded || token.IsCancellationRequested || !ReferenceEquals(_swayState, state) || state.PhotoSurface == null)
+                    return;
+                if (!string.Equals(_customBackdropPath, path, StringComparison.OrdinalIgnoreCase))
+                    return;
+
+                if (loaded == null || loaded.Value.Width <= 0 || loaded.Value.Height <= 0)
+                {
+                    if (_backdropMode == Viewer3DBackdropMode.CustomImage)
+                    {
+                        _backdropMode = Viewer3DBackdropMode.Original;
+                        ShowNotification("Could not load backdrop image");
+                    }
+                    return;
+                }
+
+                state.CustomBackdropBitmap?.Dispose();
+                state.CustomBackdropBitmap = CanvasBitmap.CreateFromBytes(
+                    state.PhotoSurface.Device, loaded.Value.Pixels, loaded.Value.Width, loaded.Value.Height,
+                    Windows.Graphics.DirectX.DirectXPixelFormat.B8G8R8A8UIntNormalized);
+                state.CustomBackdropLoadedPath = path;
+                if (!_swayRenderingSubscribed) DrawStaticSwayFrame();
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                PlayTiming.Write($"[ViewerSway] Custom backdrop load failed: {ex.GetType().Name}: {ex.Message}");
+            }
+            finally
+            {
+                if (ticket == _swayTicket && !_swayUnloaded)
+                {
+                    _swayLoadingCustomBackdrop = false;
+                    SyncSwayChrome();
+                }
+            }
+        }
+
+        private async Task PickCustomBackdropImageAsync()
+        {
+            try
+            {
+                IntPtr hwnd = IntPtr.Zero;
+                if (XamlRoot?.ContentIslandEnvironment is { } env)
+                    hwnd = Microsoft.UI.Win32Interop.GetWindowFromWindowId(env.AppWindowId);
+                if (hwnd == IntPtr.Zero && MainWindow.Instance != null)
+                    hwnd = WinRT.Interop.WindowNative.GetWindowHandle(MainWindow.Instance);
+                if (hwnd == IntPtr.Zero) return;
+
+                var picker = new Windows.Storage.Pickers.FileOpenPicker
+                {
+                    SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.PicturesLibrary,
+                    ViewMode = Windows.Storage.Pickers.PickerViewMode.Thumbnail
+                };
+                picker.FileTypeFilter.Add(".jpg");
+                picker.FileTypeFilter.Add(".jpeg");
+                picker.FileTypeFilter.Add(".png");
+                picker.FileTypeFilter.Add(".webp");
+                picker.FileTypeFilter.Add(".bmp");
+                WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+
+                var file = await picker.PickSingleFileAsync();
+                if (file == null || _swayUnloaded) return;
+
+                _customBackdropPath = file.Path;
+                SetBackdropMode(Viewer3DBackdropMode.CustomImage);
+            }
+            catch (Exception ex)
+            {
+                PlayTiming.Write($"[ViewerSway] Pick backdrop failed: {ex.GetType().Name}: {ex.Message}");
+                ShowNotification("Could not open backdrop picker");
+            }
         }
 
         private void CopyRenderedImage_Click(object sender, RoutedEventArgs e) => _ = CopyRenderedViewToClipboardAsync();

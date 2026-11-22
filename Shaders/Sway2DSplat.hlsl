@@ -46,16 +46,18 @@ D2D_PS_ENTRY(main)
         float s = min(-localReach + i * stepPx, localReach);
         float d = D2DSampleInputAtOffset(1, s * dir).r;
         float L = s + (mag + s * dolly) * (d - pivot);
-        if (min(prevL, L) <= 0.0 && max(prevL, L) >= 0.0)
+        // Only front-facing crossings (prevL <= 0 <= L, span > 0): descending cliff back-faces (span < 0)
+        // are physically occluded behind the foreground and must never beat real background or trigger gap fills.
+        if (prevL <= 0.0 && L >= 0.0)
         {
             float span = L - prevL;
-            float t = abs(span) > 1e-4 ? -prevL / span : 0.5;
+            float t = span > 1e-4 ? -prevL / span : 0.5;
             float dd = lerp(prevD, d, t);
             if (dd > bestD)
             {
                 bestD = dd;
                 bestU = lerp(prevS, s, t);
-                bestGrow = abs(span) / stepPx;
+                bestGrow = span / stepPx;
                 bool prevFar = prevD < d;
                 bestFill = prevFar ? prevS : s;
                 bestAway = prevFar ? -1.0 : 1.0;

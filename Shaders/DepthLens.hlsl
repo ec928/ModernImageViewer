@@ -22,6 +22,13 @@ float heightPx;
 float hasMask;
 float normalStepPx;
 
+float EdgeSafeDepth(float sampleD, float centerD)
+{
+    float diff = sampleD - centerD;
+    float w = 1.0 - smoothstep(0.08, 0.22, abs(diff));
+    return centerD + diff * w;
+}
+
 D2D_PS_ENTRY(main)
 {
     float4 baseCol = D2DSampleInputAtOffset(0, float2(0, 0));
@@ -80,20 +87,24 @@ D2D_PS_ENTRY(main)
     if (relight > 0.001)
     {
         float ns = max(normalStepPx, 1.5);
-        float dTL = D2DSampleInputAtOffset(1, float2(-ns, -ns)).r;
-        float dT  = D2DSampleInputAtOffset(1, float2(0.0, -ns)).r;
-        float dTR = D2DSampleInputAtOffset(1, float2(ns, -ns)).r;
-        float dL  = D2DSampleInputAtOffset(1, float2(-ns, 0.0)).r;
-        float dR  = D2DSampleInputAtOffset(1, float2(ns, 0.0)).r;
-        float dBL = D2DSampleInputAtOffset(1, float2(-ns, ns)).r;
-        float dB  = D2DSampleInputAtOffset(1, float2(0.0, ns)).r;
-        float dBR = D2DSampleInputAtOffset(1, float2(ns, ns)).r;
+        float dTL = EdgeSafeDepth(D2DSampleInputAtOffset(1, float2(-ns, -ns)).r, centerD);
+        float dT  = EdgeSafeDepth(D2DSampleInputAtOffset(1, float2(0.0, -ns)).r, centerD);
+        float dTR = EdgeSafeDepth(D2DSampleInputAtOffset(1, float2(ns, -ns)).r, centerD);
+        float dL  = EdgeSafeDepth(D2DSampleInputAtOffset(1, float2(-ns, 0.0)).r, centerD);
+        float dR  = EdgeSafeDepth(D2DSampleInputAtOffset(1, float2(ns, 0.0)).r, centerD);
+        float dBL = EdgeSafeDepth(D2DSampleInputAtOffset(1, float2(-ns, ns)).r, centerD);
+        float dB  = EdgeSafeDepth(D2DSampleInputAtOffset(1, float2(0.0, ns)).r, centerD);
+        float dBR = EdgeSafeDepth(D2DSampleInputAtOffset(1, float2(ns, ns)).r, centerD);
         float gxFine = ((dTL + 2.0 * dL + dBL) - (dTR + 2.0 * dR + dBR)) * 0.25;
         float gyFine = ((dTL + 2.0 * dT + dTR) - (dBL + 2.0 * dB + dBR)) * 0.25;
 
         float ws = min(ns * 2.6, 34.0);
-        float gxWide = D2DSampleInputAtOffset(1, float2(-ws, 0.0)).r - D2DSampleInputAtOffset(1, float2(ws, 0.0)).r;
-        float gyWide = D2DSampleInputAtOffset(1, float2(0.0, -ws)).r - D2DSampleInputAtOffset(1, float2(0.0, ws)).r;
+        float dWL = EdgeSafeDepth(D2DSampleInputAtOffset(1, float2(-ws, 0.0)).r, centerD);
+        float dWR = EdgeSafeDepth(D2DSampleInputAtOffset(1, float2(ws, 0.0)).r, centerD);
+        float dWT = EdgeSafeDepth(D2DSampleInputAtOffset(1, float2(0.0, -ws)).r, centerD);
+        float dWB = EdgeSafeDepth(D2DSampleInputAtOffset(1, float2(0.0, ws)).r, centerD);
+        float gxWide = dWL - dWR;
+        float gyWide = dWT - dWB;
 
         float gx = gxFine * 0.35 + gxWide * 0.65;
         float gy = gyFine * 0.35 + gyWide * 0.65;

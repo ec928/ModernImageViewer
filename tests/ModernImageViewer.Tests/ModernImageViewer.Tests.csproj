@@ -28,7 +28,9 @@
     <Compile Include="..\..\Music\BeatGrid.cs" Link="BeatGrid.cs" />
     <Compile Include="..\..\ShowProject.cs" Link="ShowProject.cs" />
     <Compile Include="..\..\Contracts\ParallaxFit.cs" Link="ParallaxFit.cs" />
+    <Compile Include="..\..\Contracts\ParallaxLayers.cs" Link="ParallaxLayers.cs" />
     <Compile Include="..\..\SwayDepth.cs" Link="SwayDepth.cs" />
+    <Compile Include="..\..\SwayPortrait.cs" Link="SwayPortrait.cs" />
     <Compile Include="..\..\ShowDirector.cs" Link="ShowDirector.cs" />
     <Compile Include="..\..\SceneCall.cs" Link="SceneCall.cs" />
   </ItemGroup>

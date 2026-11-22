@@ -593,8 +593,11 @@ namespace ModernImageViewer
                 if (alpha[i] <= 0.5f) remBg.Add(depth[i]);
             bgP90 = Percentile(remBg, 0.90f, 1.0f);
 
-            // On a portrait/bokeh shot where depth expansion would freeze >68% of the picture, keep the clean subject mask.
-            if (unionArea > 0.68f)
+            // On a portrait/bokeh shot or continuous ground/water-plane landscape where depth expansion would freeze the
+            // background plane (>68% overall, or >65% expanding from a clear BiRefNet subject — matching ParallaxJudge's
+            // continuous-plane criterion), keep the clean subject mask so water/ground glides behind the subject.
+            float subjectArea = fgDepths.Count / (float)n;
+            if (unionArea > 0.68f || (unionArea > 0.65f && subjectArea >= 0.15f && subjectArea < 0.45f))
             {
                 Array.Copy(subject, alpha, n);
             }

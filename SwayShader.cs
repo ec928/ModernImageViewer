@@ -1,6 +1,7 @@
 using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Effects;
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -20,6 +21,10 @@ namespace ModernImageViewer
         private static bool _splat2DMissing;
         private static byte[]? _depthLensBytes;
         private static bool _depthLensMissing;
+        private static byte[]? _subjectSplat2DBytes;
+        private static bool _subjectSplat2DMissing;
+        private static byte[]? _backdrop3DBytes;
+        private static bool _backdrop3DMissing;
 
         private static byte[]? TryLoadShaderBytes(string resourceName, ref byte[]? cache, ref bool missingFlag)
         {
@@ -61,10 +66,13 @@ namespace ModernImageViewer
             }
             catch (Exception ex) when (ex is ArgumentException or COMException or InvalidOperationException or IOException)
             {
-                lock (Sync)
+                if (ex is ArgumentException or IOException)
                 {
-                    if (resourceName == "ModernImageViewer.Shaders.Sway2DSplat.bin") _splat2DMissing = true;
-                    else _splatMissing = true;
+                    lock (Sync)
+                    {
+                        if (resourceName == "ModernImageViewer.Shaders.Sway2DSplat.bin") _splat2DMissing = true;
+                        else _splatMissing = true;
+                    }
                 }
                 PlayTiming.Write($"3D: shader not made ({resourceName}): {ex.GetType().Name} {ex.Message}");
                 return null;
@@ -97,8 +105,70 @@ namespace ModernImageViewer
             }
             catch (Exception ex) when (ex is ArgumentException or COMException or InvalidOperationException or IOException)
             {
-                lock (Sync) _depthLensMissing = true;
+                if (ex is ArgumentException or IOException)
+                {
+                    lock (Sync) _depthLensMissing = true;
+                }
                 PlayTiming.Write($"3D: depth lens shader not made: {ex.GetType().Name} {ex.Message}");
+                return null;
+            }
+        }
+
+        public static PixelShaderEffect? CreateSubjectSplat2D(
+            ICanvasImage subjectCutout, ICanvasImage subjectDepth, ICanvasImage backdropAtEdges, float maxOffset)
+        {
+            byte[]? bytes = TryLoadShaderBytes("ModernImageViewer.Shaders.SubjectSplat2D.bin", ref _subjectSplat2DBytes, ref _subjectSplat2DMissing);
+            if (bytes == null) return null;
+
+            try
+            {
+                return new PixelShaderEffect(bytes)
+                {
+                    Source1 = subjectCutout,
+                    Source2 = subjectDepth,
+                    Source3 = backdropAtEdges,
+                    Source1Mapping = SamplerCoordinateMapping.Offset,
+                    Source2Mapping = SamplerCoordinateMapping.Offset,
+                    Source3Mapping = SamplerCoordinateMapping.Offset,
+                    MaxSamplerOffset = (int)Math.Ceiling(maxOffset)
+                };
+            }
+            catch (Exception ex) when (ex is ArgumentException or COMException or InvalidOperationException or IOException)
+            {
+                if (ex is ArgumentException or IOException)
+                {
+                    lock (Sync) _subjectSplat2DMissing = true;
+                }
+                string msg = $"3D: subject splat shader not made: {ex.GetType().Name} {ex.Message}";
+                Debug.WriteLine(msg);
+                PlayTiming.Write(msg);
+                return null;
+            }
+        }
+
+        public static PixelShaderEffect? CreateBackdrop3D(ICanvasImage sizeReference)
+        {
+            byte[]? bytes = TryLoadShaderBytes("ModernImageViewer.Shaders.Backdrop3D.bin", ref _backdrop3DBytes, ref _backdrop3DMissing);
+            if (bytes == null) return null;
+
+            try
+            {
+                return new PixelShaderEffect(bytes)
+                {
+                    Source1 = sizeReference,
+                    Source1Mapping = SamplerCoordinateMapping.Offset,
+                    MaxSamplerOffset = 1
+                };
+            }
+            catch (Exception ex) when (ex is ArgumentException or COMException or InvalidOperationException or IOException)
+            {
+                if (ex is ArgumentException or IOException)
+                {
+                    lock (Sync) _backdrop3DMissing = true;
+                }
+                string msg = $"3D: backdrop shader not made: {ex.GetType().Name} {ex.Message}";
+                Debug.WriteLine(msg);
+                PlayTiming.Write(msg);
                 return null;
             }
         }
@@ -130,6 +200,50 @@ namespace ModernImageViewer
                         ExifOrientationMode.RespectExifOrientation,
                         ColorManagementMode.DoNotColorManage).AsTask(ct).ConfigureAwait(false);
                     return ((byte[] Pixels, int Width, int Height)?)(data.DetachPixelData(), targetWidth, targetHeight);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    return null;
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or COMException or ArgumentException)
+                {
+                    return null;
+                }
+            }, ct).ConfigureAwait(false);
+        }
+
+        public static async Task<(byte[] Pixels, int Width, int Height)?> LoadCustomBackdropPixelsAsync(
+            string path, int maxLongestSide, CancellationToken ct)
+        {
+            if (string.IsNullOrEmpty(path) || maxLongestSide <= 0 || ct.IsCancellationRequested)
+                return null;
+
+            return await Task.Run(async () =>
+            {
+                try
+                {
+                    using var fs = File.OpenRead(path);
+                    using IRandomAccessStream ras = fs.AsRandomAccessStream();
+                    var decoder = await BitmapDecoder.CreateAsync(ras).AsTask(ct).ConfigureAwait(false);
+                    bool turned = decoder.OrientedPixelWidth != decoder.PixelWidth;
+                    int ow = Math.Max(1, (int)decoder.OrientedPixelWidth);
+                    int oh = Math.Max(1, (int)decoder.OrientedPixelHeight);
+                    double scale = Math.Min(1.0, (double)maxLongestSide / Math.Max(ow, oh));
+                    int targetW = Math.Max(1, (int)Math.Round(ow * scale));
+                    int targetH = Math.Max(1, (int)Math.Round(oh * scale));
+                    var transform = new BitmapTransform
+                    {
+                        ScaledWidth = (uint)(turned ? targetH : targetW),
+                        ScaledHeight = (uint)(turned ? targetW : targetH),
+                        InterpolationMode = BitmapInterpolationMode.Fant
+                    };
+                    var data = await decoder.GetPixelDataAsync(
+                        BitmapPixelFormat.Bgra8,
+                        BitmapAlphaMode.Premultiplied,
+                        transform,
+                        ExifOrientationMode.RespectExifOrientation,
+                        ColorManagementMode.ColorManageToSRgb).AsTask(ct).ConfigureAwait(false);
+                    return ((byte[] Pixels, int Width, int Height)?)(data.DetachPixelData(), targetW, targetH);
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {

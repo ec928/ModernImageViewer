@@ -25,9 +25,9 @@
       whose properties disagreed with its own release tag. Bump Version here when
       tagging; the release tag, the zip name and the exe properties then all agree.
     -->
-    <Version>0.39.0</Version>
-    <AssemblyVersion>0.39.0.0</AssemblyVersion>
-    <FileVersion>0.39.0.0</FileVersion>
+    <Version>0.40.0</Version>
+    <AssemblyVersion>0.40.0.0</AssemblyVersion>
+    <FileVersion>0.40.0.0</FileVersion>
     <Product>ModernImageViewer</Product>
 
     <!--
@@ -89,6 +89,12 @@
     </EmbeddedResource>
     <EmbeddedResource Include="Shaders\DepthLens.bin">
       <LogicalName>ModernImageViewer.Shaders.DepthLens.bin</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Shaders\SubjectSplat2D.bin">
+      <LogicalName>ModernImageViewer.Shaders.SubjectSplat2D.bin</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Shaders\Backdrop3D.bin">
+      <LogicalName>ModernImageViewer.Shaders.Backdrop3D.bin</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
 

@@ -236,5 +236,28 @@ namespace ModernImageViewer.Tests
             Assert.Equal(0, x);
             Assert.Equal(0, y);
         }
+
+        [Fact]
+        public void SwayOverscanFor_accounts_for_asymmetric_portrait_pivot_at_high_sway()
+        {
+            float symmetric = ViewerMath.SwayOverscanFor(0.10, 0.50f, false);
+            float asymmetric = ViewerMath.SwayOverscanFor(0.10, 0.80f, false);
+            float breathe = ViewerMath.SwayOverscanFor(0.10, 0.80f, true);
+
+            // At 10% sway with pivot 0.80, worst side shift is 0.08 -> 1 / (1 - 2*0.08) = 1.1905
+            Assert.True(asymmetric > symmetric, $"expected asymmetric pivot overscan ({asymmetric}) > symmetric ({symmetric})");
+            Assert.True(asymmetric >= 1.18f, $"expected high-sway asymmetric overscan to cover 8% shift, got {asymmetric}");
+            Assert.True(breathe > asymmetric, "Breathe mode should add margin over non-Breathe");
+        }
+
+        [Fact]
+        public void BackdropOverscanFor_stays_tight_while_covering_breathe_margin()
+        {
+            float normal = ViewerMath.BackdropOverscanFor(0.10, false);
+            float breathe = ViewerMath.BackdropOverscanFor(0.10, true);
+
+            Assert.InRange(normal, 1.01f, 1.03f);
+            Assert.True(breathe > normal && breathe <= 1.08f);
+        }
     }
 }
