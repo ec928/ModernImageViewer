@@ -301,7 +301,8 @@ namespace ModernImageViewer
             && !TargetImage.IsComicEntry
             && !string.IsNullOrEmpty(TargetImage.Path)
             && (_animationFrames == null || _animationFrames.Length <= 1)
-            && !IsShowingTwoPages;
+            && !IsShowingTwoPages
+            && !IsUpscaleHeld;
 
         private void InitializeSway()
         {
@@ -479,6 +480,7 @@ namespace ModernImageViewer
             if (SwayButton != null) SwayButton.Visibility = vis;
             if (SwayMenuItem != null) SwayMenuItem.Visibility = vis;
             SyncSwayChrome();
+            UpdateUpscaleAvailability();
         }
 
         private void SyncStudioSliders()

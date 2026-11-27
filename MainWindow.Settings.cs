@@ -215,144 +215,39 @@ namespace ModernImageViewer
         {
             HeaderSettingsFlyout.Hide();
 
-            var statusBadge = new Border
-            {
-                CornerRadius = new CornerRadius(4),
-                Padding = new Thickness(8, 2, 8, 2),
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 8, 0)
-            };
-            var statusText = new TextBlock { FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
-            statusBadge.Child = statusText;
-
-            var actionButton = new Button { VerticalAlignment = VerticalAlignment.Center };
-            var progressRing = new ProgressRing { IsActive = false, Visibility = Visibility.Collapsed, Width = 20, Height = 20, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
-            var progressBar = new ProgressBar { Minimum = 0, Maximum = 100, Value = 0, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 6, 0, 0) };
-            var progressDetail = new TextBlock { FontSize = 11, Opacity = SettingsCard.Quiet, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 2, 0, 0) };
-
-            var buttonGroup = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-            buttonGroup.Children.Add(progressRing);
-            buttonGroup.Children.Add(statusBadge);
-            buttonGroup.Children.Add(actionButton);
-
-            var (parallaxRow, parallaxTitle, parallaxDetail) = SettingsCard.Row(
+            var parallaxCard = ExtensionCard(
                 "\uE74C",
                 "3D Parallax Motion",
                 "Transforms 2D images into immersive 3D scenes with depth and subject layers (~248 MB).",
-                buttonGroup);
-
-            var extraInfoStack = new StackPanel { Margin = new Thickness(42, 0, 14, 8) };
-            extraInfoStack.Children.Add(progressBar);
-            extraInfoStack.Children.Add(progressDetail);
-
-            var cardBorder = SettingsCard.Card(parallaxRow, extraInfoStack);
-
-            bool isInstalled = ExtensionManager.Is3DInstalled;
-
-            void RefreshUI()
-            {
-                isInstalled = ExtensionManager.Is3DInstalled;
-                long bytes = ExtensionManager.Get3DDiskSizeBytes();
-                if (isInstalled)
+                "Install (248 MB)",
+                () => ExtensionManager.Is3DInstalled,
+                ExtensionManager.Get3DDiskSizeBytes,
+                ExtensionManager.Get3DDiskSizeFormatted,
+                progress => ExtensionManager.Install3DAsync(progress),
+                ExtensionManager.Uninstall3D,
+                () =>
                 {
-                    string size = ExtensionManager.Get3DDiskSizeFormatted();
-                    statusText.Text = "Installed (" + size + ")";
-                    statusBadge.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(40, 0, 200, 100));
-                    statusText.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 30, 200, 100));
-                    actionButton.Content = "Remove";
-                    actionButton.IsEnabled = true;
-                }
-                else if (bytes > 0)
-                {
-                    string size = ExtensionManager.Get3DDiskSizeFormatted();
-                    statusText.Text = "Partially installed (" + size + ")";
-                    statusBadge.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(40, 240, 150, 0));
-                    statusText.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 240, 150, 0));
-                    actionButton.Content = "Clean up / Remove";
-                    actionButton.IsEnabled = true;
-                }
-                else
-                {
-                    statusText.Text = "Not installed";
-                    statusBadge.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(40, 128, 128, 128));
-                    statusText.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 180, 180, 180));
-                    actionButton.Content = "Install (248 MB)";
-                    actionButton.IsEnabled = true;
-                }
-                progressBar.Visibility = Visibility.Collapsed;
-                progressDetail.Visibility = Visibility.Collapsed;
-                progressRing.IsActive = false;
-                progressRing.Visibility = Visibility.Collapsed;
-                SyncOptionsLabels();
-            }
+                    MultiViewControl?.On3DExtensionChanged();
+                    Notify3DExtensionChanged();
+                });
 
-            RefreshUI();
-
-            actionButton.Click += async (_, _) =>
-            {
-                long currentBytes = ExtensionManager.Get3DDiskSizeBytes();
-                if (isInstalled || currentBytes > 0)
-                {
-                    actionButton.IsEnabled = false;
-                    progressDetail.Text = "Removing extension...";
-                    progressDetail.Visibility = Visibility.Visible;
-                    progressRing.IsActive = true;
-                    progressRing.Visibility = Visibility.Visible;
-
-                    bool uninstalled = await Task.Run(() => ExtensionManager.Uninstall3D());
-                    if (uninstalled && !ExtensionManager.Is3DInstalled)
-                    {
-                        MultiViewControl?.On3DExtensionChanged();
-                        Notify3DExtensionChanged();
-                    }
-                    RefreshUI();
-                    if (!uninstalled || ExtensionManager.Is3DInstalled)
-                    {
-                        progressDetail.Text = "Removal incomplete. Some files were locked.";
-                        progressDetail.Visibility = Visibility.Visible;
-                    }
-                }
-                else
-                {
-                    actionButton.IsEnabled = false;
-                    progressRing.IsActive = true;
-                    progressRing.Visibility = Visibility.Visible;
-                    progressBar.Visibility = Visibility.Visible;
-                    progressDetail.Visibility = Visibility.Visible;
-                    progressBar.Value = 0;
-
-                    var progress = new Progress<(double Progress, string Status)>(report =>
-                    {
-                        progressBar.Value = report.Progress * 100;
-                        progressDetail.Text = report.Status;
-                    });
-
-                    string? installError = null;
-                    try
-                    {
-                        await Task.Run(() => ExtensionManager.Install3DAsync(progress));
-                    }
-                    catch (Exception ex)
-                    {
-                        installError = ex.Message;
-                    }
-                    if (ExtensionManager.Is3DInstalled)
-                    {
-                        MultiViewControl?.On3DExtensionChanged();
-                        Notify3DExtensionChanged();
-                    }
-                    RefreshUI();
-                    if (!string.IsNullOrEmpty(installError))
-                    {
-                        progressDetail.Text = "Install failed: " + installError;
-                        progressDetail.Visibility = Visibility.Visible;
-                    }
-                }
-            };
+            var upscaleCard = ExtensionCard(
+                "\uF4A5",
+                "AI Upscale",
+                "Enlarges a photo 2× or 4× with AI (Real-ESRGAN). Compare it with the original in the viewer, then save a copy if you like it (~105 MB).",
+                "Install (105 MB)",
+                () => ExtensionManager.IsUpscaleInstalled,
+                ExtensionManager.GetUpscaleDiskSizeBytes,
+                ExtensionManager.GetUpscaleDiskSizeFormatted,
+                progress => ExtensionManager.InstallUpscaleAsync(progress),
+                ExtensionManager.UninstallUpscale,
+                NotifyUpscaleExtensionChanged);
 
             var panel = new StackPanel { Width = 520, Padding = new Thickness(0, 0, 12, 0) };
             panel.Children.Add(SettingsCard.Section("Available Extensions", first: true));
-            panel.Children.Add(cardBorder);
+            panel.Children.Add(parallaxCard);
+            upscaleCard.Margin = new Thickness(0, 8, 0, 0);
+            panel.Children.Add(upscaleCard);
 
             var noteBlock = new TextBlock
             {
@@ -377,6 +272,138 @@ namespace ModernImageViewer
             await dialog.ShowAsync();
         }
 
+        /// <summary>One extension's row in the Extensions dialog: status badge, Install / Remove, and install progress.</summary>
+        private Border ExtensionCard(
+            string glyph, string title, string description, string installLabel,
+            Func<bool> isInstalledNow, Func<long> diskBytes, Func<string> diskSize,
+            Func<IProgress<(double Progress, string Status)>, Task> install, Func<bool> uninstall, Action changed)
+        {
+            var statusBadge = new Border
+            {
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(8, 2, 8, 2),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 8, 0)
+            };
+            var statusText = new TextBlock { FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+            statusBadge.Child = statusText;
+
+            var actionButton = new Button { VerticalAlignment = VerticalAlignment.Center };
+            var progressRing = new ProgressRing { IsActive = false, Visibility = Visibility.Collapsed, Width = 20, Height = 20, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
+            var progressBar = new ProgressBar { Minimum = 0, Maximum = 100, Value = 0, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 6, 0, 0) };
+            var progressDetail = new TextBlock { FontSize = 11, Opacity = SettingsCard.Quiet, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 2, 0, 0), TextWrapping = TextWrapping.Wrap };
+
+            var buttonGroup = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            buttonGroup.Children.Add(progressRing);
+            buttonGroup.Children.Add(statusBadge);
+            buttonGroup.Children.Add(actionButton);
+
+            var (row, _, _) = SettingsCard.Row(glyph, title, description, buttonGroup);
+
+            var extraInfoStack = new StackPanel { Margin = new Thickness(42, 0, 14, 8) };
+            extraInfoStack.Children.Add(progressBar);
+            extraInfoStack.Children.Add(progressDetail);
+
+            var cardBorder = SettingsCard.Card(row, extraInfoStack);
+
+            bool isInstalled = isInstalledNow();
+
+            void RefreshUI()
+            {
+                isInstalled = isInstalledNow();
+                long bytes = diskBytes();
+                if (isInstalled)
+                {
+                    statusText.Text = "Installed (" + diskSize() + ")";
+                    statusBadge.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(40, 0, 200, 100));
+                    statusText.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 30, 200, 100));
+                    actionButton.Content = "Remove";
+                    actionButton.IsEnabled = true;
+                }
+                else if (bytes > 0)
+                {
+                    statusText.Text = "Partially installed (" + diskSize() + ")";
+                    statusBadge.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(40, 240, 150, 0));
+                    statusText.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 240, 150, 0));
+                    actionButton.Content = "Clean up / Remove";
+                    actionButton.IsEnabled = true;
+                }
+                else
+                {
+                    statusText.Text = "Not installed";
+                    statusBadge.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(40, 128, 128, 128));
+                    statusText.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 180, 180, 180));
+                    actionButton.Content = installLabel;
+                    actionButton.IsEnabled = true;
+                }
+                progressBar.Visibility = Visibility.Collapsed;
+                progressDetail.Visibility = Visibility.Collapsed;
+                progressRing.IsActive = false;
+                progressRing.Visibility = Visibility.Collapsed;
+                SyncOptionsLabels();
+            }
+
+            RefreshUI();
+
+            actionButton.Click += async (_, _) =>
+            {
+                long currentBytes = diskBytes();
+                if (isInstalled || currentBytes > 0)
+                {
+                    actionButton.IsEnabled = false;
+                    progressDetail.Text = "Removing extension...";
+                    progressDetail.Visibility = Visibility.Visible;
+                    progressRing.IsActive = true;
+                    progressRing.Visibility = Visibility.Visible;
+
+                    bool uninstalled = await Task.Run(uninstall);
+                    if (uninstalled && !isInstalledNow())
+                        changed();
+                    RefreshUI();
+                    if (!uninstalled || isInstalledNow())
+                    {
+                        progressDetail.Text = "Removal incomplete. Some files were locked.";
+                        progressDetail.Visibility = Visibility.Visible;
+                    }
+                }
+                else
+                {
+                    actionButton.IsEnabled = false;
+                    progressRing.IsActive = true;
+                    progressRing.Visibility = Visibility.Visible;
+                    progressBar.Visibility = Visibility.Visible;
+                    progressDetail.Visibility = Visibility.Visible;
+                    progressBar.Value = 0;
+
+                    var progress = new Progress<(double Progress, string Status)>(report =>
+                    {
+                        progressBar.Value = report.Progress * 100;
+                        progressDetail.Text = report.Status;
+                    });
+
+                    string? installError = null;
+                    try
+                    {
+                        await Task.Run(() => install(progress));
+                    }
+                    catch (Exception ex)
+                    {
+                        installError = ex.Message;
+                    }
+                    if (isInstalledNow())
+                        changed();
+                    RefreshUI();
+                    if (!string.IsNullOrEmpty(installError))
+                    {
+                        progressDetail.Text = "Install failed: " + installError;
+                        progressDetail.Visibility = Visibility.Visible;
+                    }
+                }
+            };
+
+            return cardBorder;
+        }
+
         private void SyncOptionsLabels()
         {
             if (MusicOptionText != null)
@@ -387,9 +414,10 @@ namespace ModernImageViewer
             if (ImageEditorOptionText != null) ImageEditorOptionText.Text = EditorName(ImageEditorPath);
             if (ExtensionsOptionText != null)
             {
-                ExtensionsOptionText.Text = ExtensionManager.Is3DInstalled
-                    ? $"3D ({ExtensionManager.Get3DDiskSizeFormatted()})"
-                    : "None installed";
+                var installed = new System.Collections.Generic.List<string>();
+                if (ExtensionManager.Is3DInstalled) installed.Add($"3D ({ExtensionManager.Get3DDiskSizeFormatted()})");
+                if (ExtensionManager.IsUpscaleInstalled) installed.Add($"Upscale ({ExtensionManager.GetUpscaleDiskSizeFormatted()})");
+                ExtensionsOptionText.Text = installed.Count == 0 ? "None installed" : string.Join(", ", installed);
             }
         }
     }

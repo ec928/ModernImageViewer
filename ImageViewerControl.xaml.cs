@@ -368,6 +368,7 @@ namespace ModernImageViewer
             _hudTimer?.Stop();
             _scrollQualityTimer?.Stop();
             CleanupSwayOnUnload();
+            CleanupUpscaleOnUnload();
             PreviewCanvas?.RemoveFromVisualTree();
             ReleaseDisplayedEntry();
             _effectStack.Dispose();
@@ -381,6 +382,7 @@ namespace ModernImageViewer
                 _canvasDevice = CanvasDevice.GetSharedDevice();
                 if (_canvasDevice != null) _canvasDevice.DeviceLost += CanvasDevice_DeviceLost;
                 HandleSwayDeviceLost();
+                HandleUpscaleDeviceLost();
                 ReleaseDisplayedEntry();
                 _effectStack.Dispose();
                 _effectStack.Initialize();
@@ -417,6 +419,7 @@ namespace ModernImageViewer
             if (AnimationHud != null) AnimationHud.Visibility = Visibility.Collapsed;
             if (!IsStandaloneMode) ResetViewTransformAndTone(requestRender: false);
             OnSwayPrepareForNewImage();
+            OnUpscalePrepareForNewImage();
 
             if (_effectStack.Crop != null) _effectStack.Crop.Source = null;
 
@@ -518,6 +521,7 @@ namespace ModernImageViewer
                 PlaceholderImage.Visibility = Visibility.Collapsed;
             }
 
+            OnUpscaleImageInjected();
             OnSwayImageInjected();
             RequestRender();
             ShowHud();
@@ -635,7 +639,7 @@ namespace ModernImageViewer
                 }
                 else
                 {
-                    CanvasBitmap drawTarget = TryGetActiveSwayBitmap() ?? currentTarget;
+                    CanvasBitmap drawTarget = TryGetActiveSwayBitmap() ?? TryGetUpscaleBitmap() ?? currentTarget;
                     crop.Source = drawTarget;
                     crop.SourceRectangle = drawTarget.Bounds;
                     bool showOriginal = _isComparingOriginal;

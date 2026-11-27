@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace ModernImageViewer
 {
-    internal static class ExtensionManager
+    internal static partial class ExtensionManager
     {
         public const string DepthAnythingUrl = "https://huggingface.co/onnx-community/depth-anything-v2-small/resolve/main/onnx/model.onnx";
         public const string BiRefNetUrl = "https://huggingface.co/onnx-community/BiRefNet_lite-ONNX/resolve/main/onnx/model_fp16.onnx";
@@ -40,40 +40,50 @@ namespace ModernImageViewer
 
         public static void CleanupPendingDeletes()
         {
+            CleanupPendingDeletes(Extension3DDir, Is3DInstalled);
+            CleanupPendingDeletes(ExtensionUpscaleDir, IsUpscaleInstalled);
+        }
+
+        private static void CleanupPendingDeletes(string dir, bool installed)
+        {
             try
             {
-                if (!Directory.Exists(Extension3DDir)) return;
-                foreach (string f in Directory.GetFiles(Extension3DDir, "*.pending-delete", SearchOption.AllDirectories))
+                if (!Directory.Exists(dir)) return;
+                foreach (string f in Directory.GetFiles(dir, "*.pending-delete", SearchOption.AllDirectories))
                 {
                     try { File.Delete(f); } catch { }
                 }
-                if (!Is3DInstalled)
+                if (!installed)
                 {
                     // Clean up any orphaned files from an incomplete install or remove
-                    foreach (string f in Directory.GetFiles(Extension3DDir, "*", SearchOption.AllDirectories))
+                    foreach (string f in Directory.GetFiles(dir, "*", SearchOption.AllDirectories))
                     {
                         try { File.Delete(f); } catch { }
                     }
-                    foreach (string d in Directory.GetDirectories(Extension3DDir))
+                    foreach (string d in Directory.GetDirectories(dir))
                     {
                         try { Directory.Delete(d, recursive: true); } catch { }
                     }
                 }
-                if (Directory.GetFileSystemEntries(Extension3DDir).Length == 0)
+                if (Directory.GetFileSystemEntries(dir).Length == 0)
                 {
-                    try { Directory.Delete(Extension3DDir, recursive: true); } catch { }
+                    try { Directory.Delete(dir, recursive: true); } catch { }
                 }
             }
             catch { }
         }
 
-        public static long Get3DDiskSizeBytes()
+        public static long Get3DDiskSizeBytes() => DiskSizeBytes(Extension3DDir);
+
+        public static string Get3DDiskSizeFormatted() => FormatSize(Get3DDiskSizeBytes());
+
+        private static long DiskSizeBytes(string dir)
         {
             try
             {
-                if (!Directory.Exists(Extension3DDir)) return 0;
+                if (!Directory.Exists(dir)) return 0;
                 long total = 0;
-                var dirInfo = new DirectoryInfo(Extension3DDir);
+                var dirInfo = new DirectoryInfo(dir);
                 foreach (var f in dirInfo.EnumerateFiles("*", SearchOption.AllDirectories))
                 {
                     if (!f.Name.EndsWith(".pending-delete", StringComparison.OrdinalIgnoreCase))
@@ -87,9 +97,8 @@ namespace ModernImageViewer
             }
         }
 
-        public static string Get3DDiskSizeFormatted()
+        private static string FormatSize(long bytes)
         {
-            long bytes = Get3DDiskSizeBytes();
             if (bytes == 0) return "0 MB";
             double mb = bytes / (1024.0 * 1024.0);
             return $"{mb:0.#} MB";
@@ -226,70 +235,7 @@ namespace ModernImageViewer
             try
             {
                 ParallaxHost.UnloadExtension();
-                if (!Directory.Exists(Extension3DDir))
-                {
-                    ParallaxHost.ReloadExtension();
-                    return true;
-                }
-
-                // Refuse wipe if Extension3DDir is a reparse point (Issue 6)
-                var dirInfo = new DirectoryInfo(Extension3DDir);
-                if ((dirInfo.Attributes & FileAttributes.ReparsePoint) != 0)
-                {
-                    PlayTiming.Write("Uninstall3D refused: Extension directory is a reparse point.");
-                    return false;
-                }
-
-                // Delete models and files with retries (TypoZen pattern)
-                for (int attempt = 0; attempt < 3; attempt++)
-                {
-                    try
-                    {
-                        foreach (string f in Directory.GetFiles(Extension3DDir, "*", SearchOption.AllDirectories))
-                        {
-                            try { File.SetAttributes(f, FileAttributes.Normal); } catch { }
-                            try { File.Delete(f); }
-                            catch
-                            {
-                                // If locked by OS native module mapping (DirectML/onnxruntime), rename to .pending-delete
-                                try
-                                {
-                                    string pending = f + ".pending-delete";
-                                    if (File.Exists(pending)) File.Delete(pending);
-                                    File.Move(f, pending);
-                                }
-                                catch { }
-                            }
-                        }
-
-                        foreach (string d in Directory.GetDirectories(Extension3DDir))
-                        {
-                            try { Directory.Delete(d, recursive: true); } catch { }
-                        }
-
-                        try { Directory.Delete(Extension3DDir, recursive: false); } catch { }
-                    }
-                    catch { }
-
-                    if (!Directory.Exists(Extension3DDir)) break;
-                    Thread.Sleep(100);
-                }
-
-                // Wipe succeeded only if directory is deleted or holds only *.pending-delete files (Issue 1)
-                bool clean = true;
-                if (Directory.Exists(Extension3DDir))
-                {
-                    var entries = Directory.GetFileSystemEntries(Extension3DDir, "*", SearchOption.AllDirectories);
-                    foreach (var entry in entries)
-                    {
-                        if (File.Exists(entry) && !entry.EndsWith(".pending-delete", StringComparison.OrdinalIgnoreCase))
-                        {
-                            clean = false;
-                            break;
-                        }
-                    }
-                }
-
+                bool clean = WipeExtensionDir(Extension3DDir, "Uninstall3D");
                 ParallaxHost.ReloadExtension();
                 return clean;
             }
@@ -298,6 +244,71 @@ namespace ModernImageViewer
                 PlayTiming.Write($"Uninstall3D failed: {ex.Message}");
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Deletes an extension's folder, renaming files the loader still has mapped to *.pending-delete (removed at the
+        /// next start). True when nothing but pending deletes is left.
+        /// </summary>
+        private static bool WipeExtensionDir(string dir, string caller)
+        {
+            if (!Directory.Exists(dir)) return true;
+
+            // Refuse wipe if the extension directory is a reparse point (Issue 6)
+            var dirInfo = new DirectoryInfo(dir);
+            if ((dirInfo.Attributes & FileAttributes.ReparsePoint) != 0)
+            {
+                PlayTiming.Write($"{caller} refused: Extension directory is a reparse point.");
+                return false;
+            }
+
+            // Delete models and files with retries (TypoZen pattern)
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                try
+                {
+                    foreach (string f in Directory.GetFiles(dir, "*", SearchOption.AllDirectories))
+                    {
+                        try { File.SetAttributes(f, FileAttributes.Normal); } catch { }
+                        try { File.Delete(f); }
+                        catch
+                        {
+                            // Already set aside on an earlier pass: leave it for the next start, do not rename it again.
+                            if (f.EndsWith(".pending-delete", StringComparison.OrdinalIgnoreCase)) continue;
+                            // If locked by OS native module mapping (DirectML/onnxruntime), rename to .pending-delete
+                            try
+                            {
+                                string pending = f + ".pending-delete";
+                                if (File.Exists(pending)) File.Delete(pending);
+                                File.Move(f, pending);
+                            }
+                            catch { }
+                        }
+                    }
+
+                    foreach (string d in Directory.GetDirectories(dir))
+                    {
+                        try { Directory.Delete(d, recursive: true); } catch { }
+                    }
+
+                    try { Directory.Delete(dir, recursive: false); } catch { }
+                }
+                catch { }
+
+                if (!Directory.Exists(dir)) break;
+                Thread.Sleep(100);
+            }
+
+            // Wipe succeeded only if directory is deleted or holds only *.pending-delete files (Issue 1)
+            if (Directory.Exists(dir))
+            {
+                foreach (var entry in Directory.GetFileSystemEntries(dir, "*", SearchOption.AllDirectories))
+                {
+                    if (File.Exists(entry) && !entry.EndsWith(".pending-delete", StringComparison.OrdinalIgnoreCase))
+                        return false;
+                }
+            }
+            return true;
         }
 
         private static async Task CopyFileAsync(string source, string destination, CancellationToken ct)

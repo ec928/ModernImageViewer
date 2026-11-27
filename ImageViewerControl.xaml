@@ -161,6 +161,13 @@
                             <FontIcon Glyph="&#xF158;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"/>
                         </ToggleMenuFlyoutItem.Icon>
                     </ToggleMenuFlyoutItem>
+                    <MenuFlyoutSubItem x:Name="UpscaleMenu" Text="AI upscale" Visibility="Collapsed">
+                        <MenuFlyoutSubItem.Icon>
+                            <FontIcon Glyph="&#xF4A5;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"/>
+                        </MenuFlyoutSubItem.Icon>
+                        <MenuFlyoutItem x:Name="UpscaleMenu2x" Text="Upscale 2&#x00D7;" Tag="2" Click="Upscale_Click"/>
+                        <MenuFlyoutItem x:Name="UpscaleMenu4x" Text="Upscale 4&#x00D7;" Tag="4" Click="Upscale_Click"/>
+                    </MenuFlyoutSubItem>
 
                     <MenuFlyoutSeparator/>
                     <MenuFlyoutItem Text="Full screen (F11)" Click="ToggleFullscreen_Click">
@@ -598,6 +605,43 @@
             </Border>
         </Grid>
 
+        <!-- AI upscale: progress while it runs, then compare / save / discard. Stays up while an upscale is held. -->
+        <Grid x:Name="UpscaleHud" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="12,0,12,76" Canvas.ZIndex="61" Visibility="Collapsed"
+              PointerEntered="Hud_PointerEntered" PointerExited="Hud_PointerExited">
+            <Border Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}" BorderThickness="1" CornerRadius="16" Padding="12,6" Translation="0,0,32" PointerPressed="UpscaleHud_PointerPressed">
+                <Border.Shadow>
+                    <ThemeShadow/>
+                </Border.Shadow>
+                <Grid>
+                    <StackPanel x:Name="UpscaleRunningPanel" Orientation="Horizontal" Spacing="10" Visibility="Collapsed">
+                        <TextBlock x:Name="UpscaleRunningText" Text="Upscaling 2&#x00D7;" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                        <ProgressBar x:Name="UpscaleProgress" Width="160" Minimum="0" Maximum="100" Value="0" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="UpscalePercent" Text="0%" Width="34" TextAlignment="Right" FontSize="12" Typography.NumeralAlignment="Tabular" Foreground="{ThemeResource TextFillColorPrimaryBrush}" VerticalAlignment="Center"/>
+                        <Button x:Name="UpscaleCancelButton" Content="Cancel" Click="UpscaleCancel_Click" Style="{StaticResource StudioPillButtonStyle}" AllowFocusOnInteraction="False" AutomationProperties.Name="Cancel upscale"/>
+                    </StackPanel>
+                    <StackPanel x:Name="UpscaleReadyPanel" Orientation="Horizontal" Spacing="6" Visibility="Collapsed">
+                        <TextBlock x:Name="UpscaleReadyText" Text="2&#x00D7;" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" Margin="2,0,4,0" Typography.NumeralAlignment="Tabular"/>
+                        <Rectangle Width="1" Height="16" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.4"/>
+                        <Button x:Name="UpscaleShowOriginalButton" Content="Original" Click="UpscaleShowOriginal_Click" Style="{StaticResource StudioPillButtonStyle}" AllowFocusOnInteraction="False" ToolTipService.ToolTip="Show the original" AutomationProperties.Name="Show original"/>
+                        <Button x:Name="UpscaleShowUpscaledButton" Content="Upscaled" Click="UpscaleShowUpscaled_Click" Style="{StaticResource StudioPillButtonStyle}" AllowFocusOnInteraction="False" ToolTipService.ToolTip="Show the upscaled version" AutomationProperties.Name="Show upscaled"/>
+                        <Rectangle Width="1" Height="16" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Opacity="0.4"/>
+                        <Button x:Name="UpscaleSaveButton" Click="UpscaleSave_Click" Style="{StaticResource StudioPillButtonStyle}" AllowFocusOnInteraction="False" ToolTipService.ToolTip="Save as a new PNG beside the original" AutomationProperties.Name="Save upscaled copy">
+                            <StackPanel Orientation="Horizontal" Spacing="5">
+                                <FontIcon Glyph="&#xE74E;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12"/>
+                                <TextBlock x:Name="UpscaleSaveText" Text="Save" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="UpscaleDiscardButton" Click="UpscaleDiscard_Click" Style="{StaticResource StudioPillButtonStyle}" AllowFocusOnInteraction="False" ToolTipService.ToolTip="Discard the upscaled version" AutomationProperties.Name="Discard upscale">
+                            <StackPanel Orientation="Horizontal" Spacing="5">
+                                <FontIcon Glyph="&#xE711;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="11"/>
+                                <TextBlock Text="Discard" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
         <Grid x:Name="UnifiedHud" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,22" Opacity="0" IsHitTestVisible="False" Canvas.ZIndex="60"
               PointerEntered="Hud_PointerEntered" PointerExited="Hud_PointerExited">
             <Grid.RenderTransform>
@@ -617,6 +661,15 @@
                         </Button>
                         <Button x:Name="SwayButton" Click="ToggleSway_Click" Style="{StaticResource HudButtonStyle}" AllowFocusOnInteraction="False" ToolTipService.ToolTip="3D &amp; depth effects (S)" Visibility="Collapsed" AutomationProperties.Name="3D &amp; depth effects (S)">
                             <FontIcon x:Name="SwayButtonIcon" Glyph="&#xF158;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="16"/>
+                        </Button>
+                        <Button x:Name="UpscaleButton" Style="{StaticResource HudButtonStyle}" AllowFocusOnInteraction="False" ToolTipService.ToolTip="AI upscale" Visibility="Collapsed" AutomationProperties.Name="AI upscale">
+                            <FontIcon Glyph="&#xF4A5;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="15"/>
+                            <Button.Flyout>
+                                <MenuFlyout Placement="Top" Opening="UpscaleFlyout_Opening">
+                                    <MenuFlyoutItem x:Name="UpscaleHud2x" Text="Upscale 2&#x00D7;" Tag="2" Click="Upscale_Click"/>
+                                    <MenuFlyoutItem x:Name="UpscaleHud4x" Text="Upscale 4&#x00D7;" Tag="4" Click="Upscale_Click"/>
+                                </MenuFlyout>
+                            </Button.Flyout>
                         </Button>
                         <Rectangle Width="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="6,6" Opacity="0.4"/>
                         <Button x:Name="MirrorButton" Click="ToggleMirrorHorizontal_Click" Style="{StaticResource HudButtonStyle}" AllowFocusOnInteraction="False" ToolTipService.ToolTip="Mirror horizontal (M)" AutomationProperties.Name="Mirror horizontal (M)">

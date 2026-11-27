@@ -404,6 +404,14 @@ namespace ModernImageViewer
             Extension3DChanged?.Invoke();
         }
 
+        public event Action? UpscaleExtensionChanged;
+
+        public void NotifyUpscaleExtensionChanged()
+        {
+            ViewerControl?.OnUpscaleExtensionChanged();
+            UpscaleExtensionChanged?.Invoke();
+        }
+
         public void ApplyGamma(float gamma)
         {
             if (Math.Abs(_currentGamma - gamma) < 0.01f) return;

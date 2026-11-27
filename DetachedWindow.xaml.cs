@@ -67,6 +67,7 @@ namespace ModernImageViewer
             {
                 MainWindow.Instance.GammaApplied += OnHostGammaChanged;
                 MainWindow.Instance.Extension3DChanged += OnExtension3DChanged;
+                MainWindow.Instance.UpscaleExtensionChanged += OnUpscaleExtensionChanged;
             }
 
             ViewerControl.TargetImage = _imageItem;
@@ -81,6 +82,7 @@ namespace ModernImageViewer
 
         private void OnHostGammaChanged(float gamma) => ViewerControl.SetGammaLevel(gamma);
         private void OnExtension3DChanged() => ViewerControl.On3DExtensionChanged();
+        private void OnUpscaleExtensionChanged() => ViewerControl.OnUpscaleExtensionChanged();
 
         private void AppWindow_Changed(AppWindow sender, AppWindowChangedEventArgs args)
         {
@@ -263,6 +265,7 @@ namespace ModernImageViewer
             {
                 MainWindow.Instance.GammaApplied -= OnHostGammaChanged;
                 MainWindow.Instance.Extension3DChanged -= OnExtension3DChanged;
+                MainWindow.Instance.UpscaleExtensionChanged -= OnUpscaleExtensionChanged;
             }
             MainWindow.Instance?.UnregisterDetachedWindow(_imageItem.Path);
 

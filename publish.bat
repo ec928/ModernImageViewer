@@ -75,6 +75,22 @@ dotnet publish "%EXT_PROJ%" ^
 if errorlevel 1 goto :failed
 if not exist "%EXT_OUT%\ModernImageViewer.Extensions.Parallax.dll" goto :failed
 
+REM Build the AI Upscale Extension bundle into %OUTDIR%\Extensions\Upscale\bundle
+set "UPS_PROJ=%~dp0extensions\Upscale\ModernImageViewer.Extensions.Upscale.csproj"
+set "UPS_OUT=%OUTDIR%\Extensions\Upscale\bundle"
+
+echo.
+echo Building AI Upscale Extension bundle...
+dotnet publish "%UPS_PROJ%" ^
+  -c Release ^
+  -r win-x64 ^
+  -p:Platform=x64 ^
+  -p:PublishDir="%UPS_OUT%\\" ^
+  --nologo
+
+if errorlevel 1 goto :failed
+if not exist "%UPS_OUT%\ModernImageViewer.Extensions.Upscale.dll" goto :failed
+
 echo.
 echo Publish reported success. Copying documentation...
 copy /Y "%~dp0LICENSE" "%OUTDIR%\" >nul

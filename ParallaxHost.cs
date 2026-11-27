@@ -13,10 +13,11 @@ namespace ModernImageViewer
         private readonly string _extensionDir;
         private readonly AssemblyDependencyResolver _resolver;
 
-        public ParallaxLoadContext(string extensionDir) : base(isCollectible: true)
+        /// <summary>Loads one extension (3D or Upscale) from its own folder; <paramref name="mainDll"/> is its assembly's file name.</summary>
+        public ParallaxLoadContext(string extensionDir, string mainDll = "ModernImageViewer.Extensions.Parallax.dll") : base(isCollectible: true)
         {
             _extensionDir = extensionDir;
-            string mainAssembly = Path.Combine(extensionDir, "ModernImageViewer.Extensions.Parallax.dll");
+            string mainAssembly = Path.Combine(extensionDir, mainDll);
             _resolver = new AssemblyDependencyResolver(mainAssembly);
         }
 
